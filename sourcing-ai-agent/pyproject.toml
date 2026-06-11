@@ -5,6 +5,7 @@ description = "Backend MVP for a criteria-driven sourcing AI agent."
 requires-python = ">=3.12"
 dependencies = [
     "psycopg[binary]>=3.2,<3.3",
+    "psycopg-pool>=3.2,<3.4",
     "requests>=2.33,<2.34",
 ]
 
@@ -15,6 +16,7 @@ dev = [
 ]
 test = [
     "pytest>=9,<10",
+    "testcontainers[postgres]>=4.13,<5",
 ]
 
 [tool.unittest]
@@ -48,6 +50,12 @@ files = [
     "src/sourcing_agent/control_plane_postgres.py",
     "src/sourcing_agent/profile_registry_backfill.py",
     "src/sourcing_agent/profile_registry_utils.py",
+    "src/sourcing_agent/linkedin_url_normalization.py",
+    "src/sourcing_agent/public_web_quality.py",
+    "src/sourcing_agent/public_web_search.py",
+    "src/sourcing_agent/public_web_runtime_core.py",
+    "src/sourcing_agent/crm_public_web_runtime.py",
+    "src/sourcing_agent/legacy_target_candidate_public_web_runtime.py",
     "src/sourcing_agent/regression_matrix.py",
     "src/sourcing_agent/excel_intake.py",
     "src/sourcing_agent/asset_reuse_planning.py",

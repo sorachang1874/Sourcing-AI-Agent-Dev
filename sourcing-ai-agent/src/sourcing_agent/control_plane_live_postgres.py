@@ -5,15 +5,21 @@ import json
 import os
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from contextlib import contextmanager
+from datetime import date, datetime, timedelta, timezone
+from datetime import time as datetime_time
+from decimal import Decimal
+from hashlib import sha1
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from .company_registry import resolve_company_alias_key
 from .control_plane_job_progress import update_job_progress_event_summary
 from .control_plane_postgres import (
     ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE,
     ACQUISITION_SHARD_REGISTRY_SPLIT_TABLES,
+    LEGACY_TARGET_PUBLIC_WEB_TABLES,
     _configure_postgres_connection_utf8,
     _import_psycopg,
     ensure_acquisition_shard_registry_split_schema,
@@ -24,10 +30,12 @@ from .local_postgres import (
     configure_control_plane_postgres_session,
     ensure_local_postgres_started,
     normalize_control_plane_postgres_connect_dsn,
+    normalize_control_plane_postgres_schema,
     resolve_control_plane_postgres_dsn,
     resolve_control_plane_postgres_schema,
     resolve_default_control_plane_db_path,
 )
+from .runtime_lease_utils import worker_lease_owner_is_dead_local_process
 
 CONTROL_PLANE_LIVE_TABLES = (
     "candidates",
@@ -37,22 +45,52 @@ CONTROL_PLANE_LIVE_TABLES = (
     "job_events",
     "job_progress_event_summaries",
     "job_result_views",
+    "job_result_lifecycle",
+    "job_board_visible_patches",
+    "job_materialization_items",
     "plan_review_sessions",
     "manual_review_items",
     "candidate_review_registry",
     "target_candidates",
     "asset_default_pointers",
     "asset_default_pointer_history",
-    "target_candidate_public_web_batches",
-    "target_candidate_public_web_runs",
+    "crm_public_web_batches",
+    "crm_public_web_runs",
     "person_public_web_assets",
     "person_public_web_signals",
-    "target_candidate_public_web_promotions",
+    "person_assets",
+    "person_evidence",
+    "person_assertions",
+    "raw_profile_index",
+    "candidate_evidence_index",
+    "projection_person_search_index",
+    "crm_records",
+    "crm_engagements",
+    "crm_events",
+    "crm_tasks",
+    "crm_public_web_promotions",
+    "company_public_web_asset_runs",
+    "company_public_web_assets",
+    "company_assets",
+    "company_evidence",
+    "company_assertions",
     "frontend_history_links",
     "agent_runtime_sessions",
     "agent_trace_spans",
     "agent_worker_runs",
     "workflow_job_leases",
+    "workflow_events",
+    "workflow_current_state",
+    "workflow_commands",
+    "runtime_outbox",
+    "agent_actions",
+    "operation_runs",
+    "acquisition_runs",
+    "workflow_activity_runs",
+    "workflow_activity_attempts",
+    "workflow_entity_deltas",
+    "acquisition_discovery_lanes",
+    "operation_events",
     "query_dispatches",
     "confidence_policy_runs",
     "confidence_policy_controls",
@@ -70,11 +108,17 @@ CONTROL_PLANE_LIVE_TABLES = (
     "asset_membership_index",
     "candidate_materialization_state",
     "snapshot_materialization_runs",
+    "serving_projections",
+    "serving_projection_members",
+    "projection_manifest_shards",
+    "run_projection_links",
+    "collection_authoritative_pointers",
     "linkedin_profile_registry",
     "linkedin_profile_registry_aliases",
     "linkedin_profile_registry_leases",
     "linkedin_profile_registry_events",
     "linkedin_profile_registry_backfill_runs",
+    "runtime_provider_limiter_leases",
 )
 
 _PRIMARY_KEY_COLUMNS = {
@@ -85,6 +129,9 @@ _PRIMARY_KEY_COLUMNS = {
     "job_events": ("event_id",),
     "job_progress_event_summaries": ("job_id",),
     "job_result_views": ("view_id",),
+    "job_result_lifecycle": ("job_id",),
+    "job_board_visible_patches": ("patch_id",),
+    "job_materialization_items": ("item_id",),
     "plan_review_sessions": ("review_id",),
     "manual_review_items": ("review_item_id",),
     "candidate_review_registry": ("record_id",),
@@ -93,14 +140,44 @@ _PRIMARY_KEY_COLUMNS = {
     "asset_default_pointer_history": ("history_id",),
     "target_candidate_public_web_batches": ("batch_id",),
     "target_candidate_public_web_runs": ("run_id",),
+    "crm_public_web_batches": ("batch_id",),
+    "crm_public_web_runs": ("run_id",),
     "person_public_web_assets": ("asset_id",),
     "person_public_web_signals": ("signal_id",),
+    "person_assets": ("asset_id",),
+    "person_evidence": ("evidence_id",),
+    "person_assertions": ("assertion_id",),
+    "raw_profile_index": ("person_identity_key",),
+    "candidate_evidence_index": ("person_identity_key",),
+    "projection_person_search_index": ("projection_id", "candidate_identity_key"),
+    "crm_records": ("crm_record_id",),
+    "crm_engagements": ("engagement_id",),
+    "crm_events": ("event_id",),
+    "crm_tasks": ("task_id",),
     "target_candidate_public_web_promotions": ("promotion_id",),
+    "crm_public_web_promotions": ("promotion_id",),
+    "company_public_web_asset_runs": ("run_id",),
+    "company_public_web_assets": ("asset_id",),
+    "company_assets": ("asset_id",),
+    "company_evidence": ("evidence_id",),
+    "company_assertions": ("assertion_id",),
     "frontend_history_links": ("history_id",),
     "agent_runtime_sessions": ("session_id",),
     "agent_trace_spans": ("span_id",),
     "agent_worker_runs": ("worker_id",),
     "workflow_job_leases": ("job_id",),
+    "workflow_events": ("event_id",),
+    "workflow_current_state": ("workflow_run_id",),
+    "workflow_commands": ("command_id",),
+    "runtime_outbox": ("outbox_id",),
+    "agent_actions": ("action_id",),
+    "operation_runs": ("operation_run_id",),
+    "acquisition_runs": ("acquisition_run_id",),
+    "workflow_activity_runs": ("activity_run_id",),
+    "workflow_activity_attempts": ("attempt_id",),
+    "workflow_entity_deltas": ("delta_id",),
+    "acquisition_discovery_lanes": ("lane_id",),
+    "operation_events": ("event_id",),
     "query_dispatches": ("dispatch_id",),
     "confidence_policy_runs": ("policy_run_id",),
     "confidence_policy_controls": ("control_id",),
@@ -118,18 +195,89 @@ _PRIMARY_KEY_COLUMNS = {
     "asset_membership_index": ("generation_key", "member_key"),
     "candidate_materialization_state": ("target_company", "snapshot_id", "asset_view", "candidate_id"),
     "snapshot_materialization_runs": ("run_id",),
+    "serving_projections": ("projection_id",),
+    "serving_projection_members": ("projection_id", "candidate_identity_key"),
+    "projection_manifest_shards": ("shard_id",),
+    "run_projection_links": ("run_id", "link_type"),
+    "collection_authoritative_pointers": ("collection_id",),
     "linkedin_profile_registry": ("profile_url_key",),
     "linkedin_profile_registry_aliases": ("alias_url_key",),
     "linkedin_profile_registry_leases": ("profile_url_key",),
     "linkedin_profile_registry_events": ("event_id",),
     "linkedin_profile_registry_backfill_runs": ("run_key",),
+    "runtime_provider_limiter_leases": ("lease_token",),
+}
+
+_JOB_RESULT_LIFECYCLE_DELTA_MONOTONIC_INT_FIELDS = {
+    "delta_profile_required_count",
+    "delta_profile_fetched_count",
+    "delta_profile_applied_count",
+    "delta_profile_materialized_count",
+    "delta_profile_board_visible_count",
+}
+_JOB_RESULT_LIFECYCLE_STAGE1_MONOTONIC_INT_FIELDS = {
+    "stage1_current_search_returned_count",
+    "stage1_former_search_returned_count",
+    "stage1_all_search_returned_count",
+    "stage1_deduped_candidate_count",
+    "stage1_deduped_profile_url_count",
+    "stage1_profile_fetch_required_count",
+    "stage1_profile_fetched_count",
 }
 
 _READ_PREFERRED_MODES = {"prefer_postgres", "postgres_only"}
 _AUTHORITATIVE_MODES = {"postgres_only"}
-_RUNTIME_COORDINATION_TABLES = {"agent_trace_spans", "agent_worker_runs", "workflow_job_leases"}
-_RUNNING_RECOVERABLE_WAIT_STAGES = {"waiting_remote_search", "waiting_remote_harvest"}
+_RUNTIME_COORDINATION_TABLES = {
+    "agent_trace_spans",
+    "agent_worker_runs",
+    "workflow_job_leases",
+    "workflow_events",
+    "workflow_current_state",
+    "workflow_commands",
+    "runtime_outbox",
+    "agent_actions",
+    "operation_runs",
+    "acquisition_runs",
+    "workflow_activity_runs",
+    "workflow_activity_attempts",
+    "workflow_entity_deltas",
+    "acquisition_discovery_lanes",
+    "operation_events",
+    "crm_tasks",
+    "company_assets",
+    "company_evidence",
+    "company_assertions",
+    "job_materialization_items",
+    "runtime_provider_limiter_leases",
+}
+
+_OPERATION_RUNTIME_TABLES = {
+    "agent_actions",
+    "operation_runs",
+    "acquisition_runs",
+    "workflow_activity_runs",
+    "workflow_activity_attempts",
+    "workflow_entity_deltas",
+    "acquisition_discovery_lanes",
+    "operation_events",
+}
+_RUNNING_RECOVERABLE_WAIT_STAGES = {
+    "submitting_remote_search",
+    "submitting_remote_harvest",
+    "waiting_remote_search",
+    "waiting_remote_harvest",
+    "persisting_terminal_harvest_profiles",
+}
 _RETRYABLE_POSTGRES_SQLSTATES = {"40P01", "40001"}
+
+# Pool exhaustion (pool.getconn() timed out waiting for a free connection) is
+# transient and must be retried like a deadlock/serialization failure. Import
+# is guarded: psycopg_pool is optional in some unit-test environments.
+try:
+    from psycopg_pool import PoolTimeout as _PSYCOPG_POOL_TIMEOUT
+except Exception:  # pragma: no cover - optional dependency missing
+    _PSYCOPG_POOL_TIMEOUT = None
+
 _CONTROL_PLANE_POSTGRES_MAX_RETRIES = 3
 _BULK_UPSERT_DIRECT_ROW_LIMIT = 1000
 _BULK_UPSERT_DIRECT_PARAM_LIMIT = 20000
@@ -163,6 +311,125 @@ def resolve_control_plane_postgres_live_mode(value: Any) -> str:
     return "disabled"
 
 
+_CONTROL_PLANE_PG_POOL_MIN_ENV = "SOURCING_CONTROL_PLANE_PG_POOL_MIN"
+_CONTROL_PLANE_PG_POOL_MAX_ENV = "SOURCING_CONTROL_PLANE_PG_POOL_MAX"
+_CONTROL_PLANE_PG_POOL_MIN_DEFAULT = 1
+_CONTROL_PLANE_PG_POOL_MAX_DEFAULT = 8
+
+_POOLED_CONNECTION_CLASS: Any = None
+
+
+def _resolve_control_plane_pg_pool_size_limits() -> tuple[int, int]:
+    def _read_limit(name: str, default: int) -> int:
+        raw = str(os.getenv(name) or "").strip()
+        if not raw:
+            return default
+        try:
+            value = int(raw)
+        except ValueError:
+            return default
+        return value if value > 0 else default
+
+    min_size = _read_limit(_CONTROL_PLANE_PG_POOL_MIN_ENV, _CONTROL_PLANE_PG_POOL_MIN_DEFAULT)
+    max_size = _read_limit(_CONTROL_PLANE_PG_POOL_MAX_ENV, _CONTROL_PLANE_PG_POOL_MAX_DEFAULT)
+    return min_size, max(min_size, max_size)
+
+
+def _resolve_pooled_connection_class(psycopg_module: Any) -> Any:
+    """Connection class preserving the legacy ``client_encoding`` connect fallback."""
+
+    global _POOLED_CONNECTION_CLASS
+    if _POOLED_CONNECTION_CLASS is None:
+
+        class _PooledControlPlaneConnection(psycopg_module.Connection):  # type: ignore[misc, name-defined]
+            @classmethod
+            def connect(cls, conninfo: str = "", **kwargs: Any) -> Any:
+                try:
+                    return super().connect(conninfo, **kwargs)
+                except TypeError:
+                    kwargs.pop("client_encoding", None)
+                    return _configure_postgres_connection_utf8(super().connect(conninfo, **kwargs))
+
+        _POOLED_CONNECTION_CLASS = _PooledControlPlaneConnection
+    return _POOLED_CONNECTION_CLASS
+
+
+def _import_psycopg_pool() -> Any:
+    try:
+        import psycopg_pool
+    except ImportError as exc:  # pragma: no cover - exercised via caller
+        raise RuntimeError(
+            "psycopg_pool is required for Postgres control-plane pooling. "
+            "Install psycopg-pool in the active environment."
+        ) from exc
+    return psycopg_pool
+
+
+class _PooledConnectionHandle:
+    """Checkout handle that mimics a dedicated ``psycopg.connect()`` connection.
+
+    Semantics preserved from the pre-pool adapter:
+    - ``with handle:`` commits on clean exit, rolls back on exception (psycopg
+      ``Connection.__exit__`` parity), then releases to the pool instead of closing.
+    - ``close()`` discards any uncommitted transaction (rollback) before returning
+      the connection to the pool, matching the server-side effect of closing a
+      dedicated connection mid-transaction.
+    - All other attribute access (``cursor``, ``commit``, ``rollback``, ...) is
+      proxied to the underlying pooled connection.
+    """
+
+    __slots__ = ("_pool", "_connection", "_released")
+
+    def __init__(self, pool: Any, connection: Any) -> None:
+        self._pool = pool
+        self._connection = connection
+        self._released = False
+
+    def cursor(self, *args: Any, **kwargs: Any) -> Any:
+        return self._connection.cursor(*args, **kwargs)
+
+    def commit(self) -> None:
+        self._connection.commit()
+
+    def rollback(self) -> None:
+        self._connection.rollback()
+
+    def close(self) -> None:
+        if self._released:
+            return
+        self._released = True
+        connection = self._connection
+        try:
+            try:
+                connection.rollback()
+            except Exception:
+                pass
+            self._pool.putconn(connection)
+        except Exception:
+            try:
+                connection.close()
+            except Exception:
+                pass
+
+    def __enter__(self) -> "_PooledConnectionHandle":
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+        try:
+            if exc_type is None:
+                self._connection.commit()
+            else:
+                self._connection.rollback()
+        finally:
+            self.close()
+        return False
+
+    def __getattr__(self, name: str) -> Any:
+        if name in _PooledConnectionHandle.__slots__:
+            raise AttributeError(name)
+        return getattr(self._connection, name)
+
+
 class LiveControlPlanePostgresAdapter:
     def __init__(
         self,
@@ -178,6 +445,9 @@ class LiveControlPlanePostgresAdapter:
             resolve_default_control_plane_db_path(self.runtime_dir, base_dir=self.runtime_dir).expanduser()
         )
         self.dsn = str(dsn or resolve_control_plane_postgres_dsn(self.runtime_dir)).strip()
+        self.schema = normalize_control_plane_postgres_schema(
+            resolve_control_plane_postgres_schema(self.runtime_dir)
+        )
         self.mode = resolve_control_plane_postgres_live_mode(mode)
         self.tables = tuple(str(item).strip() for item in tables if str(item).strip())
         self._lock = threading.Lock()
@@ -185,19 +455,198 @@ class LiveControlPlanePostgresAdapter:
         self._runtime_schema_ready = False
         self._control_plane_writer_schema_ready = False
         self._psycopg: Any | None = None
+        self._pool: Any | None = None
+        self._pool_pid: int | None = None
+        self._pool_lock = threading.Lock()
+        self._legacy_target_public_web_migration_table_depth = 0
 
     @property
     def enabled(self) -> bool:
         return bool(self.dsn) and self.mode != "disabled"
 
     def should_mirror(self, table_name: str) -> bool:
-        return self.enabled and _normalize_postgres_identifier(table_name) in self.tables
+        normalized_table = _normalize_postgres_identifier(table_name)
+        return self.enabled and (
+            normalized_table in self.tables
+            or self._legacy_target_public_web_migration_table_enabled(normalized_table)
+        )
 
     def should_prefer_read(self, table_name: str) -> bool:
         return self.should_mirror(table_name) and self.mode in _READ_PREFERRED_MODES
 
     def is_authoritative(self, table_name: str) -> bool:
         return self.should_prefer_read(table_name) and self.mode in _AUTHORITATIVE_MODES
+
+    def _legacy_target_public_web_migration_table_enabled(self, table_name: str) -> bool:
+        return (
+            int(getattr(self, "_legacy_target_public_web_migration_table_depth", 0) or 0) > 0
+            and _normalize_postgres_identifier(table_name) in LEGACY_TARGET_PUBLIC_WEB_TABLES
+        )
+
+    @contextmanager
+    def legacy_target_public_web_migration_table_context(self, reason: str = "") -> Any:
+        self._legacy_target_public_web_migration_table_depth += 1
+        try:
+            yield {
+                "status": "enabled",
+                "reason": str(reason or "").strip() or "legacy_target_public_web_migration",
+                "tables": list(LEGACY_TARGET_PUBLIC_WEB_TABLES),
+            }
+        finally:
+            self._legacy_target_public_web_migration_table_depth = max(
+                0,
+                self._legacy_target_public_web_migration_table_depth - 1,
+            )
+
+    @contextmanager
+    def profile_prefetch_scheduler_lock(self, *, source_job: str, snapshot_dir: str) -> Any:
+        """Serialize profile-prefetch replan/claim critical sections for a job snapshot.
+
+        The lock is transaction-scoped and fail-fast. PostgreSQL releases it
+        automatically if the connection exits through an exception; callers must
+        keep the protected region short, must not submit providers while holding
+        this lock, and must yield when ``acquired`` is false instead of waiting.
+        """
+
+        normalized_source_job = str(source_job or "").strip()
+        normalized_snapshot_dir = str(snapshot_dir or "").strip()
+        if (
+            not self.should_prefer_read("linkedin_profile_registry")
+            or not normalized_source_job
+            or not normalized_snapshot_dir
+        ):
+            yield {
+                "kind": "none",
+                "lock_kind": "none",
+                "distributed": False,
+                "reason": "postgres_profile_registry_not_authoritative_or_scope_missing",
+            }
+            return
+        lock_key = f"profile_prefetch_scheduler:{normalized_source_job}:{normalized_snapshot_dir}"
+        attempt = 0
+        connection = None
+        while True:
+            try:
+                connection = self._connect()
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT pg_try_advisory_xact_lock(hashtext(%s))", (lock_key,))
+                    row = cursor.fetchone()
+                    acquired = bool(row[0] if isinstance(row, (list, tuple)) and row else row)
+                if not acquired:
+                    try:
+                        yield {
+                            "kind": "pg_try_advisory_xact_lock",
+                            "lock_kind": "pg_try_advisory_xact_lock",
+                            "distributed": True,
+                            "acquired": False,
+                            "busy": True,
+                            "lock_key": lock_key,
+                            "source": "control_plane_live_postgres",
+                            "scope": "source_job_snapshot_dir",
+                            "reason": "profile_prefetch_scheduler_lock_busy",
+                        }
+                    finally:
+                        if connection is not None:
+                            try:
+                                connection.close()
+                            except Exception:
+                                pass
+                    return
+                break
+            except Exception as exc:
+                if connection is not None:
+                    try:
+                        connection.close()
+                    except Exception:
+                        pass
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+        try:
+            yield {
+                "kind": "pg_try_advisory_xact_lock",
+                "lock_kind": "pg_try_advisory_xact_lock",
+                "distributed": True,
+                "acquired": True,
+                "busy": False,
+                "lock_key": lock_key,
+                "source": "control_plane_live_postgres",
+                "scope": "source_job_snapshot_dir",
+            }
+        except Exception:
+            if connection is not None:
+                connection.rollback()
+            raise
+        else:
+            if connection is not None:
+                connection.commit()
+        finally:
+            if connection is not None:
+                try:
+                    connection.close()
+                except Exception:
+                    pass
+
+    @contextmanager
+    def board_visible_patch_publication_lock(self, *, job_id: str, snapshot_id: str) -> Any:
+        """Serialize board-visible patch sequence/cumulative writes for a job snapshot."""
+
+        normalized_job_id = str(job_id or "").strip()
+        normalized_snapshot_id = str(snapshot_id or "").strip()
+        if (
+            not self.should_prefer_read("job_board_visible_patches")
+            or not normalized_job_id
+            or not normalized_snapshot_id
+        ):
+            yield {
+                "kind": "none",
+                "lock_kind": "none",
+                "distributed": False,
+                "reason": "postgres_board_visible_patches_not_authoritative_or_scope_missing",
+            }
+            return
+        lock_key = f"board_visible_patch_publication:{normalized_job_id}:{normalized_snapshot_id}"
+        attempt = 0
+        connection = None
+        while True:
+            try:
+                connection = self._connect()
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (lock_key,))
+                break
+            except Exception as exc:
+                if connection is not None:
+                    try:
+                        connection.close()
+                    except Exception:
+                        pass
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+        try:
+            yield {
+                "kind": "pg_advisory_xact_lock",
+                "lock_kind": "pg_advisory_xact_lock",
+                "distributed": True,
+                "lock_key": lock_key,
+                "source": "control_plane_live_postgres",
+                "scope": "job_snapshot_board_visible_publication",
+            }
+        except Exception:
+            if connection is not None:
+                connection.rollback()
+            raise
+        else:
+            if connection is not None:
+                connection.commit()
+        finally:
+            if connection is not None:
+                try:
+                    connection.close()
+                except Exception:
+                    pass
 
     def insert_row_with_generated_id(
         self,
@@ -336,17 +785,53 @@ class LiveControlPlanePostgresAdapter:
             tuple(params),
         )
 
+    def update_rows(
+        self,
+        *,
+        table_name: str,
+        where_sql: str,
+        params: list[Any] | tuple[Any, ...] = (),
+        values: dict[str, Any] | None = None,
+    ) -> int:
+        normalized_table = _normalize_postgres_identifier(table_name)
+        normalized_where_sql = _normalize_postgres_identifier(where_sql)
+        if not self.should_prefer_read(normalized_table) or not normalized_where_sql:
+            return 0
+        payload = _normalize_postgres_row_payload(
+            {
+                str(column or "").strip(): value
+                for column, value in dict(values or {}).items()
+                if str(column or "").strip()
+            }
+        )
+        if not payload:
+            return 0
+        self._ensure_table_write_schema(normalized_table)
+        assignments = ", ".join(f"{_quote_identifier(column)} = %s" for column in payload.keys())
+        return self._execute_non_query(
+            f"UPDATE {_quote_identifier(normalized_table)} SET {assignments} WHERE {normalized_where_sql}",
+            (*payload.values(), *tuple(params)),
+        )
+
     def ensure_bootstrapped(self) -> None:
         if not self.enabled:
             return
         with self._lock:
             if self._bootstrapped:
                 return
+            bootstrap_tables = list(self.tables)
+            if int(getattr(self, "_legacy_target_public_web_migration_table_depth", 0) or 0) > 0:
+                bootstrap_tables.extend(
+                    table_name
+                    for table_name in LEGACY_TARGET_PUBLIC_WEB_TABLES
+                    if table_name not in bootstrap_tables
+                )
             sync_runtime_control_plane_to_postgres(
                 runtime_dir=self.runtime_dir,
                 sqlite_path=self.sqlite_path,
                 dsn=self.dsn,
-                tables=list(self.tables),
+                schema=self.schema,
+                tables=bootstrap_tables,
                 min_interval_seconds=0.0,
                 force=False,
             )
@@ -362,6 +847,7 @@ class LiveControlPlanePostgresAdapter:
             runtime_dir=self.runtime_dir,
             sqlite_path=self.sqlite_path,
             dsn=self.dsn,
+            schema=self.schema,
             tables=[normalized_table],
             min_interval_seconds=0.0,
             force=True,
@@ -373,12 +859,35 @@ class LiveControlPlanePostgresAdapter:
                 self._control_plane_writer_schema_ready = False
             self._ensure_control_plane_writer_schema()
 
+    def _ensure_legacy_target_public_web_migration_table_schema(self, table_name: str) -> None:
+        normalized_table = _normalize_postgres_identifier(table_name)
+        if not self._legacy_target_public_web_migration_table_enabled(normalized_table):
+            return
+        sync_runtime_control_plane_to_postgres(
+            runtime_dir=self.runtime_dir,
+            sqlite_path=self.sqlite_path,
+            dsn=self.dsn,
+            schema=self.schema,
+            tables=[normalized_table],
+            min_interval_seconds=0.0,
+            force=True,
+        )
+
     def _ensure_table_write_schema(self, table_name: str) -> None:
         normalized_table = str(table_name or "").strip()
         if normalized_table in _RUNTIME_COORDINATION_TABLES:
             self._ensure_runtime_coordination_schema()
             return
         self._ensure_control_plane_writer_schema()
+
+    def _require_operation_runtime_table(self, table_name: str) -> bool:
+        normalized_table = _normalize_postgres_identifier(table_name)
+        if normalized_table not in _OPERATION_RUNTIME_TABLES:
+            return False
+        if not self.should_prefer_read(normalized_table):
+            return False
+        self._ensure_runtime_coordination_schema()
+        return True
 
     def _resolve_serial_sequence(
         self,
@@ -412,6 +921,8 @@ class LiveControlPlanePostgresAdapter:
                     upsert_acquisition_shard_registry_rows(cursor, [payload], ensure_schema=False)
                 connection.commit()
             return
+        if self._legacy_target_public_web_migration_table_enabled(normalized_table):
+            self._ensure_legacy_target_public_web_migration_table_schema(normalized_table)
         columns = [column for column in payload.keys() if str(column or "").strip()]
         quoted_table_name = _quote_identifier(normalized_table)
         quoted_columns = [_quote_identifier(column) for column in columns]
@@ -420,9 +931,93 @@ class LiveControlPlanePostgresAdapter:
         conflict_target = ", ".join(_quote_identifier(column) for column in primary_keys)
         sql = f"INSERT INTO {quoted_table_name} ({', '.join(quoted_columns)}) VALUES ({placeholders})"
         if update_columns:
-            sql += f" ON CONFLICT ({conflict_target}) DO UPDATE SET " + ", ".join(
-                f"{_quote_identifier(column)} = EXCLUDED.{_quote_identifier(column)}" for column in update_columns
-            )
+            update_assignments: list[str] = []
+            for column in update_columns:
+                quoted_column = _quote_identifier(column)
+                if (
+                    normalized_table == "job_result_lifecycle"
+                    and column in _JOB_RESULT_LIFECYCLE_DELTA_MONOTONIC_INT_FIELDS
+                ):
+                    update_assignments.append(
+                        (
+                            f"{quoted_column} = CASE "
+                            "WHEN EXCLUDED.delta_profile_progress_applicable = 0 "
+                            f"THEN EXCLUDED.{quoted_column} "
+                            f"ELSE GREATEST({quoted_table_name}.{quoted_column}, EXCLUDED.{quoted_column}) "
+                            "END"
+                        )
+                    )
+                    continue
+                if (
+                    normalized_table == "job_result_lifecycle"
+                    and column in _JOB_RESULT_LIFECYCLE_STAGE1_MONOTONIC_INT_FIELDS
+                ):
+                    update_assignments.append(
+                        f"{quoted_column} = GREATEST({quoted_table_name}.{quoted_column}, EXCLUDED.{quoted_column})"
+                    )
+                    continue
+                if normalized_table == "job_result_lifecycle" and column == "metadata_json":
+                    update_assignments.append(
+                        (
+                            f"{quoted_column} = CASE "
+                            f"WHEN COALESCE(({quoted_table_name}.metadata_json::jsonb ->> 'delta_profile_denominator_promoted')::boolean, false) IS TRUE "
+                            f"THEN ({quoted_table_name}.metadata_json::jsonb || EXCLUDED.metadata_json::jsonb || "
+                            "jsonb_build_object('delta_profile_denominator_promoted', true))::text "
+                            f"ELSE EXCLUDED.{quoted_column} "
+                            "END"
+                        )
+                    )
+                    continue
+                if (
+                    normalized_table == "job_result_lifecycle"
+                    and column
+                    in {
+                        "phase",
+                        "state",
+                        "served_snapshot_id",
+                        "serving_projection_id",
+                        "serving_projection_phase",
+                        "background_snapshot_materialization_status",
+                    }
+                ):
+                    update_assignments.append(
+                        (
+                            f"{quoted_column} = CASE "
+                            "WHEN "
+                            f"{quoted_table_name}.serving_projection_phase IN "
+                            "('current_snapshot_row_shell_overlay', 'current_snapshot_serving', 'current_serving') "
+                            "AND EXCLUDED.serving_projection_phase IN "
+                            "('partial_delta_overlay', 'partial_delta_board_visible_overlay', 'partial_current_snapshot_overlay') "
+                            f"AND {quoted_table_name}.current_snapshot_id <> '' "
+                            f"AND EXCLUDED.current_snapshot_id = {quoted_table_name}.current_snapshot_id "
+                            f"THEN {quoted_table_name}.{quoted_column} "
+                            f"ELSE EXCLUDED.{quoted_column} "
+                            "END"
+                        )
+                    )
+                    continue
+                if normalized_table == "job_result_lifecycle" and column in {
+                    "served_candidate_count",
+                    "expected_candidate_count",
+                }:
+                    update_assignments.append(
+                        (
+                            f"{quoted_column} = CASE "
+                            "WHEN "
+                            f"{quoted_table_name}.serving_projection_phase IN "
+                            "('current_snapshot_row_shell_overlay', 'current_snapshot_serving', 'current_serving') "
+                            "AND EXCLUDED.serving_projection_phase IN "
+                            "('partial_delta_overlay', 'partial_delta_board_visible_overlay', 'partial_current_snapshot_overlay') "
+                            f"AND {quoted_table_name}.current_snapshot_id <> '' "
+                            f"AND EXCLUDED.current_snapshot_id = {quoted_table_name}.current_snapshot_id "
+                            f"THEN GREATEST({quoted_table_name}.{quoted_column}, EXCLUDED.{quoted_column}) "
+                            f"ELSE EXCLUDED.{quoted_column} "
+                            "END"
+                        )
+                    )
+                    continue
+                update_assignments.append(f"{quoted_column} = EXCLUDED.{quoted_column}")
+            sql += f" ON CONFLICT ({conflict_target}) DO UPDATE SET " + ", ".join(update_assignments)
         else:
             sql += f" ON CONFLICT ({conflict_target}) DO NOTHING"
         self._execute_non_query(sql, tuple(_normalize_postgres_payload(payload.get(column)) for column in columns))
@@ -460,6 +1055,13 @@ class LiveControlPlanePostgresAdapter:
         if any(column not in columns for column in primary_keys):
             return 0
         update_columns = [column for column in columns if column not in primary_keys]
+        chunks = _chunk_postgres_bulk_rows(payload_rows, column_count=len(columns))
+        if len(chunks) > 1:
+            affected_total = 0
+            for chunk in chunks:
+                normalized_chunk = [{column: payload.get(column) for column in columns} for payload in chunk]
+                affected_total += self.bulk_upsert_rows(normalized_table, normalized_chunk)
+            return affected_total
         conflict_target = ", ".join(_quote_identifier(column) for column in primary_keys)
         quoted_table_name = _quote_identifier(normalized_table)
         quoted_columns = [_quote_identifier(column) for column in columns]
@@ -627,6 +1229,36 @@ class LiveControlPlanePostgresAdapter:
         )
         return rows[0] if rows else None
 
+    def count_rows(
+        self,
+        table_name: str,
+        *,
+        where_sql: str = "",
+        params: list[Any] | tuple[Any, ...] = (),
+    ) -> int:
+        normalized_table = _normalize_postgres_identifier(table_name)
+        if not self.should_prefer_read(normalized_table):
+            return 0
+        postgres_only_read = self.mode == "postgres_only"
+        if not postgres_only_read:
+            self.ensure_bootstrapped()
+        query_parts = [f"SELECT COUNT(*) AS row_count FROM {_quote_identifier(normalized_table)}"]
+        normalized_where_sql = str(where_sql or "").strip()
+        if normalized_where_sql:
+            query_parts.append(f"WHERE {normalized_where_sql}")
+        query = " ".join(query_parts)
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                if postgres_only_read and not _postgres_table_exists(cursor, normalized_table):
+                    return 0
+                cursor.execute(query, tuple(_normalize_postgres_payload(item) for item in list(params or [])))
+                row = cursor.fetchone()
+        if isinstance(row, dict):
+            return int(row.get("row_count") or 0)
+        if isinstance(row, (list, tuple)):
+            return int((row[0] if row else 0) or 0)
+        return int(getattr(row, "row_count", 0) or 0)
+
     def select_many(
         self,
         table_name: str,
@@ -635,12 +1267,15 @@ class LiveControlPlanePostgresAdapter:
         params: list[Any] | tuple[Any, ...] = (),
         order_by_sql: str = "",
         limit: int = 100,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         normalized_table = _normalize_postgres_identifier(table_name)
         if not self.should_prefer_read(normalized_table):
             return []
-        self.ensure_bootstrapped()
-        if normalized_table == ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE:
+        postgres_only_read = self.mode == "postgres_only"
+        if not postgres_only_read:
+            self.ensure_bootstrapped()
+        if not postgres_only_read and normalized_table == ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE:
             self._ensure_table_write_schema(normalized_table)
         query_parts = [f"SELECT * FROM {_quote_identifier(normalized_table)}"]
         normalized_where_sql = str(where_sql or "").strip()
@@ -652,13 +1287,176 @@ class LiveControlPlanePostgresAdapter:
         normalized_limit = int(limit or 0)
         if normalized_limit > 0:
             query_parts.append("LIMIT %s")
+        normalized_offset = max(0, int(offset or 0))
+        if normalized_offset > 0:
+            query_parts.append("OFFSET %s")
         query = " ".join(query_parts)
         with self._connect() as connection:
             with connection.cursor() as cursor:
+                if postgres_only_read and not _postgres_table_exists(cursor, normalized_table):
+                    return []
                 query_params = list(params)
                 if normalized_limit > 0:
                     query_params.append(normalized_limit)
+                if normalized_offset > 0:
+                    query_params.append(normalized_offset)
                 cursor.execute(query, tuple(_normalize_postgres_payload(item) for item in query_params))
+                return _fetch_all_dict_rows(cursor)
+
+    def list_latest_target_candidate_public_web_runs_by_record_ids(
+        self,
+        record_ids: list[str] | tuple[str, ...],
+        *,
+        status: str = "",
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        if not self.should_prefer_read("target_candidate_public_web_runs"):
+            return []
+        normalized_record_ids: list[str] = []
+        seen: set[str] = set()
+        for raw_record_id in list(record_ids or []):
+            record_id = str(raw_record_id or "").strip()
+            if not record_id or record_id in seen:
+                continue
+            seen.add(record_id)
+            normalized_record_ids.append(record_id)
+        if not normalized_record_ids:
+            return []
+        normalized_limit = max(1, int(limit or 1000))
+        normalized_record_ids = normalized_record_ids[:normalized_limit]
+        status_filter = str(status or "").strip().lower()
+        record_placeholders = ", ".join(["%s"] * len(normalized_record_ids))
+        status_clause = "AND status = %s" if status_filter else ""
+        query = f"""
+            SELECT *
+            FROM (
+                SELECT *,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY record_id
+                           ORDER BY updated_at DESC, created_at DESC, run_id DESC
+                       ) AS public_web_run_rank
+                FROM target_candidate_public_web_runs
+                WHERE record_id IN ({record_placeholders})
+                {status_clause}
+            ) ranked_public_web_runs
+            WHERE public_web_run_rank = 1
+            ORDER BY updated_at DESC, created_at DESC, run_id DESC
+            LIMIT %s
+        """
+        params: list[Any] = [*normalized_record_ids]
+        if status_filter:
+            params.append(status_filter)
+        params.append(normalized_limit)
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                if not _postgres_table_exists(cursor, "target_candidate_public_web_runs"):
+                    return []
+                cursor.execute(query, tuple(_normalize_postgres_payload(item) for item in params))
+                return _fetch_all_dict_rows(cursor)
+
+    def list_latest_crm_public_web_runs_by_record_ids(
+        self,
+        crm_record_ids: list[str] | tuple[str, ...],
+        *,
+        workspace_id: str = "default",
+        status: str = "",
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        if not self.should_prefer_read("crm_public_web_runs"):
+            return []
+        normalized_record_ids: list[str] = []
+        seen: set[str] = set()
+        for raw_record_id in list(crm_record_ids or []):
+            record_id = str(raw_record_id or "").strip()
+            if not record_id or record_id in seen:
+                continue
+            seen.add(record_id)
+            normalized_record_ids.append(record_id)
+        if not normalized_record_ids:
+            return []
+        normalized_limit = max(1, int(limit or 1000))
+        normalized_record_ids = normalized_record_ids[:normalized_limit]
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        status_filter = str(status or "").strip().lower()
+        record_placeholders = ", ".join(["%s"] * len(normalized_record_ids))
+        status_clause = "AND status = %s" if status_filter else ""
+        query = f"""
+            SELECT *
+            FROM (
+	                SELECT *,
+	                       ROW_NUMBER() OVER (
+	                           PARTITION BY crm_record_id
+	                           ORDER BY created_at DESC, run_id DESC
+	                       ) AS public_web_run_rank
+	                FROM crm_public_web_runs
+                WHERE workspace_id = %s
+                  AND crm_record_id IN ({record_placeholders})
+                {status_clause}
+	            ) ranked_public_web_runs
+	            WHERE public_web_run_rank = 1
+	            ORDER BY created_at DESC, run_id DESC
+	            LIMIT %s
+        """
+        params: list[Any] = [normalized_workspace_id, *normalized_record_ids]
+        if status_filter:
+            params.append(status_filter)
+        params.append(normalized_limit)
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                if not _postgres_table_exists(cursor, "crm_public_web_runs"):
+                    return []
+                cursor.execute(query, tuple(_normalize_postgres_payload(item) for item in params))
+                return _fetch_all_dict_rows(cursor)
+
+    def list_latest_company_public_web_asset_runs_by_company_keys(
+        self,
+        company_keys: list[str] | tuple[str, ...],
+        *,
+        status: str = "",
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        if not self.should_prefer_read("company_public_web_asset_runs"):
+            return []
+        normalized_company_keys: list[str] = []
+        seen: set[str] = set()
+        for raw_company_key in list(company_keys or []):
+            company_key = str(raw_company_key or "").strip()
+            if not company_key or company_key in seen:
+                continue
+            seen.add(company_key)
+            normalized_company_keys.append(company_key)
+        if not normalized_company_keys:
+            return []
+        normalized_limit = max(1, int(limit or 1000))
+        normalized_company_keys = normalized_company_keys[:normalized_limit]
+        status_filter = str(status or "").strip().lower()
+        company_placeholders = ", ".join(["%s"] * len(normalized_company_keys))
+        status_clause = "AND status = %s" if status_filter else ""
+        query = f"""
+            SELECT *
+            FROM (
+                SELECT *,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY company_key
+                           ORDER BY updated_at DESC, created_at DESC, run_id DESC
+                       ) AS company_public_web_run_rank
+                FROM company_public_web_asset_runs
+                WHERE company_key IN ({company_placeholders})
+                {status_clause}
+            ) ranked_company_public_web_runs
+            WHERE company_public_web_run_rank = 1
+            ORDER BY updated_at DESC, created_at DESC, run_id DESC
+            LIMIT %s
+        """
+        params: list[Any] = [*normalized_company_keys]
+        if status_filter:
+            params.append(status_filter)
+        params.append(normalized_limit)
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                if not _postgres_table_exists(cursor, "company_public_web_asset_runs"):
+                    return []
+                cursor.execute(query, tuple(_normalize_postgres_payload(item) for item in params))
                 return _fetch_all_dict_rows(cursor)
 
     def create_agent_trace_span(
@@ -733,25 +1531,34 @@ class LiveControlPlanePostgresAdapter:
             return None
         self._ensure_runtime_coordination_schema()
         now = _utc_now_sql_timestamp()
-        return self._execute_returning_one(
-            """
-            UPDATE agent_trace_spans
-            SET status = %s,
-                output_json = %s,
-                handoff_to_lane = CASE WHEN %s <> '' THEN %s ELSE COALESCE(handoff_to_lane, '') END,
-                completed_at = %s
-            WHERE span_id = %s
-            RETURNING *
-            """,
-            (
-                str(status),
-                _json_dump(output_payload or {}),
-                str(handoff_to_lane or ""),
-                str(handoff_to_lane or ""),
-                now,
-                int(span_id),
-            ),
+        normalized_status = str(status)
+        sql = """
+        UPDATE agent_trace_spans
+        SET status = %s,
+            output_json = %s,
+            handoff_to_lane = CASE WHEN %s <> '' THEN %s ELSE COALESCE(handoff_to_lane, '') END,
+            completed_at = %s
+        WHERE span_id = %s
+        RETURNING *
+        """
+        params = (
+            normalized_status,
+            _json_dump(output_payload or {}),
+            str(handoff_to_lane or ""),
+            str(handoff_to_lane or ""),
+            now,
+            int(span_id),
         )
+        for attempt in range(_CONTROL_PLANE_POSTGRES_MAX_RETRIES):
+            row = self._execute_returning_one(sql, params)
+            if row is not None:
+                return row
+            existing = self.get_agent_trace_span(int(span_id))
+            if existing is not None and str(existing.get("status") or "") == normalized_status:
+                return existing
+            if attempt + 1 < _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt + 1))
+        return None
 
     def get_agent_trace_span(self, span_id: int) -> dict[str, Any] | None:
         if not self.should_prefer_read("agent_trace_spans") or int(span_id or 0) <= 0:
@@ -843,7 +1650,10 @@ class LiveControlPlanePostgresAdapter:
                     ELSE jobs.matching_request_json
                 END,
                 summary_json = EXCLUDED.summary_json,
-                artifact_path = EXCLUDED.artifact_path,
+                artifact_path = CASE
+                    WHEN EXCLUDED.artifact_path <> '' THEN EXCLUDED.artifact_path
+                    ELSE jobs.artifact_path
+                END,
                 request_signature = EXCLUDED.request_signature,
                 request_family_signature = EXCLUDED.request_family_signature,
                 matching_request_signature = EXCLUDED.matching_request_signature,
@@ -1011,20 +1821,33 @@ class LiveControlPlanePostgresAdapter:
         if not normalized_job_id:
             return None
         self._ensure_control_plane_writer_schema()
-        return self._execute_returning_one(
-            """
-            UPDATE agent_runtime_sessions
-            SET status = %s,
-                updated_at = %s
-            WHERE job_id = %s
-            RETURNING *
-            """,
-            (
-                str(status or ""),
-                _utc_now_sql_timestamp(),
-                normalized_job_id,
-            ),
+        normalized_status = str(status or "")
+        sql = """
+        UPDATE agent_runtime_sessions
+        SET status = %s,
+            updated_at = %s
+        WHERE job_id = %s
+        RETURNING *
+        """
+        params = (
+            normalized_status,
+            _utc_now_sql_timestamp(),
+            normalized_job_id,
         )
+        for attempt in range(_CONTROL_PLANE_POSTGRES_MAX_RETRIES):
+            row = self._execute_returning_one(sql, params)
+            if row is not None:
+                return row
+            existing = self.select_one(
+                "agent_runtime_sessions",
+                where_sql="job_id = %s",
+                params=[normalized_job_id],
+            )
+            if existing is not None and str(existing.get("status") or "") == normalized_status:
+                return existing
+            if attempt + 1 < _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt + 1))
+        return None
 
     def create_or_resume_agent_worker(
         self,
@@ -1216,6 +2039,48 @@ class LiveControlPlanePostgresAdapter:
             limit=0,
         )
 
+    def list_agent_workers_by_remote_provider_identifiers(
+        self,
+        *,
+        run_id: str = "",
+        dataset_id: str = "",
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        if not self.should_prefer_read("agent_worker_runs"):
+            return []
+        normalized_run_id = str(run_id or "").strip()
+        normalized_dataset_id = str(dataset_id or "").strip()
+        if not normalized_run_id and not normalized_dataset_id:
+            return []
+        checkpoint_json = "COALESCE(NULLIF(checkpoint_json, ''), '{}')::jsonb"
+        clauses: list[str] = []
+        params: list[Any] = []
+        if normalized_run_id:
+            clauses.append(
+                "("
+                f"{checkpoint_json} ->> 'run_id' = %s OR "
+                f"{checkpoint_json} ->> 'actor_run_id' = %s OR "
+                f"{checkpoint_json} ->> 'actorRunId' = %s"
+                ")"
+            )
+            params.extend([normalized_run_id, normalized_run_id, normalized_run_id])
+        if normalized_dataset_id:
+            clauses.append(
+                "("
+                f"{checkpoint_json} ->> 'dataset_id' = %s OR "
+                f"{checkpoint_json} ->> 'default_dataset_id' = %s OR "
+                f"{checkpoint_json} ->> 'defaultDatasetId' = %s"
+                ")"
+            )
+            params.extend([normalized_dataset_id, normalized_dataset_id, normalized_dataset_id])
+        return self.select_many(
+            "agent_worker_runs",
+            where_sql=" OR ".join(clauses),
+            params=params,
+            order_by_sql="updated_at DESC, worker_id DESC",
+            limit=max(1, int(limit or 50)),
+        )
+
     def list_recoverable_agent_workers(
         self,
         *,
@@ -1248,14 +2113,21 @@ class LiveControlPlanePostgresAdapter:
         stale_cutoff_seconds = max(1, int(stale_after_seconds or 300))
         for row in rows:
             status = str(row.get("status") or "").strip().lower()
+            lease_owner = str(row.get("lease_owner") or "").strip()
             lease_expires_at = str(row.get("lease_expires_at") or "").strip()
             checkpoint = _json_load_dict(row.get("checkpoint_json"))
             checkpoint_stage = str(checkpoint.get("stage") or "").strip()
+            if checkpoint_stage == "waiting_profile_coalescing":
+                continue
             updated_at = str(row.get("updated_at") or "").strip()
             is_running_wait = status == "running" and checkpoint_stage in _RUNNING_RECOVERABLE_WAIT_STAGES
             is_running_stale = status == "running" and _timestamp_age_seconds(updated_at) >= stale_cutoff_seconds
             is_recoverable_status = status in {"queued", "interrupted", "failed"}
-            lease_available = not lease_expires_at or _timestamp_is_expired(lease_expires_at)
+            lease_available = (
+                not lease_expires_at
+                or _timestamp_is_expired(lease_expires_at)
+                or worker_lease_owner_is_dead_local_process(lease_owner)
+            )
             if (is_recoverable_status or is_running_wait or is_running_stale) and lease_available:
                 recoverable.append(dict(row))
         recoverable.sort(key=lambda item: (str(item.get("updated_at") or ""), int(item.get("worker_id") or 0)))
@@ -1333,6 +2205,32 @@ class LiveControlPlanePostgresAdapter:
         if not self.should_prefer_read("agent_worker_runs"):
             return None
         now = _utc_now_sql_timestamp()
+        current = self.get_agent_worker(worker_id=int(worker_id))
+        current_lease_owner = str(dict(current or {}).get("lease_owner") or "").strip()
+        current_lease_expires_at = str(dict(current or {}).get("lease_expires_at") or "").strip()
+        if (
+            current_lease_owner
+            and current_lease_expires_at
+            and not _timestamp_is_expired(current_lease_expires_at)
+            and worker_lease_owner_is_dead_local_process(current_lease_owner)
+        ):
+            self._execute_returning_one(
+                """
+                UPDATE agent_worker_runs
+                SET lease_owner = NULL,
+                    lease_expires_at = NULL,
+                    last_error = %s,
+                    updated_at = %s
+                WHERE worker_id = %s AND lease_owner = %s
+                RETURNING *
+                """,
+                (
+                    f"Released dead local worker lease owner {current_lease_owner}",
+                    now,
+                    int(worker_id),
+                    current_lease_owner,
+                ),
+            )
         return self._execute_returning_one(
             """
             UPDATE agent_worker_runs
@@ -1451,6 +2349,330 @@ class LiveControlPlanePostgresAdapter:
             RETURNING *
             """,
             (_utc_now_sql_timestamp(), int(worker_id)),
+        )
+
+    def claim_job_materialization_item(
+        self,
+        item_id: str,
+        *,
+        lease_owner: str,
+        lease_seconds: int,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("job_materialization_items"):
+            return None
+        self._ensure_table_write_schema("job_materialization_items")
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE job_materialization_items
+            SET status = 'running',
+                phase = 'applying',
+                lease_owner = %s,
+                lease_expires_at = %s,
+                attempt_count = COALESCE(attempt_count, 0) + 1,
+                updated_at = %s
+            WHERE item_id = %s
+              AND status IN ('queued', 'deferred', 'failed_retryable', 'waiting_prerequisite', 'running')
+              AND (not_before_at = '' OR not_before_at <= %s)
+              AND (lease_expires_at = '' OR lease_expires_at <= %s)
+            RETURNING *
+            """,
+            (
+                str(lease_owner),
+                _expiry_timestamp(int(lease_seconds or 300)),
+                now,
+                str(item_id),
+                now,
+                now,
+            ),
+        )
+
+    def mark_job_materialization_item_completed(
+        self,
+        item_id: str,
+        *,
+        result_patch_id: str = "",
+        result_view_id: str = "",
+        serving_projection_id: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("job_materialization_items"):
+            return None
+        self._ensure_table_write_schema("job_materialization_items")
+        current = self.select_one("job_materialization_items", where_sql="item_id = %s", params=[str(item_id)])
+        metadata_payload = {
+            **_json_load_dict(dict(current or {}).get("metadata_json")),
+            **dict(metadata or {}),
+        }
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE job_materialization_items
+            SET status = 'completed',
+                phase = 'applied',
+                result_patch_id = %s,
+                result_view_id = %s,
+                serving_projection_id = %s,
+                lease_owner = '',
+                lease_expires_at = '',
+                last_error = '',
+                metadata_json = %s,
+                completed_at = %s,
+                updated_at = %s
+            WHERE item_id = %s
+            RETURNING *
+            """,
+            (
+                str(result_patch_id or dict(current or {}).get("result_patch_id") or ""),
+                str(result_view_id or dict(current or {}).get("result_view_id") or ""),
+                str(serving_projection_id or dict(current or {}).get("serving_projection_id") or ""),
+                _json_dump(metadata_payload),
+                now,
+                now,
+                str(item_id),
+            ),
+        )
+
+    def mark_job_materialization_item_failed(
+        self,
+        item_id: str,
+        *,
+        error_text: str,
+        retryable: bool = True,
+        retry_delay_seconds: int = 30,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("job_materialization_items"):
+            return None
+        self._ensure_table_write_schema("job_materialization_items")
+        current = self.select_one("job_materialization_items", where_sql="item_id = %s", params=[str(item_id)])
+        attempt_count = int(dict(current or {}).get("attempt_count") or 0)
+        max_attempts = max(1, int(dict(current or {}).get("max_attempts") or 5))
+        should_retry = bool(retryable) and attempt_count < max_attempts
+        metadata_payload = {
+            **_json_load_dict(dict(current or {}).get("metadata_json")),
+            **dict(metadata or {}),
+        }
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE job_materialization_items
+            SET status = %s,
+                phase = %s,
+                lease_owner = '',
+                lease_expires_at = '',
+                not_before_at = %s,
+                last_error = %s,
+                metadata_json = %s,
+                updated_at = %s
+            WHERE item_id = %s
+            RETURNING *
+            """,
+            (
+                "failed_retryable" if should_retry else "failed",
+                "retry_wait" if should_retry else "terminal",
+                _expiry_timestamp(int(retry_delay_seconds or 30)) if should_retry else "",
+                str(error_text or ""),
+                _json_dump(metadata_payload),
+                now,
+                str(item_id),
+            ),
+        )
+
+    def mark_job_materialization_item_waiting_prerequisite(
+        self,
+        item_id: str,
+        *,
+        retry_delay_seconds: int = 8,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("job_materialization_items"):
+            return None
+        self._ensure_table_write_schema("job_materialization_items")
+        current = self.select_one("job_materialization_items", where_sql="item_id = %s", params=[str(item_id)])
+        attempt_count = max(0, int(dict(current or {}).get("attempt_count") or 0) - 1)
+        metadata_payload = {
+            **_json_load_dict(dict(current or {}).get("metadata_json")),
+            **dict(metadata or {}),
+        }
+        metadata_payload.setdefault("failure_reason", "waiting_prerequisite_candidate_documents")
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE job_materialization_items
+            SET status = 'waiting_prerequisite',
+                phase = 'waiting_prerequisite',
+                lease_owner = '',
+                lease_expires_at = '',
+                attempt_count = %s,
+                not_before_at = %s,
+                last_error = '',
+                metadata_json = %s,
+                updated_at = %s
+            WHERE item_id = %s
+            RETURNING *
+            """,
+            (
+                attempt_count,
+                _expiry_timestamp(min(30, max(1, int(retry_delay_seconds or 8)))),
+                _json_dump(metadata_payload),
+                now,
+                str(item_id),
+            ),
+        )
+
+    def mark_job_materialization_item_partial_progress(
+        self,
+        item_id: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("job_materialization_items"):
+            return None
+        self._ensure_table_write_schema("job_materialization_items")
+        current = self.select_one("job_materialization_items", where_sql="item_id = %s", params=[str(item_id)])
+        attempt_count = max(0, int(dict(current or {}).get("attempt_count") or 0) - 1)
+        metadata_payload = {
+            **_json_load_dict(dict(current or {}).get("metadata_json")),
+            **dict(metadata or {}),
+        }
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE job_materialization_items
+            SET status = 'queued',
+                phase = 'queued',
+                lease_owner = '',
+                lease_expires_at = '',
+                attempt_count = %s,
+                not_before_at = '',
+                last_error = '',
+                metadata_json = %s,
+                updated_at = %s
+            WHERE item_id = %s
+            RETURNING *
+            """,
+            (
+                attempt_count,
+                _json_dump(metadata_payload),
+                now,
+                str(item_id),
+            ),
+        )
+
+    def reawaken_waiting_prerequisite_job_materialization_items(
+        self,
+        *,
+        job_id: str,
+        snapshot_id: str,
+        item_kind: str = "local_apply_closure",
+        source: str = "candidate_documents_prerequisite_ready",
+    ) -> int | None:
+        if not self.should_prefer_read("job_materialization_items"):
+            return None
+        normalized_job_id = str(job_id or "").strip()
+        normalized_snapshot_id = str(snapshot_id or "").strip()
+        normalized_kind = str(item_kind or "local_apply_closure").strip() or "local_apply_closure"
+        normalized_source = str(source or "candidate_documents_prerequisite_ready").strip()
+        if not normalized_job_id or not normalized_snapshot_id:
+            return 0
+        self._ensure_table_write_schema("job_materialization_items")
+        now = _utc_now_sql_timestamp()
+        return self._execute_non_query(
+            """
+            UPDATE job_materialization_items
+            SET status = 'queued',
+                phase = 'queued',
+                not_before_at = '',
+                metadata_json = jsonb_set(
+                    jsonb_set(
+                        jsonb_set(
+                            COALESCE(NULLIF(metadata_json, ''), '{}')::jsonb,
+                            '{reawakened_by}',
+                            to_jsonb(%s::text),
+                            true
+                        ),
+                        '{prerequisite_ready_source}',
+                        to_jsonb(%s::text),
+                        true
+                    ),
+                    '{prerequisite_ready_at}',
+                    to_jsonb(%s::text),
+                    true
+                )::text,
+                updated_at = %s
+            WHERE status = 'waiting_prerequisite'
+              AND job_id = %s
+              AND snapshot_id = %s
+              AND item_kind = %s
+            """,
+            (
+                normalized_source,
+                normalized_source,
+                now,
+                now,
+                normalized_job_id,
+                normalized_snapshot_id,
+                normalized_kind,
+            ),
+        )
+
+    def reawaken_waiting_prerequisite_workflow_commands(
+        self,
+        *,
+        workflow_run_id: str,
+        snapshot_id: str,
+        command_type: str,
+        source: str = "candidate_documents_prerequisite_ready",
+    ) -> int | None:
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        normalized_run_id = str(workflow_run_id or "").strip()
+        normalized_snapshot_id = str(snapshot_id or "").strip()
+        normalized_command_type = str(command_type or "").strip()
+        normalized_source = str(source or "candidate_documents_prerequisite_ready").strip()
+        if not normalized_run_id or not normalized_snapshot_id or not normalized_command_type:
+            return 0
+        self._ensure_runtime_coordination_schema()
+        now = _utc_now_sql_timestamp()
+        return self._execute_non_query(
+            """
+            UPDATE workflow_commands
+            SET status = 'queued',
+                not_before_at = '',
+                result_json = jsonb_set(
+                    jsonb_set(
+                        jsonb_set(
+                            COALESCE(NULLIF(result_json, ''), '{}')::jsonb,
+                            '{reawakened_by}',
+                            to_jsonb(%s::text),
+                            true
+                        ),
+                        '{prerequisite_ready_source}',
+                        to_jsonb(%s::text),
+                        true
+                    ),
+                    '{prerequisite_ready_at}',
+                    to_jsonb(%s::text),
+                    true
+                )::text,
+                updated_at = %s
+            WHERE status = 'retry_wait'
+              AND workflow_run_id = %s
+              AND command_type = %s
+              AND COALESCE(COALESCE(NULLIF(payload_json, ''), '{}')::jsonb ->> 'snapshot_id', '') = %s
+              AND COALESCE(last_error, '') = ''
+              AND COALESCE(COALESCE(NULLIF(result_json, ''), '{}')::jsonb ->> 'status', '') = 'waiting_prerequisite'
+            """,
+            (
+                normalized_source,
+                normalized_source,
+                now,
+                now,
+                normalized_run_id,
+                normalized_command_type,
+                normalized_snapshot_id,
+            ),
         )
 
     def acquire_workflow_job_lease(
@@ -1572,6 +2794,1439 @@ class LiveControlPlanePostgresAdapter:
             tuple(params),
         )
 
+    def append_workflow_event(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_events"):
+            return None
+        self._ensure_runtime_coordination_schema()
+        payload = _normalize_postgres_row_payload(dict(row or {}))
+        workflow_run_id = str(payload.get("workflow_run_id") or "").strip()
+        idempotency_key = str(payload.get("idempotency_key") or "").strip()
+        event_family = str(payload.get("event_family") or "").strip()
+        event_type = str(payload.get("event_type") or "").strip()
+        if not workflow_run_id or not idempotency_key or not event_family or not event_type:
+            return None
+        now = _utc_now_sql_timestamp()
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                            (f"workflow_events:{workflow_run_id}",),
+                        )
+                        sequence_number = int(payload.get("sequence_number") or 0)
+                        if sequence_number <= 0:
+                            cursor.execute(
+                                "SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM workflow_events WHERE workflow_run_id = %s",
+                                (workflow_run_id,),
+                            )
+                            row_value = cursor.fetchone()
+                            sequence_number = int(
+                                (row_value[0] if isinstance(row_value, (list, tuple)) and row_value else row_value)
+                                or 1
+                            )
+                        event_id = str(payload.get("event_id") or "").strip() or (
+                            "evt_"
+                            + sha1(f"{workflow_run_id}:{sequence_number}:{idempotency_key}".encode("utf-8")).hexdigest()[
+                                :24
+                            ]
+                        )
+                        event_payload = {
+                            "event_id": event_id,
+                            "workflow_run_id": workflow_run_id,
+                            "operation_id": str(payload.get("operation_id") or "").strip(),
+                            "command_id": str(payload.get("command_id") or "").strip(),
+                            "activity_attempt_id": str(payload.get("activity_attempt_id") or "").strip(),
+                            "event_family": event_family,
+                            "event_type": event_type,
+                            "sequence_number": sequence_number,
+                            "idempotency_key": idempotency_key,
+                            "occurred_at": str(payload.get("occurred_at") or now).strip(),
+                            "recorded_at": str(payload.get("recorded_at") or now).strip(),
+                            "actor": str(payload.get("actor") or "").strip(),
+                            "source": str(payload.get("source") or "").strip(),
+                            "payload_json": str(payload.get("payload_json") or "{}"),
+                            "artifact_refs_json": str(payload.get("artifact_refs_json") or "[]"),
+                            "schema_version": str(payload.get("schema_version") or "workflow_event_v1").strip(),
+                            "created_at": str(payload.get("created_at") or now).strip(),
+                        }
+                        columns = list(event_payload.keys())
+                        cursor.execute(
+                            (
+                                f"INSERT INTO workflow_events ({', '.join(_quote_identifier(column) for column in columns)}) "
+                                f"VALUES ({', '.join(['%s'] * len(columns))}) "
+                                "ON CONFLICT DO NOTHING RETURNING *"
+                            ),
+                            tuple(event_payload[column] for column in columns),
+                        )
+                        inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if inserted is not None:
+                            connection.commit()
+                            return inserted
+                        cursor.execute(
+                            """
+                            SELECT * FROM workflow_events
+                            WHERE workflow_run_id = %s AND idempotency_key = %s
+                            LIMIT 1
+                            """,
+                            (workflow_run_id, idempotency_key),
+                        )
+                        existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if existing is None:
+                            cursor.execute(
+                                """
+                                SELECT * FROM workflow_events
+                                WHERE workflow_run_id = %s AND sequence_number = %s
+                                LIMIT 1
+                                """,
+                                (workflow_run_id, sequence_number),
+                            )
+                            existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                    connection.commit()
+                    return existing
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def upsert_agent_action(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not self._require_operation_runtime_table("agent_actions"):
+            return None
+        payload = _normalize_postgres_row_payload(dict(row or {}))
+        action_id = str(payload.get("action_id") or "").strip()
+        workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
+        idempotency_key = str(payload.get("idempotency_key") or "").strip()
+        action_type = str(payload.get("action_type") or "").strip()
+        owner_module = str(payload.get("owner_module") or "").strip()
+        operation_type = str(payload.get("operation_type") or "").strip()
+        if not action_id or not workspace_id or not idempotency_key or not action_type or not owner_module or not operation_type:
+            return None
+        now = _utc_now_sql_timestamp()
+        row_payload = {
+            "action_id": action_id,
+            "workspace_id": workspace_id,
+            "conversation_id": str(payload.get("conversation_id") or "").strip(),
+            "action_type": action_type,
+            "owner_module": owner_module,
+            "operation_type": operation_type,
+            "target_ref_json": str(payload.get("target_ref_json") or "{}"),
+            "input_json": str(payload.get("input_json") or "{}"),
+            "approval_status": str(payload.get("approval_status") or "not_required").strip() or "not_required",
+            "approval_policy": str(payload.get("approval_policy") or "not_required").strip() or "not_required",
+            "budget_json": str(payload.get("budget_json") or "{}"),
+            "idempotency_key": idempotency_key,
+            "status": str(payload.get("status") or "planned").strip() or "planned",
+            "result_ref_json": str(payload.get("result_ref_json") or "{}"),
+            "metadata_json": str(payload.get("metadata_json") or "{}"),
+            "created_at": str(payload.get("created_at") or now).strip(),
+            "updated_at": str(payload.get("updated_at") or now).strip(),
+        }
+        columns = list(row_payload.keys())
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT * FROM agent_actions
+                    WHERE workspace_id = %s AND idempotency_key = %s
+                    LIMIT 1
+                    """,
+                    (workspace_id, idempotency_key),
+                )
+                existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                if existing is not None:
+                    connection.commit()
+                    return existing
+                cursor.execute(
+                    (
+                        f"INSERT INTO agent_actions ({', '.join(_quote_identifier(column) for column in columns)}) "
+                        f"VALUES ({', '.join(['%s'] * len(columns))}) "
+                        "ON CONFLICT DO NOTHING RETURNING *"
+                    ),
+                    tuple(row_payload[column] for column in columns),
+                )
+                inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
+                if inserted is not None:
+                    connection.commit()
+                    return inserted
+                cursor.execute(
+                    """
+                    SELECT * FROM agent_actions
+                    WHERE workspace_id = %s AND idempotency_key = %s
+                    LIMIT 1
+                    """,
+                    (workspace_id, idempotency_key),
+                )
+                existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                if existing is None:
+                    cursor.execute("SELECT * FROM agent_actions WHERE action_id = %s LIMIT 1", (action_id,))
+                    existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+            connection.commit()
+        return existing
+
+    def get_agent_action(self, action_id: str) -> dict[str, Any] | None:
+        if not self._require_operation_runtime_table("agent_actions"):
+            return None
+        return self.select_one("agent_actions", where_sql="action_id = %s", params=[str(action_id or "").strip()])
+
+    def update_agent_action_state(
+        self,
+        action_id: str,
+        *,
+        status: str = "",
+        approval_status: str = "",
+        result_ref: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self._require_operation_runtime_table("agent_actions"):
+            return None
+        normalized_action_id = str(action_id or "").strip()
+        if not normalized_action_id:
+            return None
+        current = self.select_one("agent_actions", where_sql="action_id = %s", params=[normalized_action_id])
+        if current is None:
+            return None
+        terminal = str(current.get("status") or "").strip() in {"completed", "failed", "cancelled"}
+        requested_status = str(status or current.get("status") or "").strip() or "planned"
+        if terminal and requested_status != str(current.get("status") or "").strip():
+            return current
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE agent_actions
+            SET status = %s,
+                approval_status = %s,
+                result_ref_json = %s,
+                metadata_json = %s,
+                updated_at = %s
+            WHERE action_id = %s
+            RETURNING *
+            """,
+            (
+                requested_status,
+                str(approval_status or current.get("approval_status") or "not_required").strip() or "not_required",
+                _json_dump(result_ref if result_ref is not None else _json_load_dict(current.get("result_ref_json"))),
+                _json_dump(metadata if metadata is not None else _json_load_dict(current.get("metadata_json"))),
+                now,
+                normalized_action_id,
+            ),
+        )
+
+    def upsert_operation_run(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not self._require_operation_runtime_table("operation_runs"):
+            return None
+        payload = _normalize_postgres_row_payload(dict(row or {}))
+        operation_run_id = str(payload.get("operation_run_id") or "").strip()
+        workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
+        action_id = str(payload.get("action_id") or "").strip()
+        idempotency_key = str(payload.get("idempotency_key") or "").strip()
+        owner_module = str(payload.get("owner_module") or "").strip()
+        operation_type = str(payload.get("operation_type") or "").strip()
+        if not operation_run_id or not workspace_id or not action_id or not idempotency_key or not owner_module or not operation_type:
+            return None
+        now = _utc_now_sql_timestamp()
+        row_payload = {
+            "operation_run_id": operation_run_id,
+            "workspace_id": workspace_id,
+            "action_id": action_id,
+            "owner_module": owner_module,
+            "operation_type": operation_type,
+            "status": str(payload.get("status") or "queued").strip() or "queued",
+            "progress_json": str(payload.get("progress_json") or "{}"),
+            "workflow_ref_json": str(payload.get("workflow_ref_json") or "{}"),
+            "cost_budget_json": str(payload.get("cost_budget_json") or "{}"),
+            "idempotency_key": idempotency_key,
+            "result_ref_json": str(payload.get("result_ref_json") or "{}"),
+            "metadata_json": str(payload.get("metadata_json") or "{}"),
+            "started_at": str(payload.get("started_at") or "").strip(),
+            "completed_at": str(payload.get("completed_at") or "").strip(),
+            "created_at": str(payload.get("created_at") or now).strip(),
+            "updated_at": str(payload.get("updated_at") or now).strip(),
+        }
+        columns = list(row_payload.keys())
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT * FROM operation_runs
+                    WHERE workspace_id = %s AND idempotency_key = %s
+                    LIMIT 1
+                    """,
+                    (workspace_id, idempotency_key),
+                )
+                existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                if existing is not None:
+                    connection.commit()
+                    return existing
+                cursor.execute(
+                    (
+                        f"INSERT INTO operation_runs ({', '.join(_quote_identifier(column) for column in columns)}) "
+                        f"VALUES ({', '.join(['%s'] * len(columns))}) "
+                        "ON CONFLICT DO NOTHING RETURNING *"
+                    ),
+                    tuple(row_payload[column] for column in columns),
+                )
+                inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
+                if inserted is not None:
+                    connection.commit()
+                    return inserted
+                cursor.execute(
+                    """
+                    SELECT * FROM operation_runs
+                    WHERE workspace_id = %s AND idempotency_key = %s
+                    LIMIT 1
+                    """,
+                    (workspace_id, idempotency_key),
+                )
+                existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                if existing is None:
+                    cursor.execute(
+                        "SELECT * FROM operation_runs WHERE operation_run_id = %s LIMIT 1",
+                        (operation_run_id,),
+                    )
+                    existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+            connection.commit()
+        return existing
+
+    def get_operation_run(self, operation_run_id: str) -> dict[str, Any] | None:
+        if not self._require_operation_runtime_table("operation_runs"):
+            return None
+        return self.select_one(
+            "operation_runs",
+            where_sql="operation_run_id = %s",
+            params=[str(operation_run_id or "").strip()],
+        )
+
+    def update_operation_run_state(
+        self,
+        operation_run_id: str,
+        *,
+        status: str = "",
+        progress: dict[str, Any] | None = None,
+        workflow_ref: dict[str, Any] | None = None,
+        result_ref: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self._require_operation_runtime_table("operation_runs"):
+            return None
+        normalized_operation_id = str(operation_run_id or "").strip()
+        if not normalized_operation_id:
+            return None
+        current = self.select_one("operation_runs", where_sql="operation_run_id = %s", params=[normalized_operation_id])
+        if current is None:
+            return None
+        current_status = str(current.get("status") or "").strip()
+        requested_status = str(status or current_status or "queued").strip() or "queued"
+        if current_status in {"completed", "failed", "cancelled"} and requested_status != current_status:
+            return current
+        now = _utc_now_sql_timestamp()
+        completed_at = str(current.get("completed_at") or "").strip()
+        if requested_status in {"completed", "failed", "cancelled"} and not completed_at:
+            completed_at = now
+        return self._execute_returning_one(
+            """
+            UPDATE operation_runs
+            SET status = %s,
+                progress_json = %s,
+                workflow_ref_json = %s,
+                result_ref_json = %s,
+                metadata_json = %s,
+                completed_at = %s,
+                updated_at = %s
+            WHERE operation_run_id = %s
+            RETURNING *
+            """,
+            (
+                requested_status,
+                _json_dump(progress if progress is not None else _json_load_dict(current.get("progress_json"))),
+                _json_dump(workflow_ref if workflow_ref is not None else _json_load_dict(current.get("workflow_ref_json"))),
+                _json_dump(result_ref if result_ref is not None else _json_load_dict(current.get("result_ref_json"))),
+                _json_dump(metadata if metadata is not None else _json_load_dict(current.get("metadata_json"))),
+                completed_at,
+                now,
+                normalized_operation_id,
+            ),
+        )
+
+    def append_operation_event(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not self._require_operation_runtime_table("operation_events"):
+            return None
+        payload = _normalize_postgres_row_payload(dict(row or {}))
+        workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
+        event_stream_id = str(payload.get("event_stream_id") or "").strip()
+        idempotency_key = str(payload.get("idempotency_key") or "").strip()
+        event_family = str(payload.get("event_family") or "").strip()
+        event_type = str(payload.get("event_type") or "").strip()
+        if not workspace_id or not event_stream_id or not idempotency_key or not event_family or not event_type:
+            return None
+        now = _utc_now_sql_timestamp()
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                            (f"operation_events:{event_stream_id}",),
+                        )
+                        cursor.execute(
+                            """
+                            SELECT * FROM operation_events
+                            WHERE event_stream_id = %s AND idempotency_key = %s
+                            LIMIT 1
+                            """,
+                            (event_stream_id, idempotency_key),
+                        )
+                        existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if existing is not None:
+                            connection.commit()
+                            return existing
+                        sequence_number = int(payload.get("sequence_number") or 0)
+                        if sequence_number <= 0:
+                            cursor.execute(
+                                "SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM operation_events WHERE event_stream_id = %s",
+                                (event_stream_id,),
+                            )
+                            row_value = cursor.fetchone()
+                            sequence_number = int(
+                                (row_value[0] if isinstance(row_value, (list, tuple)) and row_value else row_value)
+                                or 1
+                            )
+                        event_id = str(payload.get("event_id") or "").strip() or (
+                            "opevt_"
+                            + sha1(f"{event_stream_id}:{sequence_number}:{idempotency_key}".encode("utf-8")).hexdigest()[:24]
+                        )
+                        row_payload = {
+                            "event_id": event_id,
+                            "workspace_id": workspace_id,
+                            "event_stream_id": event_stream_id,
+                            "operation_run_id": str(payload.get("operation_run_id") or "").strip(),
+                            "action_id": str(payload.get("action_id") or "").strip(),
+                            "event_family": event_family,
+                            "event_type": event_type,
+                            "sequence_number": sequence_number,
+                            "idempotency_key": idempotency_key,
+                            "occurred_at": str(payload.get("occurred_at") or now).strip(),
+                            "recorded_at": str(payload.get("recorded_at") or now).strip(),
+                            "actor": str(payload.get("actor") or "").strip(),
+                            "source": str(payload.get("source") or "").strip(),
+                            "payload_json": str(payload.get("payload_json") or "{}"),
+                            "schema_version": str(payload.get("schema_version") or "operation_event_v1").strip(),
+                            "created_at": str(payload.get("created_at") or now).strip(),
+                        }
+                        columns = list(row_payload.keys())
+                        cursor.execute(
+                            (
+                                f"INSERT INTO operation_events ({', '.join(_quote_identifier(column) for column in columns)}) "
+                                f"VALUES ({', '.join(['%s'] * len(columns))}) "
+                                "ON CONFLICT DO NOTHING RETURNING *"
+                            ),
+                            tuple(row_payload[column] for column in columns),
+                        )
+                        inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if inserted is not None:
+                            connection.commit()
+                            return inserted
+                        cursor.execute(
+                            """
+                            SELECT * FROM operation_events
+                            WHERE event_stream_id = %s AND idempotency_key = %s
+                            LIMIT 1
+                            """,
+                            (event_stream_id, idempotency_key),
+                        )
+                        existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if existing is None:
+                            cursor.execute(
+                                """
+                                SELECT * FROM operation_events
+                                WHERE event_stream_id = %s AND sequence_number = %s
+                                LIMIT 1
+                                """,
+                                (event_stream_id, sequence_number),
+                            )
+                            existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                    connection.commit()
+                    return existing
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def upsert_workflow_command(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        self._ensure_runtime_coordination_schema()
+        payload = _normalize_postgres_row_payload(dict(row or {}))
+        workflow_run_id = str(payload.get("workflow_run_id") or "").strip()
+        idempotency_key = str(payload.get("idempotency_key") or "").strip()
+        command_type = str(payload.get("command_type") or "").strip()
+        owner = str(payload.get("owner") or "").strip()
+        if not workflow_run_id or not idempotency_key or not command_type or not owner:
+            return None
+        now = _utc_now_sql_timestamp()
+        command_id = str(payload.get("command_id") or "").strip() or (
+            "cmd_" + sha1(f"{workflow_run_id}:{idempotency_key}".encode("utf-8")).hexdigest()[:24]
+        )
+        row_payload = {
+            "command_id": command_id,
+            "workflow_run_id": workflow_run_id,
+            "operation_id": str(payload.get("operation_id") or "").strip(),
+            "command_type": command_type,
+            "owner": owner,
+            **_workflow_command_causality_columns_from_payload(
+                _json_load_dict(payload.get("payload_json")),
+            ),
+            "status": str(payload.get("status") or "queued").strip() or "queued",
+            "idempotency_key": idempotency_key,
+            "payload_json": str(payload.get("payload_json") or "{}"),
+            "artifact_refs_json": str(payload.get("artifact_refs_json") or "[]"),
+            "not_before_at": str(payload.get("not_before_at") or "").strip(),
+            "attempt": int(payload.get("attempt") or 0),
+            "max_attempts": max(1, int(payload.get("max_attempts") or 5)),
+            "retry_policy_json": str(payload.get("retry_policy_json") or "{}"),
+            "lease_owner": str(payload.get("lease_owner") or "").strip(),
+            "lease_expires_at": str(payload.get("lease_expires_at") or "").strip(),
+            "heartbeat_at": str(payload.get("heartbeat_at") or "").strip(),
+            "last_error": str(payload.get("last_error") or "").strip(),
+            "result_json": str(payload.get("result_json") or "{}"),
+            "schema_version": str(payload.get("schema_version") or "workflow_command_v1").strip(),
+            "created_at": str(payload.get("created_at") or now).strip(),
+            "updated_at": str(payload.get("updated_at") or now).strip(),
+        }
+        columns = list(row_payload.keys())
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    (
+                        f"INSERT INTO workflow_commands ({', '.join(_quote_identifier(column) for column in columns)}) "
+                        f"VALUES ({', '.join(['%s'] * len(columns))}) "
+                        "ON CONFLICT DO NOTHING RETURNING *"
+                    ),
+                    tuple(row_payload[column] for column in columns),
+                )
+                inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
+                if inserted is not None:
+                    connection.commit()
+                    return inserted
+                cursor.execute(
+                    """
+                    SELECT * FROM workflow_commands
+                    WHERE workflow_run_id = %s AND idempotency_key = %s
+                    LIMIT 1
+                    """,
+                    (workflow_run_id, idempotency_key),
+                )
+                existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                if existing is None:
+                    cursor.execute(
+                        "SELECT * FROM workflow_commands WHERE command_id = %s LIMIT 1",
+                        (command_id,),
+                    )
+                    existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+            connection.commit()
+        return existing
+
+    def update_workflow_command_payload(
+        self,
+        command_id: str,
+        *,
+        payload: dict[str, Any] | None = None,
+        artifact_refs: list[Any] | tuple[Any, ...] | None = None,
+        not_before_at: str = "",
+        result: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return None
+        self._ensure_runtime_coordination_schema()
+        now = _utc_now_sql_timestamp()
+        causality_columns = _workflow_command_causality_columns_from_payload(payload or {})
+        return self._execute_returning_one(
+            """
+            UPDATE workflow_commands
+            SET payload_json = %s,
+                artifact_refs_json = %s,
+                stage_id = %s,
+                causal_group_id = %s,
+                parent_command_id = %s,
+                source_event_id = %s,
+                source_event_type = %s,
+                input_artifact_refs_json = %s,
+                output_artifact_refs_json = %s,
+                produced_entity_counts_json = %s,
+                no_op_reason = %s,
+                readiness_effect = %s,
+                downstream_command_ids_json = %s,
+                causality_schema_version = %s,
+                not_before_at = %s,
+                result_json = %s,
+                updated_at = %s
+            WHERE command_id = %s
+              AND status IN ('queued', 'retry_wait')
+            RETURNING *
+            """,
+            (
+                _json_dump(payload or {}),
+                _json_dump(list(artifact_refs or [])),
+                causality_columns["stage_id"],
+                causality_columns["causal_group_id"],
+                causality_columns["parent_command_id"],
+                causality_columns["source_event_id"],
+                causality_columns["source_event_type"],
+                causality_columns["input_artifact_refs_json"],
+                causality_columns["output_artifact_refs_json"],
+                causality_columns["produced_entity_counts_json"],
+                causality_columns["no_op_reason"],
+                causality_columns["readiness_effect"],
+                causality_columns["downstream_command_ids_json"],
+                causality_columns["causality_schema_version"],
+                str(not_before_at or "").strip(),
+                _json_dump(result or {}),
+                now,
+                normalized_command_id,
+            ),
+        )
+
+    def claim_workflow_command(
+        self,
+        command_id: str,
+        *,
+        lease_owner: str,
+        lease_seconds: int = 300,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        self._ensure_runtime_coordination_schema()
+        normalized_command_id = str(command_id or "").strip()
+        normalized_owner = str(lease_owner or "").strip()
+        if not normalized_command_id or not normalized_owner:
+            return None
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE workflow_commands
+            SET status = 'claimed',
+                lease_owner = %s,
+                lease_expires_at = %s,
+                attempt = attempt + 1,
+                heartbeat_at = %s,
+                updated_at = %s
+            WHERE command_id = %s
+              AND status IN ('queued', 'retry_wait', 'running')
+              AND (not_before_at = '' OR not_before_at <= %s)
+              AND (lease_expires_at = '' OR lease_expires_at <= %s)
+            RETURNING *
+            """,
+            (
+                normalized_owner,
+                _expiry_timestamp(max(1, int(lease_seconds or 300))),
+                now,
+                now,
+                normalized_command_id,
+                now,
+                now,
+            ),
+        )
+
+    def mark_workflow_command_running(
+        self,
+        command_id: str,
+        *,
+        lease_owner: str = "",
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return None
+        now = _utc_now_sql_timestamp()
+        clauses = ["command_id = %s", "status = 'claimed'"]
+        params: list[Any] = [now, now, normalized_command_id]
+        normalized_owner = str(lease_owner or "").strip()
+        if normalized_owner:
+            clauses.append("lease_owner = %s")
+            params.append(normalized_owner)
+        return self._execute_returning_one(
+            f"""
+            UPDATE workflow_commands
+            SET status = 'running',
+                heartbeat_at = %s,
+                updated_at = %s
+            WHERE {' AND '.join(clauses)}
+            RETURNING *
+            """,
+            tuple(params),
+        )
+
+    def mark_workflow_command_succeeded(
+        self,
+        command_id: str,
+        *,
+        result: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE workflow_commands
+            SET status = 'succeeded',
+                lease_owner = '',
+                lease_expires_at = '',
+                heartbeat_at = %s,
+                last_error = '',
+                result_json = %s,
+                updated_at = %s
+            WHERE command_id = %s
+              AND status IN ('claimed', 'running')
+            RETURNING *
+            """,
+            (now, _json_dump(result or {}), now, str(command_id or "").strip()),
+        )
+
+    def mark_workflow_command_failed(
+        self,
+        command_id: str,
+        *,
+        error_text: str,
+        retryable: bool = True,
+        retry_delay_seconds: int = 30,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        current = self.select_one("workflow_commands", where_sql="command_id = %s", params=[str(command_id or "").strip()])
+        if current is None:
+            return None
+        attempt = int(current.get("attempt") or 0)
+        max_attempts = max(1, int(current.get("max_attempts") or 5))
+        should_retry = bool(retryable) and attempt < max_attempts
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE workflow_commands
+            SET status = %s,
+                lease_owner = '',
+                lease_expires_at = '',
+                heartbeat_at = %s,
+                not_before_at = %s,
+                last_error = %s,
+                updated_at = %s
+            WHERE command_id = %s
+              AND status IN ('claimed', 'running')
+            RETURNING *
+            """,
+            (
+                "retry_wait" if should_retry else "failed_terminal",
+                now,
+                _expiry_timestamp(max(0, int(retry_delay_seconds or 0))) if should_retry else "",
+                str(error_text or "").strip(),
+                now,
+                str(command_id or "").strip(),
+            ),
+        )
+
+    def mark_workflow_command_partial_progress(
+        self,
+        command_id: str,
+        *,
+        result: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return None
+        current = self.select_one("workflow_commands", where_sql="command_id = %s", params=[normalized_command_id])
+        if current is None:
+            return None
+        attempt = max(0, int(current.get("attempt") or 0) - 1)
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE workflow_commands
+            SET status = 'queued',
+                lease_owner = '',
+                lease_expires_at = '',
+                heartbeat_at = %s,
+                not_before_at = '',
+                attempt = %s,
+                last_error = '',
+                result_json = %s,
+                updated_at = %s
+            WHERE command_id = %s
+              AND status IN ('claimed', 'running')
+            RETURNING *
+            """,
+            (now, attempt, _json_dump(result or {}), now, normalized_command_id),
+        )
+
+    def mark_workflow_command_waiting_prerequisite(
+        self,
+        command_id: str,
+        *,
+        retry_delay_seconds: int = 8,
+        result: dict[str, Any] | None = None,
+        from_statuses: list[str] | tuple[str, ...] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return None
+        current = self.select_one("workflow_commands", where_sql="command_id = %s", params=[normalized_command_id])
+        if current is None:
+            return None
+        attempt = max(0, int(current.get("attempt") or 0) - 1)
+        now = _utc_now_sql_timestamp()
+        allowed_statuses = [
+            str(status or "").strip()
+            for status in list(from_statuses or ("claimed", "running"))
+            if str(status or "").strip()
+        ]
+        if not allowed_statuses:
+            allowed_statuses = ["claimed", "running"]
+        placeholders = ", ".join(["%s"] * len(allowed_statuses))
+        return self._execute_returning_one(
+            f"""
+            UPDATE workflow_commands
+            SET status = 'retry_wait',
+                lease_owner = '',
+                lease_expires_at = '',
+                heartbeat_at = %s,
+                not_before_at = %s,
+                attempt = %s,
+                last_error = '',
+                result_json = %s,
+                updated_at = %s
+            WHERE command_id = %s
+              AND status IN ({placeholders})
+            RETURNING *
+            """,
+            (
+                now,
+                _expiry_timestamp(min(30, max(1, int(retry_delay_seconds or 8)))),
+                attempt,
+                _json_dump(result or {}),
+                now,
+                normalized_command_id,
+                *allowed_statuses,
+            ),
+        )
+
+    def cancel_workflow_command(
+        self,
+        command_id: str,
+        *,
+        reason: str = "",
+        actor: str = "",
+        result: dict[str, Any] | None = None,
+        from_statuses: list[str] | tuple[str, ...] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return None
+        current = self.select_one("workflow_commands", where_sql="command_id = %s", params=[normalized_command_id])
+        if current is None:
+            return None
+        existing_result = _json_load_dict(current.get("result_json"))
+        next_result = {
+            **existing_result,
+            **dict(result or {}),
+            "control_action": "cancel",
+            "control_reason": str(reason or "").strip(),
+            "control_actor": str(actor or "").strip(),
+        }
+        allowed_statuses = [
+            str(status or "").strip()
+            for status in list(from_statuses or ("queued", "retry_wait"))
+            if str(status or "").strip()
+        ]
+        if not allowed_statuses:
+            allowed_statuses = ["queued", "retry_wait"]
+        placeholders = ", ".join(["%s"] * len(allowed_statuses))
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            f"""
+            UPDATE workflow_commands
+            SET status = 'cancelled',
+                lease_owner = '',
+                lease_expires_at = '',
+                heartbeat_at = %s,
+                not_before_at = '',
+                last_error = %s,
+                result_json = %s,
+                updated_at = %s
+            WHERE command_id = %s
+              AND status IN ({placeholders})
+            RETURNING *
+            """,
+            (
+                now,
+                str(reason or "cancelled_by_command_control").strip() or "cancelled_by_command_control",
+                _json_dump(next_result),
+                now,
+                normalized_command_id,
+                *allowed_statuses,
+            ),
+        )
+
+    def retry_workflow_command(
+        self,
+        command_id: str,
+        *,
+        reason: str = "",
+        actor: str = "",
+        result: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return None
+        current = self.select_one("workflow_commands", where_sql="command_id = %s", params=[normalized_command_id])
+        if current is None:
+            return None
+        existing_result = _json_load_dict(current.get("result_json"))
+        next_result = {
+            **existing_result,
+            **dict(result or {}),
+            "control_action": "retry",
+            "control_reason": str(reason or "").strip(),
+            "control_actor": str(actor or "").strip(),
+        }
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE workflow_commands
+            SET status = 'queued',
+                lease_owner = '',
+                lease_expires_at = '',
+                heartbeat_at = '',
+                not_before_at = '',
+                attempt = 0,
+                last_error = '',
+                result_json = %s,
+                updated_at = %s
+            WHERE command_id = %s
+              AND status IN ('failed_terminal', 'cancelled')
+            RETURNING *
+            """,
+            (_json_dump(next_result), now, normalized_command_id),
+        )
+
+    def resume_workflow_command(
+        self,
+        command_id: str,
+        *,
+        reason: str = "",
+        actor: str = "",
+        result: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return None
+        current = self.select_one("workflow_commands", where_sql="command_id = %s", params=[normalized_command_id])
+        if current is None:
+            return None
+        existing_result = _json_load_dict(current.get("result_json"))
+        attempt = max(0, int(current.get("attempt") or 0) - 1)
+        next_result = {
+            **existing_result,
+            **dict(result or {}),
+            "control_action": "resume",
+            "control_reason": str(reason or "").strip(),
+            "control_actor": str(actor or "").strip(),
+        }
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE workflow_commands
+            SET status = 'queued',
+                lease_owner = '',
+                lease_expires_at = '',
+                heartbeat_at = '',
+                not_before_at = '',
+                attempt = %s,
+                last_error = '',
+                result_json = %s,
+                updated_at = %s
+            WHERE command_id = %s
+              AND status = 'retry_wait'
+            RETURNING *
+            """,
+            (attempt, _json_dump(next_result), now, normalized_command_id),
+        )
+
+    def enqueue_runtime_outbox(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not self.should_prefer_read("runtime_outbox"):
+            return None
+        self._ensure_runtime_coordination_schema()
+        payload = _normalize_postgres_row_payload(dict(row or {}))
+        outbox_type = str(payload.get("outbox_type") or "").strip()
+        idempotency_key = str(payload.get("idempotency_key") or "").strip()
+        if not outbox_type or not idempotency_key:
+            return None
+        now = _utc_now_sql_timestamp()
+        outbox_id = str(payload.get("outbox_id") or "").strip() or (
+            "out_" + sha1(idempotency_key.encode("utf-8")).hexdigest()[:24]
+        )
+        row_payload = {
+            "outbox_id": outbox_id,
+            "workflow_run_id": str(payload.get("workflow_run_id") or "").strip(),
+            "operation_id": str(payload.get("operation_id") or "").strip(),
+            "command_id": str(payload.get("command_id") or "").strip(),
+            "outbox_type": outbox_type,
+            "status": str(payload.get("status") or "queued").strip() or "queued",
+            "idempotency_key": idempotency_key,
+            "payload_json": str(payload.get("payload_json") or "{}"),
+            "not_before_at": str(payload.get("not_before_at") or "").strip(),
+            "attempt": int(payload.get("attempt") or 0),
+            "max_attempts": max(1, int(payload.get("max_attempts") or 5)),
+            "lease_owner": str(payload.get("lease_owner") or "").strip(),
+            "lease_expires_at": str(payload.get("lease_expires_at") or "").strip(),
+            "dispatched_at": str(payload.get("dispatched_at") or "").strip(),
+            "last_error": str(payload.get("last_error") or "").strip(),
+            "schema_version": str(payload.get("schema_version") or "runtime_outbox_v1").strip(),
+            "created_at": str(payload.get("created_at") or now).strip(),
+            "updated_at": str(payload.get("updated_at") or now).strip(),
+        }
+        columns = list(row_payload.keys())
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    (
+                        f"INSERT INTO runtime_outbox ({', '.join(_quote_identifier(column) for column in columns)}) "
+                        f"VALUES ({', '.join(['%s'] * len(columns))}) "
+                        "ON CONFLICT DO NOTHING RETURNING *"
+                    ),
+                    tuple(row_payload[column] for column in columns),
+                )
+                inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
+                if inserted is not None:
+                    connection.commit()
+                    return inserted
+                cursor.execute(
+                    "SELECT * FROM runtime_outbox WHERE idempotency_key = %s LIMIT 1",
+                    (idempotency_key,),
+                )
+                existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+            connection.commit()
+        return existing
+
+    def mark_runtime_outbox_dispatched(self, outbox_id: str) -> dict[str, Any] | None:
+        if not self.should_prefer_read("runtime_outbox"):
+            return None
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            UPDATE runtime_outbox
+            SET status = 'dispatched',
+                dispatched_at = %s,
+                lease_owner = '',
+                lease_expires_at = '',
+                last_error = '',
+                updated_at = %s
+            WHERE outbox_id = %s
+              AND status IN ('queued', 'claimed', 'running')
+            RETURNING *
+            """,
+            (now, now, str(outbox_id or "").strip()),
+        )
+
+    def acquire_linkedin_profile_registry_lease(
+        self,
+        profile_url_key: str,
+        *,
+        lease_owner: str,
+        lease_seconds: int = 240,
+        lease_token: str = "",
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("linkedin_profile_registry_leases"):
+            return None
+        normalized_key = str(profile_url_key or "").strip()
+        normalized_owner = str(lease_owner or "").strip()
+        normalized_token = str(lease_token or "").strip()
+        if not normalized_key or not normalized_owner or not normalized_token:
+            return None
+        self._ensure_control_plane_writer_schema()
+        now = _utc_now_sql_timestamp()
+        expires_at = _expiry_timestamp(int(lease_seconds or 240))
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"linkedin_profile:{normalized_key}",))
+                        cursor.execute(
+                            """
+                            INSERT INTO linkedin_profile_registry_leases (
+                                profile_url_key,
+                                lease_owner,
+                                lease_token,
+                                lease_expires_at,
+                                created_at,
+                                updated_at
+                            ) VALUES (%s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (profile_url_key) DO UPDATE SET
+                                lease_owner = EXCLUDED.lease_owner,
+                                lease_token = EXCLUDED.lease_token,
+                                lease_expires_at = EXCLUDED.lease_expires_at,
+                                updated_at = EXCLUDED.updated_at
+                            WHERE linkedin_profile_registry_leases.lease_expires_at <= %s
+                               OR linkedin_profile_registry_leases.lease_owner = EXCLUDED.lease_owner
+                               OR linkedin_profile_registry_leases.lease_token = EXCLUDED.lease_token
+                            RETURNING *
+                            """,
+                            (
+                                normalized_key,
+                                normalized_owner,
+                                normalized_token,
+                                expires_at,
+                                now,
+                                now,
+                                now,
+                            ),
+                        )
+                        row = cursor.fetchone()
+                        result = _fetch_one_dict_row(cursor, row)
+                        if result is None:
+                            cursor.execute(
+                                """
+                                SELECT *
+                                FROM linkedin_profile_registry_leases
+                                WHERE profile_url_key = %s
+                                LIMIT 1
+                                """,
+                                (normalized_key,),
+                            )
+                            result = _fetch_one_dict_row(cursor, cursor.fetchone())
+                    connection.commit()
+                return result
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def acquire_linkedin_profile_registry_leases(
+        self,
+        profile_url_keys: list[str] | tuple[str, ...],
+        *,
+        lease_owner: str,
+        lease_seconds: int = 240,
+        lease_token: str = "",
+    ) -> list[dict[str, Any]] | None:
+        if not self.should_prefer_read("linkedin_profile_registry_leases"):
+            return None
+        normalized_keys: list[str] = []
+        for profile_url_key in list(profile_url_keys or []):
+            normalized_key = str(profile_url_key or "").strip()
+            if normalized_key and normalized_key not in normalized_keys:
+                normalized_keys.append(normalized_key)
+        normalized_keys = sorted(normalized_keys)
+        normalized_owner = str(lease_owner or "").strip()
+        normalized_token = str(lease_token or "").strip()
+        if not normalized_keys or not normalized_owner or not normalized_token:
+            return []
+        self._ensure_control_plane_writer_schema()
+        now = _utc_now_sql_timestamp()
+        expires_at = _expiry_timestamp(int(lease_seconds or 240))
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                            (f"linkedin_profile_batch:{sha1('|'.join(normalized_keys).encode('utf-8')).hexdigest()}",),
+                        )
+                        values_sql = ", ".join(["(%s, %s, %s, %s, %s, %s)"] * len(normalized_keys))
+                        values_params: list[Any] = []
+                        for normalized_key in normalized_keys:
+                            values_params.extend(
+                                [
+                                    normalized_key,
+                                    normalized_owner,
+                                    normalized_token,
+                                    expires_at,
+                                    now,
+                                    now,
+                                ]
+                            )
+                        cursor.execute(
+                            f"""
+                            INSERT INTO linkedin_profile_registry_leases (
+                                profile_url_key,
+                                lease_owner,
+                                lease_token,
+                                lease_expires_at,
+                                created_at,
+                                updated_at
+                            ) VALUES {values_sql}
+                            ON CONFLICT (profile_url_key) DO UPDATE SET
+                                lease_owner = EXCLUDED.lease_owner,
+                                lease_token = EXCLUDED.lease_token,
+                                lease_expires_at = EXCLUDED.lease_expires_at,
+                                updated_at = EXCLUDED.updated_at
+                            WHERE linkedin_profile_registry_leases.lease_expires_at <= %s
+                               OR linkedin_profile_registry_leases.lease_owner = EXCLUDED.lease_owner
+                               OR linkedin_profile_registry_leases.lease_token = EXCLUDED.lease_token
+                            """,
+                            tuple(values_params + [now]),
+                        )
+                        key_placeholders = ", ".join(["%s"] * len(normalized_keys))
+                        cursor.execute(
+                            f"""
+                            SELECT *
+                            FROM linkedin_profile_registry_leases
+                            WHERE profile_url_key IN ({key_placeholders})
+                            """,
+                            tuple(normalized_keys),
+                        )
+                        rows = _fetch_all_dict_rows(cursor)
+                    connection.commit()
+                return rows
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def release_linkedin_profile_registry_leases(
+        self,
+        profile_url_keys: list[str] | tuple[str, ...],
+        *,
+        lease_owner: str = "",
+        lease_token: str = "",
+    ) -> int:
+        if not self.should_prefer_read("linkedin_profile_registry_leases"):
+            return 0
+        normalized_keys: list[str] = []
+        for profile_url_key in list(profile_url_keys or []):
+            normalized_key = str(profile_url_key or "").strip()
+            if normalized_key and normalized_key not in normalized_keys:
+                normalized_keys.append(normalized_key)
+        normalized_keys = sorted(normalized_keys)
+        if not normalized_keys:
+            return 0
+        clauses = [f"profile_url_key IN ({', '.join(['%s'] * len(normalized_keys))})"]
+        params: list[Any] = list(normalized_keys)
+        normalized_owner = str(lease_owner or "").strip()
+        normalized_token = str(lease_token or "").strip()
+        if normalized_owner:
+            clauses.append("lease_owner = %s")
+            params.append(normalized_owner)
+        if normalized_token:
+            clauses.append("lease_token = %s")
+            params.append(normalized_token)
+        return self._execute_non_query(
+            f"DELETE FROM linkedin_profile_registry_leases WHERE {' AND '.join(clauses)}",
+            tuple(params),
+        )
+
+    def acquire_runtime_provider_limiter_slot(
+        self,
+        limiter_key: str,
+        *,
+        lease_owner: str,
+        budget: int,
+        lease_seconds: int = 7200,
+        lease_token: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("runtime_provider_limiter_leases"):
+            return None
+        normalized_key = str(limiter_key or "").strip()
+        normalized_owner = str(lease_owner or "").strip()
+        normalized_token = str(lease_token or "").strip() or f"lease_{uuid4().hex}"
+        normalized_budget = max(1, int(budget or 1))
+        if not normalized_key or not normalized_owner or not normalized_token:
+            return None
+        self._ensure_runtime_coordination_schema()
+        now = _utc_now_sql_timestamp()
+        expires_at = _expiry_timestamp(int(lease_seconds or 7200))
+        metadata_json = _json_dump(metadata or {})
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"provider_limiter:{normalized_key}",))
+                        cursor.execute(
+                            """
+                            DELETE FROM runtime_provider_limiter_leases
+                            WHERE limiter_key = %s AND lease_expires_at <= %s
+                            """,
+                            (normalized_key, now),
+                        )
+                        cursor.execute(
+                            """
+                            SELECT *
+                            FROM runtime_provider_limiter_leases
+                            WHERE lease_token = %s AND limiter_key = %s
+                            LIMIT 1
+                            """,
+                            (normalized_token, normalized_key),
+                        )
+                        existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if existing is not None:
+                            cursor.execute(
+                                """
+                                UPDATE runtime_provider_limiter_leases
+                                SET lease_owner = %s,
+                                    lease_expires_at = %s,
+                                    metadata_json = %s,
+                                    updated_at = %s
+                                WHERE lease_token = %s
+                                RETURNING *
+                                """,
+                                (normalized_owner, expires_at, metadata_json, now, normalized_token),
+                            )
+                            row = _fetch_one_dict_row(cursor, cursor.fetchone()) or existing
+                            acquired = True
+                        else:
+                            cursor.execute(
+                                """
+                                SELECT COUNT(*) AS active_count
+                                FROM runtime_provider_limiter_leases
+                                WHERE limiter_key = %s AND lease_expires_at > %s
+                                """,
+                                (normalized_key, now),
+                            )
+                            count_row = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                            active_before = int(count_row.get("active_count") or 0)
+                            if active_before >= normalized_budget:
+                                row = None
+                                acquired = False
+                            else:
+                                cursor.execute(
+                                    """
+                                    INSERT INTO runtime_provider_limiter_leases (
+                                        lease_token,
+                                        limiter_key,
+                                        lease_owner,
+                                        lease_expires_at,
+                                        metadata_json,
+                                        created_at,
+                                        updated_at
+                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                    RETURNING *
+                                    """,
+                                    (
+                                        normalized_token,
+                                        normalized_key,
+                                        normalized_owner,
+                                        expires_at,
+                                        metadata_json,
+                                        now,
+                                        now,
+                                    ),
+                                )
+                                row = _fetch_one_dict_row(cursor, cursor.fetchone())
+                                acquired = True
+                        cursor.execute(
+                            """
+                            SELECT COUNT(*) AS active_count
+                            FROM runtime_provider_limiter_leases
+                            WHERE limiter_key = %s AND lease_expires_at > %s
+                            """,
+                            (normalized_key, now),
+                        )
+                        active_count = int((_fetch_one_dict_row(cursor, cursor.fetchone()) or {}).get("active_count") or 0)
+                    connection.commit()
+                payload = dict(row or {})
+                payload.update(
+                    {
+                        "acquired": acquired,
+                        "limiter_key": normalized_key,
+                        "lease_token": normalized_token,
+                        "lease_owner": normalized_owner,
+                        "active_count": active_count,
+                        "budget": normalized_budget,
+                        "db_limiter_enabled": True,
+                    }
+                )
+                return payload
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def get_runtime_provider_limiter_status(
+        self,
+        limiter_key: str,
+        *,
+        budget: int,
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("runtime_provider_limiter_leases"):
+            return None
+        normalized_key = str(limiter_key or "").strip()
+        normalized_budget = max(1, int(budget or 1))
+        if not normalized_key:
+            return None
+        self._ensure_runtime_coordination_schema()
+        now = _utc_now_sql_timestamp()
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) AS active_count
+                    FROM runtime_provider_limiter_leases
+                    WHERE limiter_key = %s AND lease_expires_at > %s
+                    """,
+                    (normalized_key, now),
+                )
+                active_count = int((_fetch_one_dict_row(cursor, cursor.fetchone()) or {}).get("active_count") or 0)
+            connection.commit()
+        available_count = max(0, normalized_budget - active_count)
+        return {
+            "limiter_key": normalized_key,
+            "active_count": active_count,
+            "budget": normalized_budget,
+            "available_count": available_count,
+            "available": available_count > 0,
+            "db_limiter_enabled": True,
+        }
+
+    def release_runtime_provider_limiter_slot(
+        self,
+        lease_token: str,
+        *,
+        limiter_key: str = "",
+        lease_owner: str = "",
+    ) -> bool:
+        if not self.should_prefer_read("runtime_provider_limiter_leases"):
+            return False
+        normalized_token = str(lease_token or "").strip()
+        normalized_key = str(limiter_key or "").strip()
+        normalized_owner = str(lease_owner or "").strip()
+        if not normalized_token:
+            return False
+        self._ensure_runtime_coordination_schema()
+        clauses = ["lease_token = %s"]
+        params: list[Any] = [normalized_token]
+        if normalized_key:
+            clauses.append("limiter_key = %s")
+            params.append(normalized_key)
+        if normalized_owner:
+            clauses.append("lease_owner = %s")
+            params.append(normalized_owner)
+        deleted_count = self._execute_non_query(
+            f"DELETE FROM runtime_provider_limiter_leases WHERE {' AND '.join(clauses)}",
+            tuple(params),
+        )
+        return bool(deleted_count)
+
     def supersede_workflow_runtime_state(self, job_id: str) -> dict[str, Any]:
         if not (
             self.should_prefer_read("agent_worker_runs")
@@ -1661,6 +4316,32 @@ class LiveControlPlanePostgresAdapter:
                         ON target_candidates (candidate_id, updated_at)
                         """
                     )
+                    for column_name in (
+                        "person_identity_key",
+                        "candidate_identity_key",
+                        "source_projection_id",
+                        "source_run_id",
+                        "source_collection_id",
+                        "source_reason",
+                    ):
+                        cursor.execute(
+                            f"""
+                            ALTER TABLE target_candidates
+                            ADD COLUMN IF NOT EXISTS {_quote_identifier(column_name)} TEXT NOT NULL DEFAULT ''
+                            """
+                        )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_target_candidates_projection
+                        ON target_candidates (source_projection_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_target_candidates_person
+                        ON target_candidates (person_identity_key, updated_at)
+                        """
+                    )
                     cursor.execute(
                         """
                         CREATE INDEX IF NOT EXISTS idx_asset_default_pointers_company
@@ -1673,34 +4354,80 @@ class LiveControlPlanePostgresAdapter:
                         ON asset_default_pointer_history (pointer_key, occurred_at)
                         """
                     )
+                    if _postgres_table_exists(cursor, "target_candidate_public_web_batches"):
+                        cursor.execute(
+                            """
+                            CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_batches_updated
+                            ON target_candidate_public_web_batches (updated_at, status)
+                            """
+                        )
+                    if _postgres_table_exists(cursor, "target_candidate_public_web_runs"):
+                        cursor.execute(
+                            """
+                            CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_batch
+                            ON target_candidate_public_web_runs (batch_id, updated_at)
+                            """
+                        )
+                        cursor.execute(
+                            """
+                            CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_record
+                            ON target_candidate_public_web_runs (record_id, updated_at)
+                            """
+                        )
+                        cursor.execute(
+                            """
+                            CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_status
+                            ON target_candidate_public_web_runs (status, updated_at)
+                            """
+                        )
+                        cursor.execute(
+                            """
+                            CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_identity
+                            ON target_candidate_public_web_runs (linkedin_url_key, updated_at)
+                            """
+                        )
                     cursor.execute(
                         """
-                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_batches_updated
-                        ON target_candidate_public_web_batches (updated_at, status)
+                        CREATE INDEX IF NOT EXISTS idx_crm_public_web_batches_updated
+                        ON crm_public_web_batches (workspace_id, updated_at, status)
                         """
                     )
                     cursor.execute(
                         """
-                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_batch
-                        ON target_candidate_public_web_runs (batch_id, updated_at)
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_public_web_batches_idempotency_unique
+                        ON crm_public_web_batches (idempotency_key)
+                        WHERE idempotency_key != ''
                         """
                     )
                     cursor.execute(
                         """
-                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_record
-                        ON target_candidate_public_web_runs (record_id, updated_at)
+                        CREATE INDEX IF NOT EXISTS idx_crm_public_web_runs_batch
+                        ON crm_public_web_runs (batch_id, updated_at)
                         """
                     )
                     cursor.execute(
                         """
-                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_status
-                        ON target_candidate_public_web_runs (status, updated_at)
+                        CREATE INDEX IF NOT EXISTS idx_crm_public_web_runs_record
+                        ON crm_public_web_runs (workspace_id, crm_record_id, updated_at)
                         """
                     )
                     cursor.execute(
                         """
-                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_identity
-                        ON target_candidate_public_web_runs (linkedin_url_key, updated_at)
+                        CREATE INDEX IF NOT EXISTS idx_crm_public_web_runs_status
+                        ON crm_public_web_runs (workspace_id, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_crm_public_web_runs_identity
+                        ON crm_public_web_runs (person_identity_key, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_public_web_runs_idempotency_unique
+                        ON crm_public_web_runs (idempotency_key)
+                        WHERE idempotency_key != ''
                         """
                     )
                     cursor.execute(
@@ -1729,20 +4456,148 @@ class LiveControlPlanePostgresAdapter:
                     )
                     cursor.execute(
                         """
-                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_record
-                        ON target_candidate_public_web_promotions (record_id, updated_at)
+                        CREATE INDEX IF NOT EXISTS idx_person_assets_identity
+                        ON person_assets (person_identity_key, asset_type, updated_at)
                         """
                     )
                     cursor.execute(
                         """
-                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_signal
-                        ON target_candidate_public_web_promotions (signal_id, updated_at)
+                        CREATE INDEX IF NOT EXISTS idx_person_evidence_identity
+                        ON person_evidence (person_identity_key, evidence_type, updated_at)
                         """
                     )
                     cursor.execute(
                         """
-                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_run
-                        ON target_candidate_public_web_promotions (run_id, updated_at)
+                        CREATE INDEX IF NOT EXISTS idx_person_assertions_identity
+                        ON person_assertions (person_identity_key, assertion_type, verification_status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_raw_profile_index_watermark
+                        ON raw_profile_index (raw_profile_index_watermark, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_candidate_evidence_index_watermark
+                        ON candidate_evidence_index (evidence_index_watermark, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_projection_person_search_index_projection
+                        ON projection_person_search_index (projection_id, count_scope, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_projection_person_search_index_person
+                        ON projection_person_search_index (person_identity_key, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_crm_records_identity
+                        ON crm_records (workspace_id, person_identity_key)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_crm_records_projection
+                        ON crm_records (source_projection_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        ALTER TABLE crm_records
+                        ADD COLUMN IF NOT EXISTS source_collection_id TEXT NOT NULL DEFAULT ''
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_crm_records_collection
+                        ON crm_records (source_collection_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_crm_engagements_record
+                        ON crm_engagements (crm_record_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_crm_events_record
+                        ON crm_events (crm_record_id, created_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_events_idempotency
+                        ON crm_events (workspace_id, idempotency_key)
+                        WHERE idempotency_key != ''
+                        """
+                    )
+                    if _postgres_table_exists(cursor, "target_candidate_public_web_promotions"):
+                        cursor.execute(
+                            """
+                            CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_record
+                            ON target_candidate_public_web_promotions (record_id, updated_at)
+                            """
+                        )
+                        cursor.execute(
+                            """
+                            CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_signal
+                            ON target_candidate_public_web_promotions (signal_id, updated_at)
+                            """
+                        )
+                        cursor.execute(
+                            """
+                            CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_run
+                            ON target_candidate_public_web_promotions (run_id, updated_at)
+                            """
+                        )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_crm_public_web_promotions_record
+                        ON crm_public_web_promotions (workspace_id, crm_record_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_crm_public_web_promotions_signal
+                        ON crm_public_web_promotions (signal_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_crm_public_web_promotions_run
+                        ON crm_public_web_promotions (run_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_company_public_web_asset_runs_company
+                        ON company_public_web_asset_runs (company_key, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_company_public_web_asset_runs_status
+                        ON company_public_web_asset_runs (status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_company_public_web_assets_company
+                        ON company_public_web_assets (company_key, source_family, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_company_public_web_assets_url
+                        ON company_public_web_assets (normalized_url_key, updated_at)
                         """
                     )
                     cursor.execute(
@@ -1772,6 +4627,30 @@ class LiveControlPlanePostgresAdapter:
                         """
                     )
                     ensure_acquisition_shard_registry_split_schema(cursor)
+                    for column_name, column_type in (
+                        ("refill_queue_state", "TEXT"),
+                        ("last_refill_trigger_kind", "TEXT"),
+                        ("last_refill_plan_reason", "TEXT"),
+                        ("last_refill_deferred_reason", "TEXT"),
+                        ("last_refill_planned_at", "TEXT"),
+                        ("refill_not_before_at", "TEXT"),
+                        ("refill_plan_batch_size", "BIGINT NOT NULL DEFAULT 0"),
+                        ("refill_plan_batch_count", "BIGINT NOT NULL DEFAULT 0"),
+                        ("refill_plan_window_url_count", "BIGINT NOT NULL DEFAULT 0"),
+                        ("last_refill_attempt_count", "BIGINT NOT NULL DEFAULT 0"),
+                        ("refill_owner_worker_id", "BIGINT NOT NULL DEFAULT 0"),
+                        ("refill_owner_run_id", "TEXT"),
+                        ("refill_owner_dataset_id", "TEXT"),
+                        ("refill_owner_payload_hash", "TEXT"),
+                        ("refill_terminal_status", "TEXT"),
+                        ("refill_terminal_at", "TEXT"),
+                    ):
+                        cursor.execute(
+                            f"""
+                            ALTER TABLE linkedin_profile_registry
+                            ADD COLUMN IF NOT EXISTS {_quote_identifier(column_name)} {column_type}
+                            """
+                        )
                     cursor.execute(
                         """
                         CREATE INDEX IF NOT EXISTS idx_linkedin_profile_registry_status
@@ -1782,6 +4661,12 @@ class LiveControlPlanePostgresAdapter:
                         """
                         CREATE INDEX IF NOT EXISTS idx_linkedin_profile_registry_run
                         ON linkedin_profile_registry (last_run_id, last_dataset_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_linkedin_profile_registry_refill_queue
+                        ON linkedin_profile_registry (refill_queue_state, refill_not_before_at, last_refill_planned_at, updated_at)
                         """
                     )
                     cursor.execute(
@@ -2089,6 +4974,19 @@ class LiveControlPlanePostgresAdapter:
                     )
                     cursor.execute(
                         """
+                        CREATE TABLE IF NOT EXISTS runtime_provider_limiter_leases (
+                            lease_token TEXT PRIMARY KEY,
+                            limiter_key TEXT NOT NULL,
+                            lease_owner TEXT NOT NULL,
+                            lease_expires_at TEXT NOT NULL,
+                            metadata_json TEXT NOT NULL DEFAULT '{}',
+                            created_at TEXT,
+                            updated_at TEXT
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
                         CREATE TABLE IF NOT EXISTS agent_trace_spans (
                             span_id BIGINT PRIMARY KEY,
                             session_id BIGINT NOT NULL,
@@ -2158,6 +5056,747 @@ class LiveControlPlanePostgresAdapter:
                         ON workflow_job_leases (lease_expires_at)
                         """
                     )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS workflow_events (
+                            event_id TEXT PRIMARY KEY,
+                            workflow_run_id TEXT NOT NULL,
+                            operation_id TEXT NOT NULL DEFAULT '',
+                            command_id TEXT NOT NULL DEFAULT '',
+                            activity_attempt_id TEXT NOT NULL DEFAULT '',
+                            event_family TEXT NOT NULL,
+                            event_type TEXT NOT NULL,
+                            sequence_number BIGINT NOT NULL DEFAULT 0,
+                            idempotency_key TEXT NOT NULL,
+                            occurred_at TEXT NOT NULL DEFAULT '',
+                            recorded_at TEXT NOT NULL DEFAULT '',
+                            actor TEXT NOT NULL DEFAULT '',
+                            source TEXT NOT NULL DEFAULT '',
+                            payload_json TEXT NOT NULL DEFAULT '{}',
+                            artifact_refs_json TEXT NOT NULL DEFAULT '[]',
+                            schema_version TEXT NOT NULL DEFAULT 'workflow_event_v1',
+                            created_at TEXT,
+                            UNIQUE(workflow_run_id, sequence_number),
+                            UNIQUE(workflow_run_id, idempotency_key)
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS workflow_current_state (
+                            workflow_run_id TEXT PRIMARY KEY,
+                            operation_id TEXT NOT NULL DEFAULT '',
+                            workflow_type TEXT NOT NULL DEFAULT '',
+                            status TEXT NOT NULL DEFAULT 'pending',
+                            current_stage_key TEXT NOT NULL DEFAULT '',
+                            completion_proofs_json TEXT NOT NULL DEFAULT '{}',
+                            active_command_counts_json TEXT NOT NULL DEFAULT '{}',
+                            terminal_command_counts_json TEXT NOT NULL DEFAULT '{}',
+                            read_model_pointers_json TEXT NOT NULL DEFAULT '{}',
+                            migration_status_json TEXT NOT NULL DEFAULT '{}',
+                            last_processed_sequence_number BIGINT NOT NULL DEFAULT 0,
+                            reducer_version TEXT NOT NULL DEFAULT '',
+                            schema_version TEXT NOT NULL DEFAULT 'workflow_current_state_v1',
+                            metadata_json TEXT NOT NULL DEFAULT '{}',
+                            created_at TEXT,
+                            updated_at TEXT
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS workflow_commands (
+                            command_id TEXT PRIMARY KEY,
+                            workflow_run_id TEXT NOT NULL,
+                            operation_id TEXT NOT NULL DEFAULT '',
+                            command_type TEXT NOT NULL,
+                            owner TEXT NOT NULL,
+                            stage_id TEXT NOT NULL DEFAULT '',
+                            causal_group_id TEXT NOT NULL DEFAULT '',
+                            parent_command_id TEXT NOT NULL DEFAULT '',
+                            source_event_id TEXT NOT NULL DEFAULT '',
+                            source_event_type TEXT NOT NULL DEFAULT '',
+                            input_artifact_refs_json TEXT NOT NULL DEFAULT '[]',
+                            output_artifact_refs_json TEXT NOT NULL DEFAULT '[]',
+                            produced_entity_counts_json TEXT NOT NULL DEFAULT '{}',
+                            no_op_reason TEXT NOT NULL DEFAULT '',
+                            readiness_effect TEXT NOT NULL DEFAULT '',
+                            downstream_command_ids_json TEXT NOT NULL DEFAULT '[]',
+                            causality_schema_version TEXT NOT NULL DEFAULT 'command_causality_v1',
+                            status TEXT NOT NULL DEFAULT 'queued',
+                            idempotency_key TEXT NOT NULL,
+                            payload_json TEXT NOT NULL DEFAULT '{}',
+                            artifact_refs_json TEXT NOT NULL DEFAULT '[]',
+                            not_before_at TEXT NOT NULL DEFAULT '',
+                            attempt BIGINT NOT NULL DEFAULT 0,
+                            max_attempts BIGINT NOT NULL DEFAULT 5,
+                            retry_policy_json TEXT NOT NULL DEFAULT '{}',
+                            lease_owner TEXT NOT NULL DEFAULT '',
+                            lease_expires_at TEXT NOT NULL DEFAULT '',
+                            heartbeat_at TEXT NOT NULL DEFAULT '',
+                            last_error TEXT NOT NULL DEFAULT '',
+                            result_json TEXT NOT NULL DEFAULT '{}',
+                            schema_version TEXT NOT NULL DEFAULT 'workflow_command_v1',
+                            created_at TEXT,
+                            updated_at TEXT,
+                            UNIQUE(workflow_run_id, idempotency_key)
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS runtime_outbox (
+                            outbox_id TEXT PRIMARY KEY,
+                            workflow_run_id TEXT NOT NULL DEFAULT '',
+                            operation_id TEXT NOT NULL DEFAULT '',
+                            command_id TEXT NOT NULL DEFAULT '',
+                            outbox_type TEXT NOT NULL,
+                            status TEXT NOT NULL DEFAULT 'queued',
+                            idempotency_key TEXT NOT NULL,
+                            payload_json TEXT NOT NULL DEFAULT '{}',
+                            not_before_at TEXT NOT NULL DEFAULT '',
+                            attempt BIGINT NOT NULL DEFAULT 0,
+                            max_attempts BIGINT NOT NULL DEFAULT 5,
+                            lease_owner TEXT NOT NULL DEFAULT '',
+                            lease_expires_at TEXT NOT NULL DEFAULT '',
+                            dispatched_at TEXT NOT NULL DEFAULT '',
+                            last_error TEXT NOT NULL DEFAULT '',
+                            schema_version TEXT NOT NULL DEFAULT 'runtime_outbox_v1',
+                            created_at TEXT,
+                            updated_at TEXT,
+                            UNIQUE(idempotency_key)
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS agent_actions (
+                            action_id TEXT PRIMARY KEY,
+                            workspace_id TEXT NOT NULL DEFAULT 'default',
+                            conversation_id TEXT NOT NULL DEFAULT '',
+                            action_type TEXT NOT NULL,
+                            owner_module TEXT NOT NULL,
+                            operation_type TEXT NOT NULL,
+                            target_ref_json TEXT NOT NULL DEFAULT '{}',
+                            input_json TEXT NOT NULL DEFAULT '{}',
+                            approval_status TEXT NOT NULL DEFAULT 'not_required',
+                            approval_policy TEXT NOT NULL DEFAULT 'not_required',
+                            budget_json TEXT NOT NULL DEFAULT '{}',
+                            idempotency_key TEXT NOT NULL,
+                            status TEXT NOT NULL DEFAULT 'planned',
+                            result_ref_json TEXT NOT NULL DEFAULT '{}',
+                            metadata_json TEXT NOT NULL DEFAULT '{}',
+                            created_at TEXT,
+                            updated_at TEXT,
+                            UNIQUE(workspace_id, idempotency_key)
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS operation_runs (
+                            operation_run_id TEXT PRIMARY KEY,
+                            workspace_id TEXT NOT NULL DEFAULT 'default',
+                            action_id TEXT NOT NULL,
+                            owner_module TEXT NOT NULL,
+                            operation_type TEXT NOT NULL,
+                            status TEXT NOT NULL DEFAULT 'queued',
+                            progress_json TEXT NOT NULL DEFAULT '{}',
+                            workflow_ref_json TEXT NOT NULL DEFAULT '{}',
+                            cost_budget_json TEXT NOT NULL DEFAULT '{}',
+                            idempotency_key TEXT NOT NULL,
+                            result_ref_json TEXT NOT NULL DEFAULT '{}',
+                            metadata_json TEXT NOT NULL DEFAULT '{}',
+                            started_at TEXT NOT NULL DEFAULT '',
+                            completed_at TEXT NOT NULL DEFAULT '',
+                            created_at TEXT,
+                            updated_at TEXT,
+                            UNIQUE(workspace_id, idempotency_key)
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS acquisition_runs (
+                            acquisition_run_id TEXT PRIMARY KEY,
+                            workspace_id TEXT NOT NULL DEFAULT 'default',
+                            operation_run_id TEXT NOT NULL DEFAULT '',
+                            workflow_run_id TEXT NOT NULL DEFAULT '',
+                            plan_id TEXT NOT NULL DEFAULT '',
+                            plan_review_id BIGINT NOT NULL DEFAULT 0,
+                            target_company TEXT NOT NULL DEFAULT '',
+                            query TEXT NOT NULL DEFAULT '',
+                            status TEXT NOT NULL DEFAULT 'planned',
+                            current_phase TEXT NOT NULL DEFAULT '',
+                            request_json TEXT NOT NULL DEFAULT '{}',
+                            plan_json TEXT NOT NULL DEFAULT '{}',
+                            execution_bundle_json TEXT NOT NULL DEFAULT '{}',
+                            metadata_json TEXT NOT NULL DEFAULT '{}',
+                            idempotency_key TEXT NOT NULL,
+                            created_at TEXT,
+                            updated_at TEXT,
+                            UNIQUE(workspace_id, idempotency_key)
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS workflow_activity_runs (
+                            activity_run_id TEXT PRIMARY KEY,
+                            workspace_id TEXT NOT NULL DEFAULT 'default',
+                            workflow_run_id TEXT NOT NULL DEFAULT '',
+                            operation_run_id TEXT NOT NULL DEFAULT '',
+                            acquisition_run_id TEXT NOT NULL DEFAULT '',
+                            command_id TEXT NOT NULL DEFAULT '',
+                            parent_activity_run_id TEXT NOT NULL DEFAULT '',
+                            activity_type TEXT NOT NULL,
+                            owner TEXT NOT NULL DEFAULT '',
+                            status TEXT NOT NULL DEFAULT 'planned',
+                            phase TEXT NOT NULL DEFAULT '',
+                            idempotency_key TEXT NOT NULL,
+                            provider_ref_json TEXT NOT NULL DEFAULT '{}',
+                            input_json TEXT NOT NULL DEFAULT '{}',
+                            output_json TEXT NOT NULL DEFAULT '{}',
+                            artifact_refs_json TEXT NOT NULL DEFAULT '[]',
+                            entity_counts_json TEXT NOT NULL DEFAULT '{}',
+                            metadata_json TEXT NOT NULL DEFAULT '{}',
+                            created_at TEXT,
+                            updated_at TEXT,
+                            UNIQUE(workspace_id, idempotency_key)
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS workflow_activity_attempts (
+                            attempt_id TEXT PRIMARY KEY,
+                            workspace_id TEXT NOT NULL DEFAULT 'default',
+                            activity_run_id TEXT NOT NULL DEFAULT '',
+                            workflow_run_id TEXT NOT NULL DEFAULT '',
+                            command_id TEXT NOT NULL DEFAULT '',
+                            attempt_number BIGINT NOT NULL DEFAULT 0,
+                            status TEXT NOT NULL DEFAULT 'planned',
+                            provider TEXT NOT NULL DEFAULT '',
+                            provider_request_ref TEXT NOT NULL DEFAULT '',
+                            provider_run_ref TEXT NOT NULL DEFAULT '',
+                            started_at TEXT NOT NULL DEFAULT '',
+                            completed_at TEXT NOT NULL DEFAULT '',
+                            next_retry_at TEXT NOT NULL DEFAULT '',
+                            rate_limit_ref_json TEXT NOT NULL DEFAULT '{}',
+                            error_json TEXT NOT NULL DEFAULT '{}',
+                            input_json TEXT NOT NULL DEFAULT '{}',
+                            output_json TEXT NOT NULL DEFAULT '{}',
+                            artifact_refs_json TEXT NOT NULL DEFAULT '[]',
+                            idempotency_key TEXT NOT NULL,
+                            metadata_json TEXT NOT NULL DEFAULT '{}',
+                            created_at TEXT,
+                            updated_at TEXT,
+                            UNIQUE(workspace_id, idempotency_key)
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS workflow_entity_deltas (
+                            delta_id TEXT PRIMARY KEY,
+                            workspace_id TEXT NOT NULL DEFAULT 'default',
+                            workflow_run_id TEXT NOT NULL DEFAULT '',
+                            operation_run_id TEXT NOT NULL DEFAULT '',
+                            command_id TEXT NOT NULL DEFAULT '',
+                            activity_run_id TEXT NOT NULL DEFAULT '',
+                            attempt_id TEXT NOT NULL DEFAULT '',
+                            acquisition_run_id TEXT NOT NULL DEFAULT '',
+                            entity_type TEXT NOT NULL DEFAULT '',
+                            entity_key TEXT NOT NULL DEFAULT '',
+                            delta_kind TEXT NOT NULL DEFAULT '',
+                            status TEXT NOT NULL DEFAULT 'recorded',
+                            reason TEXT NOT NULL DEFAULT '',
+                            source_ref_json TEXT NOT NULL DEFAULT '{}',
+                            entity_payload_json TEXT NOT NULL DEFAULT '{}',
+                            projection_effect_json TEXT NOT NULL DEFAULT '{}',
+                            artifact_refs_json TEXT NOT NULL DEFAULT '[]',
+                            idempotency_key TEXT NOT NULL,
+                            metadata_json TEXT NOT NULL DEFAULT '{}',
+                            created_at TEXT,
+                            updated_at TEXT,
+                            UNIQUE(workspace_id, idempotency_key)
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS acquisition_discovery_lanes (
+                            lane_id TEXT PRIMARY KEY,
+                            workspace_id TEXT NOT NULL DEFAULT 'default',
+                            acquisition_run_id TEXT NOT NULL DEFAULT '',
+                            workflow_run_id TEXT NOT NULL DEFAULT '',
+                            operation_run_id TEXT NOT NULL DEFAULT '',
+                            source_command_id TEXT NOT NULL DEFAULT '',
+                            activity_run_id TEXT NOT NULL DEFAULT '',
+                            target_company TEXT NOT NULL DEFAULT '',
+                            query TEXT NOT NULL DEFAULT '',
+                            provider TEXT NOT NULL DEFAULT '',
+                            status TEXT NOT NULL DEFAULT 'planned',
+                            phase TEXT NOT NULL DEFAULT 'planned',
+                            lane_plan_json TEXT NOT NULL DEFAULT '{}',
+                            provider_ref_json TEXT NOT NULL DEFAULT '{}',
+                            artifact_refs_json TEXT NOT NULL DEFAULT '[]',
+                            entity_counts_json TEXT NOT NULL DEFAULT '{}',
+                            downstream_command_ids_json TEXT NOT NULL DEFAULT '[]',
+                            idempotency_key TEXT NOT NULL,
+                            metadata_json TEXT NOT NULL DEFAULT '{}',
+                            created_at TEXT,
+                            updated_at TEXT,
+                            UNIQUE(workspace_id, idempotency_key)
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS operation_events (
+                            event_id TEXT PRIMARY KEY,
+                            workspace_id TEXT NOT NULL DEFAULT 'default',
+                            event_stream_id TEXT NOT NULL,
+                            operation_run_id TEXT NOT NULL DEFAULT '',
+                            action_id TEXT NOT NULL DEFAULT '',
+                            event_family TEXT NOT NULL,
+                            event_type TEXT NOT NULL,
+                            sequence_number BIGINT NOT NULL DEFAULT 0,
+                            idempotency_key TEXT NOT NULL,
+                            occurred_at TEXT NOT NULL DEFAULT '',
+                            recorded_at TEXT NOT NULL DEFAULT '',
+                            actor TEXT NOT NULL DEFAULT '',
+                            source TEXT NOT NULL DEFAULT '',
+                            payload_json TEXT NOT NULL DEFAULT '{}',
+                            schema_version TEXT NOT NULL DEFAULT 'operation_event_v1',
+                            created_at TEXT,
+                            UNIQUE(event_stream_id, sequence_number),
+                            UNIQUE(event_stream_id, idempotency_key)
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS crm_tasks (
+                            task_id TEXT PRIMARY KEY,
+                            workspace_id TEXT NOT NULL DEFAULT 'default',
+                            crm_record_id TEXT NOT NULL DEFAULT '',
+                            engagement_id TEXT NOT NULL DEFAULT '',
+                            person_identity_key TEXT NOT NULL DEFAULT '',
+                            title TEXT NOT NULL DEFAULT '',
+                            description TEXT NOT NULL DEFAULT '',
+                            status TEXT NOT NULL DEFAULT 'open',
+                            priority TEXT NOT NULL DEFAULT 'normal',
+                            due_at TEXT NOT NULL DEFAULT '',
+                            completed_at TEXT NOT NULL DEFAULT '',
+                            created_by_actor TEXT NOT NULL DEFAULT '',
+                            created_by_actor_id TEXT NOT NULL DEFAULT '',
+                            source_event_id TEXT NOT NULL DEFAULT '',
+                            idempotency_key TEXT NOT NULL DEFAULT '',
+                            metadata_json TEXT NOT NULL DEFAULT '{}',
+                            created_at TEXT,
+                            updated_at TEXT
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS company_assets (
+                            asset_id TEXT PRIMARY KEY,
+                            workspace_id TEXT NOT NULL DEFAULT 'default',
+                            company_key TEXT NOT NULL DEFAULT '',
+                            target_company TEXT NOT NULL DEFAULT '',
+                            asset_type TEXT NOT NULL DEFAULT '',
+                            source_kind TEXT NOT NULL DEFAULT '',
+                            source_run_id TEXT NOT NULL DEFAULT '',
+                            source_command_id TEXT NOT NULL DEFAULT '',
+                            activity_run_id TEXT NOT NULL DEFAULT '',
+                            content_ref TEXT NOT NULL DEFAULT '',
+                            content_hash TEXT NOT NULL DEFAULT '',
+                            source_url TEXT NOT NULL DEFAULT '',
+                            fetched_at TEXT NOT NULL DEFAULT '',
+                            visibility_scope TEXT NOT NULL DEFAULT 'internal',
+                            status TEXT NOT NULL DEFAULT 'available',
+                            metadata_json TEXT NOT NULL DEFAULT '{}',
+                            created_at TEXT,
+                            updated_at TEXT
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS company_evidence (
+                            evidence_id TEXT PRIMARY KEY,
+                            workspace_id TEXT NOT NULL DEFAULT 'default',
+                            company_key TEXT NOT NULL DEFAULT '',
+                            target_company TEXT NOT NULL DEFAULT '',
+                            asset_id TEXT NOT NULL DEFAULT '',
+                            evidence_type TEXT NOT NULL DEFAULT '',
+                            value TEXT NOT NULL DEFAULT '',
+                            normalized_value TEXT NOT NULL DEFAULT '',
+                            source_url TEXT NOT NULL DEFAULT '',
+                            source_domain TEXT NOT NULL DEFAULT '',
+                            confidence_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            evidence_excerpt TEXT NOT NULL DEFAULT '',
+                            artifact_refs_json TEXT NOT NULL DEFAULT '{}',
+                            status TEXT NOT NULL DEFAULT 'observed',
+                            metadata_json TEXT NOT NULL DEFAULT '{}',
+                            created_at TEXT,
+                            updated_at TEXT
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS company_assertions (
+                            assertion_id TEXT PRIMARY KEY,
+                            workspace_id TEXT NOT NULL DEFAULT 'default',
+                            company_key TEXT NOT NULL DEFAULT '',
+                            target_company TEXT NOT NULL DEFAULT '',
+                            assertion_type TEXT NOT NULL DEFAULT '',
+                            value TEXT NOT NULL DEFAULT '',
+                            normalized_value TEXT NOT NULL DEFAULT '',
+                            authority TEXT NOT NULL DEFAULT 'provider_observed',
+                            verification_status TEXT NOT NULL DEFAULT 'needs_review',
+                            source_evidence_id TEXT NOT NULL DEFAULT '',
+                            source_run_id TEXT NOT NULL DEFAULT '',
+                            source_command_id TEXT NOT NULL DEFAULT '',
+                            confidence_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            valid_from TEXT NOT NULL DEFAULT '',
+                            valid_to TEXT NOT NULL DEFAULT '',
+                            metadata_json TEXT NOT NULL DEFAULT '{}',
+                            created_at TEXT,
+                            updated_at TEXT
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_crm_tasks_record_status_due
+                        ON crm_tasks (workspace_id, crm_record_id, status, due_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_crm_tasks_status_due
+                        ON crm_tasks (workspace_id, status, due_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_tasks_idempotency
+                        ON crm_tasks (workspace_id, idempotency_key)
+                        WHERE idempotency_key != ''
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_company_assets_company
+                        ON company_assets (workspace_id, company_key, asset_type, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_company_assets_source
+                        ON company_assets (source_run_id, source_command_id, activity_run_id)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_company_evidence_company
+                        ON company_evidence (workspace_id, company_key, evidence_type, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_company_evidence_asset
+                        ON company_evidence (asset_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_company_assertions_company
+                        ON company_assertions (workspace_id, company_key, assertion_type, verification_status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_company_assertions_evidence
+                        ON company_assertions (source_evidence_id, updated_at)
+                        """
+                    )
+                    for column_name, column_type in (
+                        ("stage_id", "TEXT NOT NULL DEFAULT ''"),
+                        ("causal_group_id", "TEXT NOT NULL DEFAULT ''"),
+                        ("parent_command_id", "TEXT NOT NULL DEFAULT ''"),
+                        ("source_event_id", "TEXT NOT NULL DEFAULT ''"),
+                        ("source_event_type", "TEXT NOT NULL DEFAULT ''"),
+                        ("input_artifact_refs_json", "TEXT NOT NULL DEFAULT '[]'"),
+                        ("output_artifact_refs_json", "TEXT NOT NULL DEFAULT '[]'"),
+                        ("produced_entity_counts_json", "TEXT NOT NULL DEFAULT '{}'"),
+                        ("no_op_reason", "TEXT NOT NULL DEFAULT ''"),
+                        ("readiness_effect", "TEXT NOT NULL DEFAULT ''"),
+                        ("downstream_command_ids_json", "TEXT NOT NULL DEFAULT '[]'"),
+                        ("causality_schema_version", "TEXT NOT NULL DEFAULT 'command_causality_v1'"),
+                    ):
+                        cursor.execute(
+                            f"""
+                            ALTER TABLE workflow_commands
+                            ADD COLUMN IF NOT EXISTS {_quote_identifier(column_name)} {column_type}
+                            """
+                        )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_workflow_events_run_sequence_unique
+                        ON workflow_events (workflow_run_id, sequence_number)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_workflow_events_run_idempotency_unique
+                        ON workflow_events (workflow_run_id, idempotency_key)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_events_run_sequence
+                        ON workflow_events (workflow_run_id, sequence_number)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_events_command
+                        ON workflow_events (command_id, recorded_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_current_state_status
+                        ON workflow_current_state (status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_workflow_commands_run_idempotency_unique
+                        ON workflow_commands (workflow_run_id, idempotency_key)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_commands_ready
+                        ON workflow_commands (owner, command_type, status, not_before_at, lease_expires_at, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_commands_run
+                        ON workflow_commands (workflow_run_id, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_commands_causal_group
+                        ON workflow_commands (causal_group_id, source_event_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_commands_source_event
+                        ON workflow_commands (source_event_id, command_type, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_runtime_outbox_ready
+                        ON runtime_outbox (outbox_type, status, not_before_at, lease_expires_at, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_runtime_outbox_run
+                        ON runtime_outbox (workflow_run_id, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_agent_actions_workspace_status
+                        ON agent_actions (workspace_id, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_actions_workspace_idempotency_unique
+                        ON agent_actions (workspace_id, idempotency_key)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_agent_actions_owner
+                        ON agent_actions (owner_module, action_type, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_operation_runs_action
+                        ON operation_runs (action_id, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_operation_runs_workspace_idempotency_unique
+                        ON operation_runs (workspace_id, idempotency_key)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_operation_runs_owner
+                        ON operation_runs (owner_module, operation_type, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_acquisition_runs_operation
+                        ON acquisition_runs (operation_run_id, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_acquisition_runs_workflow
+                        ON acquisition_runs (workflow_run_id, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_acquisition_runs_company
+                        ON acquisition_runs (workspace_id, target_company, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_acquisition_runs_workspace_idempotency_unique
+                        ON acquisition_runs (workspace_id, idempotency_key)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_activity_runs_workflow
+                        ON workflow_activity_runs (workflow_run_id, activity_type, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_activity_runs_acquisition
+                        ON workflow_activity_runs (acquisition_run_id, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_activity_runs_command
+                        ON workflow_activity_runs (command_id)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_workflow_activity_runs_workspace_idempotency_unique
+                        ON workflow_activity_runs (workspace_id, idempotency_key)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_activity_attempts_activity
+                        ON workflow_activity_attempts (activity_run_id, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_activity_attempts_workflow
+                        ON workflow_activity_attempts (workflow_run_id, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_activity_attempts_command
+                        ON workflow_activity_attempts (command_id)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_workflow_activity_attempts_workspace_idempotency_unique
+                        ON workflow_activity_attempts (workspace_id, idempotency_key)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_entity_deltas_activity
+                        ON workflow_entity_deltas (activity_run_id, entity_type, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_entity_deltas_workflow
+                        ON workflow_entity_deltas (workflow_run_id, entity_type, entity_key, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_entity_deltas_command
+                        ON workflow_entity_deltas (command_id, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_workflow_entity_deltas_workspace_idempotency_unique
+                        ON workflow_entity_deltas (workspace_id, idempotency_key)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_acquisition_discovery_lanes_acquisition
+                        ON acquisition_discovery_lanes (acquisition_run_id, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_acquisition_discovery_lanes_workflow
+                        ON acquisition_discovery_lanes (workflow_run_id, status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_acquisition_discovery_lanes_source_command
+                        ON acquisition_discovery_lanes (source_command_id)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_acquisition_discovery_lanes_workspace_idempotency_unique
+                        ON acquisition_discovery_lanes (workspace_id, idempotency_key)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_operation_events_stream_sequence
+                        ON operation_events (event_stream_id, sequence_number)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_operation_events_stream_idempotency_unique
+                        ON operation_events (event_stream_id, idempotency_key)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_operation_events_action
+                        ON operation_events (action_id, recorded_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_runtime_provider_limiter_key_expires
+                        ON runtime_provider_limiter_leases (limiter_key, lease_expires_at)
+                        """
+                    )
                     cursor.execute("CREATE SEQUENCE IF NOT EXISTS agent_trace_spans_span_id_seq START WITH 1")
                     cursor.execute("CREATE SEQUENCE IF NOT EXISTS agent_worker_runs_worker_id_seq START WITH 1")
                     cursor.execute(
@@ -2225,25 +5864,128 @@ class LiveControlPlanePostgresAdapter:
         return self._execute_non_query(sql, params)
 
     def _connect(self) -> Any:
-        if self._psycopg is None:
-            self._psycopg = _import_psycopg()
+        psycopg_module = self._psycopg
+        if psycopg_module is not None and getattr(psycopg_module, "Connection", None) is None:
+            # Test seams inject lightweight psycopg stubs exposing only
+            # ``connect()``; keep the legacy one-connection-per-call path for
+            # those instead of pooling.
+            return self._direct_connect(psycopg_module)
+        pool = self._ensure_pool()
+        return _PooledConnectionHandle(pool, pool.getconn())
+
+    def _direct_connect(self, psycopg_module: Any) -> Any:
+        """Legacy non-pooled connect path (used with injected psycopg stubs)."""
+
         if not str(os.getenv("SOURCING_CONTROL_PLANE_POSTGRES_DSN") or "").strip():
             try:
                 ensure_local_postgres_started(self.runtime_dir)
             except Exception:
                 pass
         effective_dsn = normalize_control_plane_postgres_connect_dsn(self.dsn)
-        schema = resolve_control_plane_postgres_schema(self.runtime_dir)
         try:
             return configure_control_plane_postgres_session(
-                self._psycopg.connect(effective_dsn, client_encoding="utf8"),
-                schema=schema,
+                psycopg_module.connect(effective_dsn, client_encoding="utf8"),
+                schema=self.schema,
             )
         except TypeError:
             return configure_control_plane_postgres_session(
-                _configure_postgres_connection_utf8(self._psycopg.connect(effective_dsn)),
-                schema=schema,
+                _configure_postgres_connection_utf8(psycopg_module.connect(effective_dsn)),
+                schema=self.schema,
             )
+
+    def _configure_pooled_connection(self, connection: Any) -> None:
+        """Replicate the legacy per-connection session config for pooled connections.
+
+        The pre-pool ``_connect`` applied, per fresh connection:
+        ``client_encoding=utf8`` (connect kwarg), ``SET client_encoding TO 'UTF8'``,
+        and (when the adapter schema differs from ``public``) ``CREATE SCHEMA IF NOT
+        EXISTS <schema>`` followed by ``SET search_path TO <schema>, public``. Those
+        statements used to commit together with the first unit of work; pooled
+        connections must commit here so the session state survives later rollbacks
+        and the pool receives the connection in IDLE state.
+        """
+
+        try:
+            configure_control_plane_postgres_session(connection, schema=self.schema)
+        except Exception as exc:
+            # Two pool workers can race ``CREATE SCHEMA IF NOT EXISTS`` for a
+            # fresh schema (PostgreSQL still raises unique_violation /
+            # duplicate_schema on concurrent creation). Retry once: the schema
+            # exists by then and only ``SET search_path`` remains to apply.
+            sqlstate = str(getattr(exc, "sqlstate", "") or "").strip().upper()
+            if sqlstate not in {"23505", "42P06"}:
+                raise
+            try:
+                connection.rollback()
+            except Exception:
+                pass
+            configure_control_plane_postgres_session(connection, schema=self.schema)
+        connection.commit()
+
+    def _on_pool_reconnect_failed(self, _pool: Any) -> None:
+        if not str(os.getenv("SOURCING_CONTROL_PLANE_POSTGRES_DSN") or "").strip():
+            try:
+                ensure_local_postgres_started(self.runtime_dir)
+            except Exception:
+                pass
+
+    def _ensure_pool(self) -> Any:
+        current_pid = os.getpid()
+        pool = self._pool
+        if pool is not None and self._pool_pid == current_pid and not getattr(pool, "closed", False):
+            return pool
+        with self._pool_lock:
+            pool = self._pool
+            if pool is not None and self._pool_pid == current_pid and not getattr(pool, "closed", False):
+                return pool
+            if pool is not None:
+                if self._pool_pid == current_pid:
+                    try:
+                        pool.close()
+                    except Exception:
+                        pass
+                # else: pool object inherited across fork; abandon it without
+                # touching sockets shared with the parent process.
+                self._pool = None
+                self._pool_pid = None
+            if self._psycopg is None:
+                self._psycopg = _import_psycopg()
+            psycopg_pool = _import_psycopg_pool()
+            if not str(os.getenv("SOURCING_CONTROL_PLANE_POSTGRES_DSN") or "").strip():
+                try:
+                    ensure_local_postgres_started(self.runtime_dir)
+                except Exception:
+                    pass
+            effective_dsn = normalize_control_plane_postgres_connect_dsn(self.dsn)
+            min_size, max_size = _resolve_control_plane_pg_pool_size_limits()
+            new_pool = psycopg_pool.ConnectionPool(
+                effective_dsn,
+                connection_class=_resolve_pooled_connection_class(self._psycopg),
+                kwargs={"client_encoding": "utf8"},
+                min_size=min_size,
+                max_size=max_size,
+                configure=self._configure_pooled_connection,
+                check=psycopg_pool.ConnectionPool.check_connection,
+                reconnect_failed=self._on_pool_reconnect_failed,
+                name=f"control_plane_{self.schema or 'public'}",
+                open=True,
+            )
+            self._pool = new_pool
+            self._pool_pid = current_pid
+            return new_pool
+
+    def close(self) -> None:
+        """Dispose the adapter's connection pool (tests/fixtures cleanup hook)."""
+
+        with self._pool_lock:
+            pool = self._pool
+            self._pool = None
+            self._pool_pid = None
+        if pool is not None:
+            try:
+                pool.close()
+            except Exception:
+                pass
 
     def _job_progress_event_summary_from_row(self, row: dict[str, Any] | None) -> dict[str, Any]:
         if row is None:
@@ -2313,6 +6055,12 @@ def _normalize_postgres_payload(value: Any) -> Any:
     normalized_scalar = _normalize_postgres_textual_value(value)
     if normalized_scalar is not value:
         return normalized_scalar
+    if isinstance(value, (datetime, date, datetime_time)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, Path):
+        return str(value)
     if isinstance(value, dict):
         return {
             str(_normalize_postgres_textual_value(key) or ""): _normalize_postgres_payload(item)
@@ -2342,10 +6090,12 @@ def _normalize_postgres_identifier(value: Any) -> str:
 
 
 def _is_retryable_postgres_exception(error: Exception) -> bool:
+    if _PSYCOPG_POOL_TIMEOUT is not None and isinstance(error, _PSYCOPG_POOL_TIMEOUT):
+        return True
     sqlstate = str(getattr(error, "sqlstate", "") or "").strip().upper()
     if sqlstate in _RETRYABLE_POSTGRES_SQLSTATES:
         return True
-    return type(error).__name__ in {"DeadlockDetected", "SerializationFailure"}
+    return type(error).__name__ in {"DeadlockDetected", "SerializationFailure", "PoolTimeout"}
 
 
 def _control_plane_postgres_retry_delay_seconds(attempt: int) -> float:
@@ -2356,6 +6106,21 @@ def _control_plane_postgres_retry_delay_seconds(attempt: int) -> float:
 def _quote_identifier(identifier: str) -> str:
     escaped = str(identifier or "").replace('"', '""')
     return f'"{escaped}"'
+
+
+def _postgres_table_exists(cursor: Any, table_name: str) -> bool:
+    normalized_table = _normalize_postgres_identifier(table_name)
+    if not normalized_table:
+        return False
+    cursor.execute("SELECT to_regclass(%s)", (normalized_table,))
+    row = cursor.fetchone()
+    if row is None:
+        return False
+    if isinstance(row, dict):
+        return bool(next(iter(row.values()), None))
+    if isinstance(row, (list, tuple)):
+        return bool(row[0] if row else None)
+    return bool(row)
 
 
 def _quote_string_literal(value: str) -> str:
@@ -2417,7 +6182,49 @@ def _company_scope_predicate(
 
 
 def _json_dump(payload: Any) -> str:
-    return json.dumps(payload if payload is not None else {}, ensure_ascii=False)
+    return json.dumps(_json_safe_postgres_payload(payload if payload is not None else {}), ensure_ascii=False)
+
+
+def _json_safe_postgres_payload(value: Any) -> Any:
+    normalized_scalar = _normalize_postgres_textual_value(value)
+    if normalized_scalar is not value:
+        return _json_safe_postgres_payload(normalized_scalar)
+    if isinstance(value, (datetime, date, datetime_time)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, Path):
+        return str(value)
+    to_record = getattr(value, "to_record", None)
+    if callable(to_record):
+        return _json_safe_postgres_payload(to_record())
+    if isinstance(value, dict):
+        return {str(key): _json_safe_postgres_payload(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe_postgres_payload(item) for item in value]
+    return value
+
+
+def _workflow_command_causality_columns_from_payload(payload: Any) -> dict[str, Any]:
+    payload_dict = dict(payload or {}) if isinstance(payload, dict) else {}
+    causality = dict(payload_dict.get("causality") or {})
+    return {
+        "stage_id": str(causality.get("stage_id") or payload_dict.get("stage_id") or "").strip(),
+        "causal_group_id": str(causality.get("causal_group_id") or payload_dict.get("causal_group_id") or "").strip(),
+        "parent_command_id": str(causality.get("parent_command_id") or "").strip(),
+        "source_event_id": str(causality.get("source_event_id") or "").strip(),
+        "source_event_type": str(causality.get("source_event_type") or "").strip(),
+        "input_artifact_refs_json": _json_dump(list(causality.get("input_artifact_refs") or [])),
+        "output_artifact_refs_json": _json_dump(list(causality.get("output_artifact_refs") or [])),
+        "produced_entity_counts_json": _json_dump(dict(causality.get("produced_entity_counts") or {})),
+        "no_op_reason": str(causality.get("no_op_reason") or "").strip(),
+        "readiness_effect": str(causality.get("readiness_effect") or "").strip(),
+        "downstream_command_ids_json": _json_dump(list(causality.get("downstream_command_ids") or [])),
+        "causality_schema_version": str(
+            causality.get("schema_version") or "command_causality_v1"
+        ).strip()
+        or "command_causality_v1",
+    }
 
 
 def _json_load_dict(payload: Any) -> dict[str, Any]:

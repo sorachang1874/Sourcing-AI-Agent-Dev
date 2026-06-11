@@ -3,12 +3,15 @@ from __future__ import annotations
 import ast
 import json
 import os
+import re
 import sqlite3
 import threading
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from hashlib import sha1
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from .asset_governance import (
     build_canonical_asset_replacement_plan,
@@ -39,6 +42,20 @@ from .linkedin_url_normalization import (
     normalize_linkedin_profile_url_list as _normalize_linkedin_profile_url_list,
 )
 from .local_postgres import resolve_control_plane_postgres_dsn
+from .person_identity import (
+    build_person_summary_view as _build_person_summary_view,
+)
+from .person_identity import (
+    resolve_candidate_identity_key as _resolve_candidate_identity_key,
+)
+from .public_web_signal_identity import public_web_signal_id_for_identity
+from .person_identity import resolve_person_identity_key as _resolve_person_identity_key
+from .person_identity import resolve_profile_url_key as _resolve_profile_url_key
+from .public_candidate_facets import (
+    candidate_matches_candidate_page_filter as _candidate_matches_candidate_page_filter,
+)
+from .public_candidate_facets import candidate_page_filter_active as _candidate_page_filter_active
+from .public_candidate_facets import candidate_page_filter_text as _candidate_page_filter_text
 from .request_matching import (
     MATCH_THRESHOLD,
     build_request_family_match_explanation,
@@ -50,7 +67,32 @@ from .request_matching import (
     request_signature,
 )
 from .runtime_environment import current_runtime_environment
+from .runtime_lease_utils import worker_lease_owner_is_dead_local_process
 from .worker_scheduler import effective_worker_status, wait_stage
+
+_RESULT_VIEW_SERVING_ARTIFACT_FILENAMES = (
+    "manifest.json",
+    "artifact_summary.json",
+    "snapshot_manifest.json",
+    "materialized_candidate_documents.json",
+)
+
+
+def _normalize_job_result_view_source_path(source_path: str) -> str:
+    """Persist result views against a concrete serving artifact, not a snapshot directory."""
+
+    normalized_source_path = str(source_path or "").strip()
+    if not normalized_source_path:
+        return ""
+    path = Path(normalized_source_path).expanduser()
+    if not path.is_dir():
+        return normalized_source_path
+    normalized_artifacts = path / "normalized_artifacts"
+    for filename in _RESULT_VIEW_SERVING_ARTIFACT_FILENAMES:
+        candidate = normalized_artifacts / filename
+        if candidate.exists() and candidate.is_file():
+            return str(candidate)
+    return normalized_source_path
 
 _TERMINAL_JOB_STATUSES = {"completed", "failed"}
 _CONTROL_PLANE_POSTGRES_NATIVE_READ_METHODS = {
@@ -60,6 +102,12 @@ _CONTROL_PLANE_POSTGRES_NATIVE_READ_METHODS = {
     "get_workflow_job_lease",
     "get_agent_worker",
     "list_agent_workers",
+    "list_agent_workers_by_remote_provider_identifiers",
+    "list_latest_target_candidate_public_web_runs_by_record_ids",
+    "list_latest_crm_public_web_runs_by_record_ids",
+    "list_latest_company_public_web_asset_runs_by_company_keys",
+    "get_agent_action",
+    "get_operation_run",
 }
 _CONTROL_PLANE_POSTGRES_NATIVE_TABLES = {
     "save_job_row": "jobs",
@@ -78,11 +126,51 @@ _CONTROL_PLANE_POSTGRES_NATIVE_TABLES = {
     "release_agent_worker_lease": "agent_worker_runs",
     "request_interrupt_agent_worker": "agent_worker_runs",
     "clear_interrupt_agent_worker": "agent_worker_runs",
+    "list_agent_workers_by_remote_provider_identifiers": "agent_worker_runs",
+    "list_latest_company_public_web_asset_runs_by_company_keys": "company_public_web_asset_runs",
     "acquire_workflow_job_lease": "workflow_job_leases",
     "get_workflow_job_lease": "workflow_job_leases",
     "renew_workflow_job_lease": "workflow_job_leases",
     "release_workflow_job_lease": "workflow_job_leases",
     "supersede_workflow_runtime_state": "agent_worker_runs",
+    "append_workflow_event": "workflow_events",
+    "upsert_workflow_current_state": "workflow_current_state",
+    "upsert_workflow_command": "workflow_commands",
+    "update_workflow_command_payload": "workflow_commands",
+    "claim_workflow_command": "workflow_commands",
+    "mark_workflow_command_running": "workflow_commands",
+    "mark_workflow_command_succeeded": "workflow_commands",
+    "mark_workflow_command_failed": "workflow_commands",
+    "mark_workflow_command_partial_progress": "workflow_commands",
+    "mark_workflow_command_waiting_prerequisite": "workflow_commands",
+    "cancel_workflow_command": "workflow_commands",
+    "retry_workflow_command": "workflow_commands",
+    "resume_workflow_command": "workflow_commands",
+    "enqueue_runtime_outbox": "runtime_outbox",
+    "mark_runtime_outbox_dispatched": "runtime_outbox",
+    "upsert_agent_action": "agent_actions",
+    "upsert_operation_run": "operation_runs",
+    "append_operation_event": "operation_events",
+    "get_agent_action": "agent_actions",
+    "get_operation_run": "operation_runs",
+    "update_agent_action_state": "agent_actions",
+    "update_operation_run_state": "operation_runs",
+    "claim_job_materialization_item": "job_materialization_items",
+    "mark_job_materialization_item_completed": "job_materialization_items",
+    "mark_job_materialization_item_failed": "job_materialization_items",
+    "mark_job_materialization_item_waiting_prerequisite": "job_materialization_items",
+    "reawaken_waiting_prerequisite_job_materialization_items": "job_materialization_items",
+    "list_latest_target_candidate_public_web_runs_by_record_ids": "target_candidate_public_web_runs",
+    "list_latest_crm_public_web_runs_by_record_ids": "crm_public_web_runs",
+    "upsert_serving_projection": "serving_projections",
+    "upsert_serving_projection_members": "serving_projection_members",
+    "replace_serving_projection_members": "serving_projection_members",
+    "replace_projection_person_search_index": "projection_person_search_index",
+    "upsert_projection_manifest_shard": "projection_manifest_shards",
+    "upsert_run_projection_link": "run_projection_links",
+    "upsert_collection_authoritative_pointer": "collection_authoritative_pointers",
+    "upsert_raw_profile_index": "raw_profile_index",
+    "upsert_candidate_evidence_index": "candidate_evidence_index",
 }
 
 
@@ -93,11 +181,68 @@ def _env_flag_enabled(value: Any, *, default: bool) -> bool:
     return normalized not in {"0", "false", "no", "off"}
 
 
+def _env_int(name: str, default: int) -> int:
+    raw = str(os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _linkedin_profile_max_retry_attempts(default: int = 1) -> int:
+    """Number of retry submissions allowed after the initial profile fetch failure."""
+
+    return max(0, _env_int("SOURCING_LINKEDIN_PROFILE_MAX_RETRY_ATTEMPTS", default))
+
+
 def _control_plane_postgres_required(runtime_dir: Path | None = None) -> bool:
     if _env_flag_enabled(os.getenv("SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES"), default=False):
         return True
     runtime = current_runtime_environment(runtime_dir=runtime_dir)
     return bool(runtime.is_production)
+
+
+def _strict_legacy_materialization_write_gate_enabled() -> bool:
+    return _env_flag_enabled(
+        os.getenv("SOURCING_BLOCK_LEGACY_JOB_MATERIALIZATION_NORMAL_WRITES"),
+        default=False,
+    )
+
+
+_DURABLE_RUNTIME_TABLES = {
+    "workflow_events",
+    "workflow_current_state",
+    "workflow_commands",
+    "runtime_outbox",
+    "agent_actions",
+    "operation_runs",
+    "acquisition_runs",
+    "workflow_activity_runs",
+    "workflow_activity_attempts",
+    "workflow_entity_deltas",
+    "acquisition_discovery_lanes",
+    "operation_events",
+    "crm_tasks",
+    "company_assets",
+    "company_evidence",
+    "company_assertions",
+}
+
+
+def _legacy_materialization_write_is_migration(metadata: dict[str, Any] | None, source: str = "") -> bool:
+    payload = dict(metadata or {})
+    source_text = str(source or "").strip().lower()
+    owner = str(payload.get("owner") or payload.get("write_owner") or "").strip().lower()
+    bridge_kind = str(payload.get("migration_bridge") or payload.get("bridge_kind") or "").strip().lower()
+    return bool(
+        payload.get("migration_adapter")
+        or payload.get("legacy_migration_adapter")
+        or bridge_kind in {"job_materialization_items_adapter", "legacy_materialization_adapter"}
+        or owner in {"durable_runtime_migration_adapter", "legacy_materialization_adapter"}
+        or source_text in {"durable_runtime_migration_adapter", "legacy_materialization_adapter"}
+    )
 
 
 def _resolve_postgres_only_sqlite_backend(
@@ -144,6 +289,77 @@ def _json_safe_payload(value: Any) -> Any:
     return value
 
 
+def _workflow_command_causality_columns_from_payload(
+    payload: Any,
+    *,
+    workflow_run_id: str,
+    operation_id: str,
+    command_type: str,
+    owner: str,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    payload_dict = dict(payload or {}) if isinstance(payload, dict) else {}
+    causality = dict(payload_dict.get("causality") or {})
+    return {
+        "stage_id": str(causality.get("stage_id") or payload_dict.get("stage_id") or "").strip(),
+        "causal_group_id": str(causality.get("causal_group_id") or payload_dict.get("causal_group_id") or "").strip(),
+        "parent_command_id": str(causality.get("parent_command_id") or "").strip(),
+        "source_event_id": str(causality.get("source_event_id") or "").strip(),
+        "source_event_type": str(causality.get("source_event_type") or "").strip(),
+        "input_artifact_refs_json": json.dumps(
+            _json_safe_payload(list(causality.get("input_artifact_refs") or [])),
+            ensure_ascii=False,
+        ),
+        "output_artifact_refs_json": json.dumps(
+            _json_safe_payload(list(causality.get("output_artifact_refs") or [])),
+            ensure_ascii=False,
+        ),
+        "produced_entity_counts_json": json.dumps(
+            _json_safe_payload(dict(causality.get("produced_entity_counts") or {})),
+            ensure_ascii=False,
+        ),
+        "no_op_reason": str(causality.get("no_op_reason") or "").strip(),
+        "readiness_effect": str(causality.get("readiness_effect") or "").strip(),
+        "downstream_command_ids_json": json.dumps(
+            _json_safe_payload(list(causality.get("downstream_command_ids") or [])),
+            ensure_ascii=False,
+        ),
+        "causality_schema_version": str(
+            causality.get("schema_version") or "command_causality_v1"
+        ).strip()
+        or "command_causality_v1",
+    }
+
+
+def _dedupe_ordered_texts(values: Any) -> list[str]:
+    if isinstance(values, str):
+        values = [values]
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for value in list(values or []):
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        ordered.append(text)
+    return ordered
+
+
+def _safe_int_list(values: Any) -> list[int]:
+    result: list[int] = []
+    seen: set[int] = set()
+    for value in list(values or []):
+        try:
+            item = int(value or 0)
+        except (TypeError, ValueError):
+            continue
+        if item <= 0 or item in seen:
+            continue
+        seen.add(item)
+        result.append(item)
+    return result
+
+
 def _normalize_textual_value(value: Any) -> str:
     if isinstance(value, memoryview):
         value = value.tobytes()
@@ -168,6 +384,28 @@ def _normalize_textual_value(value: Any) -> str:
             except UnicodeDecodeError:
                 return bytes(parsed).decode("utf-8", errors="replace")
     return text
+
+
+def _normalize_search_index_text(value: Any) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^0-9A-Za-z\u4e00-\u9fff]+", " ", str(value or "").lower())).strip()
+
+
+def _normalize_search_index_terms(value: Any) -> list[str]:
+    raw_items = value if isinstance(value, (list, tuple, set)) else [value]
+    normalized_terms: list[str] = []
+    seen_terms: set[str] = set()
+    for raw_item in raw_items:
+        if isinstance(raw_item, (list, tuple, set)):
+            nested_items = list(raw_item)
+        else:
+            nested_items = str(raw_item or "").split(",")
+        for item in nested_items:
+            normalized = _normalize_search_index_text(item)
+            if not normalized or normalized in seen_terms:
+                continue
+            seen_terms.add(normalized)
+            normalized_terms.append(normalized)
+    return normalized_terms
 
 
 def _normalized_payload_text(
@@ -523,6 +761,12 @@ class ControlPlaneStore:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._profile_prefetch_scheduler_lock_guard = threading.Lock()
+        self._profile_prefetch_scheduler_locks: dict[str, threading.RLock] = {}
+        self._board_visible_patch_publication_lock_guard = threading.Lock()
+        self._board_visible_patch_publication_locks: dict[str, threading.RLock] = {}
+        self._legacy_target_public_web_migration_write_depth = 0
+        self._legacy_target_public_web_migration_write_reason = ""
         self._bootstrap_candidate_store_loaded = False
         runtime_dir = self.db_path.parent
         control_plane_postgres_dsn = resolve_control_plane_postgres_dsn(runtime_dir)
@@ -573,14 +817,253 @@ class ControlPlaneStore:
     def control_plane_postgres_is_postgres_only(self) -> bool:
         return self.control_plane_postgres_live_mode() == "postgres_only"
 
-    def sqlite_shadow_backend(self) -> str:
+    def compatibility_shadow_backend(self) -> str:
         return str(self._sqlite_backend_mode or "disk")
 
-    def sqlite_shadow_connect_target(self) -> str:
+    def compatibility_shadow_connect_target(self) -> str:
         return str(self._sqlite_connect_target or self.db_path)
 
+    def compatibility_shadow_seed_path(self) -> str:
+        return str(self.db_path)
+
+    def compatibility_shadow_is_ephemeral(self) -> bool:
+        return self.compatibility_shadow_backend() != "disk"
+
+    def close(self) -> None:
+        """Dispose persistent control-plane handles (idempotent teardown hook).
+
+        Closes the live Postgres adapter's connection pool when present, then
+        the SQLite compatibility connection under the store lock. Safe to call
+        repeatedly; multi-runtime processes (test harnesses, scripted runtimes)
+        must call this so adapter pools do not accumulate per runtime.
+        """
+
+        adapter = getattr(self, "_control_plane_postgres", None)
+        adapter_close = getattr(adapter, "close", None)
+        if callable(adapter_close):
+            try:
+                adapter_close()
+            except Exception:
+                pass
+        connection = getattr(self, "_connection", None)
+        if connection is None:
+            return
+        with self._lock:
+            try:
+                connection.close()
+            except Exception:
+                pass
+
+    @contextmanager
+    def legacy_target_public_web_migration_write_context(self, reason: str = ""):
+        """Allow reviewed migration/cold-backup code to seed retired Public Web rows.
+
+        Normal runtime code must not write `target_candidate_public_web_*` rows.
+        This context keeps historical migration tests explicit while letting the
+        storage methods fail closed for accidental normal-path calls.
+        """
+
+        with self.legacy_target_public_web_migration_read_context(reason or "legacy_migration_write"):
+            previous_reason = self._legacy_target_public_web_migration_write_reason
+            self._legacy_target_public_web_migration_write_depth += 1
+            self._legacy_target_public_web_migration_write_reason = str(reason or "").strip() or "legacy_migration"
+            try:
+                yield
+            finally:
+                self._legacy_target_public_web_migration_write_depth = max(
+                    0,
+                    self._legacy_target_public_web_migration_write_depth - 1,
+                )
+                self._legacy_target_public_web_migration_write_reason = (
+                    previous_reason if self._legacy_target_public_web_migration_write_depth else ""
+                )
+
+    @contextmanager
+    def legacy_target_public_web_migration_read_context(self, reason: str = ""):
+        context_factory = getattr(
+            self._control_plane_postgres,
+            "legacy_target_public_web_migration_table_context",
+            None,
+        )
+        if callable(context_factory):
+            with context_factory(str(reason or "").strip() or "legacy_migration_read"):
+                yield
+            return
+        yield
+
+    def _require_legacy_target_public_web_migration_write(self, table_name: str) -> None:
+        if int(getattr(self, "_legacy_target_public_web_migration_write_depth", 0) or 0) > 0:
+            self._ensure_legacy_target_public_web_sqlite_tables_for_migration()
+            return
+        raise RuntimeError(
+            "legacy_target_candidate_public_web_write_retired: "
+            f"{table_name} is migration-only after W7e; normal Public Web code must use crm_public_web_* "
+            "storage and workflow_commands. Seed historical rows through legacy_public_web_storage.seed_* "
+            "or a reviewed migration write context."
+        )
+
+    @staticmethod
+    def _legacy_target_public_web_table_names() -> tuple[str, ...]:
+        return (
+            "target_candidate_public_web_promotions",
+            "target_candidate_public_web_runs",
+            "target_candidate_public_web_batches",
+        )
+
+    def _sqlite_table_exists_locked(self, table_name: str) -> bool:
+        row = self._connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+            (str(table_name or "").strip(),),
+        ).fetchone()
+        return row is not None
+
+    def _drop_empty_legacy_target_public_web_sqlite_tables(self) -> None:
+        """Remove empty retired target-candidate Public Web tables from new SQLite shadows.
+
+        Existing historical rows are preserved for reviewed cold-backup/migration
+        reads. Empty tables from schema bootstrap are dropped so new runtimes do
+        not keep legacy Public Web tables as an implied normal path.
+        """
+
+        for table_name in self._legacy_target_public_web_table_names():
+            if not self._sqlite_table_exists_locked(table_name):
+                continue
+            row = self._connection.execute(f"SELECT COUNT(*) AS row_count FROM {table_name}").fetchone()
+            if int(_row_value(row, "row_count", 0) or 0) == 0:
+                self._connection.execute(f"DROP TABLE IF EXISTS {table_name}")
+
+    def _ensure_legacy_target_public_web_sqlite_tables_for_migration(self) -> None:
+        """Create retired target-candidate Public Web tables only for explicit migration writes."""
+
+        with self._lock, self._connection:
+            self._connection.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS target_candidate_public_web_batches (
+                    batch_id TEXT PRIMARY KEY,
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    requested_record_ids_json TEXT NOT NULL DEFAULT '[]',
+                    source_families_json TEXT NOT NULL DEFAULT '[]',
+                    options_json TEXT NOT NULL DEFAULT '{}',
+                    run_ids_json TEXT NOT NULL DEFAULT '[]',
+                    summary_json TEXT NOT NULL DEFAULT '{}',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    requested_by TEXT NOT NULL DEFAULT '',
+                    force_refresh INTEGER NOT NULL DEFAULT 0,
+                    started_at TEXT,
+                    completed_at TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS target_candidate_public_web_runs (
+                    run_id TEXT PRIMARY KEY,
+                    batch_id TEXT NOT NULL DEFAULT '',
+                    record_id TEXT NOT NULL DEFAULT '',
+                    candidate_id TEXT NOT NULL DEFAULT '',
+                    candidate_name TEXT NOT NULL DEFAULT '',
+                    current_company TEXT NOT NULL DEFAULT '',
+                    linkedin_url TEXT NOT NULL DEFAULT '',
+                    linkedin_url_key TEXT NOT NULL DEFAULT '',
+                    person_identity_key TEXT NOT NULL DEFAULT '',
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    phase TEXT NOT NULL DEFAULT 'queued',
+                    source_families_json TEXT NOT NULL DEFAULT '[]',
+                    options_json TEXT NOT NULL DEFAULT '{}',
+                    query_manifest_json TEXT NOT NULL DEFAULT '[]',
+                    search_checkpoint_json TEXT NOT NULL DEFAULT '{}',
+                    fetch_checkpoint_json TEXT NOT NULL DEFAULT '{}',
+                    analysis_checkpoint_json TEXT NOT NULL DEFAULT '{}',
+                    summary_json TEXT NOT NULL DEFAULT '{}',
+                    artifact_root TEXT NOT NULL DEFAULT '',
+                    worker_key TEXT NOT NULL DEFAULT '',
+                    lease_owner TEXT NOT NULL DEFAULT '',
+                    lease_expires_at TEXT,
+                    attempt_count INTEGER NOT NULL DEFAULT 0,
+                    last_error TEXT NOT NULL DEFAULT '',
+                    started_at TEXT,
+                    completed_at TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS target_candidate_public_web_promotions (
+                    promotion_id TEXT PRIMARY KEY,
+                    signal_id TEXT NOT NULL DEFAULT '',
+                    run_id TEXT NOT NULL DEFAULT '',
+                    asset_id TEXT NOT NULL DEFAULT '',
+                    person_identity_key TEXT NOT NULL DEFAULT '',
+                    record_id TEXT NOT NULL DEFAULT '',
+                    candidate_id TEXT NOT NULL DEFAULT '',
+                    candidate_name TEXT NOT NULL DEFAULT '',
+                    current_company TEXT NOT NULL DEFAULT '',
+                    linkedin_url_key TEXT NOT NULL DEFAULT '',
+                    signal_kind TEXT NOT NULL DEFAULT '',
+                    signal_type TEXT NOT NULL DEFAULT '',
+                    email_type TEXT NOT NULL DEFAULT '',
+                    value TEXT NOT NULL DEFAULT '',
+                    normalized_value TEXT NOT NULL DEFAULT '',
+                    url TEXT NOT NULL DEFAULT '',
+                    source_url TEXT NOT NULL DEFAULT '',
+                    source_domain TEXT NOT NULL DEFAULT '',
+                    source_family TEXT NOT NULL DEFAULT '',
+                    source_title TEXT NOT NULL DEFAULT '',
+                    confidence_label TEXT NOT NULL DEFAULT '',
+                    confidence_score REAL NOT NULL DEFAULT 0,
+                    identity_match_label TEXT NOT NULL DEFAULT '',
+                    identity_match_score REAL NOT NULL DEFAULT 0,
+                    publishable INTEGER NOT NULL DEFAULT 0,
+                    clean_profile_link INTEGER NOT NULL DEFAULT 0,
+                    link_shape_warnings_json TEXT NOT NULL DEFAULT '[]',
+                    action TEXT NOT NULL DEFAULT 'promote',
+                    promotion_status TEXT NOT NULL DEFAULT 'manually_promoted',
+                    promoted_field TEXT NOT NULL DEFAULT '',
+                    previous_value TEXT NOT NULL DEFAULT '',
+                    new_value TEXT NOT NULL DEFAULT '',
+                    operator TEXT NOT NULL DEFAULT '',
+                    note TEXT NOT NULL DEFAULT '',
+                    evidence_excerpt TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_batches_updated
+                    ON target_candidate_public_web_batches (updated_at, status);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_batch
+                    ON target_candidate_public_web_runs (batch_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_record
+                    ON target_candidate_public_web_runs (record_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_status
+                    ON target_candidate_public_web_runs (status, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_identity
+                    ON target_candidate_public_web_runs (linkedin_url_key, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_record
+                    ON target_candidate_public_web_promotions (record_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_signal
+                    ON target_candidate_public_web_promotions (signal_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_run
+                    ON target_candidate_public_web_promotions (run_id, updated_at);
+                """
+            )
+
+    # Legacy aliases kept until the last sqlite_* debug/test call sites are removed.
+    def sqlite_shadow_backend(self) -> str:
+        return self.compatibility_shadow_backend()
+
+    def sqlite_shadow_connect_target(self) -> str:
+        return self.compatibility_shadow_connect_target()
+
     def sqlite_shadow_is_ephemeral(self) -> bool:
-        return self.sqlite_shadow_backend() != "disk"
+        return self.compatibility_shadow_is_ephemeral()
 
     def bootstrap_candidate_store_enabled(self) -> bool:
         return self._bootstrap_candidate_store_loaded or _env_flag_enabled(
@@ -615,6 +1098,129 @@ class ControlPlaneStore:
             and self._control_plane_postgres_is_authoritative(table_name)
         )
 
+    def _require_postgres_for_durable_runtime(self, table_name: str) -> None:
+        normalized_table = str(table_name or "").strip()
+        if normalized_table not in _DURABLE_RUNTIME_TABLES:
+            return
+        if self.control_plane_postgres_is_postgres_only():
+            return
+        raise RuntimeError(
+            f"{normalized_table} is PG-only durable runtime storage. "
+            "Set SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only with a resolved Postgres DSN; "
+            "SQLite durable runtime execution is not a normal path."
+        )
+
+    @contextmanager
+    def profile_prefetch_scheduler_lock(self, *, source_job: str, snapshot_dir: str) -> Any:
+        """Serialize profile-prefetch replan/claim for one job snapshot.
+
+        Production PG uses a transaction-scoped try-advisory lock. A busy PG
+        lock is a cooperative yield signal for the caller, not permission to
+        block a recovery tick. SQLite/local compatibility uses an in-process
+        reentrant lock; that path is sufficient for unit tests but is not a
+        distributed deployment contract.
+        """
+
+        normalized_source_job = str(source_job or "").strip()
+        normalized_snapshot_dir = str(snapshot_dir or "").strip()
+        if not normalized_source_job or not normalized_snapshot_dir:
+            yield
+            return
+        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry"):
+            lock_context = getattr(self._control_plane_postgres, "profile_prefetch_scheduler_lock", None)
+            if callable(lock_context):
+                try:
+                    with lock_context(
+                        source_job=normalized_source_job,
+                        snapshot_dir=normalized_snapshot_dir,
+                    ) as lock_evidence:
+                        yield dict(lock_evidence or {
+                            "kind": "pg_try_advisory_xact_lock",
+                            "lock_kind": "pg_try_advisory_xact_lock",
+                            "distributed": True,
+                            "acquired": True,
+                            "busy": False,
+                            "source": "control_plane_live_postgres",
+                        })
+                    return
+                except Exception as exc:
+                    if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
+                        self._raise_control_plane_postgres_write_failure(
+                            table_name="linkedin_profile_registry",
+                            method_name="profile_prefetch_scheduler_lock",
+                            reason=f"{type(exc).__name__}: {exc}",
+                            error=exc,
+                        )
+        lock_key = f"{normalized_source_job}\n{normalized_snapshot_dir}"
+        with self._profile_prefetch_scheduler_lock_guard:
+            lock = self._profile_prefetch_scheduler_locks.get(lock_key)
+            if lock is None:
+                lock = threading.RLock()
+                self._profile_prefetch_scheduler_locks[lock_key] = lock
+        with lock:
+            yield {
+                "kind": "in_process_rlock",
+                "lock_kind": "in_process_rlock",
+                "distributed": False,
+                "lock_key": lock_key,
+                "source": "sqlite_compatibility",
+                "scope": "source_job_snapshot_dir",
+            }
+
+    @contextmanager
+    def board_visible_patch_publication_lock(self, *, job_id: str, snapshot_id: str) -> Any:
+        """Serialize board-visible patch sequence/cumulative publication.
+
+        `board_visible_delta_apply` items may be claimed independently, but patch
+        publication reads and rewrites shared per-job/snapshot sequence and
+        cumulative candidate ids. Production PG therefore uses a transaction-scoped
+        advisory lock; SQLite/local compatibility uses an in-process reentrant lock.
+        """
+
+        normalized_job_id = str(job_id or "").strip()
+        normalized_snapshot_id = str(snapshot_id or "").strip()
+        if not normalized_job_id or not normalized_snapshot_id:
+            yield
+            return
+        if self._control_plane_postgres_should_prefer_read("job_board_visible_patches"):
+            lock_context = getattr(self._control_plane_postgres, "board_visible_patch_publication_lock", None)
+            if callable(lock_context):
+                try:
+                    with lock_context(
+                        job_id=normalized_job_id,
+                        snapshot_id=normalized_snapshot_id,
+                    ) as lock_evidence:
+                        yield dict(lock_evidence or {
+                            "kind": "pg_advisory_xact_lock",
+                            "lock_kind": "pg_advisory_xact_lock",
+                            "distributed": True,
+                            "source": "control_plane_live_postgres",
+                        })
+                    return
+                except Exception as exc:
+                    if self._control_plane_postgres_should_skip_sqlite_fallback("job_board_visible_patches"):
+                        self._raise_control_plane_postgres_write_failure(
+                            table_name="job_board_visible_patches",
+                            method_name="board_visible_patch_publication_lock",
+                            reason=f"{type(exc).__name__}: {exc}",
+                            error=exc,
+                        )
+        lock_key = f"{normalized_job_id}\n{normalized_snapshot_id}"
+        with self._board_visible_patch_publication_lock_guard:
+            lock = self._board_visible_patch_publication_locks.get(lock_key)
+            if lock is None:
+                lock = threading.RLock()
+                self._board_visible_patch_publication_locks[lock_key] = lock
+        with lock:
+            yield {
+                "kind": "in_process_rlock",
+                "lock_kind": "in_process_rlock",
+                "distributed": False,
+                "lock_key": lock_key,
+                "source": "sqlite_compatibility",
+                "scope": "job_snapshot_board_visible_publication",
+            }
+
     def _control_plane_postgres_native_table_name(self, method_name: str, kwargs: dict[str, Any]) -> str:
         explicit_table_name = str(kwargs.get("table_name") or "").strip()
         if explicit_table_name:
@@ -636,33 +1242,63 @@ class ControlPlaneStore:
             raise RuntimeError(message) from error
         raise RuntimeError(message)
 
+    def _raise_control_plane_postgres_read_failure(
+        self,
+        *,
+        table_name: str,
+        method_name: str,
+        reason: str,
+        error: Exception | None = None,
+    ) -> None:
+        message = (
+            f"Postgres authoritative read failed for {table_name} via {method_name}: {reason}"
+        )
+        if error is not None:
+            raise RuntimeError(message) from error
+        raise RuntimeError(message)
+
     def _call_control_plane_postgres_native(self, method_name: str, /, *args: Any, **kwargs: Any) -> Any:
         normalized_method_name = str(method_name or "").strip()
         table_name = self._control_plane_postgres_native_table_name(normalized_method_name, kwargs)
         strict_no_fallback = bool(
             table_name
-            and normalized_method_name not in _CONTROL_PLANE_POSTGRES_NATIVE_READ_METHODS
             and self._control_plane_postgres_should_skip_sqlite_fallback(table_name)
         )
+        native_read = normalized_method_name in _CONTROL_PLANE_POSTGRES_NATIVE_READ_METHODS
         method = getattr(self._control_plane_postgres, method_name, None)
         if method is None:
             if strict_no_fallback:
-                self._raise_control_plane_postgres_write_failure(
-                    table_name=table_name,
-                    method_name=normalized_method_name,
-                    reason="native writer is unavailable",
-                )
+                if native_read:
+                    self._raise_control_plane_postgres_read_failure(
+                        table_name=table_name,
+                        method_name=normalized_method_name,
+                        reason="native reader is unavailable",
+                    )
+                else:
+                    self._raise_control_plane_postgres_write_failure(
+                        table_name=table_name,
+                        method_name=normalized_method_name,
+                        reason="native writer is unavailable",
+                    )
             return None
         try:
             return method(*args, **kwargs)
         except Exception as exc:
             if strict_no_fallback:
-                self._raise_control_plane_postgres_write_failure(
-                    table_name=table_name,
-                    method_name=normalized_method_name,
-                    reason=f"{type(exc).__name__}: {exc}",
-                    error=exc,
-                )
+                if native_read:
+                    self._raise_control_plane_postgres_read_failure(
+                        table_name=table_name,
+                        method_name=normalized_method_name,
+                        reason=f"{type(exc).__name__}: {exc}",
+                        error=exc,
+                    )
+                else:
+                    self._raise_control_plane_postgres_write_failure(
+                        table_name=table_name,
+                        method_name=normalized_method_name,
+                        reason=f"{type(exc).__name__}: {exc}",
+                        error=exc,
+                    )
             return None
 
     def workflow_job_coordination_uses_postgres(self) -> bool:
@@ -729,6 +1365,7 @@ class ControlPlaneStore:
         params: list[Any] | tuple[Any, ...] = (),
         order_by_sql: str = "",
         limit: int = 100,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         if not self._control_plane_postgres_should_prefer_read(table_name):
             return []
@@ -739,8 +1376,16 @@ class ControlPlaneStore:
                 params=list(params),
                 order_by_sql=order_by_sql,
                 limit=limit,
+                offset=offset,
             )
-        except Exception:
+        except Exception as exc:
+            if self._control_plane_postgres_should_skip_sqlite_fallback(table_name):
+                self._raise_control_plane_postgres_read_failure(
+                    table_name=table_name,
+                    method_name="select_many",
+                    reason=f"{type(exc).__name__}: {exc}",
+                    error=exc,
+                )
             return []
         if not rows:
             return []
@@ -764,7 +1409,14 @@ class ControlPlaneStore:
                 params=list(params),
                 order_by_sql=order_by_sql,
             )
-        except Exception:
+        except Exception as exc:
+            if self._control_plane_postgres_should_skip_sqlite_fallback(table_name):
+                self._raise_control_plane_postgres_read_failure(
+                    table_name=table_name,
+                    method_name="select_one",
+                    reason=f"{type(exc).__name__}: {exc}",
+                    error=exc,
+                )
             return None
         if row is None:
             return None
@@ -870,6 +1522,109 @@ class ControlPlaneStore:
                     request_signature TEXT NOT NULL DEFAULT '',
                     summary_json TEXT NOT NULL DEFAULT '{}',
                     metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS job_result_lifecycle (
+                    job_id TEXT PRIMARY KEY,
+                    view_id TEXT NOT NULL DEFAULT '',
+                    company_key TEXT NOT NULL DEFAULT '',
+                    target_company TEXT NOT NULL DEFAULT '',
+                    workflow_kind TEXT NOT NULL DEFAULT '',
+                    phase TEXT NOT NULL DEFAULT 'planning',
+                    phase_status TEXT NOT NULL DEFAULT '',
+                    state TEXT NOT NULL DEFAULT '',
+                    baseline_snapshot_id TEXT NOT NULL DEFAULT '',
+                    current_snapshot_id TEXT NOT NULL DEFAULT '',
+                    served_snapshot_id TEXT NOT NULL DEFAULT '',
+                    served_generation_key TEXT NOT NULL DEFAULT '',
+                    serving_projection_id TEXT NOT NULL DEFAULT '',
+                    serving_projection_phase TEXT NOT NULL DEFAULT '',
+                    baseline_candidate_count INTEGER NOT NULL DEFAULT 0,
+                    expected_candidate_count INTEGER NOT NULL DEFAULT 0,
+                    served_candidate_count INTEGER NOT NULL DEFAULT 0,
+                    delta_profile_required_count INTEGER NOT NULL DEFAULT 0,
+                    delta_profile_fetched_count INTEGER NOT NULL DEFAULT 0,
+                    delta_profile_applied_count INTEGER NOT NULL DEFAULT 0,
+                    delta_profile_materialized_count INTEGER NOT NULL DEFAULT 0,
+                    delta_profile_board_visible_count INTEGER NOT NULL DEFAULT 0,
+                    stage1_current_search_returned_count INTEGER NOT NULL DEFAULT 0,
+                    stage1_former_search_returned_count INTEGER NOT NULL DEFAULT 0,
+                    stage1_all_search_returned_count INTEGER NOT NULL DEFAULT 0,
+                    stage1_deduped_candidate_count INTEGER NOT NULL DEFAULT 0,
+                    stage1_deduped_profile_url_count INTEGER NOT NULL DEFAULT 0,
+                    stage1_profile_fetch_required_count INTEGER NOT NULL DEFAULT 0,
+                    stage1_profile_fetched_count INTEGER NOT NULL DEFAULT 0,
+                    delta_profile_progress_applicable INTEGER NOT NULL DEFAULT 1,
+                    delta_profile_progress_reason TEXT NOT NULL DEFAULT '',
+                    background_snapshot_materialization_status TEXT NOT NULL DEFAULT '',
+                    outreach_layering_status TEXT NOT NULL DEFAULT '',
+                    source_validation_status TEXT NOT NULL DEFAULT 'validated',
+                    last_event_id INTEGER NOT NULL DEFAULT 0,
+                    projection_source_snapshot_id TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS job_board_visible_patches (
+                    patch_id TEXT PRIMARY KEY,
+                    job_id TEXT NOT NULL,
+                    target_company TEXT NOT NULL DEFAULT '',
+                    company_key TEXT NOT NULL DEFAULT '',
+                    snapshot_id TEXT NOT NULL DEFAULT '',
+                    baseline_snapshot_id TEXT NOT NULL DEFAULT '',
+                    asset_view TEXT NOT NULL DEFAULT 'canonical_merged',
+                    patch_kind TEXT NOT NULL DEFAULT 'partial_delta_board_visible_patch',
+                    patch_phase TEXT NOT NULL DEFAULT 'board_visible_delta_applied',
+                    source TEXT NOT NULL DEFAULT '',
+                    reason TEXT NOT NULL DEFAULT '',
+                    sequence_index INTEGER NOT NULL DEFAULT 0,
+                    candidate_count INTEGER NOT NULL DEFAULT 0,
+                    cumulative_candidate_count INTEGER NOT NULL DEFAULT 0,
+                    served_candidate_count INTEGER NOT NULL DEFAULT 0,
+                    result_view_id TEXT NOT NULL DEFAULT '',
+                    serving_projection_id TEXT NOT NULL DEFAULT '',
+                    serving_projection_phase TEXT NOT NULL DEFAULT '',
+                    overlay_path TEXT NOT NULL DEFAULT '',
+                    candidate_ids_json TEXT NOT NULL DEFAULT '[]',
+                    cumulative_candidate_ids_json TEXT NOT NULL DEFAULT '[]',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    published_at TEXT NOT NULL DEFAULT '',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS job_materialization_items (
+                    item_id TEXT PRIMARY KEY,
+                    job_id TEXT NOT NULL,
+                    target_company TEXT NOT NULL DEFAULT '',
+                    company_key TEXT NOT NULL DEFAULT '',
+                    snapshot_id TEXT NOT NULL DEFAULT '',
+                    baseline_snapshot_id TEXT NOT NULL DEFAULT '',
+                    asset_view TEXT NOT NULL DEFAULT 'canonical_merged',
+                    item_kind TEXT NOT NULL DEFAULT 'board_visible_delta_apply',
+                    source TEXT NOT NULL DEFAULT '',
+                    reason TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    phase TEXT NOT NULL DEFAULT 'queued',
+                    priority INTEGER NOT NULL DEFAULT 0,
+                    attempt_count INTEGER NOT NULL DEFAULT 0,
+                    max_attempts INTEGER NOT NULL DEFAULT 5,
+                    candidate_count INTEGER NOT NULL DEFAULT 0,
+                    candidate_ids_json TEXT NOT NULL DEFAULT '[]',
+                    source_worker_ids_json TEXT NOT NULL DEFAULT '[]',
+                    idempotency_key TEXT NOT NULL DEFAULT '',
+                    result_patch_id TEXT NOT NULL DEFAULT '',
+                    result_view_id TEXT NOT NULL DEFAULT '',
+                    serving_projection_id TEXT NOT NULL DEFAULT '',
+                    lease_owner TEXT NOT NULL DEFAULT '',
+                    lease_expires_at TEXT NOT NULL DEFAULT '',
+                    not_before_at TEXT NOT NULL DEFAULT '',
+                    last_error TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    completed_at TEXT NOT NULL DEFAULT '',
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
@@ -1102,6 +1857,12 @@ class ControlPlaneStore:
                     avatar_url TEXT,
                     linkedin_url TEXT,
                     primary_email TEXT,
+                    person_identity_key TEXT NOT NULL DEFAULT '',
+                    candidate_identity_key TEXT NOT NULL DEFAULT '',
+                    source_projection_id TEXT NOT NULL DEFAULT '',
+                    source_run_id TEXT NOT NULL DEFAULT '',
+                    source_collection_id TEXT NOT NULL DEFAULT '',
+                    source_reason TEXT NOT NULL DEFAULT '',
                     follow_up_status TEXT NOT NULL DEFAULT 'pending_outreach',
                     quality_score REAL,
                     comment TEXT NOT NULL DEFAULT '',
@@ -1142,11 +1903,12 @@ class ControlPlaneStore:
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
 
-                CREATE TABLE IF NOT EXISTS target_candidate_public_web_batches (
+                CREATE TABLE IF NOT EXISTS crm_public_web_batches (
                     batch_id TEXT PRIMARY KEY,
                     idempotency_key TEXT NOT NULL UNIQUE,
+                    workspace_id TEXT NOT NULL DEFAULT 'default',
                     status TEXT NOT NULL DEFAULT 'queued',
-                    requested_record_ids_json TEXT NOT NULL DEFAULT '[]',
+                    requested_crm_record_ids_json TEXT NOT NULL DEFAULT '[]',
                     source_families_json TEXT NOT NULL DEFAULT '[]',
                     options_json TEXT NOT NULL DEFAULT '{}',
                     run_ids_json TEXT NOT NULL DEFAULT '[]',
@@ -1154,16 +1916,19 @@ class ControlPlaneStore:
                     metadata_json TEXT NOT NULL DEFAULT '{}',
                     requested_by TEXT NOT NULL DEFAULT '',
                     force_refresh INTEGER NOT NULL DEFAULT 0,
+                    execution_backend TEXT NOT NULL DEFAULT 'crm_public_web_v1',
+                    source_target_batch_id TEXT NOT NULL DEFAULT '',
                     started_at TEXT,
                     completed_at TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
 
-                CREATE TABLE IF NOT EXISTS target_candidate_public_web_runs (
+                CREATE TABLE IF NOT EXISTS crm_public_web_runs (
                     run_id TEXT PRIMARY KEY,
                     batch_id TEXT NOT NULL DEFAULT '',
-                    record_id TEXT NOT NULL DEFAULT '',
+                    crm_record_id TEXT NOT NULL DEFAULT '',
+                    workspace_id TEXT NOT NULL DEFAULT 'default',
                     candidate_id TEXT NOT NULL DEFAULT '',
                     candidate_name TEXT NOT NULL DEFAULT '',
                     current_company TEXT NOT NULL DEFAULT '',
@@ -1186,6 +1951,8 @@ class ControlPlaneStore:
                     lease_expires_at TEXT,
                     attempt_count INTEGER NOT NULL DEFAULT 0,
                     last_error TEXT NOT NULL DEFAULT '',
+                    execution_backend TEXT NOT NULL DEFAULT 'crm_public_web_v1',
+                    source_target_run_id TEXT NOT NULL DEFAULT '',
                     started_at TEXT,
                     completed_at TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -1246,13 +2013,181 @@ class ControlPlaneStore:
                     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
 
-                CREATE TABLE IF NOT EXISTS target_candidate_public_web_promotions (
+                CREATE TABLE IF NOT EXISTS person_assets (
+                    asset_id TEXT PRIMARY KEY,
+                    person_identity_key TEXT NOT NULL DEFAULT '',
+                    asset_type TEXT NOT NULL DEFAULT '',
+                    source_kind TEXT NOT NULL DEFAULT '',
+                    source_run_id TEXT NOT NULL DEFAULT '',
+                    source_projection_id TEXT NOT NULL DEFAULT '',
+                    content_ref TEXT NOT NULL DEFAULT '',
+                    content_hash TEXT NOT NULL DEFAULT '',
+                    source_url TEXT NOT NULL DEFAULT '',
+                    fetched_at TEXT NOT NULL DEFAULT '',
+                    visibility_scope TEXT NOT NULL DEFAULT 'internal',
+                    status TEXT NOT NULL DEFAULT 'available',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS person_evidence (
+                    evidence_id TEXT PRIMARY KEY,
+                    person_identity_key TEXT NOT NULL DEFAULT '',
+                    asset_id TEXT NOT NULL DEFAULT '',
+                    evidence_type TEXT NOT NULL DEFAULT '',
+                    value TEXT NOT NULL DEFAULT '',
+                    normalized_value TEXT NOT NULL DEFAULT '',
+                    source_url TEXT NOT NULL DEFAULT '',
+                    source_domain TEXT NOT NULL DEFAULT '',
+                    confidence_score REAL NOT NULL DEFAULT 0,
+                    identity_match_score REAL NOT NULL DEFAULT 0,
+                    publishable INTEGER NOT NULL DEFAULT 0,
+                    evidence_excerpt TEXT NOT NULL DEFAULT '',
+                    artifact_refs_json TEXT NOT NULL DEFAULT '{}',
+                    status TEXT NOT NULL DEFAULT 'observed',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS person_assertions (
+                    assertion_id TEXT PRIMARY KEY,
+                    person_identity_key TEXT NOT NULL DEFAULT '',
+                    assertion_type TEXT NOT NULL DEFAULT '',
+                    value TEXT NOT NULL DEFAULT '',
+                    normalized_value TEXT NOT NULL DEFAULT '',
+                    authority TEXT NOT NULL DEFAULT 'provider_observed',
+                    verification_status TEXT NOT NULL DEFAULT 'needs_review',
+                    source_evidence_id TEXT NOT NULL DEFAULT '',
+                    source_crm_event_id TEXT NOT NULL DEFAULT '',
+                    source_run_id TEXT NOT NULL DEFAULT '',
+                    confidence_score REAL NOT NULL DEFAULT 0,
+                    valid_from TEXT NOT NULL DEFAULT '',
+                    valid_to TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS raw_profile_index (
+                    person_identity_key TEXT PRIMARY KEY,
+                    indexed_text TEXT NOT NULL DEFAULT '',
+                    raw_profile_terms_json TEXT NOT NULL DEFAULT '[]',
+                    source_asset_ids_json TEXT NOT NULL DEFAULT '[]',
+                    indexed_field_sources_json TEXT NOT NULL DEFAULT '{}',
+                    raw_profile_index_watermark TEXT NOT NULL DEFAULT '',
+                    profile_fetched_at TEXT NOT NULL DEFAULT '',
+                    profile_indexed_at TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS candidate_evidence_index (
+                    person_identity_key TEXT PRIMARY KEY,
+                    indexed_text TEXT NOT NULL DEFAULT '',
+                    evidence_terms_json TEXT NOT NULL DEFAULT '[]',
+                    assertion_terms_json TEXT NOT NULL DEFAULT '[]',
+                    source_evidence_ids_json TEXT NOT NULL DEFAULT '[]',
+                    source_assertion_ids_json TEXT NOT NULL DEFAULT '[]',
+                    indexed_field_sources_json TEXT NOT NULL DEFAULT '{}',
+                    evidence_index_watermark TEXT NOT NULL DEFAULT '',
+                    evidence_indexed_at TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS projection_person_search_index (
+                    projection_id TEXT NOT NULL,
+                    candidate_identity_key TEXT NOT NULL,
+                    person_identity_key TEXT NOT NULL DEFAULT '',
+                    indexed_text TEXT NOT NULL DEFAULT '',
+                    raw_profile_terms_json TEXT NOT NULL DEFAULT '[]',
+                    evidence_terms_json TEXT NOT NULL DEFAULT '[]',
+                    assertion_terms_json TEXT NOT NULL DEFAULT '[]',
+                    indexed_field_sources_json TEXT NOT NULL DEFAULT '{}',
+                    raw_profile_index_watermark TEXT NOT NULL DEFAULT '',
+                    evidence_index_watermark TEXT NOT NULL DEFAULT '',
+                    count_scope TEXT NOT NULL DEFAULT 'index_partial',
+                    profile_fetched_at TEXT NOT NULL DEFAULT '',
+                    profile_indexed_at TEXT NOT NULL DEFAULT '',
+                    evidence_indexed_at TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (projection_id, candidate_identity_key)
+                );
+
+                CREATE TABLE IF NOT EXISTS crm_records (
+                    crm_record_id TEXT PRIMARY KEY,
+                    workspace_id TEXT NOT NULL DEFAULT 'default',
+                    person_identity_key TEXT NOT NULL DEFAULT '',
+                    candidate_identity_key TEXT NOT NULL DEFAULT '',
+                    collection_id TEXT NOT NULL DEFAULT '',
+                    display_name_cache TEXT NOT NULL DEFAULT '',
+                    headline_cache TEXT NOT NULL DEFAULT '',
+                    primary_company_cache TEXT NOT NULL DEFAULT '',
+                    avatar_asset_id TEXT NOT NULL DEFAULT '',
+                    lifecycle_status TEXT NOT NULL DEFAULT 'active',
+                    visibility_status TEXT NOT NULL DEFAULT 'normal',
+                    owner_user_id TEXT NOT NULL DEFAULT '',
+                    source_projection_id TEXT NOT NULL DEFAULT '',
+                    source_run_id TEXT NOT NULL DEFAULT '',
+                    source_collection_id TEXT NOT NULL DEFAULT '',
+                    source_reason TEXT NOT NULL DEFAULT '',
+                    current_engagement_id TEXT NOT NULL DEFAULT '',
+                    crm_version INTEGER NOT NULL DEFAULT 1,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (workspace_id, person_identity_key)
+                );
+
+                CREATE TABLE IF NOT EXISTS crm_engagements (
+                    engagement_id TEXT PRIMARY KEY,
+                    crm_record_id TEXT NOT NULL DEFAULT '',
+                    pipeline_id TEXT NOT NULL DEFAULT 'default_sourcing',
+                    stage TEXT NOT NULL DEFAULT 'new',
+                    stage_category TEXT NOT NULL DEFAULT 'open',
+                    priority TEXT NOT NULL DEFAULT 'normal',
+                    quality_score REAL,
+                    next_action_at TEXT NOT NULL DEFAULT '',
+                    last_contacted_at TEXT NOT NULL DEFAULT '',
+                    source_projection_id TEXT NOT NULL DEFAULT '',
+                    source_run_id TEXT NOT NULL DEFAULT '',
+                    source_selection_reason TEXT NOT NULL DEFAULT '',
+                    created_by_actor TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS crm_events (
+                    event_id TEXT PRIMARY KEY,
+                    workspace_id TEXT NOT NULL DEFAULT 'default',
+                    crm_record_id TEXT NOT NULL DEFAULT '',
+                    engagement_id TEXT NOT NULL DEFAULT '',
+                    person_identity_key TEXT NOT NULL DEFAULT '',
+                    event_type TEXT NOT NULL DEFAULT '',
+                    actor_type TEXT NOT NULL DEFAULT '',
+                    actor_id TEXT NOT NULL DEFAULT '',
+                    idempotency_key TEXT NOT NULL DEFAULT '',
+                    payload_json TEXT NOT NULL DEFAULT '{}',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    occurred_at TEXT NOT NULL DEFAULT '',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS crm_public_web_promotions (
                     promotion_id TEXT PRIMARY KEY,
                     signal_id TEXT NOT NULL DEFAULT '',
                     run_id TEXT NOT NULL DEFAULT '',
                     asset_id TEXT NOT NULL DEFAULT '',
                     person_identity_key TEXT NOT NULL DEFAULT '',
-                    record_id TEXT NOT NULL DEFAULT '',
+                    crm_record_id TEXT NOT NULL DEFAULT '',
+                    workspace_id TEXT NOT NULL DEFAULT 'default',
                     candidate_id TEXT NOT NULL DEFAULT '',
                     candidate_name TEXT NOT NULL DEFAULT '',
                     current_company TEXT NOT NULL DEFAULT '',
@@ -1282,6 +2217,51 @@ class ControlPlaneStore:
                     operator TEXT NOT NULL DEFAULT '',
                     note TEXT NOT NULL DEFAULT '',
                     evidence_excerpt TEXT NOT NULL DEFAULT '',
+                    execution_backend TEXT NOT NULL DEFAULT 'crm_public_web_v1',
+                    source_target_promotion_id TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS company_public_web_asset_runs (
+                    run_id TEXT PRIMARY KEY,
+                    target_company TEXT NOT NULL DEFAULT '',
+                    company_key TEXT NOT NULL DEFAULT '',
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    phase TEXT NOT NULL DEFAULT 'queued',
+                    source_families_json TEXT NOT NULL DEFAULT '[]',
+                    seed_urls_json TEXT NOT NULL DEFAULT '[]',
+                    options_json TEXT NOT NULL DEFAULT '{}',
+                    discovered_assets_json TEXT NOT NULL DEFAULT '[]',
+                    summary_json TEXT NOT NULL DEFAULT '{}',
+                    artifact_root TEXT NOT NULL DEFAULT '',
+                    requested_by TEXT NOT NULL DEFAULT '',
+                    force_refresh INTEGER NOT NULL DEFAULT 0,
+                    started_at TEXT,
+                    completed_at TEXT,
+                    last_error TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS company_public_web_assets (
+                    asset_id TEXT PRIMARY KEY,
+                    company_key TEXT NOT NULL DEFAULT '',
+                    target_company TEXT NOT NULL DEFAULT '',
+                    latest_run_id TEXT NOT NULL DEFAULT '',
+                    source_family TEXT NOT NULL DEFAULT '',
+                    asset_kind TEXT NOT NULL DEFAULT 'company_public_web_asset',
+                    title TEXT NOT NULL DEFAULT '',
+                    url TEXT NOT NULL DEFAULT '',
+                    normalized_url_key TEXT NOT NULL DEFAULT '',
+                    summary TEXT NOT NULL DEFAULT '',
+                    model_safe_payload_json TEXT NOT NULL DEFAULT '{}',
+                    source_run_ids_json TEXT NOT NULL DEFAULT '[]',
+                    artifact_refs_json TEXT NOT NULL DEFAULT '{}',
+                    status TEXT NOT NULL DEFAULT 'active',
                     metadata_json TEXT NOT NULL DEFAULT '{}',
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -1405,6 +2385,22 @@ class ControlPlaneStore:
                     last_failed_at TEXT,
                     source_shards_json TEXT NOT NULL DEFAULT '[]',
                     source_jobs_json TEXT NOT NULL DEFAULT '[]',
+                    refill_queue_state TEXT,
+                    last_refill_trigger_kind TEXT,
+                    last_refill_plan_reason TEXT,
+                    last_refill_deferred_reason TEXT,
+                    last_refill_planned_at TEXT,
+                    refill_not_before_at TEXT,
+                    refill_plan_batch_size INTEGER NOT NULL DEFAULT 0,
+                    refill_plan_batch_count INTEGER NOT NULL DEFAULT 0,
+                    refill_plan_window_url_count INTEGER NOT NULL DEFAULT 0,
+                    last_refill_attempt_count INTEGER NOT NULL DEFAULT 0,
+                    refill_owner_worker_id INTEGER NOT NULL DEFAULT 0,
+                    refill_owner_run_id TEXT,
+                    refill_owner_dataset_id TEXT,
+                    refill_owner_payload_hash TEXT,
+                    refill_terminal_status TEXT,
+                    refill_terminal_at TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
@@ -1447,6 +2443,16 @@ class ControlPlaneStore:
                     checkpoint_json TEXT NOT NULL DEFAULT '{}',
                     summary_json TEXT NOT NULL DEFAULT '{}',
                     status TEXT NOT NULL DEFAULT 'running',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS runtime_provider_limiter_leases (
+                    lease_token TEXT PRIMARY KEY,
+                    limiter_key TEXT NOT NULL,
+                    lease_owner TEXT NOT NULL,
+                    lease_expires_at TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
@@ -1623,6 +2629,96 @@ class ControlPlaneStore:
                     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
 
+                CREATE TABLE IF NOT EXISTS serving_projections (
+                    projection_id TEXT PRIMARY KEY,
+                    projection_type TEXT NOT NULL,
+                    collection_id TEXT NOT NULL DEFAULT '',
+                    source_run_id TEXT NOT NULL DEFAULT '',
+                    projection_version TEXT NOT NULL DEFAULT 'serving_projection_v1',
+                    state TEXT NOT NULL DEFAULT 'draft',
+                    scope_label TEXT NOT NULL DEFAULT '',
+                    scope_spec_json TEXT NOT NULL DEFAULT '{}',
+                    candidate_identity_manifest_ref TEXT NOT NULL DEFAULT '',
+                    source_collection_version TEXT NOT NULL DEFAULT '',
+                    raw_profile_index_watermark TEXT NOT NULL DEFAULT '',
+                    evidence_index_watermark TEXT NOT NULL DEFAULT '',
+                    counts_json TEXT NOT NULL DEFAULT '{}',
+                    readiness_json TEXT NOT NULL DEFAULT '{}',
+                    provenance_json TEXT NOT NULL DEFAULT '{}',
+                    manual_overlay_version TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    published_at TEXT NOT NULL DEFAULT '',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS serving_projection_members (
+                    projection_id TEXT NOT NULL,
+                    candidate_identity_key TEXT NOT NULL,
+                    person_identity_key TEXT NOT NULL DEFAULT '',
+                    profile_url_key TEXT NOT NULL DEFAULT '',
+                    candidate_id TEXT NOT NULL DEFAULT '',
+                    rank_index INTEGER NOT NULL DEFAULT 0,
+                    rank_key TEXT NOT NULL DEFAULT '',
+                    lane TEXT NOT NULL DEFAULT '',
+                    employment_scope TEXT NOT NULL DEFAULT '',
+                    source_shard_key TEXT NOT NULL DEFAULT '',
+                    source_run_id TEXT NOT NULL DEFAULT '',
+                    row_readiness TEXT NOT NULL DEFAULT 'ready',
+                    profile_readiness TEXT NOT NULL DEFAULT 'unknown',
+                    card_readiness TEXT NOT NULL DEFAULT 'unknown',
+                    visibility_state TEXT NOT NULL DEFAULT 'visible',
+                    public_summary_json TEXT NOT NULL DEFAULT '{}',
+                    projection_metrics_json TEXT NOT NULL DEFAULT '{}',
+                    crm_overlay_summary_json TEXT NOT NULL DEFAULT '{}',
+                    provenance_json TEXT NOT NULL DEFAULT '{}',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    published_at TEXT NOT NULL DEFAULT '',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (projection_id, candidate_identity_key)
+                );
+
+                CREATE TABLE IF NOT EXISTS projection_manifest_shards (
+                    shard_id TEXT PRIMARY KEY,
+                    projection_id TEXT NOT NULL,
+                    shard_kind TEXT NOT NULL DEFAULT 'candidate_identity_manifest',
+                    shard_index INTEGER NOT NULL DEFAULT 0,
+                    manifest_ref TEXT NOT NULL DEFAULT '',
+                    row_count INTEGER NOT NULL DEFAULT 0,
+                    content_signature TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS run_projection_links (
+                    run_id TEXT NOT NULL,
+                    projection_id TEXT NOT NULL,
+                    link_type TEXT NOT NULL DEFAULT 'result',
+                    projection_type TEXT NOT NULL DEFAULT 'run_scope_projection',
+                    collection_id TEXT NOT NULL DEFAULT '',
+                    state TEXT NOT NULL DEFAULT 'active',
+                    created_by TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (run_id, link_type)
+                );
+
+                CREATE TABLE IF NOT EXISTS collection_authoritative_pointers (
+                    collection_id TEXT PRIMARY KEY,
+                    active_projection_id TEXT NOT NULL,
+                    active_collection_version TEXT NOT NULL DEFAULT '',
+                    previous_projection_id TEXT NOT NULL DEFAULT '',
+                    state TEXT NOT NULL DEFAULT 'active',
+                    writer_id TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    published_at TEXT NOT NULL DEFAULT '',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE TABLE IF NOT EXISTS cloud_asset_operation_ledger (
                     ledger_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     operation_type TEXT NOT NULL,
@@ -1707,26 +2803,32 @@ class ControlPlaneStore:
                 CREATE INDEX IF NOT EXISTS idx_target_candidates_candidate
                     ON target_candidates (candidate_id, updated_at);
 
+                CREATE INDEX IF NOT EXISTS idx_target_candidates_projection
+                    ON target_candidates (source_projection_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidates_person
+                    ON target_candidates (person_identity_key, updated_at);
+
                 CREATE INDEX IF NOT EXISTS idx_asset_default_pointers_company
                     ON asset_default_pointers (company_key, scope_kind, scope_key, asset_kind);
 
                 CREATE INDEX IF NOT EXISTS idx_asset_default_pointer_history_pointer
                     ON asset_default_pointer_history (pointer_key, occurred_at);
 
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_batches_updated
-                    ON target_candidate_public_web_batches (updated_at, status);
+                CREATE INDEX IF NOT EXISTS idx_crm_public_web_batches_updated
+                    ON crm_public_web_batches (workspace_id, updated_at, status);
 
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_batch
-                    ON target_candidate_public_web_runs (batch_id, updated_at);
+                CREATE INDEX IF NOT EXISTS idx_crm_public_web_runs_batch
+                    ON crm_public_web_runs (batch_id, updated_at);
 
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_record
-                    ON target_candidate_public_web_runs (record_id, updated_at);
+                CREATE INDEX IF NOT EXISTS idx_crm_public_web_runs_record
+                    ON crm_public_web_runs (workspace_id, crm_record_id, updated_at);
 
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_status
-                    ON target_candidate_public_web_runs (status, updated_at);
+                CREATE INDEX IF NOT EXISTS idx_crm_public_web_runs_status
+                    ON crm_public_web_runs (workspace_id, status, updated_at);
 
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_identity
-                    ON target_candidate_public_web_runs (linkedin_url_key, updated_at);
+                CREATE INDEX IF NOT EXISTS idx_crm_public_web_runs_identity
+                    ON crm_public_web_runs (person_identity_key, updated_at);
 
                 CREATE INDEX IF NOT EXISTS idx_person_public_web_assets_identity
                     ON person_public_web_assets (linkedin_url_key, updated_at);
@@ -1740,14 +2842,72 @@ class ControlPlaneStore:
                 CREATE INDEX IF NOT EXISTS idx_person_public_web_signals_identity
                     ON person_public_web_signals (person_identity_key, signal_kind, updated_at);
 
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_record
-                    ON target_candidate_public_web_promotions (record_id, updated_at);
+                CREATE INDEX IF NOT EXISTS idx_person_assets_identity
+                    ON person_assets (person_identity_key, asset_type, updated_at);
 
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_signal
-                    ON target_candidate_public_web_promotions (signal_id, updated_at);
+                CREATE INDEX IF NOT EXISTS idx_person_assets_source_projection
+                    ON person_assets (source_projection_id, updated_at);
 
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_run
-                    ON target_candidate_public_web_promotions (run_id, updated_at);
+                CREATE INDEX IF NOT EXISTS idx_person_evidence_identity
+                    ON person_evidence (person_identity_key, evidence_type, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_person_evidence_asset
+                    ON person_evidence (asset_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_person_assertions_identity
+                    ON person_assertions (person_identity_key, assertion_type, verification_status, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_raw_profile_index_watermark
+                    ON raw_profile_index (raw_profile_index_watermark, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_candidate_evidence_index_watermark
+                    ON candidate_evidence_index (evidence_index_watermark, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_projection_person_search_index_projection
+                    ON projection_person_search_index (projection_id, count_scope, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_projection_person_search_index_person
+                    ON projection_person_search_index (person_identity_key, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_crm_records_identity
+                    ON crm_records (workspace_id, person_identity_key);
+
+                CREATE INDEX IF NOT EXISTS idx_crm_records_projection
+                    ON crm_records (source_projection_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_crm_records_collection
+                    ON crm_records (source_collection_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_crm_engagements_record
+                    ON crm_engagements (crm_record_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_crm_events_record
+                    ON crm_events (crm_record_id, created_at);
+
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_events_idempotency
+                    ON crm_events (workspace_id, idempotency_key)
+                    WHERE idempotency_key != '';
+
+                CREATE INDEX IF NOT EXISTS idx_crm_public_web_promotions_record
+                    ON crm_public_web_promotions (workspace_id, crm_record_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_crm_public_web_promotions_signal
+                    ON crm_public_web_promotions (signal_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_crm_public_web_promotions_run
+                    ON crm_public_web_promotions (run_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_company_public_web_asset_runs_company
+                    ON company_public_web_asset_runs (company_key, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_company_public_web_asset_runs_status
+                    ON company_public_web_asset_runs (status, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_company_public_web_assets_company
+                    ON company_public_web_assets (company_key, source_family, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_company_public_web_assets_url
+                    ON company_public_web_assets (normalized_url_key, updated_at);
 
                 CREATE INDEX IF NOT EXISTS idx_frontend_history_links_review
                     ON frontend_history_links (review_id, updated_at);
@@ -1785,6 +2945,9 @@ class ControlPlaneStore:
                 CREATE INDEX IF NOT EXISTS idx_linkedin_profile_registry_event_profile
                     ON linkedin_profile_registry_events (profile_url_key, created_at);
 
+                CREATE INDEX IF NOT EXISTS idx_runtime_provider_limiter_key_expires
+                    ON runtime_provider_limiter_leases (limiter_key, lease_expires_at);
+
                 CREATE INDEX IF NOT EXISTS idx_organization_asset_registry_company
                     ON organization_asset_registry (target_company, asset_view, authoritative, updated_at);
 
@@ -1809,8 +2972,53 @@ class ControlPlaneStore:
                 CREATE INDEX IF NOT EXISTS idx_snapshot_materialization_runs_snapshot
                     ON snapshot_materialization_runs (target_company, snapshot_id, asset_view, created_at);
 
+                CREATE INDEX IF NOT EXISTS idx_serving_projections_collection
+                    ON serving_projections (collection_id, projection_type, state, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_serving_projections_source_run
+                    ON serving_projections (source_run_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_serving_projection_members_page
+                    ON serving_projection_members (projection_id, visibility_state, rank_index, candidate_identity_key);
+
+                CREATE INDEX IF NOT EXISTS idx_serving_projection_members_person
+                    ON serving_projection_members (person_identity_key, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_projection_manifest_shards_projection
+                    ON projection_manifest_shards (projection_id, shard_kind, shard_index);
+
+                CREATE INDEX IF NOT EXISTS idx_run_projection_links_projection
+                    ON run_projection_links (projection_id, link_type, state);
+
+                CREATE INDEX IF NOT EXISTS idx_collection_authoritative_pointers_active
+                    ON collection_authoritative_pointers (active_projection_id, state, updated_at);
+
                 CREATE INDEX IF NOT EXISTS idx_job_result_views_company
                     ON job_result_views (target_company, snapshot_id, asset_view, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_job_result_lifecycle_view
+                    ON job_result_lifecycle (view_id);
+
+                CREATE INDEX IF NOT EXISTS idx_job_result_lifecycle_company
+                    ON job_result_lifecycle (company_key, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_job_result_lifecycle_phase
+                    ON job_result_lifecycle (phase, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_job_board_visible_patches_job_snapshot
+                    ON job_board_visible_patches (job_id, snapshot_id, sequence_index, published_at);
+
+                CREATE INDEX IF NOT EXISTS idx_job_board_visible_patches_company
+                    ON job_board_visible_patches (company_key, snapshot_id, published_at);
+
+                CREATE INDEX IF NOT EXISTS idx_job_materialization_items_ready
+                    ON job_materialization_items (item_kind, status, not_before_at, lease_expires_at, priority, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_job_materialization_items_job
+                    ON job_materialization_items (job_id, item_kind, snapshot_id, status, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_job_materialization_items_idempotency
+                    ON job_materialization_items (idempotency_key, updated_at);
 
                 CREATE INDEX IF NOT EXISTS idx_cloud_asset_operation_ledger_created
                     ON cloud_asset_operation_ledger (operation_type, created_at);
@@ -1819,6 +3027,7 @@ class ControlPlaneStore:
                     ON cloud_asset_operation_ledger (bundle_kind, bundle_id, created_at);
                 """
             )
+            self._drop_empty_legacy_target_public_web_sqlite_tables()
             self._ensure_column("jobs", "job_type", "TEXT NOT NULL DEFAULT 'retrieval'")
             self._ensure_column("jobs", "stage", "TEXT NOT NULL DEFAULT 'pending'")
             self._ensure_column("jobs", "plan_json", "TEXT")
@@ -1932,6 +3141,42 @@ class ControlPlaneStore:
             self._ensure_column("linkedin_profile_registry", "last_failed_at", "TEXT")
             self._ensure_column("linkedin_profile_registry", "source_shards_json", "TEXT NOT NULL DEFAULT '[]'")
             self._ensure_column("linkedin_profile_registry", "source_jobs_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("linkedin_profile_registry", "refill_queue_state", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "last_refill_trigger_kind", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "last_refill_plan_reason", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "last_refill_deferred_reason", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "last_refill_planned_at", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "refill_not_before_at", "TEXT")
+            self._ensure_column(
+                "linkedin_profile_registry",
+                "refill_plan_batch_size",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                "linkedin_profile_registry",
+                "refill_plan_batch_count",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                "linkedin_profile_registry",
+                "refill_plan_window_url_count",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                "linkedin_profile_registry",
+                "last_refill_attempt_count",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                "linkedin_profile_registry",
+                "refill_owner_worker_id",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column("linkedin_profile_registry", "refill_owner_run_id", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "refill_owner_dataset_id", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "refill_owner_payload_hash", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "refill_terminal_status", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "refill_terminal_at", "TEXT")
             self._ensure_column("organization_asset_registry", "company_key", "TEXT")
             self._ensure_column("organization_asset_registry", "status", "TEXT NOT NULL DEFAULT 'ready'")
             self._ensure_column("organization_asset_registry", "authoritative", "INTEGER NOT NULL DEFAULT 0")
@@ -2087,6 +3332,32 @@ class ControlPlaneStore:
             self._ensure_column("asset_materialization_generations", "company_key", "TEXT")
             self._ensure_column("candidate_materialization_state", "company_key", "TEXT")
             self._ensure_column("snapshot_materialization_runs", "company_key", "TEXT")
+            self._ensure_column("target_candidates", "person_identity_key", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column("target_candidates", "candidate_identity_key", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column("target_candidates", "source_projection_id", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column("target_candidates", "source_run_id", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column("target_candidates", "source_collection_id", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column("target_candidates", "source_reason", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column("crm_records", "source_collection_id", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column("serving_projections", "projection_version", "TEXT NOT NULL DEFAULT 'serving_projection_v1'")
+            self._ensure_column("serving_projections", "metadata_json", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column("serving_projection_members", "profile_url_key", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column("serving_projection_members", "projection_metrics_json", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column("serving_projection_members", "crm_overlay_summary_json", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column("projection_person_search_index", "raw_profile_terms_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("projection_person_search_index", "evidence_terms_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("projection_person_search_index", "assertion_terms_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("projection_person_search_index", "indexed_field_sources_json", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column("raw_profile_index", "raw_profile_terms_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("raw_profile_index", "source_asset_ids_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("raw_profile_index", "indexed_field_sources_json", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column("candidate_evidence_index", "evidence_terms_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("candidate_evidence_index", "assertion_terms_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("candidate_evidence_index", "source_evidence_ids_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("candidate_evidence_index", "source_assertion_ids_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("candidate_evidence_index", "indexed_field_sources_json", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column("run_projection_links", "metadata_json", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column("collection_authoritative_pointers", "metadata_json", "TEXT NOT NULL DEFAULT '{}'")
             for table_name in (
                 "job_result_views",
                 "organization_asset_registry",
@@ -2656,6 +3927,58 @@ class ControlPlaneStore:
         self._replace_control_plane_table_from_sqlite("candidates")
         self._replace_control_plane_table_from_sqlite("evidence")
 
+    def replace_company_candidate_data(
+        self,
+        target_company: str,
+        candidate_ids: list[str] | tuple[str, ...],
+        candidates: list[Candidate],
+        evidence: list[EvidenceRecord],
+    ) -> None:
+        normalized_candidate_ids = _dedupe_preserve_order(
+            [str(candidate_id or "").strip() for candidate_id in list(candidate_ids or []) if str(candidate_id or "").strip()]
+        )
+        if not normalized_candidate_ids:
+            return
+        filtered_candidates = [
+            candidate
+            for candidate in list(candidates or [])
+            if str(candidate.candidate_id or "").strip() in set(normalized_candidate_ids)
+        ]
+        filtered_candidate_ids = {
+            str(candidate.candidate_id or "").strip()
+            for candidate in filtered_candidates
+            if str(candidate.candidate_id or "").strip()
+        }
+        filtered_evidence = [
+            item
+            for item in list(evidence or [])
+            if str(item.candidate_id or "").strip() in filtered_candidate_ids
+        ]
+        if self._replace_candidates_and_evidence_in_postgres(
+            current_candidate_rows=self._select_postgres_candidate_rows(
+                where_sql="lower(target_company) = lower(%s) AND candidate_id = ANY(%s)",
+                params=[target_company, normalized_candidate_ids],
+                limit=0,
+            ),
+            candidates=filtered_candidates,
+            evidence=filtered_evidence,
+            conflict_candidate_ids=normalized_candidate_ids,
+        ):
+            return
+        placeholders = ",".join("?" for _ in normalized_candidate_ids)
+        with self._lock, self._connection:
+            self._connection.execute(
+                f"DELETE FROM evidence WHERE candidate_id IN ({placeholders})",
+                normalized_candidate_ids,
+            )
+            self._connection.execute(
+                f"DELETE FROM candidates WHERE candidate_id IN ({placeholders})",
+                normalized_candidate_ids,
+            )
+            self._insert_candidates_and_evidence(filtered_candidates, filtered_evidence)
+        self._replace_control_plane_table_from_sqlite("candidates")
+        self._replace_control_plane_table_from_sqlite("evidence")
+
     def replace_company_category_data(
         self,
         target_company: str,
@@ -2665,6 +3988,9 @@ class ControlPlaneStore:
     ) -> None:
         company_key = target_company.strip().lower()
         category_key = category.strip().lower()
+        incoming_candidate_ids = _dedupe_preserve_order(
+            [str(candidate.candidate_id or "").strip() for candidate in list(candidates or [])]
+        )
         if self._replace_candidates_and_evidence_in_postgres(
             current_candidate_rows=self._select_postgres_candidate_rows(
                 where_sql="lower(target_company) = lower(%s) AND lower(category) = lower(%s)",
@@ -2673,6 +3999,7 @@ class ControlPlaneStore:
             ),
             candidates=candidates,
             evidence=evidence,
+            conflict_candidate_ids=incoming_candidate_ids,
         ):
             return
         with self._lock, self._connection:
@@ -2684,9 +4011,6 @@ class ControlPlaneStore:
                 (company_key, category_key),
             ).fetchall()
             candidate_ids = [row["candidate_id"] for row in rows]
-            incoming_candidate_ids = _dedupe_preserve_order(
-                [str(candidate.candidate_id or "").strip() for candidate in list(candidates or [])]
-            )
             incoming_conflict_ids = [candidate_id for candidate_id in incoming_candidate_ids if candidate_id not in candidate_ids]
             if candidate_ids:
                 placeholders = ",".join("?" for _ in candidate_ids)
@@ -2718,6 +4042,7 @@ class ControlPlaneStore:
         current_candidate_rows: list[dict[str, Any]],
         candidates: list[Candidate],
         evidence: list[EvidenceRecord],
+        conflict_candidate_ids: list[str] | None = None,
     ) -> bool:
         if not (
             self._control_plane_postgres_should_prefer_read("candidates")
@@ -2729,27 +4054,37 @@ class ControlPlaneStore:
             for row in list(current_candidate_rows or [])
             if str(row.get("candidate_id") or "").strip()
         ]
+        delete_candidate_ids = _dedupe_preserve_order(
+            [
+                *current_candidate_ids,
+                *[
+                    str(candidate_id or "").strip()
+                    for candidate_id in list(conflict_candidate_ids or [])
+                    if str(candidate_id or "").strip()
+                ],
+            ]
+        )
         candidate_payloads = self._dedupe_candidate_payloads(candidates)
         evidence_payloads = self._dedupe_evidence_payloads(evidence)
         try:
-            if current_candidate_ids:
-                placeholders = ", ".join("%s" for _ in current_candidate_ids)
+            if delete_candidate_ids:
+                placeholders = ", ".join("%s" for _ in delete_candidate_ids)
                 self._call_control_plane_postgres_native(
                     "delete_rows",
                     table_name="evidence",
                     where_sql=f"candidate_id IN ({placeholders})",
-                    params=current_candidate_ids,
+                    params=delete_candidate_ids,
                 )
                 self._call_control_plane_postgres_native(
                     "delete_rows",
                     table_name="candidates",
                     where_sql=f"candidate_id IN ({placeholders})",
-                    params=current_candidate_ids,
+                    params=delete_candidate_ids,
                 )
-            for payload in candidate_payloads:
-                self._write_control_plane_row_to_postgres("candidates", payload)
-            for payload in evidence_payloads:
-                self._write_control_plane_row_to_postgres("evidence", payload)
+            if candidate_payloads:
+                self._control_plane_postgres.bulk_upsert_rows("candidates", candidate_payloads)
+            if evidence_payloads:
+                self._control_plane_postgres.bulk_upsert_rows("evidence", evidence_payloads)
         except Exception:
             if self._control_plane_postgres_should_skip_sqlite_fallback(
                 "candidates"
@@ -2874,6 +4209,38 @@ class ControlPlaneStore:
                 (target_company,),
             ).fetchall()
         return [self._candidate_from_row(row) for row in rows]
+
+    def find_candidate_by_linkedin_url(self, linkedin_url: str) -> Candidate | None:
+        normalized_key = _normalize_linkedin_profile_url_key(linkedin_url)
+        if not normalized_key:
+            return None
+        lookup_values = _dedupe_preserve_order(
+            [
+                str(linkedin_url or "").strip().lower(),
+                normalized_key,
+                f"{normalized_key}/",
+            ]
+        )
+        postgres_rows = self._select_postgres_candidate_rows(
+            where_sql="lower(linkedin_url) IN (" + ", ".join(["%s"] * len(lookup_values)) + ")",
+            params=lookup_values,
+            limit=0,
+        )
+        candidates: list[Candidate] = []
+        if postgres_rows:
+            candidates = [self._candidate_from_row(row) for row in postgres_rows]
+        elif not self._control_plane_postgres_should_skip_sqlite_fallback("candidates"):
+            with self._lock:
+                rows = self._connection.execute(
+                    "SELECT * FROM candidates WHERE lower(linkedin_url) IN ("
+                    + ", ".join(["?"] * len(lookup_values))
+                    + ")",
+                    tuple(lookup_values),
+                ).fetchall()
+            candidates = [self._candidate_from_row(row) for row in rows]
+        if not candidates:
+            return None
+        return max(candidates, key=_candidate_richness_score_for_store_match)
 
     def get_candidate(self, candidate_id: str) -> Candidate | None:
         normalized_candidate_id = str(candidate_id or "").strip()
@@ -3156,7 +4523,10 @@ class ControlPlaneStore:
                         ELSE jobs.matching_request_json
                     END,
                     summary_json = excluded.summary_json,
-                    artifact_path = excluded.artifact_path,
+                    artifact_path = CASE
+                        WHEN excluded.artifact_path <> '' THEN excluded.artifact_path
+                        ELSE jobs.artifact_path
+                    END,
                     request_signature = excluded.request_signature,
                     request_family_signature = excluded.request_family_signature,
                     matching_request_signature = excluded.matching_request_signature,
@@ -3572,7 +4942,7 @@ class ControlPlaneStore:
         normalized_view_kind = str(view_kind or "").strip()
         normalized_snapshot_id = str(snapshot_id or "").strip()
         normalized_asset_view = str(asset_view or "canonical_merged").strip() or "canonical_merged"
-        normalized_source_path = str(source_path or "").strip()
+        normalized_source_path = _normalize_job_result_view_source_path(source_path)
         normalized_authoritative_snapshot_id = str(authoritative_snapshot_id or "").strip()
         normalized_generation_key = str(materialization_generation_key or "").strip()
         normalized_request_signature = str(request_signature_value or "").strip()
@@ -3706,6 +5076,1485 @@ class ControlPlaneStore:
         with self._lock:
             row = self._connection.execute(query, tuple(params)).fetchone()
         return self._job_result_view_from_row(row)
+
+    # ------------------------------------------------------------------
+    # Canonical job_result_lifecycle persistence (rebuild slice 1)
+    # ------------------------------------------------------------------
+
+    def upsert_job_board_visible_patch(
+        self,
+        *,
+        patch_id: str,
+        job_id: str,
+        target_company: str = "",
+        snapshot_id: str = "",
+        baseline_snapshot_id: str = "",
+        asset_view: str = "canonical_merged",
+        patch_kind: str = "partial_delta_board_visible_patch",
+        patch_phase: str = "board_visible_delta_applied",
+        source: str = "",
+        reason: str = "",
+        sequence_index: int | None = None,
+        candidate_ids: list[str] | tuple[str, ...] | None = None,
+        cumulative_candidate_ids: list[str] | tuple[str, ...] | None = None,
+        candidate_count: int | None = None,
+        cumulative_candidate_count: int | None = None,
+        served_candidate_count: int = 0,
+        result_view_id: str = "",
+        serving_projection_id: str = "",
+        serving_projection_phase: str = "",
+        overlay_path: str = "",
+        published_at: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        normalized_patch_id = str(patch_id or "").strip()
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_patch_id or not normalized_job_id:
+            return {}
+        normalized_target_company, normalized_company_key = _normalized_company_scope(target_company)
+        normalized_snapshot_id = str(snapshot_id or "").strip()
+        normalized_baseline_snapshot_id = str(baseline_snapshot_id or "").strip()
+        normalized_asset_view = str(asset_view or "canonical_merged").strip() or "canonical_merged"
+        normalized_candidate_ids = _dedupe_ordered_texts(candidate_ids or [])
+        normalized_cumulative_candidate_ids = _dedupe_ordered_texts(cumulative_candidate_ids or [])
+        resolved_candidate_count = (
+            max(0, int(candidate_count or 0))
+            if candidate_count is not None
+            else len(normalized_candidate_ids)
+        )
+        resolved_cumulative_count = (
+            max(0, int(cumulative_candidate_count or 0))
+            if cumulative_candidate_count is not None
+            else len(normalized_cumulative_candidate_ids)
+        )
+        existing = self.get_job_board_visible_patch(normalized_patch_id) or {}
+        if sequence_index is None:
+            sequence_index = int(existing.get("sequence_index") or 0)
+            if sequence_index <= 0:
+                sequence_index = self.next_job_board_visible_patch_sequence(
+                    job_id=normalized_job_id,
+                    snapshot_id=normalized_snapshot_id,
+                )
+        now = _utc_now_timestamp()
+        row_payload = {
+            "patch_id": normalized_patch_id,
+            "job_id": normalized_job_id,
+            "target_company": normalized_target_company,
+            "company_key": normalized_company_key,
+            "snapshot_id": normalized_snapshot_id,
+            "baseline_snapshot_id": normalized_baseline_snapshot_id,
+            "asset_view": normalized_asset_view,
+            "patch_kind": str(patch_kind or "partial_delta_board_visible_patch").strip()
+            or "partial_delta_board_visible_patch",
+            "patch_phase": str(patch_phase or "board_visible_delta_applied").strip()
+            or "board_visible_delta_applied",
+            "source": str(source or "").strip(),
+            "reason": str(reason or "").strip(),
+            "sequence_index": max(1, int(sequence_index or 1)),
+            "candidate_count": resolved_candidate_count,
+            "cumulative_candidate_count": resolved_cumulative_count,
+            "served_candidate_count": max(0, int(served_candidate_count or 0)),
+            "result_view_id": str(result_view_id or "").strip(),
+            "serving_projection_id": str(serving_projection_id or "").strip(),
+            "serving_projection_phase": str(serving_projection_phase or "").strip(),
+            "overlay_path": str(overlay_path or "").strip(),
+            "candidate_ids_json": json.dumps(_json_safe_payload(normalized_candidate_ids), ensure_ascii=False),
+            "cumulative_candidate_ids_json": json.dumps(
+                _json_safe_payload(normalized_cumulative_candidate_ids),
+                ensure_ascii=False,
+            ),
+            "metadata_json": json.dumps(_json_safe_payload(metadata or {}), ensure_ascii=False),
+            "published_at": str(published_at or "").strip() or now,
+            "created_at": str(existing.get("created_at") or "").strip() or now,
+            "updated_at": now,
+        }
+        if self._write_control_plane_row_to_postgres("job_board_visible_patches", row_payload):
+            return self.get_job_board_visible_patch(normalized_patch_id) or self._job_board_visible_patch_from_row(row_payload)
+        columns = list(row_payload.keys())
+        placeholders = ", ".join(["?"] * len(columns))
+        update_columns = [column for column in columns if column not in {"patch_id", "created_at"}]
+        update_clause = ", ".join(f"{column} = excluded.{column}" for column in update_columns)
+        with self._lock, self._connection:
+            self._connection.execute(
+                (
+                    f"INSERT INTO job_board_visible_patches ({', '.join(columns)}) "
+                    f"VALUES ({placeholders}) "
+                    f"ON CONFLICT(patch_id) DO UPDATE SET {update_clause}, updated_at = excluded.updated_at"
+                ),
+                tuple(row_payload[column] for column in columns),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM job_board_visible_patches WHERE patch_id = ?",
+                (normalized_patch_id,),
+            ).fetchone()
+        self._mirror_control_plane_row("job_board_visible_patches", row)
+        return self._job_board_visible_patch_from_row(row) or {}
+
+    def get_job_board_visible_patch(self, patch_id: str) -> dict[str, Any]:
+        normalized_patch_id = str(patch_id or "").strip()
+        if not normalized_patch_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "job_board_visible_patches",
+            row_builder=self._job_board_visible_patch_from_row,
+            where_sql="patch_id = %s",
+            params=[normalized_patch_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("job_board_visible_patches"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM job_board_visible_patches WHERE patch_id = ? LIMIT 1",
+                (normalized_patch_id,),
+            ).fetchone()
+        return self._job_board_visible_patch_from_row(row) or {}
+
+    def list_job_board_visible_patches(
+        self,
+        *,
+        job_id: str,
+        snapshot_id: str = "",
+        limit: int = 0,
+    ) -> list[dict[str, Any]]:
+        normalized_job_id = str(job_id or "").strip()
+        normalized_snapshot_id = str(snapshot_id or "").strip()
+        if not normalized_job_id:
+            return []
+        clauses = ["job_id = ?"]
+        params: list[Any] = [normalized_job_id]
+        postgres_clauses = ["job_id = %s"]
+        postgres_params: list[Any] = [normalized_job_id]
+        if normalized_snapshot_id:
+            clauses.append("snapshot_id = ?")
+            params.append(normalized_snapshot_id)
+            postgres_clauses.append("snapshot_id = %s")
+            postgres_params.append(normalized_snapshot_id)
+        postgres_rows = self._select_control_plane_rows(
+            "job_board_visible_patches",
+            row_builder=self._job_board_visible_patch_from_row,
+            where_sql=" AND ".join(postgres_clauses),
+            params=postgres_params,
+            order_by_sql="sequence_index ASC, published_at ASC, created_at ASC",
+            limit=max(0, int(limit or 0)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("job_board_visible_patches"):
+            return []
+        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
+        query = (
+            f"SELECT * FROM job_board_visible_patches WHERE {' AND '.join(clauses)} "
+            f"ORDER BY sequence_index ASC, published_at ASC, created_at ASC{limit_sql}"
+        )
+        sqlite_params = [*params]
+        if int(limit or 0) > 0:
+            sqlite_params.append(max(1, int(limit or 0)))
+        with self._lock:
+            rows = self._connection.execute(query, tuple(sqlite_params)).fetchall()
+        return [
+            payload
+            for row in rows
+            if (payload := self._job_board_visible_patch_from_row(row))
+        ]
+
+    def next_job_board_visible_patch_sequence(self, *, job_id: str, snapshot_id: str = "") -> int:
+        patches = self.list_job_board_visible_patches(job_id=job_id, snapshot_id=snapshot_id, limit=0)
+        if not patches:
+            return 1
+        return max(int(patch.get("sequence_index") or 0) for patch in patches) + 1
+
+    def _job_board_visible_patch_from_row(
+        self,
+        row: sqlite3.Row | dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if row is None:
+            return {}
+
+        def getter(key: str, default: Any = None) -> Any:
+            if isinstance(row, dict):
+                return row.get(key, default)
+            try:
+                return row[key]
+            except (IndexError, KeyError):
+                return default
+
+        def load_json_list(key: str) -> list[str]:
+            try:
+                payload = json.loads(getter(key) or "[]")
+            except (json.JSONDecodeError, TypeError):
+                payload = []
+            return _dedupe_ordered_texts(payload if isinstance(payload, list) else [])
+
+        try:
+            metadata_payload = json.loads(getter("metadata_json") or "{}")
+        except (json.JSONDecodeError, TypeError):
+            metadata_payload = {}
+        return {
+            "patch_id": str(getter("patch_id") or ""),
+            "job_id": str(getter("job_id") or ""),
+            "target_company": str(getter("target_company") or ""),
+            "company_key": str(getter("company_key") or ""),
+            "snapshot_id": str(getter("snapshot_id") or ""),
+            "baseline_snapshot_id": str(getter("baseline_snapshot_id") or ""),
+            "asset_view": str(getter("asset_view") or "canonical_merged"),
+            "patch_kind": str(getter("patch_kind") or ""),
+            "patch_phase": str(getter("patch_phase") or ""),
+            "source": str(getter("source") or ""),
+            "reason": str(getter("reason") or ""),
+            "sequence_index": int(getter("sequence_index") or 0),
+            "candidate_count": int(getter("candidate_count") or 0),
+            "cumulative_candidate_count": int(getter("cumulative_candidate_count") or 0),
+            "served_candidate_count": int(getter("served_candidate_count") or 0),
+            "result_view_id": str(getter("result_view_id") or ""),
+            "serving_projection_id": str(getter("serving_projection_id") or ""),
+            "serving_projection_phase": str(getter("serving_projection_phase") or ""),
+            "overlay_path": str(getter("overlay_path") or ""),
+            "candidate_ids": load_json_list("candidate_ids_json"),
+            "cumulative_candidate_ids": load_json_list("cumulative_candidate_ids_json"),
+            "metadata": metadata_payload if isinstance(metadata_payload, dict) else {},
+            "published_at": str(getter("published_at") or ""),
+            "created_at": getter("created_at"),
+            "updated_at": getter("updated_at"),
+        }
+
+    def upsert_job_materialization_item(
+        self,
+        *,
+        item_id: str,
+        job_id: str,
+        target_company: str = "",
+        snapshot_id: str = "",
+        baseline_snapshot_id: str = "",
+        asset_view: str = "canonical_merged",
+        item_kind: str = "board_visible_delta_apply",
+        source: str = "",
+        reason: str = "",
+        status: str = "queued",
+        phase: str = "queued",
+        priority: int = 0,
+        candidate_ids: list[str] | tuple[str, ...] | None = None,
+        source_worker_ids: list[int] | tuple[int, ...] | None = None,
+        idempotency_key: str = "",
+        max_attempts: int = 5,
+        serving_projection_id: str = "",
+        not_before_at: str = "",
+        last_error: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        normalized_item_id = str(item_id or "").strip()
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_item_id or not normalized_job_id:
+            return {}
+        existing = self.get_job_materialization_item(normalized_item_id) or {}
+        existing_status = str(existing.get("status") or "").strip().lower()
+        requested_status = str(status or "queued").strip().lower() or "queued"
+        terminal_statuses = {"completed", "failed", "cancelled", "canceled", "superseded", "exhausted"}
+        if existing_status in terminal_statuses and requested_status in {"queued", "deferred", "failed_retryable"}:
+            return existing
+        if existing_status == "running" and requested_status in {"queued", "deferred", "failed_retryable"}:
+            return existing
+        provided_metadata = dict(metadata or {})
+        migration_adapter_write = _legacy_materialization_write_is_migration(provided_metadata, source=source)
+        if _strict_legacy_materialization_write_gate_enabled() and not migration_adapter_write:
+            raise RuntimeError(
+                "normal-path job_materialization_items writes are blocked by "
+                "SOURCING_BLOCK_LEGACY_JOB_MATERIALIZATION_NORMAL_WRITES; "
+                "write a typed workflow_command or mark the write as an explicit migration adapter."
+            )
+        normalized_target_company, normalized_company_key = _normalized_company_scope(target_company)
+        normalized_candidate_ids = _dedupe_ordered_texts(candidate_ids or existing.get("candidate_ids") or [])
+        normalized_worker_ids: list[int] = []
+        seen_worker_ids: set[int] = set()
+        for value in list(source_worker_ids or existing.get("source_worker_ids") or []):
+            try:
+                worker_id = int(value or 0)
+            except (TypeError, ValueError):
+                continue
+            if worker_id <= 0 or worker_id in seen_worker_ids:
+                continue
+            seen_worker_ids.add(worker_id)
+            normalized_worker_ids.append(worker_id)
+        now = _utc_now_timestamp()
+        row_payload = {
+            "item_id": normalized_item_id,
+            "job_id": normalized_job_id,
+            "target_company": normalized_target_company or str(existing.get("target_company") or ""),
+            "company_key": normalized_company_key or str(existing.get("company_key") or ""),
+            "snapshot_id": str(snapshot_id or existing.get("snapshot_id") or "").strip(),
+            "baseline_snapshot_id": str(baseline_snapshot_id or existing.get("baseline_snapshot_id") or "").strip(),
+            "asset_view": str(asset_view or existing.get("asset_view") or "canonical_merged").strip()
+            or "canonical_merged",
+            "item_kind": str(item_kind or existing.get("item_kind") or "board_visible_delta_apply").strip()
+            or "board_visible_delta_apply",
+            "source": str(source or existing.get("source") or "").strip(),
+            "reason": str(reason or existing.get("reason") or "").strip(),
+            "status": requested_status,
+            "phase": str(phase or existing.get("phase") or requested_status or "queued").strip() or "queued",
+            "priority": int(priority if priority is not None else existing.get("priority") or 0),
+            "attempt_count": int(existing.get("attempt_count") or 0),
+            "max_attempts": max(1, int(max_attempts or existing.get("max_attempts") or 5)),
+            "candidate_count": len(normalized_candidate_ids),
+            "candidate_ids_json": json.dumps(_json_safe_payload(normalized_candidate_ids), ensure_ascii=False),
+            "source_worker_ids_json": json.dumps(_json_safe_payload(normalized_worker_ids), ensure_ascii=False),
+            "idempotency_key": str(idempotency_key or existing.get("idempotency_key") or normalized_item_id).strip(),
+            "result_patch_id": str(existing.get("result_patch_id") or "").strip(),
+            "result_view_id": str(existing.get("result_view_id") or "").strip(),
+            "serving_projection_id": str(serving_projection_id or existing.get("serving_projection_id") or "").strip(),
+            "lease_owner": str(existing.get("lease_owner") or "").strip(),
+            "lease_expires_at": str(existing.get("lease_expires_at") or "").strip(),
+            "not_before_at": str(not_before_at or existing.get("not_before_at") or "").strip(),
+            "last_error": (
+                str(last_error or "").strip()
+                if last_error is not None
+                else str(existing.get("last_error") or "").strip()
+            ),
+            "metadata_json": json.dumps(
+                _json_safe_payload(
+                    {
+                        **dict(existing.get("metadata") or {}),
+                        **provided_metadata,
+                        "legacy_materialization_write_contract": {
+                            "table": "job_materialization_items",
+                            "normal_path": not migration_adapter_write,
+                            "migration_adapter": migration_adapter_write,
+                            "target_runtime_table": "workflow_commands",
+                            "retirement_phase": "Phase W4",
+                        },
+                    }
+                ),
+                ensure_ascii=False,
+            ),
+            "completed_at": str(existing.get("completed_at") or "").strip(),
+            "created_at": str(existing.get("created_at") or "").strip() or now,
+            "updated_at": now,
+        }
+        if self._write_control_plane_row_to_postgres("job_materialization_items", row_payload):
+            return (
+                self.get_job_materialization_item(normalized_item_id)
+                or self._job_materialization_item_from_row(row_payload)
+                or {}
+            )
+        columns = list(row_payload.keys())
+        placeholders = ", ".join(["?"] * len(columns))
+        update_columns = [column for column in columns if column not in {"item_id", "created_at"}]
+        update_clause = ", ".join(f"{column} = excluded.{column}" for column in update_columns)
+        with self._lock, self._connection:
+            self._connection.execute(
+                (
+                    f"INSERT INTO job_materialization_items ({', '.join(columns)}) "
+                    f"VALUES ({placeholders}) "
+                    f"ON CONFLICT(item_id) DO UPDATE SET {update_clause}, updated_at = excluded.updated_at"
+                ),
+                tuple(row_payload[column] for column in columns),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM job_materialization_items WHERE item_id = ? LIMIT 1",
+                (normalized_item_id,),
+            ).fetchone()
+        self._mirror_control_plane_row("job_materialization_items", row)
+        return self._job_materialization_item_from_row(row) or {}
+
+    def get_job_materialization_item(self, item_id: str) -> dict[str, Any]:
+        normalized_item_id = str(item_id or "").strip()
+        if not normalized_item_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "job_materialization_items",
+            row_builder=self._job_materialization_item_from_row,
+            where_sql="item_id = %s",
+            params=[normalized_item_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("job_materialization_items"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM job_materialization_items WHERE item_id = ? LIMIT 1",
+                (normalized_item_id,),
+            ).fetchone()
+        return self._job_materialization_item_from_row(row) or {}
+
+    def list_job_materialization_items(
+        self,
+        *,
+        job_id: str = "",
+        item_kind: str = "",
+        statuses: list[str] | tuple[str, ...] | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        postgres_clauses: list[str] = []
+        postgres_params: list[Any] = []
+        normalized_job_id = str(job_id or "").strip()
+        if normalized_job_id:
+            clauses.append("job_id = ?")
+            params.append(normalized_job_id)
+            postgres_clauses.append("job_id = %s")
+            postgres_params.append(normalized_job_id)
+        normalized_kind = str(item_kind or "").strip()
+        if normalized_kind:
+            clauses.append("item_kind = ?")
+            params.append(normalized_kind)
+            postgres_clauses.append("item_kind = %s")
+            postgres_params.append(normalized_kind)
+        normalized_statuses = [
+            str(status or "").strip().lower()
+            for status in list(statuses or [])
+            if str(status or "").strip()
+        ]
+        if normalized_statuses:
+            placeholders = ", ".join(["?"] * len(normalized_statuses))
+            clauses.append(f"status IN ({placeholders})")
+            params.extend(normalized_statuses)
+            postgres_placeholders = ", ".join(["%s"] * len(normalized_statuses))
+            postgres_clauses.append(f"status IN ({postgres_placeholders})")
+            postgres_params.extend(normalized_statuses)
+        postgres_rows = self._select_control_plane_rows(
+            "job_materialization_items",
+            row_builder=self._job_materialization_item_from_row,
+            where_sql=" AND ".join(postgres_clauses),
+            params=postgres_params,
+            order_by_sql="priority DESC, updated_at ASC, created_at ASC",
+            limit=max(0, int(limit or 0)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("job_materialization_items"):
+            return []
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
+        sqlite_params = list(params)
+        if int(limit or 0) > 0:
+            sqlite_params.append(max(1, int(limit or 0)))
+        with self._lock:
+            rows = self._connection.execute(
+                (
+                    "SELECT * FROM job_materialization_items "
+                    f"{where_sql} ORDER BY priority DESC, updated_at ASC, created_at ASC{limit_sql}"
+                ),
+                tuple(sqlite_params),
+            ).fetchall()
+        return [
+            payload
+            for row in rows
+            if (payload := self._job_materialization_item_from_row(row))
+        ]
+
+    def list_ready_job_materialization_items(
+        self,
+        *,
+        job_id: str = "",
+        item_kind: str = "board_visible_delta_apply",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        # `waiting_prerequisite` rows are also returned once their bounded
+        # not_before_at falls due. Expired `running` rows are returned as well:
+        # the lease is the durable ownership boundary, so a crashed daemon must
+        # not strand local-apply/board-visible work in applying forever.
+        statuses = ["queued", "deferred", "failed_retryable", "waiting_prerequisite", "running"]
+        normalized_job_id = str(job_id or "").strip()
+        normalized_kind = str(item_kind or "board_visible_delta_apply").strip() or "board_visible_delta_apply"
+        now = _utc_now_timestamp()
+        clauses = [
+            "item_kind = ?",
+            "status IN (?, ?, ?, ?, ?)",
+            "(not_before_at = '' OR datetime(not_before_at) <= datetime(?))",
+            "(lease_expires_at = '' OR datetime(lease_expires_at) <= datetime(?))",
+        ]
+        params: list[Any] = [normalized_kind, *statuses, now, now]
+        postgres_clauses = [
+            "item_kind = %s",
+            "status IN (%s, %s, %s, %s, %s)",
+            "(not_before_at = '' OR not_before_at <= %s)",
+            "(lease_expires_at = '' OR lease_expires_at <= %s)",
+        ]
+        postgres_params: list[Any] = [normalized_kind, *statuses, now, now]
+        if normalized_job_id:
+            clauses.append("job_id = ?")
+            params.append(normalized_job_id)
+            postgres_clauses.append("job_id = %s")
+            postgres_params.append(normalized_job_id)
+        postgres_rows = self._select_control_plane_rows(
+            "job_materialization_items",
+            row_builder=self._job_materialization_item_from_row,
+            where_sql=" AND ".join(postgres_clauses),
+            params=postgres_params,
+            order_by_sql="priority DESC, updated_at ASC, created_at ASC",
+            limit=max(1, int(limit or 100)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("job_materialization_items"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                (
+                    "SELECT * FROM job_materialization_items WHERE "
+                    + " AND ".join(clauses)
+                    + " ORDER BY priority DESC, updated_at ASC, created_at ASC LIMIT ?"
+                ),
+                tuple([*params, max(1, int(limit or 100))]),
+            ).fetchall()
+        return [
+            payload
+            for row in rows
+            if (payload := self._job_materialization_item_from_row(row))
+        ]
+
+    def claim_job_materialization_item(
+        self,
+        item_id: str,
+        *,
+        lease_owner: str,
+        lease_seconds: int = 300,
+    ) -> dict[str, Any]:
+        normalized_item_id = str(item_id or "").strip()
+        normalized_owner = str(lease_owner or "").strip()
+        if not normalized_item_id or not normalized_owner:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("job_materialization_items"):
+            row = self._call_control_plane_postgres_native(
+                "claim_job_materialization_item",
+                normalized_item_id,
+                lease_owner=normalized_owner,
+                lease_seconds=max(1, int(lease_seconds or 300)),
+            )
+            if row is not None:
+                return self._job_materialization_item_from_row(row) or {}
+            if self._control_plane_postgres_should_skip_sqlite_fallback("job_materialization_items"):
+                return {}
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE job_materialization_items
+                SET status = 'running',
+                    phase = 'applying',
+                    lease_owner = ?,
+                    lease_expires_at = datetime('now', ?),
+                    attempt_count = attempt_count + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE item_id = ?
+                  AND status IN ('queued', 'deferred', 'failed_retryable', 'waiting_prerequisite', 'running')
+                  AND (not_before_at = '' OR datetime(not_before_at) <= datetime('now'))
+                  AND (lease_expires_at = '' OR datetime(lease_expires_at) <= datetime('now'))
+                """,
+                (normalized_owner, f"+{max(1, int(lease_seconds or 300))} seconds", normalized_item_id),
+            )
+            changed = self._connection.execute("SELECT changes()").fetchone()[0]
+            row = self._connection.execute(
+                "SELECT * FROM job_materialization_items WHERE item_id = ? LIMIT 1",
+                (normalized_item_id,),
+            ).fetchone()
+        if not changed:
+            return {}
+        self._mirror_control_plane_row("job_materialization_items", row)
+        return self._job_materialization_item_from_row(row) or {}
+
+    def mark_job_materialization_item_completed(
+        self,
+        item_id: str,
+        *,
+        result_patch_id: str = "",
+        result_view_id: str = "",
+        serving_projection_id: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        normalized_item_id = str(item_id or "").strip()
+        if not normalized_item_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("job_materialization_items"):
+            row = self._call_control_plane_postgres_native(
+                "mark_job_materialization_item_completed",
+                normalized_item_id,
+                result_patch_id=result_patch_id,
+                result_view_id=result_view_id,
+                serving_projection_id=serving_projection_id,
+                metadata=metadata or {},
+            )
+            if row is not None:
+                return self._job_materialization_item_from_row(row) or {}
+            if self._control_plane_postgres_should_skip_sqlite_fallback("job_materialization_items"):
+                return {}
+        existing = self.get_job_materialization_item(normalized_item_id) or {}
+        now = _utc_now_timestamp()
+        metadata_payload = {**dict(existing.get("metadata") or {}), **dict(metadata or {})}
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE job_materialization_items
+                SET status = 'completed',
+                    phase = 'applied',
+                    result_patch_id = ?,
+                    result_view_id = ?,
+                    serving_projection_id = ?,
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    last_error = '',
+                    metadata_json = ?,
+                    completed_at = ?,
+                    updated_at = ?
+                WHERE item_id = ?
+                """,
+                (
+                    str(result_patch_id or existing.get("result_patch_id") or "").strip(),
+                    str(result_view_id or existing.get("result_view_id") or "").strip(),
+                    str(serving_projection_id or existing.get("serving_projection_id") or "").strip(),
+                    json.dumps(_json_safe_payload(metadata_payload), ensure_ascii=False),
+                    now,
+                    now,
+                    normalized_item_id,
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM job_materialization_items WHERE item_id = ? LIMIT 1",
+                (normalized_item_id,),
+            ).fetchone()
+        self._mirror_control_plane_row("job_materialization_items", row)
+        return self._job_materialization_item_from_row(row) or {}
+
+    def mark_job_materialization_item_failed(
+        self,
+        item_id: str,
+        *,
+        error_text: str,
+        retryable: bool = True,
+        retry_delay_seconds: int = 30,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        normalized_item_id = str(item_id or "").strip()
+        if not normalized_item_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("job_materialization_items"):
+            row = self._call_control_plane_postgres_native(
+                "mark_job_materialization_item_failed",
+                normalized_item_id,
+                error_text=error_text,
+                retryable=retryable,
+                retry_delay_seconds=retry_delay_seconds,
+                metadata=metadata or {},
+            )
+            if row is not None:
+                return self._job_materialization_item_from_row(row) or {}
+            if self._control_plane_postgres_should_skip_sqlite_fallback("job_materialization_items"):
+                return {}
+        existing = self.get_job_materialization_item(normalized_item_id) or {}
+        attempt_count = int(existing.get("attempt_count") or 0)
+        max_attempts = max(1, int(existing.get("max_attempts") or 5))
+        should_retry = bool(retryable) and attempt_count < max_attempts
+        next_status = "failed_retryable" if should_retry else "failed"
+        next_phase = "retry_wait" if should_retry else "terminal"
+        next_not_before_at = (
+            (datetime.now(timezone.utc).replace(microsecond=0) + timedelta(seconds=max(1, int(retry_delay_seconds or 30)))).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            if should_retry
+            else ""
+        )
+        metadata_payload = {**dict(existing.get("metadata") or {}), **dict(metadata or {})}
+        now = _utc_now_timestamp()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE job_materialization_items
+                SET status = ?,
+                    phase = ?,
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    not_before_at = ?,
+                    last_error = ?,
+                    metadata_json = ?,
+                    updated_at = ?
+                WHERE item_id = ?
+                """,
+                (
+                    next_status,
+                    next_phase,
+                    next_not_before_at,
+                    str(error_text or "").strip(),
+                    json.dumps(_json_safe_payload(metadata_payload), ensure_ascii=False),
+                    now,
+                    normalized_item_id,
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM job_materialization_items WHERE item_id = ? LIMIT 1",
+                (normalized_item_id,),
+            ).fetchone()
+        self._mirror_control_plane_row("job_materialization_items", row)
+        return self._job_materialization_item_from_row(row) or {}
+
+    def mark_job_materialization_item_waiting_prerequisite(
+        self,
+        item_id: str,
+        *,
+        retry_delay_seconds: int = 8,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Mark an item as waiting for a missing prerequisite (e.g.,
+        candidate_documents.json not yet written). Sets a bounded
+        `not_before_at` as a fallback safety net; the primary recovery
+        path is the prerequisite-writer event, which calls
+        `reawaken_waiting_prerequisite_job_materialization_items` to
+        clear `not_before_at` immediately.
+
+        This MUST NOT increment attempt_count toward terminal failure
+        budget. It rolls back the +1 added by the previous
+        `claim_job_materialization_item` call so the soft-retry cycle
+        does not exhaust attempts on a missing prerequisite. It also
+        does NOT write `last_error` text — waiting is not a failure.
+        """
+
+        normalized_item_id = str(item_id or "").strip()
+        if not normalized_item_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("job_materialization_items"):
+            row = self._call_control_plane_postgres_native(
+                "mark_job_materialization_item_waiting_prerequisite",
+                normalized_item_id,
+                retry_delay_seconds=retry_delay_seconds,
+                metadata=metadata or {},
+            )
+            if row is not None:
+                return self._job_materialization_item_from_row(row) or {}
+            if self._control_plane_postgres_should_skip_sqlite_fallback("job_materialization_items"):
+                return {}
+        existing = self.get_job_materialization_item(normalized_item_id) or {}
+        attempt_count = max(0, int(existing.get("attempt_count") or 0) - 1)
+        clamped_delay = min(30, max(1, int(retry_delay_seconds or 8)))
+        next_not_before_at = (
+            datetime.now(timezone.utc).replace(microsecond=0)
+            + timedelta(seconds=clamped_delay)
+        ).strftime("%Y-%m-%d %H:%M:%S")
+        metadata_payload = {**dict(existing.get("metadata") or {}), **dict(metadata or {})}
+        metadata_payload.setdefault("failure_reason", "waiting_prerequisite_candidate_documents")
+        now = _utc_now_timestamp()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE job_materialization_items
+                SET status = 'waiting_prerequisite',
+                    phase = 'waiting_prerequisite',
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    attempt_count = ?,
+                    not_before_at = ?,
+                    last_error = '',
+                    metadata_json = ?,
+                    updated_at = ?
+                WHERE item_id = ?
+                """,
+                (
+                    attempt_count,
+                    next_not_before_at,
+                    json.dumps(_json_safe_payload(metadata_payload), ensure_ascii=False),
+                    now,
+                    normalized_item_id,
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM job_materialization_items WHERE item_id = ? LIMIT 1",
+                (normalized_item_id,),
+            ).fetchone()
+        self._mirror_control_plane_row("job_materialization_items", row)
+        return self._job_materialization_item_from_row(row) or {}
+
+    def mark_job_materialization_item_partial_progress(
+        self,
+        item_id: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Release a running durable item after successful partial progress.
+
+        Partial local-apply chunks are not failures and must not burn retry
+        attempts. The next service tick can immediately reclaim the same item
+        and continue from metadata/worker-marker progress.
+        """
+
+        normalized_item_id = str(item_id or "").strip()
+        if not normalized_item_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("job_materialization_items"):
+            row = self._call_control_plane_postgres_native(
+                "mark_job_materialization_item_partial_progress",
+                normalized_item_id,
+                metadata=metadata or {},
+            )
+            if row is not None:
+                return self._job_materialization_item_from_row(row) or {}
+            if self._control_plane_postgres_should_skip_sqlite_fallback("job_materialization_items"):
+                return {}
+        existing = self.get_job_materialization_item(normalized_item_id) or {}
+        attempt_count = max(0, int(existing.get("attempt_count") or 0) - 1)
+        metadata_payload = {**dict(existing.get("metadata") or {}), **dict(metadata or {})}
+        now = _utc_now_timestamp()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE job_materialization_items
+                SET status = 'queued',
+                    phase = 'queued',
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    attempt_count = ?,
+                    not_before_at = '',
+                    last_error = '',
+                    metadata_json = ?,
+                    updated_at = ?
+                WHERE item_id = ?
+                """,
+                (
+                    attempt_count,
+                    json.dumps(_json_safe_payload(metadata_payload), ensure_ascii=False),
+                    now,
+                    normalized_item_id,
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM job_materialization_items WHERE item_id = ? LIMIT 1",
+                (normalized_item_id,),
+            ).fetchone()
+        self._mirror_control_plane_row("job_materialization_items", row)
+        return self._job_materialization_item_from_row(row) or {}
+
+    def reawaken_waiting_prerequisite_job_materialization_items(
+        self,
+        *,
+        job_id: str,
+        snapshot_id: str,
+        item_kind: str = "local_apply_closure",
+        source: str = "candidate_documents_prerequisite_ready",
+    ) -> int:
+        """Reawaken `waiting_prerequisite` items the moment the
+        prerequisite writer event fires. Clears `not_before_at` so the
+        next service-loop tick claims the item immediately, without
+        waiting for the bounded fallback timer.
+
+        Returns the number of rows reawakened.
+        """
+
+        normalized_job_id = str(job_id or "").strip()
+        normalized_snapshot_id = str(snapshot_id or "").strip()
+        normalized_kind = str(item_kind or "local_apply_closure").strip() or "local_apply_closure"
+        normalized_source = str(source or "candidate_documents_prerequisite_ready").strip()
+        if not normalized_job_id or not normalized_snapshot_id:
+            return 0
+        if self._control_plane_postgres_should_prefer_read("job_materialization_items"):
+            count = self._call_control_plane_postgres_native(
+                "reawaken_waiting_prerequisite_job_materialization_items",
+                job_id=normalized_job_id,
+                snapshot_id=normalized_snapshot_id,
+                item_kind=normalized_kind,
+                source=normalized_source,
+            )
+            if count is not None:
+                try:
+                    return max(0, int(count))
+                except (TypeError, ValueError):
+                    return 0
+            if self._control_plane_postgres_should_skip_sqlite_fallback("job_materialization_items"):
+                return 0
+        now = _utc_now_timestamp()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE job_materialization_items
+                SET status = 'queued',
+                    phase = 'queued',
+                    not_before_at = '',
+                    metadata_json = json_set(
+                        COALESCE(NULLIF(metadata_json, ''), '{}'),
+                        '$.reawakened_by',
+                        ?,
+                        '$.prerequisite_ready_source',
+                        ?,
+                        '$.prerequisite_ready_at',
+                        ?
+                    ),
+                    updated_at = ?
+                WHERE status = 'waiting_prerequisite'
+                  AND job_id = ?
+                  AND snapshot_id = ?
+                  AND item_kind = ?
+                """,
+                (
+                    normalized_source,
+                    normalized_source,
+                    now,
+                    now,
+                    normalized_job_id,
+                    normalized_snapshot_id,
+                    normalized_kind,
+                ),
+            )
+            changed = self._connection.execute("SELECT changes()").fetchone()[0]
+            if changed:
+                rows = self._connection.execute(
+                    """
+                    SELECT * FROM job_materialization_items
+                    WHERE job_id = ?
+                      AND snapshot_id = ?
+                      AND item_kind = ?
+                      AND status = 'queued'
+                      AND phase = 'queued'
+                    """,
+                    (normalized_job_id, normalized_snapshot_id, normalized_kind),
+                ).fetchall()
+                for row in rows:
+                    self._mirror_control_plane_row("job_materialization_items", row)
+        return int(changed or 0)
+
+    def reawaken_waiting_prerequisite_workflow_commands(
+        self,
+        *,
+        workflow_run_id: str,
+        snapshot_id: str,
+        command_type: str,
+        source: str = "candidate_documents_prerequisite_ready",
+    ) -> int:
+        """Clear the bounded fallback delay for typed prerequisite-wait commands."""
+
+        normalized_run_id = str(workflow_run_id or "").strip()
+        normalized_snapshot_id = str(snapshot_id or "").strip()
+        normalized_command_type = str(command_type or "").strip()
+        normalized_source = str(source or "candidate_documents_prerequisite_ready").strip()
+        if not normalized_run_id or not normalized_snapshot_id or not normalized_command_type:
+            return 0
+        if self._control_plane_postgres_should_prefer_read("workflow_commands"):
+            count = self._call_control_plane_postgres_native(
+                "reawaken_waiting_prerequisite_workflow_commands",
+                workflow_run_id=normalized_run_id,
+                snapshot_id=normalized_snapshot_id,
+                command_type=normalized_command_type,
+                source=normalized_source,
+            )
+            if count is not None:
+                try:
+                    return max(0, int(count))
+                except (TypeError, ValueError):
+                    return 0
+            if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_commands"):
+                return 0
+        now = _utc_now_timestamp()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE workflow_commands
+                SET status = 'queued',
+                    not_before_at = '',
+                    result_json = json_set(
+                        COALESCE(NULLIF(result_json, ''), '{}'),
+                        '$.reawakened_by',
+                        ?,
+                        '$.prerequisite_ready_source',
+                        ?,
+                        '$.prerequisite_ready_at',
+                        ?
+                    ),
+                    updated_at = ?
+                WHERE status = 'retry_wait'
+                  AND workflow_run_id = ?
+                  AND command_type = ?
+                  AND COALESCE(json_extract(payload_json, '$.snapshot_id'), '') = ?
+                  AND COALESCE(last_error, '') = ''
+                  AND COALESCE(json_extract(result_json, '$.status'), '') = 'waiting_prerequisite'
+                """,
+                (
+                    normalized_source,
+                    normalized_source,
+                    now,
+                    now,
+                    normalized_run_id,
+                    normalized_command_type,
+                    normalized_snapshot_id,
+                ),
+            )
+            changed = self._connection.execute("SELECT changes()").fetchone()[0]
+            if changed:
+                rows = self._connection.execute(
+                    """
+                    SELECT * FROM workflow_commands
+                    WHERE workflow_run_id = ?
+                      AND command_type = ?
+                      AND COALESCE(json_extract(payload_json, '$.snapshot_id'), '') = ?
+                      AND status = 'queued'
+                    """,
+                    (normalized_run_id, normalized_command_type, normalized_snapshot_id),
+                ).fetchall()
+                for row in rows:
+                    self._mirror_control_plane_row("workflow_commands", row)
+        return int(changed or 0)
+
+    def _job_materialization_item_from_row(
+        self,
+        row: sqlite3.Row | dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if row is None:
+            return {}
+
+        def getter(key: str, default: Any = None) -> Any:
+            if isinstance(row, dict):
+                return row.get(key, default)
+            try:
+                return row[key]
+            except (IndexError, KeyError):
+                return default
+
+        def load_json_list(key: str) -> list[Any]:
+            try:
+                payload = json.loads(getter(key) or "[]")
+            except (json.JSONDecodeError, TypeError):
+                payload = []
+            return list(payload) if isinstance(payload, list) else []
+
+        try:
+            metadata_payload = json.loads(getter("metadata_json") or "{}")
+        except (json.JSONDecodeError, TypeError):
+            metadata_payload = {}
+        return {
+            "item_id": str(getter("item_id") or ""),
+            "job_id": str(getter("job_id") or ""),
+            "target_company": str(getter("target_company") or ""),
+            "company_key": str(getter("company_key") or ""),
+            "snapshot_id": str(getter("snapshot_id") or ""),
+            "baseline_snapshot_id": str(getter("baseline_snapshot_id") or ""),
+            "asset_view": str(getter("asset_view") or "canonical_merged"),
+            "item_kind": str(getter("item_kind") or ""),
+            "source": str(getter("source") or ""),
+            "reason": str(getter("reason") or ""),
+            "status": str(getter("status") or ""),
+            "phase": str(getter("phase") or ""),
+            "priority": int(getter("priority") or 0),
+            "attempt_count": int(getter("attempt_count") or 0),
+            "max_attempts": int(getter("max_attempts") or 0),
+            "candidate_count": int(getter("candidate_count") or 0),
+            "candidate_ids": _dedupe_ordered_texts(load_json_list("candidate_ids_json")),
+            "source_worker_ids": _safe_int_list(load_json_list("source_worker_ids_json")),
+            "idempotency_key": str(getter("idempotency_key") or ""),
+            "result_patch_id": str(getter("result_patch_id") or ""),
+            "result_view_id": str(getter("result_view_id") or ""),
+            "serving_projection_id": str(getter("serving_projection_id") or ""),
+            "lease_owner": str(getter("lease_owner") or ""),
+            "lease_expires_at": str(getter("lease_expires_at") or ""),
+            "not_before_at": str(getter("not_before_at") or ""),
+            "last_error": str(getter("last_error") or ""),
+            "metadata": metadata_payload if isinstance(metadata_payload, dict) else {},
+            "completed_at": str(getter("completed_at") or ""),
+            "created_at": getter("created_at"),
+            "updated_at": getter("updated_at"),
+        }
+
+    JOB_RESULT_LIFECYCLE_INT_FIELDS: tuple[str, ...] = (
+        "baseline_candidate_count",
+        "expected_candidate_count",
+        "served_candidate_count",
+        "delta_profile_required_count",
+        "delta_profile_fetched_count",
+        "delta_profile_applied_count",
+        "delta_profile_materialized_count",
+        "delta_profile_board_visible_count",
+        "stage1_current_search_returned_count",
+        "stage1_former_search_returned_count",
+        "stage1_all_search_returned_count",
+        "stage1_deduped_candidate_count",
+        "stage1_deduped_profile_url_count",
+        "stage1_profile_fetch_required_count",
+        "stage1_profile_fetched_count",
+        "last_event_id",
+    )
+    JOB_RESULT_LIFECYCLE_DELTA_MONOTONIC_INT_FIELDS: tuple[str, ...] = (
+        "delta_profile_required_count",
+        "delta_profile_fetched_count",
+        "delta_profile_applied_count",
+        "delta_profile_materialized_count",
+        "delta_profile_board_visible_count",
+    )
+    JOB_RESULT_LIFECYCLE_STAGE1_MONOTONIC_INT_FIELDS: tuple[str, ...] = (
+        "stage1_current_search_returned_count",
+        "stage1_former_search_returned_count",
+        "stage1_all_search_returned_count",
+        "stage1_deduped_candidate_count",
+        "stage1_deduped_profile_url_count",
+        "stage1_profile_fetch_required_count",
+        "stage1_profile_fetched_count",
+    )
+    JOB_RESULT_LIFECYCLE_TEXT_FIELDS: tuple[str, ...] = (
+        "view_id",
+        "company_key",
+        "target_company",
+        "workflow_kind",
+        "phase",
+        "phase_status",
+        "state",
+        "baseline_snapshot_id",
+        "current_snapshot_id",
+        "served_snapshot_id",
+        "served_generation_key",
+        "serving_projection_id",
+        "serving_projection_phase",
+        "delta_profile_progress_reason",
+        "background_snapshot_materialization_status",
+        "outreach_layering_status",
+        "source_validation_status",
+        "projection_source_snapshot_id",
+    )
+
+    def get_job_result_lifecycle(self, job_id: str) -> dict[str, Any] | None:
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id:
+            return None
+        if self._control_plane_postgres_should_prefer_read("job_result_lifecycle"):
+            row = self._control_plane_postgres.select_one(
+                "job_result_lifecycle",
+                where_sql="job_id = %s",
+                params=[normalized_job_id],
+            )
+            if row is not None:
+                return self._job_result_lifecycle_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("job_result_lifecycle"):
+                return None
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM job_result_lifecycle WHERE job_id = ?",
+                (normalized_job_id,),
+            ).fetchone()
+        return self._job_result_lifecycle_from_row(row)
+
+    def upsert_job_result_lifecycle(
+        self,
+        *,
+        job_id: str,
+        fields: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Patch-style upsert. Only provided fields are written; existing values are
+        preserved. Callers must keep writes monotonic where the schema requires it
+        (the canonical writer enforces phase progression and projection-source
+        validation; this layer is intentionally low-level)."""
+
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id:
+            return {}
+        existing = self.get_job_result_lifecycle(normalized_job_id) or {}
+        input_fields = dict(fields or {})
+        merged: dict[str, Any] = {**existing, **input_fields}
+        merged["job_id"] = normalized_job_id
+        # delta_profile_progress_applicable is stored as INTEGER (0/1)
+        applicable_value = merged.get("delta_profile_progress_applicable")
+        if isinstance(applicable_value, bool):
+            applicable_int = 1 if applicable_value else 0
+        elif applicable_value is None:
+            applicable_int = 1
+        else:
+            try:
+                applicable_int = 1 if int(applicable_value) else 0
+            except (TypeError, ValueError):
+                applicable_int = 1
+        if applicable_int:
+            for field in self.JOB_RESULT_LIFECYCLE_DELTA_MONOTONIC_INT_FIELDS:
+                if field not in input_fields:
+                    continue
+                try:
+                    incoming_value = int(input_fields.get(field) or 0)
+                except (TypeError, ValueError):
+                    incoming_value = 0
+                try:
+                    existing_value = int(existing.get(field) or 0)
+                except (TypeError, ValueError):
+                    existing_value = 0
+                merged[field] = max(existing_value, incoming_value)
+        existing_metadata_payload = existing.get("metadata") or existing.get("metadata_json") or {}
+        if isinstance(existing_metadata_payload, str):
+            try:
+                existing_metadata_payload = json.loads(existing_metadata_payload or "{}")
+            except json.JSONDecodeError:
+                existing_metadata_payload = {}
+        if not isinstance(existing_metadata_payload, dict):
+            existing_metadata_payload = {}
+        incoming_metadata_payload = input_fields.get("metadata") or input_fields.get("metadata_json") or {}
+        if isinstance(incoming_metadata_payload, str):
+            try:
+                incoming_metadata_payload = json.loads(incoming_metadata_payload or "{}")
+            except json.JSONDecodeError:
+                incoming_metadata_payload = {}
+        if not isinstance(incoming_metadata_payload, dict):
+            incoming_metadata_payload = {}
+
+        for field in self.JOB_RESULT_LIFECYCLE_STAGE1_MONOTONIC_INT_FIELDS:
+            if field not in input_fields:
+                continue
+            try:
+                incoming_value = int(input_fields.get(field) or 0)
+            except (TypeError, ValueError):
+                incoming_value = 0
+            try:
+                existing_value = int(existing.get(field) or 0)
+            except (TypeError, ValueError):
+                existing_value = 0
+            merged[field] = max(existing_value, incoming_value)
+
+        protected_current_phases = {
+            "current_snapshot_row_shell_overlay",
+            "current_snapshot_serving",
+            "current_serving",
+        }
+        incoming_partial_phases = {
+            "partial_delta_overlay",
+            "partial_delta_board_visible_overlay",
+            "partial_current_snapshot_overlay",
+        }
+        existing_projection_phase = str(existing.get("serving_projection_phase") or "").strip()
+        incoming_projection_phase = str(input_fields.get("serving_projection_phase") or "").strip()
+        existing_current_snapshot_id = str(existing.get("current_snapshot_id") or "").strip()
+        incoming_current_snapshot_id = str(
+            input_fields.get("current_snapshot_id") or merged.get("current_snapshot_id") or ""
+        ).strip()
+        stale_partial_after_row_shell = bool(
+            existing_projection_phase in protected_current_phases
+            and incoming_projection_phase in incoming_partial_phases
+            and existing_current_snapshot_id
+            and incoming_current_snapshot_id == existing_current_snapshot_id
+        )
+        if stale_partial_after_row_shell:
+            for field in (
+                "phase",
+                "state",
+                "served_snapshot_id",
+                "serving_projection_id",
+                "serving_projection_phase",
+                "background_snapshot_materialization_status",
+            ):
+                if existing.get(field) not in (None, ""):
+                    merged[field] = existing.get(field)
+            if applicable_int:
+                for field in ("served_candidate_count", "expected_candidate_count"):
+                    try:
+                        merged[field] = max(int(existing.get(field) or 0), int(merged.get(field) or 0))
+                    except (TypeError, ValueError):
+                        merged[field] = existing.get(field) or merged.get(field) or 0
+            else:
+                try:
+                    canonical_served = max(int(existing.get("served_candidate_count") or 0), int(merged.get("served_candidate_count") or 0))
+                except (TypeError, ValueError):
+                    canonical_served = int(existing.get("served_candidate_count") or 0) if existing.get("served_candidate_count") else 0
+                merged["served_candidate_count"] = canonical_served
+                if canonical_served > 0:
+                    # Non-delta projections serve a deduped canonical row set.
+                    # Partial patch writes must not preserve a larger raw lane
+                    # denominator after row-shell publication.
+                    merged["expected_candidate_count"] = canonical_served
+                else:
+                    try:
+                        merged["expected_candidate_count"] = max(
+                            int(existing.get("expected_candidate_count") or 0),
+                            int(merged.get("expected_candidate_count") or 0),
+                        )
+                    except (TypeError, ValueError):
+                        merged["expected_candidate_count"] = existing.get("expected_candidate_count") or merged.get("expected_candidate_count") or 0
+            if existing_metadata_payload:
+                merged_metadata_payload = {
+                    **incoming_metadata_payload,
+                    **existing_metadata_payload,
+                }
+                merged["metadata"] = merged_metadata_payload
+                incoming_metadata_payload = merged_metadata_payload
+
+        if (
+            bool(existing_metadata_payload.get("delta_profile_denominator_promoted"))
+            or bool(incoming_metadata_payload.get("delta_profile_denominator_promoted"))
+        ):
+            promoted_metadata_payload = {
+                **existing_metadata_payload,
+                **incoming_metadata_payload,
+                "delta_profile_denominator_promoted": True,
+            }
+            if not str(promoted_metadata_payload.get("stage1_terminal_promoted_at") or "").strip():
+                promoted_at = str(existing_metadata_payload.get("stage1_terminal_promoted_at") or "").strip()
+                if promoted_at:
+                    promoted_metadata_payload["stage1_terminal_promoted_at"] = promoted_at
+            merged["metadata"] = promoted_metadata_payload
+
+        if not applicable_int:
+            current_snapshot_id = str(merged.get("current_snapshot_id") or "").strip()
+            served_snapshot_id = str(merged.get("served_snapshot_id") or "").strip()
+            serving_projection_phase = str(merged.get("serving_projection_phase") or "").strip()
+            try:
+                canonical_served_count = int(merged.get("served_candidate_count") or 0)
+            except (TypeError, ValueError):
+                canonical_served_count = 0
+            if (
+                canonical_served_count > 0
+                and current_snapshot_id
+                and served_snapshot_id == current_snapshot_id
+                and serving_projection_phase in protected_current_phases
+            ):
+                metadata_payload_for_clamp = merged.get("metadata") or merged.get("metadata_json") or {}
+                if isinstance(metadata_payload_for_clamp, str):
+                    try:
+                        metadata_payload_for_clamp = json.loads(metadata_payload_for_clamp or "{}")
+                    except json.JSONDecodeError:
+                        metadata_payload_for_clamp = {}
+                if not isinstance(metadata_payload_for_clamp, dict):
+                    metadata_payload_for_clamp = {}
+                stage1_public_candidate_count = max(
+                    int(merged.get("stage1_profile_fetch_required_count") or 0),
+                    int(merged.get("stage1_deduped_candidate_count") or 0),
+                    int(merged.get("stage1_deduped_profile_url_count") or 0),
+                )
+                denominator_promoted = bool(metadata_payload_for_clamp.get("delta_profile_denominator_promoted"))
+                if denominator_promoted and stage1_public_candidate_count > 0:
+                    merged["expected_candidate_count"] = max(
+                        canonical_served_count,
+                        stage1_public_candidate_count,
+                    )
+                    metadata_payload_for_clamp.setdefault(
+                        "non_delta_expected_source",
+                        "stage1_public_candidate_count",
+                    )
+                else:
+                    merged["expected_candidate_count"] = canonical_served_count
+                    metadata_payload_for_clamp.setdefault(
+                        "non_delta_expected_source",
+                        "canonical_served_candidate_count",
+                    )
+                metadata_payload_for_clamp.setdefault(
+                    "non_delta_canonical_served_candidate_count",
+                    canonical_served_count,
+                )
+                merged["metadata"] = metadata_payload_for_clamp
+
+        existing_layering_status = str(existing.get("outreach_layering_status") or "").strip().lower()
+        incoming_layering_status = str(input_fields.get("outreach_layering_status") or "").strip().lower()
+        terminal_layering_statuses = {"completed", "failed"}
+        nonterminal_layering_statuses = {"", "scheduled", "running", "deferred", "pending"}
+        if (
+            existing_layering_status in terminal_layering_statuses
+            and incoming_layering_status in nonterminal_layering_statuses
+        ):
+            existing_layering_snapshot = str(
+                existing.get("current_snapshot_id")
+                or existing.get("projection_source_snapshot_id")
+                or ""
+            ).strip()
+            incoming_layering_snapshot = str(
+                input_fields.get("current_snapshot_id")
+                or input_fields.get("projection_source_snapshot_id")
+                or merged.get("current_snapshot_id")
+                or merged.get("projection_source_snapshot_id")
+                or ""
+            ).strip()
+            if not incoming_layering_snapshot or incoming_layering_snapshot == existing_layering_snapshot:
+                merged["outreach_layering_status"] = existing_layering_status
+                metadata_payload_for_layering = merged.get("metadata") or merged.get("metadata_json") or {}
+                if isinstance(metadata_payload_for_layering, str):
+                    try:
+                        metadata_payload_for_layering = json.loads(metadata_payload_for_layering or "{}")
+                    except json.JSONDecodeError:
+                        metadata_payload_for_layering = {}
+                if not isinstance(metadata_payload_for_layering, dict):
+                    metadata_payload_for_layering = {}
+                metadata_payload_for_layering["outreach_layering_status_preserved"] = {
+                    "source": "job_result_lifecycle_writer",
+                    "reason": "terminal_layering_status_is_monotonic",
+                    "existing_status": existing_layering_status,
+                    "incoming_status": incoming_layering_status,
+                    "snapshot_id": existing_layering_snapshot or incoming_layering_snapshot,
+                }
+                merged["metadata"] = metadata_payload_for_layering
+
+        metadata_payload = merged.get("metadata") or merged.get("metadata_json") or {}
+        if isinstance(metadata_payload, str):
+            try:
+                metadata_payload = json.loads(metadata_payload or "{}")
+            except json.JSONDecodeError:
+                metadata_payload = {}
+        metadata_json = json.dumps(_json_safe_payload(metadata_payload or {}), ensure_ascii=False)
+        text_payload = {
+            field: str(merged.get(field) or "").strip()
+            for field in self.JOB_RESULT_LIFECYCLE_TEXT_FIELDS
+        }
+        if not text_payload.get("phase"):
+            text_payload["phase"] = "planning"
+        if not text_payload.get("source_validation_status"):
+            text_payload["source_validation_status"] = "validated"
+        int_payload: dict[str, int] = {}
+        for field in self.JOB_RESULT_LIFECYCLE_INT_FIELDS:
+            try:
+                int_payload[field] = int(merged.get(field) or 0)
+            except (TypeError, ValueError):
+                int_payload[field] = 0
+        now = _utc_now_timestamp()
+        created_at = str(existing.get("created_at") or "").strip() or now
+        row_payload: dict[str, Any] = {
+            "job_id": normalized_job_id,
+            "delta_profile_progress_applicable": applicable_int,
+            "metadata_json": metadata_json,
+            "created_at": created_at,
+            "updated_at": now,
+            **text_payload,
+            **int_payload,
+        }
+        if self._write_control_plane_row_to_postgres("job_result_lifecycle", row_payload):
+            return self.get_job_result_lifecycle(normalized_job_id) or self._job_result_lifecycle_from_row(row_payload) or {}
+        columns = list(row_payload.keys())
+        placeholders = ", ".join(["?"] * len(columns))
+        update_columns = [c for c in columns if c not in {"job_id", "created_at"}]
+        update_clause = ", ".join(f"{c} = excluded.{c}" for c in update_columns)
+        sql = (
+            f"INSERT INTO job_result_lifecycle ({', '.join(columns)}) VALUES ({placeholders}) "
+            f"ON CONFLICT(job_id) DO UPDATE SET {update_clause}, updated_at = excluded.updated_at"
+        )
+        with self._lock, self._connection:
+            self._connection.execute(sql, tuple(row_payload[c] for c in columns))
+            row = self._connection.execute(
+                "SELECT * FROM job_result_lifecycle WHERE job_id = ?",
+                (normalized_job_id,),
+            ).fetchone()
+        self._mirror_control_plane_row("job_result_lifecycle", row)
+        return self._job_result_lifecycle_from_row(row) or {}
+
+    def _job_result_lifecycle_from_row(
+        self, row: sqlite3.Row | dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        if isinstance(row, dict):
+            def getter(key: str, default: Any = None) -> Any:
+                return row.get(key, default)
+        else:
+            def getter(key: str, default: Any = None) -> Any:
+                try:
+                    return row[key]
+                except (IndexError, KeyError):
+                    return default
+        metadata_payload: dict[str, Any] = {}
+        try:
+            metadata_payload = json.loads(getter("metadata_json") or "{}")
+        except (json.JSONDecodeError, TypeError):
+            metadata_payload = {}
+        applicable_raw = getter("delta_profile_progress_applicable")
+        try:
+            applicable_bool = bool(int(applicable_raw if applicable_raw is not None else 1))
+        except (TypeError, ValueError):
+            applicable_bool = True
+        result: dict[str, Any] = {
+            "job_id": str(getter("job_id") or ""),
+            "delta_profile_progress_applicable": applicable_bool,
+            "metadata": metadata_payload,
+            "created_at": getter("created_at"),
+            "updated_at": getter("updated_at"),
+        }
+        for field in self.JOB_RESULT_LIFECYCLE_TEXT_FIELDS:
+            result[field] = str(getter(field) or "")
+        for field in self.JOB_RESULT_LIFECYCLE_INT_FIELDS:
+            try:
+                result[field] = int(getter(field) or 0)
+            except (TypeError, ValueError):
+                result[field] = 0
+        return result
 
     def list_stale_workflow_jobs_in_acquiring(
         self,
@@ -4971,6 +7820,7 @@ class ControlPlaneStore:
         job_id: str = "",
         history_id: str = "",
         candidate_id: str = "",
+        source_projection_id: str = "",
         follow_up_status: str = "",
         limit: int = 500,
     ) -> list[dict[str, Any]]:
@@ -4985,6 +7835,9 @@ class ControlPlaneStore:
         if candidate_id:
             clauses.append("candidate_id = ?")
             params.append(candidate_id)
+        if source_projection_id:
+            clauses.append("source_projection_id = ?")
+            params.append(source_projection_id)
         if follow_up_status:
             clauses.append("follow_up_status = ?")
             params.append(_normalize_target_candidate_follow_up_status(follow_up_status))
@@ -4996,6 +7849,7 @@ class ControlPlaneStore:
                     *(["job_id = %s"] if job_id else []),
                     *(["history_id = %s"] if history_id else []),
                     *(["candidate_id = %s"] if candidate_id else []),
+                    *(["source_projection_id = %s"] if source_projection_id else []),
                     *(["follow_up_status = %s"] if follow_up_status else []),
                 ]
             ),
@@ -5003,6 +7857,7 @@ class ControlPlaneStore:
                 *([job_id] if job_id else []),
                 *([history_id] if history_id else []),
                 *([candidate_id] if candidate_id else []),
+                *([source_projection_id] if source_projection_id else []),
                 *([_normalize_target_candidate_follow_up_status(follow_up_status)] if follow_up_status else []),
             ],
             order_by_sql="updated_at DESC, added_at DESC, record_id DESC",
@@ -5040,6 +7895,12 @@ class ControlPlaneStore:
             "avatar_url": normalized["avatar_url"],
             "linkedin_url": normalized["linkedin_url"],
             "primary_email": normalized["primary_email"],
+            "person_identity_key": normalized["person_identity_key"],
+            "candidate_identity_key": normalized["candidate_identity_key"],
+            "source_projection_id": normalized["source_projection_id"],
+            "source_run_id": normalized["source_run_id"],
+            "source_collection_id": normalized["source_collection_id"],
+            "source_reason": normalized["source_reason"],
             "follow_up_status": normalized["follow_up_status"],
             "quality_score": normalized["quality_score"],
             "comment": normalized["comment"],
@@ -5062,9 +7923,11 @@ class ControlPlaneStore:
                 """
                 INSERT INTO target_candidates (
                     record_id, candidate_id, history_id, job_id, candidate_name, headline,
-                    current_company, avatar_url, linkedin_url, primary_email, follow_up_status,
+                    current_company, avatar_url, linkedin_url, primary_email,
+                    person_identity_key, candidate_identity_key, source_projection_id, source_run_id,
+                    source_collection_id, source_reason, follow_up_status,
                     quality_score, comment, metadata_json, added_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
                 ON CONFLICT(record_id) DO UPDATE SET
                     candidate_id = excluded.candidate_id,
                     history_id = excluded.history_id,
@@ -5075,6 +7938,12 @@ class ControlPlaneStore:
                     avatar_url = excluded.avatar_url,
                     linkedin_url = excluded.linkedin_url,
                     primary_email = excluded.primary_email,
+                    person_identity_key = excluded.person_identity_key,
+                    candidate_identity_key = excluded.candidate_identity_key,
+                    source_projection_id = excluded.source_projection_id,
+                    source_run_id = excluded.source_run_id,
+                    source_collection_id = excluded.source_collection_id,
+                    source_reason = excluded.source_reason,
                     follow_up_status = excluded.follow_up_status,
                     quality_score = excluded.quality_score,
                     comment = excluded.comment,
@@ -5092,6 +7961,12 @@ class ControlPlaneStore:
                     normalized["avatar_url"],
                     normalized["linkedin_url"],
                     normalized["primary_email"],
+                    normalized["person_identity_key"],
+                    normalized["candidate_identity_key"],
+                    normalized["source_projection_id"],
+                    normalized["source_run_id"],
+                    normalized["source_collection_id"],
+                    normalized["source_reason"],
                     normalized["follow_up_status"],
                     normalized["quality_score"],
                     normalized["comment"],
@@ -5129,7 +8004,1387 @@ class ControlPlaneStore:
             return None
         return self._target_candidate_from_row(row)
 
+    def _upsert_simple_control_plane_row(
+        self,
+        table_name: str,
+        *,
+        id_column: str,
+        row_payload: dict[str, Any],
+        row_builder: Any,
+    ) -> dict[str, Any]:
+        row_id = str(row_payload.get(id_column) or "").strip()
+        if not row_id:
+            return {}
+        if self._write_control_plane_row_to_postgres(table_name, row_payload):
+            postgres_row = self._select_control_plane_row(
+                table_name,
+                row_builder=row_builder,
+                where_sql=f"{id_column} = %s",
+                params=[row_id],
+            )
+            return postgres_row or row_builder(row_payload)
+        if (
+            self._control_plane_postgres_should_skip_sqlite_fallback(table_name)
+            or (
+                str(table_name or "").strip() in _DURABLE_RUNTIME_TABLES
+                and self.control_plane_postgres_is_postgres_only()
+            )
+        ):
+            self._raise_control_plane_postgres_write_failure(
+                table_name=table_name,
+                method_name="_upsert_simple_control_plane_row",
+                reason="Postgres authoritative upsert did not complete; SQLite fallback is forbidden",
+            )
+        columns = list(row_payload.keys())
+        insert_columns = ", ".join(columns)
+        insert_params = ", ".join(f":{column}" for column in columns)
+        update_assignments = ", ".join(
+            f"{column} = excluded.{column}" for column in columns if column != id_column and column != "created_at"
+        )
+        with self._lock, self._connection:
+            self._connection.execute(
+                f"""
+                INSERT INTO {table_name} ({insert_columns})
+                VALUES ({insert_params})
+                ON CONFLICT({id_column}) DO UPDATE SET
+                    {update_assignments}
+                """,
+                row_payload,
+            )
+            row = self._connection.execute(
+                f"SELECT * FROM {table_name} WHERE {id_column} = ? LIMIT 1",
+                (row_id,),
+            ).fetchone()
+            self._mirror_control_plane_row(table_name, row)
+        return row_builder(row) if row is not None else row_builder(row_payload)
+
+    def upsert_person_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        asset_id = str(normalized.get("asset_id") or normalized.get("id") or f"pa_{uuid4().hex}").strip()
+        profile_url_key = _resolve_profile_url_key(
+            normalized.get("profile_url_key"),
+            normalized.get("linkedin_url"),
+            normalized.get("source_url"),
+        )
+        person_identity_key = _resolve_person_identity_key(
+            person_identity_key=str(normalized.get("person_identity_key") or ""),
+            profile_url_key=profile_url_key,
+            linkedin_url=str(normalized.get("linkedin_url") or ""),
+            candidate_id=str(normalized.get("candidate_id") or ""),
+        )
+        now = _utc_now_timestamp()
+        existing = self.get_person_asset(asset_id)
+        row_payload = {
+            "asset_id": asset_id,
+            "person_identity_key": person_identity_key,
+            "asset_type": str(normalized.get("asset_type") or "").strip(),
+            "source_kind": str(normalized.get("source_kind") or "").strip(),
+            "source_run_id": str(normalized.get("source_run_id") or "").strip(),
+            "source_projection_id": str(normalized.get("source_projection_id") or "").strip(),
+            "content_ref": str(normalized.get("content_ref") or "").strip(),
+            "content_hash": str(normalized.get("content_hash") or "").strip(),
+            "source_url": str(normalized.get("source_url") or "").strip(),
+            "fetched_at": str(normalized.get("fetched_at") or "").strip(),
+            "visibility_scope": str(normalized.get("visibility_scope") or "internal").strip() or "internal",
+            "status": str(normalized.get("status") or "available").strip() or "available",
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "person_assets",
+            id_column="asset_id",
+            row_payload=row_payload,
+            row_builder=self._person_asset_from_row,
+        )
+
+    def get_person_asset(self, asset_id: str) -> dict[str, Any]:
+        normalized_asset_id = str(asset_id or "").strip()
+        if not normalized_asset_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "person_assets",
+            row_builder=self._person_asset_from_row,
+            where_sql="asset_id = %s",
+            params=[normalized_asset_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("person_assets"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM person_assets WHERE asset_id = ? LIMIT 1",
+                (normalized_asset_id,),
+            ).fetchone()
+        return self._person_asset_from_row(row)
+
+    def list_person_assets(
+        self,
+        *,
+        person_identity_key: str = "",
+        asset_type: str = "",
+        source_projection_id: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if person_identity_key:
+            clauses.append("person_identity_key = ?")
+            params.append(str(person_identity_key).strip())
+        if asset_type:
+            clauses.append("asset_type = ?")
+            params.append(str(asset_type).strip())
+        if source_projection_id:
+            clauses.append("source_projection_id = ?")
+            params.append(str(source_projection_id).strip())
+        where_sqlite = " AND ".join(clauses)
+        postgres_rows = self._select_control_plane_rows(
+            "person_assets",
+            row_builder=self._person_asset_from_row,
+            where_sql=where_sqlite.replace("?", "%s"),
+            params=params,
+            order_by_sql="updated_at DESC, asset_id DESC",
+            limit=max(1, int(limit or 100)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("person_assets"):
+            return []
+        where_clause = f"WHERE {where_sqlite}" if where_sqlite else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM person_assets
+                {where_clause}
+                ORDER BY updated_at DESC, asset_id DESC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 100))),
+            ).fetchall()
+        return [self._person_asset_from_row(row) for row in rows]
+
+    def list_person_assets_for_person_keys(
+        self,
+        person_identity_keys: list[str] | tuple[str, ...],
+        *,
+        asset_type: str = "",
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        keys = [
+            str(item or "").strip()
+            for item in person_identity_keys
+            if str(item or "").strip()
+        ]
+        if not keys:
+            return []
+        deduped_keys = list(dict.fromkeys(keys))
+        placeholders = ", ".join(["?"] * len(deduped_keys))
+        clauses = [f"person_identity_key IN ({placeholders})"]
+        params: list[Any] = list(deduped_keys)
+        if asset_type:
+            clauses.append("asset_type = ?")
+            params.append(str(asset_type).strip())
+        where_sqlite = " AND ".join(clauses)
+        normalized_limit = max(1, int(limit or 1000))
+        postgres_rows = self._select_control_plane_rows(
+            "person_assets",
+            row_builder=self._person_asset_from_row,
+            where_sql=where_sqlite.replace("?", "%s"),
+            params=params,
+            order_by_sql="person_identity_key ASC, updated_at DESC, asset_id DESC",
+            limit=normalized_limit,
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("person_assets"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM person_assets
+                WHERE {where_sqlite}
+                ORDER BY person_identity_key ASC, updated_at DESC, asset_id DESC
+                LIMIT ?
+                """,
+                (*params, normalized_limit),
+            ).fetchall()
+        return [self._person_asset_from_row(row) for row in rows]
+
+    def upsert_person_evidence(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        evidence_id = str(normalized.get("evidence_id") or normalized.get("id") or f"pe_{uuid4().hex}").strip()
+        now = _utc_now_timestamp()
+        existing = self.get_person_evidence(evidence_id)
+        row_payload = {
+            "evidence_id": evidence_id,
+            "person_identity_key": str(normalized.get("person_identity_key") or "").strip(),
+            "asset_id": str(normalized.get("asset_id") or "").strip(),
+            "evidence_type": str(normalized.get("evidence_type") or "").strip(),
+            "value": str(normalized.get("value") or "").strip(),
+            "normalized_value": str(normalized.get("normalized_value") or normalized.get("value") or "").strip(),
+            "source_url": str(normalized.get("source_url") or "").strip(),
+            "source_domain": str(normalized.get("source_domain") or "").strip(),
+            "confidence_score": _coerce_public_web_float(normalized.get("confidence_score")),
+            "identity_match_score": _coerce_public_web_float(normalized.get("identity_match_score")),
+            "publishable": 1 if bool(normalized.get("publishable")) else 0,
+            "evidence_excerpt": str(normalized.get("evidence_excerpt") or "").strip(),
+            "artifact_refs_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
+                ensure_ascii=False,
+            ),
+            "status": str(normalized.get("status") or "observed").strip() or "observed",
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "person_evidence",
+            id_column="evidence_id",
+            row_payload=row_payload,
+            row_builder=self._person_evidence_from_row,
+        )
+
+    def get_person_evidence(self, evidence_id: str) -> dict[str, Any]:
+        normalized_evidence_id = str(evidence_id or "").strip()
+        if not normalized_evidence_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "person_evidence",
+            row_builder=self._person_evidence_from_row,
+            where_sql="evidence_id = %s",
+            params=[normalized_evidence_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("person_evidence"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM person_evidence WHERE evidence_id = ? LIMIT 1",
+                (normalized_evidence_id,),
+            ).fetchone()
+        return self._person_evidence_from_row(row)
+
+    def list_person_evidence(
+        self,
+        *,
+        person_identity_key: str = "",
+        asset_id: str = "",
+        evidence_type: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if person_identity_key:
+            clauses.append("person_identity_key = ?")
+            params.append(str(person_identity_key).strip())
+        if asset_id:
+            clauses.append("asset_id = ?")
+            params.append(str(asset_id).strip())
+        if evidence_type:
+            clauses.append("evidence_type = ?")
+            params.append(str(evidence_type).strip())
+        where_sqlite = " AND ".join(clauses)
+        postgres_rows = self._select_control_plane_rows(
+            "person_evidence",
+            row_builder=self._person_evidence_from_row,
+            where_sql=where_sqlite.replace("?", "%s"),
+            params=params,
+            order_by_sql="updated_at DESC, evidence_id DESC",
+            limit=max(1, int(limit or 100)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("person_evidence"):
+            return []
+        where_clause = f"WHERE {where_sqlite}" if where_sqlite else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM person_evidence
+                {where_clause}
+                ORDER BY updated_at DESC, evidence_id DESC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 100))),
+            ).fetchall()
+        return [self._person_evidence_from_row(row) for row in rows]
+
+    def upsert_person_assertion(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        assertion_id = str(normalized.get("assertion_id") or normalized.get("id") or f"pass_{uuid4().hex}").strip()
+        now = _utc_now_timestamp()
+        existing = self.get_person_assertion(assertion_id)
+        row_payload = {
+            "assertion_id": assertion_id,
+            "person_identity_key": str(normalized.get("person_identity_key") or "").strip(),
+            "assertion_type": str(normalized.get("assertion_type") or "").strip(),
+            "value": str(normalized.get("value") or "").strip(),
+            "normalized_value": str(normalized.get("normalized_value") or normalized.get("value") or "").strip(),
+            "authority": str(normalized.get("authority") or "provider_observed").strip() or "provider_observed",
+            "verification_status": str(normalized.get("verification_status") or "needs_review").strip() or "needs_review",
+            "source_evidence_id": str(normalized.get("source_evidence_id") or "").strip(),
+            "source_crm_event_id": str(normalized.get("source_crm_event_id") or "").strip(),
+            "source_run_id": str(normalized.get("source_run_id") or "").strip(),
+            "confidence_score": _coerce_public_web_float(normalized.get("confidence_score")),
+            "valid_from": str(normalized.get("valid_from") or "").strip(),
+            "valid_to": str(normalized.get("valid_to") or "").strip(),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "person_assertions",
+            id_column="assertion_id",
+            row_payload=row_payload,
+            row_builder=self._person_assertion_from_row,
+        )
+
+    def get_person_assertion(self, assertion_id: str) -> dict[str, Any]:
+        normalized_assertion_id = str(assertion_id or "").strip()
+        if not normalized_assertion_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "person_assertions",
+            row_builder=self._person_assertion_from_row,
+            where_sql="assertion_id = %s",
+            params=[normalized_assertion_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("person_assertions"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM person_assertions WHERE assertion_id = ? LIMIT 1",
+                (normalized_assertion_id,),
+            ).fetchone()
+        return self._person_assertion_from_row(row)
+
+    def list_person_assertions(
+        self,
+        *,
+        person_identity_key: str = "",
+        assertion_type: str = "",
+        verification_status: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if person_identity_key:
+            clauses.append("person_identity_key = ?")
+            params.append(str(person_identity_key).strip())
+        if assertion_type:
+            clauses.append("assertion_type = ?")
+            params.append(str(assertion_type).strip())
+        if verification_status:
+            clauses.append("verification_status = ?")
+            params.append(str(verification_status).strip())
+        where_sqlite = " AND ".join(clauses)
+        postgres_rows = self._select_control_plane_rows(
+            "person_assertions",
+            row_builder=self._person_assertion_from_row,
+            where_sql=where_sqlite.replace("?", "%s"),
+            params=params,
+            order_by_sql="updated_at DESC, assertion_id DESC",
+            limit=max(1, int(limit or 100)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("person_assertions"):
+            return []
+        where_clause = f"WHERE {where_sqlite}" if where_sqlite else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM person_assertions
+                {where_clause}
+                ORDER BY updated_at DESC, assertion_id DESC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 100))),
+            ).fetchall()
+        return [self._person_assertion_from_row(row) for row in rows]
+
+    def upsert_company_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("company_assets")
+        normalized = dict(payload or {})
+        asset_id = str(normalized.get("asset_id") or normalized.get("id") or f"ca_{uuid4().hex}").strip()
+        target_company = str(normalized.get("target_company") or normalized.get("company") or "").strip()
+        company_key = str(normalized.get("company_key") or "").strip() or resolve_company_alias_key(target_company)
+        now = _utc_now_timestamp()
+        existing = self.get_company_asset(asset_id)
+        row_payload = {
+            "asset_id": asset_id,
+            "workspace_id": str(normalized.get("workspace_id") or "default").strip() or "default",
+            "company_key": company_key,
+            "target_company": target_company,
+            "asset_type": str(normalized.get("asset_type") or "").strip(),
+            "source_kind": str(normalized.get("source_kind") or "").strip(),
+            "source_run_id": str(normalized.get("source_run_id") or "").strip(),
+            "source_command_id": str(normalized.get("source_command_id") or "").strip(),
+            "activity_run_id": str(normalized.get("activity_run_id") or "").strip(),
+            "content_ref": str(normalized.get("content_ref") or "").strip(),
+            "content_hash": str(normalized.get("content_hash") or "").strip(),
+            "source_url": str(normalized.get("source_url") or "").strip(),
+            "fetched_at": str(normalized.get("fetched_at") or "").strip(),
+            "visibility_scope": str(normalized.get("visibility_scope") or "internal").strip() or "internal",
+            "status": str(normalized.get("status") or "available").strip() or "available",
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "company_assets",
+            id_column="asset_id",
+            row_payload=row_payload,
+            row_builder=self._company_asset_from_row,
+        )
+
+    def get_company_asset(self, asset_id: str) -> dict[str, Any]:
+        normalized_asset_id = str(asset_id or "").strip()
+        if not normalized_asset_id or not self._control_plane_postgres_should_prefer_read("company_assets"):
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "company_assets",
+            row_builder=self._company_asset_from_row,
+            where_sql="asset_id = %s",
+            params=[normalized_asset_id],
+        )
+        return postgres_row or {}
+
+    def list_company_assets(
+        self,
+        *,
+        workspace_id: str = "default",
+        company_key: str = "",
+        target_company: str = "",
+        asset_type: str = "",
+        status: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        if not self._control_plane_postgres_should_prefer_read("company_assets"):
+            return []
+        normalized_company_key = str(company_key or "").strip() or resolve_company_alias_key(target_company)
+        clauses: list[str] = []
+        params: list[Any] = []
+        if workspace_id:
+            clauses.append("workspace_id = %s")
+            params.append(str(workspace_id).strip())
+        if normalized_company_key:
+            clauses.append("company_key = %s")
+            params.append(normalized_company_key)
+        if asset_type:
+            clauses.append("asset_type = %s")
+            params.append(str(asset_type).strip())
+        if status:
+            clauses.append("status = %s")
+            params.append(str(status).strip())
+        return self._select_control_plane_rows(
+            "company_assets",
+            row_builder=self._company_asset_from_row,
+            where_sql=" AND ".join(clauses),
+            params=params,
+            order_by_sql="updated_at DESC, asset_id DESC",
+            limit=max(1, int(limit or 100)),
+        )
+
+    def upsert_company_evidence(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("company_evidence")
+        normalized = dict(payload or {})
+        evidence_id = str(normalized.get("evidence_id") or normalized.get("id") or f"ce_{uuid4().hex}").strip()
+        target_company = str(normalized.get("target_company") or normalized.get("company") or "").strip()
+        company_key = str(normalized.get("company_key") or "").strip() or resolve_company_alias_key(target_company)
+        now = _utc_now_timestamp()
+        existing = self.get_company_evidence(evidence_id)
+        row_payload = {
+            "evidence_id": evidence_id,
+            "workspace_id": str(normalized.get("workspace_id") or "default").strip() or "default",
+            "company_key": company_key,
+            "target_company": target_company,
+            "asset_id": str(normalized.get("asset_id") or "").strip(),
+            "evidence_type": str(normalized.get("evidence_type") or "").strip(),
+            "value": str(normalized.get("value") or "").strip(),
+            "normalized_value": str(normalized.get("normalized_value") or normalized.get("value") or "").strip(),
+            "source_url": str(normalized.get("source_url") or "").strip(),
+            "source_domain": str(normalized.get("source_domain") or "").strip(),
+            "confidence_score": _coerce_public_web_float(normalized.get("confidence_score")),
+            "evidence_excerpt": str(normalized.get("evidence_excerpt") or "").strip(),
+            "artifact_refs_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
+                ensure_ascii=False,
+            ),
+            "status": str(normalized.get("status") or "observed").strip() or "observed",
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "company_evidence",
+            id_column="evidence_id",
+            row_payload=row_payload,
+            row_builder=self._company_evidence_from_row,
+        )
+
+    def get_company_evidence(self, evidence_id: str) -> dict[str, Any]:
+        normalized_evidence_id = str(evidence_id or "").strip()
+        if not normalized_evidence_id or not self._control_plane_postgres_should_prefer_read("company_evidence"):
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "company_evidence",
+            row_builder=self._company_evidence_from_row,
+            where_sql="evidence_id = %s",
+            params=[normalized_evidence_id],
+        )
+        return postgres_row or {}
+
+    def list_company_evidence(
+        self,
+        *,
+        workspace_id: str = "default",
+        company_key: str = "",
+        target_company: str = "",
+        asset_id: str = "",
+        evidence_type: str = "",
+        status: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        if not self._control_plane_postgres_should_prefer_read("company_evidence"):
+            return []
+        normalized_company_key = str(company_key or "").strip() or resolve_company_alias_key(target_company)
+        clauses: list[str] = []
+        params: list[Any] = []
+        if workspace_id:
+            clauses.append("workspace_id = %s")
+            params.append(str(workspace_id).strip())
+        if normalized_company_key:
+            clauses.append("company_key = %s")
+            params.append(normalized_company_key)
+        if asset_id:
+            clauses.append("asset_id = %s")
+            params.append(str(asset_id).strip())
+        if evidence_type:
+            clauses.append("evidence_type = %s")
+            params.append(str(evidence_type).strip())
+        if status:
+            clauses.append("status = %s")
+            params.append(str(status).strip())
+        return self._select_control_plane_rows(
+            "company_evidence",
+            row_builder=self._company_evidence_from_row,
+            where_sql=" AND ".join(clauses),
+            params=params,
+            order_by_sql="updated_at DESC, evidence_id DESC",
+            limit=max(1, int(limit or 100)),
+        )
+
+    def upsert_company_assertion(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("company_assertions")
+        normalized = dict(payload or {})
+        assertion_id = str(normalized.get("assertion_id") or normalized.get("id") or f"cass_{uuid4().hex}").strip()
+        target_company = str(normalized.get("target_company") or normalized.get("company") or "").strip()
+        company_key = str(normalized.get("company_key") or "").strip() or resolve_company_alias_key(target_company)
+        now = _utc_now_timestamp()
+        existing = self.get_company_assertion(assertion_id)
+        row_payload = {
+            "assertion_id": assertion_id,
+            "workspace_id": str(normalized.get("workspace_id") or "default").strip() or "default",
+            "company_key": company_key,
+            "target_company": target_company,
+            "assertion_type": str(normalized.get("assertion_type") or "").strip(),
+            "value": str(normalized.get("value") or "").strip(),
+            "normalized_value": str(normalized.get("normalized_value") or normalized.get("value") or "").strip(),
+            "authority": str(normalized.get("authority") or "provider_observed").strip() or "provider_observed",
+            "verification_status": str(normalized.get("verification_status") or "needs_review").strip() or "needs_review",
+            "source_evidence_id": str(normalized.get("source_evidence_id") or "").strip(),
+            "source_run_id": str(normalized.get("source_run_id") or "").strip(),
+            "source_command_id": str(normalized.get("source_command_id") or "").strip(),
+            "confidence_score": _coerce_public_web_float(normalized.get("confidence_score")),
+            "valid_from": str(normalized.get("valid_from") or "").strip(),
+            "valid_to": str(normalized.get("valid_to") or "").strip(),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "company_assertions",
+            id_column="assertion_id",
+            row_payload=row_payload,
+            row_builder=self._company_assertion_from_row,
+        )
+
+    def get_company_assertion(self, assertion_id: str) -> dict[str, Any]:
+        normalized_assertion_id = str(assertion_id or "").strip()
+        if not normalized_assertion_id or not self._control_plane_postgres_should_prefer_read("company_assertions"):
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "company_assertions",
+            row_builder=self._company_assertion_from_row,
+            where_sql="assertion_id = %s",
+            params=[normalized_assertion_id],
+        )
+        return postgres_row or {}
+
+    def list_company_assertions(
+        self,
+        *,
+        workspace_id: str = "default",
+        company_key: str = "",
+        target_company: str = "",
+        assertion_type: str = "",
+        verification_status: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        if not self._control_plane_postgres_should_prefer_read("company_assertions"):
+            return []
+        normalized_company_key = str(company_key or "").strip() or resolve_company_alias_key(target_company)
+        clauses: list[str] = []
+        params: list[Any] = []
+        if workspace_id:
+            clauses.append("workspace_id = %s")
+            params.append(str(workspace_id).strip())
+        if normalized_company_key:
+            clauses.append("company_key = %s")
+            params.append(normalized_company_key)
+        if assertion_type:
+            clauses.append("assertion_type = %s")
+            params.append(str(assertion_type).strip())
+        if verification_status:
+            clauses.append("verification_status = %s")
+            params.append(str(verification_status).strip())
+        return self._select_control_plane_rows(
+            "company_assertions",
+            row_builder=self._company_assertion_from_row,
+            where_sql=" AND ".join(clauses),
+            params=params,
+            order_by_sql="updated_at DESC, assertion_id DESC",
+            limit=max(1, int(limit or 100)),
+        )
+
+    def upsert_raw_profile_index(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        person_identity_key = str(normalized.get("person_identity_key") or "").strip()
+        if not person_identity_key:
+            return {}
+        now = _utc_now_timestamp()
+        existing = self.get_raw_profile_index(person_identity_key)
+        raw_terms = _normalize_search_index_terms(normalized.get("raw_profile_terms"))
+        indexed_text = _normalize_search_index_text(
+            " ".join([str(normalized.get("indexed_text") or ""), *raw_terms])
+        )
+        row_payload = {
+            "person_identity_key": person_identity_key,
+            "indexed_text": indexed_text,
+            "raw_profile_terms_json": json.dumps(raw_terms, ensure_ascii=False),
+            "source_asset_ids_json": json.dumps(
+                _loads_json_list(normalized.get("source_asset_ids_json"), default=[])
+                if "source_asset_ids_json" in normalized
+                else [
+                    str(item or "").strip()
+                    for item in list(normalized.get("source_asset_ids") or [])
+                    if str(item or "").strip()
+                ],
+                ensure_ascii=False,
+            ),
+            "indexed_field_sources_json": json.dumps(
+                _normalize_json_object_payload(
+                    normalized.get("indexed_field_sources") or normalized.get("indexed_field_sources_json")
+                ),
+                ensure_ascii=False,
+            ),
+            "raw_profile_index_watermark": str(normalized.get("raw_profile_index_watermark") or "").strip(),
+            "profile_fetched_at": str(normalized.get("profile_fetched_at") or "").strip(),
+            "profile_indexed_at": str(normalized.get("profile_indexed_at") or "").strip(),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "raw_profile_index",
+            id_column="person_identity_key",
+            row_payload=row_payload,
+            row_builder=self._raw_profile_index_from_row,
+        )
+
+    def get_raw_profile_index(self, person_identity_key: str) -> dict[str, Any]:
+        normalized_person_key = str(person_identity_key or "").strip()
+        if not normalized_person_key:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "raw_profile_index",
+            row_builder=self._raw_profile_index_from_row,
+            where_sql="person_identity_key = %s",
+            params=[normalized_person_key],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("raw_profile_index"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM raw_profile_index WHERE person_identity_key = ? LIMIT 1",
+                (normalized_person_key,),
+            ).fetchone()
+        return self._raw_profile_index_from_row(row)
+
+    def list_raw_profile_indexes(
+        self,
+        person_identity_keys: list[str] | tuple[str, ...],
+    ) -> dict[str, dict[str, Any]]:
+        normalized_keys = _dedupe_ordered_texts(person_identity_keys)
+        if not normalized_keys:
+            return {}
+        placeholders = ", ".join(["%s"] * len(normalized_keys))
+        postgres_rows = self._select_control_plane_rows(
+            "raw_profile_index",
+            row_builder=self._raw_profile_index_from_row,
+            where_sql=f"person_identity_key IN ({placeholders})",
+            params=normalized_keys,
+            order_by_sql="person_identity_key ASC",
+            limit=len(normalized_keys),
+        )
+        if postgres_rows:
+            return {
+                str(row.get("person_identity_key") or "").strip(): row
+                for row in postgres_rows
+                if str(row.get("person_identity_key") or "").strip()
+            }
+        if self._control_plane_postgres_should_skip_sqlite_fallback("raw_profile_index"):
+            return {}
+        sqlite_placeholders = ", ".join(["?"] * len(normalized_keys))
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT *
+                FROM raw_profile_index
+                WHERE person_identity_key IN ({sqlite_placeholders})
+                """,
+                tuple(normalized_keys),
+            ).fetchall()
+        payloads = [self._raw_profile_index_from_row(row) for row in rows]
+        return {
+            str(row.get("person_identity_key") or "").strip(): row
+            for row in payloads
+            if str(row.get("person_identity_key") or "").strip()
+        }
+
+    def upsert_candidate_evidence_index(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        person_identity_key = str(normalized.get("person_identity_key") or "").strip()
+        if not person_identity_key:
+            return {}
+        now = _utc_now_timestamp()
+        existing = self.get_candidate_evidence_index(person_identity_key)
+        evidence_terms = _normalize_search_index_terms(normalized.get("evidence_terms"))
+        assertion_terms = _normalize_search_index_terms(normalized.get("assertion_terms"))
+        indexed_text = _normalize_search_index_text(
+            " ".join([str(normalized.get("indexed_text") or ""), *evidence_terms, *assertion_terms])
+        )
+        row_payload = {
+            "person_identity_key": person_identity_key,
+            "indexed_text": indexed_text,
+            "evidence_terms_json": json.dumps(evidence_terms, ensure_ascii=False),
+            "assertion_terms_json": json.dumps(assertion_terms, ensure_ascii=False),
+            "source_evidence_ids_json": json.dumps(
+                _loads_json_list(normalized.get("source_evidence_ids_json"), default=[])
+                if "source_evidence_ids_json" in normalized
+                else [
+                    str(item or "").strip()
+                    for item in list(normalized.get("source_evidence_ids") or [])
+                    if str(item or "").strip()
+                ],
+                ensure_ascii=False,
+            ),
+            "source_assertion_ids_json": json.dumps(
+                _loads_json_list(normalized.get("source_assertion_ids_json"), default=[])
+                if "source_assertion_ids_json" in normalized
+                else [
+                    str(item or "").strip()
+                    for item in list(normalized.get("source_assertion_ids") or [])
+                    if str(item or "").strip()
+                ],
+                ensure_ascii=False,
+            ),
+            "indexed_field_sources_json": json.dumps(
+                _normalize_json_object_payload(
+                    normalized.get("indexed_field_sources") or normalized.get("indexed_field_sources_json")
+                ),
+                ensure_ascii=False,
+            ),
+            "evidence_index_watermark": str(normalized.get("evidence_index_watermark") or "").strip(),
+            "evidence_indexed_at": str(normalized.get("evidence_indexed_at") or "").strip(),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "candidate_evidence_index",
+            id_column="person_identity_key",
+            row_payload=row_payload,
+            row_builder=self._candidate_evidence_index_from_row,
+        )
+
+    def get_candidate_evidence_index(self, person_identity_key: str) -> dict[str, Any]:
+        normalized_person_key = str(person_identity_key or "").strip()
+        if not normalized_person_key:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "candidate_evidence_index",
+            row_builder=self._candidate_evidence_index_from_row,
+            where_sql="person_identity_key = %s",
+            params=[normalized_person_key],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("candidate_evidence_index"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM candidate_evidence_index WHERE person_identity_key = ? LIMIT 1",
+                (normalized_person_key,),
+            ).fetchone()
+        return self._candidate_evidence_index_from_row(row)
+
+    def list_candidate_evidence_indexes(
+        self,
+        person_identity_keys: list[str] | tuple[str, ...],
+    ) -> dict[str, dict[str, Any]]:
+        normalized_keys = _dedupe_ordered_texts(person_identity_keys)
+        if not normalized_keys:
+            return {}
+        placeholders = ", ".join(["%s"] * len(normalized_keys))
+        postgres_rows = self._select_control_plane_rows(
+            "candidate_evidence_index",
+            row_builder=self._candidate_evidence_index_from_row,
+            where_sql=f"person_identity_key IN ({placeholders})",
+            params=normalized_keys,
+            order_by_sql="person_identity_key ASC",
+            limit=len(normalized_keys),
+        )
+        if postgres_rows:
+            return {
+                str(row.get("person_identity_key") or "").strip(): row
+                for row in postgres_rows
+                if str(row.get("person_identity_key") or "").strip()
+            }
+        if self._control_plane_postgres_should_skip_sqlite_fallback("candidate_evidence_index"):
+            return {}
+        sqlite_placeholders = ", ".join(["?"] * len(normalized_keys))
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT *
+                FROM candidate_evidence_index
+                WHERE person_identity_key IN ({sqlite_placeholders})
+                """,
+                tuple(normalized_keys),
+            ).fetchall()
+        payloads = [self._candidate_evidence_index_from_row(row) for row in rows]
+        return {
+            str(row.get("person_identity_key") or "").strip(): row
+            for row in payloads
+            if str(row.get("person_identity_key") or "").strip()
+        }
+
+    def upsert_crm_record(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
+        person_identity_key = str(normalized.get("person_identity_key") or "").strip()
+        if not person_identity_key:
+            return {}
+        existing = self.get_crm_record_by_person_identity(
+            person_identity_key,
+            workspace_id=workspace_id,
+        )
+        crm_record_id = str(
+            normalized.get("crm_record_id")
+            or normalized.get("id")
+            or (existing or {}).get("crm_record_id")
+            or f"crmrec_{uuid4().hex}"
+        ).strip()
+        now = _utc_now_timestamp()
+        row_payload = {
+            "crm_record_id": crm_record_id,
+            "workspace_id": workspace_id,
+            "person_identity_key": person_identity_key,
+            "candidate_identity_key": str(normalized.get("candidate_identity_key") or "").strip(),
+            "collection_id": str(normalized.get("collection_id") or "").strip(),
+            "display_name_cache": str(normalized.get("display_name_cache") or "").strip(),
+            "headline_cache": str(normalized.get("headline_cache") or "").strip(),
+            "primary_company_cache": str(normalized.get("primary_company_cache") or "").strip(),
+            "avatar_asset_id": str(normalized.get("avatar_asset_id") or "").strip(),
+            "lifecycle_status": str(normalized.get("lifecycle_status") or "active").strip() or "active",
+            "visibility_status": str(normalized.get("visibility_status") or "normal").strip() or "normal",
+            "owner_user_id": str(normalized.get("owner_user_id") or "").strip(),
+            "source_projection_id": str(normalized.get("source_projection_id") or "").strip(),
+            "source_run_id": str(normalized.get("source_run_id") or "").strip(),
+            "source_collection_id": str(normalized.get("source_collection_id") or "").strip(),
+            "source_reason": str(normalized.get("source_reason") or "").strip(),
+            "current_engagement_id": str(normalized.get("current_engagement_id") or "").strip(),
+            "crm_version": int((existing or {}).get("crm_version") or normalized.get("crm_version") or 0) + 1
+            if existing
+            else int(normalized.get("crm_version") or 1),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "crm_records",
+            id_column="crm_record_id",
+            row_payload=row_payload,
+            row_builder=self._crm_record_from_row,
+        )
+
+    def get_crm_record(self, crm_record_id: str) -> dict[str, Any]:
+        normalized_record_id = str(crm_record_id or "").strip()
+        if not normalized_record_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "crm_records",
+            row_builder=self._crm_record_from_row,
+            where_sql="crm_record_id = %s",
+            params=[normalized_record_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_records"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM crm_records WHERE crm_record_id = ? LIMIT 1",
+                (normalized_record_id,),
+            ).fetchone()
+        return self._crm_record_from_row(row)
+
+    def get_crm_record_by_person_identity(
+        self,
+        person_identity_key: str,
+        *,
+        workspace_id: str = "default",
+    ) -> dict[str, Any]:
+        normalized_person_key = str(person_identity_key or "").strip()
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        if not normalized_person_key:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "crm_records",
+            row_builder=self._crm_record_from_row,
+            where_sql="workspace_id = %s AND person_identity_key = %s",
+            params=[normalized_workspace_id, normalized_person_key],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_records"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT * FROM crm_records
+                WHERE workspace_id = ? AND person_identity_key = ?
+                LIMIT 1
+                """,
+                (normalized_workspace_id, normalized_person_key),
+            ).fetchone()
+        return self._crm_record_from_row(row)
+
+    def list_crm_records_by_person_identity_keys(
+        self,
+        person_identity_keys: list[str] | tuple[str, ...],
+        *,
+        workspace_id: str = "default",
+    ) -> dict[str, dict[str, Any]]:
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        keys = _dedupe_preserve_order([str(key or "").strip() for key in list(person_identity_keys or []) if str(key or "").strip()])
+        if not keys:
+            return {}
+        placeholders_sqlite = ", ".join("?" for _ in keys)
+        postgres_rows = self._select_control_plane_rows(
+            "crm_records",
+            row_builder=self._crm_record_from_row,
+            where_sql=f"workspace_id = %s AND person_identity_key IN ({', '.join('%s' for _ in keys)})",
+            params=[normalized_workspace_id, *keys],
+            order_by_sql="updated_at DESC",
+            limit=0,
+        )
+        if postgres_rows:
+            return {
+                str(row.get("person_identity_key") or "").strip(): row
+                for row in postgres_rows
+                if str(row.get("person_identity_key") or "").strip()
+            }
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_records"):
+            return {}
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM crm_records
+                WHERE workspace_id = ? AND person_identity_key IN ({placeholders_sqlite})
+                ORDER BY updated_at DESC
+                """,
+                (normalized_workspace_id, *keys),
+            ).fetchall()
+        return {
+            str(row_payload.get("person_identity_key") or "").strip(): row_payload
+            for row_payload in [self._crm_record_from_row(row) for row in rows]
+            if str(row_payload.get("person_identity_key") or "").strip()
+        }
+
+    def list_crm_records(
+        self,
+        *,
+        source_projection_id: str = "",
+        source_collection_id: str = "",
+        workspace_id: str = "default",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses = ["workspace_id = ?"]
+        params: list[Any] = [str(workspace_id or "default").strip() or "default"]
+        if source_projection_id:
+            clauses.append("source_projection_id = ?")
+            params.append(str(source_projection_id).strip())
+        if source_collection_id:
+            clauses.append("source_collection_id = ?")
+            params.append(str(source_collection_id).strip())
+        where_sqlite = " AND ".join(clauses)
+        postgres_rows = self._select_control_plane_rows(
+            "crm_records",
+            row_builder=self._crm_record_from_row,
+            where_sql=where_sqlite.replace("?", "%s"),
+            params=params,
+            order_by_sql="updated_at DESC, crm_record_id DESC",
+            limit=max(1, int(limit or 100)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_records"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM crm_records
+                WHERE {where_sqlite}
+                ORDER BY updated_at DESC, crm_record_id DESC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 100))),
+            ).fetchall()
+        return [self._crm_record_from_row(row) for row in rows]
+
+    def upsert_crm_engagement(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        engagement_id = str(normalized.get("engagement_id") or normalized.get("id") or f"crmeng_{uuid4().hex}").strip()
+        now = _utc_now_timestamp()
+        existing = self.get_crm_engagement(engagement_id)
+        row_payload = {
+            "engagement_id": engagement_id,
+            "crm_record_id": str(normalized.get("crm_record_id") or "").strip(),
+            "pipeline_id": str(normalized.get("pipeline_id") or "default_sourcing").strip() or "default_sourcing",
+            "stage": str(normalized.get("stage") or "new").strip() or "new",
+            "stage_category": str(normalized.get("stage_category") or _crm_stage_category(normalized.get("stage"))).strip()
+            or "open",
+            "priority": str(normalized.get("priority") or "normal").strip() or "normal",
+            "quality_score": normalized.get("quality_score"),
+            "next_action_at": str(normalized.get("next_action_at") or "").strip(),
+            "last_contacted_at": str(normalized.get("last_contacted_at") or "").strip(),
+            "source_projection_id": str(normalized.get("source_projection_id") or "").strip(),
+            "source_run_id": str(normalized.get("source_run_id") or "").strip(),
+            "source_selection_reason": str(normalized.get("source_selection_reason") or "").strip(),
+            "created_by_actor": str(normalized.get("created_by_actor") or "").strip(),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "crm_engagements",
+            id_column="engagement_id",
+            row_payload=row_payload,
+            row_builder=self._crm_engagement_from_row,
+        )
+
+    def get_crm_engagement(self, engagement_id: str) -> dict[str, Any]:
+        normalized_engagement_id = str(engagement_id or "").strip()
+        if not normalized_engagement_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "crm_engagements",
+            row_builder=self._crm_engagement_from_row,
+            where_sql="engagement_id = %s",
+            params=[normalized_engagement_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_engagements"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM crm_engagements WHERE engagement_id = ? LIMIT 1",
+                (normalized_engagement_id,),
+            ).fetchone()
+        return self._crm_engagement_from_row(row)
+
+    def list_crm_engagements(self, *, crm_record_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        normalized_record_id = str(crm_record_id or "").strip()
+        if not normalized_record_id:
+            return []
+        postgres_rows = self._select_control_plane_rows(
+            "crm_engagements",
+            row_builder=self._crm_engagement_from_row,
+            where_sql="crm_record_id = %s",
+            params=[normalized_record_id],
+            order_by_sql="updated_at DESC, engagement_id DESC",
+            limit=max(1, int(limit or 50)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_engagements"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT * FROM crm_engagements
+                WHERE crm_record_id = ?
+                ORDER BY updated_at DESC, engagement_id DESC
+                LIMIT ?
+                """,
+                (normalized_record_id, max(1, int(limit or 50))),
+            ).fetchall()
+        return [self._crm_engagement_from_row(row) for row in rows]
+
+    def upsert_crm_task(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("crm_tasks")
+        normalized = dict(payload or {})
+        workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
+        idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+        if idempotency_key:
+            existing_by_key = self.get_crm_task_by_idempotency(idempotency_key, workspace_id=workspace_id)
+            if existing_by_key:
+                normalized["task_id"] = existing_by_key.get("task_id")
+                normalized.setdefault("created_at", existing_by_key.get("created_at"))
+        task_id = str(normalized.get("task_id") or normalized.get("id") or f"crmtask_{uuid4().hex}").strip()
+        if not task_id:
+            return {}
+        existing = self.get_crm_task(task_id)
+        now = _utc_now_timestamp()
+        row_payload = {
+            "task_id": task_id,
+            "workspace_id": workspace_id,
+            "crm_record_id": str(normalized.get("crm_record_id") or "").strip(),
+            "engagement_id": str(normalized.get("engagement_id") or "").strip(),
+            "person_identity_key": str(normalized.get("person_identity_key") or "").strip(),
+            "title": str(normalized.get("title") or "").strip(),
+            "description": str(normalized.get("description") or "").strip(),
+            "status": str(normalized.get("status") or "open").strip() or "open",
+            "priority": str(normalized.get("priority") or "normal").strip() or "normal",
+            "due_at": str(normalized.get("due_at") or "").strip(),
+            "completed_at": str(normalized.get("completed_at") or "").strip(),
+            "created_by_actor": str(normalized.get("created_by_actor") or "").strip(),
+            "created_by_actor_id": str(normalized.get("created_by_actor_id") or "").strip(),
+            "source_event_id": str(normalized.get("source_event_id") or "").strip(),
+            "idempotency_key": idempotency_key,
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "crm_tasks",
+            id_column="task_id",
+            row_payload=row_payload,
+            row_builder=self._crm_task_from_row,
+        )
+
+    def get_crm_task(self, task_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("crm_tasks")
+        normalized_task_id = str(task_id or "").strip()
+        if not normalized_task_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "crm_tasks",
+            row_builder=self._crm_task_from_row,
+            where_sql="task_id = %s",
+            params=[normalized_task_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_tasks"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM crm_tasks WHERE task_id = ? LIMIT 1",
+                (normalized_task_id,),
+            ).fetchone()
+        return self._crm_task_from_row(row)
+
+    def get_crm_task_by_idempotency(self, idempotency_key: str, *, workspace_id: str = "default") -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("crm_tasks")
+        normalized_key = str(idempotency_key or "").strip()
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        if not normalized_key:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "crm_tasks",
+            row_builder=self._crm_task_from_row,
+            where_sql="workspace_id = %s AND idempotency_key = %s",
+            params=[normalized_workspace_id, normalized_key],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_tasks"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT * FROM crm_tasks
+                WHERE workspace_id = ? AND idempotency_key = ?
+                LIMIT 1
+                """,
+                (normalized_workspace_id, normalized_key),
+            ).fetchone()
+        return self._crm_task_from_row(row)
+
+    def list_crm_tasks(
+        self,
+        *,
+        workspace_id: str = "default",
+        crm_record_id: str = "",
+        status: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("crm_tasks")
+        clauses = ["workspace_id = ?"]
+        params: list[Any] = [str(workspace_id or "default").strip() or "default"]
+        normalized_record_id = str(crm_record_id or "").strip()
+        normalized_status = str(status or "").strip()
+        if normalized_record_id:
+            clauses.append("crm_record_id = ?")
+            params.append(normalized_record_id)
+        if normalized_status:
+            clauses.append("status = ?")
+            params.append(normalized_status)
+        where_sqlite = " AND ".join(clauses)
+        postgres_rows = self._select_control_plane_rows(
+            "crm_tasks",
+            row_builder=self._crm_task_from_row,
+            where_sql=where_sqlite.replace("?", "%s"),
+            params=params,
+            order_by_sql="due_at ASC, updated_at DESC, task_id DESC",
+            limit=max(1, int(limit or 100)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_tasks"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM crm_tasks
+                WHERE {where_sqlite}
+                ORDER BY due_at ASC, updated_at DESC, task_id DESC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 100))),
+            ).fetchall()
+        return [self._crm_task_from_row(row) for row in rows]
+
+    def append_crm_event(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
+        idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+        if idempotency_key:
+            existing = self.get_crm_event_by_idempotency(idempotency_key, workspace_id=workspace_id)
+            if existing:
+                return existing
+        event_id = str(normalized.get("event_id") or normalized.get("id") or f"crmevt_{uuid4().hex}").strip()
+        now = _utc_now_timestamp()
+        row_payload = {
+            "event_id": event_id,
+            "workspace_id": workspace_id,
+            "crm_record_id": str(normalized.get("crm_record_id") or "").strip(),
+            "engagement_id": str(normalized.get("engagement_id") or "").strip(),
+            "person_identity_key": str(normalized.get("person_identity_key") or "").strip(),
+            "event_type": str(normalized.get("event_type") or "").strip(),
+            "actor_type": str(normalized.get("actor_type") or "").strip(),
+            "actor_id": str(normalized.get("actor_id") or "").strip(),
+            "idempotency_key": idempotency_key,
+            "payload_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("payload") or normalized.get("payload_json")),
+                ensure_ascii=False,
+            ),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "occurred_at": str(normalized.get("occurred_at") or now).strip(),
+            "created_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "crm_events",
+            id_column="event_id",
+            row_payload=row_payload,
+            row_builder=self._crm_event_from_row,
+        )
+
+    def get_crm_event_by_idempotency(self, idempotency_key: str, *, workspace_id: str = "default") -> dict[str, Any]:
+        normalized_key = str(idempotency_key or "").strip()
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        if not normalized_key:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "crm_events",
+            row_builder=self._crm_event_from_row,
+            where_sql="workspace_id = %s AND idempotency_key = %s",
+            params=[normalized_workspace_id, normalized_key],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_events"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT * FROM crm_events
+                WHERE workspace_id = ? AND idempotency_key = ?
+                LIMIT 1
+                """,
+                (normalized_workspace_id, normalized_key),
+            ).fetchone()
+        return self._crm_event_from_row(row)
+
     def upsert_target_candidate_public_web_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_legacy_target_public_web_migration_write("target_candidate_public_web_batches")
         normalized = _normalize_target_candidate_public_web_batch_payload(payload)
         existing = self.get_target_candidate_public_web_batch(batch_id=normalized["batch_id"])
         now = _utc_now_timestamp()
@@ -5230,6 +9485,8 @@ class ControlPlaneStore:
         if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_batches"):
             return None
         with self._lock:
+            if not self._sqlite_table_exists_locked("target_candidate_public_web_batches"):
+                return None
             row = self._connection.execute(
                 f"SELECT * FROM target_candidate_public_web_batches WHERE {where_sqlite} LIMIT 1",
                 (value,),
@@ -5258,6 +9515,8 @@ class ControlPlaneStore:
         where_clause = "WHERE status = ?" if normalized_status else ""
         params = (normalized_status, limit) if normalized_status else (limit,)
         with self._lock:
+            if not self._sqlite_table_exists_locked("target_candidate_public_web_batches"):
+                return []
             rows = self._connection.execute(
                 f"""
                 SELECT * FROM target_candidate_public_web_batches
@@ -5270,6 +9529,7 @@ class ControlPlaneStore:
         return [self._target_candidate_public_web_batch_from_row(row) for row in rows]
 
     def upsert_target_candidate_public_web_run(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_legacy_target_public_web_migration_write("target_candidate_public_web_runs")
         normalized = _normalize_target_candidate_public_web_run_payload(payload)
         existing = self.get_target_candidate_public_web_run(run_id=normalized["run_id"])
         now = _utc_now_timestamp()
@@ -5364,6 +9624,7 @@ class ControlPlaneStore:
         return self.get_target_candidate_public_web_run(run_id=normalized["run_id"]) or normalized
 
     def update_target_candidate_public_web_run(self, run_id: str, patch: dict[str, Any]) -> dict[str, Any] | None:
+        self._require_legacy_target_public_web_migration_write("target_candidate_public_web_runs")
         existing = self.get_target_candidate_public_web_run(run_id=run_id)
         if existing is None:
             return None
@@ -5405,6 +9666,8 @@ class ControlPlaneStore:
         if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_runs"):
             return None
         with self._lock:
+            if not self._sqlite_table_exists_locked("target_candidate_public_web_runs"):
+                return None
             row = self._connection.execute(
                 f"SELECT * FROM target_candidate_public_web_runs WHERE {where_sqlite} LIMIT 1",
                 (value,),
@@ -5455,6 +9718,8 @@ class ControlPlaneStore:
             return []
         where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self._lock:
+            if not self._sqlite_table_exists_locked("target_candidate_public_web_runs"):
+                return []
             rows = self._connection.execute(
                 f"""
                 SELECT * FROM target_candidate_public_web_runs
@@ -5465,6 +9730,818 @@ class ControlPlaneStore:
                 (*params, limit),
             ).fetchall()
         return [self._target_candidate_public_web_run_from_row(row) for row in rows]
+
+    def list_latest_target_candidate_public_web_runs_by_record_ids(
+        self,
+        record_ids: list[str] | tuple[str, ...],
+        *,
+        status: str = "",
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        normalized_record_ids = _normalize_public_web_string_list(record_ids)[: max(1, int(limit or 1000))]
+        if not normalized_record_ids:
+            return []
+        normalized_status = _normalize_target_candidate_public_web_status(status, default="")
+        native_rows = self._call_control_plane_postgres_native(
+            "list_latest_target_candidate_public_web_runs_by_record_ids",
+            normalized_record_ids,
+            status=normalized_status,
+            limit=max(1, int(limit or 1000)),
+        )
+        if native_rows:
+            return [
+                self._target_candidate_public_web_run_from_row(row)
+                for row in list(native_rows or [])
+                if isinstance(row, dict)
+            ]
+        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_runs"):
+            return []
+        sqlite_placeholders = ", ".join(["?"] * len(normalized_record_ids))
+        clauses = [f"record_id IN ({sqlite_placeholders})"]
+        params: list[Any] = [*normalized_record_ids]
+        if normalized_status:
+            clauses.append("status = ?")
+            params.append(normalized_status)
+        with self._lock:
+            if not self._sqlite_table_exists_locked("target_candidate_public_web_runs"):
+                return []
+            rows = self._connection.execute(
+                f"""
+                SELECT *
+                FROM (
+                    SELECT *,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY record_id
+                               ORDER BY updated_at DESC, created_at DESC, run_id DESC
+                           ) AS public_web_run_rank
+                    FROM target_candidate_public_web_runs
+                    WHERE {" AND ".join(clauses)}
+                )
+                WHERE public_web_run_rank = 1
+                ORDER BY updated_at DESC, created_at DESC, run_id DESC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 1000))),
+            ).fetchall()
+        return [self._target_candidate_public_web_run_from_row(row) for row in rows]
+
+    def upsert_crm_public_web_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = _normalize_crm_public_web_batch_payload(payload)
+        existing = self.get_crm_public_web_batch(batch_id=normalized["batch_id"])
+        now = _utc_now_timestamp()
+        row_payload = _crm_public_web_batch_row_payload(normalized, existing=existing, now=now)
+        if self._write_control_plane_row_to_postgres("crm_public_web_batches", row_payload):
+            return (
+                self.get_crm_public_web_batch(batch_id=normalized["batch_id"])
+                or self._crm_public_web_batch_from_row(row_payload)
+            )
+        with self._lock, self._connection:
+            existing_row = self._connection.execute(
+                "SELECT created_at FROM crm_public_web_batches WHERE batch_id = ? LIMIT 1",
+                (normalized["batch_id"],),
+            ).fetchone()
+            row_payload["created_at"] = (
+                str(_row_value(existing_row, "created_at") or row_payload["created_at"] or "").strip()
+                if existing_row is not None
+                else row_payload["created_at"]
+            )
+            self._connection.execute(
+                """
+                INSERT INTO crm_public_web_batches (
+                    batch_id, idempotency_key, workspace_id, status, requested_crm_record_ids_json,
+                    source_families_json, options_json, run_ids_json, summary_json, metadata_json,
+                    requested_by, force_refresh, execution_backend, source_target_batch_id,
+                    started_at, completed_at, created_at, updated_at
+                ) VALUES (
+                    :batch_id, :idempotency_key, :workspace_id, :status, :requested_crm_record_ids_json,
+                    :source_families_json, :options_json, :run_ids_json, :summary_json, :metadata_json,
+                    :requested_by, :force_refresh, :execution_backend, :source_target_batch_id,
+                    :started_at, :completed_at, :created_at, :updated_at
+                )
+                ON CONFLICT(batch_id) DO UPDATE SET
+                    idempotency_key = excluded.idempotency_key,
+                    workspace_id = excluded.workspace_id,
+                    status = excluded.status,
+                    requested_crm_record_ids_json = excluded.requested_crm_record_ids_json,
+                    source_families_json = excluded.source_families_json,
+                    options_json = excluded.options_json,
+                    run_ids_json = excluded.run_ids_json,
+                    summary_json = excluded.summary_json,
+                    metadata_json = excluded.metadata_json,
+                    requested_by = excluded.requested_by,
+                    force_refresh = excluded.force_refresh,
+                    execution_backend = excluded.execution_backend,
+                    source_target_batch_id = excluded.source_target_batch_id,
+                    started_at = excluded.started_at,
+                    completed_at = excluded.completed_at,
+                    updated_at = excluded.updated_at
+                """,
+                row_payload,
+            )
+            row = self._connection.execute(
+                "SELECT * FROM crm_public_web_batches WHERE batch_id = ? LIMIT 1",
+                (normalized["batch_id"],),
+            ).fetchone()
+        self._mirror_control_plane_row("crm_public_web_batches", row)
+        return self.get_crm_public_web_batch(batch_id=normalized["batch_id"]) or normalized
+
+    def get_crm_public_web_batch(
+        self,
+        *,
+        batch_id: str = "",
+        idempotency_key: str = "",
+    ) -> dict[str, Any] | None:
+        normalized_batch_id = str(batch_id or "").strip()
+        normalized_idempotency_key = str(idempotency_key or "").strip()
+        if not normalized_batch_id and not normalized_idempotency_key:
+            return None
+        where_sql = "batch_id = %s" if normalized_batch_id else "idempotency_key = %s"
+        where_sqlite = "batch_id = ?" if normalized_batch_id else "idempotency_key = ?"
+        value = normalized_batch_id or normalized_idempotency_key
+        postgres_row = self._select_control_plane_row(
+            "crm_public_web_batches",
+            row_builder=self._crm_public_web_batch_from_row,
+            where_sql=where_sql,
+            params=[value],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_batches"):
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                f"SELECT * FROM crm_public_web_batches WHERE {where_sqlite} LIMIT 1",
+                (value,),
+            ).fetchone()
+        return self._crm_public_web_batch_from_row(row) if row is not None else None
+
+    def list_crm_public_web_batches(
+        self,
+        *,
+        status: str = "",
+        workspace_id: str = "default",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        normalized_status = _normalize_target_candidate_public_web_status(status, default="")
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        clauses_pg = ["workspace_id = %s"]
+        clauses_sqlite = ["workspace_id = ?"]
+        params: list[Any] = [normalized_workspace_id]
+        if normalized_status:
+            clauses_pg.append("status = %s")
+            clauses_sqlite.append("status = ?")
+            params.append(normalized_status)
+        postgres_rows = self._select_control_plane_rows(
+            "crm_public_web_batches",
+            row_builder=self._crm_public_web_batch_from_row,
+            where_sql=" AND ".join(clauses_pg),
+            params=params,
+            order_by_sql="updated_at DESC, created_at DESC, batch_id DESC",
+            limit=limit,
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_batches"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM crm_public_web_batches
+                WHERE {" AND ".join(clauses_sqlite)}
+                ORDER BY updated_at DESC, created_at DESC, batch_id DESC
+                LIMIT ?
+                """,
+                (*params, limit),
+            ).fetchall()
+        return [self._crm_public_web_batch_from_row(row) for row in rows]
+
+    def upsert_crm_public_web_run(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = _normalize_crm_public_web_run_payload(payload)
+        existing = self.get_crm_public_web_run(run_id=normalized["run_id"])
+        now = _utc_now_timestamp()
+        row_payload = _crm_public_web_run_row_payload(normalized, existing=existing, now=now)
+        if self._write_control_plane_row_to_postgres("crm_public_web_runs", row_payload):
+            return (
+                self.get_crm_public_web_run(run_id=normalized["run_id"])
+                or self._crm_public_web_run_from_row(row_payload)
+            )
+        with self._lock, self._connection:
+            existing_row = self._connection.execute(
+                "SELECT created_at FROM crm_public_web_runs WHERE run_id = ? LIMIT 1",
+                (normalized["run_id"],),
+            ).fetchone()
+            row_payload["created_at"] = (
+                str(_row_value(existing_row, "created_at") or row_payload["created_at"] or "").strip()
+                if existing_row is not None
+                else row_payload["created_at"]
+            )
+            self._connection.execute(
+                """
+                INSERT INTO crm_public_web_runs (
+                    run_id, batch_id, crm_record_id, workspace_id, candidate_id, candidate_name, current_company,
+                    linkedin_url, linkedin_url_key, person_identity_key, idempotency_key, status, phase,
+                    source_families_json, options_json, query_manifest_json, search_checkpoint_json,
+                    fetch_checkpoint_json, analysis_checkpoint_json, summary_json, artifact_root, worker_key,
+                    lease_owner, lease_expires_at, attempt_count, last_error, execution_backend,
+                    source_target_run_id, started_at, completed_at, created_at, updated_at
+                ) VALUES (
+                    :run_id, :batch_id, :crm_record_id, :workspace_id, :candidate_id, :candidate_name,
+                    :current_company, :linkedin_url, :linkedin_url_key, :person_identity_key, :idempotency_key,
+                    :status, :phase, :source_families_json, :options_json, :query_manifest_json,
+                    :search_checkpoint_json, :fetch_checkpoint_json, :analysis_checkpoint_json, :summary_json,
+                    :artifact_root, :worker_key, :lease_owner, :lease_expires_at, :attempt_count, :last_error,
+                    :execution_backend, :source_target_run_id, :started_at, :completed_at, :created_at, :updated_at
+                )
+                ON CONFLICT(run_id) DO UPDATE SET
+                    batch_id = excluded.batch_id,
+                    crm_record_id = excluded.crm_record_id,
+                    workspace_id = excluded.workspace_id,
+                    candidate_id = excluded.candidate_id,
+                    candidate_name = excluded.candidate_name,
+                    current_company = excluded.current_company,
+                    linkedin_url = excluded.linkedin_url,
+                    linkedin_url_key = excluded.linkedin_url_key,
+                    person_identity_key = excluded.person_identity_key,
+                    idempotency_key = excluded.idempotency_key,
+                    status = excluded.status,
+                    phase = excluded.phase,
+                    source_families_json = excluded.source_families_json,
+                    options_json = excluded.options_json,
+                    query_manifest_json = excluded.query_manifest_json,
+                    search_checkpoint_json = excluded.search_checkpoint_json,
+                    fetch_checkpoint_json = excluded.fetch_checkpoint_json,
+                    analysis_checkpoint_json = excluded.analysis_checkpoint_json,
+                    summary_json = excluded.summary_json,
+                    artifact_root = excluded.artifact_root,
+                    worker_key = excluded.worker_key,
+                    lease_owner = excluded.lease_owner,
+                    lease_expires_at = excluded.lease_expires_at,
+                    attempt_count = excluded.attempt_count,
+                    last_error = excluded.last_error,
+                    execution_backend = excluded.execution_backend,
+                    source_target_run_id = excluded.source_target_run_id,
+                    started_at = excluded.started_at,
+                    completed_at = excluded.completed_at,
+                    updated_at = excluded.updated_at
+                """,
+                row_payload,
+            )
+            row = self._connection.execute(
+                "SELECT * FROM crm_public_web_runs WHERE run_id = ? LIMIT 1",
+                (normalized["run_id"],),
+            ).fetchone()
+        self._mirror_control_plane_row("crm_public_web_runs", row)
+        return self.get_crm_public_web_run(run_id=normalized["run_id"]) or normalized
+
+    def update_crm_public_web_run(self, run_id: str, patch: dict[str, Any]) -> dict[str, Any] | None:
+        existing = self.get_crm_public_web_run(run_id=run_id)
+        if existing is None:
+            return None
+        merged = {
+            **existing,
+            **dict(patch or {}),
+            "run_id": str(run_id or "").strip(),
+            "crm_record_id": str((patch or {}).get("crm_record_id") or existing.get("crm_record_id") or existing.get("record_id") or ""),
+            "source_families": patch.get("source_families", existing.get("source_families")) if patch else existing.get("source_families"),
+            "options": patch.get("options", existing.get("options")) if patch else existing.get("options"),
+            "query_manifest": patch.get("query_manifest", existing.get("query_manifest")) if patch else existing.get("query_manifest"),
+            "search_checkpoint": patch.get("search_checkpoint", existing.get("search_checkpoint")) if patch else existing.get("search_checkpoint"),
+            "fetch_checkpoint": patch.get("fetch_checkpoint", existing.get("fetch_checkpoint")) if patch else existing.get("fetch_checkpoint"),
+            "analysis_checkpoint": patch.get("analysis_checkpoint", existing.get("analysis_checkpoint")) if patch else existing.get("analysis_checkpoint"),
+            "summary": patch.get("summary", existing.get("summary")) if patch else existing.get("summary"),
+        }
+        return self.upsert_crm_public_web_run(merged)
+
+    def get_crm_public_web_run(
+        self,
+        *,
+        run_id: str = "",
+        idempotency_key: str = "",
+    ) -> dict[str, Any] | None:
+        normalized_run_id = str(run_id or "").strip()
+        normalized_idempotency_key = str(idempotency_key or "").strip()
+        if not normalized_run_id and not normalized_idempotency_key:
+            return None
+        where_sql = "run_id = %s" if normalized_run_id else "idempotency_key = %s"
+        where_sqlite = "run_id = ?" if normalized_run_id else "idempotency_key = ?"
+        value = normalized_run_id or normalized_idempotency_key
+        postgres_row = self._select_control_plane_row(
+            "crm_public_web_runs",
+            row_builder=self._crm_public_web_run_from_row,
+            where_sql=where_sql,
+            params=[value],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_runs"):
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                f"SELECT * FROM crm_public_web_runs WHERE {where_sqlite} LIMIT 1",
+                (value,),
+            ).fetchone()
+        return self._crm_public_web_run_from_row(row) if row is not None else None
+
+    def list_crm_public_web_runs(
+        self,
+        *,
+        batch_id: str = "",
+        crm_record_id: str = "",
+        workspace_id: str = "default",
+        status: str = "",
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        clauses_sqlite: list[str] = []
+        clauses_pg: list[str] = []
+        params: list[Any] = []
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        if batch_id:
+            clauses_sqlite.append("batch_id = ?")
+            clauses_pg.append("batch_id = %s")
+            params.append(str(batch_id or "").strip())
+            clauses_sqlite.append("workspace_id = ?")
+            clauses_pg.append("workspace_id = %s")
+            params.append(normalized_workspace_id)
+        if crm_record_id:
+            clauses_sqlite.append("workspace_id = ?")
+            clauses_pg.append("workspace_id = %s")
+            params.append(normalized_workspace_id)
+            clauses_sqlite.append("crm_record_id = ?")
+            clauses_pg.append("crm_record_id = %s")
+            params.append(str(crm_record_id or "").strip())
+        elif not batch_id:
+            clauses_sqlite.append("workspace_id = ?")
+            clauses_pg.append("workspace_id = %s")
+            params.append(normalized_workspace_id)
+        normalized_status = _normalize_target_candidate_public_web_status(status, default="")
+        if normalized_status:
+            clauses_sqlite.append("status = ?")
+            clauses_pg.append("status = %s")
+            params.append(normalized_status)
+        order_by_sql = (
+            "created_at DESC, run_id DESC"
+            if crm_record_id and not batch_id
+            else "updated_at DESC, created_at DESC, run_id DESC"
+        )
+        postgres_rows = self._select_control_plane_rows(
+            "crm_public_web_runs",
+            row_builder=self._crm_public_web_run_from_row,
+            where_sql=" AND ".join(clauses_pg),
+            params=params,
+            order_by_sql=order_by_sql,
+            limit=limit,
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_runs"):
+            return []
+        where_clause = f"WHERE {' AND '.join(clauses_sqlite)}" if clauses_sqlite else ""
+        with self._lock:
+            rows = self._connection.execute(
+	                f"""
+	                SELECT * FROM crm_public_web_runs
+	                {where_clause}
+	                ORDER BY {order_by_sql}
+	                LIMIT ?
+	                """,
+                (*params, limit),
+            ).fetchall()
+        return [self._crm_public_web_run_from_row(row) for row in rows]
+
+    def list_latest_crm_public_web_runs_by_record_ids(
+        self,
+        crm_record_ids: list[str] | tuple[str, ...],
+        *,
+        workspace_id: str = "default",
+        status: str = "",
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        normalized_record_ids = _normalize_public_web_string_list(crm_record_ids)[: max(1, int(limit or 1000))]
+        if not normalized_record_ids:
+            return []
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        normalized_status = _normalize_target_candidate_public_web_status(status, default="")
+        placeholders_sqlite = ", ".join(["?"] * len(normalized_record_ids))
+        clauses_sqlite = ["workspace_id = ?", f"crm_record_id IN ({placeholders_sqlite})"]
+        params: list[Any] = [normalized_workspace_id, *normalized_record_ids]
+        if normalized_status:
+            clauses_sqlite.append("status = ?")
+            params.append(normalized_status)
+        native_rows = self._call_control_plane_postgres_native(
+            "list_latest_crm_public_web_runs_by_record_ids",
+            normalized_record_ids,
+            workspace_id=normalized_workspace_id,
+            status=normalized_status,
+            limit=max(1, int(limit or 1000)),
+        )
+        if native_rows:
+            latest_by_record: dict[str, dict[str, Any]] = {}
+            for row in list(native_rows or []):
+                if not isinstance(row, dict):
+                    continue
+                parsed = self._crm_public_web_run_from_row(row)
+                record_id = str(parsed.get("crm_record_id") or parsed.get("record_id") or "").strip()
+                if record_id and record_id not in latest_by_record:
+                    latest_by_record[record_id] = parsed
+            return list(latest_by_record.values())[: max(1, int(limit or 1000))]
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_runs"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT *
+                FROM (
+	                    SELECT *,
+	                           ROW_NUMBER() OVER (
+	                               PARTITION BY crm_record_id
+	                               ORDER BY created_at DESC, run_id DESC
+	                           ) AS public_web_run_rank
+	                    FROM crm_public_web_runs
+	                    WHERE {" AND ".join(clauses_sqlite)}
+	                )
+	                WHERE public_web_run_rank = 1
+	                ORDER BY created_at DESC, run_id DESC
+	                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 1000))),
+            ).fetchall()
+        return [self._crm_public_web_run_from_row(row) for row in rows]
+
+    def upsert_company_public_web_asset_run(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = _normalize_company_public_web_asset_run_payload(payload)
+        existing = self.get_company_public_web_asset_run(run_id=normalized["run_id"])
+        now = _utc_now_timestamp()
+        row_payload = _company_public_web_asset_run_row_payload(normalized, existing=existing, now=now)
+        if self._write_control_plane_row_to_postgres("company_public_web_asset_runs", row_payload):
+            return (
+                self.get_company_public_web_asset_run(run_id=normalized["run_id"])
+                or self._company_public_web_asset_run_from_row(row_payload)
+            )
+        with self._lock, self._connection:
+            existing_row = self._connection.execute(
+                "SELECT created_at FROM company_public_web_asset_runs WHERE run_id = ? LIMIT 1",
+                (normalized["run_id"],),
+            ).fetchone()
+            self._connection.execute(
+                """
+                INSERT INTO company_public_web_asset_runs (
+                    run_id, target_company, company_key, idempotency_key, status, phase, source_families_json,
+                    seed_urls_json, options_json, discovered_assets_json, summary_json, artifact_root,
+                    requested_by, force_refresh, started_at, completed_at, last_error, metadata_json,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
+                ON CONFLICT(run_id) DO UPDATE SET
+                    target_company = excluded.target_company,
+                    company_key = excluded.company_key,
+                    idempotency_key = excluded.idempotency_key,
+                    status = excluded.status,
+                    phase = excluded.phase,
+                    source_families_json = excluded.source_families_json,
+                    seed_urls_json = excluded.seed_urls_json,
+                    options_json = excluded.options_json,
+                    discovered_assets_json = excluded.discovered_assets_json,
+                    summary_json = excluded.summary_json,
+                    artifact_root = excluded.artifact_root,
+                    requested_by = excluded.requested_by,
+                    force_refresh = excluded.force_refresh,
+                    started_at = excluded.started_at,
+                    completed_at = excluded.completed_at,
+                    last_error = excluded.last_error,
+                    metadata_json = excluded.metadata_json,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    row_payload["run_id"],
+                    row_payload["target_company"],
+                    row_payload["company_key"],
+                    row_payload["idempotency_key"],
+                    row_payload["status"],
+                    row_payload["phase"],
+                    row_payload["source_families_json"],
+                    row_payload["seed_urls_json"],
+                    row_payload["options_json"],
+                    row_payload["discovered_assets_json"],
+                    row_payload["summary_json"],
+                    row_payload["artifact_root"],
+                    row_payload["requested_by"],
+                    row_payload["force_refresh"],
+                    row_payload["started_at"],
+                    row_payload["completed_at"],
+                    row_payload["last_error"],
+                    row_payload["metadata_json"],
+                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM company_public_web_asset_runs WHERE run_id = ? LIMIT 1",
+                (normalized["run_id"],),
+            ).fetchone()
+        self._mirror_control_plane_row("company_public_web_asset_runs", row)
+        return self.get_company_public_web_asset_run(run_id=normalized["run_id"]) or normalized
+
+    def get_company_public_web_asset_run(
+        self,
+        *,
+        run_id: str = "",
+        idempotency_key: str = "",
+    ) -> dict[str, Any] | None:
+        normalized_run_id = str(run_id or "").strip()
+        normalized_idempotency_key = str(idempotency_key or "").strip()
+        if not normalized_run_id and not normalized_idempotency_key:
+            return None
+        where_sql = "run_id = %s" if normalized_run_id else "idempotency_key = %s"
+        where_sqlite = "run_id = ?" if normalized_run_id else "idempotency_key = ?"
+        value = normalized_run_id or normalized_idempotency_key
+        postgres_row = self._select_control_plane_row(
+            "company_public_web_asset_runs",
+            row_builder=self._company_public_web_asset_run_from_row,
+            where_sql=where_sql,
+            params=[value],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("company_public_web_asset_runs"):
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                f"SELECT * FROM company_public_web_asset_runs WHERE {where_sqlite} LIMIT 1",
+                (value,),
+            ).fetchone()
+        return self._company_public_web_asset_run_from_row(row) if row is not None else None
+
+    def list_company_public_web_asset_runs(
+        self,
+        *,
+        target_company: str = "",
+        company_key: str = "",
+        status: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        normalized_target_company, normalized_company_key = _normalized_company_scope(target_company, company_key)
+        normalized_status = _normalize_target_candidate_public_web_status(status, default="")
+        clauses_sqlite: list[str] = []
+        clauses_pg: list[str] = []
+        params: list[Any] = []
+        if normalized_target_company or normalized_company_key:
+            clause_sqlite, clause_params = _company_identity_lookup_predicate(
+                normalized_target_company,
+                normalized_company_key,
+            )
+            clause_pg, _ = _company_identity_lookup_predicate(
+                normalized_target_company,
+                normalized_company_key,
+                placeholder="%s",
+            )
+            clauses_sqlite.append(clause_sqlite)
+            clauses_pg.append(clause_pg)
+            params.extend(clause_params)
+        if normalized_status:
+            clauses_sqlite.append("status = ?")
+            clauses_pg.append("status = %s")
+            params.append(normalized_status)
+        postgres_rows = self._select_control_plane_rows(
+            "company_public_web_asset_runs",
+            row_builder=self._company_public_web_asset_run_from_row,
+            where_sql=" AND ".join(clauses_pg),
+            params=params,
+            order_by_sql="updated_at DESC, created_at DESC, run_id DESC",
+            limit=max(1, int(limit or 100)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("company_public_web_asset_runs"):
+            return []
+        where_clause = f"WHERE {' AND '.join(clauses_sqlite)}" if clauses_sqlite else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM company_public_web_asset_runs
+                {where_clause}
+                ORDER BY updated_at DESC, created_at DESC, run_id DESC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 100))),
+            ).fetchall()
+        return [self._company_public_web_asset_run_from_row(row) for row in rows]
+
+    def list_latest_company_public_web_asset_runs_by_company_keys(
+        self,
+        company_keys: list[str] | tuple[str, ...],
+        *,
+        status: str = "",
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        normalized_company_keys = _normalize_public_web_string_list(company_keys)[: max(1, int(limit or 1000))]
+        if not normalized_company_keys:
+            return []
+        normalized_status = _normalize_target_candidate_public_web_status(status, default="")
+        native_rows = self._call_control_plane_postgres_native(
+            "list_latest_company_public_web_asset_runs_by_company_keys",
+            normalized_company_keys,
+            status=normalized_status,
+            limit=max(1, int(limit or 1000)),
+        )
+        if native_rows:
+            return [
+                self._company_public_web_asset_run_from_row(row)
+                for row in list(native_rows or [])
+                if isinstance(row, dict)
+            ]
+        if self._control_plane_postgres_should_skip_sqlite_fallback("company_public_web_asset_runs"):
+            return []
+        sqlite_placeholders = ", ".join(["?"] * len(normalized_company_keys))
+        clauses = [f"company_key IN ({sqlite_placeholders})"]
+        params: list[Any] = [*normalized_company_keys]
+        if normalized_status:
+            clauses.append("status = ?")
+            params.append(normalized_status)
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT *
+                FROM (
+                    SELECT *,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY company_key
+                               ORDER BY updated_at DESC, created_at DESC, run_id DESC
+                           ) AS company_public_web_run_rank
+                    FROM company_public_web_asset_runs
+                    WHERE {" AND ".join(clauses)}
+                )
+                WHERE company_public_web_run_rank = 1
+                ORDER BY updated_at DESC, created_at DESC, run_id DESC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 1000))),
+            ).fetchall()
+        return [self._company_public_web_asset_run_from_row(row) for row in rows]
+
+    def upsert_company_public_web_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = _normalize_company_public_web_asset_payload(payload)
+        existing = self.get_company_public_web_asset(asset_id=normalized["asset_id"])
+        now = _utc_now_timestamp()
+        row_payload = _company_public_web_asset_row_payload(normalized, existing=existing, now=now)
+        if self._write_control_plane_row_to_postgres("company_public_web_assets", row_payload):
+            return (
+                self.get_company_public_web_asset(asset_id=normalized["asset_id"])
+                or self._company_public_web_asset_from_row(row_payload)
+            )
+        with self._lock, self._connection:
+            existing_row = self._connection.execute(
+                "SELECT created_at FROM company_public_web_assets WHERE asset_id = ? LIMIT 1",
+                (normalized["asset_id"],),
+            ).fetchone()
+            self._connection.execute(
+                """
+                INSERT INTO company_public_web_assets (
+                    asset_id, company_key, target_company, latest_run_id, source_family, asset_kind, title, url,
+                    normalized_url_key, summary, model_safe_payload_json, source_run_ids_json, artifact_refs_json,
+                    status, metadata_json, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
+                ON CONFLICT(asset_id) DO UPDATE SET
+                    company_key = excluded.company_key,
+                    target_company = excluded.target_company,
+                    latest_run_id = excluded.latest_run_id,
+                    source_family = excluded.source_family,
+                    asset_kind = excluded.asset_kind,
+                    title = excluded.title,
+                    url = excluded.url,
+                    normalized_url_key = excluded.normalized_url_key,
+                    summary = excluded.summary,
+                    model_safe_payload_json = excluded.model_safe_payload_json,
+                    source_run_ids_json = excluded.source_run_ids_json,
+                    artifact_refs_json = excluded.artifact_refs_json,
+                    status = excluded.status,
+                    metadata_json = excluded.metadata_json,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    row_payload["asset_id"],
+                    row_payload["company_key"],
+                    row_payload["target_company"],
+                    row_payload["latest_run_id"],
+                    row_payload["source_family"],
+                    row_payload["asset_kind"],
+                    row_payload["title"],
+                    row_payload["url"],
+                    row_payload["normalized_url_key"],
+                    row_payload["summary"],
+                    row_payload["model_safe_payload_json"],
+                    row_payload["source_run_ids_json"],
+                    row_payload["artifact_refs_json"],
+                    row_payload["status"],
+                    row_payload["metadata_json"],
+                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM company_public_web_assets WHERE asset_id = ? LIMIT 1",
+                (normalized["asset_id"],),
+            ).fetchone()
+        self._mirror_control_plane_row("company_public_web_assets", row)
+        return self.get_company_public_web_asset(asset_id=normalized["asset_id"]) or normalized
+
+    def get_company_public_web_asset(
+        self,
+        *,
+        asset_id: str = "",
+        company_key: str = "",
+        normalized_url_key: str = "",
+    ) -> dict[str, Any] | None:
+        normalized_asset_id = str(asset_id or "").strip()
+        normalized_company_key = str(company_key or "").strip()
+        normalized_url = str(normalized_url_key or "").strip()
+        params: list[Any]
+        if normalized_asset_id:
+            where_sql, where_sqlite, params = "asset_id = %s", "asset_id = ?", [normalized_asset_id]
+        elif normalized_company_key and normalized_url:
+            where_sql, where_sqlite, params = (
+                "company_key = %s AND normalized_url_key = %s",
+                "company_key = ? AND normalized_url_key = ?",
+                [normalized_company_key, normalized_url],
+            )
+        elif normalized_url:
+            where_sql, where_sqlite, params = "normalized_url_key = %s", "normalized_url_key = ?", [normalized_url]
+        else:
+            return None
+        postgres_row = self._select_control_plane_row(
+            "company_public_web_assets",
+            row_builder=self._company_public_web_asset_from_row,
+            where_sql=where_sql,
+            params=params,
+            order_by_sql="updated_at DESC",
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("company_public_web_assets"):
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                f"SELECT * FROM company_public_web_assets WHERE {where_sqlite} ORDER BY updated_at DESC LIMIT 1",
+                tuple(params),
+            ).fetchone()
+        return self._company_public_web_asset_from_row(row) if row is not None else None
+
+    def list_company_public_web_assets(
+        self,
+        *,
+        target_company: str = "",
+        company_key: str = "",
+        source_family: str = "",
+        status: str = "",
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        normalized_target_company, normalized_company_key = _normalized_company_scope(target_company, company_key)
+        clauses_sqlite: list[str] = []
+        clauses_pg: list[str] = []
+        params: list[Any] = []
+        if normalized_target_company or normalized_company_key:
+            clause_sqlite, clause_params = _company_identity_lookup_predicate(
+                normalized_target_company,
+                normalized_company_key,
+            )
+            clause_pg, _ = _company_identity_lookup_predicate(
+                normalized_target_company,
+                normalized_company_key,
+                placeholder="%s",
+            )
+            clauses_sqlite.append(clause_sqlite)
+            clauses_pg.append(clause_pg)
+            params.extend(clause_params)
+        normalized_source_family = str(source_family or "").strip()
+        if normalized_source_family:
+            clauses_sqlite.append("source_family = ?")
+            clauses_pg.append("source_family = %s")
+            params.append(normalized_source_family)
+        normalized_status = str(status or "").strip().lower()
+        if normalized_status:
+            clauses_sqlite.append("status = ?")
+            clauses_pg.append("status = %s")
+            params.append(normalized_status)
+        postgres_rows = self._select_control_plane_rows(
+            "company_public_web_assets",
+            row_builder=self._company_public_web_asset_from_row,
+            where_sql=" AND ".join(clauses_pg),
+            params=params,
+            order_by_sql="updated_at DESC, created_at DESC, asset_id DESC",
+            limit=max(1, int(limit or 500)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("company_public_web_assets"):
+            return []
+        where_clause = f"WHERE {' AND '.join(clauses_sqlite)}" if clauses_sqlite else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM company_public_web_assets
+                {where_clause}
+                ORDER BY updated_at DESC, created_at DESC, asset_id DESC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 500))),
+            ).fetchall()
+        return [self._company_public_web_asset_from_row(row) for row in rows]
 
     def upsert_person_public_web_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = _normalize_person_public_web_asset_payload(payload)
@@ -5776,6 +10853,38 @@ class ControlPlaneStore:
                         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                     )
+                    ON CONFLICT(signal_id) DO UPDATE SET
+                        run_id = excluded.run_id,
+                        asset_id = excluded.asset_id,
+                        person_identity_key = excluded.person_identity_key,
+                        record_id = excluded.record_id,
+                        candidate_id = excluded.candidate_id,
+                        candidate_name = excluded.candidate_name,
+                        current_company = excluded.current_company,
+                        linkedin_url_key = excluded.linkedin_url_key,
+                        signal_kind = excluded.signal_kind,
+                        signal_type = excluded.signal_type,
+                        email_type = excluded.email_type,
+                        value = excluded.value,
+                        normalized_value = excluded.normalized_value,
+                        url = excluded.url,
+                        source_url = excluded.source_url,
+                        source_domain = excluded.source_domain,
+                        source_family = excluded.source_family,
+                        source_title = excluded.source_title,
+                        confidence_label = excluded.confidence_label,
+                        confidence_score = excluded.confidence_score,
+                        identity_match_label = excluded.identity_match_label,
+                        identity_match_score = excluded.identity_match_score,
+                        publishable = excluded.publishable,
+                        promotion_status = excluded.promotion_status,
+                        suppression_reason = excluded.suppression_reason,
+                        evidence_excerpt = excluded.evidence_excerpt,
+                        artifact_refs_json = excluded.artifact_refs_json,
+                        model_provider = excluded.model_provider,
+                        model_version = excluded.model_version,
+                        metadata_json = excluded.metadata_json,
+                        updated_at = CURRENT_TIMESTAMP
                     """,
                     (
                         row_payload["signal_id"],
@@ -5904,6 +11013,7 @@ class ControlPlaneStore:
         return [self._person_public_web_signal_from_row(row) for row in rows]
 
     def upsert_target_candidate_public_web_promotion(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_legacy_target_public_web_migration_write("target_candidate_public_web_promotions")
         normalized = _normalize_target_candidate_public_web_promotion_payload(payload)
         existing = self.get_target_candidate_public_web_promotion(normalized["promotion_id"])
         now = _utc_now_timestamp()
@@ -6031,6 +11141,8 @@ class ControlPlaneStore:
         if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_promotions"):
             return None
         with self._lock:
+            if not self._sqlite_table_exists_locked("target_candidate_public_web_promotions"):
+                return None
             row = self._connection.execute(
                 "SELECT * FROM target_candidate_public_web_promotions WHERE promotion_id = ? LIMIT 1",
                 (normalized_promotion_id,),
@@ -6079,6 +11191,8 @@ class ControlPlaneStore:
             return []
         where_clause = f"WHERE {' AND '.join(clauses_sqlite)}" if clauses_sqlite else ""
         with self._lock:
+            if not self._sqlite_table_exists_locked("target_candidate_public_web_promotions"):
+                return []
             rows = self._connection.execute(
                 f"""
                 SELECT * FROM target_candidate_public_web_promotions
@@ -6089,6 +11203,176 @@ class ControlPlaneStore:
                 (*params, limit),
             ).fetchall()
         return [self._target_candidate_public_web_promotion_from_row(row) for row in rows]
+
+    def upsert_crm_public_web_promotion(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = _normalize_crm_public_web_promotion_payload(payload)
+        existing = self.get_crm_public_web_promotion(normalized["promotion_id"])
+        now = _utc_now_timestamp()
+        row_payload = _crm_public_web_promotion_row_payload(normalized, existing=existing, now=now)
+        if self._write_control_plane_row_to_postgres("crm_public_web_promotions", row_payload):
+            return (
+                self.get_crm_public_web_promotion(normalized["promotion_id"])
+                or self._crm_public_web_promotion_from_row(row_payload)
+            )
+        with self._lock, self._connection:
+            existing_row = self._connection.execute(
+                "SELECT created_at FROM crm_public_web_promotions WHERE promotion_id = ? LIMIT 1",
+                (normalized["promotion_id"],),
+            ).fetchone()
+            row_payload["created_at"] = (
+                str(_row_value(existing_row, "created_at") or row_payload["created_at"] or "").strip()
+                if existing_row is not None
+                else row_payload["created_at"]
+            )
+            self._connection.execute(
+                """
+                INSERT INTO crm_public_web_promotions (
+                    promotion_id, signal_id, run_id, asset_id, person_identity_key, crm_record_id, workspace_id,
+                    candidate_id, candidate_name, current_company, linkedin_url_key, signal_kind, signal_type,
+                    email_type, value, normalized_value, url, source_url, source_domain, source_family,
+                    source_title, confidence_label, confidence_score, identity_match_label, identity_match_score,
+                    publishable, clean_profile_link, link_shape_warnings_json, action, promotion_status,
+                    promoted_field, previous_value, new_value, operator, note, evidence_excerpt,
+                    execution_backend, source_target_promotion_id, metadata_json, created_at, updated_at
+                ) VALUES (
+                    :promotion_id, :signal_id, :run_id, :asset_id, :person_identity_key, :crm_record_id,
+                    :workspace_id, :candidate_id, :candidate_name, :current_company, :linkedin_url_key,
+                    :signal_kind, :signal_type, :email_type, :value, :normalized_value, :url, :source_url,
+                    :source_domain, :source_family, :source_title, :confidence_label, :confidence_score,
+                    :identity_match_label, :identity_match_score, :publishable, :clean_profile_link,
+                    :link_shape_warnings_json, :action, :promotion_status, :promoted_field, :previous_value,
+                    :new_value, :operator, :note, :evidence_excerpt, :execution_backend,
+                    :source_target_promotion_id, :metadata_json, :created_at, :updated_at
+                )
+                ON CONFLICT(promotion_id) DO UPDATE SET
+                    signal_id = excluded.signal_id,
+                    run_id = excluded.run_id,
+                    asset_id = excluded.asset_id,
+                    person_identity_key = excluded.person_identity_key,
+                    crm_record_id = excluded.crm_record_id,
+                    workspace_id = excluded.workspace_id,
+                    candidate_id = excluded.candidate_id,
+                    candidate_name = excluded.candidate_name,
+                    current_company = excluded.current_company,
+                    linkedin_url_key = excluded.linkedin_url_key,
+                    signal_kind = excluded.signal_kind,
+                    signal_type = excluded.signal_type,
+                    email_type = excluded.email_type,
+                    value = excluded.value,
+                    normalized_value = excluded.normalized_value,
+                    url = excluded.url,
+                    source_url = excluded.source_url,
+                    source_domain = excluded.source_domain,
+                    source_family = excluded.source_family,
+                    source_title = excluded.source_title,
+                    confidence_label = excluded.confidence_label,
+                    confidence_score = excluded.confidence_score,
+                    identity_match_label = excluded.identity_match_label,
+                    identity_match_score = excluded.identity_match_score,
+                    publishable = excluded.publishable,
+                    clean_profile_link = excluded.clean_profile_link,
+                    link_shape_warnings_json = excluded.link_shape_warnings_json,
+                    action = excluded.action,
+                    promotion_status = excluded.promotion_status,
+                    promoted_field = excluded.promoted_field,
+                    previous_value = excluded.previous_value,
+                    new_value = excluded.new_value,
+                    operator = excluded.operator,
+                    note = excluded.note,
+                    evidence_excerpt = excluded.evidence_excerpt,
+                    execution_backend = excluded.execution_backend,
+                    source_target_promotion_id = excluded.source_target_promotion_id,
+                    metadata_json = excluded.metadata_json,
+                    updated_at = excluded.updated_at
+                """,
+                row_payload,
+            )
+            row = self._connection.execute(
+                "SELECT * FROM crm_public_web_promotions WHERE promotion_id = ? LIMIT 1",
+                (normalized["promotion_id"],),
+            ).fetchone()
+        self._mirror_control_plane_row("crm_public_web_promotions", row)
+        return self.get_crm_public_web_promotion(normalized["promotion_id"]) or normalized
+
+    def get_crm_public_web_promotion(self, promotion_id: str) -> dict[str, Any] | None:
+        normalized_promotion_id = str(promotion_id or "").strip()
+        if not normalized_promotion_id:
+            return None
+        postgres_row = self._select_control_plane_row(
+            "crm_public_web_promotions",
+            row_builder=self._crm_public_web_promotion_from_row,
+            where_sql="promotion_id = %s",
+            params=[normalized_promotion_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_promotions"):
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM crm_public_web_promotions WHERE promotion_id = ? LIMIT 1",
+                (normalized_promotion_id,),
+            ).fetchone()
+        return self._crm_public_web_promotion_from_row(row) if row is not None else None
+
+    def list_crm_public_web_promotions(
+        self,
+        *,
+        crm_record_id: str = "",
+        workspace_id: str = "default",
+        signal_id: str = "",
+        run_id: str = "",
+        action: str = "",
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        clauses_sqlite: list[str] = []
+        clauses_pg: list[str] = []
+        params: list[Any] = []
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        if crm_record_id:
+            clauses_sqlite.append("workspace_id = ?")
+            clauses_pg.append("workspace_id = %s")
+            params.append(normalized_workspace_id)
+        for column_name, raw_value in (
+            ("crm_record_id", crm_record_id),
+            ("signal_id", signal_id),
+            ("run_id", run_id),
+        ):
+            value = str(raw_value or "").strip()
+            if not value:
+                continue
+            clauses_sqlite.append(f"{column_name} = ?")
+            clauses_pg.append(f"{column_name} = %s")
+            params.append(value)
+        normalized_action = _normalize_target_candidate_public_web_promotion_action(action, default="")
+        if normalized_action:
+            clauses_sqlite.append("action = ?")
+            clauses_pg.append("action = %s")
+            params.append(normalized_action)
+        postgres_rows = self._select_control_plane_rows(
+            "crm_public_web_promotions",
+            row_builder=self._crm_public_web_promotion_from_row,
+            where_sql=" AND ".join(clauses_pg),
+            params=params,
+            order_by_sql="updated_at DESC, created_at DESC, promotion_id DESC",
+            limit=limit,
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_promotions"):
+            return []
+        where_clause = f"WHERE {' AND '.join(clauses_sqlite)}" if clauses_sqlite else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM crm_public_web_promotions
+                {where_clause}
+                ORDER BY updated_at DESC, created_at DESC, promotion_id DESC
+                LIMIT ?
+                """,
+                (*params, limit),
+            ).fetchall()
+        return [self._crm_public_web_promotion_from_row(row) for row in rows]
 
     def get_asset_default_pointer(
         self,
@@ -6804,6 +12088,12 @@ class ControlPlaneStore:
             )
             if row is not None:
                 return self._agent_runtime_session_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("agent_runtime_sessions"):
+                self._raise_control_plane_postgres_write_failure(
+                    table_name="agent_runtime_sessions",
+                    method_name="create_agent_runtime_session_row",
+                    reason="native writer returned no row",
+                )
         with self._lock, self._connection:
             self._connection.execute(
                 """
@@ -6950,6 +12240,12 @@ class ControlPlaneStore:
             )
             if row is not None:
                 return self._agent_runtime_session_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("agent_runtime_sessions"):
+                self._raise_control_plane_postgres_write_failure(
+                    table_name="agent_runtime_sessions",
+                    method_name="update_agent_runtime_session_status",
+                    reason="native writer returned no row",
+                )
         with self._lock, self._connection:
             self._connection.execute(
                 """
@@ -7212,10 +12508,9 @@ class ControlPlaneStore:
         clauses = [
             "("
             "(status IN ('queued', 'interrupted', 'failed')) "
-            "OR (status = 'running' AND json_extract(checkpoint_json, '$.stage') IN ('waiting_remote_search', 'waiting_remote_harvest')) "
+            "OR (status = 'running' AND json_extract(checkpoint_json, '$.stage') IN ('submitting_remote_search', 'submitting_remote_harvest', 'waiting_remote_search', 'waiting_remote_harvest', 'persisting_terminal_harvest_profiles')) "
             "OR (status = 'running' AND datetime(updated_at) <= datetime('now', ?))"
             ")",
-            "(lease_expires_at IS NULL OR datetime(lease_expires_at) <= datetime('now'))",
         ]
         params: list[Any] = [f"-{max(1, int(stale_after_seconds or 300))} seconds"]
         if job_id:
@@ -7232,7 +12527,23 @@ class ControlPlaneStore:
         params.append(max(1, int(limit or 100)))
         with self._lock:
             rows = self._connection.execute(query, tuple(params)).fetchall()
-        return [self._agent_worker_from_row(row) for row in rows]
+        workers = []
+        for row in rows:
+            worker = self._agent_worker_from_row(row)
+            checkpoint_stage = str(dict(worker.get("checkpoint") or {}).get("stage") or "").strip()
+            if checkpoint_stage == "waiting_profile_coalescing":
+                continue
+            lease_expires_at = str(worker.get("lease_expires_at") or "").strip()
+            lease_owner = str(worker.get("lease_owner") or "").strip()
+            if (
+                not lease_expires_at
+                or _is_sqlite_timestamp_expired(lease_expires_at)
+                or worker_lease_owner_is_dead_local_process(lease_owner)
+            ):
+                workers.append(worker)
+                if len(workers) >= max(1, int(limit or 100)):
+                    break
+        return workers
 
     def retire_agent_workers(
         self,
@@ -7329,6 +12640,35 @@ class ControlPlaneStore:
             )
             return self._agent_worker_from_row(row) if row is not None else None
         with self._lock, self._connection:
+            current = self._connection.execute(
+                "SELECT * FROM agent_worker_runs WHERE worker_id = ? LIMIT 1",
+                (worker_id,),
+            ).fetchone()
+            if current is not None:
+                current_worker = self._agent_worker_from_row(current)
+                current_lease_owner = str(current_worker.get("lease_owner") or "").strip()
+                current_lease_expires_at = str(current_worker.get("lease_expires_at") or "").strip()
+                if (
+                    current_lease_owner
+                    and current_lease_expires_at
+                    and not _is_sqlite_timestamp_expired(current_lease_expires_at)
+                    and worker_lease_owner_is_dead_local_process(current_lease_owner)
+                ):
+                    self._connection.execute(
+                        """
+                        UPDATE agent_worker_runs
+                        SET lease_owner = NULL,
+                            lease_expires_at = NULL,
+                            last_error = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE worker_id = ? AND lease_owner = ?
+                        """,
+                        (
+                            f"Released dead local worker lease owner {current_lease_owner}",
+                            worker_id,
+                            current_lease_owner,
+                        ),
+                    )
             self._connection.execute(
                 """
                 UPDATE agent_worker_runs
@@ -7549,6 +12889,2524 @@ class ControlPlaneStore:
                 (normalized_job_id,),
             )
 
+    def append_workflow_event(
+        self,
+        *,
+        workflow_run_id: str,
+        event_family: str,
+        event_type: str,
+        idempotency_key: str,
+        operation_id: str = "",
+        command_id: str = "",
+        activity_attempt_id: str = "",
+        sequence_number: int = 0,
+        occurred_at: str = "",
+        actor: str = "",
+        source: str = "",
+        payload: dict[str, Any] | None = None,
+        artifact_refs: list[Any] | tuple[Any, ...] | None = None,
+        schema_version: str = "workflow_event_v1",
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_events")
+        normalized_run_id = str(workflow_run_id or "").strip()
+        normalized_family = str(event_family or "").strip()
+        normalized_type = str(event_type or "").strip()
+        normalized_idempotency = str(idempotency_key or "").strip()
+        if not normalized_run_id or not normalized_family or not normalized_type or not normalized_idempotency:
+            return {}
+        now = _utc_now_timestamp()
+        row_payload = {
+            "event_id": "",
+            "workflow_run_id": normalized_run_id,
+            "operation_id": str(operation_id or "").strip(),
+            "command_id": str(command_id or "").strip(),
+            "activity_attempt_id": str(activity_attempt_id or "").strip(),
+            "event_family": normalized_family,
+            "event_type": normalized_type,
+            "sequence_number": max(0, int(sequence_number or 0)),
+            "idempotency_key": normalized_idempotency,
+            "occurred_at": str(occurred_at or now).strip(),
+            "recorded_at": now,
+            "actor": str(actor or "").strip(),
+            "source": str(source or "").strip(),
+            "payload_json": json.dumps(_json_safe_payload(payload or {}), ensure_ascii=False),
+            "artifact_refs_json": json.dumps(_json_safe_payload(list(artifact_refs or [])), ensure_ascii=False),
+            "schema_version": str(schema_version or "workflow_event_v1").strip(),
+            "created_at": now,
+        }
+        if self._control_plane_postgres_should_prefer_read("workflow_events"):
+            row = self._call_control_plane_postgres_native("append_workflow_event", row_payload)
+            if row is not None:
+                return self._workflow_event_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_events"):
+                return {}
+        with self._lock, self._connection:
+            existing = self._connection.execute(
+                """
+                SELECT * FROM workflow_events
+                WHERE workflow_run_id = ? AND idempotency_key = ?
+                LIMIT 1
+                """,
+                (normalized_run_id, normalized_idempotency),
+            ).fetchone()
+            if existing is not None:
+                return self._workflow_event_from_row(existing)
+            next_sequence = int(row_payload["sequence_number"] or 0)
+            if next_sequence <= 0:
+                next_sequence = int(
+                    self._connection.execute(
+                        "SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM workflow_events WHERE workflow_run_id = ?",
+                        (normalized_run_id,),
+                    ).fetchone()[0]
+                    or 1
+                )
+            row_payload["sequence_number"] = next_sequence
+            row_payload["event_id"] = "evt_" + sha1(
+                f"{normalized_run_id}:{next_sequence}:{normalized_idempotency}".encode("utf-8")
+            ).hexdigest()[:24]
+            columns = list(row_payload.keys())
+            self._connection.execute(
+                (
+                    f"INSERT OR IGNORE INTO workflow_events ({', '.join(columns)}) "
+                    f"VALUES ({', '.join(['?'] * len(columns))})"
+                ),
+                tuple(row_payload[column] for column in columns),
+            )
+            row = self._connection.execute(
+                """
+                SELECT * FROM workflow_events
+                WHERE workflow_run_id = ? AND idempotency_key = ?
+                LIMIT 1
+                """,
+                (normalized_run_id, normalized_idempotency),
+            ).fetchone()
+        self._mirror_control_plane_row("workflow_events", row)
+        return self._workflow_event_from_row(row)
+
+    def upsert_agent_action(
+        self,
+        *,
+        action_id: str,
+        workspace_id: str = "default",
+        conversation_id: str = "",
+        action_type: str,
+        owner_module: str,
+        operation_type: str,
+        target_ref: dict[str, Any] | None = None,
+        input_payload: dict[str, Any] | None = None,
+        approval_status: str = "not_required",
+        approval_policy: str = "not_required",
+        budget: dict[str, Any] | None = None,
+        idempotency_key: str,
+        status: str = "planned",
+        result_ref: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("agent_actions")
+        normalized_action_id = str(action_id or "").strip()
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        normalized_type = str(action_type or "").strip()
+        normalized_owner = str(owner_module or "").strip()
+        normalized_operation_type = str(operation_type or "").strip()
+        normalized_idempotency = str(idempotency_key or "").strip()
+        if (
+            not normalized_action_id
+            or not normalized_workspace_id
+            or not normalized_type
+            or not normalized_owner
+            or not normalized_operation_type
+            or not normalized_idempotency
+        ):
+            return {}
+        now = _utc_now_timestamp()
+        row_payload = {
+            "action_id": normalized_action_id,
+            "workspace_id": normalized_workspace_id,
+            "conversation_id": str(conversation_id or "").strip(),
+            "action_type": normalized_type,
+            "owner_module": normalized_owner,
+            "operation_type": normalized_operation_type,
+            "target_ref_json": json.dumps(_json_safe_payload(target_ref or {}), ensure_ascii=False),
+            "input_json": json.dumps(_json_safe_payload(input_payload or {}), ensure_ascii=False),
+            "approval_status": str(approval_status or "not_required").strip() or "not_required",
+            "approval_policy": str(approval_policy or "not_required").strip() or "not_required",
+            "budget_json": json.dumps(_json_safe_payload(budget or {}), ensure_ascii=False),
+            "idempotency_key": normalized_idempotency,
+            "status": str(status or "planned").strip() or "planned",
+            "result_ref_json": json.dumps(_json_safe_payload(result_ref or {}), ensure_ascii=False),
+            "metadata_json": json.dumps(_json_safe_payload(metadata or {}), ensure_ascii=False),
+            "created_at": now,
+            "updated_at": now,
+        }
+        if self._control_plane_postgres_should_prefer_read("agent_actions"):
+            row = self._call_control_plane_postgres_native("upsert_agent_action", row_payload)
+            if row is not None:
+                return self._agent_action_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("agent_actions"):
+                return {}
+        with self._lock, self._connection:
+            columns = list(row_payload.keys())
+            self._connection.execute(
+                (
+                    f"INSERT OR IGNORE INTO agent_actions ({', '.join(columns)}) "
+                    f"VALUES ({', '.join(['?'] * len(columns))})"
+                ),
+                tuple(row_payload[column] for column in columns),
+            )
+            row = self._connection.execute(
+                """
+                SELECT * FROM agent_actions
+                WHERE workspace_id = ? AND idempotency_key = ?
+                LIMIT 1
+                """,
+                (normalized_workspace_id, normalized_idempotency),
+            ).fetchone()
+        self._mirror_control_plane_row("agent_actions", row)
+        return self._agent_action_from_row(row)
+
+    def get_agent_action(self, action_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("agent_actions")
+        normalized_action_id = str(action_id or "").strip()
+        if not normalized_action_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "agent_actions",
+            row_builder=self._agent_action_from_row,
+            where_sql="action_id = %s",
+            params=[normalized_action_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("agent_actions"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM agent_actions WHERE action_id = ? LIMIT 1",
+                (normalized_action_id,),
+            ).fetchone()
+        return self._agent_action_from_row(row)
+
+    def list_agent_actions(
+        self,
+        *,
+        workspace_id: str = "default",
+        conversation_id: str = "",
+        action_type: str = "",
+        owner_module: str = "",
+        statuses: list[str] | tuple[str, ...] | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("agent_actions")
+        clauses: list[str] = []
+        params: list[Any] = []
+        pg_clauses: list[str] = []
+        pg_params: list[Any] = []
+        normalized_workspace_id = str(workspace_id or "").strip()
+        if normalized_workspace_id:
+            clauses.append("workspace_id = ?")
+            params.append(normalized_workspace_id)
+            pg_clauses.append("workspace_id = %s")
+            pg_params.append(normalized_workspace_id)
+        normalized_conversation_id = str(conversation_id or "").strip()
+        if normalized_conversation_id:
+            clauses.append("conversation_id = ?")
+            params.append(normalized_conversation_id)
+            pg_clauses.append("conversation_id = %s")
+            pg_params.append(normalized_conversation_id)
+        normalized_action_type = str(action_type or "").strip()
+        if normalized_action_type:
+            clauses.append("action_type = ?")
+            params.append(normalized_action_type)
+            pg_clauses.append("action_type = %s")
+            pg_params.append(normalized_action_type)
+        normalized_owner = str(owner_module or "").strip()
+        if normalized_owner:
+            clauses.append("owner_module = ?")
+            params.append(normalized_owner)
+            pg_clauses.append("owner_module = %s")
+            pg_params.append(normalized_owner)
+        normalized_statuses = [
+            str(status or "").strip()
+            for status in list(statuses or [])
+            if str(status or "").strip()
+        ]
+        if normalized_statuses:
+            placeholders = ", ".join(["?"] * len(normalized_statuses))
+            clauses.append(f"status IN ({placeholders})")
+            params.extend(normalized_statuses)
+            pg_placeholders = ", ".join(["%s"] * len(normalized_statuses))
+            pg_clauses.append(f"status IN ({pg_placeholders})")
+            pg_params.extend(normalized_statuses)
+        pg_rows = self._select_control_plane_rows(
+            "agent_actions",
+            row_builder=self._agent_action_from_row,
+            where_sql=" AND ".join(pg_clauses),
+            params=pg_params,
+            order_by_sql="updated_at DESC, created_at DESC",
+            limit=max(0, int(limit or 0)),
+            offset=max(0, int(offset or 0)),
+        )
+        if pg_rows:
+            return pg_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("agent_actions"):
+            return []
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
+        offset_sql = " OFFSET ?" if int(offset or 0) > 0 and int(limit or 0) > 0 else ""
+        sqlite_params = list(params)
+        if int(limit or 0) > 0:
+            sqlite_params.append(max(1, int(limit or 0)))
+        if int(offset or 0) > 0 and int(limit or 0) > 0:
+            sqlite_params.append(max(0, int(offset or 0)))
+        with self._lock:
+            rows = self._connection.execute(
+                (
+                    "SELECT * FROM agent_actions "
+                    f"{where_sql} ORDER BY updated_at DESC, created_at DESC{limit_sql}{offset_sql}"
+                ),
+                tuple(sqlite_params),
+            ).fetchall()
+        return [payload for row in rows if (payload := self._agent_action_from_row(row))]
+
+    def update_agent_action_state(
+        self,
+        action_id: str,
+        *,
+        status: str = "",
+        approval_status: str = "",
+        result_ref_patch: dict[str, Any] | None = None,
+        metadata_patch: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("agent_actions")
+        normalized_action_id = str(action_id or "").strip()
+        if not normalized_action_id:
+            return {}
+        existing = self.get_agent_action(normalized_action_id)
+        if not existing:
+            return {}
+        current_status = str(existing.get("status") or "").strip()
+        requested_status = str(status or current_status or "planned").strip() or "planned"
+        if current_status in {"completed", "failed", "cancelled"} and requested_status != current_status:
+            return existing
+        result_ref = {**dict(existing.get("result_ref") or {}), **dict(result_ref_patch or {})}
+        metadata = {**dict(existing.get("metadata") or {}), **dict(metadata_patch or {})}
+        if self._control_plane_postgres_should_prefer_read("agent_actions"):
+            row = self._call_control_plane_postgres_native(
+                "update_agent_action_state",
+                normalized_action_id,
+                status=requested_status,
+                approval_status=str(approval_status or existing.get("approval_status") or "not_required").strip(),
+                result_ref=result_ref,
+                metadata=metadata,
+            )
+            if row is not None:
+                return self._agent_action_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("agent_actions"):
+                return {}
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE agent_actions
+                SET status = ?,
+                    approval_status = ?,
+                    result_ref_json = ?,
+                    metadata_json = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE action_id = ?
+                """,
+                (
+                    requested_status,
+                    str(approval_status or existing.get("approval_status") or "not_required").strip() or "not_required",
+                    json.dumps(_json_safe_payload(result_ref), ensure_ascii=False),
+                    json.dumps(_json_safe_payload(metadata), ensure_ascii=False),
+                    normalized_action_id,
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM agent_actions WHERE action_id = ? LIMIT 1",
+                (normalized_action_id,),
+            ).fetchone()
+        self._mirror_control_plane_row("agent_actions", row)
+        return self._agent_action_from_row(row)
+
+    def upsert_operation_run(
+        self,
+        *,
+        operation_run_id: str,
+        workspace_id: str = "default",
+        action_id: str,
+        owner_module: str,
+        operation_type: str,
+        status: str = "queued",
+        progress: dict[str, Any] | None = None,
+        workflow_ref: dict[str, Any] | None = None,
+        cost_budget: dict[str, Any] | None = None,
+        idempotency_key: str,
+        result_ref: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+        started_at: str = "",
+        completed_at: str = "",
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("operation_runs")
+        normalized_operation_id = str(operation_run_id or "").strip()
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        normalized_action_id = str(action_id or "").strip()
+        normalized_owner = str(owner_module or "").strip()
+        normalized_operation_type = str(operation_type or "").strip()
+        normalized_idempotency = str(idempotency_key or "").strip()
+        if (
+            not normalized_operation_id
+            or not normalized_workspace_id
+            or not normalized_action_id
+            or not normalized_owner
+            or not normalized_operation_type
+            or not normalized_idempotency
+        ):
+            return {}
+        now = _utc_now_timestamp()
+        row_payload = {
+            "operation_run_id": normalized_operation_id,
+            "workspace_id": normalized_workspace_id,
+            "action_id": normalized_action_id,
+            "owner_module": normalized_owner,
+            "operation_type": normalized_operation_type,
+            "status": str(status or "queued").strip() or "queued",
+            "progress_json": json.dumps(_json_safe_payload(progress or {}), ensure_ascii=False),
+            "workflow_ref_json": json.dumps(_json_safe_payload(workflow_ref or {}), ensure_ascii=False),
+            "cost_budget_json": json.dumps(_json_safe_payload(cost_budget or {}), ensure_ascii=False),
+            "idempotency_key": normalized_idempotency,
+            "result_ref_json": json.dumps(_json_safe_payload(result_ref or {}), ensure_ascii=False),
+            "metadata_json": json.dumps(_json_safe_payload(metadata or {}), ensure_ascii=False),
+            "started_at": str(started_at or "").strip(),
+            "completed_at": str(completed_at or "").strip(),
+            "created_at": now,
+            "updated_at": now,
+        }
+        if self._control_plane_postgres_should_prefer_read("operation_runs"):
+            row = self._call_control_plane_postgres_native("upsert_operation_run", row_payload)
+            if row is not None:
+                return self._operation_run_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("operation_runs"):
+                return {}
+        with self._lock, self._connection:
+            columns = list(row_payload.keys())
+            self._connection.execute(
+                (
+                    f"INSERT OR IGNORE INTO operation_runs ({', '.join(columns)}) "
+                    f"VALUES ({', '.join(['?'] * len(columns))})"
+                ),
+                tuple(row_payload[column] for column in columns),
+            )
+            row = self._connection.execute(
+                """
+                SELECT * FROM operation_runs
+                WHERE workspace_id = ? AND idempotency_key = ?
+                LIMIT 1
+                """,
+                (normalized_workspace_id, normalized_idempotency),
+            ).fetchone()
+        self._mirror_control_plane_row("operation_runs", row)
+        return self._operation_run_from_row(row)
+
+    def get_operation_run(self, operation_run_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("operation_runs")
+        normalized_operation_id = str(operation_run_id or "").strip()
+        if not normalized_operation_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "operation_runs",
+            row_builder=self._operation_run_from_row,
+            where_sql="operation_run_id = %s",
+            params=[normalized_operation_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("operation_runs"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM operation_runs WHERE operation_run_id = ? LIMIT 1",
+                (normalized_operation_id,),
+            ).fetchone()
+        return self._operation_run_from_row(row)
+
+    def list_operation_runs(
+        self,
+        *,
+        workspace_id: str = "default",
+        action_id: str = "",
+        owner_module: str = "",
+        operation_type: str = "",
+        statuses: list[str] | tuple[str, ...] | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("operation_runs")
+        clauses: list[str] = []
+        params: list[Any] = []
+        pg_clauses: list[str] = []
+        pg_params: list[Any] = []
+        normalized_workspace_id = str(workspace_id or "").strip()
+        if normalized_workspace_id:
+            clauses.append("workspace_id = ?")
+            params.append(normalized_workspace_id)
+            pg_clauses.append("workspace_id = %s")
+            pg_params.append(normalized_workspace_id)
+        normalized_action_id = str(action_id or "").strip()
+        if normalized_action_id:
+            clauses.append("action_id = ?")
+            params.append(normalized_action_id)
+            pg_clauses.append("action_id = %s")
+            pg_params.append(normalized_action_id)
+        normalized_owner = str(owner_module or "").strip()
+        if normalized_owner:
+            clauses.append("owner_module = ?")
+            params.append(normalized_owner)
+            pg_clauses.append("owner_module = %s")
+            pg_params.append(normalized_owner)
+        normalized_operation_type = str(operation_type or "").strip()
+        if normalized_operation_type:
+            clauses.append("operation_type = ?")
+            params.append(normalized_operation_type)
+            pg_clauses.append("operation_type = %s")
+            pg_params.append(normalized_operation_type)
+        normalized_statuses = [
+            str(status or "").strip()
+            for status in list(statuses or [])
+            if str(status or "").strip()
+        ]
+        if normalized_statuses:
+            placeholders = ", ".join(["?"] * len(normalized_statuses))
+            clauses.append(f"status IN ({placeholders})")
+            params.extend(normalized_statuses)
+            pg_placeholders = ", ".join(["%s"] * len(normalized_statuses))
+            pg_clauses.append(f"status IN ({pg_placeholders})")
+            pg_params.extend(normalized_statuses)
+        pg_rows = self._select_control_plane_rows(
+            "operation_runs",
+            row_builder=self._operation_run_from_row,
+            where_sql=" AND ".join(pg_clauses),
+            params=pg_params,
+            order_by_sql="updated_at DESC, created_at DESC",
+            limit=max(0, int(limit or 0)),
+            offset=max(0, int(offset or 0)),
+        )
+        if pg_rows:
+            return pg_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("operation_runs"):
+            return []
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
+        offset_sql = " OFFSET ?" if int(offset or 0) > 0 and int(limit or 0) > 0 else ""
+        sqlite_params = list(params)
+        if int(limit or 0) > 0:
+            sqlite_params.append(max(1, int(limit or 0)))
+        if int(offset or 0) > 0 and int(limit or 0) > 0:
+            sqlite_params.append(max(0, int(offset or 0)))
+        with self._lock:
+            rows = self._connection.execute(
+                (
+                    "SELECT * FROM operation_runs "
+                    f"{where_sql} ORDER BY updated_at DESC, created_at DESC{limit_sql}{offset_sql}"
+                ),
+                tuple(sqlite_params),
+            ).fetchall()
+        return [payload for row in rows if (payload := self._operation_run_from_row(row))]
+
+    def update_operation_run_state(
+        self,
+        operation_run_id: str,
+        *,
+        status: str = "",
+        progress_patch: dict[str, Any] | None = None,
+        workflow_ref_patch: dict[str, Any] | None = None,
+        result_ref_patch: dict[str, Any] | None = None,
+        metadata_patch: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("operation_runs")
+        normalized_operation_id = str(operation_run_id or "").strip()
+        if not normalized_operation_id:
+            return {}
+        existing = self.get_operation_run(normalized_operation_id)
+        if not existing:
+            return {}
+        current_status = str(existing.get("status") or "").strip()
+        requested_status = str(status or current_status or "queued").strip() or "queued"
+        if current_status in {"completed", "failed", "cancelled"} and requested_status != current_status:
+            return existing
+        progress = {**dict(existing.get("progress") or {}), **dict(progress_patch or {})}
+        workflow_ref = {**dict(existing.get("workflow_ref") or {}), **dict(workflow_ref_patch or {})}
+        result_ref = {**dict(existing.get("result_ref") or {}), **dict(result_ref_patch or {})}
+        metadata = {**dict(existing.get("metadata") or {}), **dict(metadata_patch or {})}
+        if self._control_plane_postgres_should_prefer_read("operation_runs"):
+            row = self._call_control_plane_postgres_native(
+                "update_operation_run_state",
+                normalized_operation_id,
+                status=requested_status,
+                progress=progress,
+                workflow_ref=workflow_ref,
+                result_ref=result_ref,
+                metadata=metadata,
+            )
+            if row is not None:
+                return self._operation_run_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("operation_runs"):
+                return {}
+        completed_at = str(existing.get("completed_at") or "").strip()
+        if requested_status in {"completed", "failed", "cancelled"} and not completed_at:
+            completed_at = _utc_now_timestamp()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE operation_runs
+                SET status = ?,
+                    progress_json = ?,
+                    workflow_ref_json = ?,
+                    result_ref_json = ?,
+                    metadata_json = ?,
+                    completed_at = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE operation_run_id = ?
+                """,
+                (
+                    requested_status,
+                    json.dumps(_json_safe_payload(progress), ensure_ascii=False),
+                    json.dumps(_json_safe_payload(workflow_ref), ensure_ascii=False),
+                    json.dumps(_json_safe_payload(result_ref), ensure_ascii=False),
+                    json.dumps(_json_safe_payload(metadata), ensure_ascii=False),
+                    completed_at,
+                    normalized_operation_id,
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM operation_runs WHERE operation_run_id = ? LIMIT 1",
+                (normalized_operation_id,),
+            ).fetchone()
+        self._mirror_control_plane_row("operation_runs", row)
+        return self._operation_run_from_row(row)
+
+    def upsert_acquisition_run(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("acquisition_runs")
+        normalized = dict(payload or {})
+        workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
+        operation_run_id = str(normalized.get("operation_run_id") or "").strip()
+        workflow_run_id = str(normalized.get("workflow_run_id") or "").strip()
+        plan_id = str(normalized.get("plan_id") or "").strip()
+        plan_review_id = int(normalized.get("plan_review_id") or 0)
+        target_company = str(normalized.get("target_company") or "").strip()
+        query_text = str(normalized.get("query") or "").strip()
+        idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+        if not idempotency_key:
+            idempotency_seed = "|".join([operation_run_id, workflow_run_id, str(plan_review_id), plan_id, target_company])
+            idempotency_key = f"acquisition_run:{sha1(idempotency_seed.encode('utf-8')).hexdigest()[:24]}"
+        acquisition_run_id = str(
+            normalized.get("acquisition_run_id")
+            or normalized.get("run_id")
+            or f"acqrun_{sha1(idempotency_key.encode('utf-8')).hexdigest()[:24]}"
+        ).strip()
+        if not acquisition_run_id or not workflow_run_id:
+            return {}
+        existing = self.get_acquisition_run(acquisition_run_id)
+        now = _utc_now_timestamp()
+        row_payload = {
+            "acquisition_run_id": acquisition_run_id,
+            "workspace_id": workspace_id,
+            "operation_run_id": operation_run_id,
+            "workflow_run_id": workflow_run_id,
+            "plan_id": plan_id,
+            "plan_review_id": plan_review_id,
+            "target_company": target_company,
+            "query": query_text,
+            "status": str(normalized.get("status") or "planned").strip() or "planned",
+            "current_phase": str(normalized.get("current_phase") or "").strip(),
+            "request_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("request") or normalized.get("request_json")),
+                ensure_ascii=False,
+            ),
+            "plan_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("plan") or normalized.get("plan_json")),
+                ensure_ascii=False,
+            ),
+            "execution_bundle_json": json.dumps(
+                _normalize_json_object_payload(
+                    normalized.get("execution_bundle") or normalized.get("execution_bundle_json")
+                ),
+                ensure_ascii=False,
+            ),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "idempotency_key": idempotency_key,
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "acquisition_runs",
+            id_column="acquisition_run_id",
+            row_payload=row_payload,
+            row_builder=self._acquisition_run_from_row,
+        )
+
+    def get_acquisition_run(self, acquisition_run_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("acquisition_runs")
+        normalized_run_id = str(acquisition_run_id or "").strip()
+        if not normalized_run_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "acquisition_runs",
+            row_builder=self._acquisition_run_from_row,
+            where_sql="acquisition_run_id = %s",
+            params=[normalized_run_id],
+        )
+        return postgres_row or {}
+
+    def list_acquisition_runs(
+        self,
+        *,
+        workspace_id: str = "default",
+        operation_run_id: str = "",
+        workflow_run_id: str = "",
+        target_company: str = "",
+        statuses: list[str] | tuple[str, ...] | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("acquisition_runs")
+        pg_clauses: list[str] = []
+        pg_params: list[Any] = []
+        normalized_workspace_id = str(workspace_id or "").strip()
+        if normalized_workspace_id:
+            pg_clauses.append("workspace_id = %s")
+            pg_params.append(normalized_workspace_id)
+        normalized_operation_id = str(operation_run_id or "").strip()
+        if normalized_operation_id:
+            pg_clauses.append("operation_run_id = %s")
+            pg_params.append(normalized_operation_id)
+        normalized_workflow_run_id = str(workflow_run_id or "").strip()
+        if normalized_workflow_run_id:
+            pg_clauses.append("workflow_run_id = %s")
+            pg_params.append(normalized_workflow_run_id)
+        normalized_company = str(target_company or "").strip()
+        if normalized_company:
+            pg_clauses.append("target_company = %s")
+            pg_params.append(normalized_company)
+        normalized_statuses = [
+            str(status or "").strip()
+            for status in list(statuses or [])
+            if str(status or "").strip()
+        ]
+        if normalized_statuses:
+            pg_placeholders = ", ".join(["%s"] * len(normalized_statuses))
+            pg_clauses.append(f"status IN ({pg_placeholders})")
+            pg_params.extend(normalized_statuses)
+        pg_rows = self._select_control_plane_rows(
+            "acquisition_runs",
+            row_builder=self._acquisition_run_from_row,
+            where_sql=" AND ".join(pg_clauses),
+            params=pg_params,
+            order_by_sql="updated_at DESC, created_at DESC",
+            limit=max(0, int(limit or 0)),
+            offset=max(0, int(offset or 0)),
+        )
+        return pg_rows
+
+    def upsert_workflow_activity_run(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_activity_runs")
+        normalized = dict(payload or {})
+        workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
+        workflow_run_id = str(normalized.get("workflow_run_id") or "").strip()
+        operation_run_id = str(normalized.get("operation_run_id") or normalized.get("operation_id") or "").strip()
+        acquisition_run_id = str(normalized.get("acquisition_run_id") or "").strip()
+        command_id = str(normalized.get("command_id") or normalized.get("source_command_id") or "").strip()
+        parent_activity_run_id = str(normalized.get("parent_activity_run_id") or "").strip()
+        activity_type = str(normalized.get("activity_type") or "").strip()
+        owner = str(normalized.get("owner") or "").strip()
+        phase = str(normalized.get("phase") or "").strip()
+        idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+        if not idempotency_key:
+            idempotency_seed = "|".join(
+                [workflow_run_id, acquisition_run_id, command_id, parent_activity_run_id, activity_type, phase]
+            )
+            idempotency_key = f"workflow_activity:{sha1(idempotency_seed.encode('utf-8')).hexdigest()[:24]}"
+        activity_run_id = str(
+            normalized.get("activity_run_id")
+            or normalized.get("activity_id")
+            or f"actrun_{sha1(idempotency_key.encode('utf-8')).hexdigest()[:24]}"
+        ).strip()
+        if not activity_run_id or not workflow_run_id or not activity_type:
+            return {}
+        existing = self.get_workflow_activity_run(activity_run_id)
+        now = _utc_now_timestamp()
+        row_payload = {
+            "activity_run_id": activity_run_id,
+            "workspace_id": workspace_id,
+            "workflow_run_id": workflow_run_id,
+            "operation_run_id": operation_run_id,
+            "acquisition_run_id": acquisition_run_id,
+            "command_id": command_id,
+            "parent_activity_run_id": parent_activity_run_id,
+            "activity_type": activity_type,
+            "owner": owner,
+            "status": str(normalized.get("status") or "planned").strip() or "planned",
+            "phase": phase,
+            "idempotency_key": idempotency_key,
+            "provider_ref_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("provider_ref") or normalized.get("provider_ref_json")),
+                ensure_ascii=False,
+            ),
+            "input_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("input") or normalized.get("input_json")),
+                ensure_ascii=False,
+            ),
+            "output_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("output") or normalized.get("output_json")),
+                ensure_ascii=False,
+            ),
+            "artifact_refs_json": json.dumps(
+                _loads_json_list(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
+                ensure_ascii=False,
+            ),
+            "entity_counts_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("entity_counts") or normalized.get("entity_counts_json")),
+                ensure_ascii=False,
+            ),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "workflow_activity_runs",
+            id_column="activity_run_id",
+            row_payload=row_payload,
+            row_builder=self._workflow_activity_run_from_row,
+        )
+
+    def get_workflow_activity_run(self, activity_run_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_activity_runs")
+        normalized_activity_run_id = str(activity_run_id or "").strip()
+        if not normalized_activity_run_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "workflow_activity_runs",
+            row_builder=self._workflow_activity_run_from_row,
+            where_sql="activity_run_id = %s",
+            params=[normalized_activity_run_id],
+        )
+        return postgres_row or {}
+
+    def list_workflow_activity_runs(
+        self,
+        *,
+        workspace_id: str = "default",
+        workflow_run_id: str = "",
+        operation_run_id: str = "",
+        acquisition_run_id: str = "",
+        command_id: str = "",
+        activity_type: str = "",
+        statuses: list[str] | tuple[str, ...] | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("workflow_activity_runs")
+        pg_clauses: list[str] = []
+        pg_params: list[Any] = []
+        normalized_workspace_id = str(workspace_id or "").strip()
+        if normalized_workspace_id:
+            pg_clauses.append("workspace_id = %s")
+            pg_params.append(normalized_workspace_id)
+        for column_name, value in (
+            ("workflow_run_id", workflow_run_id),
+            ("operation_run_id", operation_run_id),
+            ("acquisition_run_id", acquisition_run_id),
+            ("command_id", command_id),
+            ("activity_type", activity_type),
+        ):
+            normalized_value = str(value or "").strip()
+            if normalized_value:
+                pg_clauses.append(f"{column_name} = %s")
+                pg_params.append(normalized_value)
+        normalized_statuses = [
+            str(status or "").strip()
+            for status in list(statuses or [])
+            if str(status or "").strip()
+        ]
+        if normalized_statuses:
+            pg_clauses.append("status IN (" + ", ".join(["%s"] * len(normalized_statuses)) + ")")
+            pg_params.extend(normalized_statuses)
+        return self._select_control_plane_rows(
+            "workflow_activity_runs",
+            row_builder=self._workflow_activity_run_from_row,
+            where_sql=" AND ".join(pg_clauses),
+            params=pg_params,
+            order_by_sql="updated_at DESC, created_at DESC",
+            limit=max(0, int(limit or 0)),
+            offset=max(0, int(offset or 0)),
+        )
+
+    def upsert_workflow_activity_attempt(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_activity_attempts")
+        normalized = dict(payload or {})
+        workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
+        activity_run_id = str(normalized.get("activity_run_id") or "").strip()
+        workflow_run_id = str(normalized.get("workflow_run_id") or "").strip()
+        command_id = str(normalized.get("command_id") or "").strip()
+        provider = str(normalized.get("provider") or "").strip()
+        attempt_number = max(0, int(normalized.get("attempt_number") or normalized.get("attempt") or 0))
+        idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+        if not idempotency_key:
+            idempotency_seed = "|".join([workflow_run_id, activity_run_id, command_id, provider, str(attempt_number)])
+            idempotency_key = f"workflow_activity_attempt:{sha1(idempotency_seed.encode('utf-8')).hexdigest()[:24]}"
+        attempt_id = str(
+            normalized.get("attempt_id")
+            or normalized.get("activity_attempt_id")
+            or f"actattempt_{sha1(idempotency_key.encode('utf-8')).hexdigest()[:24]}"
+        ).strip()
+        if not attempt_id or not activity_run_id or not workflow_run_id:
+            return {}
+        existing = self.get_workflow_activity_attempt(attempt_id)
+        now = _utc_now_timestamp()
+        row_payload = {
+            "attempt_id": attempt_id,
+            "workspace_id": workspace_id,
+            "activity_run_id": activity_run_id,
+            "workflow_run_id": workflow_run_id,
+            "command_id": command_id,
+            "attempt_number": attempt_number,
+            "status": str(normalized.get("status") or "planned").strip() or "planned",
+            "provider": provider,
+            "provider_request_ref": str(normalized.get("provider_request_ref") or "").strip(),
+            "provider_run_ref": str(normalized.get("provider_run_ref") or "").strip(),
+            "started_at": str(normalized.get("started_at") or ""),
+            "completed_at": str(normalized.get("completed_at") or ""),
+            "next_retry_at": str(normalized.get("next_retry_at") or ""),
+            "rate_limit_ref_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("rate_limit_ref") or normalized.get("rate_limit_ref_json")),
+                ensure_ascii=False,
+            ),
+            "error_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("error") or normalized.get("error_json")),
+                ensure_ascii=False,
+            ),
+            "input_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("input") or normalized.get("input_json")),
+                ensure_ascii=False,
+            ),
+            "output_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("output") or normalized.get("output_json")),
+                ensure_ascii=False,
+            ),
+            "artifact_refs_json": json.dumps(
+                _loads_json_list(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
+                ensure_ascii=False,
+            ),
+            "idempotency_key": idempotency_key,
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "workflow_activity_attempts",
+            id_column="attempt_id",
+            row_payload=row_payload,
+            row_builder=self._workflow_activity_attempt_from_row,
+        )
+
+    def get_workflow_activity_attempt(self, attempt_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_activity_attempts")
+        normalized_attempt_id = str(attempt_id or "").strip()
+        if not normalized_attempt_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "workflow_activity_attempts",
+            row_builder=self._workflow_activity_attempt_from_row,
+            where_sql="attempt_id = %s",
+            params=[normalized_attempt_id],
+        )
+        return postgres_row or {}
+
+    def list_workflow_activity_attempts(
+        self,
+        *,
+        workspace_id: str = "default",
+        activity_run_id: str = "",
+        workflow_run_id: str = "",
+        command_id: str = "",
+        statuses: list[str] | tuple[str, ...] | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("workflow_activity_attempts")
+        pg_clauses: list[str] = []
+        pg_params: list[Any] = []
+        normalized_workspace_id = str(workspace_id or "").strip()
+        if normalized_workspace_id:
+            pg_clauses.append("workspace_id = %s")
+            pg_params.append(normalized_workspace_id)
+        for column_name, value in (
+            ("activity_run_id", activity_run_id),
+            ("workflow_run_id", workflow_run_id),
+            ("command_id", command_id),
+        ):
+            normalized_value = str(value or "").strip()
+            if normalized_value:
+                pg_clauses.append(f"{column_name} = %s")
+                pg_params.append(normalized_value)
+        normalized_statuses = [
+            str(status or "").strip()
+            for status in list(statuses or [])
+            if str(status or "").strip()
+        ]
+        if normalized_statuses:
+            pg_clauses.append("status IN (" + ", ".join(["%s"] * len(normalized_statuses)) + ")")
+            pg_params.extend(normalized_statuses)
+        return self._select_control_plane_rows(
+            "workflow_activity_attempts",
+            row_builder=self._workflow_activity_attempt_from_row,
+            where_sql=" AND ".join(pg_clauses),
+            params=pg_params,
+            order_by_sql="updated_at DESC, created_at DESC",
+            limit=max(0, int(limit or 0)),
+            offset=max(0, int(offset or 0)),
+        )
+
+    def upsert_workflow_entity_delta(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_entity_deltas")
+        normalized = dict(payload or {})
+        workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
+        workflow_run_id = str(normalized.get("workflow_run_id") or "").strip()
+        operation_run_id = str(normalized.get("operation_run_id") or normalized.get("operation_id") or "").strip()
+        command_id = str(normalized.get("command_id") or "").strip()
+        activity_run_id = str(normalized.get("activity_run_id") or "").strip()
+        attempt_id = str(normalized.get("attempt_id") or normalized.get("activity_attempt_id") or "").strip()
+        acquisition_run_id = str(normalized.get("acquisition_run_id") or "").strip()
+        entity_type = str(normalized.get("entity_type") or "").strip()
+        entity_key = str(normalized.get("entity_key") or "").strip()
+        delta_kind = str(normalized.get("delta_kind") or "").strip()
+        idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+        if not idempotency_key:
+            idempotency_seed = "|".join(
+                [workflow_run_id, activity_run_id, attempt_id, entity_type, entity_key, delta_kind]
+            )
+            idempotency_key = f"workflow_entity_delta:{sha1(idempotency_seed.encode('utf-8')).hexdigest()[:24]}"
+        delta_id = str(
+            normalized.get("delta_id") or f"entitydelta_{sha1(idempotency_key.encode('utf-8')).hexdigest()[:24]}"
+        ).strip()
+        if not delta_id or not workflow_run_id or not entity_type or not delta_kind:
+            return {}
+        existing = self.get_workflow_entity_delta(delta_id)
+        now = _utc_now_timestamp()
+        row_payload = {
+            "delta_id": delta_id,
+            "workspace_id": workspace_id,
+            "workflow_run_id": workflow_run_id,
+            "operation_run_id": operation_run_id,
+            "command_id": command_id,
+            "activity_run_id": activity_run_id,
+            "attempt_id": attempt_id,
+            "acquisition_run_id": acquisition_run_id,
+            "entity_type": entity_type,
+            "entity_key": entity_key,
+            "delta_kind": delta_kind,
+            "status": str(normalized.get("status") or "recorded").strip() or "recorded",
+            "reason": str(normalized.get("reason") or "").strip(),
+            "source_ref_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("source_ref") or normalized.get("source_ref_json")),
+                ensure_ascii=False,
+            ),
+            "entity_payload_json": json.dumps(
+                _normalize_json_object_payload(
+                    normalized.get("entity_payload") or normalized.get("entity_payload_json")
+                ),
+                ensure_ascii=False,
+            ),
+            "projection_effect_json": json.dumps(
+                _normalize_json_object_payload(
+                    normalized.get("projection_effect") or normalized.get("projection_effect_json")
+                ),
+                ensure_ascii=False,
+            ),
+            "artifact_refs_json": json.dumps(
+                _loads_json_list(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
+                ensure_ascii=False,
+            ),
+            "idempotency_key": idempotency_key,
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "workflow_entity_deltas",
+            id_column="delta_id",
+            row_payload=row_payload,
+            row_builder=self._workflow_entity_delta_from_row,
+        )
+
+    def get_workflow_entity_delta(self, delta_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_entity_deltas")
+        normalized_delta_id = str(delta_id or "").strip()
+        if not normalized_delta_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "workflow_entity_deltas",
+            row_builder=self._workflow_entity_delta_from_row,
+            where_sql="delta_id = %s",
+            params=[normalized_delta_id],
+        )
+        return postgres_row or {}
+
+    def list_workflow_entity_deltas(
+        self,
+        *,
+        workspace_id: str = "default",
+        workflow_run_id: str = "",
+        operation_run_id: str = "",
+        command_id: str = "",
+        activity_run_id: str = "",
+        attempt_id: str = "",
+        acquisition_run_id: str = "",
+        entity_type: str = "",
+        entity_key: str = "",
+        statuses: list[str] | tuple[str, ...] | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("workflow_entity_deltas")
+        pg_clauses: list[str] = []
+        pg_params: list[Any] = []
+        normalized_workspace_id = str(workspace_id or "").strip()
+        if normalized_workspace_id:
+            pg_clauses.append("workspace_id = %s")
+            pg_params.append(normalized_workspace_id)
+        for column_name, value in (
+            ("workflow_run_id", workflow_run_id),
+            ("operation_run_id", operation_run_id),
+            ("command_id", command_id),
+            ("activity_run_id", activity_run_id),
+            ("attempt_id", attempt_id),
+            ("acquisition_run_id", acquisition_run_id),
+            ("entity_type", entity_type),
+            ("entity_key", entity_key),
+        ):
+            normalized_value = str(value or "").strip()
+            if normalized_value:
+                pg_clauses.append(f"{column_name} = %s")
+                pg_params.append(normalized_value)
+        normalized_statuses = [
+            str(status or "").strip()
+            for status in list(statuses or [])
+            if str(status or "").strip()
+        ]
+        if normalized_statuses:
+            pg_clauses.append("status IN (" + ", ".join(["%s"] * len(normalized_statuses)) + ")")
+            pg_params.extend(normalized_statuses)
+        return self._select_control_plane_rows(
+            "workflow_entity_deltas",
+            row_builder=self._workflow_entity_delta_from_row,
+            where_sql=" AND ".join(pg_clauses),
+            params=pg_params,
+            order_by_sql="updated_at DESC, created_at DESC",
+            limit=max(0, int(limit or 0)),
+            offset=max(0, int(offset or 0)),
+        )
+
+    def upsert_acquisition_discovery_lane(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("acquisition_discovery_lanes")
+        normalized = dict(payload or {})
+        workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
+        acquisition_run_id = str(normalized.get("acquisition_run_id") or "").strip()
+        workflow_run_id = str(normalized.get("workflow_run_id") or "").strip()
+        operation_run_id = str(normalized.get("operation_run_id") or normalized.get("operation_id") or "").strip()
+        source_command_id = str(normalized.get("source_command_id") or normalized.get("command_id") or "").strip()
+        activity_run_id = str(normalized.get("activity_run_id") or "").strip()
+        target_company = str(normalized.get("target_company") or "").strip()
+        query_text = str(normalized.get("query") or "").strip()
+        provider = str(normalized.get("provider") or "").strip()
+        idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+        if not idempotency_key:
+            idempotency_seed = "|".join([acquisition_run_id, workflow_run_id, source_command_id, query_text, provider])
+            idempotency_key = f"acquisition_discovery_lane:{sha1(idempotency_seed.encode('utf-8')).hexdigest()[:24]}"
+        lane_id = str(
+            normalized.get("lane_id") or f"lane_{sha1(idempotency_key.encode('utf-8')).hexdigest()[:24]}"
+        ).strip()
+        if not lane_id or not acquisition_run_id or not workflow_run_id:
+            return {}
+        existing = self.get_acquisition_discovery_lane(lane_id)
+        now = _utc_now_timestamp()
+        row_payload = {
+            "lane_id": lane_id,
+            "workspace_id": workspace_id,
+            "acquisition_run_id": acquisition_run_id,
+            "workflow_run_id": workflow_run_id,
+            "operation_run_id": operation_run_id,
+            "source_command_id": source_command_id,
+            "activity_run_id": activity_run_id,
+            "target_company": target_company,
+            "query": query_text,
+            "provider": provider,
+            "status": str(normalized.get("status") or "planned").strip() or "planned",
+            "phase": str(normalized.get("phase") or "planned").strip() or "planned",
+            "lane_plan_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("lane_plan") or normalized.get("lane_plan_json")),
+                ensure_ascii=False,
+            ),
+            "provider_ref_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("provider_ref") or normalized.get("provider_ref_json")),
+                ensure_ascii=False,
+            ),
+            "artifact_refs_json": json.dumps(
+                _loads_json_list(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
+                ensure_ascii=False,
+            ),
+            "entity_counts_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("entity_counts") or normalized.get("entity_counts_json")),
+                ensure_ascii=False,
+            ),
+            "downstream_command_ids_json": json.dumps(
+                _loads_json_list(
+                    normalized.get("downstream_command_ids") or normalized.get("downstream_command_ids_json")
+                ),
+                ensure_ascii=False,
+            ),
+            "idempotency_key": idempotency_key,
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        return self._upsert_simple_control_plane_row(
+            "acquisition_discovery_lanes",
+            id_column="lane_id",
+            row_payload=row_payload,
+            row_builder=self._acquisition_discovery_lane_from_row,
+        )
+
+    def get_acquisition_discovery_lane(self, lane_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("acquisition_discovery_lanes")
+        normalized_lane_id = str(lane_id or "").strip()
+        if not normalized_lane_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "acquisition_discovery_lanes",
+            row_builder=self._acquisition_discovery_lane_from_row,
+            where_sql="lane_id = %s",
+            params=[normalized_lane_id],
+        )
+        return postgres_row or {}
+
+    def list_acquisition_discovery_lanes(
+        self,
+        *,
+        workspace_id: str = "default",
+        acquisition_run_id: str = "",
+        workflow_run_id: str = "",
+        operation_run_id: str = "",
+        source_command_id: str = "",
+        activity_run_id: str = "",
+        statuses: list[str] | tuple[str, ...] | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("acquisition_discovery_lanes")
+        pg_clauses: list[str] = []
+        pg_params: list[Any] = []
+        normalized_workspace_id = str(workspace_id or "").strip()
+        if normalized_workspace_id:
+            pg_clauses.append("workspace_id = %s")
+            pg_params.append(normalized_workspace_id)
+        for column_name, value in (
+            ("acquisition_run_id", acquisition_run_id),
+            ("workflow_run_id", workflow_run_id),
+            ("operation_run_id", operation_run_id),
+            ("source_command_id", source_command_id),
+            ("activity_run_id", activity_run_id),
+        ):
+            normalized_value = str(value or "").strip()
+            if normalized_value:
+                pg_clauses.append(f"{column_name} = %s")
+                pg_params.append(normalized_value)
+        normalized_statuses = [
+            str(status or "").strip()
+            for status in list(statuses or [])
+            if str(status or "").strip()
+        ]
+        if normalized_statuses:
+            pg_clauses.append("status IN (" + ", ".join(["%s"] * len(normalized_statuses)) + ")")
+            pg_params.extend(normalized_statuses)
+        return self._select_control_plane_rows(
+            "acquisition_discovery_lanes",
+            row_builder=self._acquisition_discovery_lane_from_row,
+            where_sql=" AND ".join(pg_clauses),
+            params=pg_params,
+            order_by_sql="updated_at DESC, created_at DESC",
+            limit=max(0, int(limit or 0)),
+            offset=max(0, int(offset or 0)),
+        )
+
+    def append_operation_event(
+        self,
+        *,
+        event_stream_id: str,
+        event_family: str,
+        event_type: str,
+        idempotency_key: str,
+        workspace_id: str = "default",
+        operation_run_id: str = "",
+        action_id: str = "",
+        sequence_number: int = 0,
+        occurred_at: str = "",
+        actor: str = "",
+        source: str = "",
+        payload: dict[str, Any] | None = None,
+        schema_version: str = "operation_event_v1",
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("operation_events")
+        normalized_stream_id = str(event_stream_id or "").strip()
+        normalized_family = str(event_family or "").strip()
+        normalized_type = str(event_type or "").strip()
+        normalized_idempotency = str(idempotency_key or "").strip()
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        if not normalized_stream_id or not normalized_family or not normalized_type or not normalized_idempotency:
+            return {}
+        now = _utc_now_timestamp()
+        row_payload = {
+            "event_id": "",
+            "workspace_id": normalized_workspace_id,
+            "event_stream_id": normalized_stream_id,
+            "operation_run_id": str(operation_run_id or "").strip(),
+            "action_id": str(action_id or "").strip(),
+            "event_family": normalized_family,
+            "event_type": normalized_type,
+            "sequence_number": max(0, int(sequence_number or 0)),
+            "idempotency_key": normalized_idempotency,
+            "occurred_at": str(occurred_at or now).strip(),
+            "recorded_at": now,
+            "actor": str(actor or "").strip(),
+            "source": str(source or "").strip(),
+            "payload_json": json.dumps(_json_safe_payload(payload or {}), ensure_ascii=False),
+            "schema_version": str(schema_version or "operation_event_v1").strip(),
+            "created_at": now,
+        }
+        if self._control_plane_postgres_should_prefer_read("operation_events"):
+            row = self._call_control_plane_postgres_native("append_operation_event", row_payload)
+            if row is not None:
+                return self._operation_event_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("operation_events"):
+                return {}
+        with self._lock, self._connection:
+            existing = self._connection.execute(
+                """
+                SELECT * FROM operation_events
+                WHERE event_stream_id = ? AND idempotency_key = ?
+                LIMIT 1
+                """,
+                (normalized_stream_id, normalized_idempotency),
+            ).fetchone()
+            if existing is not None:
+                return self._operation_event_from_row(existing)
+            next_sequence = int(row_payload["sequence_number"] or 0)
+            if next_sequence <= 0:
+                next_sequence = int(
+                    self._connection.execute(
+                        "SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM operation_events WHERE event_stream_id = ?",
+                        (normalized_stream_id,),
+                    ).fetchone()[0]
+                    or 1
+                )
+            row_payload["sequence_number"] = next_sequence
+            row_payload["event_id"] = "opevt_" + sha1(
+                f"{normalized_stream_id}:{next_sequence}:{normalized_idempotency}".encode("utf-8")
+            ).hexdigest()[:24]
+            columns = list(row_payload.keys())
+            self._connection.execute(
+                (
+                    f"INSERT OR IGNORE INTO operation_events ({', '.join(columns)}) "
+                    f"VALUES ({', '.join(['?'] * len(columns))})"
+                ),
+                tuple(row_payload[column] for column in columns),
+            )
+            row = self._connection.execute(
+                """
+                SELECT * FROM operation_events
+                WHERE event_stream_id = ? AND idempotency_key = ?
+                LIMIT 1
+                """,
+                (normalized_stream_id, normalized_idempotency),
+            ).fetchone()
+        self._mirror_control_plane_row("operation_events", row)
+        return self._operation_event_from_row(row)
+
+    def list_operation_events(self, event_stream_id: str, *, limit: int = 1000) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("operation_events")
+        normalized_stream_id = str(event_stream_id or "").strip()
+        if not normalized_stream_id:
+            return []
+        postgres_rows = self._select_control_plane_rows(
+            "operation_events",
+            row_builder=self._operation_event_from_row,
+            where_sql="event_stream_id = %s",
+            params=[normalized_stream_id],
+            order_by_sql="sequence_number ASC",
+            limit=max(0, int(limit or 0)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("operation_events"):
+            return []
+        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
+        params: list[Any] = [normalized_stream_id]
+        if int(limit or 0) > 0:
+            params.append(max(1, int(limit or 0)))
+        with self._lock:
+            rows = self._connection.execute(
+                (
+                    "SELECT * FROM operation_events WHERE event_stream_id = ? "
+                    f"ORDER BY sequence_number ASC{limit_sql}"
+                ),
+                tuple(params),
+            ).fetchall()
+        return [payload for row in rows if (payload := self._operation_event_from_row(row))]
+
+    def list_operation_events_for_action(self, action_id: str, *, limit: int = 1000) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("operation_events")
+        normalized_action_id = str(action_id or "").strip()
+        if not normalized_action_id:
+            return []
+        postgres_rows = self._select_control_plane_rows(
+            "operation_events",
+            row_builder=self._operation_event_from_row,
+            where_sql="action_id = %s",
+            params=[normalized_action_id],
+            order_by_sql="recorded_at ASC, event_stream_id ASC, sequence_number ASC",
+            limit=max(0, int(limit or 0)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("operation_events"):
+            return []
+        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
+        params: list[Any] = [normalized_action_id]
+        if int(limit or 0) > 0:
+            params.append(max(1, int(limit or 0)))
+        with self._lock:
+            rows = self._connection.execute(
+                (
+                    "SELECT * FROM operation_events WHERE action_id = ? "
+                    f"ORDER BY recorded_at ASC, event_stream_id ASC, sequence_number ASC{limit_sql}"
+                ),
+                tuple(params),
+            ).fetchall()
+        return [payload for row in rows if (payload := self._operation_event_from_row(row))]
+
+    def list_workflow_events(self, workflow_run_id: str, *, limit: int = 1000) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("workflow_events")
+        normalized_run_id = str(workflow_run_id or "").strip()
+        if not normalized_run_id:
+            return []
+        postgres_rows = self._select_control_plane_rows(
+            "workflow_events",
+            row_builder=self._workflow_event_from_row,
+            where_sql="workflow_run_id = %s",
+            params=[normalized_run_id],
+            order_by_sql="sequence_number ASC",
+            limit=max(0, int(limit or 0)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_events"):
+            return []
+        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
+        params: list[Any] = [normalized_run_id]
+        if int(limit or 0) > 0:
+            params.append(max(1, int(limit or 0)))
+        with self._lock:
+            rows = self._connection.execute(
+                (
+                    "SELECT * FROM workflow_events WHERE workflow_run_id = ? "
+                    f"ORDER BY sequence_number ASC{limit_sql}"
+                ),
+                tuple(params),
+            ).fetchall()
+        return [payload for row in rows if (payload := self._workflow_event_from_row(row))]
+
+    def upsert_workflow_current_state(
+        self,
+        *,
+        workflow_run_id: str,
+        operation_id: str = "",
+        workflow_type: str = "",
+        status: str = "pending",
+        current_stage_key: str = "",
+        completion_proofs: dict[str, Any] | None = None,
+        active_command_counts: dict[str, Any] | None = None,
+        terminal_command_counts: dict[str, Any] | None = None,
+        read_model_pointers: dict[str, Any] | None = None,
+        migration_status: dict[str, Any] | None = None,
+        last_processed_sequence_number: int = 0,
+        reducer_version: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_current_state")
+        normalized_run_id = str(workflow_run_id or "").strip()
+        if not normalized_run_id:
+            return {}
+        now = _utc_now_timestamp()
+        existing = self.get_workflow_current_state(normalized_run_id) or {}
+        row_payload = {
+            "workflow_run_id": normalized_run_id,
+            "operation_id": str(operation_id or existing.get("operation_id") or "").strip(),
+            "workflow_type": str(workflow_type or existing.get("workflow_type") or "").strip(),
+            "status": str(status or existing.get("status") or "pending").strip() or "pending",
+            "current_stage_key": str(current_stage_key or existing.get("current_stage_key") or "").strip(),
+            "completion_proofs_json": json.dumps(
+                _json_safe_payload(completion_proofs if completion_proofs is not None else existing.get("completion_proofs") or {}),
+                ensure_ascii=False,
+            ),
+            "active_command_counts_json": json.dumps(
+                _json_safe_payload(
+                    active_command_counts
+                    if active_command_counts is not None
+                    else existing.get("active_command_counts") or {}
+                ),
+                ensure_ascii=False,
+            ),
+            "terminal_command_counts_json": json.dumps(
+                _json_safe_payload(
+                    terminal_command_counts
+                    if terminal_command_counts is not None
+                    else existing.get("terminal_command_counts") or {}
+                ),
+                ensure_ascii=False,
+            ),
+            "read_model_pointers_json": json.dumps(
+                _json_safe_payload(
+                    read_model_pointers
+                    if read_model_pointers is not None
+                    else existing.get("read_model_pointers") or {}
+                ),
+                ensure_ascii=False,
+            ),
+            "migration_status_json": json.dumps(
+                _json_safe_payload(migration_status if migration_status is not None else existing.get("migration_status") or {}),
+                ensure_ascii=False,
+            ),
+            "last_processed_sequence_number": max(
+                int(existing.get("last_processed_sequence_number") or 0),
+                int(last_processed_sequence_number or 0),
+            ),
+            "reducer_version": str(reducer_version or existing.get("reducer_version") or "").strip(),
+            "schema_version": "workflow_current_state_v1",
+            "metadata_json": json.dumps(
+                _json_safe_payload(metadata if metadata is not None else existing.get("metadata") or {}),
+                ensure_ascii=False,
+            ),
+            "created_at": str(existing.get("created_at") or now).strip() or now,
+            "updated_at": now,
+        }
+        if self._write_control_plane_row_to_postgres("workflow_current_state", row_payload):
+            return self.get_workflow_current_state(normalized_run_id) or self._workflow_current_state_from_row(row_payload)
+        columns = list(row_payload.keys())
+        update_columns = [column for column in columns if column not in {"workflow_run_id", "created_at"}]
+        with self._lock, self._connection:
+            self._connection.execute(
+                (
+                    f"INSERT INTO workflow_current_state ({', '.join(columns)}) "
+                    f"VALUES ({', '.join(['?'] * len(columns))}) "
+                    "ON CONFLICT(workflow_run_id) DO UPDATE SET "
+                    + ", ".join(f"{column} = excluded.{column}" for column in update_columns)
+                ),
+                tuple(row_payload[column] for column in columns),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM workflow_current_state WHERE workflow_run_id = ? LIMIT 1",
+                (normalized_run_id,),
+            ).fetchone()
+        self._mirror_control_plane_row("workflow_current_state", row)
+        return self._workflow_current_state_from_row(row)
+
+    def get_workflow_current_state(self, workflow_run_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_current_state")
+        normalized_run_id = str(workflow_run_id or "").strip()
+        if not normalized_run_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "workflow_current_state",
+            row_builder=self._workflow_current_state_from_row,
+            where_sql="workflow_run_id = %s",
+            params=[normalized_run_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_current_state"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM workflow_current_state WHERE workflow_run_id = ? LIMIT 1",
+                (normalized_run_id,),
+            ).fetchone()
+        return self._workflow_current_state_from_row(row)
+
+    def upsert_workflow_command(
+        self,
+        *,
+        workflow_run_id: str,
+        command_type: str,
+        owner: str,
+        idempotency_key: str,
+        command_id: str = "",
+        operation_id: str = "",
+        payload: dict[str, Any] | None = None,
+        artifact_refs: list[Any] | tuple[Any, ...] | None = None,
+        not_before_at: str = "",
+        max_attempts: int = 5,
+        retry_policy: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_run_id = str(workflow_run_id or "").strip()
+        normalized_type = str(command_type or "").strip()
+        normalized_owner = str(owner or "").strip()
+        normalized_idempotency = str(idempotency_key or "").strip()
+        if not normalized_run_id or not normalized_type or not normalized_owner or not normalized_idempotency:
+            return {}
+        now = _utc_now_timestamp()
+        normalized_command_id = str(command_id or "").strip() or (
+            "cmd_" + sha1(f"{normalized_run_id}:{normalized_idempotency}".encode("utf-8")).hexdigest()[:24]
+        )
+        safe_payload = _json_safe_payload(payload or {})
+        causality_columns = _workflow_command_causality_columns_from_payload(
+            safe_payload,
+            workflow_run_id=normalized_run_id,
+            operation_id=str(operation_id or "").strip(),
+            command_type=normalized_type,
+            owner=normalized_owner,
+            idempotency_key=normalized_idempotency,
+        )
+        row_payload = {
+            "command_id": normalized_command_id,
+            "workflow_run_id": normalized_run_id,
+            "operation_id": str(operation_id or "").strip(),
+            "command_type": normalized_type,
+            "owner": normalized_owner,
+            **causality_columns,
+            "status": "queued",
+            "idempotency_key": normalized_idempotency,
+            "payload_json": json.dumps(safe_payload, ensure_ascii=False),
+            "artifact_refs_json": json.dumps(_json_safe_payload(list(artifact_refs or [])), ensure_ascii=False),
+            "not_before_at": str(not_before_at or "").strip(),
+            "attempt": 0,
+            "max_attempts": max(1, int(max_attempts or 5)),
+            "retry_policy_json": json.dumps(_json_safe_payload(retry_policy or {}), ensure_ascii=False),
+            "lease_owner": "",
+            "lease_expires_at": "",
+            "heartbeat_at": "",
+            "last_error": "",
+            "result_json": "{}",
+            "schema_version": "workflow_command_v1",
+            "created_at": now,
+            "updated_at": now,
+        }
+        if self._control_plane_postgres_should_prefer_read("workflow_commands"):
+            row = self._call_control_plane_postgres_native("upsert_workflow_command", row_payload)
+            if row is not None:
+                return self._workflow_command_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_commands"):
+                return {}
+        with self._lock, self._connection:
+            columns = list(row_payload.keys())
+            self._connection.execute(
+                (
+                    f"INSERT OR IGNORE INTO workflow_commands ({', '.join(columns)}) "
+                    f"VALUES ({', '.join(['?'] * len(columns))})"
+                ),
+                tuple(row_payload[column] for column in columns),
+            )
+            row = self._connection.execute(
+                """
+                SELECT * FROM workflow_commands
+                WHERE workflow_run_id = ? AND idempotency_key = ?
+                LIMIT 1
+                """,
+                (normalized_run_id, normalized_idempotency),
+            ).fetchone()
+        self._mirror_control_plane_row("workflow_commands", row)
+        return self._workflow_command_from_row(row)
+
+    def get_workflow_command(self, command_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "workflow_commands",
+            row_builder=self._workflow_command_from_row,
+            where_sql="command_id = %s",
+            params=[normalized_command_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_commands"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
+                (normalized_command_id,),
+            ).fetchone()
+        return self._workflow_command_from_row(row)
+
+    def update_workflow_command_payload(
+        self,
+        command_id: str,
+        *,
+        payload: dict[str, Any] | None = None,
+        artifact_refs: list[Any] | tuple[Any, ...] | None = None,
+        not_before_at: str | None = None,
+        result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return {}
+        existing = self.get_workflow_command(normalized_command_id)
+        if not existing:
+            return {}
+        next_payload = dict(payload if payload is not None else existing.get("payload") or {})
+        next_artifact_refs = list(
+            artifact_refs if artifact_refs is not None else list(existing.get("artifact_refs") or [])
+        )
+        next_not_before = (
+            str(not_before_at or "").strip()
+            if not_before_at is not None
+            else str(existing.get("not_before_at") or "").strip()
+        )
+        next_result = dict(result if result is not None else existing.get("result") or {})
+        causality_columns = _workflow_command_causality_columns_from_payload(
+            next_payload,
+            workflow_run_id=str(existing.get("workflow_run_id") or "").strip(),
+            operation_id=str(existing.get("operation_id") or "").strip(),
+            command_type=str(existing.get("command_type") or "").strip(),
+            owner=str(existing.get("owner") or "").strip(),
+            idempotency_key=str(existing.get("idempotency_key") or "").strip(),
+        )
+        if self._control_plane_postgres_should_prefer_read("workflow_commands"):
+            row = self._call_control_plane_postgres_native(
+                "update_workflow_command_payload",
+                normalized_command_id,
+                payload=next_payload,
+                artifact_refs=next_artifact_refs,
+                not_before_at=next_not_before,
+                result=next_result,
+            )
+            if row is not None:
+                return self._workflow_command_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_commands"):
+                return {}
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE workflow_commands
+                SET payload_json = ?,
+                    artifact_refs_json = ?,
+                    stage_id = ?,
+                    causal_group_id = ?,
+                    parent_command_id = ?,
+                    source_event_id = ?,
+                    source_event_type = ?,
+                    input_artifact_refs_json = ?,
+                    output_artifact_refs_json = ?,
+                    produced_entity_counts_json = ?,
+                    no_op_reason = ?,
+                    readiness_effect = ?,
+                    downstream_command_ids_json = ?,
+                    causality_schema_version = ?,
+                    not_before_at = ?,
+                    result_json = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE command_id = ?
+                  AND status IN ('queued', 'retry_wait')
+                """,
+                (
+                    json.dumps(_json_safe_payload(next_payload), ensure_ascii=False),
+                    json.dumps(_json_safe_payload(next_artifact_refs), ensure_ascii=False),
+                    causality_columns["stage_id"],
+                    causality_columns["causal_group_id"],
+                    causality_columns["parent_command_id"],
+                    causality_columns["source_event_id"],
+                    causality_columns["source_event_type"],
+                    causality_columns["input_artifact_refs_json"],
+                    causality_columns["output_artifact_refs_json"],
+                    causality_columns["produced_entity_counts_json"],
+                    causality_columns["no_op_reason"],
+                    causality_columns["readiness_effect"],
+                    causality_columns["downstream_command_ids_json"],
+                    causality_columns["causality_schema_version"],
+                    next_not_before,
+                    json.dumps(_json_safe_payload(next_result), ensure_ascii=False),
+                    normalized_command_id,
+                ),
+            )
+            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
+            row = self._connection.execute(
+                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
+                (normalized_command_id,),
+            ).fetchone()
+        if not changed:
+            return {}
+        self._mirror_control_plane_row("workflow_commands", row)
+        return self._workflow_command_from_row(row)
+
+    def list_workflow_commands(
+        self,
+        *,
+        workflow_run_id: str = "",
+        operation_id: str = "",
+        owner: str = "",
+        statuses: list[str] | tuple[str, ...] | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        clauses: list[str] = []
+        params: list[Any] = []
+        pg_clauses: list[str] = []
+        pg_params: list[Any] = []
+        normalized_run_id = str(workflow_run_id or "").strip()
+        if normalized_run_id:
+            clauses.append("workflow_run_id = ?")
+            params.append(normalized_run_id)
+            pg_clauses.append("workflow_run_id = %s")
+            pg_params.append(normalized_run_id)
+        normalized_operation_id = str(operation_id or "").strip()
+        if normalized_operation_id:
+            clauses.append("operation_id = ?")
+            params.append(normalized_operation_id)
+            pg_clauses.append("operation_id = %s")
+            pg_params.append(normalized_operation_id)
+        normalized_owner = str(owner or "").strip()
+        if normalized_owner:
+            clauses.append("owner = ?")
+            params.append(normalized_owner)
+            pg_clauses.append("owner = %s")
+            pg_params.append(normalized_owner)
+        normalized_statuses = [str(status or "").strip() for status in list(statuses or []) if str(status or "").strip()]
+        if normalized_statuses:
+            placeholders = ", ".join(["?"] * len(normalized_statuses))
+            clauses.append(f"status IN ({placeholders})")
+            params.extend(normalized_statuses)
+            pg_placeholders = ", ".join(["%s"] * len(normalized_statuses))
+            pg_clauses.append(f"status IN ({pg_placeholders})")
+            pg_params.extend(normalized_statuses)
+        pg_rows = self._select_control_plane_rows(
+            "workflow_commands",
+            row_builder=self._workflow_command_from_row,
+            where_sql=" AND ".join(pg_clauses),
+            params=pg_params,
+            order_by_sql="updated_at ASC, created_at ASC",
+            limit=max(0, int(limit or 0)),
+        )
+        if pg_rows:
+            return pg_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_commands"):
+            return []
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
+        sqlite_params = list(params)
+        if int(limit or 0) > 0:
+            sqlite_params.append(max(1, int(limit or 0)))
+        with self._lock:
+            rows = self._connection.execute(
+                f"SELECT * FROM workflow_commands {where_sql} ORDER BY updated_at ASC, created_at ASC{limit_sql}",
+                tuple(sqlite_params),
+            ).fetchall()
+        return [payload for row in rows if (payload := self._workflow_command_from_row(row))]
+
+    def list_ready_workflow_commands(
+        self,
+        *,
+        workflow_run_id: str = "",
+        owner: str = "",
+        command_type: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_run_id = str(workflow_run_id or "").strip()
+        normalized_owner = str(owner or "").strip()
+        normalized_type = str(command_type or "").strip()
+        now = _utc_now_timestamp()
+        clauses = [
+            "status IN ('queued', 'retry_wait', 'running')",
+            "(not_before_at = '' OR datetime(not_before_at) <= datetime(?))",
+            "(lease_expires_at = '' OR datetime(lease_expires_at) <= datetime(?))",
+        ]
+        params: list[Any] = [now, now]
+        pg_clauses = [
+            "status IN ('queued', 'retry_wait', 'running')",
+            "(not_before_at = '' OR not_before_at <= %s)",
+            "(lease_expires_at = '' OR lease_expires_at <= %s)",
+        ]
+        pg_params: list[Any] = [now, now]
+        if normalized_run_id:
+            clauses.append("workflow_run_id = ?")
+            params.append(normalized_run_id)
+            pg_clauses.append("workflow_run_id = %s")
+            pg_params.append(normalized_run_id)
+        if normalized_owner:
+            clauses.append("owner = ?")
+            params.append(normalized_owner)
+            pg_clauses.append("owner = %s")
+            pg_params.append(normalized_owner)
+        if normalized_type:
+            clauses.append("command_type = ?")
+            params.append(normalized_type)
+            pg_clauses.append("command_type = %s")
+            pg_params.append(normalized_type)
+        pg_rows = self._select_control_plane_rows(
+            "workflow_commands",
+            row_builder=self._workflow_command_from_row,
+            where_sql=" AND ".join(pg_clauses),
+            params=pg_params,
+            order_by_sql="updated_at ASC, created_at ASC",
+            limit=max(1, int(limit or 100)),
+        )
+        if pg_rows:
+            return pg_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_commands"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                (
+                    "SELECT * FROM workflow_commands WHERE "
+                    + " AND ".join(clauses)
+                    + " ORDER BY updated_at ASC, created_at ASC LIMIT ?"
+                ),
+                tuple([*params, max(1, int(limit or 100))]),
+            ).fetchall()
+        return [payload for row in rows if (payload := self._workflow_command_from_row(row))]
+
+    def claim_workflow_command(
+        self,
+        command_id: str,
+        *,
+        lease_owner: str,
+        lease_seconds: int = 300,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        normalized_owner = str(lease_owner or "").strip()
+        if not normalized_command_id or not normalized_owner:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("workflow_commands"):
+            row = self._call_control_plane_postgres_native(
+                "claim_workflow_command",
+                normalized_command_id,
+                lease_owner=normalized_owner,
+                lease_seconds=max(1, int(lease_seconds or 300)),
+            )
+            return self._workflow_command_from_row(row) if row is not None else {}
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE workflow_commands
+                SET status = 'claimed',
+                    lease_owner = ?,
+                    lease_expires_at = datetime('now', ?),
+                    attempt = attempt + 1,
+                    heartbeat_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE command_id = ?
+                  AND status IN ('queued', 'retry_wait', 'running')
+                  AND (not_before_at = '' OR datetime(not_before_at) <= datetime('now'))
+                  AND (lease_expires_at = '' OR datetime(lease_expires_at) <= datetime('now'))
+                """,
+                (normalized_owner, f"+{max(1, int(lease_seconds or 300))} seconds", normalized_command_id),
+            )
+            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
+            row = self._connection.execute(
+                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
+                (normalized_command_id,),
+            ).fetchone()
+        if not changed:
+            return {}
+        self._mirror_control_plane_row("workflow_commands", row)
+        return self._workflow_command_from_row(row)
+
+    def mark_workflow_command_running(self, command_id: str, *, lease_owner: str = "") -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("workflow_commands"):
+            row = self._call_control_plane_postgres_native(
+                "mark_workflow_command_running",
+                normalized_command_id,
+                lease_owner=lease_owner,
+            )
+            return self._workflow_command_from_row(row) if row is not None else {}
+        clauses = ["command_id = ?", "status = 'claimed'"]
+        params: list[Any] = [normalized_command_id]
+        normalized_owner = str(lease_owner or "").strip()
+        if normalized_owner:
+            clauses.append("lease_owner = ?")
+            params.append(normalized_owner)
+        with self._lock, self._connection:
+            self._connection.execute(
+                f"""
+                UPDATE workflow_commands
+                SET status = 'running',
+                    heartbeat_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE {' AND '.join(clauses)}
+                """,
+                tuple(params),
+            )
+            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
+            row = self._connection.execute(
+                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
+                (normalized_command_id,),
+            ).fetchone()
+        if not changed:
+            return {}
+        self._mirror_control_plane_row("workflow_commands", row)
+        return self._workflow_command_from_row(row)
+
+    def mark_workflow_command_succeeded(
+        self,
+        command_id: str,
+        *,
+        result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("workflow_commands"):
+            row = self._call_control_plane_postgres_native(
+                "mark_workflow_command_succeeded",
+                normalized_command_id,
+                result=result or {},
+            )
+            return self._workflow_command_from_row(row) if row is not None else {}
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE workflow_commands
+                SET status = 'succeeded',
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    heartbeat_at = CURRENT_TIMESTAMP,
+                    last_error = '',
+                    result_json = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE command_id = ?
+                  AND status IN ('claimed', 'running')
+                """,
+                (json.dumps(_json_safe_payload(result or {}), ensure_ascii=False), normalized_command_id),
+            )
+            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
+            row = self._connection.execute(
+                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
+                (normalized_command_id,),
+            ).fetchone()
+        if not changed:
+            return {}
+        self._mirror_control_plane_row("workflow_commands", row)
+        return self._workflow_command_from_row(row)
+
+    def mark_workflow_command_failed(
+        self,
+        command_id: str,
+        *,
+        error_text: str,
+        retryable: bool = True,
+        retry_delay_seconds: int = 30,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("workflow_commands"):
+            row = self._call_control_plane_postgres_native(
+                "mark_workflow_command_failed",
+                normalized_command_id,
+                error_text=error_text,
+                retryable=retryable,
+                retry_delay_seconds=retry_delay_seconds,
+            )
+            return self._workflow_command_from_row(row) if row is not None else {}
+        existing = self.get_workflow_command(normalized_command_id)
+        if not existing:
+            return {}
+        should_retry = bool(retryable) and int(existing.get("attempt") or 0) < max(1, int(existing.get("max_attempts") or 5))
+        next_status = "retry_wait" if should_retry else "failed_terminal"
+        next_not_before = (
+            (
+                datetime.now(timezone.utc).replace(microsecond=0)
+                + timedelta(seconds=max(1, int(retry_delay_seconds or 30)))
+            ).strftime("%Y-%m-%d %H:%M:%S")
+            if should_retry
+            else ""
+        )
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE workflow_commands
+                SET status = ?,
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    heartbeat_at = CURRENT_TIMESTAMP,
+                    not_before_at = ?,
+                    last_error = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE command_id = ?
+                  AND status IN ('claimed', 'running')
+                """,
+                (next_status, next_not_before, str(error_text or "").strip(), normalized_command_id),
+            )
+            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
+            row = self._connection.execute(
+                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
+                (normalized_command_id,),
+            ).fetchone()
+        if not changed:
+            return {}
+        self._mirror_control_plane_row("workflow_commands", row)
+        return self._workflow_command_from_row(row)
+
+    def mark_workflow_command_partial_progress(
+        self,
+        command_id: str,
+        *,
+        result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("workflow_commands"):
+            row = self._call_control_plane_postgres_native(
+                "mark_workflow_command_partial_progress",
+                normalized_command_id,
+                result=result or {},
+            )
+            return self._workflow_command_from_row(row) if row is not None else {}
+        existing = self.get_workflow_command(normalized_command_id)
+        if not existing:
+            return {}
+        attempt = max(0, int(existing.get("attempt") or 0) - 1)
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE workflow_commands
+                SET status = 'queued',
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    heartbeat_at = CURRENT_TIMESTAMP,
+                    not_before_at = '',
+                    attempt = ?,
+                    last_error = '',
+                    result_json = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE command_id = ?
+                  AND status IN ('claimed', 'running')
+                """,
+                (
+                    attempt,
+                    json.dumps(_json_safe_payload(result or {}), ensure_ascii=False),
+                    normalized_command_id,
+                ),
+            )
+            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
+            row = self._connection.execute(
+                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
+                (normalized_command_id,),
+            ).fetchone()
+        if not changed:
+            return {}
+        self._mirror_control_plane_row("workflow_commands", row)
+        return self._workflow_command_from_row(row)
+
+    def mark_workflow_command_waiting_prerequisite(
+        self,
+        command_id: str,
+        *,
+        retry_delay_seconds: int = 8,
+        result: dict[str, Any] | None = None,
+        from_statuses: list[str] | tuple[str, ...] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("workflow_commands"):
+            row = self._call_control_plane_postgres_native(
+                "mark_workflow_command_waiting_prerequisite",
+                normalized_command_id,
+                retry_delay_seconds=retry_delay_seconds,
+                result=result or {},
+                from_statuses=list(from_statuses or []),
+            )
+            return self._workflow_command_from_row(row) if row is not None else {}
+        existing = self.get_workflow_command(normalized_command_id)
+        if not existing:
+            return {}
+        attempt = max(0, int(existing.get("attempt") or 0) - 1)
+        clamped_delay = min(30, max(1, int(retry_delay_seconds or 8)))
+        next_not_before = (
+            datetime.now(timezone.utc).replace(microsecond=0) + timedelta(seconds=clamped_delay)
+        ).strftime("%Y-%m-%d %H:%M:%S")
+        allowed_statuses = [
+            str(status or "").strip()
+            for status in list(from_statuses or ("claimed", "running"))
+            if str(status or "").strip()
+        ]
+        if not allowed_statuses:
+            allowed_statuses = ["claimed", "running"]
+        placeholders = ", ".join(["?"] * len(allowed_statuses))
+        with self._lock, self._connection:
+            self._connection.execute(
+                f"""
+                UPDATE workflow_commands
+                SET status = 'retry_wait',
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    heartbeat_at = CURRENT_TIMESTAMP,
+                    not_before_at = ?,
+                    attempt = ?,
+                    last_error = '',
+                    result_json = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE command_id = ?
+                  AND status IN ({placeholders})
+                """,
+                (
+                    next_not_before,
+                    attempt,
+                    json.dumps(_json_safe_payload(result or {}), ensure_ascii=False),
+                    normalized_command_id,
+                    *allowed_statuses,
+                ),
+            )
+            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
+            row = self._connection.execute(
+                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
+                (normalized_command_id,),
+            ).fetchone()
+        if not changed:
+            return {}
+        self._mirror_control_plane_row("workflow_commands", row)
+        return self._workflow_command_from_row(row)
+
+    def cancel_workflow_command(
+        self,
+        command_id: str,
+        *,
+        reason: str = "",
+        actor: str = "",
+        result: dict[str, Any] | None = None,
+        from_statuses: list[str] | tuple[str, ...] | None = None,
+    ) -> dict[str, Any]:
+        """Cancel a command that has not started owner work.
+
+        Running commands may have external side effects in progress; those must
+        be cancelled through owner-specific APIs. The generic command surface is
+        intentionally safe for Agent callers and only cancels queued/waiting
+        work.
+        """
+
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("workflow_commands"):
+            row = self._call_control_plane_postgres_native(
+                "cancel_workflow_command",
+                normalized_command_id,
+                reason=reason,
+                actor=actor,
+                result=result or {},
+                from_statuses=list(from_statuses or []),
+            )
+            return self._workflow_command_from_row(row) if row is not None else {}
+        existing = self.get_workflow_command(normalized_command_id)
+        if not existing:
+            return {}
+        next_result = {
+            **dict(existing.get("result") or {}),
+            **dict(result or {}),
+            "control_action": "cancel",
+            "control_reason": str(reason or "").strip(),
+            "control_actor": str(actor or "").strip(),
+        }
+        allowed_statuses = [
+            str(status or "").strip()
+            for status in list(from_statuses or ("queued", "retry_wait"))
+            if str(status or "").strip()
+        ]
+        if not allowed_statuses:
+            allowed_statuses = ["queued", "retry_wait"]
+        placeholders = ", ".join(["?"] * len(allowed_statuses))
+        with self._lock, self._connection:
+            self._connection.execute(
+                f"""
+                UPDATE workflow_commands
+                SET status = 'cancelled',
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    heartbeat_at = CURRENT_TIMESTAMP,
+                    not_before_at = '',
+                    last_error = ?,
+                    result_json = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE command_id = ?
+                  AND status IN ({placeholders})
+                """,
+                (
+                    str(reason or "cancelled_by_command_control").strip() or "cancelled_by_command_control",
+                    json.dumps(_json_safe_payload(next_result), ensure_ascii=False),
+                    normalized_command_id,
+                    *allowed_statuses,
+                ),
+            )
+            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
+            row = self._connection.execute(
+                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
+                (normalized_command_id,),
+            ).fetchone()
+        if not changed:
+            return {}
+        self._mirror_control_plane_row("workflow_commands", row)
+        return self._workflow_command_from_row(row)
+
+    def retry_workflow_command(
+        self,
+        command_id: str,
+        *,
+        reason: str = "",
+        actor: str = "",
+        result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("workflow_commands"):
+            row = self._call_control_plane_postgres_native(
+                "retry_workflow_command",
+                normalized_command_id,
+                reason=reason,
+                actor=actor,
+                result=result or {},
+            )
+            return self._workflow_command_from_row(row) if row is not None else {}
+        existing = self.get_workflow_command(normalized_command_id)
+        if not existing:
+            return {}
+        next_result = {
+            **dict(existing.get("result") or {}),
+            **dict(result or {}),
+            "control_action": "retry",
+            "control_reason": str(reason or "").strip(),
+            "control_actor": str(actor or "").strip(),
+        }
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE workflow_commands
+                SET status = 'queued',
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    heartbeat_at = '',
+                    not_before_at = '',
+                    attempt = 0,
+                    last_error = '',
+                    result_json = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE command_id = ?
+                  AND status IN ('failed_terminal', 'cancelled')
+                """,
+                (
+                    json.dumps(_json_safe_payload(next_result), ensure_ascii=False),
+                    normalized_command_id,
+                ),
+            )
+            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
+            row = self._connection.execute(
+                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
+                (normalized_command_id,),
+            ).fetchone()
+        if not changed:
+            return {}
+        self._mirror_control_plane_row("workflow_commands", row)
+        return self._workflow_command_from_row(row)
+
+    def resume_workflow_command(
+        self,
+        command_id: str,
+        *,
+        reason: str = "",
+        actor: str = "",
+        result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_commands")
+        normalized_command_id = str(command_id or "").strip()
+        if not normalized_command_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("workflow_commands"):
+            row = self._call_control_plane_postgres_native(
+                "resume_workflow_command",
+                normalized_command_id,
+                reason=reason,
+                actor=actor,
+                result=result or {},
+            )
+            return self._workflow_command_from_row(row) if row is not None else {}
+        existing = self.get_workflow_command(normalized_command_id)
+        if not existing:
+            return {}
+        attempt = max(0, int(existing.get("attempt") or 0) - 1)
+        next_result = {
+            **dict(existing.get("result") or {}),
+            **dict(result or {}),
+            "control_action": "resume",
+            "control_reason": str(reason or "").strip(),
+            "control_actor": str(actor or "").strip(),
+        }
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE workflow_commands
+                SET status = 'queued',
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    heartbeat_at = '',
+                    not_before_at = '',
+                    attempt = ?,
+                    last_error = '',
+                    result_json = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE command_id = ?
+                  AND status = 'retry_wait'
+                """,
+                (
+                    attempt,
+                    json.dumps(_json_safe_payload(next_result), ensure_ascii=False),
+                    normalized_command_id,
+                ),
+            )
+            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
+            row = self._connection.execute(
+                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
+                (normalized_command_id,),
+            ).fetchone()
+        if not changed:
+            return {}
+        self._mirror_control_plane_row("workflow_commands", row)
+        return self._workflow_command_from_row(row)
+
+    def enqueue_runtime_outbox(
+        self,
+        *,
+        outbox_type: str,
+        idempotency_key: str,
+        workflow_run_id: str = "",
+        operation_id: str = "",
+        command_id: str = "",
+        payload: dict[str, Any] | None = None,
+        not_before_at: str = "",
+        max_attempts: int = 5,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("runtime_outbox")
+        normalized_type = str(outbox_type or "").strip()
+        normalized_idempotency = str(idempotency_key or "").strip()
+        if not normalized_type or not normalized_idempotency:
+            return {}
+        now = _utc_now_timestamp()
+        row_payload = {
+            "outbox_id": "out_" + sha1(normalized_idempotency.encode("utf-8")).hexdigest()[:24],
+            "workflow_run_id": str(workflow_run_id or "").strip(),
+            "operation_id": str(operation_id or "").strip(),
+            "command_id": str(command_id or "").strip(),
+            "outbox_type": normalized_type,
+            "status": "queued",
+            "idempotency_key": normalized_idempotency,
+            "payload_json": json.dumps(_json_safe_payload(payload or {}), ensure_ascii=False),
+            "not_before_at": str(not_before_at or "").strip(),
+            "attempt": 0,
+            "max_attempts": max(1, int(max_attempts or 5)),
+            "lease_owner": "",
+            "lease_expires_at": "",
+            "dispatched_at": "",
+            "last_error": "",
+            "schema_version": "runtime_outbox_v1",
+            "created_at": now,
+            "updated_at": now,
+        }
+        if self._control_plane_postgres_should_prefer_read("runtime_outbox"):
+            row = self._call_control_plane_postgres_native("enqueue_runtime_outbox", row_payload)
+            if row is not None:
+                return self._runtime_outbox_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("runtime_outbox"):
+                return {}
+        with self._lock, self._connection:
+            columns = list(row_payload.keys())
+            self._connection.execute(
+                (
+                    f"INSERT OR IGNORE INTO runtime_outbox ({', '.join(columns)}) "
+                    f"VALUES ({', '.join(['?'] * len(columns))})"
+                ),
+                tuple(row_payload[column] for column in columns),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM runtime_outbox WHERE idempotency_key = ? LIMIT 1",
+                (normalized_idempotency,),
+            ).fetchone()
+        self._mirror_control_plane_row("runtime_outbox", row)
+        return self._runtime_outbox_from_row(row)
+
+    def mark_runtime_outbox_dispatched(self, outbox_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("runtime_outbox")
+        normalized_outbox_id = str(outbox_id or "").strip()
+        if not normalized_outbox_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("runtime_outbox"):
+            row = self._call_control_plane_postgres_native("mark_runtime_outbox_dispatched", normalized_outbox_id)
+            return self._runtime_outbox_from_row(row) if row is not None else {}
+        now = _utc_now_timestamp()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE runtime_outbox
+                SET status = 'dispatched',
+                    dispatched_at = ?,
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    last_error = '',
+                    updated_at = ?
+                WHERE outbox_id = ?
+                  AND status IN ('queued', 'claimed', 'running')
+                """,
+                (now, now, normalized_outbox_id),
+            )
+            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
+            row = self._connection.execute(
+                "SELECT * FROM runtime_outbox WHERE outbox_id = ? LIMIT 1",
+                (normalized_outbox_id,),
+            ).fetchone()
+        if not changed:
+            return {}
+        self._mirror_control_plane_row("runtime_outbox", row)
+        return self._runtime_outbox_from_row(row)
+
     def renew_agent_worker_lease(
         self,
         worker_id: int,
@@ -7710,6 +15568,55 @@ class ControlPlaneStore:
         if not clauses:
             return []
         query = "SELECT * FROM agent_worker_runs WHERE " + " AND ".join(clauses) + " ORDER BY worker_id"
+        with self._lock:
+            rows = self._connection.execute(query, tuple(params)).fetchall()
+        return [self._agent_worker_from_row(row) for row in rows]
+
+    def list_agent_workers_by_remote_provider_identifiers(
+        self,
+        *,
+        run_id: str = "",
+        dataset_id: str = "",
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        normalized_run_id = str(run_id or "").strip()
+        normalized_dataset_id = str(dataset_id or "").strip()
+        if not normalized_run_id and not normalized_dataset_id:
+            return []
+        if self._control_plane_postgres_should_prefer_read("agent_worker_runs"):
+            rows = self._call_control_plane_postgres_native(
+                "list_agent_workers_by_remote_provider_identifiers",
+                run_id=normalized_run_id,
+                dataset_id=normalized_dataset_id,
+                limit=limit,
+            )
+            return [self._agent_worker_from_row(row) for row in list(rows or [])]
+        clauses: list[str] = []
+        params: list[Any] = []
+        if normalized_run_id:
+            clauses.append(
+                "("
+                "json_extract(checkpoint_json, '$.run_id') = ? "
+                "OR json_extract(checkpoint_json, '$.actor_run_id') = ? "
+                "OR json_extract(checkpoint_json, '$.actorRunId') = ?"
+                ")"
+            )
+            params.extend([normalized_run_id, normalized_run_id, normalized_run_id])
+        if normalized_dataset_id:
+            clauses.append(
+                "("
+                "json_extract(checkpoint_json, '$.dataset_id') = ? "
+                "OR json_extract(checkpoint_json, '$.default_dataset_id') = ? "
+                "OR json_extract(checkpoint_json, '$.defaultDatasetId') = ?"
+                ")"
+            )
+            params.extend([normalized_dataset_id, normalized_dataset_id, normalized_dataset_id])
+        query = (
+            "SELECT * FROM agent_worker_runs WHERE "
+            + " OR ".join(clauses)
+            + " ORDER BY updated_at DESC, worker_id DESC LIMIT ?"
+        )
+        params.append(max(1, int(limit or 50)))
         with self._lock:
             rows = self._connection.execute(query, tuple(params)).fetchall()
         return [self._agent_worker_from_row(row) for row in rows]
@@ -9916,6 +17823,1921 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] if "updated_at" in row_keys else dict(row).get("updated_at") or ""),
         }
 
+    def _serving_projection_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "projection_id": str(_row_value(row, "projection_id") or ""),
+            "projection_type": str(_row_value(row, "projection_type") or ""),
+            "collection_id": str(_row_value(row, "collection_id") or ""),
+            "source_run_id": str(_row_value(row, "source_run_id") or ""),
+            "projection_version": str(_row_value(row, "projection_version") or "serving_projection_v1"),
+            "state": str(_row_value(row, "state") or ""),
+            "scope_label": str(_row_value(row, "scope_label") or ""),
+            "scope_spec": _loads_json_dict(_row_value(row, "scope_spec_json")),
+            "candidate_identity_manifest_ref": str(_row_value(row, "candidate_identity_manifest_ref") or ""),
+            "source_collection_version": str(_row_value(row, "source_collection_version") or ""),
+            "raw_profile_index_watermark": str(_row_value(row, "raw_profile_index_watermark") or ""),
+            "evidence_index_watermark": str(_row_value(row, "evidence_index_watermark") or ""),
+            "counts": _loads_json_dict(_row_value(row, "counts_json")),
+            "readiness": _loads_json_dict(_row_value(row, "readiness_json")),
+            "provenance": _loads_json_dict(_row_value(row, "provenance_json")),
+            "manual_overlay_version": str(_row_value(row, "manual_overlay_version") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "published_at": str(_row_value(row, "published_at") or ""),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _serving_projection_member_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "projection_id": str(_row_value(row, "projection_id") or ""),
+            "candidate_identity_key": str(_row_value(row, "candidate_identity_key") or ""),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "profile_url_key": str(_row_value(row, "profile_url_key") or ""),
+            "candidate_id": str(_row_value(row, "candidate_id") or ""),
+            "rank_index": _normalize_projection_rank_index(_row_value(row, "rank_index")),
+            "rank_key": str(_row_value(row, "rank_key") or ""),
+            "lane": str(_row_value(row, "lane") or ""),
+            "employment_scope": str(_row_value(row, "employment_scope") or ""),
+            "source_shard_key": str(_row_value(row, "source_shard_key") or ""),
+            "source_run_id": str(_row_value(row, "source_run_id") or ""),
+            "row_readiness": str(_row_value(row, "row_readiness") or ""),
+            "profile_readiness": str(_row_value(row, "profile_readiness") or ""),
+            "card_readiness": str(_row_value(row, "card_readiness") or ""),
+            "visibility_state": str(_row_value(row, "visibility_state") or ""),
+            "public_summary": _loads_json_dict(_row_value(row, "public_summary_json")),
+            "projection_metrics": _loads_json_dict(_row_value(row, "projection_metrics_json")),
+            "crm_overlay_summary": _loads_json_dict(_row_value(row, "crm_overlay_summary_json")),
+            "provenance": _loads_json_dict(_row_value(row, "provenance_json")),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "published_at": str(_row_value(row, "published_at") or ""),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _projection_person_search_index_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "projection_id": str(_row_value(row, "projection_id") or ""),
+            "candidate_identity_key": str(_row_value(row, "candidate_identity_key") or ""),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "indexed_text": str(_row_value(row, "indexed_text") or ""),
+            "raw_profile_terms": _loads_json_list(_row_value(row, "raw_profile_terms_json")),
+            "evidence_terms": _loads_json_list(_row_value(row, "evidence_terms_json")),
+            "assertion_terms": _loads_json_list(_row_value(row, "assertion_terms_json")),
+            "indexed_field_sources": _loads_json_dict(_row_value(row, "indexed_field_sources_json")),
+            "raw_profile_index_watermark": str(_row_value(row, "raw_profile_index_watermark") or ""),
+            "evidence_index_watermark": str(_row_value(row, "evidence_index_watermark") or ""),
+            "count_scope": str(_row_value(row, "count_scope") or ""),
+            "profile_fetched_at": str(_row_value(row, "profile_fetched_at") or ""),
+            "profile_indexed_at": str(_row_value(row, "profile_indexed_at") or ""),
+            "evidence_indexed_at": str(_row_value(row, "evidence_indexed_at") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _projection_manifest_shard_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "shard_id": str(_row_value(row, "shard_id") or ""),
+            "projection_id": str(_row_value(row, "projection_id") or ""),
+            "shard_kind": str(_row_value(row, "shard_kind") or ""),
+            "shard_index": _normalize_projection_rank_index(_row_value(row, "shard_index")),
+            "manifest_ref": str(_row_value(row, "manifest_ref") or ""),
+            "row_count": _normalize_projection_rank_index(_row_value(row, "row_count")),
+            "content_signature": str(_row_value(row, "content_signature") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _run_projection_link_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "run_id": str(_row_value(row, "run_id") or ""),
+            "projection_id": str(_row_value(row, "projection_id") or ""),
+            "link_type": str(_row_value(row, "link_type") or ""),
+            "projection_type": str(_row_value(row, "projection_type") or ""),
+            "collection_id": str(_row_value(row, "collection_id") or ""),
+            "state": str(_row_value(row, "state") or ""),
+            "created_by": str(_row_value(row, "created_by") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _collection_authoritative_pointer_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "collection_id": str(_row_value(row, "collection_id") or ""),
+            "active_projection_id": str(_row_value(row, "active_projection_id") or ""),
+            "active_collection_version": str(_row_value(row, "active_collection_version") or ""),
+            "previous_projection_id": str(_row_value(row, "previous_projection_id") or ""),
+            "state": str(_row_value(row, "state") or ""),
+            "writer_id": str(_row_value(row, "writer_id") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "published_at": str(_row_value(row, "published_at") or ""),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def upsert_serving_projection(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        projection_id = _build_projection_id(normalized.get("projection_id") or normalized.get("id"))
+        projection_type = _normalize_serving_projection_type(normalized.get("projection_type"))
+        state = _normalize_serving_projection_state(normalized.get("state"))
+        now = _utc_now_timestamp()
+        existing = self.get_serving_projection(projection_id)
+        row_payload = {
+            "projection_id": projection_id,
+            "projection_type": projection_type,
+            "collection_id": str(normalized.get("collection_id") or "").strip(),
+            "source_run_id": str(normalized.get("source_run_id") or normalized.get("run_id") or "").strip(),
+            "projection_version": str(normalized.get("projection_version") or "serving_projection_v1").strip()
+            or "serving_projection_v1",
+            "state": state,
+            "scope_label": str(normalized.get("scope_label") or "").strip(),
+            "scope_spec_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("scope_spec") or normalized.get("scope_spec_json")),
+                ensure_ascii=False,
+            ),
+            "candidate_identity_manifest_ref": str(normalized.get("candidate_identity_manifest_ref") or "").strip(),
+            "source_collection_version": str(normalized.get("source_collection_version") or "").strip(),
+            "raw_profile_index_watermark": str(normalized.get("raw_profile_index_watermark") or "").strip(),
+            "evidence_index_watermark": str(normalized.get("evidence_index_watermark") or "").strip(),
+            "counts_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("counts") or normalized.get("counts_json")),
+                ensure_ascii=False,
+            ),
+            "readiness_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("readiness") or normalized.get("readiness_json")),
+                ensure_ascii=False,
+            ),
+            "provenance_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("provenance") or normalized.get("provenance_json")),
+                ensure_ascii=False,
+            ),
+            "manual_overlay_version": str(normalized.get("manual_overlay_version") or "").strip(),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "published_at": str(normalized.get("published_at") or "").strip(),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        if self._write_control_plane_row_to_postgres("serving_projections", row_payload):
+            return self.get_serving_projection(projection_id)
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO serving_projections (
+                    projection_id,
+                    projection_type,
+                    collection_id,
+                    source_run_id,
+                    projection_version,
+                    state,
+                    scope_label,
+                    scope_spec_json,
+                    candidate_identity_manifest_ref,
+                    source_collection_version,
+                    raw_profile_index_watermark,
+                    evidence_index_watermark,
+                    counts_json,
+                    readiness_json,
+                    provenance_json,
+                    manual_overlay_version,
+                    metadata_json,
+                    published_at,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    :projection_id,
+                    :projection_type,
+                    :collection_id,
+                    :source_run_id,
+                    :projection_version,
+                    :state,
+                    :scope_label,
+                    :scope_spec_json,
+                    :candidate_identity_manifest_ref,
+                    :source_collection_version,
+                    :raw_profile_index_watermark,
+                    :evidence_index_watermark,
+                    :counts_json,
+                    :readiness_json,
+                    :provenance_json,
+                    :manual_overlay_version,
+                    :metadata_json,
+                    :published_at,
+                    :created_at,
+                    :updated_at
+                )
+                ON CONFLICT(projection_id) DO UPDATE SET
+                    projection_type = excluded.projection_type,
+                    collection_id = excluded.collection_id,
+                    source_run_id = excluded.source_run_id,
+                    projection_version = excluded.projection_version,
+                    state = excluded.state,
+                    scope_label = excluded.scope_label,
+                    scope_spec_json = excluded.scope_spec_json,
+                    candidate_identity_manifest_ref = excluded.candidate_identity_manifest_ref,
+                    source_collection_version = excluded.source_collection_version,
+                    raw_profile_index_watermark = excluded.raw_profile_index_watermark,
+                    evidence_index_watermark = excluded.evidence_index_watermark,
+                    counts_json = excluded.counts_json,
+                    readiness_json = excluded.readiness_json,
+                    provenance_json = excluded.provenance_json,
+                    manual_overlay_version = excluded.manual_overlay_version,
+                    metadata_json = excluded.metadata_json,
+                    published_at = excluded.published_at,
+                    updated_at = excluded.updated_at
+                """,
+                row_payload,
+            )
+            row = self._connection.execute(
+                """
+                SELECT *
+                FROM serving_projections
+                WHERE projection_id = ?
+                LIMIT 1
+                """,
+                (projection_id,),
+            ).fetchone()
+            self._mirror_control_plane_row("serving_projections", row)
+        return self.get_serving_projection(projection_id)
+
+    def get_serving_projection(self, projection_id: str) -> dict[str, Any]:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "serving_projections",
+            row_builder=self._serving_projection_from_row,
+            where_sql="projection_id = %s",
+            params=[normalized_projection_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projections"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT *
+                FROM serving_projections
+                WHERE projection_id = ?
+                LIMIT 1
+                """,
+                (normalized_projection_id,),
+            ).fetchone()
+        return self._serving_projection_from_row(row)
+
+    def list_serving_projections(
+        self,
+        *,
+        collection_id: str = "",
+        source_run_id: str = "",
+        projection_type: str = "",
+        state: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if str(collection_id or "").strip():
+            clauses.append("collection_id = ?")
+            params.append(str(collection_id or "").strip())
+        if str(source_run_id or "").strip():
+            clauses.append("source_run_id = ?")
+            params.append(str(source_run_id or "").strip())
+        if str(projection_type or "").strip():
+            clauses.append("projection_type = ?")
+            params.append(_normalize_serving_projection_type(projection_type))
+        if str(state or "").strip():
+            clauses.append("state = ?")
+            params.append(_normalize_serving_projection_state(state))
+        where_sqlite = " AND ".join(clauses)
+        postgres_rows = self._select_control_plane_rows(
+            "serving_projections",
+            row_builder=self._serving_projection_from_row,
+            where_sql=where_sqlite.replace("?", "%s"),
+            params=params,
+            order_by_sql="updated_at DESC, projection_id DESC",
+            limit=max(1, int(limit or 100)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projections"):
+            return []
+        where_clause = f"WHERE {where_sqlite}" if where_sqlite else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT *
+                FROM serving_projections
+                {where_clause}
+                ORDER BY updated_at DESC, projection_id DESC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 100))),
+            ).fetchall()
+        return [self._serving_projection_from_row(row) for row in rows]
+
+    def _serving_projection_member_row_payload(
+        self,
+        projection_id: str,
+        member: dict[str, Any],
+        *,
+        existing: dict[str, Any] | None = None,
+        now: str = "",
+    ) -> dict[str, Any]:
+        normalized_member = dict(member or {})
+        public_summary = _normalize_json_object_payload(
+            normalized_member.get("public_summary") or normalized_member.get("public_summary_json")
+        )
+        profile_url_key = _resolve_profile_url_key(
+            normalized_member.get("profile_url_key"),
+            public_summary.get("profile_url_key"),
+            normalized_member.get("linkedin_url"),
+            public_summary.get("linkedin_url"),
+            public_summary.get("profile_url"),
+        )
+        candidate_id = str(normalized_member.get("candidate_id") or public_summary.get("candidate_id") or "").strip()
+        person_identity_key = _resolve_person_identity_key(
+            person_identity_key=str(normalized_member.get("person_identity_key") or ""),
+            profile_url_key=profile_url_key,
+            linkedin_url=str(normalized_member.get("linkedin_url") or public_summary.get("linkedin_url") or ""),
+            candidate_identity_key=str(normalized_member.get("candidate_identity_key") or ""),
+            candidate_id=candidate_id,
+        )
+        candidate_identity_key = _resolve_candidate_identity_key(
+            candidate_identity_key=str(normalized_member.get("candidate_identity_key") or ""),
+            person_identity_key=person_identity_key,
+            profile_url_key=profile_url_key,
+            linkedin_url=str(normalized_member.get("linkedin_url") or public_summary.get("linkedin_url") or ""),
+            candidate_id=candidate_id,
+        )
+        public_summary = {
+            **public_summary,
+            **_build_person_summary_view(
+                public_summary,
+                candidate_id=candidate_id,
+                profile_url_key=profile_url_key,
+                person_identity_key=person_identity_key,
+                source_projection_id=projection_id,
+                source_run_id=str(normalized_member.get("source_run_id") or ""),
+            ),
+        }
+        timestamp = str(now or _utc_now_timestamp())
+        return {
+            "projection_id": projection_id,
+            "candidate_identity_key": candidate_identity_key,
+            "person_identity_key": person_identity_key or candidate_identity_key,
+            "profile_url_key": profile_url_key,
+            "candidate_id": candidate_id,
+            "rank_index": _normalize_projection_rank_index(normalized_member.get("rank_index")),
+            "rank_key": str(normalized_member.get("rank_key") or "").strip(),
+            "lane": str(normalized_member.get("lane") or "").strip(),
+            "employment_scope": _normalize_employment_scope(normalized_member.get("employment_scope")),
+            "source_shard_key": str(normalized_member.get("source_shard_key") or "").strip(),
+            "source_run_id": str(normalized_member.get("source_run_id") or "").strip(),
+            "row_readiness": str(normalized_member.get("row_readiness") or "ready").strip() or "ready",
+            "profile_readiness": str(normalized_member.get("profile_readiness") or "unknown").strip() or "unknown",
+            "card_readiness": str(normalized_member.get("card_readiness") or "unknown").strip() or "unknown",
+            "visibility_state": str(normalized_member.get("visibility_state") or "visible").strip() or "visible",
+            "public_summary_json": json.dumps(public_summary, ensure_ascii=False),
+            "projection_metrics_json": json.dumps(
+                _normalize_json_object_payload(
+                    normalized_member.get("projection_metrics") or normalized_member.get("projection_metrics_json")
+                ),
+                ensure_ascii=False,
+            ),
+            "crm_overlay_summary_json": json.dumps(
+                _normalize_json_object_payload(
+                    normalized_member.get("crm_overlay_summary") or normalized_member.get("crm_overlay_summary_json")
+                ),
+                ensure_ascii=False,
+            ),
+            "provenance_json": json.dumps(
+                _normalize_json_object_payload(normalized_member.get("provenance") or normalized_member.get("provenance_json")),
+                ensure_ascii=False,
+            ),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized_member.get("metadata") or normalized_member.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "published_at": str(normalized_member.get("published_at") or "").strip(),
+            "created_at": str((existing or {}).get("created_at") or normalized_member.get("created_at") or timestamp),
+            "updated_at": timestamp,
+        }
+
+    def upsert_serving_projection_members(
+        self,
+        projection_id: str,
+        members: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    ) -> int:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return 0
+        normalized_by_key: dict[str, dict[str, Any]] = {}
+        for member in list(members or []):
+            if not isinstance(member, dict):
+                continue
+            public_summary = _normalize_json_object_payload(member.get("public_summary") or member.get("public_summary_json"))
+            profile_url_key = _resolve_profile_url_key(
+                member.get("profile_url_key"),
+                public_summary.get("profile_url_key"),
+                member.get("linkedin_url"),
+                public_summary.get("linkedin_url"),
+                public_summary.get("profile_url"),
+            )
+            candidate_identity_key = _resolve_candidate_identity_key(
+                candidate_identity_key=str(member.get("candidate_identity_key") or ""),
+                person_identity_key=str(member.get("person_identity_key") or ""),
+                profile_url_key=profile_url_key,
+                linkedin_url=str(member.get("linkedin_url") or public_summary.get("linkedin_url") or ""),
+                candidate_id=str(member.get("candidate_id") or public_summary.get("candidate_id") or ""),
+            )
+            if not candidate_identity_key:
+                continue
+            normalized_by_key[candidate_identity_key] = dict(member)
+        if not normalized_by_key:
+            return 0
+        now = _utc_now_timestamp()
+        if self._control_plane_postgres_should_prefer_read("serving_projection_members"):
+            member_keys = list(normalized_by_key.keys())
+            existing_by_key = {
+                str(item.get("candidate_identity_key") or "").strip(): item
+                for item in self.list_serving_projection_members_by_identity_keys(
+                    normalized_projection_id,
+                    member_keys,
+                )
+                if str(item.get("candidate_identity_key") or "").strip()
+            }
+            row_payloads = [
+                self._serving_projection_member_row_payload(
+                    normalized_projection_id,
+                    member,
+                    existing=existing_by_key.get(candidate_identity_key),
+                    now=now,
+                )
+                for candidate_identity_key, member in normalized_by_key.items()
+            ]
+            return int(
+                self._call_control_plane_postgres_native(
+                    "bulk_upsert_rows",
+                    "serving_projection_members",
+                    row_payloads,
+                )
+                or 0
+            )
+        with self._lock, self._connection:
+            member_keys = list(normalized_by_key.keys())
+            existing_rows = []
+            chunk_size = 500
+            for offset in range(0, len(member_keys), chunk_size):
+                chunk = member_keys[offset : offset + chunk_size]
+                placeholders = ",".join("?" for _ in chunk)
+                existing_rows.extend(
+                    self._connection.execute(
+                        f"""
+                        SELECT *
+                        FROM serving_projection_members
+                        WHERE projection_id = ? AND candidate_identity_key IN ({placeholders})
+                        """,
+                        (normalized_projection_id, *chunk),
+                    ).fetchall()
+                )
+            existing_by_key = {
+                str(row["candidate_identity_key"] or "").strip(): self._serving_projection_member_from_row(row)
+                for row in existing_rows
+                if str(row["candidate_identity_key"] or "").strip()
+            }
+            row_payloads = [
+                self._serving_projection_member_row_payload(
+                    normalized_projection_id,
+                    member,
+                    existing=existing_by_key.get(candidate_identity_key),
+                    now=now,
+                )
+                for candidate_identity_key, member in normalized_by_key.items()
+            ]
+            self._connection.executemany(
+                """
+                INSERT INTO serving_projection_members (
+                    projection_id,
+                    candidate_identity_key,
+                    person_identity_key,
+                    profile_url_key,
+                    candidate_id,
+                    rank_index,
+                    rank_key,
+                    lane,
+                    employment_scope,
+                    source_shard_key,
+                    source_run_id,
+                    row_readiness,
+                    profile_readiness,
+                    card_readiness,
+                    visibility_state,
+                    public_summary_json,
+                    projection_metrics_json,
+                    crm_overlay_summary_json,
+                    provenance_json,
+                    metadata_json,
+                    published_at,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    :projection_id,
+                    :candidate_identity_key,
+                    :person_identity_key,
+                    :profile_url_key,
+                    :candidate_id,
+                    :rank_index,
+                    :rank_key,
+                    :lane,
+                    :employment_scope,
+                    :source_shard_key,
+                    :source_run_id,
+                    :row_readiness,
+                    :profile_readiness,
+                    :card_readiness,
+                    :visibility_state,
+                    :public_summary_json,
+                    :projection_metrics_json,
+                    :crm_overlay_summary_json,
+                    :provenance_json,
+                    :metadata_json,
+                    :published_at,
+                    :created_at,
+                    :updated_at
+                )
+                ON CONFLICT(projection_id, candidate_identity_key) DO UPDATE SET
+                    person_identity_key = excluded.person_identity_key,
+                    profile_url_key = excluded.profile_url_key,
+                    candidate_id = excluded.candidate_id,
+                    rank_index = excluded.rank_index,
+                    rank_key = excluded.rank_key,
+                    lane = excluded.lane,
+                    employment_scope = excluded.employment_scope,
+                    source_shard_key = excluded.source_shard_key,
+                    source_run_id = excluded.source_run_id,
+                    row_readiness = excluded.row_readiness,
+                    profile_readiness = excluded.profile_readiness,
+                    card_readiness = excluded.card_readiness,
+                    visibility_state = excluded.visibility_state,
+                    public_summary_json = excluded.public_summary_json,
+                    projection_metrics_json = excluded.projection_metrics_json,
+                    crm_overlay_summary_json = excluded.crm_overlay_summary_json,
+                    provenance_json = excluded.provenance_json,
+                    metadata_json = excluded.metadata_json,
+                    published_at = excluded.published_at,
+                    updated_at = excluded.updated_at
+                """,
+                row_payloads,
+            )
+            for row_payload in row_payloads:
+                self._mirror_control_plane_row("serving_projection_members", row_payload)
+        return len(normalized_by_key)
+
+    def replace_serving_projection_members(
+        self,
+        projection_id: str,
+        members: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    ) -> int:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return 0
+        if self._control_plane_postgres_should_prefer_read("serving_projection_members"):
+            try:
+                self._call_control_plane_postgres_native(
+                    "delete_rows",
+                    table_name="serving_projection_members",
+                    where_sql="projection_id = %s",
+                    params=[normalized_projection_id],
+                )
+                return self.upsert_serving_projection_members(normalized_projection_id, members)
+            except Exception as exc:
+                if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
+                    self._raise_control_plane_postgres_write_failure(
+                        table_name="serving_projection_members",
+                        method_name="replace_serving_projection_members",
+                        reason=f"{type(exc).__name__}: {exc}",
+                        error=exc,
+                    )
+        with self._lock, self._connection:
+            self._connection.execute(
+                "DELETE FROM serving_projection_members WHERE projection_id = ?",
+                (normalized_projection_id,),
+            )
+        return self.upsert_serving_projection_members(normalized_projection_id, members)
+
+    def list_serving_projection_members(
+        self,
+        projection_id: str,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        visible_only: bool = True,
+    ) -> list[dict[str, Any]]:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return []
+        normalized_limit = max(1, int(limit or 100))
+        normalized_offset = max(0, int(offset or 0))
+        clauses = ["projection_id = ?"]
+        params: list[Any] = [normalized_projection_id]
+        if visible_only:
+            clauses.append("visibility_state = ?")
+            params.append("visible")
+        where_sqlite = " AND ".join(clauses)
+        postgres_rows = self._select_control_plane_rows(
+            "serving_projection_members",
+            row_builder=self._serving_projection_member_from_row,
+            where_sql=where_sqlite.replace("?", "%s"),
+            params=params,
+            order_by_sql="rank_index ASC, candidate_identity_key ASC",
+            limit=normalized_limit,
+            offset=normalized_offset,
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT *
+                FROM serving_projection_members
+                WHERE {where_sqlite}
+                ORDER BY rank_index ASC, candidate_identity_key ASC
+                LIMIT ? OFFSET ?
+                """,
+                (*params, normalized_limit, normalized_offset),
+            ).fetchall()
+        return [self._serving_projection_member_from_row(row) for row in rows]
+
+    def list_serving_projection_members_by_identity_keys(
+        self,
+        projection_id: str,
+        candidate_identity_keys: list[str] | tuple[str, ...] | set[str],
+    ) -> list[dict[str, Any]]:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return []
+        normalized_keys = [
+            str(key or "").strip()
+            for key in dict.fromkeys(candidate_identity_keys or [])
+            if str(key or "").strip()
+        ]
+        if not normalized_keys:
+            return []
+
+        rows: list[dict[str, Any]] = []
+        # Keep parameter counts comfortably below SQLite limits and avoid very
+        # large postgres IN clauses on production-scale projection publish paths.
+        chunk_size = 500
+        if self._control_plane_postgres_should_prefer_read("serving_projection_members"):
+            for offset in range(0, len(normalized_keys), chunk_size):
+                chunk = normalized_keys[offset : offset + chunk_size]
+                placeholders = ", ".join("%s" for _ in chunk)
+                rows.extend(
+                    self._select_control_plane_rows(
+                        "serving_projection_members",
+                        row_builder=self._serving_projection_member_from_row,
+                        where_sql=f"projection_id = %s AND candidate_identity_key IN ({placeholders})",
+                        params=[normalized_projection_id, *chunk],
+                        order_by_sql="rank_index ASC, candidate_identity_key ASC",
+                        limit=0,
+                    )
+                )
+            if rows:
+                return rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
+            return []
+        with self._lock:
+            for offset in range(0, len(normalized_keys), chunk_size):
+                chunk = normalized_keys[offset : offset + chunk_size]
+                placeholders = ",".join("?" for _ in chunk)
+                fetched = self._connection.execute(
+                    f"""
+                    SELECT *
+                    FROM serving_projection_members
+                    WHERE projection_id = ? AND candidate_identity_key IN ({placeholders})
+                    ORDER BY rank_index ASC, candidate_identity_key ASC
+                    """,
+                    (normalized_projection_id, *chunk),
+                ).fetchall()
+                rows.extend(self._serving_projection_member_from_row(row) for row in fetched)
+        return rows
+
+    def list_serving_projection_members_by_person_identity(
+        self,
+        person_identity_key: str,
+        *,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        normalized_person_key = str(person_identity_key or "").strip()
+        if not normalized_person_key:
+            return []
+        normalized_limit = max(1, int(limit or 100))
+        postgres_rows = self._select_control_plane_rows(
+            "serving_projection_members",
+            row_builder=self._serving_projection_member_from_row,
+            where_sql="person_identity_key = %s",
+            params=[normalized_person_key],
+            order_by_sql="updated_at DESC, projection_id ASC, rank_index ASC",
+            limit=normalized_limit,
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT *
+                FROM serving_projection_members
+                WHERE person_identity_key = ?
+                ORDER BY updated_at DESC, projection_id ASC, rank_index ASC
+                LIMIT ?
+                """,
+                (normalized_person_key, normalized_limit),
+            ).fetchall()
+        return [self._serving_projection_member_from_row(row) for row in rows]
+
+    def count_serving_projection_members_by_readiness(
+        self,
+        projection_id: str,
+        *,
+        visible_only: bool = True,
+    ) -> dict[str, int]:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return {}
+        clauses = ["projection_id = ?"]
+        params: list[Any] = [normalized_projection_id]
+        if visible_only:
+            clauses.append("visibility_state = ?")
+            params.append("visible")
+        where_sqlite = " AND ".join(clauses)
+        if self._control_plane_postgres_should_prefer_read("serving_projection_members"):
+            try:
+                rows = self._control_plane_postgres.select_many(
+                    "serving_projection_members",
+                    where_sql=where_sqlite.replace("?", "%s"),
+                    params=params,
+                    order_by_sql="profile_readiness ASC, card_readiness ASC",
+                    limit=0,
+                )
+                return _serving_projection_readiness_counts(
+                    [self._serving_projection_member_from_row(row) for row in rows]
+                )
+            except Exception:
+                if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
+                    return {}
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT profile_readiness, card_readiness
+                FROM serving_projection_members
+                WHERE {where_sqlite}
+                """,
+                tuple(params),
+            ).fetchall()
+        return _serving_projection_readiness_counts([self._serving_projection_member_from_row(row) for row in rows])
+
+    def get_serving_projection_member(self, projection_id: str, candidate_identity_key: str) -> dict[str, Any]:
+        normalized_projection_id = str(projection_id or "").strip()
+        normalized_candidate_key = str(candidate_identity_key or "").strip()
+        if not normalized_projection_id or not normalized_candidate_key:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "serving_projection_members",
+            row_builder=self._serving_projection_member_from_row,
+            where_sql="projection_id = %s AND candidate_identity_key = %s",
+            params=[normalized_projection_id, normalized_candidate_key],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT *
+                FROM serving_projection_members
+                WHERE projection_id = ? AND candidate_identity_key = ?
+                LIMIT 1
+                """,
+                (normalized_projection_id, normalized_candidate_key),
+            ).fetchone()
+        return self._serving_projection_member_from_row(row)
+
+    def count_serving_projection_members(self, projection_id: str, *, visible_only: bool = True) -> int:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return 0
+        clauses = ["projection_id = ?"]
+        params: list[Any] = [normalized_projection_id]
+        if visible_only:
+            clauses.append("visibility_state = ?")
+            params.append("visible")
+        where_sqlite = " AND ".join(clauses)
+        if self._control_plane_postgres_should_prefer_read("serving_projection_members"):
+            try:
+                count_rows = getattr(self._control_plane_postgres, "count_rows", None)
+                if callable(count_rows):
+                    return int(
+                        count_rows(
+                            "serving_projection_members",
+                            where_sql=where_sqlite.replace("?", "%s"),
+                            params=params,
+                        )
+                        or 0
+                    )
+            except Exception:
+                if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
+                    return 0
+            try:
+                rows = self._control_plane_postgres.select_many(
+                    "serving_projection_members",
+                    where_sql=where_sqlite.replace("?", "%s"),
+                    params=params,
+                    limit=0,
+                )
+                return len(rows)
+            except Exception:
+                if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
+                    return 0
+        with self._lock:
+            row = self._connection.execute(
+                f"""
+                SELECT COUNT(*) AS row_count
+                FROM serving_projection_members
+                WHERE {where_sqlite}
+                """,
+                tuple(params),
+            ).fetchone()
+        return int(row["row_count"] or 0) if row is not None else 0
+
+    def replace_projection_person_search_index(
+        self,
+        projection_id: str,
+        rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    ) -> dict[str, Any]:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return {"status": "invalid", "reason": "projection_id_required", "indexed_count": 0}
+        self.delete_projection_person_search_index(normalized_projection_id)
+        return self.upsert_projection_person_search_index_rows(normalized_projection_id, rows)
+
+    def delete_projection_person_search_index(self, projection_id: str) -> dict[str, Any]:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return {"status": "invalid", "reason": "projection_id_required", "deleted": False}
+        if self._control_plane_postgres_should_prefer_read("projection_person_search_index"):
+            try:
+                self._call_control_plane_postgres_native(
+                    "delete_rows",
+                    table_name="projection_person_search_index",
+                    where_sql="projection_id = %s",
+                    params=[normalized_projection_id],
+                )
+                return {
+                    "status": "deleted",
+                    "projection_id": normalized_projection_id,
+                    "deleted": True,
+                    "read_contract": {
+                        "source": "projection_person_search_index",
+                        "fallback_used": False,
+                        "fail_closed": True,
+                    },
+                }
+            except Exception as exc:
+                if self._control_plane_postgres_should_skip_sqlite_fallback("projection_person_search_index"):
+                    self._raise_control_plane_postgres_write_failure(
+                        table_name="projection_person_search_index",
+                        method_name="delete_projection_person_search_index",
+                        reason=f"{type(exc).__name__}: {exc}",
+                        error=exc,
+                    )
+        with self._lock, self._connection:
+            self._connection.execute(
+                "DELETE FROM projection_person_search_index WHERE projection_id = ?",
+                (normalized_projection_id,),
+            )
+        return {
+            "status": "deleted",
+            "projection_id": normalized_projection_id,
+            "deleted": True,
+            "read_contract": {
+                "source": "projection_person_search_index",
+                "fallback_used": False,
+                "fail_closed": True,
+            },
+        }
+
+    def upsert_projection_person_search_index_rows(
+        self,
+        projection_id: str,
+        rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    ) -> dict[str, Any]:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return {"status": "invalid", "reason": "projection_id_required", "indexed_count": 0}
+        normalized_rows = [
+            self._projection_person_search_index_row_payload(normalized_projection_id, row)
+            for row in list(rows or [])
+            if isinstance(row, dict)
+        ]
+        normalized_rows = [
+            row
+            for row in normalized_rows
+            if str(row.get("candidate_identity_key") or "").strip()
+        ]
+        if self._control_plane_postgres_should_prefer_read("projection_person_search_index"):
+            try:
+                if normalized_rows:
+                    self._call_control_plane_postgres_native(
+                        "bulk_upsert_rows",
+                        "projection_person_search_index",
+                        normalized_rows,
+                    )
+                return {
+                    "status": "indexed",
+                    "projection_id": normalized_projection_id,
+                    "indexed_count": len(normalized_rows),
+                    "read_contract": {
+                        "source": "projection_person_search_index",
+                        "fallback_used": False,
+                        "fail_closed": True,
+                    },
+                }
+            except Exception as exc:
+                if self._control_plane_postgres_should_skip_sqlite_fallback("projection_person_search_index"):
+                    self._raise_control_plane_postgres_write_failure(
+                        table_name="projection_person_search_index",
+                        method_name="upsert_projection_person_search_index_rows",
+                        reason=f"{type(exc).__name__}: {exc}",
+                        error=exc,
+                    )
+        with self._lock, self._connection:
+            if normalized_rows:
+                self._connection.executemany(
+                    """
+                    INSERT INTO projection_person_search_index (
+                        projection_id,
+                        candidate_identity_key,
+                        person_identity_key,
+                        indexed_text,
+                        raw_profile_terms_json,
+                        evidence_terms_json,
+                        assertion_terms_json,
+                        indexed_field_sources_json,
+                        raw_profile_index_watermark,
+                        evidence_index_watermark,
+                        count_scope,
+                        profile_fetched_at,
+                        profile_indexed_at,
+                        evidence_indexed_at,
+                        metadata_json,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        :projection_id,
+                        :candidate_identity_key,
+                        :person_identity_key,
+                        :indexed_text,
+                        :raw_profile_terms_json,
+                        :evidence_terms_json,
+                        :assertion_terms_json,
+                        :indexed_field_sources_json,
+                        :raw_profile_index_watermark,
+                        :evidence_index_watermark,
+                        :count_scope,
+                        :profile_fetched_at,
+                        :profile_indexed_at,
+                        :evidence_indexed_at,
+                        :metadata_json,
+                        :created_at,
+                        :updated_at
+                    )
+                    ON CONFLICT(projection_id, candidate_identity_key) DO UPDATE SET
+                        person_identity_key = excluded.person_identity_key,
+                        indexed_text = excluded.indexed_text,
+                        raw_profile_terms_json = excluded.raw_profile_terms_json,
+                        evidence_terms_json = excluded.evidence_terms_json,
+                        assertion_terms_json = excluded.assertion_terms_json,
+                        indexed_field_sources_json = excluded.indexed_field_sources_json,
+                        raw_profile_index_watermark = excluded.raw_profile_index_watermark,
+                        evidence_index_watermark = excluded.evidence_index_watermark,
+                        count_scope = excluded.count_scope,
+                        profile_fetched_at = excluded.profile_fetched_at,
+                        profile_indexed_at = excluded.profile_indexed_at,
+                        evidence_indexed_at = excluded.evidence_indexed_at,
+                        metadata_json = excluded.metadata_json,
+                        updated_at = excluded.updated_at
+                    """,
+                    normalized_rows,
+                )
+                for row_payload in normalized_rows:
+                    self._mirror_control_plane_row("projection_person_search_index", row_payload)
+        return {
+            "status": "indexed",
+            "projection_id": normalized_projection_id,
+            "indexed_count": len(normalized_rows),
+            "read_contract": {
+                "source": "projection_person_search_index",
+                "fallback_used": False,
+                "fail_closed": True,
+            },
+        }
+
+    def update_projection_person_search_index_scope(
+        self,
+        projection_id: str,
+        *,
+        count_scope: str,
+        raw_profile_index_watermark: str = "",
+        evidence_index_watermark: str = "",
+    ) -> dict[str, Any]:
+        normalized_projection_id = str(projection_id or "").strip()
+        normalized_count_scope = str(count_scope or "").strip() or "index_partial"
+        if not normalized_projection_id:
+            return {"status": "invalid", "reason": "projection_id_required", "updated_count": 0}
+        now = _utc_now_timestamp()
+        values = {
+            "count_scope": normalized_count_scope,
+            "updated_at": now,
+        }
+        raw_watermark = str(raw_profile_index_watermark or "").strip()
+        evidence_watermark = str(evidence_index_watermark or "").strip()
+        if raw_watermark:
+            values["raw_profile_index_watermark"] = raw_watermark
+        if evidence_watermark:
+            values["evidence_index_watermark"] = evidence_watermark
+        if self._control_plane_postgres_should_prefer_read("projection_person_search_index"):
+            try:
+                updated_count = self._call_control_plane_postgres_native(
+                    "update_rows",
+                    table_name="projection_person_search_index",
+                    where_sql="projection_id = %s",
+                    params=[normalized_projection_id],
+                    values=values,
+                )
+                if updated_count is not None:
+                    return {
+                        "status": "updated",
+                        "projection_id": normalized_projection_id,
+                        "updated_count": int(updated_count or 0),
+                        "count_scope": normalized_count_scope,
+                        "read_contract": {
+                            "source": "projection_person_search_index",
+                            "fallback_used": False,
+                            "fail_closed": True,
+                        },
+                    }
+            except Exception as exc:
+                if self._control_plane_postgres_should_skip_sqlite_fallback("projection_person_search_index"):
+                    self._raise_control_plane_postgres_write_failure(
+                        table_name="projection_person_search_index",
+                        method_name="update_projection_person_search_index_scope",
+                        reason=f"{type(exc).__name__}: {exc}",
+                        error=exc,
+                    )
+        assignments = ["count_scope = ?", "updated_at = ?"]
+        params: list[Any] = [normalized_count_scope, now]
+        if raw_watermark:
+            assignments.append("raw_profile_index_watermark = ?")
+            params.append(raw_watermark)
+        if evidence_watermark:
+            assignments.append("evidence_index_watermark = ?")
+            params.append(evidence_watermark)
+        params.append(normalized_projection_id)
+        with self._lock, self._connection:
+            cursor = self._connection.execute(
+                f"""
+                UPDATE projection_person_search_index
+                SET {", ".join(assignments)}
+                WHERE projection_id = ?
+                """,
+                tuple(params),
+            )
+            updated_count = int(cursor.rowcount or 0)
+        return {
+            "status": "updated",
+            "projection_id": normalized_projection_id,
+            "updated_count": updated_count,
+            "count_scope": normalized_count_scope,
+            "read_contract": {
+                "source": "projection_person_search_index",
+                "fallback_used": False,
+                "fail_closed": True,
+            },
+        }
+
+    def count_projection_person_search_index(self, projection_id: str) -> int:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return 0
+        if self._control_plane_postgres_should_prefer_read("projection_person_search_index"):
+            try:
+                count_rows = getattr(self._control_plane_postgres, "count_rows", None)
+                if callable(count_rows):
+                    return int(
+                        count_rows(
+                            "projection_person_search_index",
+                            where_sql="projection_id = %s",
+                            params=[normalized_projection_id],
+                        )
+                        or 0
+                    )
+            except Exception:
+                if self._control_plane_postgres_should_skip_sqlite_fallback("projection_person_search_index"):
+                    return 0
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT COUNT(*) AS row_count
+                FROM projection_person_search_index
+                WHERE projection_id = ?
+                """,
+                (normalized_projection_id,),
+            ).fetchone()
+        return int(row["row_count"] or 0) if row is not None else 0
+
+    def search_projection_person_index(
+        self,
+        projection_id: str,
+        *,
+        search_keyword: str = "",
+        offset: int = 0,
+        limit: int = 120,
+    ) -> dict[str, Any]:
+        normalized_projection_id = str(projection_id or "").strip()
+        normalized_keyword = _normalize_search_index_text(search_keyword)
+        normalized_limit = min(max(1, int(limit or 120)), 250)
+        normalized_offset = max(0, int(offset or 0))
+        if not normalized_projection_id:
+            return {"status": "invalid", "reason": "projection_id_required", "matched_count": 0, "candidate_identity_keys": []}
+        if not normalized_keyword:
+            return {"status": "invalid", "reason": "search_keyword_required", "matched_count": 0, "candidate_identity_keys": []}
+        if self.count_projection_person_search_index(normalized_projection_id) <= 0:
+            return {
+                "status": "unavailable",
+                "reason": "projection_person_search_index_missing",
+                "projection_id": normalized_projection_id,
+                "matched_count": 0,
+                "candidate_identity_keys": [],
+                "index_filter_readiness": {
+                    "count_scope": "unavailable",
+                    "raw_profile_index_watermark": "",
+                    "evidence_index_watermark": "",
+                    "freshness_timezone": "Asia/Shanghai",
+                },
+            }
+        rows = self._search_projection_person_index_rows(
+            normalized_projection_id,
+            normalized_keyword=normalized_keyword,
+        )
+        matched_count = len(rows)
+        paged_rows = rows[normalized_offset : normalized_offset + normalized_limit]
+        readiness_rows = rows or self._list_projection_person_search_index_rows(normalized_projection_id, limit=1000)
+        return {
+            "status": "ready",
+            "projection_id": normalized_projection_id,
+            "search_keyword": str(search_keyword or "").strip(),
+            "normalized_search_keyword": normalized_keyword,
+            "matched_count": matched_count,
+            "candidate_identity_keys": [
+                str(row.get("candidate_identity_key") or "").strip()
+                for row in paged_rows
+                if str(row.get("candidate_identity_key") or "").strip()
+            ],
+            "offset": normalized_offset,
+            "limit": len(paged_rows),
+            "has_more": normalized_offset + len(paged_rows) < matched_count,
+            "next_offset": (
+                normalized_offset + len(paged_rows)
+                if normalized_offset + len(paged_rows) < matched_count
+                else None
+            ),
+            "index_filter_readiness": _projection_person_search_index_readiness(readiness_rows),
+            "read_contract": {
+                "source": "projection_person_search_index",
+                "fallback_used": False,
+                "fail_closed": True,
+            },
+        }
+
+    def filter_projection_person_search_index(
+        self,
+        projection_id: str,
+        *,
+        candidate_filter: dict[str, Any],
+        offset: int = 0,
+        limit: int = 120,
+    ) -> dict[str, Any]:
+        normalized_projection_id = str(projection_id or "").strip()
+        normalized_filter = dict(candidate_filter or {})
+        normalized_limit = min(max(1, int(limit or 120)), 250)
+        normalized_offset = max(0, int(offset or 0))
+        if not normalized_projection_id:
+            return {
+                "status": "invalid",
+                "reason": "projection_id_required",
+                "matched_count": 0,
+                "candidate_identity_keys": [],
+            }
+        if not _candidate_page_filter_active(normalized_filter):
+            return {
+                "status": "invalid",
+                "reason": "active_filter_required",
+                "projection_id": normalized_projection_id,
+                "matched_count": 0,
+                "candidate_identity_keys": [],
+            }
+        if self.count_projection_person_search_index(normalized_projection_id) <= 0:
+            return {
+                "status": "unavailable",
+                "reason": "projection_person_search_index_missing",
+                "projection_id": normalized_projection_id,
+                "matched_count": 0,
+                "candidate_identity_keys": [],
+                "index_filter_readiness": {
+                    "count_scope": "unavailable",
+                    "raw_profile_index_watermark": "",
+                    "evidence_index_watermark": "",
+                    "freshness_timezone": "Asia/Shanghai",
+                },
+            }
+        search_keyword = str(normalized_filter.get("search_keyword") or "").strip()
+        if search_keyword:
+            rows = self._search_projection_person_index_rows(
+                normalized_projection_id,
+                normalized_keyword=_candidate_page_filter_text(search_keyword),
+            )
+        else:
+            rows = self._list_projection_person_search_index_rows(normalized_projection_id, limit=100_000)
+        filter_without_index_keyword = {**normalized_filter, "search_keyword": ""}
+        matched_rows: list[dict[str, Any]] = []
+        missing_filter_record_count = 0
+        for row in rows:
+            metadata = dict(row.get("metadata") or {})
+            filter_record = dict(metadata.get("filter_record") or {})
+            if not filter_record:
+                missing_filter_record_count += 1
+                continue
+            if _candidate_matches_candidate_page_filter(
+                record=filter_record,
+                candidate_filter=filter_without_index_keyword,
+                review_status_lookup={},
+            ):
+                matched_rows.append(row)
+        readiness_rows = rows or self._list_projection_person_search_index_rows(normalized_projection_id, limit=1000)
+        if missing_filter_record_count and not matched_rows and rows:
+            return {
+                "status": "unavailable",
+                "reason": "projection_person_search_index_filter_record_missing",
+                "projection_id": normalized_projection_id,
+                "matched_count": 0,
+                "candidate_identity_keys": [],
+                "missing_filter_record_count": missing_filter_record_count,
+                "index_filter_readiness": _projection_person_search_index_readiness(readiness_rows),
+            }
+        paged_rows = matched_rows[normalized_offset : normalized_offset + normalized_limit]
+        return {
+            "status": "ready",
+            "projection_id": normalized_projection_id,
+            "matched_count": len(matched_rows),
+            "candidate_identity_keys": [
+                str(row.get("candidate_identity_key") or "").strip()
+                for row in paged_rows
+                if str(row.get("candidate_identity_key") or "").strip()
+            ],
+            "offset": normalized_offset,
+            "limit": len(paged_rows),
+            "has_more": normalized_offset + len(paged_rows) < len(matched_rows),
+            "next_offset": (
+                normalized_offset + len(paged_rows)
+                if normalized_offset + len(paged_rows) < len(matched_rows)
+                else None
+            ),
+            "missing_filter_record_count": missing_filter_record_count,
+            "index_filter_readiness": _projection_person_search_index_readiness(readiness_rows),
+            "read_contract": {
+                "source": "projection_person_search_index",
+                "fallback_used": False,
+                "fail_closed": True,
+            },
+        }
+
+    def _search_projection_person_index_rows(
+        self,
+        projection_id: str,
+        *,
+        normalized_keyword: str,
+    ) -> list[dict[str, Any]]:
+        where_sqlite = "projection_id = ? AND indexed_text LIKE ?"
+        params: list[Any] = [projection_id, f"%{normalized_keyword}%"]
+        postgres_rows = self._select_control_plane_rows(
+            "projection_person_search_index",
+            row_builder=self._projection_person_search_index_from_row,
+            where_sql=where_sqlite.replace("?", "%s"),
+            params=params,
+            order_by_sql="candidate_identity_key ASC",
+            limit=0,
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("projection_person_search_index"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT *
+                FROM projection_person_search_index
+                WHERE {where_sqlite}
+                ORDER BY candidate_identity_key ASC
+                """,
+                tuple(params),
+            ).fetchall()
+        return [self._projection_person_search_index_from_row(row) for row in rows]
+
+    def get_projection_person_search_index_summary(self, projection_id: str) -> dict[str, Any]:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return {"status": "invalid", "reason": "projection_id_required"}
+        rows = self._list_projection_person_search_index_rows(normalized_projection_id, limit=1000)
+        if not rows:
+            return {
+                "status": "unavailable",
+                "projection_id": normalized_projection_id,
+                "indexed_count": 0,
+                "index_filter_readiness": {
+                    "count_scope": "unavailable",
+                    "raw_profile_index_watermark": "",
+                    "evidence_index_watermark": "",
+                    "freshness_timezone": "Asia/Shanghai",
+                },
+            }
+        return {
+            "status": "ready",
+            "projection_id": normalized_projection_id,
+            "indexed_count": self.count_projection_person_search_index(normalized_projection_id),
+            "index_filter_readiness": _projection_person_search_index_readiness(rows),
+            "read_contract": {
+                "source": "projection_person_search_index",
+                "fallback_used": False,
+                "fail_closed": True,
+            },
+        }
+
+    def list_projection_person_search_index_rows(
+        self,
+        projection_id: str,
+        *,
+        offset: int = 0,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        return self._list_projection_person_search_index_rows(
+            projection_id,
+            offset=offset,
+            limit=limit,
+        )
+
+    def _list_projection_person_search_index_rows(
+        self,
+        projection_id: str,
+        *,
+        offset: int = 0,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        normalized_offset = max(0, int(offset or 0))
+        postgres_rows = self._select_control_plane_rows(
+            "projection_person_search_index",
+            row_builder=self._projection_person_search_index_from_row,
+            where_sql="projection_id = %s",
+            params=[projection_id],
+            order_by_sql="updated_at DESC, candidate_identity_key ASC",
+            limit=max(1, int(limit or 1000)),
+            offset=normalized_offset,
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("projection_person_search_index"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT *
+                FROM projection_person_search_index
+                WHERE projection_id = ?
+                ORDER BY updated_at DESC, candidate_identity_key ASC
+                LIMIT ? OFFSET ?
+                """,
+                (projection_id, max(1, int(limit or 1000)), normalized_offset),
+            ).fetchall()
+        return [self._projection_person_search_index_from_row(row) for row in rows]
+
+    def _projection_person_search_index_row_payload(
+        self,
+        projection_id: str,
+        row: dict[str, Any],
+    ) -> dict[str, Any]:
+        normalized = dict(row or {})
+        candidate_identity_key = str(normalized.get("candidate_identity_key") or "").strip()
+        person_identity_key = str(normalized.get("person_identity_key") or "").strip()
+        text_parts: list[str] = [str(normalized.get("indexed_text") or "")]
+        for field_name in (
+            "display_name",
+            "headline",
+            "summary",
+            "current_company",
+            "title",
+            "location",
+        ):
+            text_parts.append(str(normalized.get(field_name) or ""))
+        for terms_key in ("raw_profile_terms", "evidence_terms", "assertion_terms"):
+            text_parts.extend(_normalize_search_index_terms(normalized.get(terms_key)))
+        indexed_text = _normalize_search_index_text(" ".join(text_parts))
+        now = _utc_now_timestamp()
+        return {
+            "projection_id": projection_id,
+            "candidate_identity_key": candidate_identity_key,
+            "person_identity_key": person_identity_key,
+            "indexed_text": indexed_text,
+            "raw_profile_terms_json": json.dumps(
+                _normalize_search_index_terms(normalized.get("raw_profile_terms")),
+                ensure_ascii=False,
+            ),
+            "evidence_terms_json": json.dumps(
+                _normalize_search_index_terms(normalized.get("evidence_terms")),
+                ensure_ascii=False,
+            ),
+            "assertion_terms_json": json.dumps(
+                _normalize_search_index_terms(normalized.get("assertion_terms")),
+                ensure_ascii=False,
+            ),
+            "indexed_field_sources_json": json.dumps(
+                _normalize_json_object_payload(
+                    normalized.get("indexed_field_sources") or normalized.get("indexed_field_sources_json")
+                ),
+                ensure_ascii=False,
+            ),
+            "raw_profile_index_watermark": str(normalized.get("raw_profile_index_watermark") or "").strip(),
+            "evidence_index_watermark": str(normalized.get("evidence_index_watermark") or "").strip(),
+            "count_scope": str(normalized.get("count_scope") or "index_partial").strip() or "index_partial",
+            "profile_fetched_at": str(normalized.get("profile_fetched_at") or "").strip(),
+            "profile_indexed_at": str(normalized.get("profile_indexed_at") or "").strip(),
+            "evidence_indexed_at": str(normalized.get("evidence_indexed_at") or "").strip(),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str(normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+
+    def upsert_projection_manifest_shard(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        projection_id = str(normalized.get("projection_id") or "").strip()
+        if not projection_id:
+            return {}
+        shard_kind = str(normalized.get("shard_kind") or "candidate_identity_manifest").strip()
+        shard_index = _normalize_projection_rank_index(normalized.get("shard_index"))
+        manifest_ref = str(normalized.get("manifest_ref") or "").strip()
+        explicit_shard_id = str(normalized.get("shard_id") or "").strip()
+        shard_id = explicit_shard_id or f"{projection_id}::{shard_kind}::{shard_index}"
+        now = _utc_now_timestamp()
+        existing = self.get_projection_manifest_shard(shard_id)
+        row_payload = {
+            "shard_id": shard_id,
+            "projection_id": projection_id,
+            "shard_kind": shard_kind,
+            "shard_index": shard_index,
+            "manifest_ref": manifest_ref,
+            "row_count": _normalize_projection_rank_index(normalized.get("row_count")),
+            "content_signature": str(normalized.get("content_signature") or "").strip(),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        if self._write_control_plane_row_to_postgres("projection_manifest_shards", row_payload):
+            return self.get_projection_manifest_shard(shard_id)
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO projection_manifest_shards (
+                    shard_id,
+                    projection_id,
+                    shard_kind,
+                    shard_index,
+                    manifest_ref,
+                    row_count,
+                    content_signature,
+                    metadata_json,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    :shard_id,
+                    :projection_id,
+                    :shard_kind,
+                    :shard_index,
+                    :manifest_ref,
+                    :row_count,
+                    :content_signature,
+                    :metadata_json,
+                    :created_at,
+                    :updated_at
+                )
+                ON CONFLICT(shard_id) DO UPDATE SET
+                    projection_id = excluded.projection_id,
+                    shard_kind = excluded.shard_kind,
+                    shard_index = excluded.shard_index,
+                    manifest_ref = excluded.manifest_ref,
+                    row_count = excluded.row_count,
+                    content_signature = excluded.content_signature,
+                    metadata_json = excluded.metadata_json,
+                    updated_at = excluded.updated_at
+                """,
+                row_payload,
+            )
+            row = self._connection.execute(
+                """
+                SELECT *
+                FROM projection_manifest_shards
+                WHERE shard_id = ?
+                LIMIT 1
+                """,
+                (shard_id,),
+            ).fetchone()
+            self._mirror_control_plane_row("projection_manifest_shards", row)
+        return self.get_projection_manifest_shard(shard_id)
+
+    def get_projection_manifest_shard(self, shard_id: str) -> dict[str, Any]:
+        normalized_shard_id = str(shard_id or "").strip()
+        if not normalized_shard_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "projection_manifest_shards",
+            row_builder=self._projection_manifest_shard_from_row,
+            where_sql="shard_id = %s",
+            params=[normalized_shard_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("projection_manifest_shards"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT *
+                FROM projection_manifest_shards
+                WHERE shard_id = ?
+                LIMIT 1
+                """,
+                (normalized_shard_id,),
+            ).fetchone()
+        return self._projection_manifest_shard_from_row(row)
+
+    def list_projection_manifest_shards(
+        self,
+        projection_id: str,
+        *,
+        shard_kind: str = "",
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return []
+        clauses = ["projection_id = ?"]
+        params: list[Any] = [normalized_projection_id]
+        if str(shard_kind or "").strip():
+            clauses.append("shard_kind = ?")
+            params.append(str(shard_kind or "").strip())
+        where_sqlite = " AND ".join(clauses)
+        postgres_rows = self._select_control_plane_rows(
+            "projection_manifest_shards",
+            row_builder=self._projection_manifest_shard_from_row,
+            where_sql=where_sqlite.replace("?", "%s"),
+            params=params,
+            order_by_sql="shard_kind ASC, shard_index ASC, shard_id ASC",
+            limit=max(1, int(limit or 1000)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("projection_manifest_shards"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT *
+                FROM projection_manifest_shards
+                WHERE {where_sqlite}
+                ORDER BY shard_kind ASC, shard_index ASC, shard_id ASC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 1000))),
+            ).fetchall()
+        return [self._projection_manifest_shard_from_row(row) for row in rows]
+
+    def upsert_run_projection_link(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        run_id = str(normalized.get("run_id") or normalized.get("job_id") or "").strip()
+        projection_id = str(normalized.get("projection_id") or "").strip()
+        if not run_id or not projection_id:
+            return {}
+        link_type = str(normalized.get("link_type") or "result").strip() or "result"
+        existing = self.get_run_projection_link(run_id, link_type=link_type)
+        now = _utc_now_timestamp()
+        row_payload = {
+            "run_id": run_id,
+            "projection_id": projection_id,
+            "link_type": link_type,
+            "projection_type": _normalize_serving_projection_type(normalized.get("projection_type")),
+            "collection_id": str(normalized.get("collection_id") or "").strip(),
+            "state": str(normalized.get("state") or "active").strip().lower() or "active",
+            "created_by": str(normalized.get("created_by") or "").strip(),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        if self._write_control_plane_row_to_postgres("run_projection_links", row_payload):
+            return self.get_run_projection_link(run_id, link_type=link_type)
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO run_projection_links (
+                    run_id,
+                    projection_id,
+                    link_type,
+                    projection_type,
+                    collection_id,
+                    state,
+                    created_by,
+                    metadata_json,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    :run_id,
+                    :projection_id,
+                    :link_type,
+                    :projection_type,
+                    :collection_id,
+                    :state,
+                    :created_by,
+                    :metadata_json,
+                    :created_at,
+                    :updated_at
+                )
+                ON CONFLICT(run_id, link_type) DO UPDATE SET
+                    projection_id = excluded.projection_id,
+                    projection_type = excluded.projection_type,
+                    collection_id = excluded.collection_id,
+                    state = excluded.state,
+                    created_by = excluded.created_by,
+                    metadata_json = excluded.metadata_json,
+                    updated_at = excluded.updated_at
+                """,
+                row_payload,
+            )
+            row = self._connection.execute(
+                """
+                SELECT *
+                FROM run_projection_links
+                WHERE run_id = ? AND link_type = ?
+                LIMIT 1
+                """,
+                (run_id, link_type),
+            ).fetchone()
+            self._mirror_control_plane_row("run_projection_links", row)
+        return self.get_run_projection_link(run_id, link_type=link_type)
+
+    def get_run_projection_link(self, run_id: str, *, link_type: str = "result") -> dict[str, Any]:
+        normalized_run_id = str(run_id or "").strip()
+        normalized_link_type = str(link_type or "result").strip() or "result"
+        if not normalized_run_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "run_projection_links",
+            row_builder=self._run_projection_link_from_row,
+            where_sql="run_id = %s AND link_type = %s",
+            params=[normalized_run_id, normalized_link_type],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("run_projection_links"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT *
+                FROM run_projection_links
+                WHERE run_id = ? AND link_type = ?
+                LIMIT 1
+                """,
+                (normalized_run_id, normalized_link_type),
+            ).fetchone()
+        return self._run_projection_link_from_row(row)
+
+    def list_run_projection_links(self, run_id: str, *, limit: int = 20) -> list[dict[str, Any]]:
+        normalized_run_id = str(run_id or "").strip()
+        if not normalized_run_id:
+            return []
+        postgres_rows = self._select_control_plane_rows(
+            "run_projection_links",
+            row_builder=self._run_projection_link_from_row,
+            where_sql="run_id = %s",
+            params=[normalized_run_id],
+            order_by_sql="updated_at DESC, link_type ASC",
+            limit=max(1, int(limit or 20)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("run_projection_links"):
+            return []
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT *
+                FROM run_projection_links
+                WHERE run_id = ?
+                ORDER BY updated_at DESC, link_type ASC
+                LIMIT ?
+                """,
+                (normalized_run_id, max(1, int(limit or 20))),
+            ).fetchall()
+        return [self._run_projection_link_from_row(row) for row in rows]
+
+    def upsert_collection_authoritative_pointer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        collection_id = str(normalized.get("collection_id") or "").strip()
+        active_projection_id = str(
+            normalized.get("active_projection_id") or normalized.get("projection_id") or ""
+        ).strip()
+        if not collection_id or not active_projection_id:
+            return {}
+        existing = self.get_collection_authoritative_pointer(collection_id)
+        previous_projection_id = str(
+            normalized.get("previous_projection_id")
+            or (
+                (existing or {}).get("active_projection_id")
+                if str((existing or {}).get("active_projection_id") or "") != active_projection_id
+                else (existing or {}).get("previous_projection_id")
+            )
+            or ""
+        ).strip()
+        now = _utc_now_timestamp()
+        row_payload = {
+            "collection_id": collection_id,
+            "active_projection_id": active_projection_id,
+            "active_collection_version": str(normalized.get("active_collection_version") or "").strip(),
+            "previous_projection_id": previous_projection_id,
+            "state": str(normalized.get("state") or "active").strip().lower() or "active",
+            "writer_id": str(normalized.get("writer_id") or "").strip(),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "published_at": str(normalized.get("published_at") or now).strip(),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        if self._write_control_plane_row_to_postgres("collection_authoritative_pointers", row_payload):
+            return self.get_collection_authoritative_pointer(collection_id)
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO collection_authoritative_pointers (
+                    collection_id,
+                    active_projection_id,
+                    active_collection_version,
+                    previous_projection_id,
+                    state,
+                    writer_id,
+                    metadata_json,
+                    published_at,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    :collection_id,
+                    :active_projection_id,
+                    :active_collection_version,
+                    :previous_projection_id,
+                    :state,
+                    :writer_id,
+                    :metadata_json,
+                    :published_at,
+                    :created_at,
+                    :updated_at
+                )
+                ON CONFLICT(collection_id) DO UPDATE SET
+                    active_projection_id = excluded.active_projection_id,
+                    active_collection_version = excluded.active_collection_version,
+                    previous_projection_id = excluded.previous_projection_id,
+                    state = excluded.state,
+                    writer_id = excluded.writer_id,
+                    metadata_json = excluded.metadata_json,
+                    published_at = excluded.published_at,
+                    updated_at = excluded.updated_at
+                """,
+                row_payload,
+            )
+            row = self._connection.execute(
+                """
+                SELECT *
+                FROM collection_authoritative_pointers
+                WHERE collection_id = ?
+                LIMIT 1
+                """,
+                (collection_id,),
+            ).fetchone()
+            self._mirror_control_plane_row("collection_authoritative_pointers", row)
+        return self.get_collection_authoritative_pointer(collection_id)
+
+    def get_collection_authoritative_pointer(self, collection_id: str) -> dict[str, Any]:
+        normalized_collection_id = str(collection_id or "").strip()
+        if not normalized_collection_id:
+            return {}
+        postgres_row = self._select_control_plane_row(
+            "collection_authoritative_pointers",
+            row_builder=self._collection_authoritative_pointer_from_row,
+            where_sql="collection_id = %s",
+            params=[normalized_collection_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("collection_authoritative_pointers"):
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT *
+                FROM collection_authoritative_pointers
+                WHERE collection_id = ?
+                LIMIT 1
+                """,
+                (normalized_collection_id,),
+            ).fetchone()
+        return self._collection_authoritative_pointer_from_row(row)
+
+    def list_collection_authoritative_pointers(
+        self,
+        *,
+        state: str = "active",
+        limit: int = 250,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        normalized_state = str(state or "").strip().lower()
+        if normalized_state:
+            clauses.append("state = ?")
+            params.append(normalized_state)
+        where_sqlite = " AND ".join(clauses)
+        postgres_rows = self._select_control_plane_rows(
+            "collection_authoritative_pointers",
+            row_builder=self._collection_authoritative_pointer_from_row,
+            where_sql=where_sqlite.replace("?", "%s"),
+            params=params,
+            order_by_sql="updated_at DESC, collection_id ASC",
+            limit=max(1, int(limit or 250)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("collection_authoritative_pointers"):
+            return []
+        where_clause = f"WHERE {where_sqlite}" if where_sqlite else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT *
+                FROM collection_authoritative_pointers
+                {where_clause}
+                ORDER BY updated_at DESC, collection_id ASC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 250))),
+            ).fetchall()
+        return [self._collection_authoritative_pointer_from_row(row) for row in rows]
+
     def _select_asset_membership_rows_for_generation(self, generation_key: str) -> list[dict[str, Any]]:
         normalized_generation_key = str(generation_key or "").strip()
         if not normalized_generation_key:
@@ -11930,6 +21752,68 @@ class ControlPlaneStore:
         with self._lock:
             return self._resolve_linkedin_profile_registry_key_locked(normalized_key)
 
+    def _resolve_linkedin_profile_registry_keys_bulk(
+        self,
+        profile_url_keys: list[str] | tuple[str, ...],
+    ) -> dict[str, str]:
+        normalized_keys = _dedupe_preserve_order(
+            [str(profile_url_key or "").strip() for profile_url_key in list(profile_url_keys or [])]
+        )
+        normalized_keys = [key for key in normalized_keys if key]
+        if not normalized_keys:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry_aliases"):
+            resolved_by_original = {key: key for key in normalized_keys}
+            unresolved_keys = list(normalized_keys)
+            seen_alias_keys: set[str] = set()
+            # Preserve the single-key resolver's alias-chain semantics while keeping
+            # each chain level to one PG round trip for refill batch lease hot paths.
+            for _ in range(8):
+                query_keys = [
+                    key
+                    for key in _dedupe_preserve_order(unresolved_keys)
+                    if key and key not in seen_alias_keys
+                ]
+                if not query_keys:
+                    break
+                seen_alias_keys.update(query_keys)
+                placeholders = ", ".join("%s" for _ in query_keys)
+                try:
+                    alias_rows = self._select_control_plane_rows(
+                        "linkedin_profile_registry_aliases",
+                        row_builder=lambda row: dict(row),
+                        where_sql=f"alias_url_key IN ({placeholders})",
+                        params=query_keys,
+                        limit=0,
+                    )
+                except Exception:
+                    alias_rows = []
+                alias_map = {
+                    str(dict(row).get("alias_url_key") or "").strip(): str(
+                        dict(row).get("profile_url_key") or ""
+                    ).strip()
+                    for row in list(alias_rows or [])
+                    if str(dict(row).get("alias_url_key") or "").strip()
+                    and str(dict(row).get("profile_url_key") or "").strip()
+                }
+                if not alias_map:
+                    break
+                next_unresolved: list[str] = []
+                for original_key, current_key in list(resolved_by_original.items()):
+                    mapped_key = str(alias_map.get(current_key) or "").strip()
+                    if not mapped_key or mapped_key == current_key:
+                        continue
+                    resolved_by_original[original_key] = mapped_key
+                    if mapped_key not in seen_alias_keys:
+                        next_unresolved.append(mapped_key)
+                unresolved_keys = next_unresolved
+            return resolved_by_original
+        with self._lock:
+            return {
+                key: self._resolve_linkedin_profile_registry_key_locked(key)
+                for key in normalized_keys
+            }
+
     def _list_linkedin_profile_alias_urls(self, canonical_key: str) -> list[str]:
         normalized_canonical_key = str(canonical_key or "").strip()
         if not normalized_canonical_key:
@@ -11975,6 +21859,22 @@ class ControlPlaneStore:
         last_failed_at: str,
         source_shards: list[str],
         source_jobs: list[str],
+        refill_queue_state: str = "",
+        last_refill_trigger_kind: str = "",
+        last_refill_plan_reason: str = "",
+        last_refill_deferred_reason: str = "",
+        last_refill_planned_at: str = "",
+        refill_not_before_at: str = "",
+        refill_plan_batch_size: int = 0,
+        refill_plan_batch_count: int = 0,
+        refill_plan_window_url_count: int = 0,
+        last_refill_attempt_count: int = 0,
+        refill_owner_worker_id: int = 0,
+        refill_owner_run_id: str = "",
+        refill_owner_dataset_id: str = "",
+        refill_owner_payload_hash: str = "",
+        refill_terminal_status: str = "",
+        refill_terminal_at: str = "",
         created_at: str = "",
         updated_at: str = "",
     ) -> dict[str, Any]:
@@ -11997,6 +21897,22 @@ class ControlPlaneStore:
             "last_failed_at": str(last_failed_at or "").strip(),
             "source_shards_json": json.dumps(list(source_shards or []), ensure_ascii=False),
             "source_jobs_json": json.dumps(list(source_jobs or []), ensure_ascii=False),
+            "refill_queue_state": str(refill_queue_state or "").strip(),
+            "last_refill_trigger_kind": str(last_refill_trigger_kind or "").strip(),
+            "last_refill_plan_reason": str(last_refill_plan_reason or "").strip(),
+            "last_refill_deferred_reason": str(last_refill_deferred_reason or "").strip(),
+            "last_refill_planned_at": str(last_refill_planned_at or "").strip(),
+            "refill_not_before_at": str(refill_not_before_at or "").strip(),
+            "refill_plan_batch_size": max(0, int(refill_plan_batch_size or 0)),
+            "refill_plan_batch_count": max(0, int(refill_plan_batch_count or 0)),
+            "refill_plan_window_url_count": max(0, int(refill_plan_window_url_count or 0)),
+            "last_refill_attempt_count": max(0, int(last_refill_attempt_count or 0)),
+            "refill_owner_worker_id": max(0, int(refill_owner_worker_id or 0)),
+            "refill_owner_run_id": str(refill_owner_run_id or "").strip(),
+            "refill_owner_dataset_id": str(refill_owner_dataset_id or "").strip(),
+            "refill_owner_payload_hash": str(refill_owner_payload_hash or "").strip(),
+            "refill_terminal_status": str(refill_terminal_status or "").strip(),
+            "refill_terminal_at": str(refill_terminal_at or "").strip(),
             "created_at": str(created_at or now),
             "updated_at": str(updated_at or now),
         }
@@ -12168,6 +22084,69 @@ class ControlPlaneStore:
                 resolved[key] = dict(payload)
         return resolved
 
+    def summarize_linkedin_profile_registry_scope(
+        self,
+        *,
+        source_job: str,
+        snapshot_dir: str,
+    ) -> dict[str, Any]:
+        """Return the terminal-state proof for one job-owned snapshot profile wave.
+
+        The profile registry is the scheduler source of truth. Stage recovery
+        must therefore only restore LinkedIn Stage 1 from candidate documents
+        when this job/snapshot registry scope has no open provider work left.
+        """
+
+        normalized_source_job = str(source_job or "").strip()
+        normalized_snapshot_dir = str(snapshot_dir or "").strip()
+        if not normalized_source_job or not normalized_snapshot_dir:
+            return {
+                "requested_url_count": 0,
+                "terminal_url_count": 0,
+                "fetched_url_count": 0,
+                "fetched_missing_raw_path_count": 0,
+                "unrecoverable_url_count": 0,
+                "open_url_count": 0,
+                "open_state_counts": {},
+                "terminal_queue_state_leak_count": 0,
+                "all_requested_terminal": False,
+                "source_job": normalized_source_job,
+                "snapshot_dir": normalized_snapshot_dir,
+            }
+
+        rows: list[dict[str, Any]] = []
+        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry"):
+            rows = self._select_control_plane_rows(
+                "linkedin_profile_registry",
+                row_builder=self._linkedin_profile_registry_from_row,
+                where_sql="last_snapshot_dir = %s",
+                params=[normalized_snapshot_dir],
+                order_by_sql="updated_at ASC",
+                limit=0,
+            )
+            if rows or self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
+                return _summarize_linkedin_profile_registry_rows_for_scope(
+                    rows,
+                    source_job=normalized_source_job,
+                    snapshot_dir=normalized_snapshot_dir,
+                )
+
+        with self._lock:
+            sqlite_rows = self._connection.execute(
+                """
+                SELECT *
+                FROM linkedin_profile_registry
+                WHERE last_snapshot_dir = ?
+                ORDER BY updated_at ASC
+                """,
+                (normalized_snapshot_dir,),
+            ).fetchall()
+        return _summarize_linkedin_profile_registry_rows_for_scope(
+            [self._linkedin_profile_registry_from_row(row) for row in sqlite_rows],
+            source_job=normalized_source_job,
+            snapshot_dir=normalized_snapshot_dir,
+        )
+
     def get_linkedin_profile_registry_aliases(self, profile_url: str) -> list[str]:
         key = _normalize_linkedin_profile_url_key(profile_url)
         if not key:
@@ -12314,6 +22293,40 @@ class ControlPlaneStore:
         ttl_seconds = max(5, int(lease_seconds or 0))
         if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry_leases"):
             canonical_key = self._resolve_linkedin_profile_registry_key(normalized_key)
+            native_acquire = getattr(self._control_plane_postgres, "acquire_linkedin_profile_registry_lease", None)
+            if callable(native_acquire):
+                try:
+                    native_payload = native_acquire(
+                        canonical_key,
+                        lease_owner=normalized_owner,
+                        lease_seconds=ttl_seconds,
+                        lease_token=normalized_token,
+                    )
+                except Exception as exc:
+                    if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry_leases"):
+                        self._raise_control_plane_postgres_write_failure(
+                            table_name="linkedin_profile_registry_leases",
+                            method_name="acquire_linkedin_profile_registry_lease",
+                            reason=f"{type(exc).__name__}: {exc}",
+                            error=exc,
+                        )
+                    native_payload = None
+                if native_payload is not None:
+                    lease_payload = self._linkedin_profile_registry_lease_from_row(native_payload)
+                    acquired = (
+                        str(lease_payload.get("lease_owner") or "") == normalized_owner
+                        and str(lease_payload.get("lease_token") or "") == normalized_token
+                        and not bool(lease_payload.get("expired"))
+                    )
+                    return {
+                        **lease_payload,
+                        "acquired": acquired,
+                        "contended": bool(
+                            not acquired
+                            and lease_payload
+                            and str(lease_payload.get("lease_owner") or "").strip()
+                        ),
+                    }
             existing = self._select_control_plane_row(
                 "linkedin_profile_registry_leases",
                 row_builder=self._linkedin_profile_registry_lease_from_row,
@@ -12346,11 +22359,18 @@ class ControlPlaneStore:
                 },
             )
             lease_payload = self.get_linkedin_profile_registry_lease(profile_url) or {}
-            return {
-                **lease_payload,
-                "acquired": bool(lease_payload),
-                "contended": False,
-            }
+            if lease_payload:
+                return {
+                    **lease_payload,
+                    "acquired": True,
+                    "contended": False,
+                }
+            if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry_leases"):
+                return {
+                    **dict(existing or {}),
+                    "acquired": False,
+                    "contended": bool(existing),
+                }
         with self._lock, self._connection:
             canonical_key = self._resolve_linkedin_profile_registry_key_locked(normalized_key)
             cursor = self._connection.execute(
@@ -12396,6 +22416,169 @@ class ControlPlaneStore:
                 and not bool(cursor.rowcount)
             ),
         }
+
+    def acquire_linkedin_profile_registry_leases(
+        self,
+        profile_urls: list[str] | tuple[str, ...],
+        *,
+        lease_owner: str,
+        lease_seconds: int = 240,
+        lease_token: str = "",
+    ) -> dict[str, Any]:
+        normalized_owner = str(lease_owner or "").strip()
+        normalized_urls: list[str] = []
+        for profile_url in list(profile_urls or []):
+            normalized_profile_url = str(profile_url or "").strip()
+            if normalized_profile_url and normalized_profile_url not in normalized_urls:
+                normalized_urls.append(normalized_profile_url)
+        if not normalized_urls or not normalized_owner:
+            return {
+                "acquired": False,
+                "lease_owner": normalized_owner,
+                "lease_token": "",
+                "requested_urls": normalized_urls,
+                "acquired_urls": [],
+                "contended_urls": normalized_urls,
+                "leases_by_url": {},
+            }
+        normalized_token = (
+            str(lease_token or "").strip()
+            or sha1(
+                f"{','.join(_normalize_linkedin_profile_url_key(url) for url in normalized_urls)}:{normalized_owner}:{_utc_now_timestamp()}".encode(
+                    "utf-8"
+                )
+            ).hexdigest()[:16]
+        )
+        ttl_seconds = max(5, int(lease_seconds or 0))
+        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry_leases"):
+            canonical_keys_by_normalized_key = self._resolve_linkedin_profile_registry_keys_bulk(
+                [_normalize_linkedin_profile_url_key(profile_url) for profile_url in normalized_urls]
+            )
+            canonical_keys_by_url = {
+                profile_url: str(
+                    canonical_keys_by_normalized_key.get(_normalize_linkedin_profile_url_key(profile_url))
+                    or _normalize_linkedin_profile_url_key(profile_url)
+                ).strip()
+                for profile_url in normalized_urls
+            }
+            canonical_keys = _dedupe_preserve_order(
+                [key for key in canonical_keys_by_url.values() if str(key or "").strip()]
+            )
+            native_acquire = getattr(self._control_plane_postgres, "acquire_linkedin_profile_registry_leases", None)
+            if callable(native_acquire) and canonical_keys:
+                try:
+                    native_rows = native_acquire(
+                        canonical_keys,
+                        lease_owner=normalized_owner,
+                        lease_seconds=ttl_seconds,
+                        lease_token=normalized_token,
+                    )
+                except Exception as exc:
+                    if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry_leases"):
+                        self._raise_control_plane_postgres_write_failure(
+                            table_name="linkedin_profile_registry_leases",
+                            method_name="acquire_linkedin_profile_registry_leases",
+                            reason=f"{type(exc).__name__}: {exc}",
+                            error=exc,
+                        )
+                    native_rows = None
+                if native_rows is not None:
+                    rows_by_key = {
+                        str(dict(row or {}).get("profile_url_key") or "").strip(): self._linkedin_profile_registry_lease_from_row(
+                            row
+                        )
+                        for row in list(native_rows or [])
+                        if str(dict(row or {}).get("profile_url_key") or "").strip()
+                    }
+                    return self._build_linkedin_profile_registry_batch_lease_payload(
+                        normalized_urls=normalized_urls,
+                        canonical_keys_by_url=canonical_keys_by_url,
+                        rows_by_key=rows_by_key,
+                        lease_owner=normalized_owner,
+                        lease_token=normalized_token,
+                    )
+            if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry_leases"):
+                lease_payloads: list[dict[str, Any]] = []
+                for profile_url in normalized_urls:
+                    lease_payloads.append(
+                        self.acquire_linkedin_profile_registry_lease(
+                            profile_url,
+                            lease_owner=normalized_owner,
+                            lease_seconds=ttl_seconds,
+                            lease_token=normalized_token,
+                        )
+                    )
+                return self._build_linkedin_profile_registry_batch_lease_payload(
+                    normalized_urls=normalized_urls,
+                    canonical_keys_by_url={
+                        profile_url: str(payload.get("profile_url_key") or "")
+                        for profile_url, payload in zip(normalized_urls, lease_payloads)
+                    },
+                    rows_by_key={
+                        str(payload.get("profile_url_key") or ""): dict(payload)
+                        for payload in lease_payloads
+                        if str(payload.get("profile_url_key") or "")
+                    },
+                    lease_owner=normalized_owner,
+                    lease_token=normalized_token,
+                )
+        now = _utc_now_timestamp()
+        with self._lock, self._connection:
+            canonical_keys_by_url = {
+                profile_url: self._resolve_linkedin_profile_registry_key_locked(
+                    _normalize_linkedin_profile_url_key(profile_url)
+                )
+                for profile_url in normalized_urls
+            }
+            rows_by_key: dict[str, dict[str, Any]] = {}
+            for profile_url, canonical_key in canonical_keys_by_url.items():
+                self._connection.execute(
+                    """
+                    INSERT INTO linkedin_profile_registry_leases (
+                        profile_url_key,
+                        lease_owner,
+                        lease_token,
+                        lease_expires_at,
+                        created_at,
+                        updated_at
+                    ) VALUES (?, ?, ?, datetime('now', ?), ?, ?)
+                    ON CONFLICT(profile_url_key) DO UPDATE SET
+                        lease_owner = excluded.lease_owner,
+                        lease_token = excluded.lease_token,
+                        lease_expires_at = excluded.lease_expires_at,
+                        updated_at = excluded.updated_at
+                    WHERE datetime(linkedin_profile_registry_leases.lease_expires_at) <= datetime('now')
+                       OR linkedin_profile_registry_leases.lease_owner = excluded.lease_owner
+                       OR linkedin_profile_registry_leases.lease_token = excluded.lease_token
+                    """,
+                    (
+                        canonical_key,
+                        normalized_owner,
+                        normalized_token,
+                        f"+{ttl_seconds} seconds",
+                        now,
+                        now,
+                    ),
+                )
+            placeholders = ",".join("?" for _ in canonical_keys_by_url.values())
+            lease_rows = self._connection.execute(
+                f"""
+                SELECT * FROM linkedin_profile_registry_leases
+                WHERE profile_url_key IN ({placeholders})
+                """,
+                tuple(canonical_keys_by_url.values()),
+            ).fetchall()
+            rows_by_key = {
+                str(row["profile_url_key"] or ""): self._linkedin_profile_registry_lease_from_row(row)
+                for row in lease_rows
+            }
+        return self._build_linkedin_profile_registry_batch_lease_payload(
+            normalized_urls=normalized_urls,
+            canonical_keys_by_url=canonical_keys_by_url,
+            rows_by_key=rows_by_key,
+            lease_owner=normalized_owner,
+            lease_token=normalized_token,
+        )
 
     def get_linkedin_profile_registry_lease(self, profile_url: str) -> dict[str, Any] | None:
         normalized_key = _normalize_linkedin_profile_url_key(profile_url)
@@ -12500,6 +22683,396 @@ class ControlPlaneStore:
                     """,
                     (canonical_key,),
                 )
+        return bool(cursor.rowcount)
+
+    def release_linkedin_profile_registry_leases(
+        self,
+        profile_urls: list[str] | tuple[str, ...],
+        *,
+        lease_owner: str = "",
+        lease_token: str = "",
+    ) -> int:
+        normalized_urls: list[str] = []
+        for profile_url in list(profile_urls or []):
+            normalized_profile_url = str(profile_url or "").strip()
+            if normalized_profile_url and normalized_profile_url not in normalized_urls:
+                normalized_urls.append(normalized_profile_url)
+        if not normalized_urls:
+            return 0
+        normalized_owner = str(lease_owner or "").strip()
+        normalized_token = str(lease_token or "").strip()
+        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry_leases"):
+            canonical_keys_by_normalized_key = self._resolve_linkedin_profile_registry_keys_bulk(
+                [_normalize_linkedin_profile_url_key(profile_url) for profile_url in normalized_urls]
+            )
+            canonical_keys = _dedupe_preserve_order(
+                [
+                    str(
+                        canonical_keys_by_normalized_key.get(_normalize_linkedin_profile_url_key(profile_url))
+                        or _normalize_linkedin_profile_url_key(profile_url)
+                    ).strip()
+                    for profile_url in normalized_urls
+                    if _normalize_linkedin_profile_url_key(profile_url)
+                ]
+            )
+            native_release = getattr(self._control_plane_postgres, "release_linkedin_profile_registry_leases", None)
+            if callable(native_release) and canonical_keys:
+                try:
+                    deleted_count = int(
+                        native_release(
+                            canonical_keys,
+                            lease_owner=normalized_owner,
+                            lease_token=normalized_token,
+                        )
+                        or 0
+                    )
+                except Exception as exc:
+                    if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry_leases"):
+                        self._raise_control_plane_postgres_write_failure(
+                            table_name="linkedin_profile_registry_leases",
+                            method_name="release_linkedin_profile_registry_leases",
+                            reason=f"{type(exc).__name__}: {exc}",
+                            error=exc,
+                        )
+                    deleted_count = 0
+                if deleted_count or self._control_plane_postgres_should_skip_sqlite_fallback(
+                    "linkedin_profile_registry_leases"
+                ):
+                    return deleted_count
+            if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry_leases"):
+                return sum(
+                    1
+                    for profile_url in normalized_urls
+                    if self.release_linkedin_profile_registry_lease(
+                        profile_url,
+                        lease_owner=normalized_owner,
+                        lease_token=normalized_token,
+                    )
+                )
+        with self._lock, self._connection:
+            canonical_keys = [
+                self._resolve_linkedin_profile_registry_key_locked(
+                    _normalize_linkedin_profile_url_key(profile_url)
+                )
+                for profile_url in normalized_urls
+            ]
+            placeholders = ",".join("?" for _ in canonical_keys)
+            clauses = [f"profile_url_key IN ({placeholders})"]
+            params: list[Any] = list(canonical_keys)
+            if normalized_owner:
+                clauses.append("lease_owner = ?")
+                params.append(normalized_owner)
+            if normalized_token:
+                clauses.append("lease_token = ?")
+                params.append(normalized_token)
+            cursor = self._connection.execute(
+                f"DELETE FROM linkedin_profile_registry_leases WHERE {' AND '.join(clauses)}",
+                tuple(params),
+            )
+        return int(cursor.rowcount or 0)
+
+    def acquire_runtime_provider_limiter_slot(
+        self,
+        limiter_key: str,
+        *,
+        lease_owner: str,
+        budget: int,
+        lease_seconds: int = 7200,
+        lease_token: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        normalized_key = str(limiter_key or "").strip()
+        normalized_owner = str(lease_owner or "").strip()
+        normalized_budget = max(1, int(budget or 1))
+        if not normalized_key or not normalized_owner:
+            return {
+                "acquired": False,
+                "limiter_key": normalized_key,
+                "lease_owner": normalized_owner,
+                "lease_token": "",
+                "active_count": 0,
+                "budget": normalized_budget,
+                "db_limiter_enabled": True,
+            }
+        normalized_token = (
+            str(lease_token or "").strip()
+            or f"lease_{uuid4().hex}"
+        )
+        ttl_seconds = max(5, int(lease_seconds or 0))
+        metadata_payload = dict(metadata or {})
+        if self._control_plane_postgres_should_prefer_read("runtime_provider_limiter_leases"):
+            native_acquire = getattr(self._control_plane_postgres, "acquire_runtime_provider_limiter_slot", None)
+            if callable(native_acquire):
+                try:
+                    native_payload = native_acquire(
+                        normalized_key,
+                        lease_owner=normalized_owner,
+                        budget=normalized_budget,
+                        lease_seconds=ttl_seconds,
+                        lease_token=normalized_token,
+                        metadata=metadata_payload,
+                    )
+                except Exception as exc:
+                    if self._control_plane_postgres_should_skip_sqlite_fallback(
+                        "runtime_provider_limiter_leases"
+                    ):
+                        self._raise_control_plane_postgres_write_failure(
+                            table_name="runtime_provider_limiter_leases",
+                            method_name="acquire_runtime_provider_limiter_slot",
+                            reason=f"{type(exc).__name__}: {exc}",
+                            error=exc,
+                        )
+                    native_payload = None
+                if native_payload is not None:
+                    return {
+                        **dict(native_payload),
+                        "acquired": bool(dict(native_payload).get("acquired")),
+                        "limiter_key": normalized_key,
+                        "lease_owner": normalized_owner,
+                        "lease_token": normalized_token,
+                        "budget": normalized_budget,
+                        "db_limiter_enabled": True,
+                    }
+            if self._control_plane_postgres_should_skip_sqlite_fallback("runtime_provider_limiter_leases"):
+                return {
+                    "acquired": False,
+                    "limiter_key": normalized_key,
+                    "lease_owner": normalized_owner,
+                    "lease_token": normalized_token,
+                    "active_count": normalized_budget,
+                    "budget": normalized_budget,
+                    "db_limiter_enabled": True,
+                    "reason": "postgres_native_limiter_unavailable",
+                }
+        now_timestamp = _utc_now_timestamp()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                DELETE FROM runtime_provider_limiter_leases
+                WHERE limiter_key = ? AND datetime(lease_expires_at) <= datetime('now')
+                """,
+                (normalized_key,),
+            )
+            existing = self._connection.execute(
+                """
+                SELECT *
+                FROM runtime_provider_limiter_leases
+                WHERE lease_token = ? AND limiter_key = ?
+                LIMIT 1
+                """,
+                (normalized_token, normalized_key),
+            ).fetchone()
+            if existing is not None:
+                self._connection.execute(
+                    """
+                    UPDATE runtime_provider_limiter_leases
+                    SET lease_owner = ?,
+                        lease_expires_at = datetime('now', ?),
+                        metadata_json = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE lease_token = ?
+                    """,
+                    (
+                        normalized_owner,
+                        f"+{ttl_seconds} seconds",
+                        json.dumps(metadata_payload, ensure_ascii=False),
+                        normalized_token,
+                    ),
+                )
+                acquired = True
+            else:
+                active_row = self._connection.execute(
+                    """
+                    SELECT COUNT(*) AS active_count
+                    FROM runtime_provider_limiter_leases
+                    WHERE limiter_key = ? AND datetime(lease_expires_at) > datetime('now')
+                    """,
+                    (normalized_key,),
+                ).fetchone()
+                active_before = int(active_row["active_count"] or 0) if active_row is not None else 0
+                acquired = active_before < normalized_budget
+                if acquired:
+                    self._connection.execute(
+                        """
+                        INSERT INTO runtime_provider_limiter_leases (
+                            lease_token,
+                            limiter_key,
+                            lease_owner,
+                            lease_expires_at,
+                            metadata_json,
+                            created_at,
+                            updated_at
+                        ) VALUES (?, ?, ?, datetime('now', ?), ?, ?, ?)
+                        """,
+                        (
+                            normalized_token,
+                            normalized_key,
+                            normalized_owner,
+                            f"+{ttl_seconds} seconds",
+                            json.dumps(metadata_payload, ensure_ascii=False),
+                            now_timestamp,
+                            now_timestamp,
+                        ),
+                    )
+            row = self._connection.execute(
+                """
+                SELECT *
+                FROM runtime_provider_limiter_leases
+                WHERE lease_token = ? AND limiter_key = ?
+                LIMIT 1
+                """,
+                (normalized_token, normalized_key),
+            ).fetchone()
+            active_count_row = self._connection.execute(
+                """
+                SELECT COUNT(*) AS active_count
+                FROM runtime_provider_limiter_leases
+                WHERE limiter_key = ? AND datetime(lease_expires_at) > datetime('now')
+                """,
+                (normalized_key,),
+            ).fetchone()
+        payload = self._runtime_provider_limiter_lease_from_row(row)
+        return {
+            **payload,
+            "acquired": acquired,
+            "limiter_key": normalized_key,
+            "lease_owner": normalized_owner,
+            "lease_token": normalized_token,
+            "active_count": int(active_count_row["active_count"] or 0) if active_count_row is not None else 0,
+            "budget": normalized_budget,
+            "db_limiter_enabled": True,
+        }
+
+    def get_runtime_provider_limiter_status(
+        self,
+        limiter_key: str,
+        *,
+        budget: int,
+    ) -> dict[str, Any]:
+        normalized_key = str(limiter_key or "").strip()
+        normalized_budget = max(1, int(budget or 1))
+        if not normalized_key:
+            return {
+                "limiter_key": normalized_key,
+                "active_count": 0,
+                "budget": normalized_budget,
+                "available_count": normalized_budget,
+                "available": True,
+                "db_limiter_enabled": True,
+                "reason": "limiter_key_missing",
+            }
+        if self._control_plane_postgres_should_prefer_read("runtime_provider_limiter_leases"):
+            native_status = getattr(
+                self._control_plane_postgres,
+                "get_runtime_provider_limiter_status",
+                None,
+            )
+            if callable(native_status):
+                try:
+                    native_payload = native_status(normalized_key, budget=normalized_budget)
+                except Exception as exc:
+                    if self._control_plane_postgres_should_skip_sqlite_fallback(
+                        "runtime_provider_limiter_leases"
+                    ):
+                        self._raise_control_plane_postgres_write_failure(
+                            table_name="runtime_provider_limiter_leases",
+                            method_name="get_runtime_provider_limiter_status",
+                            reason=f"{type(exc).__name__}: {exc}",
+                            error=exc,
+                        )
+                    native_payload = None
+                if native_payload is not None:
+                    payload = dict(native_payload)
+                    active_count = max(0, int(payload.get("active_count") or 0))
+                    available_count = max(0, normalized_budget - active_count)
+                    return {
+                        **payload,
+                        "limiter_key": normalized_key,
+                        "active_count": active_count,
+                        "budget": normalized_budget,
+                        "available_count": available_count,
+                        "available": available_count > 0,
+                        "db_limiter_enabled": True,
+                    }
+            if self._control_plane_postgres_should_skip_sqlite_fallback("runtime_provider_limiter_leases"):
+                return {
+                    "limiter_key": normalized_key,
+                    "active_count": normalized_budget,
+                    "budget": normalized_budget,
+                    "available_count": 0,
+                    "available": False,
+                    "db_limiter_enabled": True,
+                    "reason": "postgres_native_limiter_status_unavailable",
+                }
+        with self._lock, self._connection:
+            active_count_row = self._connection.execute(
+                """
+                SELECT COUNT(*) AS active_count
+                FROM runtime_provider_limiter_leases
+                WHERE limiter_key = ? AND datetime(lease_expires_at) > datetime('now')
+                """,
+                (normalized_key,),
+            ).fetchone()
+        active_count = int(active_count_row["active_count"] or 0) if active_count_row is not None else 0
+        available_count = max(0, normalized_budget - active_count)
+        return {
+            "limiter_key": normalized_key,
+            "active_count": active_count,
+            "budget": normalized_budget,
+            "available_count": available_count,
+            "available": available_count > 0,
+            "db_limiter_enabled": True,
+        }
+
+    def release_runtime_provider_limiter_slot(
+        self,
+        lease_token: str,
+        *,
+        limiter_key: str = "",
+        lease_owner: str = "",
+    ) -> bool:
+        normalized_token = str(lease_token or "").strip()
+        if not normalized_token:
+            return False
+        normalized_key = str(limiter_key or "").strip()
+        normalized_owner = str(lease_owner or "").strip()
+        if self._control_plane_postgres_should_prefer_read("runtime_provider_limiter_leases"):
+            native_release = getattr(self._control_plane_postgres, "release_runtime_provider_limiter_slot", None)
+            if callable(native_release):
+                try:
+                    deleted = native_release(
+                        normalized_token,
+                        limiter_key=normalized_key,
+                        lease_owner=normalized_owner,
+                    )
+                except Exception as exc:
+                    if self._control_plane_postgres_should_skip_sqlite_fallback(
+                        "runtime_provider_limiter_leases"
+                    ):
+                        self._raise_control_plane_postgres_write_failure(
+                            table_name="runtime_provider_limiter_leases",
+                            method_name="release_runtime_provider_limiter_slot",
+                            reason=f"{type(exc).__name__}: {exc}",
+                            error=exc,
+                        )
+                    deleted = False
+                if deleted or self._control_plane_postgres_should_skip_sqlite_fallback(
+                    "runtime_provider_limiter_leases"
+                ):
+                    return bool(deleted)
+        clauses = ["lease_token = ?"]
+        params: list[Any] = [normalized_token]
+        if normalized_key:
+            clauses.append("limiter_key = ?")
+            params.append(normalized_key)
+        if normalized_owner:
+            clauses.append("lease_owner = ?")
+            params.append(normalized_owner)
+        with self._lock, self._connection:
+            cursor = self._connection.execute(
+                f"DELETE FROM runtime_provider_limiter_leases WHERE {' AND '.join(clauses)}",
+                tuple(params),
+            )
         return bool(cursor.rowcount)
 
     def record_linkedin_profile_registry_event(
@@ -12850,6 +23423,251 @@ class ControlPlaneStore:
             preserve_unrecoverable=True,
         )
 
+    def mark_linkedin_profile_registry_queued_many(
+        self,
+        profile_urls: list[str] | tuple[str, ...] | set[str],
+        *,
+        source_shards: list[str] | None = None,
+        source_shards_by_url: dict[str, list[str]] | dict[str, set[str]] | None = None,
+        source_jobs: list[str] | None = None,
+        alias_urls_by_url: dict[str, list[str]] | dict[str, set[str]] | None = None,
+        raw_linkedin_urls_by_url: dict[str, str] | None = None,
+        sanity_linkedin_urls_by_url: dict[str, str] | None = None,
+        run_id: str = "",
+        dataset_id: str = "",
+        snapshot_dir: str = "",
+    ) -> dict[str, Any]:
+        normalized_urls = _normalize_linkedin_profile_url_list(list(profile_urls or []))
+        if not normalized_urls:
+            return {"status": "skipped", "reason": "no_profile_urls", "queued_count": 0, "requested_count": 0}
+        normalized_source_shards = _normalize_registry_label_list(source_shards)
+        normalized_source_jobs = _normalize_registry_label_list(source_jobs)
+        source_shards_map = {
+            str(url or "").strip(): _normalize_registry_label_list(list(values or []))
+            for url, values in dict(source_shards_by_url or {}).items()
+            if str(url or "").strip()
+        }
+        alias_map = {
+            str(url or "").strip(): _normalize_linkedin_profile_url_list(list(values or []))
+            for url, values in dict(alias_urls_by_url or {}).items()
+            if str(url or "").strip()
+        }
+        raw_url_map = {
+            str(url or "").strip(): str(value or "").strip()
+            for url, value in dict(raw_linkedin_urls_by_url or {}).items()
+            if str(url or "").strip()
+        }
+        sanity_url_map = {
+            str(url or "").strip(): str(value or "").strip()
+            for url, value in dict(sanity_linkedin_urls_by_url or {}).items()
+            if str(url or "").strip()
+        }
+        normalized_run_id = str(run_id or "").strip()
+        normalized_dataset_id = str(dataset_id or "").strip()
+        normalized_snapshot_dir = str(snapshot_dir or "").strip()
+        now_timestamp = _utc_now_timestamp()
+
+        def _source_shards_for(url: str) -> list[str]:
+            return source_shards_map.get(str(url or "").strip()) or normalized_source_shards
+
+        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry"):
+            try:
+                requested_keys = _dedupe_preserve_order(
+                    [_normalize_linkedin_profile_url_key(profile_url) for profile_url in normalized_urls]
+                )
+                canonical_keys_by_key = self._resolve_linkedin_profile_registry_keys_bulk(requested_keys)
+                canonical_keys = _dedupe_preserve_order(
+                    [
+                        str(canonical_keys_by_key.get(key) or key).strip()
+                        for key in requested_keys
+                        if str(canonical_keys_by_key.get(key) or key).strip()
+                    ]
+                )
+                existing_rows_by_key: dict[str, dict[str, Any]] = {}
+                aliases_by_canonical: dict[str, list[str]] = {}
+                if canonical_keys:
+                    placeholders = ", ".join("%s" for _ in canonical_keys)
+                    existing_rows = self._select_control_plane_rows(
+                        "linkedin_profile_registry",
+                        row_builder=self._linkedin_profile_registry_from_row,
+                        where_sql=f"profile_url_key IN ({placeholders})",
+                        params=canonical_keys,
+                        limit=0,
+                    )
+                    alias_rows = self._select_control_plane_rows(
+                        "linkedin_profile_registry_aliases",
+                        row_builder=lambda row: dict(row),
+                        where_sql=f"profile_url_key IN ({placeholders})",
+                        params=canonical_keys,
+                        order_by_sql="updated_at DESC",
+                        limit=0,
+                    )
+                    for alias_row in alias_rows:
+                        canonical_key = str(dict(alias_row).get("profile_url_key") or "").strip()
+                        alias_url = str(dict(alias_row).get("alias_url") or "").strip()
+                        if not canonical_key or not alias_url:
+                            continue
+                        aliases = aliases_by_canonical.setdefault(canonical_key, [])
+                        if alias_url not in aliases:
+                            aliases.append(alias_url)
+                    for existing_row in existing_rows:
+                        payload = dict(existing_row or {})
+                        canonical_key = str(payload.get("profile_url_key") or "").strip()
+                        if not canonical_key:
+                            continue
+                        payload["alias_urls"] = list(aliases_by_canonical.get(canonical_key) or [])
+                        existing_rows_by_key[canonical_key] = payload
+
+                effective_by_key: dict[str, dict[str, Any]] = {}
+                modified_keys: set[str] = set()
+                for profile_url in normalized_urls:
+                    normalized_key = _normalize_linkedin_profile_url_key(profile_url)
+                    canonical_key = str(canonical_keys_by_key.get(normalized_key) or normalized_key).strip()
+                    if not canonical_key:
+                        continue
+                    existing_payload = dict(
+                        effective_by_key.get(canonical_key)
+                        or existing_rows_by_key.get(canonical_key)
+                        or {}
+                    )
+                    effective_payload = self._compose_linkedin_profile_registry_effective_payload(
+                        existing_payload=existing_payload,
+                        normalized_status="queued",
+                        normalized_profile_url=profile_url,
+                        normalized_raw_linkedin_url=raw_url_map.get(profile_url, ""),
+                        normalized_sanity_linkedin_url=sanity_url_map.get(profile_url, ""),
+                        normalized_alias_urls=[profile_url, *list(alias_map.get(profile_url) or [])],
+                        normalized_run_id=normalized_run_id,
+                        normalized_dataset_id=normalized_dataset_id,
+                        normalized_snapshot_dir=normalized_snapshot_dir,
+                        normalized_raw_path="",
+                        normalized_source_shards=_source_shards_for(profile_url),
+                        normalized_source_jobs=normalized_source_jobs,
+                        retry_count=None,
+                        increment_retry=False,
+                        last_error=None,
+                        preserve_unrecoverable=True,
+                        now_timestamp=now_timestamp,
+                    )
+                    effective_by_key[canonical_key] = effective_payload
+                    modified_keys.add(canonical_key)
+
+                registry_rows_to_upsert: list[dict[str, Any]] = []
+                alias_rows_to_upsert: list[dict[str, Any]] = []
+                alias_written_keys: set[str] = set()
+                for canonical_key in canonical_keys:
+                    if canonical_key not in modified_keys:
+                        continue
+                    effective_payload = dict(effective_by_key.get(canonical_key) or {})
+                    profile_url = str(effective_payload.get("profile_url") or canonical_key).strip()
+                    registry_rows_to_upsert.append(
+                        self._linkedin_profile_registry_row_payload(
+                            profile_url_key=canonical_key,
+                            profile_url=profile_url,
+                            raw_linkedin_url=str(effective_payload.get("raw_linkedin_url") or ""),
+                            sanity_linkedin_url=str(effective_payload.get("sanity_linkedin_url") or ""),
+                            status=str(effective_payload.get("status") or "queued"),
+                            retry_count=int(effective_payload.get("retry_count") or 0),
+                            last_error=str(effective_payload.get("last_error") or ""),
+                            last_run_id=str(effective_payload.get("last_run_id") or ""),
+                            last_dataset_id=str(effective_payload.get("last_dataset_id") or ""),
+                            last_snapshot_dir=str(effective_payload.get("last_snapshot_dir") or ""),
+                            last_raw_path=str(effective_payload.get("last_raw_path") or ""),
+                            first_queued_at=str(effective_payload.get("first_queued_at") or ""),
+                            last_queued_at=str(effective_payload.get("last_queued_at") or ""),
+                            last_fetched_at=str(effective_payload.get("last_fetched_at") or ""),
+                            last_failed_at=str(effective_payload.get("last_failed_at") or ""),
+                            source_shards=list(effective_payload.get("source_shards") or []),
+                            source_jobs=list(effective_payload.get("source_jobs") or []),
+                            refill_queue_state=str(effective_payload.get("refill_queue_state") or ""),
+                            last_refill_trigger_kind=str(effective_payload.get("last_refill_trigger_kind") or ""),
+                            last_refill_plan_reason=str(effective_payload.get("last_refill_plan_reason") or ""),
+                            last_refill_deferred_reason=str(effective_payload.get("last_refill_deferred_reason") or ""),
+                            last_refill_planned_at=str(effective_payload.get("last_refill_planned_at") or ""),
+                            refill_not_before_at=str(effective_payload.get("refill_not_before_at") or ""),
+                            refill_plan_batch_size=int(effective_payload.get("refill_plan_batch_size") or 0),
+                            refill_plan_batch_count=int(effective_payload.get("refill_plan_batch_count") or 0),
+                            refill_plan_window_url_count=int(effective_payload.get("refill_plan_window_url_count") or 0),
+                            last_refill_attempt_count=int(effective_payload.get("last_refill_attempt_count") or 0),
+                            refill_owner_worker_id=int(effective_payload.get("refill_owner_worker_id") or 0),
+                            refill_owner_run_id=str(effective_payload.get("refill_owner_run_id") or ""),
+                            refill_owner_dataset_id=str(effective_payload.get("refill_owner_dataset_id") or ""),
+                            refill_owner_payload_hash=str(effective_payload.get("refill_owner_payload_hash") or ""),
+                            refill_terminal_status=str(effective_payload.get("refill_terminal_status") or ""),
+                            refill_terminal_at=str(effective_payload.get("refill_terminal_at") or ""),
+                            created_at=str(effective_payload.get("created_at") or now_timestamp),
+                            updated_at=str(effective_payload.get("updated_at") or now_timestamp),
+                        )
+                    )
+                    for alias_url in _normalize_linkedin_profile_url_list(
+                        [profile_url, *list(effective_payload.get("alias_urls") or [])]
+                    ):
+                        alias_key = _normalize_linkedin_profile_url_key(alias_url)
+                        if not alias_key or alias_key in alias_written_keys:
+                            continue
+                        alias_written_keys.add(alias_key)
+                        alias_rows_to_upsert.append(
+                            {
+                                "alias_url_key": alias_key,
+                                "profile_url_key": canonical_key,
+                                "alias_url": alias_url,
+                                "alias_kind": "observed",
+                                "created_at": str(effective_payload.get("created_at") or now_timestamp),
+                                "updated_at": now_timestamp,
+                            }
+                        )
+                if registry_rows_to_upsert:
+                    self._control_plane_postgres.bulk_upsert_rows(
+                        "linkedin_profile_registry",
+                        registry_rows_to_upsert,
+                    )
+                if alias_rows_to_upsert:
+                    self._control_plane_postgres.bulk_upsert_rows(
+                        "linkedin_profile_registry_aliases",
+                        alias_rows_to_upsert,
+                    )
+                queued_count = len(registry_rows_to_upsert)
+                return {
+                    "status": "queued" if queued_count else "skipped",
+                    "reason": "" if queued_count else "no_valid_profile_urls",
+                    "queued_count": queued_count,
+                    "requested_count": len(normalized_urls),
+                    "write_mode": "bulk_postgres",
+                }
+            except Exception as exc:
+                if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
+                    self._raise_control_plane_postgres_write_failure(
+                        table_name="linkedin_profile_registry",
+                        method_name="mark_linkedin_profile_registry_queued_many",
+                        reason=f"{type(exc).__name__}: {exc}",
+                        error=exc,
+                    )
+
+        queued_count = 0
+        for profile_url in normalized_urls:
+            payload = self._upsert_linkedin_profile_registry(
+                profile_url=profile_url,
+                status="queued",
+                source_shards=_source_shards_for(profile_url),
+                source_jobs=normalized_source_jobs,
+                alias_urls=list(alias_map.get(profile_url) or []),
+                raw_linkedin_url=raw_url_map.get(profile_url, ""),
+                sanity_linkedin_url=sanity_url_map.get(profile_url, ""),
+                run_id=normalized_run_id,
+                dataset_id=normalized_dataset_id,
+                snapshot_dir=normalized_snapshot_dir,
+                preserve_unrecoverable=True,
+            )
+            if payload is not None:
+                queued_count += 1
+        return {
+            "status": "queued" if queued_count else "skipped",
+            "reason": "" if queued_count else "no_valid_profile_urls",
+            "queued_count": queued_count,
+            "requested_count": len(normalized_urls),
+            "write_mode": "sqlite_loop",
+        }
+
     def mark_linkedin_profile_registry_fetched(
         self,
         profile_url: str,
@@ -12887,6 +23705,8 @@ class ControlPlaneStore:
         *,
         error: str,
         retryable: bool = True,
+        retry_delay_seconds: int = 30,
+        max_retry_attempts: int | None = None,
         source_shards: list[str] | None = None,
         source_jobs: list[str] | None = None,
         alias_urls: list[str] | None = None,
@@ -12896,9 +23716,19 @@ class ControlPlaneStore:
         dataset_id: str = "",
         snapshot_dir: str = "",
     ) -> dict[str, Any] | None:
-        return self._upsert_linkedin_profile_registry(
+        retry_count_before = 0
+        if retryable:
+            existing = self.get_linkedin_profile_registry(profile_url) or {}
+            retry_count_before = max(0, int(dict(existing).get("retry_count") or 0))
+        retry_attempt_budget = (
+            _linkedin_profile_max_retry_attempts()
+            if max_retry_attempts is None
+            else max(0, int(max_retry_attempts or 0))
+        )
+        retry_queue_allowed = bool(retryable) and retry_count_before < retry_attempt_budget
+        failed = self._upsert_linkedin_profile_registry(
             profile_url=profile_url,
-            status="failed_retryable" if retryable else "unrecoverable",
+            status="failed_retryable" if retry_queue_allowed else "unrecoverable",
             increment_retry=retryable,
             last_error=str(error or "").strip(),
             source_shards=source_shards,
@@ -12909,8 +23739,904 @@ class ControlPlaneStore:
             run_id=run_id,
             dataset_id=dataset_id,
             snapshot_dir=snapshot_dir,
-            preserve_unrecoverable=not retryable,
+            preserve_unrecoverable=not retry_queue_allowed,
         )
+        if not retry_queue_allowed or failed is None:
+            return failed
+        failed_payload = dict(failed or {})
+        retry_source_jobs = [
+            str(item or "").strip()
+            for item in list(failed_payload.get("source_jobs") or source_jobs or [])
+            if str(item or "").strip()
+        ]
+        retry_snapshot_dir = str(failed_payload.get("last_snapshot_dir") or snapshot_dir or "").strip()
+        if not retry_source_jobs or not retry_snapshot_dir:
+            return failed
+        retry_not_before_at = (
+            datetime.now(timezone.utc).replace(microsecond=0)
+            + timedelta(seconds=max(1, int(retry_delay_seconds or 30)))
+        ).strftime("%Y-%m-%d %H:%M:%S")
+        retry_profile_url = str(failed_payload.get("profile_url") or profile_url).strip()
+        self.record_linkedin_profile_refill_plan_items(
+            deferred_profile_urls=[retry_profile_url],
+            source_shards_by_url={
+                retry_profile_url: list(failed_payload.get("source_shards") or source_shards or [])
+            },
+            source_jobs=retry_source_jobs,
+            snapshot_dir=retry_snapshot_dir,
+            trigger_kind="profile_retry",
+            plan_reason="profile_retry_wait",
+            deferred_reason=str(error or "profile_retryable_failure").strip() or "profile_retryable_failure",
+            deferred_queue_state="retry_wait",
+            refill_not_before_at=retry_not_before_at,
+        )
+        return self.get_linkedin_profile_registry(retry_profile_url) or failed
+
+    def mark_linkedin_profile_registry_deferred_for_coalescing(
+        self,
+        profile_url: str,
+        *,
+        reason: str,
+        source_shards: list[str] | None = None,
+        source_jobs: list[str] | None = None,
+        alias_urls: list[str] | None = None,
+        raw_linkedin_url: str = "",
+        sanity_linkedin_url: str = "",
+        snapshot_dir: str = "",
+    ) -> dict[str, Any] | None:
+        return self._upsert_linkedin_profile_registry(
+            profile_url=profile_url,
+            status="deferred_coalescing",
+            last_error=str(reason or "").strip(),
+            source_shards=source_shards,
+            source_jobs=source_jobs,
+            alias_urls=alias_urls,
+            raw_linkedin_url=raw_linkedin_url,
+            sanity_linkedin_url=sanity_linkedin_url,
+            snapshot_dir=snapshot_dir,
+            preserve_unrecoverable=True,
+        )
+
+    def record_linkedin_profile_refill_plan_items(
+        self,
+        *,
+        active_profile_urls: list[str] | tuple[str, ...] | set[str] | None = None,
+        deferred_profile_urls: list[str] | tuple[str, ...] | set[str] | None = None,
+        source_shards_by_url: dict[str, list[str]] | dict[str, set[str]] | None = None,
+        source_jobs: list[str] | None = None,
+        snapshot_dir: str = "",
+        trigger_kind: str = "profile_prefetch_refill",
+        plan_reason: str = "",
+        active_queue_state: str = "planned_dispatch",
+        active_reason: str = "",
+        active_refill_not_before_at: str = "",
+        active_owner_worker_id: int = 0,
+        active_owner_run_id: str = "",
+        active_owner_dataset_id: str = "",
+        active_owner_payload_hash: str = "",
+        deferred_reason: str = "",
+        deferred_queue_state: str = "deferred_budget",
+        refill_not_before_at: str = "",
+        refill_plan_batch_size: int = 0,
+        refill_plan_batch_count: int = 0,
+        refill_plan_window_url_count: int = 0,
+    ) -> dict[str, Any]:
+        active_urls = _normalize_linkedin_profile_url_list(list(active_profile_urls or []))
+        deferred_urls = _normalize_linkedin_profile_url_list(list(deferred_profile_urls or []))
+        active_keys = {_normalize_linkedin_profile_url_key(url) for url in active_urls}
+        deferred_urls = [
+            url for url in deferred_urls if _normalize_linkedin_profile_url_key(url) not in active_keys
+        ]
+        if not active_urls and not deferred_urls:
+            return {"status": "skipped", "reason": "no_refill_items", "active_item_count": 0, "deferred_item_count": 0}
+        normalized_source_jobs = _normalize_registry_label_list(source_jobs)
+        source_shards_map = {
+            str(url or "").strip(): _normalize_registry_label_list(list(values or []))
+            for url, values in dict(source_shards_by_url or {}).items()
+            if str(url or "").strip()
+        }
+        planned_at = _utc_now_timestamp()
+        normalized_refill_not_before_at = str(refill_not_before_at or "").strip()
+        normalized_active_refill_not_before_at = str(
+            active_refill_not_before_at or refill_not_before_at or ""
+        ).strip()
+        normalized_active_owner_worker_id = max(0, int(active_owner_worker_id or 0))
+        normalized_active_owner_run_id = str(active_owner_run_id or "").strip()
+        normalized_active_owner_dataset_id = str(active_owner_dataset_id or "").strip()
+        normalized_active_owner_payload_hash = str(active_owner_payload_hash or "").strip()
+        normalized_active_queue_state = str(active_queue_state or "planned_dispatch").strip()
+        if normalized_active_queue_state not in {
+            "planned_dispatch",
+            "dispatch_reserved",
+            "dispatch_claimed",
+            "deferred_budget",
+        }:
+            raise ValueError(
+                "active_queue_state must be one of: planned_dispatch, dispatch_reserved, dispatch_claimed, deferred_budget"
+            )
+        normalized_deferred_queue_state = str(deferred_queue_state or "deferred_budget").strip()
+        if normalized_deferred_queue_state not in {
+            "deferred_budget",
+            "deferred_coalescing",
+            "retry_wait",
+            "dispatch_reserved",
+            "dispatch_claimed",
+            "planned_dispatch",
+        }:
+            raise ValueError(
+                "deferred_queue_state must be one of: deferred_budget, deferred_coalescing, retry_wait, dispatch_reserved, dispatch_claimed, planned_dispatch"
+            )
+        normalized_refill_plan_batch_size = max(0, int(refill_plan_batch_size or 0))
+        normalized_refill_plan_batch_count = max(0, int(refill_plan_batch_count or 0))
+        normalized_refill_plan_window_url_count = max(0, int(refill_plan_window_url_count or 0))
+
+        def _source_shards_for(url: str) -> list[str]:
+            return source_shards_map.get(str(url or "").strip()) or []
+
+        terminal_skipped_active_count = 0
+        terminal_skipped_deferred_count = 0
+
+        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry"):
+            try:
+                specs: list[dict[str, Any]] = []
+
+                def _append_specs(urls: list[str], *, kind: str, queue_state: str, reason: str, not_before_at: str) -> None:
+                    for profile_url in urls:
+                        normalized_key = _normalize_linkedin_profile_url_key(profile_url)
+                        if not normalized_key:
+                            continue
+                        specs.append(
+                            {
+                                "url": profile_url,
+                                "key": normalized_key,
+                                "kind": kind,
+                                "queue_state": queue_state,
+                                "reason": reason,
+                                "not_before_at": str(not_before_at or "").strip(),
+                            }
+                        )
+
+                resolved_active_reason = str(active_reason or plan_reason or "ready_to_dispatch").strip()
+                resolved_deferred_reason = str(deferred_reason or plan_reason or "worker_budget_deferred").strip()
+                _append_specs(
+                    active_urls,
+                    kind="active",
+                    queue_state=normalized_active_queue_state,
+                    reason="" if normalized_active_queue_state == "planned_dispatch" else resolved_active_reason,
+                    not_before_at=normalized_active_refill_not_before_at,
+                )
+                _append_specs(
+                    deferred_urls,
+                    kind="deferred",
+                    queue_state=normalized_deferred_queue_state,
+                    reason=resolved_deferred_reason,
+                    not_before_at=normalized_refill_not_before_at,
+                )
+                spec_keys = _dedupe_preserve_order([str(spec.get("key") or "") for spec in specs])
+                canonical_keys_by_key = self._resolve_linkedin_profile_registry_keys_bulk(spec_keys)
+                canonical_keys = _dedupe_preserve_order(
+                    [
+                        str(canonical_keys_by_key.get(key) or key).strip()
+                        for key in spec_keys
+                        if str(canonical_keys_by_key.get(key) or key).strip()
+                    ]
+                )
+                existing_rows_by_key: dict[str, dict[str, Any]] = {}
+                aliases_by_canonical: dict[str, list[str]] = {}
+                if canonical_keys:
+                    placeholders = ", ".join("%s" for _ in canonical_keys)
+                    existing_rows = self._select_control_plane_rows(
+                        "linkedin_profile_registry",
+                        row_builder=self._linkedin_profile_registry_from_row,
+                        where_sql=f"profile_url_key IN ({placeholders})",
+                        params=canonical_keys,
+                        limit=0,
+                    )
+                    alias_rows = self._select_control_plane_rows(
+                        "linkedin_profile_registry_aliases",
+                        row_builder=lambda row: dict(row),
+                        where_sql=f"profile_url_key IN ({placeholders})",
+                        params=canonical_keys,
+                        order_by_sql="updated_at DESC",
+                        limit=0,
+                    )
+                    for alias_row in alias_rows:
+                        canonical_key = str(dict(alias_row).get("profile_url_key") or "").strip()
+                        alias_url = str(dict(alias_row).get("alias_url") or "").strip()
+                        if not canonical_key or not alias_url:
+                            continue
+                        aliases = aliases_by_canonical.setdefault(canonical_key, [])
+                        if alias_url not in aliases:
+                            aliases.append(alias_url)
+                    for existing_row in existing_rows:
+                        payload = dict(existing_row or {})
+                        canonical_key = str(payload.get("profile_url_key") or "").strip()
+                        if not canonical_key:
+                            continue
+                        payload["alias_urls"] = list(aliases_by_canonical.get(canonical_key) or [])
+                        existing_rows_by_key[canonical_key] = payload
+
+                effective_by_key: dict[str, dict[str, Any]] = {}
+                profile_url_by_key: dict[str, str] = {}
+                modified_keys: set[str] = set()
+                recorded_active_count = 0
+                recorded_deferred_count = 0
+                for spec in specs:
+                    profile_url = str(spec.get("url") or "").strip()
+                    normalized_key = str(spec.get("key") or "").strip()
+                    canonical_key = str(canonical_keys_by_key.get(normalized_key) or normalized_key).strip()
+                    if not canonical_key:
+                        continue
+                    existing_payload = dict(
+                        effective_by_key.get(canonical_key)
+                        or existing_rows_by_key.get(canonical_key)
+                        or {}
+                    )
+                    effective_payload = self._compose_linkedin_profile_registry_effective_payload(
+                        existing_payload=existing_payload,
+                        normalized_status="",
+                        normalized_profile_url=profile_url,
+                        normalized_raw_linkedin_url="",
+                        normalized_sanity_linkedin_url="",
+                        normalized_alias_urls=[profile_url],
+                        normalized_run_id="",
+                        normalized_dataset_id="",
+                        normalized_snapshot_dir=snapshot_dir,
+                        normalized_raw_path="",
+                        normalized_source_shards=_source_shards_for(profile_url),
+                        normalized_source_jobs=normalized_source_jobs,
+                        retry_count=None,
+                        increment_retry=False,
+                        last_error=None,
+                        preserve_unrecoverable=True,
+                        now_timestamp=planned_at,
+                    )
+                    current_status = str(effective_payload.get("status") or "").strip().lower()
+                    if current_status in {"fetched", "unrecoverable"}:
+                        if spec.get("kind") == "active":
+                            terminal_skipped_active_count += 1
+                        else:
+                            terminal_skipped_deferred_count += 1
+                        effective_by_key[canonical_key] = effective_payload
+                        continue
+                    queue_state = str(spec.get("queue_state") or "").strip()
+                    current_refill_queue_state = str(effective_payload.get("refill_queue_state") or "").strip()
+                    current_owner = (
+                        max(0, int(effective_payload.get("refill_owner_worker_id") or 0)),
+                        str(effective_payload.get("refill_owner_run_id") or "").strip(),
+                        str(effective_payload.get("refill_owner_dataset_id") or "").strip(),
+                        str(effective_payload.get("refill_owner_payload_hash") or "").strip(),
+                    )
+                    next_owner = (
+                        normalized_active_owner_worker_id,
+                        normalized_active_owner_run_id,
+                        normalized_active_owner_dataset_id,
+                        normalized_active_owner_payload_hash,
+                    )
+                    owner_changed = any(next_owner) and next_owner != current_owner
+                    attempt_count = max(0, int(effective_payload.get("last_refill_attempt_count") or 0)) + (
+                        1
+                        if queue_state == "planned_dispatch"
+                        and (current_refill_queue_state != "planned_dispatch" or owner_changed)
+                        else 0
+                    )
+                    owner_worker_id = max(0, int(effective_payload.get("refill_owner_worker_id") or 0))
+                    owner_run_id = str(effective_payload.get("refill_owner_run_id") or "").strip()
+                    owner_dataset_id = str(effective_payload.get("refill_owner_dataset_id") or "").strip()
+                    owner_payload_hash = str(effective_payload.get("refill_owner_payload_hash") or "").strip()
+                    terminal_status = str(effective_payload.get("refill_terminal_status") or "").strip()
+                    terminal_at = str(effective_payload.get("refill_terminal_at") or "").strip()
+                    if queue_state == "planned_dispatch":
+                        if normalized_active_owner_worker_id > 0:
+                            owner_worker_id = normalized_active_owner_worker_id
+                        if normalized_active_owner_run_id:
+                            owner_run_id = normalized_active_owner_run_id
+                        if normalized_active_owner_dataset_id:
+                            owner_dataset_id = normalized_active_owner_dataset_id
+                        if normalized_active_owner_payload_hash:
+                            owner_payload_hash = normalized_active_owner_payload_hash
+                        terminal_status = ""
+                        terminal_at = ""
+                    elif queue_state in {"dispatch_reserved", "dispatch_claimed"}:
+                        owner_worker_id = normalized_active_owner_worker_id
+                        owner_run_id = normalized_active_owner_run_id
+                        owner_dataset_id = normalized_active_owner_dataset_id
+                        owner_payload_hash = normalized_active_owner_payload_hash
+                        terminal_status = ""
+                        terminal_at = ""
+                    elif queue_state in {
+                        "deferred_budget",
+                        "deferred_coalescing",
+                    }:
+                        owner_worker_id = 0
+                        owner_run_id = ""
+                        owner_dataset_id = ""
+                        owner_payload_hash = ""
+                        terminal_status = ""
+                        terminal_at = ""
+                    effective_payload.update(
+                        {
+                            "status": "deferred_coalescing"
+                            if queue_state == "deferred_coalescing"
+                            else str(effective_payload.get("status") or "queued"),
+                            "refill_queue_state": queue_state,
+                            "last_refill_trigger_kind": str(trigger_kind or "").strip(),
+                            "last_refill_plan_reason": str(plan_reason or "").strip(),
+                        "last_refill_deferred_reason": str(spec.get("reason") or "").strip(),
+                        "last_refill_planned_at": planned_at,
+                        "refill_not_before_at": ""
+                        if queue_state == "planned_dispatch"
+                        else str(spec.get("not_before_at") or "").strip(),
+                        "refill_plan_batch_size": normalized_refill_plan_batch_size,
+                        "refill_plan_batch_count": normalized_refill_plan_batch_count,
+                        "refill_plan_window_url_count": normalized_refill_plan_window_url_count,
+                        "last_refill_attempt_count": attempt_count,
+                            "refill_owner_worker_id": owner_worker_id,
+                            "refill_owner_run_id": owner_run_id,
+                            "refill_owner_dataset_id": owner_dataset_id,
+                            "refill_owner_payload_hash": owner_payload_hash,
+                            "refill_terminal_status": terminal_status,
+                            "refill_terminal_at": terminal_at,
+                            "updated_at": planned_at,
+                        }
+                    )
+                    effective_by_key[canonical_key] = effective_payload
+                    profile_url_by_key[canonical_key] = profile_url
+                    modified_keys.add(canonical_key)
+                    if spec.get("kind") == "active":
+                        recorded_active_count += 1
+                    else:
+                        recorded_deferred_count += 1
+
+                registry_rows_to_upsert: list[dict[str, Any]] = []
+                alias_rows_to_upsert: list[dict[str, Any]] = []
+                alias_written_keys: set[str] = set()
+                for canonical_key in canonical_keys:
+                    if canonical_key not in modified_keys:
+                        continue
+                    effective_payload = dict(effective_by_key.get(canonical_key) or {})
+                    profile_url = str(
+                        effective_payload.get("profile_url") or profile_url_by_key.get(canonical_key) or canonical_key
+                    ).strip()
+                    registry_rows_to_upsert.append(
+                        self._linkedin_profile_registry_row_payload(
+                            profile_url_key=canonical_key,
+                            profile_url=profile_url,
+                            raw_linkedin_url=str(effective_payload.get("raw_linkedin_url") or ""),
+                            sanity_linkedin_url=str(effective_payload.get("sanity_linkedin_url") or ""),
+                            status=str(effective_payload.get("status") or "queued"),
+                            retry_count=int(effective_payload.get("retry_count") or 0),
+                            last_error=str(effective_payload.get("last_error") or ""),
+                            last_run_id=str(effective_payload.get("last_run_id") or ""),
+                            last_dataset_id=str(effective_payload.get("last_dataset_id") or ""),
+                            last_snapshot_dir=str(effective_payload.get("last_snapshot_dir") or ""),
+                            last_raw_path=str(effective_payload.get("last_raw_path") or ""),
+                            first_queued_at=str(effective_payload.get("first_queued_at") or ""),
+                            last_queued_at=str(effective_payload.get("last_queued_at") or ""),
+                            last_fetched_at=str(effective_payload.get("last_fetched_at") or ""),
+                            last_failed_at=str(effective_payload.get("last_failed_at") or ""),
+                            source_shards=list(effective_payload.get("source_shards") or []),
+                            source_jobs=list(effective_payload.get("source_jobs") or []),
+                            refill_queue_state=str(effective_payload.get("refill_queue_state") or ""),
+                            last_refill_trigger_kind=str(effective_payload.get("last_refill_trigger_kind") or ""),
+                            last_refill_plan_reason=str(effective_payload.get("last_refill_plan_reason") or ""),
+                            last_refill_deferred_reason=str(effective_payload.get("last_refill_deferred_reason") or ""),
+                            last_refill_planned_at=str(effective_payload.get("last_refill_planned_at") or ""),
+                            refill_not_before_at=str(effective_payload.get("refill_not_before_at") or ""),
+                            refill_plan_batch_size=int(effective_payload.get("refill_plan_batch_size") or 0),
+                            refill_plan_batch_count=int(effective_payload.get("refill_plan_batch_count") or 0),
+                            refill_plan_window_url_count=int(effective_payload.get("refill_plan_window_url_count") or 0),
+                            last_refill_attempt_count=int(effective_payload.get("last_refill_attempt_count") or 0),
+                            refill_owner_worker_id=int(effective_payload.get("refill_owner_worker_id") or 0),
+                            refill_owner_run_id=str(effective_payload.get("refill_owner_run_id") or ""),
+                            refill_owner_dataset_id=str(effective_payload.get("refill_owner_dataset_id") or ""),
+                            refill_owner_payload_hash=str(effective_payload.get("refill_owner_payload_hash") or ""),
+                            refill_terminal_status=str(effective_payload.get("refill_terminal_status") or ""),
+                            refill_terminal_at=str(effective_payload.get("refill_terminal_at") or ""),
+                            created_at=str(effective_payload.get("created_at") or planned_at),
+                            updated_at=str(effective_payload.get("updated_at") or planned_at),
+                        )
+                    )
+                    for alias_url in _normalize_linkedin_profile_url_list(
+                        [
+                            profile_url,
+                            *list(effective_payload.get("alias_urls") or []),
+                        ]
+                    ):
+                        alias_key = _normalize_linkedin_profile_url_key(alias_url)
+                        if not alias_key or alias_key in alias_written_keys:
+                            continue
+                        alias_written_keys.add(alias_key)
+                        alias_rows_to_upsert.append(
+                            {
+                                "alias_url_key": alias_key,
+                                "profile_url_key": canonical_key,
+                                "alias_url": alias_url,
+                                "alias_kind": "observed",
+                                "created_at": str(effective_payload.get("created_at") or planned_at),
+                                "updated_at": planned_at,
+                            }
+                        )
+                if registry_rows_to_upsert:
+                    self._control_plane_postgres.bulk_upsert_rows(
+                        "linkedin_profile_registry",
+                        registry_rows_to_upsert,
+                    )
+                if alias_rows_to_upsert:
+                    self._control_plane_postgres.bulk_upsert_rows(
+                        "linkedin_profile_registry_aliases",
+                        alias_rows_to_upsert,
+                    )
+                recorded_item_count = recorded_active_count + recorded_deferred_count
+                terminal_skipped_count = terminal_skipped_active_count + terminal_skipped_deferred_count
+                return {
+                    "status": "recorded" if recorded_item_count > 0 else "skipped",
+                    "reason": "" if recorded_item_count > 0 else "terminal_items_already_closed",
+                    "item_store": "linkedin_profile_registry",
+                    "active_item_count": recorded_active_count,
+                    "deferred_item_count": recorded_deferred_count,
+                    "requested_active_item_count": len(active_urls),
+                    "requested_deferred_item_count": len(deferred_urls),
+                    "terminal_skipped_item_count": terminal_skipped_count,
+                    "terminal_skipped_active_item_count": terminal_skipped_active_count,
+                    "terminal_skipped_deferred_item_count": terminal_skipped_deferred_count,
+                    "trigger_kind": str(trigger_kind or "").strip(),
+                    "plan_reason": str(plan_reason or "").strip(),
+                    "active_queue_state": normalized_active_queue_state,
+                    "active_reason": resolved_active_reason,
+                    "active_refill_not_before_at": normalized_active_refill_not_before_at,
+                    "active_owner_worker_id": normalized_active_owner_worker_id,
+                    "active_owner_run_id": normalized_active_owner_run_id,
+                    "active_owner_dataset_id": normalized_active_owner_dataset_id,
+                    "active_owner_payload_hash": normalized_active_owner_payload_hash,
+                    "deferred_reason": resolved_deferred_reason,
+                    "deferred_queue_state": normalized_deferred_queue_state,
+                    "planned_at": planned_at,
+                    "refill_not_before_at": normalized_refill_not_before_at,
+                }
+            except Exception as exc:
+                if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
+                    self._raise_control_plane_postgres_write_failure(
+                        table_name="linkedin_profile_registry",
+                        method_name="record_linkedin_profile_refill_plan_items",
+                        reason=f"{type(exc).__name__}: {exc}",
+                        error=exc,
+                    )
+
+        def _record(url: str, *, queue_state: str, reason: str, not_before_at: str) -> str:
+            payload = self._upsert_linkedin_profile_registry(
+                profile_url=url,
+                status="",
+                source_shards=_source_shards_for(url),
+                source_jobs=normalized_source_jobs,
+                snapshot_dir=snapshot_dir,
+                preserve_unrecoverable=True,
+            )
+            canonical_url = str(dict(payload or {}).get("profile_url") or url).strip()
+            canonical_key = _normalize_linkedin_profile_url_key(canonical_url or url)
+            if not canonical_key:
+                return "skipped"
+            current = self.get_linkedin_profile_registry(canonical_url or url) or {}
+            current_status = str(current.get("status") or "").strip().lower()
+            if current_status in {"fetched", "unrecoverable"}:
+                return "terminal_skipped"
+            current_refill_queue_state = str(current.get("refill_queue_state") or "").strip()
+            current_owner = (
+                max(0, int(current.get("refill_owner_worker_id") or 0)),
+                str(current.get("refill_owner_run_id") or "").strip(),
+                str(current.get("refill_owner_dataset_id") or "").strip(),
+                str(current.get("refill_owner_payload_hash") or "").strip(),
+            )
+            next_owner = (
+                normalized_active_owner_worker_id,
+                normalized_active_owner_run_id,
+                normalized_active_owner_dataset_id,
+                normalized_active_owner_payload_hash,
+            )
+            owner_changed = any(next_owner) and next_owner != current_owner
+            attempt_count = max(0, int(current.get("last_refill_attempt_count") or 0)) + (
+                1
+                if queue_state == "planned_dispatch"
+                and (current_refill_queue_state != "planned_dispatch" or owner_changed)
+                else 0
+            )
+            owner_worker_id = max(0, int(current.get("refill_owner_worker_id") or 0))
+            owner_run_id = str(current.get("refill_owner_run_id") or "").strip()
+            owner_dataset_id = str(current.get("refill_owner_dataset_id") or "").strip()
+            owner_payload_hash = str(current.get("refill_owner_payload_hash") or "").strip()
+            terminal_status = str(current.get("refill_terminal_status") or "").strip()
+            terminal_at = str(current.get("refill_terminal_at") or "").strip()
+            if queue_state == "planned_dispatch":
+                if normalized_active_owner_worker_id > 0:
+                    owner_worker_id = normalized_active_owner_worker_id
+                if normalized_active_owner_run_id:
+                    owner_run_id = normalized_active_owner_run_id
+                if normalized_active_owner_dataset_id:
+                    owner_dataset_id = normalized_active_owner_dataset_id
+                if normalized_active_owner_payload_hash:
+                    owner_payload_hash = normalized_active_owner_payload_hash
+                terminal_status = ""
+                terminal_at = ""
+            elif queue_state in {"dispatch_reserved", "dispatch_claimed"}:
+                owner_worker_id = normalized_active_owner_worker_id
+                owner_run_id = normalized_active_owner_run_id
+                owner_dataset_id = normalized_active_owner_dataset_id
+                owner_payload_hash = normalized_active_owner_payload_hash
+                terminal_status = ""
+                terminal_at = ""
+            elif queue_state in {
+                "deferred_budget",
+                "deferred_coalescing",
+            }:
+                owner_worker_id = 0
+                owner_run_id = ""
+                owner_dataset_id = ""
+                owner_payload_hash = ""
+                terminal_status = ""
+                terminal_at = ""
+            row_update = {
+                "refill_queue_state": queue_state,
+                "last_refill_trigger_kind": str(trigger_kind or "").strip(),
+                "last_refill_plan_reason": str(plan_reason or "").strip(),
+                "last_refill_deferred_reason": str(reason or "").strip(),
+                "last_refill_planned_at": planned_at,
+                "refill_not_before_at": "" if queue_state == "planned_dispatch" else str(not_before_at or "").strip(),
+                "refill_plan_batch_size": normalized_refill_plan_batch_size,
+                "refill_plan_batch_count": normalized_refill_plan_batch_count,
+                "refill_plan_window_url_count": normalized_refill_plan_window_url_count,
+                "last_refill_attempt_count": attempt_count,
+                "refill_owner_worker_id": owner_worker_id,
+                "refill_owner_run_id": owner_run_id,
+                "refill_owner_dataset_id": owner_dataset_id,
+                "refill_owner_payload_hash": owner_payload_hash,
+                "refill_terminal_status": terminal_status,
+                "refill_terminal_at": terminal_at,
+                "updated_at": planned_at,
+            }
+            if queue_state == "deferred_coalescing":
+                row_update["status"] = "deferred_coalescing"
+            if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry"):
+                try:
+                    self._control_plane_postgres.update_row_returning(
+                        table_name="linkedin_profile_registry",
+                        id_column="profile_url_key",
+                        id_value=canonical_key,
+                        row=row_update,
+                    )
+                except Exception as exc:
+                    if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
+                        self._raise_control_plane_postgres_write_failure(
+                            table_name="linkedin_profile_registry",
+                            method_name="update_row_returning",
+                            reason=f"{type(exc).__name__}: {exc}",
+                            error=exc,
+                        )
+                    else:
+                        return "skipped"
+                if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
+                    return "recorded"
+            with self._lock, self._connection:
+                resolved_key = self._resolve_linkedin_profile_registry_key_locked(canonical_key)
+                status_assignment = ", status = ?" if queue_state == "deferred_coalescing" else ""
+                self._connection.execute(
+                    f"""
+                    UPDATE linkedin_profile_registry
+                    SET refill_queue_state = ?,
+                        last_refill_trigger_kind = ?,
+                        last_refill_plan_reason = ?,
+                        last_refill_deferred_reason = ?,
+                        last_refill_planned_at = ?,
+                        refill_not_before_at = ?,
+                        refill_plan_batch_size = ?,
+                        refill_plan_batch_count = ?,
+                        refill_plan_window_url_count = ?,
+                        last_refill_attempt_count = ?,
+                        refill_owner_worker_id = ?,
+                        refill_owner_run_id = ?,
+                        refill_owner_dataset_id = ?,
+                        refill_owner_payload_hash = ?,
+                        refill_terminal_status = ?,
+                        refill_terminal_at = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                        {status_assignment}
+                    WHERE profile_url_key = ?
+                    """,
+                    (
+                        queue_state,
+                        str(trigger_kind or "").strip(),
+                        str(plan_reason or "").strip(),
+                        str(reason or "").strip(),
+                        planned_at,
+                        "" if queue_state == "planned_dispatch" else str(not_before_at or "").strip(),
+                        normalized_refill_plan_batch_size,
+                        normalized_refill_plan_batch_count,
+                        normalized_refill_plan_window_url_count,
+                        attempt_count,
+                        owner_worker_id,
+                        owner_run_id,
+                        owner_dataset_id,
+                        owner_payload_hash,
+                        terminal_status,
+                        terminal_at,
+                        *(("deferred_coalescing",) if queue_state == "deferred_coalescing" else ()),
+                        resolved_key,
+                    ),
+                )
+            return "recorded"
+
+        resolved_active_reason = str(active_reason or plan_reason or "ready_to_dispatch").strip()
+        recorded_active_count = 0
+        for profile_url in active_urls:
+            record_status = _record(
+                profile_url,
+                queue_state=normalized_active_queue_state,
+                reason="" if normalized_active_queue_state == "planned_dispatch" else resolved_active_reason,
+                not_before_at=normalized_active_refill_not_before_at,
+            )
+            if record_status == "recorded":
+                recorded_active_count += 1
+            elif record_status == "terminal_skipped":
+                terminal_skipped_active_count += 1
+        resolved_deferred_reason = str(deferred_reason or plan_reason or "worker_budget_deferred").strip()
+        recorded_deferred_count = 0
+        for profile_url in deferred_urls:
+            record_status = _record(
+                profile_url,
+                queue_state=normalized_deferred_queue_state,
+                reason=resolved_deferred_reason,
+                not_before_at=normalized_refill_not_before_at,
+            )
+            if record_status == "recorded":
+                recorded_deferred_count += 1
+            elif record_status == "terminal_skipped":
+                terminal_skipped_deferred_count += 1
+        recorded_item_count = recorded_active_count + recorded_deferred_count
+        terminal_skipped_count = terminal_skipped_active_count + terminal_skipped_deferred_count
+        return {
+            "status": "recorded" if recorded_item_count > 0 else "skipped",
+            "reason": "" if recorded_item_count > 0 else "terminal_items_already_closed",
+            "item_store": "linkedin_profile_registry",
+            "active_item_count": recorded_active_count,
+            "deferred_item_count": recorded_deferred_count,
+            "requested_active_item_count": len(active_urls),
+            "requested_deferred_item_count": len(deferred_urls),
+            "terminal_skipped_item_count": terminal_skipped_count,
+            "terminal_skipped_active_item_count": terminal_skipped_active_count,
+            "terminal_skipped_deferred_item_count": terminal_skipped_deferred_count,
+            "trigger_kind": str(trigger_kind or "").strip(),
+            "plan_reason": str(plan_reason or "").strip(),
+            "active_queue_state": normalized_active_queue_state,
+            "active_reason": resolved_active_reason,
+            "active_refill_not_before_at": normalized_active_refill_not_before_at,
+            "active_owner_worker_id": normalized_active_owner_worker_id,
+            "active_owner_run_id": normalized_active_owner_run_id,
+            "active_owner_dataset_id": normalized_active_owner_dataset_id,
+            "active_owner_payload_hash": normalized_active_owner_payload_hash,
+            "deferred_reason": resolved_deferred_reason,
+            "deferred_queue_state": normalized_deferred_queue_state,
+            "planned_at": planned_at,
+            "refill_not_before_at": normalized_refill_not_before_at,
+            "refill_plan_batch_size": normalized_refill_plan_batch_size,
+            "refill_plan_batch_count": normalized_refill_plan_batch_count,
+            "refill_plan_window_url_count": normalized_refill_plan_window_url_count,
+        }
+
+    def list_linkedin_profile_refill_queue_items(
+        self,
+        *,
+        states: list[str] | tuple[str, ...] | set[str] | None = None,
+        source_job: str = "",
+        snapshot_dir: str = "",
+        limit: int = 100,
+        ready_only: bool = True,
+    ) -> list[dict[str, Any]]:
+        normalized_states = [
+            str(item or "").strip()
+            for item in list(states or ["deferred_budget"])
+            if str(item or "").strip()
+        ]
+        if not normalized_states:
+            return []
+        normalized_limit = max(1, min(10000, int(limit or 100)))
+        normalized_source_job = str(source_job or "").strip()
+        normalized_snapshot_dir = str(snapshot_dir or "").strip()
+        normalized_ready_only = bool(ready_only)
+        ready_clause_sqlite = "(refill_not_before_at IS NULL OR refill_not_before_at = '' OR datetime(refill_not_before_at) <= datetime('now'))"
+        ready_clause_postgres = "(coalesce(refill_not_before_at, '') = '' OR refill_not_before_at <= %s)"
+        provider_owned_states = {"planned_dispatch"}
+        include_provider_owned_states = any(state in provider_owned_states for state in normalized_states)
+        if normalized_ready_only and include_provider_owned_states:
+            return []
+        now_timestamp = _utc_now_timestamp()
+        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry"):
+            placeholders = ", ".join("%s" for _ in normalized_states)
+            where_sql = f"refill_queue_state IN ({placeholders})"
+            params: list[Any] = [*normalized_states]
+            if normalized_ready_only:
+                where_sql = f"{where_sql} AND {ready_clause_postgres}"
+                params.append(now_timestamp)
+            rows = self._select_control_plane_rows(
+                "linkedin_profile_registry",
+                row_builder=self._linkedin_profile_registry_from_row,
+                where_sql=where_sql,
+                params=params,
+                order_by_sql="refill_not_before_at ASC, last_refill_planned_at ASC, updated_at ASC",
+                limit=normalized_limit * 3,
+            )
+            filtered_rows = self._filter_linkedin_profile_refill_queue_rows(
+                rows,
+                source_job=normalized_source_job,
+                snapshot_dir=normalized_snapshot_dir,
+                limit=normalized_limit,
+            )
+            if filtered_rows or self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
+                return filtered_rows
+        with self._lock:
+            placeholders = ", ".join("?" for _ in normalized_states)
+            where_sql = f"refill_queue_state IN ({placeholders})"
+            params: list[Any] = [*normalized_states]
+            if normalized_ready_only:
+                where_sql = f"{where_sql} AND {ready_clause_sqlite}"
+            rows = self._connection.execute(
+                f"""
+                SELECT *
+                FROM linkedin_profile_registry
+                WHERE {where_sql}
+                ORDER BY refill_not_before_at ASC, last_refill_planned_at ASC, updated_at ASC
+                LIMIT ?
+                """,
+                (*params, normalized_limit * 3),
+            ).fetchall()
+        return self._filter_linkedin_profile_refill_queue_rows(
+            [self._linkedin_profile_registry_from_row(row) for row in rows],
+            source_job=normalized_source_job,
+            snapshot_dir=normalized_snapshot_dir,
+            limit=normalized_limit,
+        )
+
+    def list_linkedin_profile_refill_queue_groups(
+        self,
+        *,
+        states: list[str] | tuple[str, ...] | set[str] | None = None,
+        source_job: str = "",
+        limit: int = 20,
+        item_limit_per_group: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Return durable refill work grouped by the workflow scope that owns it.
+
+        The registry row remains the canonical item store; this helper only groups
+        rows so daemon ticks can wake a job/snapshot refill without reconstructing
+        queue state from artifacts.
+        """
+
+        normalized_states = [
+            str(item or "").strip()
+            for item in list(states or ["deferred_budget"])
+            if str(item or "").strip()
+        ]
+        if not normalized_states:
+            return []
+        normalized_limit = max(1, min(100, int(limit or 20)))
+        normalized_item_limit = max(1, min(10000, int(item_limit_per_group or 200)))
+        normalized_source_job = str(source_job or "").strip()
+        row_limit = max(normalized_limit * normalized_item_limit, normalized_item_limit)
+        ready_clause_sqlite = "(refill_not_before_at IS NULL OR refill_not_before_at = '' OR datetime(refill_not_before_at) <= datetime('now'))"
+        ready_clause_postgres = "(coalesce(refill_not_before_at, '') = '' OR refill_not_before_at <= %s)"
+        now_timestamp = _utc_now_timestamp()
+        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry"):
+            placeholders = ", ".join("%s" for _ in normalized_states)
+            rows = self._select_control_plane_rows(
+                "linkedin_profile_registry",
+                row_builder=self._linkedin_profile_registry_from_row,
+                where_sql=f"refill_queue_state IN ({placeholders}) AND {ready_clause_postgres}",
+                params=[*normalized_states, now_timestamp],
+                order_by_sql="refill_not_before_at ASC, last_refill_planned_at ASC, updated_at ASC",
+                limit=row_limit,
+            )
+            groups = self._group_linkedin_profile_refill_queue_rows(
+                rows,
+                source_job=normalized_source_job,
+                group_limit=normalized_limit,
+                item_limit_per_group=normalized_item_limit,
+            )
+            if groups or self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
+                return groups
+        with self._lock:
+            placeholders = ", ".join("?" for _ in normalized_states)
+            rows = self._connection.execute(
+                f"""
+                SELECT *
+                FROM linkedin_profile_registry
+                WHERE refill_queue_state IN ({placeholders})
+                  AND {ready_clause_sqlite}
+                ORDER BY refill_not_before_at ASC, last_refill_planned_at ASC, updated_at ASC
+                LIMIT ?
+                """,
+                (*normalized_states, row_limit),
+            ).fetchall()
+        return self._group_linkedin_profile_refill_queue_rows(
+            [self._linkedin_profile_registry_from_row(row) for row in rows],
+            source_job=normalized_source_job,
+            group_limit=normalized_limit,
+            item_limit_per_group=normalized_item_limit,
+        )
+
+    @staticmethod
+    def _filter_linkedin_profile_refill_queue_rows(
+        rows: list[dict[str, Any]],
+        *,
+        source_job: str,
+        snapshot_dir: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        filtered: list[dict[str, Any]] = []
+        normalized_limit = max(1, int(limit or 1))
+        for row in list(rows or []):
+            payload = dict(row or {})
+            if source_job and source_job not in {str(item or "").strip() for item in list(payload.get("source_jobs") or [])}:
+                continue
+            if snapshot_dir and str(payload.get("last_snapshot_dir") or "").strip() != snapshot_dir:
+                continue
+            filtered.append(payload)
+            if len(filtered) >= normalized_limit:
+                break
+        return filtered
+
+    @staticmethod
+    def _group_linkedin_profile_refill_queue_rows(
+        rows: list[dict[str, Any]],
+        *,
+        source_job: str,
+        group_limit: int,
+        item_limit_per_group: int,
+    ) -> list[dict[str, Any]]:
+        groups: list[dict[str, Any]] = []
+        groups_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+        normalized_group_limit = max(1, int(group_limit or 1))
+        normalized_item_limit = max(1, int(item_limit_per_group or 1))
+        normalized_source_job = str(source_job or "").strip()
+        for row in list(rows or []):
+            payload = dict(row or {})
+            row_source_jobs = [
+                str(item or "").strip()
+                for item in list(payload.get("source_jobs") or [])
+                if str(item or "").strip()
+            ]
+            snapshot_dir = str(payload.get("last_snapshot_dir") or "").strip()
+            if not snapshot_dir:
+                continue
+            candidate_jobs = [normalized_source_job] if normalized_source_job else row_source_jobs
+            for job_id in candidate_jobs:
+                if not job_id:
+                    continue
+                if row_source_jobs and job_id not in row_source_jobs:
+                    continue
+                key = (job_id, snapshot_dir)
+                group = groups_by_key.get(key)
+                if group is None:
+                    if len(groups) >= normalized_group_limit:
+                        continue
+                    group = {
+                        "source_job": job_id,
+                        "snapshot_dir": snapshot_dir,
+                        "states": {},
+                        "item_count": 0,
+                        "items": [],
+                    }
+                    groups_by_key[key] = group
+                    groups.append(group)
+                if int(group.get("item_count") or 0) >= normalized_item_limit:
+                    continue
+                items = list(group.get("items") or [])
+                items.append(payload)
+                group["items"] = items
+                group["item_count"] = len(items)
+                state = str(payload.get("refill_queue_state") or "").strip()
+                states = dict(group.get("states") or {})
+                if state:
+                    states[state] = int(states.get(state) or 0) + 1
+                group["states"] = states
+        return groups
 
     def upsert_linkedin_profile_registry_sources(
         self,
@@ -12972,7 +24698,7 @@ class ControlPlaneStore:
             effective_status = "unrecoverable"
         if normalized_status == "fetched":
             effective_status = "fetched"
-        if normalized_status == "queued" and existing_status == "fetched" and existing_raw_path:
+        if normalized_status in {"queued", "deferred_coalescing"} and existing_status == "fetched" and existing_raw_path:
             effective_status = "fetched"
         if retry_count is not None:
             effective_retry_count = max(0, int(retry_count))
@@ -13011,6 +24737,33 @@ class ControlPlaneStore:
                 effective_sanity_linkedin_url,
             ]
         )
+        effective_refill_queue_state = str(existing.get("refill_queue_state") or "")
+        effective_refill_not_before_at = str(existing.get("refill_not_before_at") or "")
+        effective_refill_plan_batch_size = max(0, int(existing.get("refill_plan_batch_size") or 0))
+        effective_refill_plan_batch_count = max(0, int(existing.get("refill_plan_batch_count") or 0))
+        effective_refill_plan_window_url_count = max(
+            0,
+            int(existing.get("refill_plan_window_url_count") or 0),
+        )
+        effective_refill_terminal_status = str(existing.get("refill_terminal_status") or "")
+        effective_refill_terminal_at = str(existing.get("refill_terminal_at") or "")
+        if effective_status in {"fetched", "unrecoverable"}:
+            effective_refill_queue_state = ""
+            effective_refill_not_before_at = ""
+            effective_refill_plan_batch_size = 0
+            effective_refill_plan_batch_count = 0
+            effective_refill_plan_window_url_count = 0
+            effective_refill_terminal_status = (
+                effective_refill_terminal_status
+                or ("completed" if effective_status == "fetched" else "terminal_failed")
+            )
+            effective_refill_terminal_at = effective_refill_terminal_at or now_timestamp
+        elif normalized_status == "failed_retryable":
+            effective_refill_terminal_status = "retryable_failed"
+            effective_refill_terminal_at = now_timestamp
+        if normalized_status == "failed_retryable" and (not merged_source_jobs or not effective_snapshot_dir):
+            effective_refill_queue_state = ""
+            effective_refill_not_before_at = ""
         return {
             "profile_url": effective_profile_url,
             "raw_linkedin_url": effective_raw_linkedin_url,
@@ -13028,6 +24781,22 @@ class ControlPlaneStore:
             "last_failed_at": effective_last_failed_at,
             "source_shards": merged_source_shards,
             "source_jobs": merged_source_jobs,
+            "refill_queue_state": effective_refill_queue_state,
+            "last_refill_trigger_kind": str(existing.get("last_refill_trigger_kind") or ""),
+            "last_refill_plan_reason": str(existing.get("last_refill_plan_reason") or ""),
+            "last_refill_deferred_reason": str(existing.get("last_refill_deferred_reason") or ""),
+            "last_refill_planned_at": str(existing.get("last_refill_planned_at") or ""),
+            "refill_not_before_at": effective_refill_not_before_at,
+            "refill_plan_batch_size": effective_refill_plan_batch_size,
+            "refill_plan_batch_count": effective_refill_plan_batch_count,
+            "refill_plan_window_url_count": effective_refill_plan_window_url_count,
+            "last_refill_attempt_count": max(0, int(existing.get("last_refill_attempt_count") or 0)),
+            "refill_owner_worker_id": max(0, int(existing.get("refill_owner_worker_id") or 0)),
+            "refill_owner_run_id": str(existing.get("refill_owner_run_id") or ""),
+            "refill_owner_dataset_id": str(existing.get("refill_owner_dataset_id") or ""),
+            "refill_owner_payload_hash": str(existing.get("refill_owner_payload_hash") or ""),
+            "refill_terminal_status": effective_refill_terminal_status,
+            "refill_terminal_at": effective_refill_terminal_at,
             "alias_urls": effective_alias_urls,
             "created_at": str(existing.get("created_at") or now_timestamp),
             "updated_at": now_timestamp,
@@ -13057,6 +24826,8 @@ class ControlPlaneStore:
                     alias_urls=list(entry.get("alias_urls") or []),
                     raw_linkedin_url=str(entry.get("raw_linkedin_url") or ""),
                     sanity_linkedin_url=str(entry.get("sanity_linkedin_url") or ""),
+                    run_id=str(entry.get("run_id") or ""),
+                    dataset_id=str(entry.get("dataset_id") or ""),
                     snapshot_dir=str(entry.get("snapshot_dir") or ""),
                 )
             else:
@@ -13069,6 +24840,8 @@ class ControlPlaneStore:
                     alias_urls=list(entry.get("alias_urls") or []),
                     raw_linkedin_url=str(entry.get("raw_linkedin_url") or ""),
                     sanity_linkedin_url=str(entry.get("sanity_linkedin_url") or ""),
+                    run_id=str(entry.get("run_id") or ""),
+                    dataset_id=str(entry.get("dataset_id") or ""),
                     snapshot_dir=str(entry.get("snapshot_dir") or ""),
                 )
             processed += 1
@@ -13194,25 +24967,75 @@ class ControlPlaneStore:
                 continue
             effective_payload = dict(existing_rows_by_key.get(canonical_key) or {})
             for entry in batch_entries:
+                entry_status = str(entry.get("status") or "")
+                entry_retryable = bool(entry.get("retryable"))
+                retry_count_before = max(0, int(effective_payload.get("retry_count") or 0))
+                retry_attempt_budget = _linkedin_profile_max_retry_attempts()
+                retry_queue_allowed = (
+                    entry_status == "failed_retryable"
+                    and entry_retryable
+                    and retry_count_before < retry_attempt_budget
+                )
+                effective_status = (
+                    "unrecoverable"
+                    if entry_status == "failed_retryable" and entry_retryable and not retry_queue_allowed
+                    else entry_status
+                )
+                now_timestamp = _utc_now_timestamp()
                 effective_payload = self._compose_linkedin_profile_registry_effective_payload(
                     existing_payload=effective_payload,
-                    normalized_status=str(entry.get("status") or ""),
+                    normalized_status=effective_status,
                     normalized_profile_url=str(entry.get("profile_url") or ""),
                     normalized_raw_linkedin_url=str(entry.get("raw_linkedin_url") or ""),
                     normalized_sanity_linkedin_url=str(entry.get("sanity_linkedin_url") or ""),
                     normalized_alias_urls=list(entry.get("alias_urls") or []),
-                    normalized_run_id="",
-                    normalized_dataset_id="",
+                    normalized_run_id=str(entry.get("run_id") or ""),
+                    normalized_dataset_id=str(entry.get("dataset_id") or ""),
                     normalized_snapshot_dir=str(entry.get("snapshot_dir") or ""),
                     normalized_raw_path=str(entry.get("raw_path") or ""),
                     normalized_source_shards=list(entry.get("source_shards") or []),
                     normalized_source_jobs=list(entry.get("source_jobs") or []),
-                    retry_count=0 if str(entry.get("status") or "") == "fetched" else None,
-                    increment_retry=bool(entry.get("retryable")),
+                    retry_count=0 if entry_status == "fetched" else None,
+                    increment_retry=entry_retryable,
                     last_error=str(entry.get("error") or ""),
-                    preserve_unrecoverable=not bool(entry.get("retryable")),
-                    now_timestamp=_utc_now_timestamp(),
+                    preserve_unrecoverable=not entry_retryable,
+                    now_timestamp=now_timestamp,
                 )
+                retry_source_jobs = [
+                    str(item or "").strip()
+                    for item in list(effective_payload.get("source_jobs") or [])
+                    if str(item or "").strip()
+                ]
+                retry_snapshot_dir = str(effective_payload.get("last_snapshot_dir") or "").strip()
+                if retry_queue_allowed and retry_source_jobs and retry_snapshot_dir:
+                    retry_not_before_at = (
+                        datetime.now(timezone.utc).replace(microsecond=0)
+                        + timedelta(seconds=30)
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+                    effective_payload.update(
+                        {
+                            "status": "failed_retryable",
+                            "refill_queue_state": "retry_wait",
+                            "last_refill_trigger_kind": "profile_retry",
+                            "last_refill_plan_reason": "profile_retry_wait",
+                            "last_refill_deferred_reason": str(
+                                entry.get("error") or "profile_retryable_failure"
+                            ).strip()
+                            or "profile_retryable_failure",
+                            "last_refill_planned_at": now_timestamp,
+                            "refill_not_before_at": retry_not_before_at,
+                            "refill_plan_batch_size": 0,
+                            "refill_plan_batch_count": 0,
+                            "refill_plan_window_url_count": 0,
+                            "refill_owner_worker_id": 0,
+                            "refill_owner_run_id": "",
+                            "refill_owner_dataset_id": "",
+                            "refill_owner_payload_hash": "",
+                            "refill_terminal_status": "retryable_failed",
+                            "refill_terminal_at": now_timestamp,
+                            "updated_at": now_timestamp,
+                        }
+                    )
             registry_rows_to_upsert.append(
                 self._linkedin_profile_registry_row_payload(
                     profile_url_key=canonical_key,
@@ -13229,12 +25052,28 @@ class ControlPlaneStore:
                     first_queued_at=str(effective_payload.get("first_queued_at") or ""),
                     last_queued_at=str(effective_payload.get("last_queued_at") or ""),
                     last_fetched_at=str(effective_payload.get("last_fetched_at") or ""),
-                    last_failed_at=str(effective_payload.get("last_failed_at") or ""),
-                    source_shards=list(effective_payload.get("source_shards") or []),
-                    source_jobs=list(effective_payload.get("source_jobs") or []),
-                    created_at=str(effective_payload.get("created_at") or _utc_now_timestamp()),
-                    updated_at=str(effective_payload.get("updated_at") or _utc_now_timestamp()),
-                )
+                last_failed_at=str(effective_payload.get("last_failed_at") or ""),
+                source_shards=list(effective_payload.get("source_shards") or []),
+                source_jobs=list(effective_payload.get("source_jobs") or []),
+                refill_queue_state=str(effective_payload.get("refill_queue_state") or ""),
+                last_refill_trigger_kind=str(effective_payload.get("last_refill_trigger_kind") or ""),
+                last_refill_plan_reason=str(effective_payload.get("last_refill_plan_reason") or ""),
+                last_refill_deferred_reason=str(effective_payload.get("last_refill_deferred_reason") or ""),
+                last_refill_planned_at=str(effective_payload.get("last_refill_planned_at") or ""),
+                refill_not_before_at=str(effective_payload.get("refill_not_before_at") or ""),
+                refill_plan_batch_size=int(effective_payload.get("refill_plan_batch_size") or 0),
+                refill_plan_batch_count=int(effective_payload.get("refill_plan_batch_count") or 0),
+                refill_plan_window_url_count=int(effective_payload.get("refill_plan_window_url_count") or 0),
+                last_refill_attempt_count=int(effective_payload.get("last_refill_attempt_count") or 0),
+                refill_owner_worker_id=int(effective_payload.get("refill_owner_worker_id") or 0),
+                refill_owner_run_id=str(effective_payload.get("refill_owner_run_id") or ""),
+                refill_owner_dataset_id=str(effective_payload.get("refill_owner_dataset_id") or ""),
+                refill_owner_payload_hash=str(effective_payload.get("refill_owner_payload_hash") or ""),
+                refill_terminal_status=str(effective_payload.get("refill_terminal_status") or ""),
+                refill_terminal_at=str(effective_payload.get("refill_terminal_at") or ""),
+                created_at=str(effective_payload.get("created_at") or _utc_now_timestamp()),
+                updated_at=str(effective_payload.get("updated_at") or _utc_now_timestamp()),
+            )
             )
             for alias_url in _normalize_linkedin_profile_url_list(
                 [
@@ -13346,6 +25185,22 @@ class ControlPlaneStore:
                 last_failed_at=str(effective_payload.get("last_failed_at") or ""),
                 source_shards=list(effective_payload.get("source_shards") or []),
                 source_jobs=list(effective_payload.get("source_jobs") or []),
+                refill_queue_state=str(effective_payload.get("refill_queue_state") or ""),
+                last_refill_trigger_kind=str(effective_payload.get("last_refill_trigger_kind") or ""),
+                last_refill_plan_reason=str(effective_payload.get("last_refill_plan_reason") or ""),
+                last_refill_deferred_reason=str(effective_payload.get("last_refill_deferred_reason") or ""),
+                last_refill_planned_at=str(effective_payload.get("last_refill_planned_at") or ""),
+                refill_not_before_at=str(effective_payload.get("refill_not_before_at") or ""),
+                refill_plan_batch_size=int(effective_payload.get("refill_plan_batch_size") or 0),
+                refill_plan_batch_count=int(effective_payload.get("refill_plan_batch_count") or 0),
+                refill_plan_window_url_count=int(effective_payload.get("refill_plan_window_url_count") or 0),
+                last_refill_attempt_count=int(effective_payload.get("last_refill_attempt_count") or 0),
+                refill_owner_worker_id=int(effective_payload.get("refill_owner_worker_id") or 0),
+                refill_owner_run_id=str(effective_payload.get("refill_owner_run_id") or ""),
+                refill_owner_dataset_id=str(effective_payload.get("refill_owner_dataset_id") or ""),
+                refill_owner_payload_hash=str(effective_payload.get("refill_owner_payload_hash") or ""),
+                refill_terminal_status=str(effective_payload.get("refill_terminal_status") or ""),
+                refill_terminal_at=str(effective_payload.get("refill_terminal_at") or ""),
                 created_at=str(effective_payload.get("created_at") or now_timestamp),
                 updated_at=str(effective_payload.get("updated_at") or now_timestamp),
             )
@@ -13407,8 +25262,24 @@ class ControlPlaneStore:
                     last_fetched_at,
                     last_failed_at,
                     source_shards_json,
-                    source_jobs_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    source_jobs_json,
+                    refill_queue_state,
+                    last_refill_trigger_kind,
+                    last_refill_plan_reason,
+                    last_refill_deferred_reason,
+                    last_refill_planned_at,
+                    refill_not_before_at,
+                    refill_plan_batch_size,
+                    refill_plan_batch_count,
+                    refill_plan_window_url_count,
+                    last_refill_attempt_count,
+                    refill_owner_worker_id,
+                    refill_owner_run_id,
+                    refill_owner_dataset_id,
+                    refill_owner_payload_hash,
+                    refill_terminal_status,
+                    refill_terminal_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(profile_url_key) DO UPDATE SET
                     profile_url = excluded.profile_url,
                     raw_linkedin_url = excluded.raw_linkedin_url,
@@ -13426,6 +25297,22 @@ class ControlPlaneStore:
                     last_failed_at = excluded.last_failed_at,
                     source_shards_json = excluded.source_shards_json,
                     source_jobs_json = excluded.source_jobs_json,
+                    refill_queue_state = excluded.refill_queue_state,
+                    last_refill_trigger_kind = excluded.last_refill_trigger_kind,
+                    last_refill_plan_reason = excluded.last_refill_plan_reason,
+                    last_refill_deferred_reason = excluded.last_refill_deferred_reason,
+                    last_refill_planned_at = excluded.last_refill_planned_at,
+                    refill_not_before_at = excluded.refill_not_before_at,
+                    refill_plan_batch_size = excluded.refill_plan_batch_size,
+                    refill_plan_batch_count = excluded.refill_plan_batch_count,
+                    refill_plan_window_url_count = excluded.refill_plan_window_url_count,
+                    last_refill_attempt_count = excluded.last_refill_attempt_count,
+                    refill_owner_worker_id = excluded.refill_owner_worker_id,
+                    refill_owner_run_id = excluded.refill_owner_run_id,
+                    refill_owner_dataset_id = excluded.refill_owner_dataset_id,
+                    refill_owner_payload_hash = excluded.refill_owner_payload_hash,
+                    refill_terminal_status = excluded.refill_terminal_status,
+                    refill_terminal_at = excluded.refill_terminal_at,
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 (
@@ -13446,6 +25333,22 @@ class ControlPlaneStore:
                     str(effective_payload.get("last_failed_at") or ""),
                     json.dumps(list(effective_payload.get("source_shards") or []), ensure_ascii=False),
                     json.dumps(list(effective_payload.get("source_jobs") or []), ensure_ascii=False),
+                    str(effective_payload.get("refill_queue_state") or ""),
+                    str(effective_payload.get("last_refill_trigger_kind") or ""),
+                    str(effective_payload.get("last_refill_plan_reason") or ""),
+                    str(effective_payload.get("last_refill_deferred_reason") or ""),
+                    str(effective_payload.get("last_refill_planned_at") or ""),
+                    str(effective_payload.get("refill_not_before_at") or ""),
+                    int(effective_payload.get("refill_plan_batch_size") or 0),
+                    int(effective_payload.get("refill_plan_batch_count") or 0),
+                    int(effective_payload.get("refill_plan_window_url_count") or 0),
+                    int(effective_payload.get("last_refill_attempt_count") or 0),
+                    int(effective_payload.get("refill_owner_worker_id") or 0),
+                    str(effective_payload.get("refill_owner_run_id") or ""),
+                    str(effective_payload.get("refill_owner_dataset_id") or ""),
+                    str(effective_payload.get("refill_owner_payload_hash") or ""),
+                    str(effective_payload.get("refill_terminal_status") or ""),
+                    str(effective_payload.get("refill_terminal_at") or ""),
                 ),
             )
             canonical_profile_url = str(effective_payload.get("profile_url") or canonical_key)
@@ -15643,33 +27546,49 @@ class ControlPlaneStore:
         source_shards = []
         source_jobs = []
         try:
-            source_shards = list(json.loads(row["source_shards_json"] or "[]"))
+            source_shards = list(json.loads(_row_value(row, "source_shards_json", "[]") or "[]"))
         except json.JSONDecodeError:
             source_shards = []
         try:
-            source_jobs = list(json.loads(row["source_jobs_json"] or "[]"))
+            source_jobs = list(json.loads(_row_value(row, "source_jobs_json", "[]") or "[]"))
         except json.JSONDecodeError:
             source_jobs = []
         return {
-            "profile_url_key": str(row["profile_url_key"] or ""),
-            "profile_url": str(row["profile_url"] or ""),
-            "raw_linkedin_url": str(row["raw_linkedin_url"] or ""),
-            "sanity_linkedin_url": str(row["sanity_linkedin_url"] or ""),
-            "status": str(row["status"] or ""),
-            "retry_count": int(row["retry_count"] or 0),
-            "last_error": str(row["last_error"] or ""),
-            "last_run_id": str(row["last_run_id"] or ""),
-            "last_dataset_id": str(row["last_dataset_id"] or ""),
-            "last_snapshot_dir": str(row["last_snapshot_dir"] or ""),
-            "last_raw_path": str(row["last_raw_path"] or ""),
-            "first_queued_at": str(row["first_queued_at"] or ""),
-            "last_queued_at": str(row["last_queued_at"] or ""),
-            "last_fetched_at": str(row["last_fetched_at"] or ""),
-            "last_failed_at": str(row["last_failed_at"] or ""),
+            "profile_url_key": str(_row_value(row, "profile_url_key") or ""),
+            "profile_url": str(_row_value(row, "profile_url") or ""),
+            "raw_linkedin_url": str(_row_value(row, "raw_linkedin_url") or ""),
+            "sanity_linkedin_url": str(_row_value(row, "sanity_linkedin_url") or ""),
+            "status": str(_row_value(row, "status") or ""),
+            "retry_count": int(_row_value(row, "retry_count", 0) or 0),
+            "last_error": str(_row_value(row, "last_error") or ""),
+            "last_run_id": str(_row_value(row, "last_run_id") or ""),
+            "last_dataset_id": str(_row_value(row, "last_dataset_id") or ""),
+            "last_snapshot_dir": str(_row_value(row, "last_snapshot_dir") or ""),
+            "last_raw_path": str(_row_value(row, "last_raw_path") or ""),
+            "first_queued_at": str(_row_value(row, "first_queued_at") or ""),
+            "last_queued_at": str(_row_value(row, "last_queued_at") or ""),
+            "last_fetched_at": str(_row_value(row, "last_fetched_at") or ""),
+            "last_failed_at": str(_row_value(row, "last_failed_at") or ""),
             "source_shards": [str(item).strip() for item in source_shards if str(item).strip()],
             "source_jobs": [str(item).strip() for item in source_jobs if str(item).strip()],
-            "created_at": str(row["created_at"] or ""),
-            "updated_at": str(row["updated_at"] or ""),
+            "refill_queue_state": str(_row_value(row, "refill_queue_state") or ""),
+            "last_refill_trigger_kind": str(_row_value(row, "last_refill_trigger_kind") or ""),
+            "last_refill_plan_reason": str(_row_value(row, "last_refill_plan_reason") or ""),
+            "last_refill_deferred_reason": str(_row_value(row, "last_refill_deferred_reason") or ""),
+            "last_refill_planned_at": str(_row_value(row, "last_refill_planned_at") or ""),
+            "refill_not_before_at": str(_row_value(row, "refill_not_before_at") or ""),
+            "refill_plan_batch_size": int(_row_value(row, "refill_plan_batch_size", 0) or 0),
+            "refill_plan_batch_count": int(_row_value(row, "refill_plan_batch_count", 0) or 0),
+            "refill_plan_window_url_count": int(_row_value(row, "refill_plan_window_url_count", 0) or 0),
+            "last_refill_attempt_count": int(_row_value(row, "last_refill_attempt_count", 0) or 0),
+            "refill_owner_worker_id": int(_row_value(row, "refill_owner_worker_id", 0) or 0),
+            "refill_owner_run_id": str(_row_value(row, "refill_owner_run_id") or ""),
+            "refill_owner_dataset_id": str(_row_value(row, "refill_owner_dataset_id") or ""),
+            "refill_owner_payload_hash": str(_row_value(row, "refill_owner_payload_hash") or ""),
+            "refill_terminal_status": str(_row_value(row, "refill_terminal_status") or ""),
+            "refill_terminal_at": str(_row_value(row, "refill_terminal_at") or ""),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
         }
 
     def _linkedin_profile_registry_lease_from_row(self, row: Any) -> dict[str, Any]:
@@ -15681,6 +27600,74 @@ class ControlPlaneStore:
             "lease_owner": str(row["lease_owner"] or ""),
             "lease_token": str(row["lease_token"] or ""),
             "lease_expires_at": lease_expires_at,
+            "expired": _is_sqlite_timestamp_expired(lease_expires_at),
+            "created_at": str(row["created_at"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+
+    def _build_linkedin_profile_registry_batch_lease_payload(
+        self,
+        *,
+        normalized_urls: list[str],
+        canonical_keys_by_url: dict[str, str],
+        rows_by_key: dict[str, dict[str, Any]],
+        lease_owner: str,
+        lease_token: str,
+    ) -> dict[str, Any]:
+        acquired_urls: list[str] = []
+        contended_urls: list[str] = []
+        leases_by_url: dict[str, dict[str, Any]] = {}
+        for profile_url in normalized_urls:
+            canonical_key = str(canonical_keys_by_url.get(profile_url) or "").strip()
+            lease_payload = dict(rows_by_key.get(canonical_key) or {})
+            acquired = (
+                bool(lease_payload)
+                and str(lease_payload.get("lease_owner") or "") == str(lease_owner or "")
+                and str(lease_payload.get("lease_token") or "") == str(lease_token or "")
+                and not bool(lease_payload.get("expired"))
+            )
+            lease_result = {
+                **lease_payload,
+                "profile_url_key": canonical_key or str(lease_payload.get("profile_url_key") or ""),
+                "acquired": acquired,
+                "contended": bool(
+                    not acquired
+                    and lease_payload
+                    and str(lease_payload.get("lease_owner") or "").strip()
+                ),
+            }
+            leases_by_url[profile_url] = lease_result
+            if acquired:
+                acquired_urls.append(profile_url)
+            else:
+                contended_urls.append(profile_url)
+        return {
+            "acquired": len(acquired_urls) == len(normalized_urls),
+            "lease_owner": str(lease_owner or ""),
+            "lease_token": str(lease_token or ""),
+            "requested_urls": list(normalized_urls),
+            "acquired_urls": acquired_urls,
+            "contended_urls": contended_urls,
+            "leases_by_url": leases_by_url,
+            "acquired_count": len(acquired_urls),
+            "contended_count": len(contended_urls),
+        }
+
+    def _runtime_provider_limiter_lease_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        lease_expires_at = str(row["lease_expires_at"] or "")
+        metadata: dict[str, Any] = {}
+        try:
+            metadata = dict(json.loads(row["metadata_json"] or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            metadata = {}
+        return {
+            "lease_token": str(row["lease_token"] or ""),
+            "limiter_key": str(row["limiter_key"] or ""),
+            "lease_owner": str(row["lease_owner"] or ""),
+            "lease_expires_at": lease_expires_at,
+            "metadata": metadata,
             "expired": _is_sqlite_timestamp_expired(lease_expires_at),
             "created_at": str(row["created_at"] or ""),
             "updated_at": str(row["updated_at"] or ""),
@@ -15698,6 +27685,316 @@ class ControlPlaneStore:
             "expired": _is_sqlite_timestamp_expired(lease_expires_at),
             "created_at": str(row["created_at"] or ""),
             "updated_at": str(row["updated_at"] or ""),
+        }
+
+    def _workflow_event_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "event_id": str(_row_value(row, "event_id", "") or ""),
+            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
+            "operation_id": str(_row_value(row, "operation_id", "") or ""),
+            "command_id": str(_row_value(row, "command_id", "") or ""),
+            "activity_attempt_id": str(_row_value(row, "activity_attempt_id", "") or ""),
+            "event_family": str(_row_value(row, "event_family", "") or ""),
+            "event_type": str(_row_value(row, "event_type", "") or ""),
+            "sequence_number": int(_row_value(row, "sequence_number", 0) or 0),
+            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
+            "occurred_at": str(_row_value(row, "occurred_at", "") or ""),
+            "recorded_at": str(_row_value(row, "recorded_at", "") or ""),
+            "actor": str(_row_value(row, "actor", "") or ""),
+            "source": str(_row_value(row, "source", "") or ""),
+            "payload": _loads_json_dict(_row_value(row, "payload_json", "{}")),
+            "artifact_refs": _loads_json_list(_row_value(row, "artifact_refs_json", "[]")),
+            "schema_version": str(_row_value(row, "schema_version", "workflow_event_v1") or "workflow_event_v1"),
+            "created_at": str(_row_value(row, "created_at", "") or ""),
+        }
+
+    def _agent_action_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "action_id": str(_row_value(row, "action_id", "") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
+            "conversation_id": str(_row_value(row, "conversation_id", "") or ""),
+            "action_type": str(_row_value(row, "action_type", "") or ""),
+            "owner_module": str(_row_value(row, "owner_module", "") or ""),
+            "operation_type": str(_row_value(row, "operation_type", "") or ""),
+            "target_ref": _loads_json_dict(_row_value(row, "target_ref_json", "{}")),
+            "input": _loads_json_dict(_row_value(row, "input_json", "{}")),
+            "approval_status": str(_row_value(row, "approval_status", "") or ""),
+            "approval_policy": str(_row_value(row, "approval_policy", "") or ""),
+            "budget": _loads_json_dict(_row_value(row, "budget_json", "{}")),
+            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
+            "status": str(_row_value(row, "status", "") or ""),
+            "result_ref": _loads_json_dict(_row_value(row, "result_ref_json", "{}")),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
+            "created_at": str(_row_value(row, "created_at", "") or ""),
+            "updated_at": str(_row_value(row, "updated_at", "") or ""),
+        }
+
+    def _operation_run_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "operation_run_id": str(_row_value(row, "operation_run_id", "") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
+            "action_id": str(_row_value(row, "action_id", "") or ""),
+            "owner_module": str(_row_value(row, "owner_module", "") or ""),
+            "operation_type": str(_row_value(row, "operation_type", "") or ""),
+            "status": str(_row_value(row, "status", "") or ""),
+            "progress": _loads_json_dict(_row_value(row, "progress_json", "{}")),
+            "workflow_ref": _loads_json_dict(_row_value(row, "workflow_ref_json", "{}")),
+            "cost_budget": _loads_json_dict(_row_value(row, "cost_budget_json", "{}")),
+            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
+            "result_ref": _loads_json_dict(_row_value(row, "result_ref_json", "{}")),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
+            "started_at": str(_row_value(row, "started_at", "") or ""),
+            "completed_at": str(_row_value(row, "completed_at", "") or ""),
+            "created_at": str(_row_value(row, "created_at", "") or ""),
+            "updated_at": str(_row_value(row, "updated_at", "") or ""),
+        }
+
+    def _acquisition_run_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "acquisition_run_id": str(_row_value(row, "acquisition_run_id", "") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
+            "operation_run_id": str(_row_value(row, "operation_run_id", "") or ""),
+            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
+            "plan_id": str(_row_value(row, "plan_id", "") or ""),
+            "plan_review_id": int(_row_value(row, "plan_review_id", 0) or 0),
+            "target_company": str(_row_value(row, "target_company", "") or ""),
+            "query": str(_row_value(row, "query", "") or ""),
+            "status": str(_row_value(row, "status", "") or ""),
+            "current_phase": str(_row_value(row, "current_phase", "") or ""),
+            "request": _loads_json_dict(_row_value(row, "request_json", "{}")),
+            "plan": _loads_json_dict(_row_value(row, "plan_json", "{}")),
+            "execution_bundle": _loads_json_dict(_row_value(row, "execution_bundle_json", "{}")),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
+            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
+            "created_at": str(_row_value(row, "created_at", "") or ""),
+            "updated_at": str(_row_value(row, "updated_at", "") or ""),
+        }
+
+    def _workflow_activity_run_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "activity_run_id": str(_row_value(row, "activity_run_id", "") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
+            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
+            "operation_run_id": str(_row_value(row, "operation_run_id", "") or ""),
+            "acquisition_run_id": str(_row_value(row, "acquisition_run_id", "") or ""),
+            "command_id": str(_row_value(row, "command_id", "") or ""),
+            "parent_activity_run_id": str(_row_value(row, "parent_activity_run_id", "") or ""),
+            "activity_type": str(_row_value(row, "activity_type", "") or ""),
+            "owner": str(_row_value(row, "owner", "") or ""),
+            "status": str(_row_value(row, "status", "") or ""),
+            "phase": str(_row_value(row, "phase", "") or ""),
+            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
+            "provider_ref": _loads_json_dict(_row_value(row, "provider_ref_json", "{}")),
+            "input": _loads_json_dict(_row_value(row, "input_json", "{}")),
+            "output": _loads_json_dict(_row_value(row, "output_json", "{}")),
+            "artifact_refs": _loads_json_list(_row_value(row, "artifact_refs_json", "[]")),
+            "entity_counts": _loads_json_dict(_row_value(row, "entity_counts_json", "{}")),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
+            "created_at": str(_row_value(row, "created_at", "") or ""),
+            "updated_at": str(_row_value(row, "updated_at", "") or ""),
+        }
+
+    def _workflow_activity_attempt_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "attempt_id": str(_row_value(row, "attempt_id", "") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
+            "activity_run_id": str(_row_value(row, "activity_run_id", "") or ""),
+            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
+            "command_id": str(_row_value(row, "command_id", "") or ""),
+            "attempt_number": int(_row_value(row, "attempt_number", 0) or 0),
+            "status": str(_row_value(row, "status", "") or ""),
+            "provider": str(_row_value(row, "provider", "") or ""),
+            "provider_request_ref": str(_row_value(row, "provider_request_ref", "") or ""),
+            "provider_run_ref": str(_row_value(row, "provider_run_ref", "") or ""),
+            "started_at": str(_row_value(row, "started_at", "") or ""),
+            "completed_at": str(_row_value(row, "completed_at", "") or ""),
+            "next_retry_at": str(_row_value(row, "next_retry_at", "") or ""),
+            "rate_limit_ref": _loads_json_dict(_row_value(row, "rate_limit_ref_json", "{}")),
+            "error": _loads_json_dict(_row_value(row, "error_json", "{}")),
+            "input": _loads_json_dict(_row_value(row, "input_json", "{}")),
+            "output": _loads_json_dict(_row_value(row, "output_json", "{}")),
+            "artifact_refs": _loads_json_list(_row_value(row, "artifact_refs_json", "[]")),
+            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
+            "created_at": str(_row_value(row, "created_at", "") or ""),
+            "updated_at": str(_row_value(row, "updated_at", "") or ""),
+        }
+
+    def _workflow_entity_delta_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "delta_id": str(_row_value(row, "delta_id", "") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
+            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
+            "operation_run_id": str(_row_value(row, "operation_run_id", "") or ""),
+            "command_id": str(_row_value(row, "command_id", "") or ""),
+            "activity_run_id": str(_row_value(row, "activity_run_id", "") or ""),
+            "attempt_id": str(_row_value(row, "attempt_id", "") or ""),
+            "acquisition_run_id": str(_row_value(row, "acquisition_run_id", "") or ""),
+            "entity_type": str(_row_value(row, "entity_type", "") or ""),
+            "entity_key": str(_row_value(row, "entity_key", "") or ""),
+            "delta_kind": str(_row_value(row, "delta_kind", "") or ""),
+            "status": str(_row_value(row, "status", "") or ""),
+            "reason": str(_row_value(row, "reason", "") or ""),
+            "source_ref": _loads_json_dict(_row_value(row, "source_ref_json", "{}")),
+            "entity_payload": _loads_json_dict(_row_value(row, "entity_payload_json", "{}")),
+            "projection_effect": _loads_json_dict(_row_value(row, "projection_effect_json", "{}")),
+            "artifact_refs": _loads_json_list(_row_value(row, "artifact_refs_json", "[]")),
+            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
+            "created_at": str(_row_value(row, "created_at", "") or ""),
+            "updated_at": str(_row_value(row, "updated_at", "") or ""),
+        }
+
+    def _acquisition_discovery_lane_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "lane_id": str(_row_value(row, "lane_id", "") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
+            "acquisition_run_id": str(_row_value(row, "acquisition_run_id", "") or ""),
+            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
+            "operation_run_id": str(_row_value(row, "operation_run_id", "") or ""),
+            "source_command_id": str(_row_value(row, "source_command_id", "") or ""),
+            "activity_run_id": str(_row_value(row, "activity_run_id", "") or ""),
+            "target_company": str(_row_value(row, "target_company", "") or ""),
+            "query": str(_row_value(row, "query", "") or ""),
+            "provider": str(_row_value(row, "provider", "") or ""),
+            "status": str(_row_value(row, "status", "") or ""),
+            "phase": str(_row_value(row, "phase", "") or ""),
+            "lane_plan": _loads_json_dict(_row_value(row, "lane_plan_json", "{}")),
+            "provider_ref": _loads_json_dict(_row_value(row, "provider_ref_json", "{}")),
+            "artifact_refs": _loads_json_list(_row_value(row, "artifact_refs_json", "[]")),
+            "entity_counts": _loads_json_dict(_row_value(row, "entity_counts_json", "{}")),
+            "downstream_command_ids": _loads_json_list(_row_value(row, "downstream_command_ids_json", "[]")),
+            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
+            "created_at": str(_row_value(row, "created_at", "") or ""),
+            "updated_at": str(_row_value(row, "updated_at", "") or ""),
+        }
+
+    def _operation_event_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "event_id": str(_row_value(row, "event_id", "") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
+            "event_stream_id": str(_row_value(row, "event_stream_id", "") or ""),
+            "operation_run_id": str(_row_value(row, "operation_run_id", "") or ""),
+            "action_id": str(_row_value(row, "action_id", "") or ""),
+            "event_family": str(_row_value(row, "event_family", "") or ""),
+            "event_type": str(_row_value(row, "event_type", "") or ""),
+            "sequence_number": int(_row_value(row, "sequence_number", 0) or 0),
+            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
+            "occurred_at": str(_row_value(row, "occurred_at", "") or ""),
+            "recorded_at": str(_row_value(row, "recorded_at", "") or ""),
+            "actor": str(_row_value(row, "actor", "") or ""),
+            "source": str(_row_value(row, "source", "") or ""),
+            "payload": _loads_json_dict(_row_value(row, "payload_json", "{}")),
+            "schema_version": str(_row_value(row, "schema_version", "operation_event_v1") or "operation_event_v1"),
+            "created_at": str(_row_value(row, "created_at", "") or ""),
+        }
+
+    def _workflow_current_state_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
+            "operation_id": str(_row_value(row, "operation_id", "") or ""),
+            "workflow_type": str(_row_value(row, "workflow_type", "") or ""),
+            "status": str(_row_value(row, "status", "") or ""),
+            "current_stage_key": str(_row_value(row, "current_stage_key", "") or ""),
+            "completion_proofs": _loads_json_dict(_row_value(row, "completion_proofs_json", "{}")),
+            "active_command_counts": _loads_json_dict(_row_value(row, "active_command_counts_json", "{}")),
+            "terminal_command_counts": _loads_json_dict(_row_value(row, "terminal_command_counts_json", "{}")),
+            "read_model_pointers": _loads_json_dict(_row_value(row, "read_model_pointers_json", "{}")),
+            "migration_status": _loads_json_dict(_row_value(row, "migration_status_json", "{}")),
+            "last_processed_sequence_number": int(_row_value(row, "last_processed_sequence_number", 0) or 0),
+            "reducer_version": str(_row_value(row, "reducer_version", "") or ""),
+            "schema_version": str(
+                _row_value(row, "schema_version", "workflow_current_state_v1") or "workflow_current_state_v1"
+            ),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
+            "created_at": str(_row_value(row, "created_at", "") or ""),
+            "updated_at": str(_row_value(row, "updated_at", "") or ""),
+        }
+
+    def _workflow_command_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "command_id": str(_row_value(row, "command_id", "") or ""),
+            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
+            "operation_id": str(_row_value(row, "operation_id", "") or ""),
+            "command_type": str(_row_value(row, "command_type", "") or ""),
+            "owner": str(_row_value(row, "owner", "") or ""),
+            "stage_id": str(_row_value(row, "stage_id", "") or ""),
+            "causal_group_id": str(_row_value(row, "causal_group_id", "") or ""),
+            "parent_command_id": str(_row_value(row, "parent_command_id", "") or ""),
+            "source_event_id": str(_row_value(row, "source_event_id", "") or ""),
+            "source_event_type": str(_row_value(row, "source_event_type", "") or ""),
+            "input_artifact_refs": _loads_json_list(_row_value(row, "input_artifact_refs_json", "[]")),
+            "output_artifact_refs": _loads_json_list(_row_value(row, "output_artifact_refs_json", "[]")),
+            "produced_entity_counts": _loads_json_dict(_row_value(row, "produced_entity_counts_json", "{}")),
+            "no_op_reason": str(_row_value(row, "no_op_reason", "") or ""),
+            "readiness_effect": str(_row_value(row, "readiness_effect", "") or ""),
+            "downstream_command_ids": _loads_json_list(_row_value(row, "downstream_command_ids_json", "[]")),
+            "causality_schema_version": str(
+                _row_value(row, "causality_schema_version", "command_causality_v1") or "command_causality_v1"
+            ),
+            "status": str(_row_value(row, "status", "") or ""),
+            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
+            "payload": _loads_json_dict(_row_value(row, "payload_json", "{}")),
+            "artifact_refs": _loads_json_list(_row_value(row, "artifact_refs_json", "[]")),
+            "not_before_at": str(_row_value(row, "not_before_at", "") or ""),
+            "attempt": int(_row_value(row, "attempt", 0) or 0),
+            "max_attempts": int(_row_value(row, "max_attempts", 0) or 0),
+            "retry_policy": _loads_json_dict(_row_value(row, "retry_policy_json", "{}")),
+            "lease_owner": str(_row_value(row, "lease_owner", "") or ""),
+            "lease_expires_at": str(_row_value(row, "lease_expires_at", "") or ""),
+            "heartbeat_at": str(_row_value(row, "heartbeat_at", "") or ""),
+            "last_error": str(_row_value(row, "last_error", "") or ""),
+            "result": _loads_json_dict(_row_value(row, "result_json", "{}")),
+            "schema_version": str(_row_value(row, "schema_version", "workflow_command_v1") or "workflow_command_v1"),
+            "created_at": str(_row_value(row, "created_at", "") or ""),
+            "updated_at": str(_row_value(row, "updated_at", "") or ""),
+        }
+
+    def _runtime_outbox_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "outbox_id": str(_row_value(row, "outbox_id", "") or ""),
+            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
+            "operation_id": str(_row_value(row, "operation_id", "") or ""),
+            "command_id": str(_row_value(row, "command_id", "") or ""),
+            "outbox_type": str(_row_value(row, "outbox_type", "") or ""),
+            "status": str(_row_value(row, "status", "") or ""),
+            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
+            "payload": _loads_json_dict(_row_value(row, "payload_json", "{}")),
+            "not_before_at": str(_row_value(row, "not_before_at", "") or ""),
+            "attempt": int(_row_value(row, "attempt", 0) or 0),
+            "max_attempts": int(_row_value(row, "max_attempts", 0) or 0),
+            "lease_owner": str(_row_value(row, "lease_owner", "") or ""),
+            "lease_expires_at": str(_row_value(row, "lease_expires_at", "") or ""),
+            "dispatched_at": str(_row_value(row, "dispatched_at", "") or ""),
+            "last_error": str(_row_value(row, "last_error", "") or ""),
+            "schema_version": str(_row_value(row, "schema_version", "runtime_outbox_v1") or "runtime_outbox_v1"),
+            "created_at": str(_row_value(row, "created_at", "") or ""),
+            "updated_at": str(_row_value(row, "updated_at", "") or ""),
         }
 
     def _linkedin_profile_registry_backfill_from_row(self, row: Any) -> dict[str, Any]:
@@ -15811,6 +28108,12 @@ class ControlPlaneStore:
             "avatar_url": row["avatar_url"] or "",
             "linkedin_url": row["linkedin_url"] or "",
             "primary_email": row["primary_email"] or "",
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "candidate_identity_key": str(_row_value(row, "candidate_identity_key") or ""),
+            "source_projection_id": str(_row_value(row, "source_projection_id") or ""),
+            "source_run_id": str(_row_value(row, "source_run_id") or ""),
+            "source_collection_id": str(_row_value(row, "source_collection_id") or ""),
+            "source_reason": str(_row_value(row, "source_reason") or ""),
             "follow_up_status": row["follow_up_status"] or "pending_outreach",
             "quality_score": float(quality_score) if quality_score is not None else None,
             "comment": row["comment"] or "",
@@ -15865,6 +28168,67 @@ class ControlPlaneStore:
             "lease_expires_at": str(_row_value(row, "lease_expires_at") or ""),
             "attempt_count": int(_row_value(row, "attempt_count", 0) or 0),
             "last_error": str(_row_value(row, "last_error") or ""),
+            "started_at": str(_row_value(row, "started_at") or ""),
+            "completed_at": str(_row_value(row, "completed_at") or ""),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _crm_public_web_batch_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        return {
+            "batch_id": str(_row_value(row, "batch_id") or ""),
+            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id") or "default") or "default",
+            "status": str(_row_value(row, "status") or "queued"),
+            "requested_crm_record_ids": _loads_json_list(_row_value(row, "requested_crm_record_ids_json"), default=[]),
+            "requested_record_ids": _loads_json_list(_row_value(row, "requested_crm_record_ids_json"), default=[]),
+            "source_families": _loads_json_list(_row_value(row, "source_families_json"), default=[]),
+            "options": _loads_json_dict(_row_value(row, "options_json")),
+            "run_ids": _loads_json_list(_row_value(row, "run_ids_json"), default=[]),
+            "summary": _loads_json_dict(_row_value(row, "summary_json")),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "requested_by": str(_row_value(row, "requested_by") or ""),
+            "force_refresh": bool(_row_value(row, "force_refresh", 0)),
+            "execution_backend": str(_row_value(row, "execution_backend") or "crm_public_web_v1"),
+            "source_target_batch_id": str(_row_value(row, "source_target_batch_id") or ""),
+            "started_at": str(_row_value(row, "started_at") or ""),
+            "completed_at": str(_row_value(row, "completed_at") or ""),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _crm_public_web_run_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        crm_record_id = str(_row_value(row, "crm_record_id") or "")
+        return {
+            "run_id": str(_row_value(row, "run_id") or ""),
+            "batch_id": str(_row_value(row, "batch_id") or ""),
+            "crm_record_id": crm_record_id,
+            "record_id": crm_record_id,
+            "workspace_id": str(_row_value(row, "workspace_id") or "default") or "default",
+            "candidate_id": str(_row_value(row, "candidate_id") or ""),
+            "candidate_name": str(_row_value(row, "candidate_name") or ""),
+            "current_company": str(_row_value(row, "current_company") or ""),
+            "linkedin_url": str(_row_value(row, "linkedin_url") or ""),
+            "linkedin_url_key": str(_row_value(row, "linkedin_url_key") or ""),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
+            "status": str(_row_value(row, "status") or "queued"),
+            "phase": str(_row_value(row, "phase") or "queued"),
+            "source_families": _loads_json_list(_row_value(row, "source_families_json"), default=[]),
+            "options": _loads_json_dict(_row_value(row, "options_json")),
+            "query_manifest": _loads_json_list(_row_value(row, "query_manifest_json"), default=[]),
+            "search_checkpoint": _loads_json_dict(_row_value(row, "search_checkpoint_json")),
+            "fetch_checkpoint": _loads_json_dict(_row_value(row, "fetch_checkpoint_json")),
+            "analysis_checkpoint": _loads_json_dict(_row_value(row, "analysis_checkpoint_json")),
+            "summary": _loads_json_dict(_row_value(row, "summary_json")),
+            "artifact_root": str(_row_value(row, "artifact_root") or ""),
+            "worker_key": str(_row_value(row, "worker_key") or ""),
+            "lease_owner": str(_row_value(row, "lease_owner") or ""),
+            "lease_expires_at": str(_row_value(row, "lease_expires_at") or ""),
+            "attempt_count": int(_row_value(row, "attempt_count", 0) or 0),
+            "last_error": str(_row_value(row, "last_error") or ""),
+            "execution_backend": str(_row_value(row, "execution_backend") or "crm_public_web_v1"),
+            "source_target_run_id": str(_row_value(row, "source_target_run_id") or ""),
             "started_at": str(_row_value(row, "started_at") or ""),
             "completed_at": str(_row_value(row, "completed_at") or ""),
             "created_at": str(_row_value(row, "created_at") or ""),
@@ -15927,6 +28291,271 @@ class ControlPlaneStore:
             "updated_at": str(_row_value(row, "updated_at") or ""),
         }
 
+    def _person_asset_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "asset_id": str(_row_value(row, "asset_id") or ""),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "asset_type": str(_row_value(row, "asset_type") or ""),
+            "source_kind": str(_row_value(row, "source_kind") or ""),
+            "source_run_id": str(_row_value(row, "source_run_id") or ""),
+            "source_projection_id": str(_row_value(row, "source_projection_id") or ""),
+            "content_ref": str(_row_value(row, "content_ref") or ""),
+            "content_hash": str(_row_value(row, "content_hash") or ""),
+            "source_url": str(_row_value(row, "source_url") or ""),
+            "fetched_at": str(_row_value(row, "fetched_at") or ""),
+            "visibility_scope": str(_row_value(row, "visibility_scope") or "internal"),
+            "status": str(_row_value(row, "status") or "available"),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _person_evidence_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "evidence_id": str(_row_value(row, "evidence_id") or ""),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "asset_id": str(_row_value(row, "asset_id") or ""),
+            "evidence_type": str(_row_value(row, "evidence_type") or ""),
+            "value": str(_row_value(row, "value") or ""),
+            "normalized_value": str(_row_value(row, "normalized_value") or ""),
+            "source_url": str(_row_value(row, "source_url") or ""),
+            "source_domain": str(_row_value(row, "source_domain") or ""),
+            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
+            "identity_match_score": _coerce_public_web_float(_row_value(row, "identity_match_score", 0.0)),
+            "publishable": bool(_row_value(row, "publishable", 0)),
+            "evidence_excerpt": str(_row_value(row, "evidence_excerpt") or ""),
+            "artifact_refs": _loads_json_dict(_row_value(row, "artifact_refs_json")),
+            "status": str(_row_value(row, "status") or "observed"),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _person_assertion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "assertion_id": str(_row_value(row, "assertion_id") or ""),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "assertion_type": str(_row_value(row, "assertion_type") or ""),
+            "value": str(_row_value(row, "value") or ""),
+            "normalized_value": str(_row_value(row, "normalized_value") or ""),
+            "authority": str(_row_value(row, "authority") or "provider_observed"),
+            "verification_status": str(_row_value(row, "verification_status") or "needs_review"),
+            "source_evidence_id": str(_row_value(row, "source_evidence_id") or ""),
+            "source_crm_event_id": str(_row_value(row, "source_crm_event_id") or ""),
+            "source_run_id": str(_row_value(row, "source_run_id") or ""),
+            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
+            "valid_from": str(_row_value(row, "valid_from") or ""),
+            "valid_to": str(_row_value(row, "valid_to") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _company_asset_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "asset_id": str(_row_value(row, "asset_id") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id") or "default") or "default",
+            "company_key": str(_row_value(row, "company_key") or ""),
+            "target_company": str(_row_value(row, "target_company") or ""),
+            "asset_type": str(_row_value(row, "asset_type") or ""),
+            "source_kind": str(_row_value(row, "source_kind") or ""),
+            "source_run_id": str(_row_value(row, "source_run_id") or ""),
+            "source_command_id": str(_row_value(row, "source_command_id") or ""),
+            "activity_run_id": str(_row_value(row, "activity_run_id") or ""),
+            "content_ref": str(_row_value(row, "content_ref") or ""),
+            "content_hash": str(_row_value(row, "content_hash") or ""),
+            "source_url": str(_row_value(row, "source_url") or ""),
+            "fetched_at": str(_row_value(row, "fetched_at") or ""),
+            "visibility_scope": str(_row_value(row, "visibility_scope") or "internal"),
+            "status": str(_row_value(row, "status") or "available"),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _company_evidence_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "evidence_id": str(_row_value(row, "evidence_id") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id") or "default") or "default",
+            "company_key": str(_row_value(row, "company_key") or ""),
+            "target_company": str(_row_value(row, "target_company") or ""),
+            "asset_id": str(_row_value(row, "asset_id") or ""),
+            "evidence_type": str(_row_value(row, "evidence_type") or ""),
+            "value": str(_row_value(row, "value") or ""),
+            "normalized_value": str(_row_value(row, "normalized_value") or ""),
+            "source_url": str(_row_value(row, "source_url") or ""),
+            "source_domain": str(_row_value(row, "source_domain") or ""),
+            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
+            "evidence_excerpt": str(_row_value(row, "evidence_excerpt") or ""),
+            "artifact_refs": _loads_json_dict(_row_value(row, "artifact_refs_json")),
+            "status": str(_row_value(row, "status") or "observed"),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _company_assertion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "assertion_id": str(_row_value(row, "assertion_id") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id") or "default") or "default",
+            "company_key": str(_row_value(row, "company_key") or ""),
+            "target_company": str(_row_value(row, "target_company") or ""),
+            "assertion_type": str(_row_value(row, "assertion_type") or ""),
+            "value": str(_row_value(row, "value") or ""),
+            "normalized_value": str(_row_value(row, "normalized_value") or ""),
+            "authority": str(_row_value(row, "authority") or "provider_observed"),
+            "verification_status": str(_row_value(row, "verification_status") or "needs_review"),
+            "source_evidence_id": str(_row_value(row, "source_evidence_id") or ""),
+            "source_run_id": str(_row_value(row, "source_run_id") or ""),
+            "source_command_id": str(_row_value(row, "source_command_id") or ""),
+            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
+            "valid_from": str(_row_value(row, "valid_from") or ""),
+            "valid_to": str(_row_value(row, "valid_to") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _raw_profile_index_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "indexed_text": str(_row_value(row, "indexed_text") or ""),
+            "raw_profile_terms": _loads_json_list(_row_value(row, "raw_profile_terms_json")),
+            "source_asset_ids": _loads_json_list(_row_value(row, "source_asset_ids_json")),
+            "indexed_field_sources": _loads_json_dict(_row_value(row, "indexed_field_sources_json")),
+            "raw_profile_index_watermark": str(_row_value(row, "raw_profile_index_watermark") or ""),
+            "profile_fetched_at": str(_row_value(row, "profile_fetched_at") or ""),
+            "profile_indexed_at": str(_row_value(row, "profile_indexed_at") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _candidate_evidence_index_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "indexed_text": str(_row_value(row, "indexed_text") or ""),
+            "evidence_terms": _loads_json_list(_row_value(row, "evidence_terms_json")),
+            "assertion_terms": _loads_json_list(_row_value(row, "assertion_terms_json")),
+            "source_evidence_ids": _loads_json_list(_row_value(row, "source_evidence_ids_json")),
+            "source_assertion_ids": _loads_json_list(_row_value(row, "source_assertion_ids_json")),
+            "indexed_field_sources": _loads_json_dict(_row_value(row, "indexed_field_sources_json")),
+            "evidence_index_watermark": str(_row_value(row, "evidence_index_watermark") or ""),
+            "evidence_indexed_at": str(_row_value(row, "evidence_indexed_at") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _crm_record_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "crm_record_id": str(_row_value(row, "crm_record_id") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id") or "default"),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "candidate_identity_key": str(_row_value(row, "candidate_identity_key") or ""),
+            "collection_id": str(_row_value(row, "collection_id") or ""),
+            "display_name_cache": str(_row_value(row, "display_name_cache") or ""),
+            "headline_cache": str(_row_value(row, "headline_cache") or ""),
+            "primary_company_cache": str(_row_value(row, "primary_company_cache") or ""),
+            "avatar_asset_id": str(_row_value(row, "avatar_asset_id") or ""),
+            "lifecycle_status": str(_row_value(row, "lifecycle_status") or "active"),
+            "visibility_status": str(_row_value(row, "visibility_status") or "normal"),
+            "owner_user_id": str(_row_value(row, "owner_user_id") or ""),
+            "source_projection_id": str(_row_value(row, "source_projection_id") or ""),
+            "source_run_id": str(_row_value(row, "source_run_id") or ""),
+            "source_collection_id": str(_row_value(row, "source_collection_id") or ""),
+            "source_reason": str(_row_value(row, "source_reason") or ""),
+            "current_engagement_id": str(_row_value(row, "current_engagement_id") or ""),
+            "crm_version": int(_row_value(row, "crm_version", 1) or 1),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _crm_engagement_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        if row is None:
+            return {}
+        quality_score = _row_value(row, "quality_score")
+        return {
+            "engagement_id": str(_row_value(row, "engagement_id") or ""),
+            "crm_record_id": str(_row_value(row, "crm_record_id") or ""),
+            "pipeline_id": str(_row_value(row, "pipeline_id") or "default_sourcing"),
+            "stage": str(_row_value(row, "stage") or "new"),
+            "stage_category": str(_row_value(row, "stage_category") or "open"),
+            "priority": str(_row_value(row, "priority") or "normal"),
+            "quality_score": float(quality_score) if quality_score not in {None, ""} else None,
+            "next_action_at": str(_row_value(row, "next_action_at") or ""),
+            "last_contacted_at": str(_row_value(row, "last_contacted_at") or ""),
+            "source_projection_id": str(_row_value(row, "source_projection_id") or ""),
+            "source_run_id": str(_row_value(row, "source_run_id") or ""),
+            "source_selection_reason": str(_row_value(row, "source_selection_reason") or ""),
+            "created_by_actor": str(_row_value(row, "created_by_actor") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _crm_event_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "event_id": str(_row_value(row, "event_id") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id") or "default"),
+            "crm_record_id": str(_row_value(row, "crm_record_id") or ""),
+            "engagement_id": str(_row_value(row, "engagement_id") or ""),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "event_type": str(_row_value(row, "event_type") or ""),
+            "actor_type": str(_row_value(row, "actor_type") or ""),
+            "actor_id": str(_row_value(row, "actor_id") or ""),
+            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
+            "payload": _loads_json_dict(_row_value(row, "payload_json")),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "occurred_at": str(_row_value(row, "occurred_at") or ""),
+            "created_at": str(_row_value(row, "created_at") or ""),
+        }
+
+    def _crm_task_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "task_id": str(_row_value(row, "task_id") or ""),
+            "workspace_id": str(_row_value(row, "workspace_id") or "default"),
+            "crm_record_id": str(_row_value(row, "crm_record_id") or ""),
+            "engagement_id": str(_row_value(row, "engagement_id") or ""),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "title": str(_row_value(row, "title") or ""),
+            "description": str(_row_value(row, "description") or ""),
+            "status": str(_row_value(row, "status") or "open"),
+            "priority": str(_row_value(row, "priority") or "normal"),
+            "due_at": str(_row_value(row, "due_at") or ""),
+            "completed_at": str(_row_value(row, "completed_at") or ""),
+            "created_by_actor": str(_row_value(row, "created_by_actor") or ""),
+            "created_by_actor_id": str(_row_value(row, "created_by_actor_id") or ""),
+            "source_event_id": str(_row_value(row, "source_event_id") or ""),
+            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
     def _target_candidate_public_web_promotion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
         return {
             "promotion_id": str(_row_value(row, "promotion_id") or ""),
@@ -15964,6 +28593,98 @@ class ControlPlaneStore:
             "operator": str(_row_value(row, "operator") or ""),
             "note": str(_row_value(row, "note") or ""),
             "evidence_excerpt": str(_row_value(row, "evidence_excerpt") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _crm_public_web_promotion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        crm_record_id = str(_row_value(row, "crm_record_id") or "")
+        return {
+            "promotion_id": str(_row_value(row, "promotion_id") or ""),
+            "signal_id": str(_row_value(row, "signal_id") or ""),
+            "run_id": str(_row_value(row, "run_id") or ""),
+            "asset_id": str(_row_value(row, "asset_id") or ""),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "crm_record_id": crm_record_id,
+            "record_id": crm_record_id,
+            "workspace_id": str(_row_value(row, "workspace_id") or "default") or "default",
+            "candidate_id": str(_row_value(row, "candidate_id") or ""),
+            "candidate_name": str(_row_value(row, "candidate_name") or ""),
+            "current_company": str(_row_value(row, "current_company") or ""),
+            "linkedin_url_key": str(_row_value(row, "linkedin_url_key") or ""),
+            "signal_kind": str(_row_value(row, "signal_kind") or ""),
+            "signal_type": str(_row_value(row, "signal_type") or ""),
+            "email_type": str(_row_value(row, "email_type") or ""),
+            "value": str(_row_value(row, "value") or ""),
+            "normalized_value": str(_row_value(row, "normalized_value") or ""),
+            "url": str(_row_value(row, "url") or ""),
+            "source_url": str(_row_value(row, "source_url") or ""),
+            "source_domain": str(_row_value(row, "source_domain") or ""),
+            "source_family": str(_row_value(row, "source_family") or ""),
+            "source_title": str(_row_value(row, "source_title") or ""),
+            "confidence_label": str(_row_value(row, "confidence_label") or ""),
+            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
+            "identity_match_label": str(_row_value(row, "identity_match_label") or ""),
+            "identity_match_score": _coerce_public_web_float(_row_value(row, "identity_match_score", 0.0)),
+            "publishable": bool(_row_value(row, "publishable", 0)),
+            "clean_profile_link": bool(_row_value(row, "clean_profile_link", 0)),
+            "link_shape_warnings": _loads_json_list(_row_value(row, "link_shape_warnings_json"), default=[]),
+            "action": str(_row_value(row, "action") or ""),
+            "promotion_status": str(_row_value(row, "promotion_status") or ""),
+            "promoted_field": str(_row_value(row, "promoted_field") or ""),
+            "previous_value": str(_row_value(row, "previous_value") or ""),
+            "new_value": str(_row_value(row, "new_value") or ""),
+            "operator": str(_row_value(row, "operator") or ""),
+            "note": str(_row_value(row, "note") or ""),
+            "evidence_excerpt": str(_row_value(row, "evidence_excerpt") or ""),
+            "execution_backend": str(_row_value(row, "execution_backend") or "crm_public_web_v1"),
+            "source_target_promotion_id": str(_row_value(row, "source_target_promotion_id") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _company_public_web_asset_run_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        return {
+            "run_id": str(_row_value(row, "run_id") or ""),
+            "target_company": str(_row_value(row, "target_company") or ""),
+            "company_key": str(_row_value(row, "company_key") or ""),
+            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
+            "status": str(_row_value(row, "status") or "queued"),
+            "phase": str(_row_value(row, "phase") or "queued"),
+            "source_families": _loads_json_list(_row_value(row, "source_families_json"), default=[]),
+            "seed_urls": _loads_json_list(_row_value(row, "seed_urls_json"), default=[]),
+            "options": _loads_json_dict(_row_value(row, "options_json")),
+            "discovered_assets": _loads_json_list(_row_value(row, "discovered_assets_json"), default=[]),
+            "summary": _loads_json_dict(_row_value(row, "summary_json")),
+            "artifact_root": str(_row_value(row, "artifact_root") or ""),
+            "requested_by": str(_row_value(row, "requested_by") or ""),
+            "force_refresh": bool(_row_value(row, "force_refresh", 0)),
+            "started_at": str(_row_value(row, "started_at") or ""),
+            "completed_at": str(_row_value(row, "completed_at") or ""),
+            "last_error": str(_row_value(row, "last_error") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _company_public_web_asset_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        return {
+            "asset_id": str(_row_value(row, "asset_id") or ""),
+            "company_key": str(_row_value(row, "company_key") or ""),
+            "target_company": str(_row_value(row, "target_company") or ""),
+            "latest_run_id": str(_row_value(row, "latest_run_id") or ""),
+            "source_family": str(_row_value(row, "source_family") or ""),
+            "asset_kind": str(_row_value(row, "asset_kind") or "company_public_web_asset"),
+            "title": str(_row_value(row, "title") or ""),
+            "url": str(_row_value(row, "url") or ""),
+            "normalized_url_key": str(_row_value(row, "normalized_url_key") or ""),
+            "summary": str(_row_value(row, "summary") or ""),
+            "model_safe_payload": _loads_json_dict(_row_value(row, "model_safe_payload_json")),
+            "source_run_ids": _loads_json_list(_row_value(row, "source_run_ids_json"), default=[]),
+            "artifact_refs": _loads_json_dict(_row_value(row, "artifact_refs_json")),
+            "status": str(_row_value(row, "status") or "active"),
             "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
             "created_at": str(_row_value(row, "created_at") or ""),
             "updated_at": str(_row_value(row, "updated_at") or ""),
@@ -16346,6 +29067,64 @@ def _dedupe_preserve_order(values: list[str]) -> list[str]:
     return deduped
 
 
+def _serving_projection_readiness_counts(members: list[dict[str, Any]]) -> dict[str, int]:
+    row_count = 0
+    profile_ready_count = 0
+    card_ready_count = 0
+    profile_required_count = 0
+    for member in members:
+        if not isinstance(member, dict):
+            continue
+        row_count += 1
+        profile_readiness = str(member.get("profile_readiness") or "").strip().lower()
+        card_readiness = str(member.get("card_readiness") or "").strip().lower()
+        projection_metrics = dict(member.get("projection_metrics") or {})
+        public_summary = dict(member.get("public_summary") or {})
+        profile_required = bool(
+            projection_metrics.get("profile_required")
+            or projection_metrics.get("needs_profile_completion")
+            or public_summary.get("needs_profile_completion")
+            or profile_readiness not in {"", "not_required", "skipped"}
+        )
+        if profile_required:
+            profile_required_count += 1
+        if profile_readiness in {"ready", "complete", "completed", "fetched", "available"}:
+            profile_ready_count += 1
+        if card_readiness in {"ready", "complete", "completed", "materialized", "display_ready"}:
+            card_ready_count += 1
+    return {
+        "row_count": row_count,
+        "profile_required_count": profile_required_count,
+        "profile_ready_count": profile_ready_count,
+        "card_ready_count": card_ready_count,
+    }
+
+
+def _candidate_richness_score_for_store_match(candidate: Candidate) -> int:
+    score = 0
+    for value in (
+        candidate.linkedin_url,
+        candidate.role,
+        candidate.team,
+        candidate.focus_areas,
+        candidate.education,
+        candidate.work_history,
+        candidate.notes,
+        candidate.source_path,
+    ):
+        if str(value or "").strip():
+            score += 1
+    metadata = dict(candidate.metadata or {})
+    for key in ("headline", "summary", "languages", "skills", "public_identifier", "profile_capture_source_path"):
+        value = metadata.get(key)
+        if isinstance(value, list):
+            if value:
+                score += 1
+        elif str(value or "").strip():
+            score += 1
+    return score
+
+
 _CANDIDATE_REVIEW_STATUSES = {
     "no_review_needed",
     "needs_review",
@@ -16453,6 +29232,25 @@ def _normalize_target_candidate_follow_up_status(value: Any) -> str:
     return "pending_outreach"
 
 
+_CRM_STAGE_CATEGORIES = {
+    "new": "open",
+    "researching": "open",
+    "outreach_ready": "open",
+    "contacted_waiting": "waiting",
+    "responded": "open",
+    "interview_completed": "terminal_success",
+    "accepted": "terminal_success",
+    "rejected": "terminal_loss",
+    "do_not_contact": "blocked",
+    "archived": "archived",
+}
+
+
+def _crm_stage_category(value: Any) -> str:
+    normalized = str(value or "new").strip().lower() or "new"
+    return _CRM_STAGE_CATEGORIES.get(normalized, "open")
+
+
 def _normalize_target_candidate_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload or {})
     quality_score = normalized.get("quality_score")
@@ -16462,6 +29260,24 @@ def _normalize_target_candidate_payload(payload: dict[str, Any]) -> dict[str, An
             parsed_quality_score = float(quality_score)
         except (TypeError, ValueError):
             parsed_quality_score = None
+    profile_url_key = _resolve_profile_url_key(
+        normalized.get("profile_url_key"),
+        normalized.get("linkedin_url"),
+    )
+    person_identity_key = _resolve_person_identity_key(
+        person_identity_key=str(normalized.get("person_identity_key") or ""),
+        profile_url_key=profile_url_key,
+        linkedin_url=str(normalized.get("linkedin_url") or ""),
+        candidate_identity_key=str(normalized.get("candidate_identity_key") or ""),
+        candidate_id=str(normalized.get("candidate_id") or ""),
+    )
+    candidate_identity_key = _resolve_candidate_identity_key(
+        candidate_identity_key=str(normalized.get("candidate_identity_key") or ""),
+        person_identity_key=person_identity_key,
+        profile_url_key=profile_url_key,
+        linkedin_url=str(normalized.get("linkedin_url") or ""),
+        candidate_id=str(normalized.get("candidate_id") or ""),
+    )
     return {
         "record_id": _build_target_candidate_record_id(normalized),
         "candidate_id": str(normalized.get("candidate_id") or "").strip(),
@@ -16473,6 +29289,12 @@ def _normalize_target_candidate_payload(payload: dict[str, Any]) -> dict[str, An
         "avatar_url": str(normalized.get("avatar_url") or "").strip(),
         "linkedin_url": str(normalized.get("linkedin_url") or "").strip(),
         "primary_email": str(normalized.get("primary_email") or "").strip(),
+        "person_identity_key": person_identity_key,
+        "candidate_identity_key": candidate_identity_key,
+        "source_projection_id": str(normalized.get("source_projection_id") or "").strip(),
+        "source_run_id": str(normalized.get("source_run_id") or "").strip(),
+        "source_collection_id": str(normalized.get("source_collection_id") or "").strip(),
+        "source_reason": str(normalized.get("source_reason") or "").strip(),
         "follow_up_status": _normalize_target_candidate_follow_up_status(normalized.get("follow_up_status")),
         "quality_score": parsed_quality_score,
         "comment": str(normalized.get("comment") or "").strip(),
@@ -16515,7 +29337,10 @@ _TARGET_CANDIDATE_PUBLIC_WEB_STATUSES = {
     "searching",
     "entry_links_ready",
     "fetching",
+    "documents_fetched",
     "analyzing",
+    "adjudication_completed",
+    "analysis_completed",
     "completed",
     "completed_with_errors",
     "needs_review",
@@ -16553,6 +29378,54 @@ def _loads_json_list(value: Any, *, default: list[Any] | None = None) -> list[An
     return list(parsed) if isinstance(parsed, list) else list(default or [])
 
 
+_SERVING_PROJECTION_TYPES = {
+    "run_scope_projection",
+    "collection_authoritative_projection",
+}
+_SERVING_PROJECTION_STATES = {
+    "draft",
+    "building",
+    "serving",
+    "degraded",
+    "failed",
+    "archived",
+}
+
+
+def _build_projection_id(value: Any = "") -> str:
+    normalized = str(value or "").strip()
+    if normalized:
+        return normalized
+    return f"proj_{uuid4().hex}"
+
+
+def _normalize_serving_projection_type(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in _SERVING_PROJECTION_TYPES:
+        return normalized
+    return "run_scope_projection"
+
+
+def _normalize_serving_projection_state(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in _SERVING_PROJECTION_STATES:
+        return normalized
+    return "draft"
+
+
+def _normalize_json_object_payload(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(_json_safe_payload(value))
+    return _loads_json_dict(value)
+
+
+def _normalize_projection_rank_index(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _normalize_public_web_string_list(value: Any) -> list[str]:
     if isinstance(value, str):
         raw_items = [item.strip() for item in value.split(",")]
@@ -16567,6 +29440,48 @@ def _normalize_public_web_string_list(value: Any) -> list[str]:
         seen.add(item)
         items.append(item)
     return items
+
+
+def _projection_person_search_index_readiness(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {
+            "raw_profile_index_watermark": "",
+            "evidence_index_watermark": "",
+            "count_scope": "unavailable",
+            "profile_fetched_at": "",
+            "profile_indexed_at": "",
+            "evidence_indexed_at": "",
+            "freshness_timezone": "Asia/Shanghai",
+        }
+    count_scopes = {
+        str(row.get("count_scope") or "").strip()
+        for row in rows
+        if str(row.get("count_scope") or "").strip()
+    }
+    if count_scopes == {"exact_projection"}:
+        count_scope = "exact_projection"
+    elif count_scopes:
+        count_scope = "index_partial"
+    else:
+        count_scope = "unavailable"
+    return {
+        "raw_profile_index_watermark": _latest_text_value(row.get("raw_profile_index_watermark") for row in rows),
+        "evidence_index_watermark": _latest_text_value(row.get("evidence_index_watermark") for row in rows),
+        "count_scope": count_scope,
+        "profile_fetched_at": _latest_text_value(row.get("profile_fetched_at") for row in rows),
+        "profile_indexed_at": _latest_text_value(row.get("profile_indexed_at") for row in rows),
+        "evidence_indexed_at": _latest_text_value(row.get("evidence_indexed_at") for row in rows),
+        "freshness_timezone": "Asia/Shanghai",
+    }
+
+
+def _latest_text_value(values: Any) -> str:
+    normalized_values = sorted(
+        str(value or "").strip()
+        for value in values
+        if str(value or "").strip()
+    )
+    return normalized_values[-1] if normalized_values else ""
 
 
 def _normalize_target_candidate_public_web_status(value: Any, *, default: str = "queued") -> str:
@@ -16615,6 +29530,55 @@ def _normalize_target_candidate_public_web_batch_payload(payload: dict[str, Any]
         "metadata": dict(normalized.get("metadata") or {}),
         "requested_by": str(normalized.get("requested_by") or "").strip(),
         "force_refresh": bool(normalized.get("force_refresh")),
+        "started_at": str(normalized.get("started_at") or "").strip(),
+        "completed_at": completed_at,
+        "created_at": str(normalized.get("created_at") or "").strip(),
+    }
+
+
+def _normalize_crm_public_web_batch_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    requested_record_ids = _normalize_public_web_string_list(
+        normalized.get("requested_crm_record_ids")
+        or normalized.get("crm_record_ids")
+        or normalized.get("requested_record_ids")
+        or normalized.get("record_ids")
+    )
+    source_families = _normalize_public_web_string_list(normalized.get("source_families"))
+    options = dict(normalized.get("options") or {})
+    run_ids = _normalize_public_web_string_list(normalized.get("run_ids"))
+    idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+    if not idempotency_key:
+        idempotency_key = "crm-public-web-batch:" + _public_web_hash_token(
+            str(normalized.get("workspace_id") or "default").strip() or "default",
+            ",".join(sorted(requested_record_ids)),
+            ",".join(sorted(source_families)),
+            json.dumps(_json_safe_payload(options), sort_keys=True, ensure_ascii=False),
+            str(bool(normalized.get("force_refresh"))),
+        )
+    batch_id = str(normalized.get("batch_id") or normalized.get("id") or "").strip()
+    if not batch_id:
+        batch_id = f"crm-public-web-batch-{_public_web_hash_token(idempotency_key)}"
+    status = _normalize_target_candidate_public_web_status(normalized.get("status"))
+    completed_at = str(normalized.get("completed_at") or "").strip()
+    if status in _TARGET_CANDIDATE_PUBLIC_WEB_TERMINAL_STATUSES and not completed_at:
+        completed_at = _utc_now_timestamp()
+    return {
+        "batch_id": batch_id,
+        "idempotency_key": idempotency_key,
+        "workspace_id": str(normalized.get("workspace_id") or "default").strip() or "default",
+        "status": status,
+        "requested_crm_record_ids": requested_record_ids,
+        "source_families": source_families,
+        "options": options,
+        "run_ids": run_ids,
+        "summary": dict(normalized.get("summary") or {}),
+        "metadata": dict(normalized.get("metadata") or {}),
+        "requested_by": str(normalized.get("requested_by") or "").strip(),
+        "force_refresh": bool(normalized.get("force_refresh")),
+        "execution_backend": str(normalized.get("execution_backend") or "crm_public_web_v1").strip()
+        or "crm_public_web_v1",
+        "source_target_batch_id": str(normalized.get("source_target_batch_id") or "").strip(),
         "started_at": str(normalized.get("started_at") or "").strip(),
         "completed_at": completed_at,
         "created_at": str(normalized.get("created_at") or "").strip(),
@@ -16685,6 +29649,300 @@ def _normalize_target_candidate_public_web_run_payload(payload: dict[str, Any]) 
         "completed_at": completed_at,
         "created_at": str(normalized.get("created_at") or "").strip(),
     }
+
+
+def _normalize_crm_public_web_run_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    crm_record_id = str(normalized.get("crm_record_id") or normalized.get("record_id") or normalized.get("id") or "").strip()
+    linkedin_url = str(normalized.get("linkedin_url") or "").strip()
+    linkedin_url_key = str(normalized.get("linkedin_url_key") or "").strip() or _normalize_linkedin_profile_url_key(
+        linkedin_url
+    )
+    source_families = _normalize_public_web_string_list(normalized.get("source_families"))
+    options = dict(normalized.get("options") or {})
+    person_identity_key = str(normalized.get("person_identity_key") or "").strip()
+    if not person_identity_key:
+        person_identity_key = f"linkedin:{linkedin_url_key}" if linkedin_url_key else f"crm_record:{crm_record_id}"
+    idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+    if not idempotency_key:
+        idempotency_key = "crm-public-web-run:" + _public_web_hash_token(
+            str(normalized.get("workspace_id") or "default").strip() or "default",
+            crm_record_id,
+            person_identity_key,
+            ",".join(sorted(source_families)),
+            json.dumps(_json_safe_payload(options), sort_keys=True, ensure_ascii=False),
+        )
+    run_id = str(normalized.get("run_id") or "").strip() or f"crm-public-web-run-{_public_web_hash_token(idempotency_key)}"
+    status = _normalize_target_candidate_public_web_status(normalized.get("status"))
+    phase = str(normalized.get("phase") or status or "queued").strip().lower()
+    started_at = str(normalized.get("started_at") or "").strip()
+    if status != "queued" and not started_at:
+        started_at = _utc_now_timestamp()
+    completed_at = str(normalized.get("completed_at") or "").strip()
+    if status in _TARGET_CANDIDATE_PUBLIC_WEB_TERMINAL_STATUSES and not completed_at:
+        completed_at = _utc_now_timestamp()
+    attempt_value = normalized.get("attempt_count")
+    try:
+        attempt_count = max(0, int(attempt_value or 0))
+    except (TypeError, ValueError):
+        attempt_count = 0
+    return {
+        "run_id": run_id,
+        "batch_id": str(normalized.get("batch_id") or "").strip(),
+        "crm_record_id": crm_record_id,
+        "workspace_id": str(normalized.get("workspace_id") or "default").strip() or "default",
+        "candidate_id": str(normalized.get("candidate_id") or "").strip(),
+        "candidate_name": str(normalized.get("candidate_name") or "").strip(),
+        "current_company": str(normalized.get("current_company") or "").strip(),
+        "linkedin_url": linkedin_url,
+        "linkedin_url_key": linkedin_url_key,
+        "person_identity_key": person_identity_key,
+        "idempotency_key": idempotency_key,
+        "status": status,
+        "phase": phase,
+        "source_families": source_families,
+        "options": options,
+        "query_manifest": _loads_json_list(normalized.get("query_manifest"), default=[]),
+        "search_checkpoint": dict(normalized.get("search_checkpoint") or {}),
+        "fetch_checkpoint": dict(normalized.get("fetch_checkpoint") or {}),
+        "analysis_checkpoint": dict(normalized.get("analysis_checkpoint") or {}),
+        "summary": dict(normalized.get("summary") or {}),
+        "artifact_root": str(normalized.get("artifact_root") or "").strip(),
+        "worker_key": str(normalized.get("worker_key") or "").strip() or f"public_web_run::{run_id}",
+        "lease_owner": str(normalized.get("lease_owner") or "").strip(),
+        "lease_expires_at": str(normalized.get("lease_expires_at") or "").strip(),
+        "attempt_count": attempt_count,
+        "last_error": str(normalized.get("last_error") or "").strip(),
+        "execution_backend": str(normalized.get("execution_backend") or "crm_public_web_v1").strip()
+        or "crm_public_web_v1",
+        "source_target_run_id": str(normalized.get("source_target_run_id") or "").strip(),
+        "started_at": started_at,
+        "completed_at": completed_at,
+        "created_at": str(normalized.get("created_at") or "").strip(),
+    }
+
+
+def _normalize_company_public_web_asset_run_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    target_company = str(normalized.get("target_company") or normalized.get("company") or "").strip()
+    company_key = str(normalized.get("company_key") or "").strip() or resolve_company_alias_key(target_company)
+    source_families = _normalize_public_web_string_list(normalized.get("source_families"))
+    seed_urls = _normalize_public_web_string_list(normalized.get("seed_urls") or normalized.get("urls"))
+    options = dict(normalized.get("options") or {})
+    force_refresh = bool(normalized.get("force_refresh"))
+    idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+    if not idempotency_key:
+        idempotency_key = "company-public-web-run:" + _public_web_hash_token(
+            company_key,
+            target_company,
+            ",".join(sorted(source_families)),
+            ",".join(sorted(seed_urls)),
+            json.dumps(_json_safe_payload(options), sort_keys=True, ensure_ascii=False),
+            str(force_refresh),
+            str(normalized.get("refresh_nonce") or normalized.get("nonce") or "") if force_refresh else "",
+        )
+    run_id = str(normalized.get("run_id") or "").strip() or f"company-public-web-run-{_public_web_hash_token(idempotency_key)}"
+    status = _normalize_target_candidate_public_web_status(normalized.get("status"))
+    phase = str(normalized.get("phase") or status or "queued").strip().lower()
+    started_at = str(normalized.get("started_at") or "").strip()
+    if status != "queued" and not started_at:
+        started_at = _utc_now_timestamp()
+    completed_at = str(normalized.get("completed_at") or "").strip()
+    if status in _TARGET_CANDIDATE_PUBLIC_WEB_TERMINAL_STATUSES and not completed_at:
+        completed_at = _utc_now_timestamp()
+    return {
+        "run_id": run_id,
+        "target_company": target_company,
+        "company_key": company_key,
+        "idempotency_key": idempotency_key,
+        "status": status,
+        "phase": phase,
+        "source_families": source_families,
+        "seed_urls": seed_urls,
+        "options": options,
+        "discovered_assets": _loads_json_list(normalized.get("discovered_assets"), default=[]),
+        "summary": dict(normalized.get("summary") or {}),
+        "artifact_root": str(normalized.get("artifact_root") or "").strip(),
+        "requested_by": str(normalized.get("requested_by") or normalized.get("user_id") or "").strip(),
+        "force_refresh": force_refresh,
+        "started_at": started_at,
+        "completed_at": completed_at,
+        "last_error": str(normalized.get("last_error") or "").strip(),
+        "metadata": dict(normalized.get("metadata") or {}),
+        "created_at": str(normalized.get("created_at") or "").strip(),
+    }
+
+
+def _company_public_web_asset_run_row_payload(
+    normalized: dict[str, Any],
+    *,
+    existing: dict[str, Any] | None,
+    now: str,
+) -> dict[str, Any]:
+    return {
+        "run_id": normalized["run_id"],
+        "target_company": normalized["target_company"],
+        "company_key": normalized["company_key"],
+        "idempotency_key": normalized["idempotency_key"],
+        "status": normalized["status"],
+        "phase": normalized["phase"],
+        "source_families_json": json.dumps(normalized["source_families"], ensure_ascii=False),
+        "seed_urls_json": json.dumps(normalized["seed_urls"], ensure_ascii=False),
+        "options_json": json.dumps(_json_safe_payload(normalized["options"]), ensure_ascii=False),
+        "discovered_assets_json": json.dumps(_json_safe_payload(normalized["discovered_assets"]), ensure_ascii=False),
+        "summary_json": json.dumps(_json_safe_payload(normalized["summary"]), ensure_ascii=False),
+        "artifact_root": normalized["artifact_root"],
+        "requested_by": normalized["requested_by"],
+        "force_refresh": 1 if normalized["force_refresh"] else 0,
+        "started_at": normalized["started_at"],
+        "completed_at": normalized["completed_at"],
+        "last_error": normalized["last_error"],
+        "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
+        "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
+        "updated_at": now,
+    }
+
+
+def _crm_public_web_batch_row_payload(
+    normalized: dict[str, Any],
+    *,
+    existing: dict[str, Any] | None,
+    now: str,
+) -> dict[str, Any]:
+    return {
+        "batch_id": normalized["batch_id"],
+        "idempotency_key": normalized["idempotency_key"],
+        "workspace_id": normalized["workspace_id"],
+        "status": normalized["status"],
+        "requested_crm_record_ids_json": json.dumps(normalized["requested_crm_record_ids"], ensure_ascii=False),
+        "source_families_json": json.dumps(normalized["source_families"], ensure_ascii=False),
+        "options_json": json.dumps(_json_safe_payload(normalized["options"]), ensure_ascii=False),
+        "run_ids_json": json.dumps(normalized["run_ids"], ensure_ascii=False),
+        "summary_json": json.dumps(_json_safe_payload(normalized["summary"]), ensure_ascii=False),
+        "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
+        "requested_by": normalized["requested_by"],
+        "force_refresh": 1 if normalized["force_refresh"] else 0,
+        "execution_backend": normalized["execution_backend"],
+        "source_target_batch_id": normalized["source_target_batch_id"],
+        "started_at": normalized["started_at"],
+        "completed_at": normalized["completed_at"],
+        "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
+        "updated_at": now,
+    }
+
+
+def _crm_public_web_run_row_payload(
+    normalized: dict[str, Any],
+    *,
+    existing: dict[str, Any] | None,
+    now: str,
+) -> dict[str, Any]:
+    return {
+        "run_id": normalized["run_id"],
+        "batch_id": normalized["batch_id"],
+        "crm_record_id": normalized["crm_record_id"],
+        "workspace_id": normalized["workspace_id"],
+        "candidate_id": normalized["candidate_id"],
+        "candidate_name": normalized["candidate_name"],
+        "current_company": normalized["current_company"],
+        "linkedin_url": normalized["linkedin_url"],
+        "linkedin_url_key": normalized["linkedin_url_key"],
+        "person_identity_key": normalized["person_identity_key"],
+        "idempotency_key": normalized["idempotency_key"],
+        "status": normalized["status"],
+        "phase": normalized["phase"],
+        "source_families_json": json.dumps(normalized["source_families"], ensure_ascii=False),
+        "options_json": json.dumps(_json_safe_payload(normalized["options"]), ensure_ascii=False),
+        "query_manifest_json": json.dumps(_json_safe_payload(normalized["query_manifest"]), ensure_ascii=False),
+        "search_checkpoint_json": json.dumps(_json_safe_payload(normalized["search_checkpoint"]), ensure_ascii=False),
+        "fetch_checkpoint_json": json.dumps(_json_safe_payload(normalized["fetch_checkpoint"]), ensure_ascii=False),
+        "analysis_checkpoint_json": json.dumps(_json_safe_payload(normalized["analysis_checkpoint"]), ensure_ascii=False),
+        "summary_json": json.dumps(_json_safe_payload(normalized["summary"]), ensure_ascii=False),
+        "artifact_root": normalized["artifact_root"],
+        "worker_key": normalized["worker_key"],
+        "lease_owner": normalized["lease_owner"],
+        "lease_expires_at": normalized["lease_expires_at"],
+        "attempt_count": normalized["attempt_count"],
+        "last_error": normalized["last_error"],
+        "execution_backend": normalized["execution_backend"],
+        "source_target_run_id": normalized["source_target_run_id"],
+        "started_at": normalized["started_at"],
+        "completed_at": normalized["completed_at"],
+        "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
+        "updated_at": now,
+    }
+
+
+def _normalize_company_public_web_asset_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    target_company = str(normalized.get("target_company") or normalized.get("company") or "").strip()
+    company_key = str(normalized.get("company_key") or "").strip() or resolve_company_alias_key(target_company)
+    source_family = str(normalized.get("source_family") or "").strip() or "company_homepage"
+    url = str(normalized.get("url") or normalized.get("source_url") or "").strip()
+    normalized_url_key = str(normalized.get("normalized_url_key") or "").strip() or _normalize_public_url_key(url)
+    latest_run_id = str(normalized.get("latest_run_id") or normalized.get("run_id") or "").strip()
+    asset_kind = str(normalized.get("asset_kind") or "").strip() or "company_public_web_asset"
+    asset_id = str(normalized.get("asset_id") or "").strip()
+    if not asset_id:
+        asset_id = "company-public-web-asset-" + _public_web_hash_token(company_key, source_family, normalized_url_key)
+    source_run_ids = _normalize_public_web_string_list(normalized.get("source_run_ids"))
+    if latest_run_id and latest_run_id not in source_run_ids:
+        source_run_ids.append(latest_run_id)
+    return {
+        "asset_id": asset_id,
+        "company_key": company_key,
+        "target_company": target_company,
+        "latest_run_id": latest_run_id,
+        "source_family": source_family,
+        "asset_kind": asset_kind,
+        "title": str(normalized.get("title") or "").strip(),
+        "url": url,
+        "normalized_url_key": normalized_url_key,
+        "summary": str(normalized.get("summary") or "").strip(),
+        "model_safe_payload": dict(normalized.get("model_safe_payload") or {}),
+        "source_run_ids": source_run_ids,
+        "artifact_refs": dict(normalized.get("artifact_refs") or {}),
+        "status": str(normalized.get("status") or "active").strip().lower() or "active",
+        "metadata": dict(normalized.get("metadata") or {}),
+        "created_at": str(normalized.get("created_at") or "").strip(),
+    }
+
+
+def _company_public_web_asset_row_payload(
+    normalized: dict[str, Any],
+    *,
+    existing: dict[str, Any] | None,
+    now: str,
+) -> dict[str, Any]:
+    merged_source_run_ids = _normalize_public_web_string_list(
+        [*list((existing or {}).get("source_run_ids") or []), *list(normalized["source_run_ids"] or [])]
+    )
+    return {
+        "asset_id": normalized["asset_id"],
+        "company_key": normalized["company_key"],
+        "target_company": normalized["target_company"],
+        "latest_run_id": normalized["latest_run_id"],
+        "source_family": normalized["source_family"],
+        "asset_kind": normalized["asset_kind"],
+        "title": normalized["title"],
+        "url": normalized["url"],
+        "normalized_url_key": normalized["normalized_url_key"],
+        "summary": normalized["summary"],
+        "model_safe_payload_json": json.dumps(_json_safe_payload(normalized["model_safe_payload"]), ensure_ascii=False),
+        "source_run_ids_json": json.dumps(merged_source_run_ids, ensure_ascii=False),
+        "artifact_refs_json": json.dumps(_json_safe_payload(normalized["artifact_refs"]), ensure_ascii=False),
+        "status": normalized["status"],
+        "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
+        "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
+        "updated_at": now,
+    }
+
+
+def _normalize_public_url_key(url: Any) -> str:
+    text = str(url or "").strip()
+    if not text:
+        return ""
+    return sha1(text.lower().rstrip("/").encode("utf-8")).hexdigest()[:24]
 
 
 def _target_candidate_public_web_run_row_payload(
@@ -16773,14 +30031,15 @@ def _normalize_person_public_web_signal_payload(payload: dict[str, Any]) -> dict
     source_url = str(normalized.get("source_url") or url).strip()
     signal_id = str(normalized.get("signal_id") or "").strip()
     if not signal_id:
-        signal_id = "person-public-web-signal-" + _public_web_hash_token(
-            run_id,
-            person_identity_key,
-            signal_kind,
-            signal_type,
-            normalized_value,
-            url,
-            source_url,
+        signal_id = public_web_signal_id_for_identity(
+            person_identity_key=person_identity_key,
+            record_id=str(normalized.get("record_id") or "").strip(),
+            signal_kind=signal_kind,
+            signal_type=signal_type,
+            normalized_value=normalized_value,
+            value=value,
+            url=url,
+            source_url=source_url,
         )
     return {
         "signal_id": signal_id,
@@ -16929,6 +30188,72 @@ def _normalize_target_candidate_public_web_promotion_payload(payload: dict[str, 
     }
 
 
+def _normalize_crm_public_web_promotion_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    action = _normalize_target_candidate_public_web_promotion_action(normalized.get("action"))
+    promotion_status = str(normalized.get("promotion_status") or "").strip()
+    if not promotion_status:
+        promotion_status = "manually_promoted" if action == "promote" else "manually_rejected"
+    signal_id = str(normalized.get("signal_id") or "").strip()
+    crm_record_id = str(normalized.get("crm_record_id") or normalized.get("record_id") or "").strip()
+    normalized_value = str(normalized.get("normalized_value") or normalized.get("value") or normalized.get("url") or "").strip()
+    promotion_id = str(normalized.get("promotion_id") or normalized.get("id") or "").strip()
+    if not promotion_id:
+        promotion_id = "crm-public-web-promotion-" + _public_web_hash_token(
+            str(normalized.get("workspace_id") or "default").strip() or "default",
+            crm_record_id,
+            signal_id,
+            action,
+            normalized_value,
+            normalized.get("created_at") or _utc_now_timestamp(),
+        )
+    link_shape_warnings = _normalize_public_web_string_list(normalized.get("link_shape_warnings"))
+    metadata = dict(normalized.get("metadata") or {})
+    return {
+        "promotion_id": promotion_id,
+        "signal_id": signal_id,
+        "run_id": str(normalized.get("run_id") or "").strip(),
+        "asset_id": str(normalized.get("asset_id") or "").strip(),
+        "person_identity_key": str(normalized.get("person_identity_key") or "").strip(),
+        "crm_record_id": crm_record_id,
+        "workspace_id": str(normalized.get("workspace_id") or "default").strip() or "default",
+        "candidate_id": str(normalized.get("candidate_id") or "").strip(),
+        "candidate_name": str(normalized.get("candidate_name") or "").strip(),
+        "current_company": str(normalized.get("current_company") or "").strip(),
+        "linkedin_url_key": str(normalized.get("linkedin_url_key") or "").strip(),
+        "signal_kind": str(normalized.get("signal_kind") or "").strip(),
+        "signal_type": str(normalized.get("signal_type") or "").strip(),
+        "email_type": str(normalized.get("email_type") or "").strip(),
+        "value": str(normalized.get("value") or "").strip(),
+        "normalized_value": normalized_value,
+        "url": str(normalized.get("url") or "").strip(),
+        "source_url": str(normalized.get("source_url") or "").strip(),
+        "source_domain": str(normalized.get("source_domain") or "").strip(),
+        "source_family": str(normalized.get("source_family") or "").strip(),
+        "source_title": str(normalized.get("source_title") or "").strip(),
+        "confidence_label": str(normalized.get("confidence_label") or "").strip(),
+        "confidence_score": _coerce_public_web_float(normalized.get("confidence_score")),
+        "identity_match_label": str(normalized.get("identity_match_label") or "").strip(),
+        "identity_match_score": _coerce_public_web_float(normalized.get("identity_match_score")),
+        "publishable": bool(normalized.get("publishable")),
+        "clean_profile_link": bool(normalized.get("clean_profile_link")),
+        "link_shape_warnings": link_shape_warnings,
+        "action": action,
+        "promotion_status": promotion_status,
+        "promoted_field": str(normalized.get("promoted_field") or "").strip(),
+        "previous_value": str(normalized.get("previous_value") or "").strip(),
+        "new_value": str(normalized.get("new_value") or normalized_value).strip(),
+        "operator": str(normalized.get("operator") or "operator").strip() or "operator",
+        "note": str(normalized.get("note") or "").strip(),
+        "evidence_excerpt": str(normalized.get("evidence_excerpt") or "").strip(),
+        "execution_backend": str(normalized.get("execution_backend") or "crm_public_web_v1").strip()
+        or "crm_public_web_v1",
+        "source_target_promotion_id": str(normalized.get("source_target_promotion_id") or "").strip(),
+        "metadata": metadata,
+        "created_at": str(normalized.get("created_at") or "").strip(),
+    }
+
+
 def _target_candidate_public_web_promotion_row_payload(
     normalized: dict[str, Any],
     *,
@@ -16971,6 +30296,57 @@ def _target_candidate_public_web_promotion_row_payload(
         "operator": normalized["operator"],
         "note": normalized["note"],
         "evidence_excerpt": normalized["evidence_excerpt"],
+        "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
+        "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
+        "updated_at": now,
+    }
+
+
+def _crm_public_web_promotion_row_payload(
+    normalized: dict[str, Any],
+    *,
+    existing: dict[str, Any] | None,
+    now: str,
+) -> dict[str, Any]:
+    return {
+        "promotion_id": normalized["promotion_id"],
+        "signal_id": normalized["signal_id"],
+        "run_id": normalized["run_id"],
+        "asset_id": normalized["asset_id"],
+        "person_identity_key": normalized["person_identity_key"],
+        "crm_record_id": normalized["crm_record_id"],
+        "workspace_id": normalized["workspace_id"],
+        "candidate_id": normalized["candidate_id"],
+        "candidate_name": normalized["candidate_name"],
+        "current_company": normalized["current_company"],
+        "linkedin_url_key": normalized["linkedin_url_key"],
+        "signal_kind": normalized["signal_kind"],
+        "signal_type": normalized["signal_type"],
+        "email_type": normalized["email_type"],
+        "value": normalized["value"],
+        "normalized_value": normalized["normalized_value"],
+        "url": normalized["url"],
+        "source_url": normalized["source_url"],
+        "source_domain": normalized["source_domain"],
+        "source_family": normalized["source_family"],
+        "source_title": normalized["source_title"],
+        "confidence_label": normalized["confidence_label"],
+        "confidence_score": normalized["confidence_score"],
+        "identity_match_label": normalized["identity_match_label"],
+        "identity_match_score": normalized["identity_match_score"],
+        "publishable": 1 if normalized["publishable"] else 0,
+        "clean_profile_link": 1 if normalized["clean_profile_link"] else 0,
+        "link_shape_warnings_json": json.dumps(normalized["link_shape_warnings"], ensure_ascii=False),
+        "action": normalized["action"],
+        "promotion_status": normalized["promotion_status"],
+        "promoted_field": normalized["promoted_field"],
+        "previous_value": normalized["previous_value"],
+        "new_value": normalized["new_value"],
+        "operator": normalized["operator"],
+        "note": normalized["note"],
+        "evidence_excerpt": normalized["evidence_excerpt"],
+        "execution_backend": normalized["execution_backend"],
+        "source_target_promotion_id": normalized["source_target_promotion_id"],
         "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
         "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
         "updated_at": now,
@@ -17052,6 +30428,75 @@ def _merge_registry_label_lists(existing: list[str], incoming: list[str]) -> lis
     return _dedupe_preserve_order([*list(existing or []), *list(incoming or [])])
 
 
+def _summarize_linkedin_profile_registry_rows_for_scope(
+    rows: list[dict[str, Any]],
+    *,
+    source_job: str,
+    snapshot_dir: str,
+) -> dict[str, Any]:
+    normalized_source_job = str(source_job or "").strip()
+    normalized_snapshot_dir = str(snapshot_dir or "").strip()
+    requested_count = 0
+    fetched_count = 0
+    fetched_missing_raw_path_count = 0
+    unrecoverable_count = 0
+    open_count = 0
+    terminal_queue_state_leak_count = 0
+    open_state_counts: dict[str, int] = {}
+    for row in list(rows or []):
+        payload = dict(row or {})
+        if normalized_snapshot_dir and str(payload.get("last_snapshot_dir") or "").strip() != normalized_snapshot_dir:
+            continue
+        source_jobs = {
+            str(item or "").strip()
+            for item in list(payload.get("source_jobs") or [])
+            if str(item or "").strip()
+        }
+        if normalized_source_job and normalized_source_job not in source_jobs:
+            continue
+        requested_count += 1
+        status_value = str(payload.get("status") or "").strip().lower()
+        refill_state = str(payload.get("refill_queue_state") or "").strip().lower()
+        if refill_state and status_value in {"fetched", "unrecoverable"}:
+            terminal_queue_state_leak_count += 1
+        if status_value == "fetched":
+            if str(payload.get("last_raw_path") or "").strip():
+                fetched_count += 1
+            else:
+                fetched_missing_raw_path_count += 1
+                open_count += 1
+                open_state_counts["fetched_missing_raw_path"] = (
+                    int(open_state_counts.get("fetched_missing_raw_path") or 0) + 1
+                )
+            continue
+        if status_value == "unrecoverable":
+            unrecoverable_count += 1
+            continue
+        open_count += 1
+        state_key = refill_state or status_value or "unknown"
+        open_state_counts[state_key] = int(open_state_counts.get(state_key) or 0) + 1
+    terminal_count = fetched_count + unrecoverable_count
+    all_requested_terminal = (
+        requested_count > 0
+        and terminal_count == requested_count
+        and open_count == 0
+        and terminal_queue_state_leak_count == 0
+    )
+    return {
+        "requested_url_count": requested_count,
+        "terminal_url_count": terminal_count,
+        "fetched_url_count": fetched_count,
+        "fetched_missing_raw_path_count": fetched_missing_raw_path_count,
+        "unrecoverable_url_count": unrecoverable_count,
+        "open_url_count": open_count,
+        "open_state_counts": open_state_counts,
+        "terminal_queue_state_leak_count": terminal_queue_state_leak_count,
+        "all_requested_terminal": all_requested_terminal,
+        "source_job": normalized_source_job,
+        "snapshot_dir": normalized_snapshot_dir,
+    }
+
+
 def _normalize_linkedin_profile_registry_backfill_entry(payload: dict[str, Any] | None) -> dict[str, Any] | None:
     normalized = dict(payload or {})
     profile_url = str(normalized.get("profile_url") or "").strip()
@@ -17090,6 +30535,8 @@ def _normalize_linkedin_profile_registry_backfill_entry(payload: dict[str, Any] 
         "raw_linkedin_url": raw_linkedin_url,
         "sanity_linkedin_url": sanity_linkedin_url,
         "snapshot_dir": str(normalized.get("snapshot_dir") or "").strip(),
+        "run_id": str(normalized.get("run_id") or normalized.get("last_run_id") or "").strip(),
+        "dataset_id": str(normalized.get("dataset_id") or normalized.get("last_dataset_id") or "").strip(),
     }
 
 
