@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -11,6 +12,15 @@ from sourcing_agent.acquisition import AcquisitionEngine
 from sourcing_agent.api import create_server
 from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.domain import Candidate, JobRequest
+from sourcing_agent.durable_runtime import (
+    EXCEL_INTAKE_RUN_COMMAND_TYPE,
+    EXCEL_INTAKE_RUN_OWNER,
+    PROJECTION_RUN_SCOPE_FINALIZE_COMMAND_TYPE,
+    PROJECTION_RUN_SCOPE_FINALIZE_OWNER,
+    SNAPSHOT_COMPACTION_RUN_OWNER,
+    legacy_job_operation_id,
+    legacy_job_workflow_run_id,
+)
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import SourcingOrchestrator, _plan_hydration_request_signature
 from sourcing_agent.semantic_provider import LocalSemanticProvider
@@ -22,11 +32,13 @@ from sourcing_agent.settings import (
     SemanticProviderSettings,
 )
 from sourcing_agent.storage import ControlPlaneStore
+from tests.pg_durable_runtime import PGDurableRuntimeTestMixin
 
 
-class FrontendHistoryRecoveryTest(unittest.TestCase):
+class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
+        self._start_pg_durable_runtime(runtime_dir=Path(self.tempdir.name))
         self.catalog = AssetCatalog.discover()
         self.store = ControlPlaneStore(f"{self.tempdir.name}/test.db")
         self.settings = AppSettings(
@@ -59,6 +71,7 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
         self._runtime_env_patcher.start()
 
     def tearDown(self) -> None:
+        self._stop_pg_durable_runtime()
         self._runtime_env_patcher.stop()
         self.tempdir.cleanup()
 
@@ -103,6 +116,40 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
         self.assertTrue(link["plan"])
         self.assertTrue(dict(link["metadata"].get("effective_execution_semantics") or {}))
         self.assertTrue(dict(link["metadata"].get("dispatch_preview") or {}))
+        self.assertTrue(dict(link["metadata"].get("provider_execution_manifest") or {}))
+
+    def test_plan_workflow_persists_full_roster_provider_manifest_without_generic_seed_queries(self) -> None:
+        history_id = "history-lovable-full-roster-manifest"
+        self._write_company_identity_snapshot(target_company="Lovable", snapshot_id="20260505T020101")
+
+        planned = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "帮我找Lovable的全部成员",
+                "history_id": history_id,
+            }
+        )
+
+        acquisition_strategy = dict(dict(planned["plan"]).get("acquisition_strategy") or {})
+        self.assertEqual(acquisition_strategy.get("strategy_type"), "full_company_roster")
+        self.assertEqual(acquisition_strategy.get("search_seed_queries"), [])
+        link = self.store.get_frontend_history_link(history_id)
+        self.assertIsNotNone(link)
+        assert link is not None
+        manifest = dict(link["metadata"].get("provider_execution_manifest") or {})
+        lanes = list(manifest.get("lanes") or [])
+        current_lane = next(lane for lane in lanes if lane.get("lane_id") == "current_company_employees")
+        self.assertEqual(current_lane.get("provider"), "harvest_company_employees")
+        self.assertEqual(current_lane.get("operation"), "company_employees")
+        self.assertEqual(current_lane.get("query_texts"), [])
+        self.assertFalse(current_lane.get("provider_facing_query"))
+
+        recovered = self.orchestrator.get_frontend_history_recovery(history_id)
+        recovered_manifest = dict(recovered["recovery"]["metadata"].get("provider_execution_manifest") or {})
+        self.assertEqual(recovered_manifest.get("strategy_type"), "full_company_roster")
+        recovered_current_lane = next(
+            lane for lane in list(recovered_manifest.get("lanes") or []) if lane.get("lane_id") == "current_company_employees"
+        )
+        self.assertEqual(recovered_current_lane.get("query_texts"), [])
 
     def test_submit_plan_workflow_persists_pending_frontend_history_link(self) -> None:
         history_id = "history-plan-submit-1"
@@ -343,7 +390,7 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
         }
         with (
             mock.patch("sourcing_agent.orchestrator.ExcelIntakeService.prepare_contacts", return_value=prepared_contacts),
-            mock.patch.object(threading.Thread, "start", autospec=True, return_value=None),
+            mock.patch.object(SourcingOrchestrator, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None),
         ):
             queued = self.orchestrator.start_excel_intake_workflow(
                 {
@@ -361,6 +408,15 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
         assert job is not None
         self.assertEqual(job["job_type"], "excel_intake")
         self.assertEqual(job["status"], "queued")
+        excel_bundle = dict(dict(job.get("execution_bundle") or {}).get("excel_intake") or {})
+        prepared_batch_path = Path(str(excel_bundle.get("prepared_contact_batch_path") or ""))
+        self.assertTrue(prepared_batch_path.is_file())
+        persisted_prepared = json.loads(prepared_batch_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            persisted_prepared["prepared_contact_batch"]["contacts"][0]["name"],
+            "Ada Import",
+        )
+        self.assertEqual(int(excel_bundle.get("prepared_contact_count") or 0), 1)
         link = self.store.get_frontend_history_link(history_id)
         self.assertIsNotNone(link)
         assert link is not None
@@ -368,6 +424,13 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
         self.assertEqual(link["phase"], "running")
         self.assertEqual(str(link["metadata"].get("workflow_kind") or ""), "excel_intake")
         self.assertFalse(link["plan"])
+        self.assertEqual(queued["workflow_command"]["command_type"], EXCEL_INTAKE_RUN_COMMAND_TYPE)
+        self.assertEqual(queued["workflow_command"]["owner"], EXCEL_INTAKE_RUN_OWNER)
+        self.assertEqual(queued["workflow_command"]["status"], "running")
+        command = self.store.get_workflow_command(str(queued["workflow_command"]["command_id"] or "")) or {}
+        self.assertEqual(command["payload"]["job_id"], str(queued["job_id"]))
+        self.assertEqual(command["produced_entity_counts"]["excel_intake_job"], 1)
+        self.assertEqual(command["produced_entity_counts"]["excel_contact"], 1)
 
     def test_start_excel_intake_workflow_splits_company_groups_into_multiple_histories(self) -> None:
         prepared_contacts = {
@@ -416,7 +479,7 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
         }
         with (
             mock.patch("sourcing_agent.orchestrator.ExcelIntakeService.prepare_contacts", return_value=prepared_contacts),
-            mock.patch.object(threading.Thread, "start", autospec=True, return_value=None),
+            mock.patch.object(SourcingOrchestrator, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None),
         ):
             queued = self.orchestrator.start_excel_intake_workflow(
                 {
@@ -440,6 +503,19 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
             self.assertEqual(str(link["metadata"].get("workflow_kind") or ""), "excel_intake")
             self.assertEqual(str(link["metadata"].get("batch_id") or ""), str(queued["batch_id"]))
             self.assertEqual(link["phase"], "running")
+            self.assertEqual(group["workflow_command"]["command_type"], EXCEL_INTAKE_RUN_COMMAND_TYPE)
+            self.assertEqual(group["workflow_command"]["owner"], EXCEL_INTAKE_RUN_OWNER)
+            self.assertEqual(group["workflow_command"]["status"], "running")
+        commands = [
+            command
+            for command in self.store.list_workflow_commands(
+                owner=EXCEL_INTAKE_RUN_OWNER,
+                statuses=["running"],
+                limit=20,
+            )
+            if command["command_type"] == EXCEL_INTAKE_RUN_COMMAND_TYPE
+        ]
+        self.assertEqual(len(commands), 3)
 
     def test_run_excel_intake_workflow_persists_result_view_and_results_history(self) -> None:
         history_id = "history-excel-workflow-results-1"
@@ -462,6 +538,20 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
             education="MIT",
             work_history="OpenAI",
         )
+        baseline_candidate = Candidate(
+            candidate_id="openai-baseline-1",
+            name_en="Grace Baseline",
+            display_name="Grace Baseline",
+            category="employee",
+            target_company=target_company,
+            organization=target_company,
+            employment_status="current",
+            role="Research Scientist",
+            linkedin_url="https://www.linkedin.com/in/grace-baseline/",
+            focus_areas="Agent",
+            education="Stanford",
+            work_history="OpenAI",
+        )
         (snapshot_dir / "candidate_documents.json").write_text(
             json.dumps(
                 {
@@ -475,9 +565,9 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
                             "linkedin_slug": company_key,
                         },
                     },
-                    "candidates": [candidate.to_record()],
+                    "candidates": [candidate.to_record(), baseline_candidate.to_record()],
                     "evidence": [],
-                    "candidate_count": 1,
+                    "candidate_count": 2,
                     "evidence_count": 0,
                 },
                 ensure_ascii=False,
@@ -515,14 +605,14 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
                 "source_path": str(snapshot_dir / "contacts.xlsx"),
                 "sheet_count": 1,
                 "sheet_names": ["Contacts"],
-                "detected_contact_row_count": 1,
+                "detected_contact_row_count": 2,
             },
             "summary": {
-                "total_rows": 1,
+                "total_rows": 2,
                 "persisted_candidate_count": 1,
                 "persisted_evidence_count": 0,
                 "local_exact_hit_count": 0,
-                "manual_review_local_count": 0,
+                "manual_review_local_count": 1,
                 "fetched_direct_linkedin_count": 1,
                 "fetched_via_search_count": 0,
                 "manual_review_search_count": 0,
@@ -531,7 +621,7 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
             "attachment_summary": {
                 "status": "completed",
                 "snapshot_id": snapshot_id,
-                "candidate_count": 1,
+                "candidate_count": 2,
                 "evidence_count": 0,
                 "candidate_doc_path": str(snapshot_dir / "candidate_documents.json"),
                 "stage_candidate_doc_path": str(snapshot_dir / "candidate_documents.excel_intake.json"),
@@ -542,7 +632,23 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
                 },
             },
             "artifact_paths": {},
-            "results": [],
+            "results": [
+                {
+                    "status": "fetched_direct_linkedin",
+                    "matched_candidate": candidate.to_record(),
+                    "row_key": "Contacts#1",
+                },
+                {
+                    "status": "manual_review_local",
+                    "row_key": "Contacts#2",
+                    "name": "Needs Review",
+                    "company": target_company,
+                    "title": "Research",
+                    "linkedin_url": "https://www.linkedin.com/in/needs-review/",
+                    "manual_review_candidates": [baseline_candidate.to_record()],
+                    "match_reason": "local_near_match_candidates",
+                },
+            ],
         }
 
         with mock.patch("sourcing_agent.orchestrator.ExcelIntakeService.ingest_contacts", return_value=mocked_result):
@@ -568,14 +674,491 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
         assert result_view is not None
         self.assertEqual(result_view["source_kind"], "company_snapshot")
         self.assertEqual(result_view["snapshot_id"], snapshot_id)
+        markers = list(dict(result_view.get("metadata") or {}).get("job_scoped_candidate_markers") or [])
+        self.assertEqual(len(markers), 1)
+        self.assertEqual(markers[0]["marker_id"], "excel_intake:current_job")
+        self.assertEqual(markers[0]["label"], "本次Excel导入")
+        self.assertEqual(markers[0]["candidate_ids"], ["openai-import-1"])
+        row_manifest_ref = dict(job["summary"].get("excel_row_manifest") or {})
+        self.assertEqual(row_manifest_ref.get("review_row_count"), 1)
+        row_manifest_path = Path(str(row_manifest_ref.get("path") or ""))
+        self.assertTrue(row_manifest_path.exists())
+        row_manifest = json.loads(row_manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(row_manifest["review_rows"][0]["row_key"], "Contacts#2")
+        self.assertEqual(
+            row_manifest["review_rows"][0]["manual_review_candidates"][0]["candidate_id"],
+            "openai-baseline-1",
+        )
+        progress = self.orchestrator.get_job_progress("excelworkflowresults1")
+        self.assertIsNotNone(progress)
+        assert progress is not None
+        excel_progress = dict(progress.get("excel_intake_progress") or {})
+        self.assertEqual(excel_progress.get("total_row_count"), 2)
+        self.assertEqual(excel_progress.get("matched_row_count"), 1)
+        self.assertEqual(excel_progress.get("manual_review_row_count"), 1)
+        self.assertEqual(excel_progress.get("unresolved_row_count"), 0)
+        self.assertEqual(excel_progress.get("review_row_count"), 1)
+        execution_phase = dict(progress.get("execution_phase_contract") or {})
+        self.assertEqual(execution_phase.get("active_phase_label"), "Excel Intake")
+        self.assertIn("已匹配 1 行", str(execution_phase.get("active_phase_detail") or ""))
+        self.assertIn("需人工审核 1 行", str(execution_phase.get("active_phase_detail") or ""))
         dashboard = self.orchestrator.get_job_dashboard("excelworkflowresults1")
         self.assertIsNotNone(dashboard)
         assert dashboard is not None
-        self.assertEqual(int(dashboard["asset_population"].get("candidate_count") or 0), 1)
+        self.assertEqual(int(dashboard["asset_population"].get("candidate_count") or 0), 2)
+        candidate_payloads = {
+            str(item.get("candidate_id") or ""): dict(item)
+            for item in list(dashboard["asset_population"].get("candidates") or [])
+            if isinstance(item, dict)
+        }
+        self.assertIn("本次Excel导入", list(candidate_payloads["openai-import-1"].get("matched_keywords") or []))
+        self.assertNotIn("本次Excel导入", list(candidate_payloads["openai-baseline-1"].get("matched_keywords") or []))
         link = self.store.get_frontend_history_link(history_id)
         self.assertIsNotNone(link)
         assert link is not None
         self.assertEqual(link["phase"], "results")
+
+    def test_stale_excel_intake_job_recovers_from_persisted_prepared_batch(self) -> None:
+        history_id = "history-excel-recovery-prepared-batch-1"
+        snapshot_id = "20260423T132500"
+        target_company = "OpenAI"
+        self._write_company_identity_snapshot(target_company=target_company, snapshot_id=snapshot_id)
+        company_key = "openai"
+        snapshot_dir = self.settings.company_assets_dir / company_key / snapshot_id
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        candidate = Candidate(
+            candidate_id="openai-recovered-excel-1",
+            name_en="Ada Recovered",
+            display_name="Ada Recovered",
+            category="employee",
+            target_company=target_company,
+            organization=target_company,
+            employment_status="current",
+            role="Research Engineer",
+            linkedin_url="https://www.linkedin.com/in/ada-recovered/",
+            focus_areas="Agents",
+            education="MIT",
+            work_history="OpenAI",
+        )
+        (snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "snapshot": {
+                        "snapshot_id": snapshot_id,
+                        "target_company": target_company,
+                        "company_identity": {
+                            "requested_name": target_company,
+                            "canonical_name": target_company,
+                            "company_key": company_key,
+                            "linkedin_slug": company_key,
+                        },
+                    },
+                    "candidates": [candidate.to_record()],
+                    "evidence": [],
+                    "candidate_count": 1,
+                    "evidence_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        prepared_contacts = {
+            "workbook": {
+                "source_path": str(snapshot_dir / "contacts.xlsx"),
+                "sheet_count": 1,
+                "sheet_names": ["Contacts"],
+                "detected_contact_row_count": 1,
+            },
+            "schema_inference": {},
+            "contacts": [
+                {
+                    "row_key": "Contacts#1",
+                    "sheet_name": "Contacts",
+                    "row_index": 1,
+                    "name": "Ada Recovered",
+                    "company": target_company,
+                    "title": "Research Engineer",
+                    "linkedin_url": "https://www.linkedin.com/in/ada-recovered/",
+                    "source_path": "contacts.xlsx#Contacts:1",
+                    "raw_row": {},
+                }
+            ],
+        }
+        with (
+            mock.patch("sourcing_agent.orchestrator.ExcelIntakeService.prepare_contacts", return_value=prepared_contacts),
+            mock.patch.object(SourcingOrchestrator, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None),
+        ):
+            queued = self.orchestrator.start_excel_intake_workflow(
+                {
+                    "target_company": target_company,
+                    "history_id": history_id,
+                    "query_text": "Excel 批量导入 OpenAI 候选人",
+                    "filename": "contacts.xlsx",
+                    "file_content_base64": "ZmFrZQ==",
+                }
+            )
+
+        job_id = str(queued["job_id"])
+        initial_command_id = str(dict(queued.get("workflow_command") or {}).get("command_id") or "")
+        self.assertTrue(initial_command_id)
+        self.store.mark_workflow_command_partial_progress(
+            initial_command_id,
+            result={
+                "status": "test_requeue_after_mocked_thread_start",
+                "recovery_source": "test_stale_excel_intake_job_recovers_from_persisted_prepared_batch",
+            },
+        )
+        captured_payload: dict[str, object] = {}
+        mocked_result = {
+            "status": "completed",
+            "intake_id": "excel-recovered-1",
+            "workbook": dict(prepared_contacts["workbook"]),
+            "summary": {
+                "total_rows": 1,
+                "persisted_candidate_count": 1,
+                "persisted_evidence_count": 0,
+                "local_exact_hit_count": 0,
+                "manual_review_local_count": 0,
+                "fetched_direct_linkedin_count": 1,
+                "fetched_via_search_count": 0,
+                "manual_review_search_count": 0,
+                "unresolved_count": 0,
+            },
+            "attachment_summary": {
+                "status": "completed",
+                "snapshot_id": snapshot_id,
+                "candidate_count": 1,
+                "evidence_count": 0,
+                "candidate_doc_path": str(snapshot_dir / "candidate_documents.json"),
+                "stage_candidate_doc_path": str(snapshot_dir / "candidate_documents.excel_intake.json"),
+            },
+            "artifact_paths": {},
+            "results": [
+                {
+                    "status": "fetched_direct_linkedin",
+                    "matched_candidate": candidate.to_record(),
+                    "row_key": "Contacts#1",
+                }
+            ],
+        }
+
+        def _capture_ingest(payload: dict[str, object]) -> dict[str, object]:
+            captured_payload.update(payload)
+            return mocked_result
+
+        with (
+            mock.patch(
+                "sourcing_agent.orchestrator.ExcelIntakeService.prepare_contacts",
+                side_effect=AssertionError("recovery must use persisted prepared batch"),
+            ),
+            mock.patch("sourcing_agent.orchestrator.ExcelIntakeService.ingest_contacts", side_effect=_capture_ingest),
+        ):
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "job_id": job_id,
+                    "excel_intake_recovery_enabled": True,
+                    "excel_intake_stale_after_seconds": 0,
+                    "post_recovery_housekeeping_enabled": False,
+                }
+            )
+
+        excel_recovery = dict(recovery.get("excel_intake_recovery") or {})
+        self.assertEqual(excel_recovery["recovered_count"], 1)
+        self.assertEqual(excel_recovery["results"][0]["reason"], "recovered_via_excel_intake_run_command")
+        owner_result = dict(excel_recovery["results"][0]["owner_result"])
+        self.assertEqual(owner_result["started_count"], 1)
+        self.assertEqual(
+            dict(captured_payload.get("prepared_contact_batch") or {})["contacts"][0]["name"],
+            "Ada Recovered",
+        )
+        recovered_job = self.store.get_job(job_id)
+        deadline = time.monotonic() + 5.0
+        while recovered_job and recovered_job.get("status") != "completed" and time.monotonic() < deadline:
+            time.sleep(0.05)
+            recovered_job = self.store.get_job(job_id)
+        self.assertIsNotNone(recovered_job)
+        assert recovered_job is not None
+        self.assertEqual(recovered_job["status"], "completed")
+        result_view = self.store.get_job_result_view(job_id=job_id)
+        self.assertIsNotNone(result_view)
+        link = self.store.get_frontend_history_link(history_id)
+        while link and link.get("phase") != "results" and time.monotonic() < deadline:
+            time.sleep(0.05)
+            link = self.store.get_frontend_history_link(history_id)
+        self.assertIsNotNone(link)
+        assert link is not None
+        self.assertEqual(link["phase"], "results")
+
+    def test_run_excel_intake_workflow_defers_full_artifact_build_until_after_result_view(self) -> None:
+        history_id = "history-excel-workflow-deferred-artifacts-1"
+        snapshot_id = "20260423T131500"
+        target_company = "OpenAI"
+        company_key = "openai"
+        self._write_company_identity_snapshot(target_company=target_company, snapshot_id=snapshot_id)
+        snapshot_dir = self.settings.company_assets_dir / company_key / snapshot_id
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        (snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "snapshot": {
+                        "snapshot_id": snapshot_id,
+                        "target_company": target_company,
+                        "company_identity": {
+                            "requested_name": target_company,
+                            "canonical_name": target_company,
+                            "company_key": company_key,
+                            "linkedin_slug": company_key,
+                        },
+                    },
+                    "candidates": [],
+                    "evidence": [],
+                    "candidate_count": 0,
+                    "evidence_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        candidate = Candidate(
+            candidate_id="openai-import-deferred-1",
+            name_en="Ada Import",
+            display_name="Ada Import",
+            category="employee",
+            target_company=target_company,
+            organization=target_company,
+            employment_status="current",
+            role="Research Engineer",
+            linkedin_url="https://www.linkedin.com/in/ada-import-deferred/",
+            focus_areas="Reasoning, Coding",
+            education="MIT",
+            work_history="OpenAI",
+        )
+        self.store.upsert_candidate(candidate)
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "Excel 批量导入 OpenAI 候选人",
+                "query": "Excel 批量导入 OpenAI 候选人",
+                "target_company": target_company,
+                "target_scope": "full_company_asset",
+                "asset_view": "canonical_merged",
+                "retrieval_strategy": "asset_population",
+                "planning_mode": "excel_intake",
+            }
+        )
+        self.store.upsert_frontend_history_link(
+            {
+                "history_id": history_id,
+                "query_text": "Excel 批量导入 OpenAI 候选人",
+                "target_company": target_company,
+                "job_id": "excelworkflowdeferred1",
+                "phase": "running",
+                "request": request.to_record(),
+                "metadata": {"workflow_kind": "excel_intake"},
+            }
+        )
+
+        with (
+            mock.patch("sourcing_agent.company_asset_supplement.build_company_candidate_artifacts") as supplement_build,
+            mock.patch("sourcing_agent.candidate_artifacts.build_company_candidate_artifacts") as artifact_build,
+        ):
+            supplement_build.side_effect = AssertionError("Excel workflow must not inline full artifact build")
+            artifact_build.side_effect = AssertionError("Excel result view must not materialize on first dashboard read")
+            self.orchestrator._run_excel_intake_workflow(
+                job_id="excelworkflowdeferred1",
+                request=request,
+                payload={
+                    "target_company": target_company,
+                    "filename": "contacts.xlsx",
+                    "attach_to_snapshot": True,
+                    "build_artifacts": True,
+                    "prepared_contact_batch": {
+                        "workbook": {
+                            "source_path": str(snapshot_dir / "contacts.xlsx"),
+                            "sheet_count": 1,
+                            "sheet_names": ["Contacts"],
+                            "detected_contact_row_count": 1,
+                        },
+                        "schema_inference": {},
+                        "contacts": [
+                            {
+                                "row_key": "Contacts#1",
+                                "name": "Ada Import",
+                                "company": "OpenAI",
+                                "title": "Research Engineer",
+                                "linkedin_url": "https://www.linkedin.com/in/ada-import-deferred/",
+                            }
+                        ],
+                    },
+                },
+            )
+            dashboard = self.orchestrator.get_job_dashboard("excelworkflowdeferred1")
+            progress = self.orchestrator.get_job_progress("excelworkflowdeferred1")
+
+        job = self.store.get_job("excelworkflowdeferred1")
+        self.assertIsNotNone(job)
+        assert job is not None
+        self.assertEqual(job["status"], "completed")
+        self.assertTrue(bool(dict(job["summary"].get("public_web_stage_2") or {}).get("artifact_build_deferred")))
+        result_view = self.store.get_job_result_view(job_id="excelworkflowdeferred1")
+        self.assertIsNotNone(result_view)
+        assert result_view is not None
+        self.assertTrue(str(dict(result_view.get("metadata") or {}).get("asset_population_overlay_path") or ""))
+        self.assertIsNotNone(dashboard)
+        assert dashboard is not None
+        self.assertEqual(int(dashboard["asset_population"].get("candidate_count") or 0), 1)
+        self.assertEqual(dashboard["asset_population"]["candidates"][0]["display_name"], "Ada Import")
+        dashboard_contract = dict(dashboard.get("execution_phase_contract") or {})
+        self.assertFalse(bool(dashboard_contract.get("public_web_stage_applicable")))
+        self.assertEqual(
+            dict(dashboard_contract.get("stage_title_overrides") or {}).get("public_web_stage_2"),
+            "公司资产归档",
+        )
+        self.assertIsNotNone(progress)
+        assert progress is not None
+        progress_contract = dict(progress.get("execution_phase_contract") or {})
+        self.assertFalse(bool(progress_contract.get("public_web_stage_applicable")))
+        self.assertEqual(
+            dict(progress_contract.get("stage_title_overrides") or {}).get("public_web_stage_2"),
+            "公司资产归档",
+        )
+        link = self.store.get_frontend_history_link(history_id)
+        self.assertIsNotNone(link)
+        assert link is not None
+        self.assertEqual(link["phase"], "results")
+
+    def test_repair_excel_intake_artifacts_uses_durable_snapshot_materialization_item(self) -> None:
+        job_id = "excelworkflowartifactrepair1"
+        snapshot_id = "20260423T141500"
+        target_company = "OpenAI"
+        company_key = "openai"
+        self._write_company_identity_snapshot(target_company=target_company, snapshot_id=snapshot_id)
+        snapshot_dir = self.settings.company_assets_dir / company_key / snapshot_id
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+        candidate_doc_path.write_text(
+            json.dumps(
+                {
+                    "snapshot": {
+                        "snapshot_id": snapshot_id,
+                        "target_company": target_company,
+                        "company_identity": {
+                            "requested_name": target_company,
+                            "canonical_name": target_company,
+                            "company_key": company_key,
+                            "linkedin_slug": company_key,
+                        },
+                    },
+                    "candidates": [],
+                    "evidence": [],
+                    "candidate_count": 0,
+                    "evidence_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "Excel 批量导入 OpenAI 候选人",
+                "query": "Excel 批量导入 OpenAI 候选人",
+                "target_company": target_company,
+                "planning_mode": "excel_intake",
+            }
+        )
+        self.store.save_job(
+            job_id=job_id,
+            job_type="excel_intake",
+            status="completed",
+            stage="completed",
+            request_payload=request.to_record(),
+            plan_payload={},
+            summary_payload={
+                "workflow_kind": "excel_intake",
+                "public_web_stage_2": {
+                    "status": "completed",
+                    "title": "公司资产归档",
+                    "workflow_kind": "excel_intake",
+                    "snapshot_id": snapshot_id,
+                    "candidate_doc_path": str(candidate_doc_path),
+                    "artifact_build_deferred": True,
+                    "artifact_build_deferred_reason": "excel_workflow_serves_result_view_overlay",
+                },
+            },
+        )
+
+        dry_run = self.orchestrator.repair_excel_intake_artifacts({"job_id": job_id})
+
+        self.assertEqual(dry_run["status"], "dry_run")
+        self.assertTrue(dry_run["would_enqueue"])
+        self.assertEqual(
+            self.store.list_job_materialization_items(
+                job_id=job_id,
+                item_kind="snapshot_full_materialization",
+            ),
+            [],
+        )
+
+        with mock.patch(
+            "sourcing_agent.orchestrator.build_company_candidate_artifacts",
+            return_value={
+                "status": "completed",
+                "artifact_dir": str(snapshot_dir / "normalized_artifacts"),
+                "artifact_paths": {
+                    "materialized_candidate_documents": str(
+                        snapshot_dir / "normalized_artifacts" / "materialized_candidate_documents.json"
+                    )
+                },
+            },
+        ) as artifact_build:
+            repair = self.orchestrator.repair_excel_intake_artifacts(
+                {"job_id": job_id, "dry_run": False, "run_now": True}
+            )
+
+        self.assertEqual(repair["status"], "completed")
+        artifact_build.assert_called_once_with(
+            runtime_dir=self.settings.runtime_dir,
+            store=self.store,
+            target_company=target_company,
+            snapshot_id=snapshot_id,
+        )
+        # W6 cutover: snapshot materialization is command-owned; the durable
+        # snapshot.compaction.run command is the completion evidence, and the
+        # legacy job_materialization_items adapter must stay disabled (no rows).
+        compaction_commands = self.store.list_workflow_commands(
+            workflow_run_id=legacy_job_workflow_run_id(job_id),
+            owner=SNAPSHOT_COMPACTION_RUN_OWNER,
+        )
+        succeeded_commands = [
+            command for command in compaction_commands if str(command.get("status") or "") == "succeeded"
+        ]
+        self.assertEqual(len(succeeded_commands), 1)
+        self.assertEqual(
+            self.store.list_job_materialization_items(
+                job_id=job_id,
+                item_kind="snapshot_full_materialization",
+                statuses=["completed"],
+            ),
+            [],
+        )
+        refreshed_job = self.store.get_job(job_id)
+        self.assertIsNotNone(refreshed_job)
+        assert refreshed_job is not None
+        refreshed_stage = dict(dict(refreshed_job["summary"]).get("public_web_stage_2") or {})
+        self.assertFalse(bool(refreshed_stage.get("artifact_build_deferred")))
+        self.assertEqual(refreshed_stage["artifact_build_status"], "completed")
+        self.assertEqual(
+            dict(refreshed_job["summary"]).get("excel_artifact_materialization", {}).get("status"),
+            "completed",
+        )
+        event_phases = [
+            dict(event.get("payload") or {}).get("phase")
+            for event in self.store.list_job_events(job_id)
+            if dict(event.get("payload") or {}).get("event_family") == "excel_artifact_materialization"
+        ]
+        self.assertEqual(event_phases, ["started", "completed"])
 
     def test_start_workflow_recovers_history_id_from_plan_review_session(self) -> None:
         history_id = "history-workflow-review-lookup-1"
@@ -654,6 +1237,38 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
                     "matched_fields": ["work_history"],
                 }
             ],
+        )
+        # Completion promotion fails closed without a durable serving_finalized
+        # proof and requires an agent runtime session row in PG-only mode; seed
+        # both, mirroring what the run-scope projection finalize owner records.
+        self.store.create_agent_runtime_session(
+            job_id=job_id,
+            target_company="OpenAI",
+            request_payload={
+                "raw_user_request": "我想要OpenAI做Reasoning方向的人",
+                "query": "OpenAI Reasoning direction",
+                "target_company": "OpenAI",
+            },
+            plan_payload={},
+            runtime_mode="workflow",
+            lanes=[],
+        )
+        self.orchestrator.durable_runtime_writer.append_event_and_reduce(
+            workflow_run_id=legacy_job_workflow_run_id(job_id),
+            operation_id=legacy_job_operation_id(job_id),
+            command_id=f"{job_id}:run_scope_projection_finalize_seed",
+            event_family="workflow_event",
+            event_type="CompletionProofRecorded",
+            idempotency_key=f"{job_id}:serving_finalized:seed",
+            actor=PROJECTION_RUN_SCOPE_FINALIZE_OWNER,
+            source=PROJECTION_RUN_SCOPE_FINALIZE_COMMAND_TYPE,
+            payload={
+                "workflow_type": "linkedin_acquisition",
+                "stage_key": "run_scope_projection_finalize",
+                "proof_key": "serving_finalized",
+                "status": "proved",
+                "job_id": job_id,
+            },
         )
 
         with mock.patch.object(
@@ -826,6 +1441,70 @@ class FrontendHistoryRecoveryTest(unittest.TestCase):
         self.assertEqual(recovered["recovery"]["job_id"], job_id)
         self.assertEqual(recovered["recovery"]["metadata"]["workflow_status"], "reused_completed_job")
         self.assertEqual(recovered["recovery"]["metadata"]["dispatch"]["strategy"], "reuse_completed")
+
+    def test_frontend_history_recovery_keeps_completed_job_running_while_background_workers_active(self) -> None:
+        history_id = "history-post-completion-workers-1"
+        job_id = "job-post-completion-workers-1"
+        request_payload = {
+            "raw_user_request": "帮我找Lovable的全部成员",
+            "target_company": "Lovable",
+        }
+        plan_payload = {"target_company": "Lovable"}
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload=request_payload,
+            plan_payload=plan_payload,
+            summary_payload={"message": "baseline ready"},
+        )
+        self.store.upsert_frontend_history_link(
+            {
+                "history_id": history_id,
+                "query_text": "帮我找Lovable的全部成员",
+                "target_company": "Lovable",
+                "job_id": job_id,
+                "phase": "results",
+                "request": request_payload,
+                "plan": plan_payload,
+            }
+        )
+        worker = self.store.create_or_resume_agent_worker(
+            session_id=1,
+            job_id=job_id,
+            span_id=1,
+            lane_id="enrichment_specialist",
+            worker_key="harvest-profile-batch-1",
+            metadata={"recovery_kind": "harvest_profile_batch"},
+        )
+        self.store.mark_agent_worker_running(int(worker["worker_id"]))
+        self.store.checkpoint_agent_worker(
+            int(worker["worker_id"]),
+            checkpoint_payload={"stage": "waiting_remote_harvest"},
+            output_payload={"message": "waiting on provider"},
+            status="running",
+        )
+
+        self.orchestrator._sync_frontend_history_phase_for_job(
+            job={
+                "job_id": job_id,
+                "status": "completed",
+                "stage": "completed",
+                "request": request_payload,
+                "plan": plan_payload,
+            },
+            phase="results",
+        )
+        stored_link = self.store.get_frontend_history_link(history_id)
+        assert stored_link is not None
+        self.assertEqual(stored_link["phase"], "running")
+
+        recovered = self.orchestrator.get_frontend_history_recovery(history_id)
+
+        self.assertEqual(recovered["status"], "found")
+        self.assertEqual(recovered["recovery"]["phase"], "running")
+        self.assertEqual(recovered["recovery"]["job_id"], job_id)
 
     def test_plan_api_round_trips_history_id_without_500(self) -> None:
         history_id = "history-plan-api-roundtrip-1"

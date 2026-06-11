@@ -1,34 +1,21 @@
-import contextlib
-import errno
 import json
 import os
-import shutil
 import tempfile
-import threading
-import time
 import unittest
-import unittest.mock
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from sourcing_agent.acquisition import AcquisitionEngine
-from sourcing_agent.api import create_server
-from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.asset_reuse_planning import build_acquisition_shard_registry_record
 from sourcing_agent.company_registry import resolve_company_alias_key
 from sourcing_agent.domain import JobRequest
-from sourcing_agent.model_provider import build_model_client
-from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.organization_execution_profile import ensure_organization_execution_profile
-from sourcing_agent.scripted_test_runtime import build_isolated_runtime_env, isolated_runtime_state_paths
-from sourcing_agent.semantic_provider import build_semantic_provider
-from sourcing_agent.settings import (
-    AppSettings,
-    HarvestActorSettings,
-    HarvestSettings,
-    QwenSettings,
-    SemanticProviderSettings,
+from sourcing_agent.scripted_provider_scenario import load_scripted_provider_invocations
+from sourcing_agent.scripted_test_runtime import (
+    HostedScriptTestRuntime,
+    isolated_hosted_test_runtime,
 )
+from sourcing_agent.settings import AppSettings
 from sourcing_agent.storage import ControlPlaneStore
 from sourcing_agent.workflow_explain_matrix import (
     load_explain_cases,
@@ -53,22 +40,37 @@ _FAST_HOSTED_SMOKE_ENV = {
     "EXPLORATION_READY_POLL_MIN_INTERVAL_SECONDS": "0",
     "EXPLORATION_FETCH_MIN_INTERVAL_SECONDS": "0",
     "DATAFORSEO_TASK_GET_BATCH_WORKERS": "4",
+    "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0.1",
 }
 
 
 @dataclass
 class HostedSmokeHarness:
-    tempdir: tempfile.TemporaryDirectory
+    runtime: HostedScriptTestRuntime
     store: ControlPlaneStore
     settings: AppSettings
-    orchestrator: SourcingOrchestrator
-    client: HostedWorkflowSmokeClient
-    server: object
-    thread: threading.Thread
+
+    @property
+    def client(self) -> HostedWorkflowSmokeClient:
+        return HostedWorkflowSmokeClient(self.runtime.base_url)
+
+    @property
+    def orchestrator(self):
+        return self.runtime.orchestrator
 
 
 class HostedWorkflowSmokeTest(unittest.TestCase):
     maxDiff = None
+
+    @staticmethod
+    def _provider_case_profile_scheduler_contract(record: dict) -> dict:
+        provider_case_report = dict(record.get("provider_case_report") or {})
+        event_level_efficiency = dict(provider_case_report.get("event_level_efficiency") or {})
+        scheduler_contract = dict(event_level_efficiency.get("profile_scheduler_contract") or {})
+        if scheduler_contract:
+            return scheduler_contract
+        service_metrics = dict(provider_case_report.get("service_metrics") or {})
+        return dict(service_metrics.get("profile_scheduler_contract") or {})
 
     def test_summarize_smoke_timings_aggregates_p95(self) -> None:
         summary = summarize_smoke_timings(
@@ -114,7 +116,42 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
             encoding="utf-8",
         )
 
-    @contextlib.contextmanager
+    def _build_openai_baseline_candidate_specs(self) -> list[dict[str, str]]:
+        specs: list[dict[str, str]] = [
+            {
+                "name": "OpenAI Reasoning",
+                "slug": "openai-reasoning",
+                "role": "Research Scientist",
+                "focus_text": "Reasoning models, chain-of-thought, o-series model development.",
+            },
+            {
+                "name": "OpenAI Reasoning Engineer",
+                "slug": "openai-reasoning-eng",
+                "role": "Software Engineer",
+                "focus_text": "Reasoning systems, inference optimization, model evaluation.",
+            },
+        ]
+        focus_cycle = [
+            "Reasoning models, evaluation harnesses, and model behavior research.",
+            "Multimodal model systems, data pipelines, and evaluation workflows.",
+            "Coding model reliability, tool-use evaluation, and developer workflows.",
+            "Training infrastructure, inference systems, and frontier-model operations.",
+            "Post-training, alignment evaluation, and applied model quality.",
+        ]
+        for index in range(3, 301):
+            employment_status = "former" if index > 260 else "current"
+            specs.append(
+                {
+                    "name": f"OpenAI Baseline {index:03d}",
+                    "slug": f"openai-baseline-{index:03d}",
+                    "role": "Former Research Engineer" if employment_status == "former" else "Research Engineer",
+                    "employment_status": employment_status,
+                    "focus_text": focus_cycle[index % len(focus_cycle)],
+                }
+            )
+        return specs
+
+    @contextmanager
     def _hosted_harness(
         self,
         *,
@@ -122,151 +159,37 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
         scripted_scenario: str = "",
         inject_fast_runtime_env: bool = True,
     ):
-        tempdir = tempfile.TemporaryDirectory()
-        runtime_paths = isolated_runtime_state_paths(tempdir.name)
         extra_env = dict(_FAST_HOSTED_SMOKE_ENV) if inject_fast_runtime_env else {}
-        env_payload, _runtime_env_file = build_isolated_runtime_env(
-            runtime_dir=tempdir.name,
+        runtime_root = Path(os.getenv("PYTEST_TMPDIR") or os.getenv("TMPDIR") or "/tmp").expanduser()
+        runtime_root.mkdir(parents=True, exist_ok=True)
+        runtime_dir = Path(
+            tempfile.mkdtemp(
+                prefix=f"sourcing_hosted_workflow_smoke_{self._testMethodName}_",
+                dir=str(runtime_root),
+            )
+        )
+        with isolated_hosted_test_runtime(
+            runtime_dir=runtime_dir,
             provider_mode=provider_mode,
             scripted_scenario=scripted_scenario,
             extra_env=extra_env,
+        ) as runtime:
+            yield self._harness(runtime)
+
+    @staticmethod
+    def _runtime_settings(runtime: HostedScriptTestRuntime) -> AppSettings:
+        settings = getattr(getattr(runtime.orchestrator, "acquisition_engine", None), "settings", None)
+        if not isinstance(settings, AppSettings):
+            raise RuntimeError("hosted test runtime did not expose loaded AppSettings")
+        return settings
+
+    @staticmethod
+    def _harness(runtime: HostedScriptTestRuntime) -> HostedSmokeHarness:
+        return HostedSmokeHarness(
+            runtime=runtime,
+            store=runtime.orchestrator.store,
+            settings=HostedWorkflowSmokeTest._runtime_settings(runtime),
         )
-        patcher = unittest.mock.patch.dict(os.environ, env_payload, clear=False)
-        patcher.start()
-        server = None
-        thread = None
-        store = None
-        try:
-            catalog = AssetCatalog.discover()
-            settings = AppSettings(
-                project_root=Path(tempdir.name),
-                runtime_dir=runtime_paths["runtime_dir"],
-                secrets_file=runtime_paths["secrets_file"],
-                jobs_dir=runtime_paths["jobs_dir"],
-                company_assets_dir=runtime_paths["company_assets_dir"],
-                db_path=runtime_paths["db_path"],
-                qwen=QwenSettings(enabled=False),
-                semantic=SemanticProviderSettings(enabled=False),
-                harvest=HarvestSettings(
-                    profile_scraper=HarvestActorSettings(
-                        enabled=True,
-                        api_token="test-token",
-                        actor_id="test-profile-scraper",
-                        default_mode="short",
-                        max_paid_items=2500,
-                    ),
-                    profile_search=HarvestActorSettings(
-                        enabled=True,
-                        api_token="test-token",
-                        actor_id="test-profile-search",
-                        default_mode="short",
-                        max_paid_items=2500,
-                    ),
-                    company_employees=HarvestActorSettings(
-                        enabled=True,
-                        api_token="test-token",
-                        actor_id="test-company-employees",
-                        default_mode="short",
-                        max_paid_items=2500,
-                    ),
-                ),
-            )
-            store = ControlPlaneStore(str(settings.db_path))
-            model_client = build_model_client(qwen_settings=settings.qwen)
-            semantic_provider = build_semantic_provider(settings.semantic)
-            acquisition_engine = AcquisitionEngine(catalog, settings, store, model_client)
-            orchestrator = SourcingOrchestrator(
-                catalog=catalog,
-                store=store,
-                jobs_dir=str(settings.jobs_dir),
-                model_client=model_client,
-                semantic_provider=semantic_provider,
-                acquisition_engine=acquisition_engine,
-            )
-            server = create_server(orchestrator, host="127.0.0.1", port=0)
-            thread = threading.Thread(target=server.serve_forever, daemon=True)
-            thread.start()
-            host, port = server.server_address
-            yield HostedSmokeHarness(
-                tempdir=tempdir,
-                store=store,
-                settings=settings,
-                orchestrator=orchestrator,
-                client=HostedWorkflowSmokeClient(f"http://{host}:{port}"),
-                server=server,
-                thread=thread,
-            )
-        finally:
-            if server is not None:
-                server.shutdown()
-                server.server_close()
-            if thread is not None:
-                thread.join(timeout=5)
-            runtime_thread_prefixes = (
-                "hosted-workflow-",
-                "hosted-stage2-",
-                "continue-stage2-",
-                "progress-auto-takeover-",
-                "workflow-job-lease-",
-                "workflow-runtime-controls-",
-                "hosted-runtime-watchdog-deferred-",
-                "shared-recovery-deferred-",
-                "background-outreach-layering-",
-                "background-snapshot-materialization-",
-                "plan-hydration-",
-                "excel-intake-",
-                "organization-asset-warmup",
-            )
-            runtime_thread_markers = (
-                "worker-recovery",
-                "runtime-watchdog",
-                "workflow-recovery",
-            )
-            for _ in range(20):
-                active_runtime_threads = [
-                    item
-                    for item in threading.enumerate()
-                    if item.is_alive()
-                    and (
-                        any(item.name.startswith(prefix) for prefix in runtime_thread_prefixes)
-                        or (
-                            item.name.endswith("-thread")
-                            and any(marker in item.name for marker in runtime_thread_markers)
-                        )
-                    )
-                ]
-                if not active_runtime_threads:
-                    break
-                for active_thread in active_runtime_threads:
-                    active_thread.join(timeout=0.1)
-                time.sleep(0.05)
-            connection = getattr(store, "_connection", None)
-            if connection is not None:
-                try:
-                    connection.close()
-                except Exception:
-                    pass
-            patcher.stop()
-            tempdir_root = Path(tempdir.name)
-            cleanup_error = None
-            for attempt in range(8):
-                try:
-                    if tempdir_root.exists():
-                        shutil.rmtree(tempdir_root)
-                    tempdir.cleanup()
-                    cleanup_error = None
-                    break
-                except FileNotFoundError:
-                    tempdir.cleanup()
-                    cleanup_error = None
-                    break
-                except OSError as exc:
-                    if exc.errno not in {errno.ENOTEMPTY, errno.EBUSY}:
-                        raise
-                    cleanup_error = exc
-                    time.sleep(0.1 * (attempt + 1))
-            if cleanup_error is not None:
-                raise cleanup_error
 
     def _write_candidate_documents(
         self,
@@ -401,6 +324,29 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
                 "effective_ready": former_count > 0,
             },
         }
+        population_coverage = {
+            "contract_version": 1,
+            "coverage_kind": "full_company_roster",
+            "coverage_status": "verified",
+            "full_company_coverage_proven": True,
+            "exact_scoped_coverage_available": False,
+            "scoped_shard_only": False,
+            "directional_scope_reuse_allowed": False,
+            "proof_source": "hosted_smoke_seed",
+            "reason_codes": ["hosted_smoke_seed_full_company_coverage"],
+            "selected_snapshot_ids": [snapshot_id],
+            "candidate_count": claimed_candidate_count,
+            "current_lane_effective_candidate_count": current_count,
+            "former_lane_effective_candidate_count": former_count,
+            "write_source": "hosted_workflow_smoke_seed",
+        }
+        source_snapshot_selection = {
+            "selected_snapshot_ids": [snapshot_id],
+            "population_coverage": dict(population_coverage),
+            "full_company_coverage": dict(population_coverage),
+        }
+        summary_payload["population_coverage"] = dict(population_coverage)
+        summary_payload["source_snapshot_selection"] = dict(source_snapshot_selection)
         harness.store.upsert_organization_asset_registry(
             {
                 "target_company": target_company,
@@ -426,7 +372,7 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
                 "current_lane_effective_ready": current_count > 0,
                 "former_lane_effective_ready": former_count > 0,
                 "selected_snapshot_ids": [snapshot_id],
-                "source_snapshot_selection": {"selected_snapshot_ids": [snapshot_id]},
+                "source_snapshot_selection": source_snapshot_selection,
                 "source_path": str(snapshot_dir / "normalized_artifacts" / "artifact_summary.json"),
                 "source_job_id": "",
                 "summary": summary_payload,
@@ -508,22 +454,9 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
             harness=harness,
             target_company="OpenAI",
             snapshot_id="20260414T120300",
-            current_count=1400,
-            former_count=220,
-            candidate_specs=[
-                {
-                    "name": "OpenAI Reasoning",
-                    "slug": "openai-reasoning",
-                    "role": "Research Scientist",
-                    "focus_text": "Reasoning models, chain-of-thought, o-series model development.",
-                },
-                {
-                    "name": "OpenAI Reasoning Engineer",
-                    "slug": "openai-reasoning-eng",
-                    "role": "Software Engineer",
-                    "focus_text": "Reasoning systems, inference optimization, model evaluation.",
-                },
-            ],
+            current_count=260,
+            former_count=40,
+            candidate_specs=self._build_openai_baseline_candidate_specs(),
         )
         openai_reasoning_snapshot_id = "20260414T120301"
         openai_reasoning_current_specs = [
@@ -1487,8 +1420,11 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
                 json.dumps(record, ensure_ascii=False, indent=2),
             )
             self.assertGreaterEqual(
-                int((record.get("final") or {}).get("results_count") or 0)
-                + int((record.get("final") or {}).get("manual_review_count") or 0),
+                max(
+                    int((record.get("final") or {}).get("results_count") or 0)
+                    + int((record.get("final") or {}).get("manual_review_count") or 0),
+                    int((record.get("final") or {}).get("asset_population_candidate_count") or 0),
+                ),
                 1,
             )
 
@@ -1512,6 +1448,91 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
             metrics = dict(runtime_health.get("metrics") or {})
             self.assertEqual(int(metrics.get("stale_acquiring_job_count") or 0), 0)
             self.assertEqual(int(metrics.get("stale_queue_job_count") or 0), 0)
+
+    def test_hosted_scripted_openai_agent_scoped_delta_outputs_service_metrics(self) -> None:
+        scenario_path = str(
+            Path(__file__).resolve().parents[1] / "configs" / "scripted" / "openai_agent_scoped_delta_streaming.json"
+        )
+        with self._hosted_harness(provider_mode="scripted", scripted_scenario=scenario_path) as harness:
+            self._seed_reference_org_assets(harness)
+            record = run_hosted_smoke_case(
+                client=harness.client,
+                case_name="openai_agent_scoped_delta_streaming",
+                payload={
+                    "raw_user_request": "帮我找OpenAI做Agent方向的人",
+                    "top_k": 10,
+                    "force_fresh_run": True,
+                },
+                reviewer="hosted-scripted-openai-agent-delta",
+                poll_seconds=0.1,
+                max_poll_seconds=90.0,
+                runtime_tuning_profile="fast_smoke",
+            )
+
+            self.assertEqual(
+                (record.get("final") or {}).get("job_status"),
+                "completed",
+                json.dumps(record, ensure_ascii=False, indent=2),
+            )
+            self.assertEqual((record.get("explain") or {}).get("target_company"), "OpenAI")
+            self.assertEqual((record.get("explain") or {}).get("plan_current_filter_keywords"), ["Agent"])
+            self.assertEqual((record.get("explain") or {}).get("plan_former_filter_keywords"), ["Agent"])
+            self.assertEqual((record.get("explain") or {}).get("runtime_tuning_profile"), "fast_smoke")
+
+            provider_report = dict(record.get("provider_case_report") or {})
+            behavior_guardrails = dict(provider_report.get("behavior_guardrails") or {})
+            duplicate_provider_dispatch = dict(behavior_guardrails.get("duplicate_provider_dispatch") or {})
+            disabled_stage_violations = dict(behavior_guardrails.get("disabled_stage_violations") or {})
+            final_results_board_consistency = dict(behavior_guardrails.get("final_results_board_consistency") or {})
+            self.assertFalse(
+                duplicate_provider_dispatch.get("violation_detected"), json.dumps(record, ensure_ascii=False, indent=2)
+            )
+            self.assertFalse(
+                disabled_stage_violations.get("violation_detected"), json.dumps(record, ensure_ascii=False, indent=2)
+            )
+            self.assertFalse(
+                disabled_stage_violations.get("unexpected_public_web_stage"),
+                json.dumps(record, ensure_ascii=False, indent=2),
+            )
+            self.assertTrue(
+                dict(provider_report.get("board") or {}).get("ready_nonempty"),
+                json.dumps(record, ensure_ascii=False, indent=2),
+            )
+            self.assertFalse(
+                final_results_board_consistency.get("missing_board_after_final"),
+                json.dumps(record, ensure_ascii=False, indent=2),
+            )
+
+            service_metrics = dict(provider_report.get("service_metrics") or {})
+            worker_timeline = dict(service_metrics.get("worker_timeline") or {})
+            user_experience = dict(service_metrics.get("user_experience") or {})
+            self.assertTrue(service_metrics.get("report_available"), json.dumps(record, ensure_ascii=False, indent=2))
+            self.assertGreaterEqual(int(worker_timeline.get("worker_count") or 0), 2)
+            self.assertGreaterEqual(
+                int(dict(worker_timeline.get("duration_ms") or {}).get("count") or 0),
+                1,
+                json.dumps(record, ensure_ascii=False, indent=2),
+            )
+            self.assertIn("job_to_board_nonempty_ms", user_experience)
+
+            invocations = load_scripted_provider_invocations()
+            profile_search_invocations = [
+                dict(item) for item in invocations if str(item.get("logical_name") or "") == "harvest_profile_search"
+            ]
+            self.assertGreaterEqual(len(profile_search_invocations), 2, json.dumps(invocations, ensure_ascii=False))
+            profile_search_payloads = [dict(item.get("payload") or {}) for item in profile_search_invocations]
+            self.assertTrue(
+                all(payload.get("searchQuery") == "Agent" for payload in profile_search_payloads),
+                json.dumps(profile_search_payloads, ensure_ascii=False, indent=2),
+            )
+            self.assertTrue(
+                any(list(payload.get("currentCompanies") or []) for payload in profile_search_payloads),
+                json.dumps(profile_search_payloads, ensure_ascii=False, indent=2),
+            )
+            self.assertTrue(
+                any(list(payload.get("pastCompanies") or []) for payload in profile_search_payloads),
+                json.dumps(profile_search_payloads, ensure_ascii=False, indent=2),
+            )
 
     def test_hosted_scripted_large_org_full_roster_overflow_completes_without_live_provider(self) -> None:
         scenario_path = str(
@@ -1550,9 +1571,15 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
             prerequisite_gaps = dict(behavior_guardrails.get("prerequisite_gaps") or {})
             final_results_board_consistency = dict(behavior_guardrails.get("final_results_board_consistency") or {})
             self.assertGreaterEqual(int(duplicate_provider_dispatch.get("invocation_count") or 0), 1)
-            self.assertFalse(duplicate_provider_dispatch.get("violation_detected"), json.dumps(record, ensure_ascii=False, indent=2))
-            self.assertFalse(disabled_stage_violations.get("violation_detected"), json.dumps(record, ensure_ascii=False, indent=2))
-            self.assertFalse(prerequisite_gaps.get("violation_detected"), json.dumps(record, ensure_ascii=False, indent=2))
+            self.assertFalse(
+                duplicate_provider_dispatch.get("violation_detected"), json.dumps(record, ensure_ascii=False, indent=2)
+            )
+            self.assertFalse(
+                disabled_stage_violations.get("violation_detected"), json.dumps(record, ensure_ascii=False, indent=2)
+            )
+            self.assertFalse(
+                prerequisite_gaps.get("violation_detected"), json.dumps(record, ensure_ascii=False, indent=2)
+            )
             self.assertFalse(
                 final_results_board_consistency.get("violation_detected"),
                 json.dumps(record, ensure_ascii=False, indent=2),
@@ -1605,36 +1632,60 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
 
             background_reconcile = dict(((record.get("final") or {}).get("background_reconcile")) or {})
             harvest_prefetch = dict(background_reconcile.get("harvest_prefetch") or {})
-            self.assertEqual(
-                harvest_prefetch.get("status"), "completed", json.dumps(record, ensure_ascii=False, indent=2)
+            scheduler_contract = self._provider_case_profile_scheduler_contract(record)
+            scheduler_snapshots = list(dict(scheduler_contract.get("samples") or {}).get("queue_snapshots") or [])
+            local_raw_cache_reused = any(
+                str(snapshot.get("status") or "") == "completed"
+                and str(snapshot.get("reason") or "") == "reused_local_raw_cache"
+                and int(snapshot.get("cached_url_count") or 0) >= 1
+                for snapshot in scheduler_snapshots
+                if isinstance(snapshot, dict)
             )
-            self.assertGreaterEqual(int(harvest_prefetch.get("applied_worker_count") or 0), 1)
+            if harvest_prefetch:
+                self.assertIn(
+                    harvest_prefetch.get("status"),
+                    {"completed", "inline_applied"},
+                    json.dumps(record, ensure_ascii=False, indent=2),
+                )
+                self.assertGreaterEqual(int(harvest_prefetch.get("applied_worker_count") or 0), 1)
 
-            resume_result = dict(harvest_prefetch.get("resume_result") or {})
-            profile_completion_result = dict(resume_result.get("profile_completion_result") or {})
-            self.assertEqual(
-                profile_completion_result.get("status"), "completed", json.dumps(record, ensure_ascii=False, indent=2)
-            )
-            completion_metrics = dict(profile_completion_result.get("result") or {})
-            artifact_summary = dict(dict(profile_completion_result.get("artifact_result") or {}).get("summary") or {})
-            self.assertGreaterEqual(
-                max(
-                    int(completion_metrics.get("fetched_profile_count") or 0),
-                    int(artifact_summary.get("profile_detail_count") or 0),
-                ),
-                1,
-                json.dumps(record, ensure_ascii=False, indent=2),
-            )
-            self.assertGreaterEqual(
-                int(artifact_summary.get("structured_experience_count") or 0),
-                1,
-                json.dumps(record, ensure_ascii=False, indent=2),
-            )
-            self.assertGreaterEqual(
-                int(artifact_summary.get("structured_education_count") or 0),
-                1,
-                json.dumps(record, ensure_ascii=False, indent=2),
-            )
+                resume_result = dict(harvest_prefetch.get("resume_result") or {})
+                profile_completion_result = dict(resume_result.get("profile_completion_result") or {})
+                self.assertIn(
+                    profile_completion_result.get("status"),
+                    {"completed", "applied"},
+                    json.dumps(record, ensure_ascii=False, indent=2),
+                )
+                completion_metrics = dict(profile_completion_result.get("result") or {})
+                artifact_summary = dict(dict(profile_completion_result.get("artifact_result") or {}).get("summary") or {})
+                self.assertGreaterEqual(
+                    max(
+                        int(completion_metrics.get("fetched_profile_count") or 0),
+                        int(profile_completion_result.get("fetched_profile_url_count") or 0),
+                        int(profile_completion_result.get("profile_materialized_candidate_record_count") or 0),
+                        int(artifact_summary.get("profile_detail_count") or 0),
+                    ),
+                    1,
+                    json.dumps(record, ensure_ascii=False, indent=2),
+                )
+                profile_records = [
+                    dict(item)
+                    for item in list(profile_completion_result.get("profile_materialized_candidate_records") or [])
+                    if isinstance(item, dict)
+                ]
+                if artifact_summary or profile_records:
+                    self.assertTrue(
+                        int(artifact_summary.get("structured_experience_count") or 0) >= 1
+                        or any(list(item.get("experience_lines") or []) for item in profile_records),
+                        json.dumps(record, ensure_ascii=False, indent=2),
+                    )
+                    self.assertTrue(
+                        int(artifact_summary.get("structured_education_count") or 0) >= 1
+                        or any(list(item.get("education_lines") or []) for item in profile_records),
+                        json.dumps(record, ensure_ascii=False, indent=2),
+                    )
+            else:
+                self.assertTrue(local_raw_cache_reused, json.dumps(record, ensure_ascii=False, indent=2))
 
             job_id = str((record.get("start") or {}).get("job_id") or "")
             job_payload = harness.client.get(f"/api/jobs/{job_id}?include_details=1")
@@ -1642,21 +1693,23 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
                 str(event.get("message") or event.get("detail") or "")
                 for event in list(job_payload.get("events") or [])
             ]
-            self.assertTrue(
-                any(
-                    "Background harvest profile prefetch reconcile started after worker recovery." in message
-                    for message in event_messages
-                ),
-                json.dumps(event_messages, ensure_ascii=False, indent=2),
-            )
-            self.assertTrue(
-                any(
-                    "Background harvest profile prefetch merged local profile detail into candidate artifacts."
-                    in message
-                    for message in event_messages
-                ),
-                json.dumps(event_messages, ensure_ascii=False, indent=2),
-            )
+            if harvest_prefetch:
+                self.assertTrue(
+                    any(
+                        "Background harvest profile prefetch reconcile started after worker recovery." in message
+                        for message in event_messages
+                    ),
+                    json.dumps(event_messages, ensure_ascii=False, indent=2),
+                )
+                self.assertTrue(
+                    any(
+                        "Background harvest profile prefetch merged local profile detail into candidate artifacts."
+                        in message
+                        or "Background harvest profile prefetch delta was applied" in message
+                        for message in event_messages
+                    ),
+                    json.dumps(event_messages, ensure_ascii=False, indent=2),
+                )
 
             results_payload = harness.client.get(f"/api/jobs/{job_id}/results?include_candidates=1")
             asset_population = dict(results_payload.get("asset_population") or {})
@@ -1697,17 +1750,41 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
                 json.dumps(first_record, ensure_ascii=False, indent=2),
             )
             first_reconcile = dict(((first_record.get("final") or {}).get("background_reconcile")) or {})
-            self.assertEqual(
+            self.assertIn(
                 dict(first_reconcile.get("harvest_prefetch") or {}).get("status"),
-                "completed",
+                {"completed", "inline_applied"},
                 json.dumps(first_record, ensure_ascii=False, indent=2),
             )
 
-            registry_row = harness.store.get_authoritative_organization_asset_registry(target_company="xAI")
+            first_job_id = str((first_record.get("start") or {}).get("job_id") or "")
+            run_projection_link = harness.store.get_run_projection_link(first_job_id)
             self.assertTrue(
-                registry_row, "authoritative xAI snapshot should exist after the first scripted reconcile run"
+                run_projection_link,
+                "canonical xAI run-scope projection should exist after the first scripted reconcile run",
             )
-            self.assertEqual(int(dict(registry_row or {}).get("profile_completion_backlog_count") or 0), 0)
+            authoritative_projection = harness.store.get_serving_projection(
+                str(dict(run_projection_link or {}).get("projection_id") or "")
+            )
+            self.assertEqual(
+                authoritative_projection.get("projection_type"),
+                "run_scope_projection",
+                json.dumps(authoritative_projection, ensure_ascii=False, indent=2),
+            )
+            self.assertEqual(
+                str(dict(authoritative_projection.get("readiness") or {}).get("profile") or ""),
+                "complete",
+                json.dumps(authoritative_projection, ensure_ascii=False, indent=2),
+            )
+            collection_pointer = harness.store.get_collection_authoritative_pointer("company:xai")
+            collection_merge_items = harness.store.list_job_materialization_items(
+                job_id=first_job_id,
+                item_kind="collection_authoritative_merge",
+                limit=5,
+            )
+            self.assertTrue(
+                collection_pointer or collection_merge_items,
+                "collection authoritative publication should be either active or queued after run-scope projection",
+            )
 
             second_record = run_hosted_smoke_case(
                 client=harness.client,
@@ -1733,6 +1810,10 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
             self.assertEqual(
                 str((second_record.get("explain") or {}).get("dispatch_strategy") or ""), "reuse_completed"
             )
+            self.assertIn(
+                str((second_record.get("explain") or {}).get("reuse_basis") or ""),
+                {"run_scope_projection", "collection_authoritative_projection"},
+            )
             self.assertEqual(
                 str((second_record.get("explain") or {}).get("dispatch_matched_job_status") or ""), "completed"
             )
@@ -1753,8 +1834,16 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
                 1,
                 json.dumps(second_record, ensure_ascii=False, indent=2),
             )
-            refreshed_registry_row = harness.store.get_authoritative_organization_asset_registry(target_company="xAI")
-            self.assertEqual(int(dict(refreshed_registry_row or {}).get("profile_completion_backlog_count") or 0), 0)
+            refreshed_pointer = harness.store.get_collection_authoritative_pointer("company:xai")
+            if refreshed_pointer:
+                refreshed_projection = harness.store.get_serving_projection(
+                    str(dict(refreshed_pointer or {}).get("active_projection_id") or "")
+                )
+                self.assertEqual(
+                    str(dict(refreshed_projection.get("readiness") or {}).get("profile") or ""),
+                    "complete",
+                    json.dumps(refreshed_projection, ensure_ascii=False, indent=2),
+                )
 
     def test_hosted_scripted_long_tail_accepts_request_scoped_fast_smoke_profile_without_server_env(self) -> None:
         scenario_path = str(

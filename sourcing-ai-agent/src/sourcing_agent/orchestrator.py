@@ -4558,6 +4558,9 @@ class SourcingOrchestrator:
             "request_preview": _load_job_request_preview(payload),
         }
         if include_details:
+            # include_details keeps the full stored request contract (e.g.
+            # execution_preferences round-trips); only events/summary are compacted.
+            public_payload["request"] = {**request_payload, **public_payload["request"]}
             public_payload["events"] = [
                 _compact_public_job_event_payload(dict(event))
                 for event in self.store.list_job_events(job_id)
@@ -33155,6 +33158,13 @@ class SourcingOrchestrator:
             for row in list(projection_page.get("candidates") or [])
             if isinstance(row, dict)
         ]
+        # Job-scoped markers (e.g. 本次Excel导入) must reach matched_keywords/
+        # source_matches on this read path too — the frontend recall filter
+        # depends on them; the legacy/overlay paths already annotate.
+        self._annotate_job_scoped_candidate_markers_on_records(
+            records=rows,
+            candidate_source=candidate_source,
+        )
         facet_summary = dict(canonical_asset_population.get("facet_summary") or projection_page.get("facet_summary") or {})
         facet_summary_scope = str(
             canonical_asset_population.get("facet_summary_scope")
