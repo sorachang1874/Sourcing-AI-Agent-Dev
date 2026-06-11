@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import logging
 import os
 import sqlite3
 import time
@@ -17,8 +18,16 @@ from .local_postgres import (
     configure_control_plane_postgres_session,
     ensure_local_postgres_started,
     normalize_control_plane_postgres_connect_dsn,
+    normalize_control_plane_postgres_schema,
     resolve_control_plane_postgres_dsn,
+    resolve_control_plane_postgres_schema,
     resolve_default_control_plane_db_path,
+)
+
+LEGACY_TARGET_PUBLIC_WEB_TABLES = (
+    "target_candidate_public_web_batches",
+    "target_candidate_public_web_runs",
+    "target_candidate_public_web_promotions",
 )
 
 DEFAULT_CONTROL_PLANE_TABLES = [
@@ -29,22 +38,52 @@ DEFAULT_CONTROL_PLANE_TABLES = [
     "job_events",
     "job_progress_event_summaries",
     "job_result_views",
+    "job_result_lifecycle",
+    "job_board_visible_patches",
+    "job_materialization_items",
     "plan_review_sessions",
     "manual_review_items",
     "candidate_review_registry",
     "target_candidates",
     "asset_default_pointers",
     "asset_default_pointer_history",
-    "target_candidate_public_web_batches",
-    "target_candidate_public_web_runs",
+    "crm_public_web_batches",
+    "crm_public_web_runs",
     "person_public_web_assets",
     "person_public_web_signals",
-    "target_candidate_public_web_promotions",
+    "person_assets",
+    "person_evidence",
+    "person_assertions",
+    "raw_profile_index",
+    "candidate_evidence_index",
+    "projection_person_search_index",
+    "crm_records",
+    "crm_engagements",
+    "crm_events",
+    "crm_tasks",
+    "crm_public_web_promotions",
+    "company_public_web_asset_runs",
+    "company_public_web_assets",
+    "company_assets",
+    "company_evidence",
+    "company_assertions",
     "frontend_history_links",
     "agent_runtime_sessions",
     "agent_trace_spans",
     "agent_worker_runs",
     "workflow_job_leases",
+    "workflow_events",
+    "workflow_current_state",
+    "workflow_commands",
+    "runtime_outbox",
+    "agent_actions",
+    "operation_runs",
+    "acquisition_runs",
+    "workflow_activity_runs",
+    "workflow_activity_attempts",
+    "workflow_entity_deltas",
+    "acquisition_discovery_lanes",
+    "operation_events",
     "query_dispatches",
     "confidence_policy_runs",
     "confidence_policy_controls",
@@ -62,13 +101,66 @@ DEFAULT_CONTROL_PLANE_TABLES = [
     "asset_membership_index",
     "candidate_materialization_state",
     "snapshot_materialization_runs",
+    "serving_projections",
+    "serving_projection_members",
+    "projection_manifest_shards",
+    "run_projection_links",
+    "collection_authoritative_pointers",
     "generation_index_entries",
     "linkedin_profile_registry",
     "linkedin_profile_registry_aliases",
     "linkedin_profile_registry_leases",
     "linkedin_profile_registry_events",
     "linkedin_profile_registry_backfill_runs",
+    "runtime_provider_limiter_leases",
 ]
+
+_CONTROL_PLANE_UNIQUE_INDEXES: dict[str, tuple[tuple[str, tuple[str, ...], str], ...]] = {
+    "crm_public_web_batches": (
+        ("idx_crm_public_web_batches_idempotency_unique", ("idempotency_key",), "idempotency_key <> ''"),
+    ),
+    "crm_public_web_runs": (
+        ("idx_crm_public_web_runs_idempotency_unique", ("idempotency_key",), "idempotency_key <> ''"),
+    ),
+    # ON CONFLICT (target_company, pattern_type, subject, value) — storage.upsert_criteria_pattern
+    # (SQLite mirrors this with UNIQUE(target_company, pattern_type, subject, value)).
+    "criteria_patterns": (
+        (
+            "idx_criteria_patterns_identity_unique",
+            ("target_company", "pattern_type", "subject", "value"),
+            "",
+        ),
+    ),
+    # SQLite declares job_id UNIQUE on job_result_views and storage upserts with
+    # ON CONFLICT(job_id); Postgres only carried the view_id primary key.
+    "job_result_views": (
+        ("idx_job_result_views_job_id_unique", ("job_id",), ""),
+    ),
+}
+
+# Deterministic recency ranking used to keep the NEWEST row per duplicate group
+# before each unique index above is created (newest-first ORDER BY). Every index
+# in _CONTROL_PLANE_UNIQUE_INDEXES MUST have an entry here: bootstrap fails
+# loudly when duplicates exist for an index without a configured policy instead
+# of guessing which row to keep.
+_CONTROL_PLANE_UNIQUE_INDEX_DEDUPE_RECENCY_SQL: dict[str, str] = {
+    "idx_crm_public_web_batches_idempotency_unique": (
+        "updated_at DESC NULLS LAST, created_at DESC NULLS LAST, batch_id DESC NULLS LAST"
+    ),
+    "idx_crm_public_web_runs_idempotency_unique": (
+        "updated_at DESC NULLS LAST, created_at DESC NULLS LAST, run_id DESC NULLS LAST"
+    ),
+    "idx_criteria_patterns_identity_unique": (
+        "updated_at DESC NULLS LAST, created_at DESC NULLS LAST, pattern_id DESC NULLS LAST"
+    ),
+    "idx_job_result_views_job_id_unique": (
+        "updated_at DESC NULLS LAST, created_at DESC NULLS LAST, view_id DESC NULLS LAST"
+    ),
+}
+
+_LOGGER = logging.getLogger(__name__)
+_UNIQUE_INDEX_DEDUPE_MAX_LOGGED_GROUPS = 20
+
 ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE = "acquisition_shard_registry"
 ACQUISITION_SHARD_REGISTRY_CURRENT_TABLE = "acquisition_shard_registry_current"
 ACQUISITION_SHARD_REGISTRY_FORMER_TABLE = "acquisition_shard_registry_former"
@@ -135,7 +227,9 @@ def _acquisition_shard_registry_other_split_table(table_name: str) -> str:
 
 
 def _acquisition_shard_registry_union_sql() -> str:
-    select_columns = ", ".join(_quote_identifier(column_name) for column_name in _ACQUISITION_SHARD_REGISTRY_COLUMN_NAMES)
+    select_columns = ", ".join(
+        _quote_identifier(column_name) for column_name in _ACQUISITION_SHARD_REGISTRY_COLUMN_NAMES
+    )
     return (
         f"SELECT {select_columns} FROM {_quote_identifier(ACQUISITION_SHARD_REGISTRY_CURRENT_TABLE)} "
         f"UNION ALL SELECT {select_columns} FROM {_quote_identifier(ACQUISITION_SHARD_REGISTRY_FORMER_TABLE)}"
@@ -178,12 +272,14 @@ def _legacy_acquisition_shard_registry_select_columns_sql() -> str:
 
 def _build_acquisition_shard_registry_split_table_sql(table_name: str) -> str:
     column_sql: list[str] = []
+
     def _column_int(column: dict[str, Any], key: str) -> int:
         raw_value = column.get(key)
         try:
             return int(raw_value or 0)
         except (TypeError, ValueError):
             return 0
+
     primary_key_columns = [
         dict(item) for item in ACQUISITION_SHARD_REGISTRY_COLUMNS if _column_int(dict(item), "pk_position") > 0
     ]
@@ -210,7 +306,9 @@ def _build_acquisition_shard_registry_split_table_sql(table_name: str) -> str:
 def _build_acquisition_shard_registry_upsert_sql(table_name: str) -> str:
     quoted_table_name = _quote_identifier(table_name)
     quoted_columns = [_quote_identifier(column_name) for column_name in _ACQUISITION_SHARD_REGISTRY_COLUMN_NAMES]
-    update_columns = [column_name for column_name in _ACQUISITION_SHARD_REGISTRY_COLUMN_NAMES if column_name != "shard_key"]
+    update_columns = [
+        column_name for column_name in _ACQUISITION_SHARD_REGISTRY_COLUMN_NAMES if column_name != "shard_key"
+    ]
     return (
         f"INSERT INTO {quoted_table_name} ({', '.join(quoted_columns)}) "
         f"VALUES ({', '.join(['%s'] * len(quoted_columns))}) "
@@ -346,7 +444,11 @@ def upsert_acquisition_shard_registry_rows(
         if not payload_rows:
             continue
         other_table_name = _acquisition_shard_registry_other_split_table(table_name)
-        shard_keys = [str(dict(item).get("shard_key") or "").strip() for item in payload_rows if str(dict(item).get("shard_key") or "").strip()]
+        shard_keys = [
+            str(dict(item).get("shard_key") or "").strip()
+            for item in payload_rows
+            if str(dict(item).get("shard_key") or "").strip()
+        ]
         if shard_keys:
             placeholders = ", ".join(["%s"] * len(shard_keys))
             cursor.execute(
@@ -357,8 +459,7 @@ def upsert_acquisition_shard_registry_rows(
         values: list[tuple[Any, ...]] = []
         for payload in payload_rows:
             prepared_payload = {
-                column_name: payload.get(column_name)
-                for column_name in _ACQUISITION_SHARD_REGISTRY_COLUMN_NAMES
+                column_name: payload.get(column_name) for column_name in _ACQUISITION_SHARD_REGISTRY_COLUMN_NAMES
             }
             prepared_payload["provider_cap_hit"] = _normalize_acquisition_shard_registry_bool(
                 prepared_payload.get("provider_cap_hit")
@@ -388,7 +489,9 @@ def _resolve_sqlite_connect_target(
 ) -> str:
     if sqlite_path is None:
         return str(resolve_default_control_plane_db_path(runtime_dir, base_dir=runtime_dir).expanduser())
-    return str(sqlite_path).strip() or str(resolve_default_control_plane_db_path(runtime_dir, base_dir=runtime_dir).expanduser())
+    return str(sqlite_path).strip() or str(
+        resolve_default_control_plane_db_path(runtime_dir, base_dir=runtime_dir).expanduser()
+    )
 
 
 def _sqlite_connect_uses_uri(connect_target: str) -> bool:
@@ -460,6 +563,7 @@ def export_control_plane_snapshot(
         if requested_source_backend == "sqlite":
             raise FileNotFoundError(f"SQLite control-plane source is unavailable: {db_path}")
         effective_dsn = resolve_control_plane_postgres_dsn(runtime_root)
+        effective_schema = resolve_control_plane_postgres_schema(runtime_root)
         if not effective_dsn:
             raise FileNotFoundError(f"Control-plane source is unavailable: {db_path}")
         if not str(os.getenv("SOURCING_CONTROL_PLANE_POSTGRES_DSN") or "").strip():
@@ -469,7 +573,7 @@ def export_control_plane_snapshot(
                 pass
         resolved_source_backend = "postgres"
         psycopg = _import_psycopg()
-        with _connect_postgres(effective_dsn, psycopg=psycopg) as connection:
+        with _connect_postgres(effective_dsn, psycopg=psycopg, schema=effective_schema) as connection:
             with connection.cursor() as cursor:
                 selected_tables = _resolve_export_table_names_postgres(
                     cursor,
@@ -513,6 +617,7 @@ def sync_control_plane_snapshot_to_postgres(
     tables_payload = dict(snapshot_payload.get("tables") or {})
     selected_tables = _resolve_snapshot_table_names(snapshot_payload=snapshot_payload, tables=tables)
     effective_dsn = str(dsn or resolve_control_plane_postgres_dsn(resolved_snapshot_path)).strip()
+    effective_schema = resolve_control_plane_postgres_schema(resolved_snapshot_path)
     if not effective_dsn:
         raise RuntimeError("Postgres DSN is required. Set --dsn or SOURCING_CONTROL_PLANE_POSTGRES_DSN.")
     if not str(os.getenv("SOURCING_CONTROL_PLANE_POSTGRES_DSN") or "").strip():
@@ -525,7 +630,7 @@ def sync_control_plane_snapshot_to_postgres(
     synced_tables: dict[str, Any] = {}
     validation_tables: dict[str, Any] = {}
     validation_errors: list[str] = []
-    with _connect_postgres(effective_dsn, psycopg=psycopg) as connection:
+    with _connect_postgres(effective_dsn, psycopg=psycopg, schema=effective_schema) as connection:
         with connection.cursor() as cursor:
             for table_name in selected_tables:
                 table_payload = dict(tables_payload.get(table_name) or {})
@@ -546,7 +651,9 @@ def sync_control_plane_snapshot_to_postgres(
                     if validate_postgres:
                         actual_row_count = count_acquisition_shard_registry_rows(cursor)
                         validation_mode = "exact" if truncate_first else "at_least"
-                        validation_ok = actual_row_count == len(rows) if truncate_first else actual_row_count >= len(rows)
+                        validation_ok = (
+                            actual_row_count == len(rows) if truncate_first else actual_row_count >= len(rows)
+                        )
                         validation_tables[table_name] = {
                             "mode": validation_mode,
                             "expected_row_count": len(rows),
@@ -567,6 +674,7 @@ def sync_control_plane_snapshot_to_postgres(
                     }
                     continue
                 cursor.execute(_build_create_table_sql(table_name, columns))
+                unique_index_enforcement = _ensure_control_plane_unique_indexes(cursor, table_name)
                 if truncate_first:
                     cursor.execute(f"TRUNCATE TABLE {_quote_identifier(table_name)}")
                 if rows:
@@ -597,6 +705,8 @@ def sync_control_plane_snapshot_to_postgres(
                         str(item.get("name") or "") for item in columns if int(item.get("pk_position") or 0) > 0
                     ],
                 }
+                if unique_index_enforcement:
+                    synced_tables[table_name]["unique_index_enforcement"] = unique_index_enforcement
         connection.commit()
     if validation_errors:
         raise RuntimeError("Postgres validation failed: " + "; ".join(validation_errors))
@@ -660,7 +770,7 @@ def restore_control_plane_snapshot_to_sqlite(
             connection.execute(_build_create_table_sqlite(table_name, columns))
             if rows:
                 insert_sql = _build_insert_sqlite_sql(table_name, columns)
-                values = [tuple(row.get(str(column.get('name') or '')) for column in columns) for row in rows]
+                values = [tuple(row.get(str(column.get("name") or "")) for column in columns) for row in rows]
                 connection.executemany(insert_sql, values)
             restored_tables[table_name] = {
                 "row_count": len(rows),
@@ -742,6 +852,7 @@ def sync_runtime_control_plane_to_postgres(
     runtime_dir: str | Path,
     sqlite_path: str | Path | None = None,
     dsn: str = "",
+    schema: str = "",
     tables: list[str] | None = None,
     truncate_first: bool = False,
     snapshot_path: str | Path | None = None,
@@ -776,6 +887,11 @@ def sync_runtime_control_plane_to_postgres(
     finally:
         connection.close()
     effective_dsn = str(dsn or resolve_control_plane_postgres_dsn(runtime_root)).strip()
+    effective_schema = (
+        normalize_control_plane_postgres_schema(schema)
+        if str(schema or "").strip()
+        else resolve_control_plane_postgres_schema(runtime_root)
+    )
     if effective_dsn and not str(os.getenv("SOURCING_CONTROL_PLANE_POSTGRES_DSN") or "").strip():
         try:
             ensure_local_postgres_started(runtime_root)
@@ -808,6 +924,7 @@ def sync_runtime_control_plane_to_postgres(
         "tables": selected_tables,
         "truncate_first": bool(truncate_first),
         "force": bool(force),
+        "schema": effective_schema,
         "min_interval_seconds": effective_min_interval_seconds,
         "source_fingerprint": source_fingerprint,
         "include_all_sqlite_tables": bool(include_all_sqlite_tables),
@@ -902,6 +1019,7 @@ def sync_runtime_control_plane_to_postgres(
                 runtime_dir=runtime_root,
                 sqlite_path=resolved_sqlite_path,
                 dsn=effective_dsn,
+                schema=effective_schema,
                 tables=selected_tables,
                 truncate_first=truncate_first,
                 validate_postgres=validate_postgres,
@@ -1145,7 +1263,11 @@ def _export_control_plane_snapshot_from_postgres(
 ) -> tuple[list[str], dict[str, Any]]:
     psycopg = _import_psycopg()
     exported_tables: dict[str, Any] = {}
-    with _connect_postgres(dsn, psycopg=psycopg) as connection:
+    with _connect_postgres(
+        dsn,
+        psycopg=psycopg,
+        schema=resolve_control_plane_postgres_schema(runtime_dir),
+    ) as connection:
         with connection.cursor() as cursor:
             selected_tables = _resolve_export_table_names_postgres(
                 cursor,
@@ -1236,6 +1358,7 @@ def _sync_runtime_sqlite_to_postgres_direct(
     runtime_dir: Path,
     sqlite_path: str | Path,
     dsn: str,
+    schema: str,
     tables: list[str],
     truncate_first: bool,
     validate_postgres: bool,
@@ -1263,7 +1386,7 @@ def _sync_runtime_sqlite_to_postgres_direct(
         synced_tables: dict[str, Any] = {}
         validation_tables: dict[str, Any] = {}
         skipped_tables: list[str] = []
-        with _connect_postgres(dsn, psycopg=psycopg) as postgres_connection:
+        with _connect_postgres(dsn, psycopg=psycopg, schema=schema) as postgres_connection:
             with postgres_connection.cursor() as postgres_cursor:
                 for table_name in tables:
                     previous_progress = dict(table_progress.get(table_name) or {})
@@ -1291,6 +1414,7 @@ def _sync_runtime_sqlite_to_postgres_direct(
                         },
                         started_at=started_at,
                     )
+
                     def _progress_callback(progress: dict[str, Any]) -> None:
                         current_progress = {
                             **previous_progress,
@@ -1310,6 +1434,7 @@ def _sync_runtime_sqlite_to_postgres_direct(
                             },
                             started_at=started_at,
                         )
+
                     table_summary = _copy_sqlite_table_to_postgres(
                         sqlite_connection=sqlite_connection,
                         postgres_connection=postgres_connection,
@@ -1394,6 +1519,7 @@ def _copy_sqlite_table_to_postgres(
         columns = [dict(item) for item in list(exported.get("columns") or []) if isinstance(item, dict)]
         rows = [dict(item) for item in list(exported.get("rows") or []) if isinstance(item, dict)]
         postgres_cursor.execute(_build_create_table_sql(table_name, columns))
+        unique_index_enforcement = _ensure_control_plane_unique_indexes(postgres_cursor, table_name)
         if truncate_first:
             postgres_cursor.execute(f"TRUNCATE TABLE {_quote_identifier(table_name)}")
         chunk_count = 0
@@ -1426,7 +1552,7 @@ def _copy_sqlite_table_to_postgres(
             truncate_first=truncate_first,
             validate_postgres=validate_postgres,
         )
-        return {
+        table_summary = {
             "status": "synced",
             "row_count": len(rows),
             "column_count": len(columns),
@@ -1435,6 +1561,9 @@ def _copy_sqlite_table_to_postgres(
             "primary_key": [str(item.get("name") or "") for item in columns if int(item.get("pk_position") or 0) > 0],
             "validation": validation,
         }
+        if unique_index_enforcement:
+            table_summary["unique_index_enforcement"] = unique_index_enforcement
+        return table_summary
     if table_name == ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE:
         if not _sqlite_table_exists(sqlite_connection, table_name):
             return {
@@ -1536,6 +1665,7 @@ def _copy_sqlite_table_to_postgres(
         sqlite_connection.execute(f"SELECT COUNT(*) FROM {_quote_identifier(table_name)}").fetchone()[0] or 0
     )
     postgres_cursor.execute(_build_create_table_sql(table_name, columns))
+    unique_index_enforcement = _ensure_control_plane_unique_indexes(postgres_cursor, table_name)
     if truncate_first:
         postgres_cursor.execute(f"TRUNCATE TABLE {_quote_identifier(table_name)}")
     insert_sql = _build_upsert_sql(table_name, columns)
@@ -1574,7 +1704,7 @@ def _copy_sqlite_table_to_postgres(
         truncate_first=truncate_first,
         validate_postgres=validate_postgres,
     )
-    return {
+    table_summary = {
         "status": "synced",
         "row_count": row_count,
         "column_count": len(columns),
@@ -1583,6 +1713,9 @@ def _copy_sqlite_table_to_postgres(
         "primary_key": [str(item.get("name") or "") for item in columns if int(item.get("pk_position") or 0) > 0],
         "validation": validation,
     }
+    if unique_index_enforcement:
+        table_summary["unique_index_enforcement"] = unique_index_enforcement
+    return table_summary
 
 
 def _prepare_postgres_row_values(row: dict[str, Any], columns: list[dict[str, Any]]) -> tuple[tuple[Any, ...], int]:
@@ -1667,7 +1800,9 @@ def _chunked_rows(rows: list[dict[str, Any]], chunk_size: int) -> list[list[dict
 
 
 def _load_table_progress(previous_state: dict[str, Any], *, source_fingerprint: str) -> dict[str, Any]:
-    previous_fingerprint = str(previous_state.get("last_synced_fingerprint") or previous_state.get("source_fingerprint") or "").strip()
+    previous_fingerprint = str(
+        previous_state.get("last_synced_fingerprint") or previous_state.get("source_fingerprint") or ""
+    ).strip()
     if not previous_fingerprint or previous_fingerprint != str(source_fingerprint or "").strip():
         return {}
     previous_summary = dict(previous_state.get("last_summary") or {})
@@ -1816,8 +1951,7 @@ def _list_postgres_tables(cursor: Any) -> list[str]:
     resolved_tables = [
         str(value or "").strip()
         for value in _extract_cursor_column_values(cursor, "table_name")
-        if str(value or "").strip()
-        and str(value or "").strip() not in ACQUISITION_SHARD_REGISTRY_SPLIT_TABLES
+        if str(value or "").strip() and str(value or "").strip() not in ACQUISITION_SHARD_REGISTRY_SPLIT_TABLES
     ]
     logical_relation_kind = _postgres_relation_kind(cursor, ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE)
     if logical_relation_kind in {"r", "p", "v", "m"} or any(
@@ -1906,6 +2040,136 @@ def _build_create_table_sql(table_name: str, columns: list[dict[str, Any]]) -> s
             f"PRIMARY KEY ({', '.join(_quote_identifier(str(item.get('name') or '')) for item in sorted_primary_keys)})"
         )
     return f"CREATE TABLE IF NOT EXISTS {_quote_identifier(table_name)} ({', '.join(column_sql)})"
+
+
+def _ensure_control_plane_unique_indexes(cursor: Any, table_name: str) -> dict[str, Any]:
+    """Create the configured unique indexes for ``table_name``, deduping first.
+
+    Existing databases (ECS production, long-lived local Postgres instances)
+    may already contain duplicate rows for a conflict-column set that only
+    later gained a unique index — ``CREATE UNIQUE INDEX`` would then abort the
+    whole bootstrap. This function therefore handles duplicates deliberately,
+    for every index declared in ``_CONTROL_PLANE_UNIQUE_INDEXES``:
+
+    1. Detect duplicates with ``GROUP BY <conflict columns> HAVING COUNT(*) > 1``
+       (scoped to the index predicate when the index is partial).
+    2. If duplicates exist, keep the NEWEST row per group according to the
+       deterministic recency ranking configured in
+       ``_CONTROL_PLANE_UNIQUE_INDEX_DEDUPE_RECENCY_SQL`` and delete the rest.
+       The removal (row count plus a bounded sample of the affected group
+       keys) is logged and reported in the returned summary so it surfaces in
+       the bootstrap/sync result payload.
+    3. If duplicates exist but no recency policy is configured for the index,
+       fail loudly with a remediation message instead of guessing which row
+       survives.
+    4. Create the unique index idempotently (``CREATE UNIQUE INDEX IF NOT
+       EXISTS``).
+
+    Returns a summary dict keyed by index name for every index that required
+    deduplication; an empty dict means no duplicates were found.
+    """
+
+    enforcement_summary: dict[str, Any] = {}
+    for index_name, column_names, where_sql in _CONTROL_PLANE_UNIQUE_INDEXES.get(str(table_name or "").strip(), ()):
+        quoted_columns = ", ".join(_quote_identifier(column_name) for column_name in column_names)
+        where_clause = f" WHERE {where_sql}" if where_sql else ""
+        dedupe_summary = _dedupe_rows_for_unique_index(
+            cursor,
+            table_name=table_name,
+            index_name=index_name,
+            column_names=column_names,
+            where_sql=where_sql,
+        )
+        if dedupe_summary:
+            enforcement_summary[index_name] = dedupe_summary
+        cursor.execute(
+            f"CREATE UNIQUE INDEX IF NOT EXISTS {_quote_identifier(index_name)} "
+            f"ON {_quote_identifier(table_name)} ({quoted_columns}){where_clause}"
+        )
+    return enforcement_summary
+
+
+def _dedupe_rows_for_unique_index(
+    cursor: Any,
+    *,
+    table_name: str,
+    index_name: str,
+    column_names: tuple[str, ...],
+    where_sql: str,
+) -> dict[str, Any]:
+    """Delete duplicate rows that would block ``index_name`` (keep newest).
+
+    See :func:`_ensure_control_plane_unique_indexes` for the full policy.
+    Returns ``{}`` when the table has no duplicate groups for the conflict
+    columns; otherwise returns a summary describing what was removed.
+    """
+
+    quoted_table_name = _quote_identifier(table_name)
+    group_by_sql = ", ".join(_quote_identifier(column_name) for column_name in column_names)
+    where_clause = f"WHERE {where_sql}" if str(where_sql or "").strip() else ""
+    cursor.execute(
+        f"SELECT {group_by_sql}, COUNT(*) AS duplicate_row_count "
+        f"FROM {quoted_table_name} {where_clause} "
+        f"GROUP BY {group_by_sql} HAVING COUNT(*) > 1 "
+        f"ORDER BY duplicate_row_count DESC, {group_by_sql}"
+    )
+    duplicate_groups = _fetch_cursor_rows_as_dicts(cursor)
+    if not duplicate_groups:
+        return {}
+    recency_order_sql = str(_CONTROL_PLANE_UNIQUE_INDEX_DEDUPE_RECENCY_SQL.get(index_name) or "").strip()
+    if not recency_order_sql:
+        raise RuntimeError(
+            f"Postgres bootstrap found {len(duplicate_groups)} duplicate group(s) in {table_name} "
+            f"for unique index {index_name} on ({', '.join(column_names)}), but no dedupe recency "
+            "policy is configured. Refusing to guess which rows to keep. Remediation: add a "
+            "deterministic newest-first ORDER BY for this index to "
+            "_CONTROL_PLANE_UNIQUE_INDEX_DEDUPE_RECENCY_SQL in sourcing_agent/control_plane_postgres.py "
+            "(or manually delete the duplicate rows) and re-run the bootstrap."
+        )
+    cursor.execute(
+        f"""
+        WITH ranked AS (
+            SELECT
+                ctid AS duplicate_ctid,
+                ROW_NUMBER() OVER (
+                    PARTITION BY {group_by_sql}
+                    ORDER BY {recency_order_sql}
+                ) AS duplicate_rank
+            FROM {quoted_table_name}
+            {where_clause}
+        )
+        DELETE FROM {quoted_table_name}
+        WHERE ctid IN (
+            SELECT duplicate_ctid
+            FROM ranked
+            WHERE duplicate_rank > 1
+        )
+        """
+    )
+    removed_row_count = max(0, int(getattr(cursor, "rowcount", 0) or 0))
+    summary = {
+        "table": str(table_name),
+        "index": str(index_name),
+        "conflict_columns": list(column_names),
+        "kept_policy": f"newest first by: {recency_order_sql}",
+        "duplicate_group_count": len(duplicate_groups),
+        "removed_row_count": removed_row_count,
+        "sample_groups": [
+            {str(key): value for key, value in dict(group).items()}
+            for group in duplicate_groups[:_UNIQUE_INDEX_DEDUPE_MAX_LOGGED_GROUPS]
+        ],
+    }
+    _LOGGER.warning(
+        "control-plane bootstrap deduplicated %s row(s) across %s group(s) in %s before creating "
+        "unique index %s on (%s); kept newest row per group (%s)",
+        removed_row_count,
+        len(duplicate_groups),
+        table_name,
+        index_name,
+        ", ".join(column_names),
+        recency_order_sql,
+    )
+    return summary
 
 
 def _build_create_table_sqlite(table_name: str, columns: list[dict[str, Any]]) -> str:
@@ -2021,18 +2285,11 @@ def _cursor_row_to_dict(row: Any, column_names: list[str]) -> dict[str, Any]:
     if isinstance(row, dict):
         return {str(key): _json_safe_snapshot_value(value) for key, value in row.items()}
     if hasattr(row, "_mapping"):
-        return {
-            str(key): _json_safe_snapshot_value(value)
-            for key, value in dict(getattr(row, "_mapping")).items()
-        }
+        return {str(key): _json_safe_snapshot_value(value) for key, value in dict(getattr(row, "_mapping")).items()}
     if hasattr(row, "_asdict"):
         return {str(key): _json_safe_snapshot_value(value) for key, value in row._asdict().items()}
     if isinstance(row, sqlite3.Row):
-        return {
-            str(key): _json_safe_snapshot_value(row[key])
-            for key in row.keys()
-            if str(key or "").strip()
-        }
+        return {str(key): _json_safe_snapshot_value(row[key]) for key in row.keys() if str(key or "").strip()}
     if isinstance(row, (list, tuple)):
         return {
             column_names[index]: _json_safe_snapshot_value(value)
@@ -2166,9 +2423,9 @@ def _import_psycopg() -> Any:
     return psycopg
 
 
-def _configure_postgres_connection_utf8(connection: Any) -> Any:
+def _configure_postgres_connection_utf8(connection: Any, *, schema: str | None = None) -> Any:
     try:
-        return configure_control_plane_postgres_session(connection)
+        return configure_control_plane_postgres_session(connection, schema=schema)
     except Exception:
         pass
     set_client_encoding = getattr(connection, "set_client_encoding", None)
@@ -2189,11 +2446,19 @@ def _configure_postgres_connection_utf8(connection: Any) -> Any:
     return connection
 
 
-def _connect_postgres(dsn: str, *, psycopg: Any | None = None) -> Any:
+def _connect_postgres(
+    dsn: str,
+    *,
+    psycopg: Any | None = None,
+    schema: str | None = None,
+) -> Any:
     if psycopg is None:
         psycopg = _import_psycopg()
     effective_dsn = normalize_control_plane_postgres_connect_dsn(dsn)
     try:
-        return configure_control_plane_postgres_session(psycopg.connect(effective_dsn, client_encoding="utf8"))
+        return configure_control_plane_postgres_session(
+            psycopg.connect(effective_dsn, client_encoding="utf8"),
+            schema=schema,
+        )
     except TypeError:
-        return _configure_postgres_connection_utf8(psycopg.connect(effective_dsn))
+        return _configure_postgres_connection_utf8(psycopg.connect(effective_dsn), schema=schema)

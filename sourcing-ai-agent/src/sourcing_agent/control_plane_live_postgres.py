@@ -21,6 +21,7 @@ from .control_plane_postgres import (
     ACQUISITION_SHARD_REGISTRY_SPLIT_TABLES,
     LEGACY_TARGET_PUBLIC_WEB_TABLES,
     _configure_postgres_connection_utf8,
+    _ensure_control_plane_unique_indexes,
     _import_psycopg,
     ensure_acquisition_shard_registry_split_schema,
     sync_runtime_control_plane_to_postgres,
@@ -4626,6 +4627,14 @@ class LiveControlPlanePostgresAdapter:
                         ON organization_execution_profiles (target_company, asset_view)
                         """
                     )
+                    # Conflict-target unique indexes (with duplicate cleanup) that the
+                    # snapshot-sync bootstrap may have skipped on long-lived databases
+                    # (the sync short-circuits on unchanged source fingerprints).
+                    # _ensure_control_plane_unique_indexes dedupes deliberately —
+                    # keeping the newest row per conflict group — before creating
+                    # each index; see its docstring for the policy.
+                    _ensure_control_plane_unique_indexes(cursor, "criteria_patterns")
+                    _ensure_control_plane_unique_indexes(cursor, "job_result_views")
                     ensure_acquisition_shard_registry_split_schema(cursor)
                     for column_name, column_type in (
                         ("refill_queue_state", "TEXT"),

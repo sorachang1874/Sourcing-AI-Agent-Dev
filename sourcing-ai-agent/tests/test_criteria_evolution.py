@@ -4,16 +4,16 @@ import unittest
 from sourcing_agent.domain import Candidate, JobRequest
 from sourcing_agent.confidence_policy import build_confidence_policy
 from sourcing_agent.scoring import score_candidates
-from sourcing_agent.storage import ControlPlaneStore
+
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
-class CriteriaEvolutionTest(unittest.TestCase):
+class CriteriaEvolutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
-        self.store = ControlPlaneStore(f"{self.tempdir.name}/test.db")
-
-    def tearDown(self) -> None:
-        self.tempdir.cleanup()
+        self.addCleanup(self.tempdir.cleanup)
+        self.store = self.make_pg_store(f"{self.tempdir.name}/test.db")
 
     def test_feedback_persists_alias_pattern(self) -> None:
         result = self.store.record_criteria_feedback(
