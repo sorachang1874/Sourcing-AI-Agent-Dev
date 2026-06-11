@@ -155,8 +155,49 @@ _EXCEL_INTAKE_SUITES = (
 _ASSET_GOVERNANCE_SUITES = (
     PytestInvocation(
         label="asset-governance-contract",
-        args=("tests/test_asset_governance.py", "tests/test_organization_execution_profile.py", "-k", "coverage_baseline or lifecycle or promoted"),
+        args=(
+            "tests/test_asset_governance.py",
+            "tests/test_organization_execution_profile.py",
+            "-k",
+            "coverage_baseline or lifecycle or promoted",
+        ),
         reason="canonical/default pointer, lifecycle, promotion, and coverage baseline governance",
+    ),
+)
+
+_PUBLIC_WEB_SUITES = (
+    PytestInvocation(
+        label="public-web-core",
+        args=(
+            "tests/test_public_web_search.py",
+            "tests/test_public_web_quality.py",
+            "tests/test_linkedin_url_normalization.py",
+        ),
+        reason="candidate Public Web search, quality gate, URL-shape, and identity-key normalization",
+    ),
+    PytestInvocation(
+        label="crm-public-web-runtime-boundary",
+        args=(
+            "tests/test_crm_public_web_runtime_boundary.py",
+            "tests/test_target_candidate_public_web.py",
+            "tests/test_results_api.py",
+            "-k",
+            "target_candidate_public_web or public_web_api or promotion",
+        ),
+        reason="CRM Public Web normal boundary plus migration-only target-candidate retirement contract",
+    ),
+    PytestInvocation(
+        label="target-candidate-public-web-pg",
+        args=(
+            "tests/test_control_plane_live_postgres.py",
+            "-k",
+            (
+                "target_candidate_public_web_state_is_postgres_authoritative "
+                "or postgres_only_uses_ephemeral_sqlite_shadow "
+                "or postgres_only_skips_sqlite_fallback"
+            ),
+        ),
+        reason="PG-authoritative Public Web tables and no SQLite fallback guardrail",
     ),
 )
 
@@ -220,6 +261,20 @@ _WORKFLOW_EXPLAIN_RELATED_PATHS = {
     "src/sourcing_agent/asset_reuse_planning.py",
     "scripts/run_explain_dry_run_matrix.py",
 }
+# command_kernel.py is the store-only command-execution kernel extracted from
+# SourcingOrchestrator; it mirrors durable_runtime.py's mapping (the paired
+# tests/test_durable_runtime.py suite) since the kernel owns the same
+# workflow-command spine contracts.
+_COMMAND_KERNEL_RELATED_PATHS = {
+    "src/sourcing_agent/command_kernel.py",
+}
+_COMMAND_KERNEL_SUITES = (
+    PytestInvocation(
+        label="paired::tests/test_durable_runtime.py",
+        args=("tests/test_durable_runtime.py",),
+        reason="command kernel extracted from the orchestrator workflow-command spine",
+    ),
+)
 _ORCHESTRATOR_RELATED_PATHS = {
     "src/sourcing_agent/orchestrator.py",
     "src/sourcing_agent/api.py",
@@ -239,6 +294,21 @@ _ASSET_GOVERNANCE_RELATED_PATHS = {
     "src/sourcing_agent/asset_registration.py",
     "src/sourcing_agent/organization_assets.py",
     "src/sourcing_agent/organization_execution_profile.py",
+}
+_PUBLIC_WEB_RELATED_PATHS = {
+    "src/sourcing_agent/linkedin_url_normalization.py",
+    "src/sourcing_agent/public_web_quality.py",
+    "src/sourcing_agent/public_web_search.py",
+    "src/sourcing_agent/crm_public_web_runtime.py",
+    "src/sourcing_agent/public_web_runtime_core.py",
+    "src/sourcing_agent/legacy_public_web_storage.py",
+    "tests/test_linkedin_url_normalization.py",
+    "tests/test_public_web_quality.py",
+    "tests/test_public_web_search.py",
+    "tests/test_crm_public_web_runtime_boundary.py",
+    "tests/test_target_candidate_public_web.py",
+    "frontend-demo/scripts/run_target_public_web_e2e.mjs",
+    "frontend-demo/scripts/run_target_public_web_promotion_export_e2e.mjs",
 }
 _PRODUCT_JOURNEY_RELATED_PATHS = {
     "src/sourcing_agent/company_asset_supplement.py",
@@ -309,6 +379,11 @@ def infer_pytest_invocations(
             add(_STORAGE_AND_CONTROL_PLANE_SUITES[2])
             add(_STORAGE_AND_CONTROL_PLANE_SUITES[3])
             continue
+        if path in _COMMAND_KERNEL_RELATED_PATHS:
+            saw_backend_change = True
+            for invocation in _COMMAND_KERNEL_SUITES:
+                add(invocation)
+            continue
         if path in _ORCHESTRATOR_RELATED_PATHS:
             saw_backend_change = True
             for invocation in _ORCHESTRATOR_AND_RESULTS_SUITES:
@@ -343,6 +418,14 @@ def infer_pytest_invocations(
             saw_backend_change = True
             for invocation in _ASSET_GOVERNANCE_SUITES:
                 add(invocation)
+            continue
+        if path in _PUBLIC_WEB_RELATED_PATHS:
+            saw_backend_change = saw_backend_change or path.startswith("src/")
+            for invocation in _PUBLIC_WEB_SUITES:
+                add(invocation)
+            if path.startswith("frontend-demo/"):
+                for invocation in _FRONTEND_CONTRACT_SUITES:
+                    add(invocation)
             continue
         if path in _PRODUCT_JOURNEY_RELATED_PATHS:
             saw_backend_change = saw_backend_change or path.startswith("src/")

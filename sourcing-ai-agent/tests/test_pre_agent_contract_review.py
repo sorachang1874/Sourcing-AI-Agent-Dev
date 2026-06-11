@@ -1574,7 +1574,7 @@ def test_w7f_crm_public_web_phase_commands_are_contract_visible() -> None:
     assert "control_policy_violation_count" in review_doc
     assert "display_contract_violation_count" in review_doc
     assert "activity_spine_policy_violation_count" in review_doc
-    assert '"control_policy"' in _class_method_source("_workflow_command_api_record")
+    assert '"control_policy"' in _class_method_source("_workflow_command_api_record", class_name="CommandKernel")
     assert '"allowed_workflow_command_contracts"' in operation_source
     assert "_workflow_command_contract_record" in operation_source
     find_class_method("_workflow_activity_control_target_record")
@@ -1723,7 +1723,9 @@ def test_action_registry_allowlist_is_agent_command_exposure_gate() -> None:
     assert "necessary but not sufficient" in review_doc
     assert "ActionRegistry allowlist" in agent_doc
     assert "only normal Agent exposure gate" in agent_doc
-    assert "not_action_registry_allowlisted" in _class_method_source("_workflow_command_agent_exposure_record")
+    assert "not_action_registry_allowlisted" in _class_method_source(
+        "_workflow_command_agent_exposure_record", class_name="CommandKernel"
+    )
     assert "Workflow command exposure must be explicit on both registry and concrete command rows" in review_doc
     assert "not_action_registry_allowlisted" in review_doc
     assert "not_action_registry_allowlisted" in durable_doc
