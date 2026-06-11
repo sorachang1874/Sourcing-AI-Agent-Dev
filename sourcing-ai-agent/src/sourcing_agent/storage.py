@@ -22600,7 +22600,9 @@ class ControlPlaneStore:
             if payload is not None:
                 return payload
             if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry_leases"):
-                return None
+                # Parity with the SQLite path below: a missing lease row is the
+                # empty-dict sentinel, never None for a valid URL.
+                return self._linkedin_profile_registry_lease_from_row(None)
         with self._lock:
             canonical_key = self._resolve_linkedin_profile_registry_key_locked(normalized_key)
             row = self._connection.execute(
@@ -24003,6 +24005,14 @@ class ControlPlaneStore:
                         else:
                             terminal_skipped_deferred_count += 1
                         effective_by_key[canonical_key] = effective_payload
+                        # Parity with the per-row SQLite path: the composed
+                        # payload (merged source_jobs/aliases, terminal status
+                        # preserved) must still be written — terminal rows keep
+                        # accumulating job scope even though their queue state
+                        # is untouched. Skipping the upsert under-counts
+                        # terminal rows in per-job scope summaries.
+                        profile_url_by_key[canonical_key] = profile_url
+                        modified_keys.add(canonical_key)
                         continue
                     queue_state = str(spec.get("queue_state") or "").strip()
                     current_refill_queue_state = str(effective_payload.get("refill_queue_state") or "").strip()
