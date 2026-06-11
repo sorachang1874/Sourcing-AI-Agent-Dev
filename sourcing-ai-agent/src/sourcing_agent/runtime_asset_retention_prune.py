@@ -1687,8 +1687,61 @@ def _active_runtime_pid_file_processes(
         command = process_commands.get(pid)
         if command is None:
             continue
+        if not _command_is_workspace_runtime_process(command=command, root=root) and not _runtime_process_reference_is_fresh(reference_path):
+            # The recorded pid is alive, but the live process is unrecognizable
+            # as a workspace runtime process AND the reference file has gone
+            # stale far beyond its heartbeat contract: treat as pid reuse after
+            # the recorded service died without cleanup. A blanket pid-alive
+            # rule would let a dead service block pruning of its own runtime
+            # directory forever.
+            continue
         active.append({"pid": pid, "command": f"{command[:450]} [runtime process reference: {_display_path(reference_path, root)}]"})
     return active
+
+
+def _command_is_workspace_runtime_process(*, command: str, root: Path) -> bool:
+    normalized = str(command or "").lower()
+    if any(token in normalized for token in ACTIVE_PROCESS_TOKENS):
+        return True
+    return str(_realpath(root)).lower() in normalized
+
+
+_REFERENCE_FRESHNESS_FLOOR_SECONDS = 3600
+_REFERENCE_STALE_MULTIPLIER = 20
+
+
+def _runtime_process_reference_is_fresh(reference_path: Path) -> bool:
+    window_seconds = _REFERENCE_FRESHNESS_FLOOR_SECONDS
+    newest: datetime | None = None
+    if reference_path.name == "status.json":
+        try:
+            payload = dict(json.loads(reference_path.read_text(encoding="utf-8")) or {})
+        except (OSError, TypeError, ValueError):
+            payload = {}
+        try:
+            stale_after_seconds = int(payload.get("stale_after_seconds") or 0)
+        except (TypeError, ValueError):
+            stale_after_seconds = 0
+        if stale_after_seconds > 0:
+            window_seconds = max(window_seconds, stale_after_seconds * _REFERENCE_STALE_MULTIPLIER)
+        for key in ("updated_at", "started_at"):
+            raw_value = str(payload.get(key) or "").strip()
+            if not raw_value:
+                continue
+            try:
+                parsed = datetime.fromisoformat(raw_value)
+            except ValueError:
+                continue
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            if newest is None or parsed > newest:
+                newest = parsed
+    if newest is None:
+        try:
+            newest = datetime.fromtimestamp(reference_path.stat().st_mtime, tz=timezone.utc)
+        except OSError:
+            return True
+    return (datetime.now(timezone.utc) - newest).total_seconds() <= window_seconds
 
 
 def _iter_runtime_process_references(root: Path, *, operation_paths: list[str] | None = None) -> list[tuple[Path, int]]:

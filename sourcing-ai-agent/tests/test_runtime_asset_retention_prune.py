@@ -1689,7 +1689,7 @@ def test_runtime_prune_apply_detects_nested_runtime_status_reference_without_pat
     assert old_case.exists()
 
 
-def test_runtime_prune_apply_blocks_stale_non_terminal_status_when_pid_is_live(
+def test_runtime_prune_apply_skips_stale_reference_when_live_pid_is_unrecognized(
     tmp_path: Path, monkeypatch
 ) -> None:
     workspace = tmp_path / "repo"
@@ -1734,10 +1734,14 @@ def test_runtime_prune_apply_blocks_stale_non_terminal_status_when_pid_is_live(
     monkeypatch.setattr(prune_module.subprocess, "run", fake_run)
     report = apply_runtime_asset_prune_plan(plan=plan, workspace_root=workspace, apply=True, reviewed=True)
 
-    assert report["status"] == "blocked"
-    assert "active_runtime_processes_detected" in report["blockers"]
-    expected_reference = "runtime process reference: runtime/test_env/w6_google_old_case/scenario/services/job-recovery-abc/status.json"
-    assert expected_reference in report["active_processes"][0]["command"]
+    # The status reference is 2 days stale against a 60s heartbeat contract and
+    # the live pid belongs to an unrecognizable command: pid reuse, not an
+    # active service. A blanket pid-alive block here would let a dead service
+    # block pruning of its own runtime directory forever. (This synthetic
+    # fixture's plan is independently not ready for review, so the apply still
+    # blocks on that — the point here is that the process gate no longer fires.)
+    assert "active_runtime_processes_detected" not in report.get("blockers", [])
+    assert report.get("active_processes") in ([], None)
     assert old_case.exists()
 
 
@@ -2001,3 +2005,48 @@ def test_ttl_local_rebuildable_cli_dry_run_default_and_root_refusal(tmp_path: Pa
     )
     assert refused.returncode != 0
     assert "only allows --prune-root runtime/test_env" in refused.stderr
+
+
+def test_pid_file_processes_ignore_unrelated_pid_reuse(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    services = workspace / "runtime" / "test_env" / "old_run_20260101" / "services" / "server-runtime-watchdog"
+    services.mkdir(parents=True)
+    (services / "status.json").write_text(
+        json.dumps(
+            {
+                "service_name": "server-runtime-watchdog",
+                "status": "running",
+                "pid": 4242,
+                "updated_at": (datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+                "stale_after_seconds": 180,
+            }
+        ),
+        encoding="utf-8",
+    )
+    # The recorded pid is alive but now belongs to an unrelated process (pid reuse).
+    unrelated = {4242: "/opt/homebrew/opt/postgresql@16/bin/postgres -D /opt/homebrew/var/postgresql@16"}
+    flagged = prune_module._active_runtime_pid_file_processes(
+        root=workspace, process_commands=unrelated, operation_paths=["runtime/test_env/old_run_20260101"]
+    )
+    assert flagged == []
+
+
+def test_pid_file_processes_still_flag_live_runtime_process(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    services = workspace / "runtime" / "test_env" / "old_run_20260101" / "services" / "worker-recovery-daemon"
+    services.mkdir(parents=True)
+    (services / "status.json").write_text(
+        json.dumps({"service_name": "worker-recovery-daemon", "status": "running", "pid": 4243}),
+        encoding="utf-8",
+    )
+    by_token = {4243: ".venv/bin/python -m sourcing_agent.worker_daemon --runtime-dir runtime"}
+    flagged = prune_module._active_runtime_pid_file_processes(
+        root=workspace, process_commands=by_token, operation_paths=["runtime/test_env/old_run_20260101"]
+    )
+    assert [item["pid"] for item in flagged] == [4243]
+
+    by_workspace_path = {4243: f".venv/bin/python {workspace}/scripts/anything.py"}
+    flagged_path = prune_module._active_runtime_pid_file_processes(
+        root=workspace, process_commands=by_workspace_path, operation_paths=["runtime/test_env/old_run_20260101"]
+    )
+    assert [item["pid"] for item in flagged_path] == [4243]
