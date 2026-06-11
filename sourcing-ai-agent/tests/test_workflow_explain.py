@@ -22,7 +22,7 @@ from sourcing_agent.settings import (
     QwenSettings,
     SemanticProviderSettings,
 )
-from sourcing_agent.storage import ControlPlaneStore
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
 def _without_volatile_timestamps(value):
@@ -37,11 +37,12 @@ def _without_volatile_timestamps(value):
     return value
 
 
-class WorkflowExplainTest(unittest.TestCase):
+class WorkflowExplainTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         self.catalog = AssetCatalog.discover()
-        self.store = ControlPlaneStore(f"{self.tempdir.name}/test.db")
+        self.store = self.make_pg_store(f"{self.tempdir.name}/test.db")
         self.settings = AppSettings(
             project_root=Path(self.tempdir.name),
             runtime_dir=Path(self.tempdir.name),
@@ -74,6 +75,7 @@ class WorkflowExplainTest(unittest.TestCase):
     def tearDown(self) -> None:
         self._runtime_env_patcher.stop()
         self.tempdir.cleanup()
+        super().tearDown()
 
     def _write_company_snapshot(self, *, target_company: str, snapshot_id: str, candidate_count: int = 3) -> str:
         company_key = resolve_company_alias_key(target_company)
@@ -147,11 +149,42 @@ class WorkflowExplainTest(unittest.TestCase):
         materialization_generation_key: str = "",
         materialization_generation_sequence: int = 0,
         materialization_watermark: str = "",
+        include_population_coverage: bool = True,
     ) -> None:
         company_key = resolve_company_alias_key(target_company)
         source_path = str(
             Path(self.tempdir.name) / "company_assets" / company_key / snapshot_id / "candidate_documents.json"
         )
+        population_coverage = {
+            "coverage_kind": "full_company_roster",
+            "coverage_status": "verified",
+            "full_company_coverage_proven": True,
+        } if include_population_coverage else {}
+        source_snapshot_selection = {"selected_snapshot_ids": [snapshot_id]}
+        if population_coverage:
+            source_snapshot_selection["population_coverage"] = dict(population_coverage)
+            source_snapshot_selection["full_company_coverage"] = dict(population_coverage)
+        summary = {
+            "target_company": target_company,
+            "snapshot_id": snapshot_id,
+            "candidate_count": current_count + former_count,
+            "standard_bundles": {"bundle_count": 1},
+            "profile_detail_count": (
+                current_count + former_count if profile_detail_count is None else profile_detail_count
+            ),
+            "current_lane_coverage": {
+                "effective_candidate_count": current_count,
+                "effective_ready": True,
+            },
+            "former_lane_coverage": {
+                "effective_candidate_count": former_count,
+                "effective_ready": True,
+            },
+        }
+        if population_coverage:
+            summary["population_coverage"] = dict(population_coverage)
+            summary["full_company_coverage"] = dict(population_coverage)
+            summary["source_snapshot_selection"] = dict(source_snapshot_selection)
         self.store.upsert_organization_asset_registry(
             {
                 "target_company": target_company,
@@ -190,29 +223,13 @@ class WorkflowExplainTest(unittest.TestCase):
                 "current_lane_effective_ready": True,
                 "former_lane_effective_ready": True,
                 "selected_snapshot_ids": [snapshot_id],
-                "source_snapshot_selection": {"selected_snapshot_ids": [snapshot_id]},
+                "source_snapshot_selection": source_snapshot_selection,
                 "source_path": source_path,
                 "source_job_id": "",
                 "materialization_generation_key": materialization_generation_key,
                 "materialization_generation_sequence": materialization_generation_sequence,
                 "materialization_watermark": materialization_watermark,
-                "summary": {
-                    "target_company": target_company,
-                    "snapshot_id": snapshot_id,
-                    "candidate_count": current_count + former_count,
-                    "standard_bundles": {"bundle_count": 1},
-                    "profile_detail_count": (
-                        current_count + former_count if profile_detail_count is None else profile_detail_count
-                    ),
-                    "current_lane_coverage": {
-                        "effective_candidate_count": current_count,
-                        "effective_ready": True,
-                    },
-                    "former_lane_coverage": {
-                        "effective_candidate_count": former_count,
-                        "effective_ready": True,
-                    },
-                },
+                "summary": summary,
             },
             authoritative=True,
         )
@@ -547,6 +564,7 @@ class WorkflowExplainTest(unittest.TestCase):
         )
         self.assertEqual(explained["asset_reuse_plan"]["planner_mode"], "reuse_snapshot_only")
         self.assertFalse(explained["asset_reuse_plan"]["requires_delta_acquisition"])
+        self.assertFalse(explained["asset_reuse_plan"]["baseline_full_company_coverage_proven"])
         self.assertEqual(
             list(explained["asset_reuse_plan"]["missing_current_profile_search_queries"] or []),
             [],
@@ -557,10 +575,231 @@ class WorkflowExplainTest(unittest.TestCase):
         )
         self.assertEqual(
             explained["effective_execution_semantics"]["effective_acquisition_mode"],
-            "full_local_asset_reuse",
+            "baseline_reuse_asset_population",
+        )
+        self.assertFalse(explained["effective_execution_semantics"]["full_local_asset_reuse"])
+
+    def test_explain_workflow_keeps_large_authoritative_baseline_when_small_shard_row_partially_matches(self) -> None:
+        large_snapshot_id = "20260511T000000"
+        small_snapshot_id = "20260414T120400"
+        company_key = self._write_company_snapshot(
+            target_company="Google",
+            snapshot_id=large_snapshot_id,
+            candidate_count=3,
+        )
+        self._write_company_snapshot(
+            target_company="Google",
+            snapshot_id=small_snapshot_id,
+            candidate_count=2,
+        )
+        self.store.upsert_organization_asset_registry(
+            {
+                "target_company": "Google",
+                "company_key": company_key,
+                "snapshot_id": large_snapshot_id,
+                "asset_view": "canonical_merged",
+                "status": "ready",
+                "authoritative": True,
+                "candidate_count": 5000,
+                "evidence_count": 0,
+                "profile_detail_count": 5000,
+                "explicit_profile_capture_count": 5000,
+                "missing_linkedin_count": 0,
+                "manual_review_backlog_count": 0,
+                "profile_completion_backlog_count": 0,
+                "source_snapshot_count": 1,
+                "completeness_score": 88.0,
+                "completeness_band": "high",
+                "current_lane_coverage": {
+                    "effective_candidate_count": 4067,
+                    "effective_ready": True,
+                },
+                "former_lane_coverage": {
+                    "effective_candidate_count": 933,
+                    "effective_ready": True,
+                },
+                "current_lane_effective_candidate_count": 4067,
+                "former_lane_effective_candidate_count": 933,
+                "current_lane_effective_ready": True,
+                "former_lane_effective_ready": True,
+                "selected_snapshot_ids": [large_snapshot_id],
+                "source_snapshot_selection": {
+                    "selected_snapshot_ids": [large_snapshot_id],
+                    "population_coverage": {
+                        "coverage_kind": "scoped_asset",
+                        "coverage_status": "ready",
+                        "full_company_coverage_proven": False,
+                        "selected_snapshot_ids": [large_snapshot_id],
+                        "candidate_count": 5000,
+                    },
+                },
+                "source_path": str(
+                    Path(self.tempdir.name)
+                    / "company_assets"
+                    / company_key
+                    / large_snapshot_id
+                    / "candidate_documents.json"
+                ),
+                "source_job_id": "",
+                "materialization_generation_key": "large-google-generation",
+                "materialization_generation_sequence": 1,
+                "materialization_watermark": "1:large-google",
+                "summary": {
+                    "target_company": "Google",
+                    "snapshot_id": large_snapshot_id,
+                    "candidate_count": 5000,
+                    "profile_detail_count": 5000,
+                    "population_coverage": {
+                        "coverage_kind": "scoped_asset",
+                        "coverage_status": "ready",
+                        "full_company_coverage_proven": False,
+                        "selected_snapshot_ids": [large_snapshot_id],
+                        "candidate_count": 5000,
+                    },
+                    "current_lane_coverage": {
+                        "effective_candidate_count": 4067,
+                        "effective_ready": True,
+                    },
+                    "former_lane_coverage": {
+                        "effective_candidate_count": 933,
+                        "effective_ready": True,
+                    },
+                },
+            },
+            authoritative=True,
+        )
+        self.store.upsert_organization_asset_registry(
+            {
+                "target_company": "Google",
+                "company_key": company_key,
+                "snapshot_id": small_snapshot_id,
+                "asset_view": "canonical_merged",
+                "status": "ready",
+                "authoritative": False,
+                "candidate_count": 300,
+                "evidence_count": 0,
+                "profile_detail_count": 300,
+                "explicit_profile_capture_count": 300,
+                "missing_linkedin_count": 0,
+                "manual_review_backlog_count": 0,
+                "profile_completion_backlog_count": 0,
+                "source_snapshot_count": 2,
+                "completeness_score": 90.0,
+                "completeness_band": "high",
+                "current_lane_coverage": {
+                    "effective_candidate_count": 260,
+                    "effective_ready": True,
+                },
+                "former_lane_coverage": {
+                    "effective_candidate_count": 40,
+                    "effective_ready": True,
+                },
+                "current_lane_effective_candidate_count": 260,
+                "former_lane_effective_candidate_count": 40,
+                "current_lane_effective_ready": True,
+                "former_lane_effective_ready": True,
+                "selected_snapshot_ids": [small_snapshot_id, "google-multimodal"],
+                "source_snapshot_selection": {
+                    "selected_snapshot_ids": [small_snapshot_id, "google-multimodal"],
+                    "population_coverage": {
+                        "coverage_kind": "full_company_roster",
+                        "coverage_status": "complete",
+                        "full_company_coverage_proven": True,
+                        "selected_snapshot_ids": [small_snapshot_id, "google-multimodal"],
+                        "candidate_count": 300,
+                    },
+                },
+                "source_path": str(
+                    Path(self.tempdir.name)
+                    / "company_assets"
+                    / company_key
+                    / small_snapshot_id
+                    / "candidate_documents.json"
+                ),
+                "source_job_id": "",
+                "summary": {
+                    "target_company": "Google",
+                    "snapshot_id": small_snapshot_id,
+                    "candidate_count": 300,
+                    "profile_detail_count": 300,
+                    "population_coverage": {
+                        "coverage_kind": "full_company_roster",
+                        "coverage_status": "complete",
+                        "full_company_coverage_proven": True,
+                        "selected_snapshot_ids": [small_snapshot_id, "google-multimodal"],
+                        "candidate_count": 300,
+                    },
+                    "current_lane_coverage": {
+                        "effective_candidate_count": 260,
+                        "effective_ready": True,
+                    },
+                    "former_lane_coverage": {
+                        "effective_candidate_count": 40,
+                        "effective_ready": True,
+                    },
+                },
+            },
+            authoritative=False,
+        )
+        for employment_scope, strategy_type in (
+            ("current", "scoped_search_roster"),
+            ("former", "former_employee_search"),
+        ):
+            self.store.upsert_acquisition_shard_registry(
+                build_acquisition_shard_registry_record(
+                    target_company="Google",
+                    company_key=company_key,
+                    snapshot_id="google-multimodal",
+                    lane="profile_search",
+                    employment_scope=employment_scope,
+                    strategy_type=strategy_type,
+                    shard_id=f"Multimodal-{employment_scope}",
+                    shard_title="Multimodal",
+                    search_query="Multimodal",
+                    company_filters={
+                        "companies": ["https://www.linkedin.com/company/google/"],
+                        "function_ids": ["24", "8"],
+                        "search_query": "Multimodal",
+                    },
+                    result_count=1,
+                    status="completed",
+                )
+            )
+
+        explained = self.orchestrator.explain_workflow(
+            {
+                "raw_user_request": "帮我找Google做vision-language方向的人",
+                "target_company": "Google",
+                "keywords": ["Vision-language"],
+                "employment_statuses": ["current", "former"],
+                "categories": ["employee", "former_employee"],
+                "top_k": 10,
+            }
         )
 
-    def test_explain_workflow_large_authoritative_baseline_reuses_snapshot_without_delta(self) -> None:
+        dispatch_preferences = dict(
+            dict(explained["dispatch_preview"]["request_after_dispatch_hints"]).get("execution_preferences") or {}
+        )
+        self.assertEqual(explained["asset_reuse_plan"]["baseline_snapshot_id"], large_snapshot_id)
+        self.assertEqual(explained["dispatch_preview"]["matched_snapshot_id"], large_snapshot_id)
+        self.assertEqual(dispatch_preferences.get("delta_baseline_snapshot_id"), large_snapshot_id)
+        self.assertEqual(explained["organization_execution_profile"]["source_snapshot_id"], large_snapshot_id)
+        self.assertEqual(
+            list(explained["asset_reuse_plan"]["missing_current_profile_search_queries"] or []),
+            ["Vision-language"],
+        )
+        self.assertEqual(
+            list(explained["asset_reuse_plan"]["missing_former_profile_search_queries"] or []),
+            ["Vision-language"],
+        )
+        self.assertFalse(
+            any(
+                str(query).strip() == "Multimodal"
+                for query in list(explained["asset_reuse_plan"]["missing_current_profile_search_queries"] or [])
+            )
+        )
+
+    def test_explain_workflow_large_directional_baseline_without_shard_requires_delta(self) -> None:
         snapshot_id = "20260415T010203-anthropic"
         self._write_company_snapshot(target_company="Anthropic", snapshot_id=snapshot_id)
         self._upsert_authoritative_registry(
@@ -576,17 +815,14 @@ class WorkflowExplainTest(unittest.TestCase):
 
         self.assertEqual(explained["organization_execution_profile"]["org_scale_band"], "large")
         self.assertEqual(explained["organization_execution_profile"]["default_acquisition_mode"], "scoped_search_roster")
-        self.assertTrue(explained["asset_reuse_plan"]["baseline_directional_local_reuse_eligible"])
-        self.assertEqual(explained["dispatch_preview"]["strategy"], "reuse_snapshot")
-        self.assertFalse(explained["asset_reuse_plan"]["requires_delta_acquisition"])
-        self.assertEqual(explained["asset_reuse_plan"]["planner_mode"], "reuse_snapshot_only")
+        self.assertFalse(explained["asset_reuse_plan"]["baseline_directional_local_reuse_eligible"])
+        self.assertEqual(explained["dispatch_preview"]["strategy"], "delta_from_snapshot")
+        self.assertTrue(explained["asset_reuse_plan"]["requires_delta_acquisition"])
+        self.assertTrue(explained["asset_reuse_plan"]["profile_query_requires_explicit_coverage"])
+        self.assertEqual(explained["asset_reuse_plan"]["planner_mode"], "delta_from_snapshot")
         self.assertEqual(
             explained["effective_execution_semantics"]["effective_acquisition_mode"],
-            "full_local_asset_reuse",
-        )
-        self.assertEqual(
-            explained["effective_execution_semantics"]["default_results_mode"],
-            "asset_population",
+            "baseline_reuse_with_delta",
         )
         self.assertTrue(explained["effective_execution_semantics"]["asset_population_supported"])
 
@@ -684,7 +920,30 @@ class WorkflowExplainTest(unittest.TestCase):
                     "asset_population",
                 )
 
-    def test_explain_workflow_large_authoritative_baseline_low_profile_detail_still_defaults_to_population_reuse(self) -> None:
+    def test_explain_workflow_does_not_use_legacy_standard_bundle_as_hidden_full_coverage_proof(self) -> None:
+        snapshot_id = "20260414T040103"
+        self._write_company_snapshot(target_company="Humans&", snapshot_id=snapshot_id)
+        self._upsert_authoritative_registry(
+            target_company="Humans&",
+            snapshot_id=snapshot_id,
+            current_count=520,
+            former_count=80,
+            include_population_coverage=False,
+        )
+
+        explained = self.orchestrator.explain_workflow(
+            {"raw_user_request": "我想了解Humans&里偏Coding agents方向的研究成员", "top_k": 10}
+        )
+
+        coverage_contract = explained["asset_reuse_plan"]["baseline_population_coverage_contract"]
+        self.assertFalse(explained["asset_reuse_plan"]["baseline_full_company_coverage_proven"])
+        self.assertTrue(coverage_contract["legacy_inference_suppressed"])
+        self.assertIn("legacy_population_coverage_inference_suppressed", coverage_contract["reason_codes"])
+        self.assertEqual(explained["dispatch_preview"]["strategy"], "delta_from_snapshot")
+        self.assertTrue(explained["asset_reuse_plan"]["requires_delta_acquisition"])
+        self.assertFalse(explained["effective_execution_semantics"]["full_local_asset_reuse"])
+
+    def test_explain_workflow_large_directional_low_profile_detail_baseline_still_requires_delta(self) -> None:
         snapshot_id = "20260416T223400-anthropic-runtime"
         self._write_company_snapshot(target_company="Anthropic", snapshot_id=snapshot_id)
         self._upsert_authoritative_registry(
@@ -702,14 +961,14 @@ class WorkflowExplainTest(unittest.TestCase):
             {"raw_user_request": "帮我找Anthropic里做Pre-training方向的人", "top_k": 10}
         )
 
-        self.assertEqual(explained["dispatch_preview"]["strategy"], "reuse_snapshot")
-        self.assertFalse(explained["asset_reuse_plan"]["requires_delta_acquisition"])
-        self.assertTrue(explained["asset_reuse_plan"]["baseline_population_default_reuse_sufficient"])
-        self.assertEqual(explained["asset_reuse_plan"]["planner_mode"], "reuse_snapshot_only")
-        self.assertEqual(explained["plan"]["acquisition_strategy"]["strategy_type"], "full_company_roster")
+        self.assertEqual(explained["dispatch_preview"]["strategy"], "delta_from_snapshot")
+        self.assertTrue(explained["asset_reuse_plan"]["requires_delta_acquisition"])
+        self.assertTrue(explained["asset_reuse_plan"]["profile_query_requires_explicit_coverage"])
+        self.assertFalse(explained["asset_reuse_plan"]["baseline_directional_local_reuse_eligible"])
+        self.assertEqual(explained["asset_reuse_plan"]["planner_mode"], "delta_from_snapshot")
         self.assertEqual(
             explained["effective_execution_semantics"]["effective_acquisition_mode"],
-            "full_local_asset_reuse",
+            "baseline_reuse_with_delta",
         )
         self.assertEqual(explained["request_preview"]["keywords"], ["Pre-train"])
         self.assertNotIn("pre_training", list(explained["request_preview"].get("must_have_facets") or []))

@@ -1,12 +1,16 @@
 import tempfile
+import time
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 from sourcing_agent.agent_runtime import AgentRuntimeCoordinator
 from sourcing_agent.connectors import CompanyIdentity
 from sourcing_agent.domain import Candidate, JobRequest
 from sourcing_agent.storage import ControlPlaneStore
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 from sourcing_agent.worker_daemon import PersistentWorkerRecoveryDaemon
 
 
@@ -48,11 +52,18 @@ class _FakeSearchSeedAcquirer:
             }
         )
         lane_id = "public_media_specialist" if query_spec.get("source_family") in {"public_interviews", "publication_and_blog"} else "search_planner"
-        worker = self.store.get_agent_worker(
-            job_id=job_id,
-            lane_id=lane_id,
-            worker_key=f"{query_spec['bundle_id']}::{index:02d}",
-        )
+        worker = None
+        for worker_key in (
+            f"{employment_status}::{query_spec['bundle_id']}::{index:02d}",
+            f"{query_spec['bundle_id']}::{index:02d}",
+        ):
+            worker = self.store.get_agent_worker(
+                job_id=job_id,
+                lane_id=lane_id,
+                worker_key=worker_key,
+            )
+            if worker is not None:
+                break
         if worker is not None:
             self.store.complete_agent_worker(
                 int(worker["worker_id"]),
@@ -210,6 +221,7 @@ class _FakeAcquisitionEngine:
         plan_payload: dict,
         runtime_mode: str,
         allow_shared_provider_cache: bool = True,
+        prefetch_batch_context: dict | None = None,
     ) -> dict[str, object]:
         self.harvest_profile_batch_calls.append(
             {
@@ -218,6 +230,10 @@ class _FakeAcquisitionEngine:
                 "snapshot_dir": str(snapshot_dir),
                 "requested_url_count": str(len(profile_urls)),
                 "allow_shared_provider_cache": str(bool(allow_shared_provider_cache)).lower(),
+                "prefetch_requested_url_count": str(dict(prefetch_batch_context or {}).get("requested_url_count") or ""),
+                "prefetch_candidate_count": str(dict(prefetch_batch_context or {}).get("candidate_count") or ""),
+                "nonblocking_submit": str(bool(dict(prefetch_batch_context or {}).get("nonblocking_submit"))).lower(),
+                "recovery_submit_policy": str(dict(prefetch_batch_context or {}).get("recovery_submit_policy") or ""),
             }
         )
         worker = self.store.list_agent_workers(job_id=job_id, lane_id="enrichment_specialist")
@@ -235,12 +251,15 @@ class _FakeAcquisitionEngine:
         }
 
 
-class PersistentWorkerRecoveryDaemonTest(unittest.TestCase):
+class PersistentWorkerRecoveryDaemonTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         self.db_path = f"{self.tempdir.name}/runtime.db"
-        self.controller_store = ControlPlaneStore(self.db_path)
-        self.daemon_store = ControlPlaneStore(self.db_path)
+        # Two stores over one control plane on purpose: controller vs daemon
+        # connections must coordinate through shared durable state.
+        self.controller_store = self.make_pg_store(self.db_path)
+        self.daemon_store = self.make_pg_store(self.db_path)
         self.controller_runtime = AgentRuntimeCoordinator(self.controller_store)
         self.daemon_runtime = AgentRuntimeCoordinator(self.daemon_store)
         self.request = JobRequest(
@@ -264,9 +283,8 @@ class PersistentWorkerRecoveryDaemonTest(unittest.TestCase):
         self.fake_engine = _FakeAcquisitionEngine(self.daemon_store)
 
     def tearDown(self) -> None:
-        self.controller_store._connection.close()
-        self.daemon_store._connection.close()
         self.tempdir.cleanup()
+        super().tearDown()
 
     def _save_job(self, job_id: str, *, stage: str = "acquiring", status: str = "running") -> None:
         self.controller_store.save_job(
@@ -325,6 +343,633 @@ class PersistentWorkerRecoveryDaemonTest(unittest.TestCase):
         self.assertEqual(claimed_c["lease_owner"], "daemon-b")
         self.assertEqual(int(claimed_c["attempt_count"]), 2)
 
+    def test_explicit_worker_ids_bypass_recoverable_scan_for_terminal_provider_event(self) -> None:
+        job_id = "job_explicit_remote_event_worker"
+        self._save_job(job_id)
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-explicit-worker"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="enrichment_specialist",
+            worker_key="harvest_profile_batch::explicit",
+            stage="enriching",
+            span_name="harvest_profile_batch:explicit",
+            budget_payload={"requested_url_count": 1},
+            input_payload={"profile_urls": ["https://www.linkedin.com/in/explicit-worker/"]},
+            metadata={
+                "recovery_kind": "harvest_profile_batch",
+                "snapshot_dir": str(snapshot_dir),
+                "profile_urls": ["https://www.linkedin.com/in/explicit-worker/"],
+                "request_payload": self.request.to_record(),
+                "plan_payload": self.plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="acquisition_specialist",
+        )
+        self.controller_store.checkpoint_agent_worker(
+            handle.worker_id,
+            checkpoint_payload={
+                "stage": "waiting_remote_harvest",
+                "run_id": "run-explicit-worker",
+                "dataset_id": "dataset-explicit-worker",
+                "recovery_kind": "harvest_profile_batch",
+            },
+            output_payload={"summary": {"status": "queued"}},
+            status="running",
+        )
+        claimed = self.controller_store.claim_agent_worker(
+            handle.worker_id,
+            lease_owner="active-worker-that-would-block-scan",
+            lease_seconds=120,
+        )
+        self.assertIsNotNone(claimed)
+        self.assertEqual(
+            self.controller_store.list_recoverable_agent_workers(
+                job_id=job_id,
+                stale_after_seconds=0,
+            ),
+            [],
+        )
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="remote-event-explicit",
+            total_limit=1,
+            stale_after_seconds=0,
+            job_id=job_id,
+            explicit_worker_ids=[handle.worker_id],
+            force_release_explicit_worker_leases=True,
+        )
+        summary = daemon.run_once()
+
+        self.assertEqual(summary["explicit_worker_count"], 1)
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+        self.assertEqual(worker["status"], "completed")
+        self.assertEqual(self.fake_engine.harvest_profile_batch_calls[0]["requested_url_count"], "1")
+
+    def test_explicit_worker_scope_leaves_submitted_remote_wait_to_event_owner_after_completion(self) -> None:
+        job_id = "job_explicit_remote_event_scope"
+        self._save_job(job_id)
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-explicit-scope"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        def _begin_profile_worker(worker_key: str, profile_url: str):
+            handle = self.controller_runtime.begin_worker(
+                job_id=job_id,
+                request=self.request,
+                plan_payload=self.plan_payload,
+                runtime_mode="workflow",
+                lane_id="enrichment_specialist",
+                worker_key=worker_key,
+                stage="enriching",
+                span_name=worker_key,
+                budget_payload={"requested_url_count": 1},
+                input_payload={"profile_urls": [profile_url]},
+                metadata={
+                    "recovery_kind": "harvest_profile_batch",
+                    "snapshot_dir": str(snapshot_dir),
+                    "profile_urls": [profile_url],
+                    "request_payload": self.request.to_record(),
+                    "plan_payload": self.plan_payload,
+                    "runtime_mode": "workflow",
+                },
+                handoff_from_lane="acquisition_specialist",
+            )
+            self.controller_store.checkpoint_agent_worker(
+                handle.worker_id,
+                checkpoint_payload={
+                    "stage": "waiting_remote_harvest",
+                    "run_id": f"run-{worker_key}",
+                    "dataset_id": f"dataset-{worker_key}",
+                    "recovery_kind": "harvest_profile_batch",
+                },
+                output_payload={"summary": {"status": "queued"}},
+                status="running",
+            )
+            return handle
+
+        explicit = _begin_profile_worker(
+            "harvest_profile_batch::explicit-scope",
+            "https://www.linkedin.com/in/explicit-scope/",
+        )
+        other = _begin_profile_worker(
+            "harvest_profile_batch::other-recoverable",
+            "https://www.linkedin.com/in/other-recoverable/",
+        )
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="remote-event-explicit-scope",
+            total_limit=4,
+            stale_after_seconds=0,
+            job_id=job_id,
+            explicit_worker_ids=[explicit.worker_id],
+            force_release_explicit_worker_leases=True,
+        )
+        summary = daemon.run_once()
+
+        self.assertTrue(summary["explicit_worker_scope"])
+        self.assertTrue(summary["explicit_worker_scan_suppressed"])
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        self.assertEqual(len(self.fake_engine.harvest_profile_batch_calls), 1)
+        self.assertEqual(
+            self.controller_store.get_agent_worker(worker_id=explicit.worker_id)["status"],
+            "completed",
+        )
+        self.assertEqual(
+            self.controller_store.get_agent_worker(worker_id=other.worker_id)["status"],
+            "running",
+        )
+
+        followup = daemon.run_once()
+
+        self.assertTrue(followup["explicit_worker_scope"])
+        self.assertFalse(followup["explicit_worker_scan_suppressed"])
+        self.assertEqual(followup["remote_wait_skipped_count"], 1)
+        self.assertEqual(followup["remote_wait_skipped_worker_ids"], [other.worker_id])
+        self.assertEqual(followup["claimed_count"], 0)
+        self.assertEqual(followup["executed_count"], 0)
+        self.assertEqual(len(self.fake_engine.harvest_profile_batch_calls), 1)
+        self.assertEqual(
+            self.controller_store.get_agent_worker(worker_id=other.worker_id)["status"],
+            "running",
+        )
+
+    def test_non_explicit_submitted_remote_wait_is_not_polled_without_terminal_event(self) -> None:
+        job_id = "job_remote_wait_provider_owned"
+        self._save_job(job_id)
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-remote-wait-provider-owned"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="enrichment_specialist",
+            worker_key="harvest_profile_batch::provider-owned",
+            stage="enriching",
+            span_name="harvest_profile_batch:provider-owned",
+            budget_payload={"requested_url_count": 1},
+            input_payload={"profile_urls": ["https://www.linkedin.com/in/provider-owned/"]},
+            metadata={
+                "recovery_kind": "harvest_profile_batch",
+                "snapshot_dir": str(snapshot_dir),
+                "profile_urls": ["https://www.linkedin.com/in/provider-owned/"],
+                "request_payload": self.request.to_record(),
+                "plan_payload": self.plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="acquisition_specialist",
+        )
+        self.controller_store.checkpoint_agent_worker(
+            handle.worker_id,
+            checkpoint_payload={
+                "stage": "waiting_remote_harvest",
+                "run_id": "run-provider-owned",
+                "dataset_id": "dataset-provider-owned",
+                "recovery_kind": "harvest_profile_batch",
+            },
+            output_payload={"summary": {"status": "queued"}},
+            status="running",
+        )
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="generic-recovery",
+            total_limit=2,
+            stale_after_seconds=0,
+            job_id=job_id,
+        )
+        summary = daemon.run_once()
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+
+        self.assertEqual(summary["recoverable_count"], 0)
+        self.assertEqual(summary["remote_wait_skipped_count"], 1)
+        self.assertEqual(summary["remote_wait_skipped_worker_ids"], [handle.worker_id])
+        self.assertEqual(summary["claimed_count"], 0)
+        self.assertEqual(summary["executed_count"], 0)
+        self.assertEqual(self.fake_engine.harvest_profile_batch_calls, [])
+        self.assertEqual(worker["status"], "running")
+
+    def test_terminal_remote_event_marker_allows_remote_wait_recovery_owner_to_resume(self) -> None:
+        job_id = "job_remote_wait_terminal_marker"
+        self._save_job(job_id)
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-remote-wait-terminal"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="enrichment_specialist",
+            worker_key="harvest_profile_batch::terminal-marker",
+            stage="enriching",
+            span_name="harvest_profile_batch:terminal-marker",
+            budget_payload={"requested_url_count": 1},
+            input_payload={"profile_urls": ["https://www.linkedin.com/in/terminal-marker/"]},
+            metadata={
+                "recovery_kind": "harvest_profile_batch",
+                "snapshot_dir": str(snapshot_dir),
+                "profile_urls": ["https://www.linkedin.com/in/terminal-marker/"],
+                "request_payload": self.request.to_record(),
+                "plan_payload": self.plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="acquisition_specialist",
+        )
+        self.controller_store.checkpoint_agent_worker(
+            handle.worker_id,
+            checkpoint_payload={
+                "stage": "waiting_remote_harvest",
+                "run_id": "run-terminal-marker",
+                "dataset_id": "dataset-terminal-marker",
+                "recovery_kind": "harvest_profile_batch",
+                "remote_provider_terminal_event": {
+                    "event_type": "ACTOR.RUN.SUCCEEDED",
+                    "status": "succeeded",
+                    "run_id": "run-terminal-marker",
+                    "dataset_id": "dataset-terminal-marker",
+                },
+                "remote_provider_terminal_event_seen_at": "2026-05-23T00:00:00+00:00",
+            },
+            output_payload={"summary": {"status": "queued"}},
+            status="running",
+        )
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="remote-event-recovery",
+            total_limit=2,
+            stale_after_seconds=0,
+            job_id=job_id,
+        )
+        summary = daemon.run_once()
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+
+        self.assertEqual(summary["remote_wait_skipped_count"], 0)
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        self.assertEqual(len(self.fake_engine.harvest_profile_batch_calls), 1)
+        self.assertEqual(worker["status"], "completed")
+
+    def test_terminal_profile_persist_stage_is_immediately_recoverable_after_partial_yield(self) -> None:
+        job_id = "job_terminal_persist_recoverable"
+        self._save_job(job_id)
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-terminal-persist"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        profile_urls = [
+            "https://www.linkedin.com/in/terminal-persist-a/",
+            "https://www.linkedin.com/in/terminal-persist-b/",
+        ]
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="enrichment_specialist",
+            worker_key="harvest_profile_batch::terminal-persist",
+            stage="enriching",
+            span_name="harvest_profile_batch:terminal-persist",
+            budget_payload={"requested_url_count": len(profile_urls)},
+            input_payload={"profile_urls": profile_urls},
+            metadata={
+                "recovery_kind": "harvest_profile_batch",
+                "snapshot_dir": str(snapshot_dir),
+                "profile_urls": profile_urls,
+                "request_payload": self.request.to_record(),
+                "plan_payload": self.plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="acquisition_specialist",
+        )
+        self.controller_store.checkpoint_agent_worker(
+            handle.worker_id,
+            checkpoint_payload={
+                "stage": "persisting_terminal_harvest_profiles",
+                "run_id": "run-terminal-persist",
+                "dataset_id": "dataset-terminal-persist",
+                "terminal_persist_progress": {
+                    "processed_url_count": 1,
+                    "remaining_url_count": 1,
+                },
+                "recovery_kind": "harvest_profile_batch",
+            },
+            output_payload={
+                "summary": {
+                    "status": "running",
+                    "terminal_persist_progress": {"processed_url_count": 1, "remaining_url_count": 1},
+                }
+            },
+            status="running",
+        )
+        self.controller_store.release_agent_worker_lease(handle.worker_id)
+
+        recoverable = self.daemon_store.list_recoverable_agent_workers(
+            job_id=job_id,
+            stale_after_seconds=300,
+        )
+        claimed = self.daemon_store.claim_agent_worker(
+            handle.worker_id,
+            lease_owner="terminal-persist-recovery",
+            lease_seconds=120,
+        )
+
+        self.assertEqual([int(worker["worker_id"]) for worker in recoverable], [handle.worker_id])
+        self.assertIsNotNone(claimed)
+        self.assertEqual(claimed["lease_owner"], "terminal-persist-recovery")
+
+    def test_persistent_daemon_defers_completion_callbacks_until_selected_markers_are_written(self) -> None:
+        job_id = "job_remote_event_marker_batch_before_callback"
+        self._save_job(job_id)
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-marker-batch"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        handles = []
+        for index in (1, 2):
+            url = f"https://www.linkedin.com/in/batched-marker-{index}/"
+            handle = self.controller_runtime.begin_worker(
+                job_id=job_id,
+                request=self.request,
+                plan_payload=self.plan_payload,
+                runtime_mode="workflow",
+                lane_id="enrichment_specialist",
+                worker_key=f"harvest_profile_batch::marker-{index}",
+                stage="enriching",
+                span_name=f"harvest_profile_batch:marker-{index}",
+                budget_payload={"requested_url_count": 1},
+                input_payload={"profile_urls": [url]},
+                metadata={
+                    "index": index,
+                    "recovery_kind": "harvest_profile_batch",
+                    "snapshot_dir": str(snapshot_dir),
+                    "profile_urls": [url],
+                    "request_payload": self.request.to_record(),
+                    "plan_payload": self.plan_payload,
+                    "runtime_mode": "workflow",
+                },
+                handoff_from_lane="acquisition_specialist",
+            )
+            self.controller_store.checkpoint_agent_worker(
+                handle.worker_id,
+                checkpoint_payload={
+                    "stage": "waiting_remote_harvest",
+                    "run_id": f"run-marker-{index}",
+                    "dataset_id": f"dataset-marker-{index}",
+                    "recovery_kind": "harvest_profile_batch",
+                },
+                output_payload={"summary": {"status": "queued"}},
+                status="running",
+            )
+            handles.append(handle)
+
+        def _complete_matching_profile_worker(**kwargs):
+            profile_urls = list(kwargs.get("profile_urls") or [])
+            profile_url = str(profile_urls[0] if profile_urls else "")
+            worker = next(
+                (
+                    item
+                    for item in self.daemon_store.list_agent_workers(
+                        job_id=str(kwargs.get("job_id") or ""),
+                        lane_id="enrichment_specialist",
+                    )
+                    if profile_url in list(dict(item.get("metadata") or {}).get("profile_urls") or [])
+                ),
+                None,
+            )
+            self.assertIsNotNone(worker)
+            assert worker is not None
+            self.daemon_store.complete_agent_worker(
+                int(worker["worker_id"]),
+                status="completed",
+                checkpoint_payload={"stage": "completed", "recovery_kind": "harvest_profile_batch"},
+                output_payload={"summary": {"status": "completed", "requested_url_count": len(profile_urls)}},
+            )
+            return {
+                "worker_status": "completed",
+                "summary": {"status": "completed", "requested_url_count": len(profile_urls)},
+            }
+
+        self.fake_engine.multi_source_enricher._execute_harvest_profile_batch_worker = _complete_matching_profile_worker
+        callback_observations: list[list[str]] = []
+
+        def _completion_callback(result: dict[str, object]) -> dict[str, object]:
+            callback_observations.append(
+                [
+                    str(
+                        dict(self.daemon_store.get_agent_worker(worker_id=int(handle.worker_id)) or {}).get("status")
+                        or ""
+                    )
+                    for handle in handles
+                ]
+            )
+            return {"status": "enqueued", "worker_id": int(dict(result or {}).get("worker_id") or 0)}
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="remote-event-marker-batch",
+            completion_callback=_completion_callback,
+            total_limit=2,
+            stale_after_seconds=0,
+            job_id=job_id,
+            explicit_worker_ids=[int(handle.worker_id) for handle in handles],
+        )
+        summary = daemon.run_once()
+
+        self.assertEqual(summary["claimed_count"], 2)
+        self.assertEqual(summary["executed_count"], 2)
+        self.assertEqual(summary["jobs"][0]["completion_callback_count"], 2)
+        self.assertEqual(callback_observations, [["completed", "completed"], ["completed", "completed"]])
+
+    def test_root_runtime_recovery_daemon_skips_nested_test_runtime_worker(self) -> None:
+        job_id = "job_nested_test_runtime_worker"
+        self._save_job(job_id)
+        root_runtime = Path(self.tempdir.name) / "runtime"
+        snapshot_dir = root_runtime / "test_env" / "scripted_case" / "company_assets" / "openai" / "snap-1"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="enrichment_specialist",
+            worker_key="harvest_profile_batch::nested-test",
+            stage="enriching",
+            span_name="harvest_profile_batch:nested-test",
+            budget_payload={"requested_url_count": 1},
+            input_payload={"profile_urls": ["https://www.linkedin.com/in/openai-agent-current-0189/"]},
+            metadata={
+                "recovery_kind": "harvest_profile_batch",
+                "snapshot_dir": str(snapshot_dir),
+                "profile_urls": ["https://www.linkedin.com/in/openai-agent-current-0189/"],
+                "request_payload": self.request.to_record(),
+                "plan_payload": self.plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="acquisition_specialist",
+        )
+        self.controller_store.checkpoint_agent_worker(
+            handle.worker_id,
+            checkpoint_payload={"stage": "waiting_remote_harvest", "recovery_kind": "harvest_profile_batch"},
+            output_payload={"summary": {"status": "queued"}},
+            status="queued",
+        )
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="root-runtime-daemon",
+            total_limit=1,
+            stale_after_seconds=0,
+            runtime_dir=root_runtime,
+        )
+        summary = daemon.run_once()
+
+        self.assertEqual(summary["runtime_namespace_skipped_count"], 1)
+        self.assertEqual(summary["claimed_count"], 0)
+        self.assertEqual(summary["executed_count"], 0)
+        self.assertEqual(self.fake_engine.harvest_profile_batch_calls, [])
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+        self.assertEqual(worker["status"], "queued")
+
+    def test_profile_coalescing_worker_stage_is_not_timer_recoverable(self) -> None:
+        job_id = "job_profile_coalescing_legacy_worker"
+        self._save_job(job_id)
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "openai" / "snapshot-coalescing"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        profile_url = "https://www.linkedin.com/in/coalesced-tail/"
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="enrichment_specialist",
+            worker_key="harvest_profile_batch::coalescing",
+            stage="enriching",
+            span_name="harvest_profile_coalescing:coalescing",
+            budget_payload={"requested_url_count": 1, "coalescing_min_age_ms": 60000},
+            input_payload={"profile_urls": [profile_url]},
+            metadata={
+                "recovery_kind": "harvest_profile_batch",
+                "snapshot_dir": str(snapshot_dir),
+                "profile_urls": [profile_url],
+                "request_payload": self.request.to_record(),
+                "plan_payload": self.plan_payload,
+                "runtime_mode": "workflow",
+                "allow_shared_provider_cache": True,
+                "prefetch_batch_context": {
+                    "requested_url_count": 100,
+                    "candidate_count": 100,
+                    "planned_deferred_url_count": 0,
+                    "planned_dispatch_worker_count": 1,
+                },
+            },
+            handoff_from_lane="acquisition_specialist",
+        )
+        self.controller_store.checkpoint_agent_worker(
+            handle.worker_id,
+            checkpoint_payload={
+                "stage": "waiting_profile_coalescing",
+                "not_before_at": "2000-01-01 00:00:00",
+                "prefetch_batch_context": {
+                    "requested_url_count": 100,
+                    "candidate_count": 100,
+                    "planned_deferred_url_count": 0,
+                    "planned_dispatch_worker_count": 1,
+                },
+            },
+            output_payload={"summary": {"status": "queued", "message": "waiting for coalescing"}},
+            status="running",
+        )
+
+        self.assertEqual(
+            self.daemon_store.list_recoverable_agent_workers(
+                job_id=job_id,
+                stale_after_seconds=999999,
+            ),
+            [],
+        )
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="coalescing-daemon",
+            total_limit=1,
+            stale_after_seconds=999999,
+            job_id=job_id,
+        )
+        summary = daemon.run_once()
+
+        self.assertEqual(summary["claimed_count"], 0)
+        self.assertEqual(summary["executed_count"], 0)
+        self.assertEqual(self.fake_engine.harvest_profile_batch_calls, [])
+
+    def test_dead_local_worker_daemon_lease_does_not_block_recovery(self) -> None:
+        job_id = "job_dead_local_lease"
+        self._save_job(job_id)
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="enrichment_specialist",
+            worker_key="harvest_profile_batch::dead-local",
+            stage="enriching",
+            span_name="harvest_profile_batch:dead-local",
+            budget_payload={"requested_url_count": 1},
+            input_payload={"profile_urls": ["https://www.linkedin.com/in/example"]},
+            metadata={"recovery_kind": "harvest_profile_batch"},
+            handoff_from_lane="acquisition_specialist",
+        )
+        self.controller_store.checkpoint_agent_worker(
+            handle.worker_id,
+            checkpoint_payload={"stage": "waiting_remote_harvest"},
+            output_payload={},
+            status="queued",
+        )
+        claimed_a = self.controller_store.claim_agent_worker(
+            handle.worker_id,
+            lease_owner="worker-recovery-daemon-local-host-999999",
+            lease_seconds=120,
+        )
+        self.assertIsNotNone(claimed_a)
+
+        with (
+            mock.patch("sourcing_agent.storage.worker_lease_owner_is_dead_local_process", return_value=True),
+            # The PG-native list path binds its own reference to the helper.
+            mock.patch(
+                "sourcing_agent.control_plane_live_postgres.worker_lease_owner_is_dead_local_process",
+                return_value=True,
+            ),
+        ):
+            recoverable = self.daemon_store.list_recoverable_agent_workers(job_id=job_id)
+            self.assertEqual([int(worker["worker_id"]) for worker in recoverable], [handle.worker_id])
+            claimed_b = self.daemon_store.claim_agent_worker(
+                handle.worker_id,
+                lease_owner="daemon-b",
+                lease_seconds=120,
+            )
+
+        self.assertIsNotNone(claimed_b)
+        self.assertEqual(claimed_b["lease_owner"], "daemon-b")
+        self.assertEqual(int(claimed_b["attempt_count"]), 2)
+
     def test_persistent_daemon_recovers_stale_running_search_worker(self) -> None:
         job_id = "job_search_recovery"
         snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-01"
@@ -363,11 +1008,13 @@ class PersistentWorkerRecoveryDaemonTest(unittest.TestCase):
             },
             handoff_from_lane="triage_planner",
         )
-        with self.controller_store._lock, self.controller_store._connection:
-            self.controller_store._connection.execute(
-                "UPDATE agent_worker_runs SET updated_at = datetime('now', '-600 seconds') WHERE worker_id = ?",
-                (handle.worker_id,),
-            )
+        # Backdate the AUTHORITATIVE row (PG) — a SQLite-shadow UPDATE would
+        # leave the row the recovery scan actually reads untouched.
+        backdated_at = (datetime.now(timezone.utc) - timedelta(seconds=600)).isoformat()
+        self.controller_store._control_plane_postgres.execute_non_query(
+            "UPDATE agent_worker_runs SET updated_at = %s WHERE worker_id = %s",
+            (backdated_at, int(handle.worker_id)),
+        )
 
         daemon = PersistentWorkerRecoveryDaemon(
             store=self.daemon_store,
@@ -785,9 +1432,199 @@ class PersistentWorkerRecoveryDaemonTest(unittest.TestCase):
         self.assertEqual(summary["claimed_count"], 1)
         self.assertEqual(summary["executed_count"], 1)
         self.assertEqual(len(self.fake_engine.harvest_profile_batch_calls), 1)
+        self.assertEqual(self.fake_engine.harvest_profile_batch_calls[0]["nonblocking_submit"], "true")
+        self.assertEqual(
+            self.fake_engine.harvest_profile_batch_calls[0]["recovery_submit_policy"],
+            "nonblocking_provider_handoff",
+        )
         self.assertIsNotNone(worker)
         self.assertEqual(worker["status"], "completed")
         self.assertEqual(worker["checkpoint"]["recovery_kind"], "harvest_profile_batch")
+
+    def test_persistent_daemon_splits_large_profile_recovery_by_candidate_limit(self) -> None:
+        job_id = "job_harvest_profile_recovery_candidate_budget"
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-harvest-profile-budget"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        self._save_job(job_id)
+        handles = []
+        for index in range(2):
+            profile_urls = [
+                f"https://www.linkedin.com/in/profile-budget-{index}-{url_index:03d}/"
+                for url_index in range(200)
+            ]
+            handle = self.controller_runtime.begin_worker(
+                job_id=job_id,
+                request=self.request,
+                plan_payload=self.plan_payload,
+                runtime_mode="workflow",
+                lane_id="enrichment_specialist",
+                worker_key=f"harvest_profile_batch::budget-{index}",
+                stage="enriching",
+                span_name=f"harvest_profile_batch:budget-{index}",
+                budget_payload={"requested_url_count": len(profile_urls)},
+                input_payload={"profile_urls": profile_urls},
+                metadata={
+                    "recovery_kind": "harvest_profile_batch",
+                    "snapshot_dir": str(snapshot_dir),
+                    "profile_urls": profile_urls,
+                    "request_payload": self.request.to_record(),
+                    "plan_payload": self.plan_payload,
+                    "runtime_mode": "workflow",
+                },
+                handoff_from_lane="acquisition_specialist",
+            )
+            self.controller_runtime.complete_worker(
+                handle,
+                status="queued",
+                checkpoint_payload={
+                    "stage": "waiting_remote_harvest",
+                    "recovery_kind": "harvest_profile_batch",
+                },
+                output_payload={"summary": {"status": "queued", "requested_url_count": len(profile_urls)}},
+            )
+            handles.append(handle)
+
+        def _complete_matching_profile_worker(**kwargs):
+            profile_urls = list(kwargs.get("profile_urls") or [])
+            matching_worker = next(
+                (
+                    worker
+                    for worker in self.daemon_store.list_agent_workers(
+                        job_id=str(kwargs.get("job_id") or ""),
+                        lane_id="enrichment_specialist",
+                    )
+                    if list(dict(worker.get("metadata") or {}).get("profile_urls") or []) == profile_urls
+                ),
+                None,
+            )
+            self.assertIsNotNone(matching_worker)
+            assert matching_worker is not None
+            self.daemon_store.complete_agent_worker(
+                int(matching_worker["worker_id"]),
+                status="completed",
+                checkpoint_payload={"stage": "completed", "recovery_kind": "harvest_profile_batch"},
+                output_payload={"summary": {"status": "completed", "requested_url_count": len(profile_urls)}},
+            )
+            return {
+                "worker_status": "completed",
+                "summary": {"status": "completed", "requested_url_count": len(profile_urls)},
+            }
+
+        self.fake_engine.multi_source_enricher._execute_harvest_profile_batch_worker = _complete_matching_profile_worker
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="daemon-harvest-profile-budget",
+            stale_after_seconds=0,
+            total_limit=4,
+            candidate_limit=256,
+            job_id=job_id,
+        )
+        summary = daemon.run_once()
+        worker_statuses = [
+            str(dict(self.controller_store.get_agent_worker(worker_id=handle.worker_id) or {}).get("status") or "")
+            for handle in handles
+        ]
+
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        self.assertEqual(summary["candidate_count"], 200)
+        self.assertTrue(summary["candidate_budget_exhausted"])
+        self.assertEqual(worker_statuses.count("completed"), 1)
+        self.assertEqual(worker_statuses.count("queued"), 1)
+
+    def test_persistent_daemon_checks_phase_budget_between_profile_workers(self) -> None:
+        job_id = "job_harvest_profile_recovery_elapsed_budget"
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-harvest-profile-elapsed"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        self._save_job(job_id)
+        handles = []
+        for index in range(2):
+            profile_urls = [f"https://www.linkedin.com/in/profile-elapsed-{index}-{url_index:03d}/" for url_index in range(80)]
+            handle = self.controller_runtime.begin_worker(
+                job_id=job_id,
+                request=self.request,
+                plan_payload=self.plan_payload,
+                runtime_mode="workflow",
+                lane_id="enrichment_specialist",
+                worker_key=f"harvest_profile_batch::elapsed-{index}",
+                stage="enriching",
+                span_name=f"harvest_profile_batch:elapsed-{index}",
+                budget_payload={"requested_url_count": len(profile_urls)},
+                input_payload={"profile_urls": profile_urls},
+                metadata={
+                    "recovery_kind": "harvest_profile_batch",
+                    "snapshot_dir": str(snapshot_dir),
+                    "profile_urls": profile_urls,
+                    "request_payload": self.request.to_record(),
+                    "plan_payload": self.plan_payload,
+                    "runtime_mode": "workflow",
+                },
+                handoff_from_lane="acquisition_specialist",
+            )
+            self.controller_runtime.complete_worker(
+                handle,
+                status="queued",
+                checkpoint_payload={
+                    "stage": "waiting_remote_harvest",
+                    "recovery_kind": "harvest_profile_batch",
+                },
+                output_payload={"summary": {"status": "queued", "requested_url_count": len(profile_urls)}},
+            )
+            handles.append(handle)
+
+        def _slow_complete_profile_worker(**kwargs):
+            profile_urls = list(kwargs.get("profile_urls") or [])
+            matching_worker = next(
+                (
+                    worker
+                    for worker in self.daemon_store.list_agent_workers(
+                        job_id=str(kwargs.get("job_id") or ""),
+                        lane_id="enrichment_specialist",
+                    )
+                    if list(dict(worker.get("metadata") or {}).get("profile_urls") or []) == profile_urls
+                ),
+                None,
+            )
+            self.assertIsNotNone(matching_worker)
+            assert matching_worker is not None
+            time.sleep(0.03)
+            self.daemon_store.complete_agent_worker(
+                int(matching_worker["worker_id"]),
+                status="completed",
+                checkpoint_payload={"stage": "completed", "recovery_kind": "harvest_profile_batch"},
+                output_payload={"summary": {"status": "completed", "requested_url_count": len(profile_urls)}},
+            )
+            return {
+                "worker_status": "completed",
+                "summary": {"status": "completed", "requested_url_count": len(profile_urls)},
+            }
+
+        self.fake_engine.multi_source_enricher._execute_harvest_profile_batch_worker = _slow_complete_profile_worker
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="daemon-harvest-profile-elapsed",
+            stale_after_seconds=0,
+            total_limit=4,
+            phase_budget_ms=10,
+            job_id=job_id,
+        )
+        summary = daemon.run_once()
+        worker_statuses = [
+            str(dict(self.controller_store.get_agent_worker(worker_id=handle.worker_id) or {}).get("status") or "")
+            for handle in handles
+        ]
+
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        self.assertTrue(summary["elapsed_budget_exhausted"])
+        self.assertEqual(worker_statuses.count("completed"), 1)
+        self.assertEqual(worker_statuses.count("queued"), 1)
 
     def test_persistent_daemon_persists_completed_harvest_profile_batch_result_without_nested_worker_update(self) -> None:
         job_id = "job_harvest_profile_recovery_cached"

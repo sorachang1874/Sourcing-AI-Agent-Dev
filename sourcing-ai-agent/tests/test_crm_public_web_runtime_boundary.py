@@ -532,25 +532,24 @@ def test_legacy_public_web_test_rows_are_seeded_through_migration_helpers() -> N
 
 
 def test_legacy_target_public_web_storage_writes_fail_closed_without_migration_context(tmp_path) -> None:
-    from sourcing_agent.storage import ControlPlaneStore
+    from tests.pg_store_fixture import pg_backed_control_plane_store
 
-    store = ControlPlaneStore(tmp_path / "test.db")
+    with pg_backed_control_plane_store(schema_label="boundary_legacy_fail_closed") as store:
+        try:
+            store.upsert_target_candidate_public_web_batch(
+                {
+                    "batch_id": "normal-path-forbidden",
+                    "idempotency_key": "normal-path-forbidden",
+                    "status": "queued",
+                }
+            )
+        except RuntimeError as exc:
+            message = str(exc)
+        else:
+            raise AssertionError("legacy target-candidate Public Web batch write should fail closed")
 
-    try:
-        store.upsert_target_candidate_public_web_batch(
-            {
-                "batch_id": "normal-path-forbidden",
-                "idempotency_key": "normal-path-forbidden",
-                "status": "queued",
-            }
-        )
-    except RuntimeError as exc:
-        message = str(exc)
-    else:
-        raise AssertionError("legacy target-candidate Public Web batch write should fail closed")
-
-    assert "legacy_target_candidate_public_web_write_retired" in message
-    assert store.list_target_candidate_public_web_batches() == []
+        assert "legacy_target_candidate_public_web_write_retired" in message
+        assert store.list_target_candidate_public_web_batches() == []
 
 
 def test_public_web_core_legacy_storage_access_is_retired_or_migration_only() -> None:

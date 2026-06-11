@@ -7,9 +7,10 @@ from types import SimpleNamespace
 from unittest import mock
 
 from sourcing_agent import cli
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
-class CliWorkflowRunnerTest(unittest.TestCase):
+class CliWorkflowRunnerTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def test_control_plane_storage_banner_marks_non_pg_runtime_as_error(self) -> None:
         banner = cli._control_plane_storage_banner(  # noqa: SLF001
             {
@@ -20,18 +21,19 @@ class CliWorkflowRunnerTest(unittest.TestCase):
 
         self.assertEqual(banner["status"], "non_pg_control_plane")
         self.assertEqual(banner["severity"], "error")
-        self.assertIn("Disk SQLite live control-plane mode is retired", banner["message"])
+        self.assertIn("Disk-backed live SQLite control-plane mode is retired", banner["message"])
 
     def test_control_plane_storage_banner_accepts_pg_only_ephemeral_shadow(self) -> None:
         banner = cli._control_plane_storage_banner(  # noqa: SLF001
             {
                 "control_plane_postgres_live_mode": "postgres_only",
-                "sqlite_shadow_backend": "shared_memory",
+                "compatibility_shadow_backend": "shared_memory",
             }
         )
 
         self.assertEqual(banner["status"], "pg_only")
         self.assertEqual(banner["severity"], "ok")
+        self.assertIn("ephemeral compatibility shadow", banner["message"])
 
     def test_retired_sqlite_tool_confirmation_helper_is_removed(self) -> None:
         self.assertFalse(hasattr(cli, "_require_legacy_sqlite_tool_confirmation"))
@@ -347,6 +349,242 @@ class CliWorkflowRunnerTest(unittest.TestCase):
         self.assertTrue(bool(payload["auto_job_daemon"]))
         print_mock.assert_called_once()
 
+    def test_run_worker_daemon_once_prints_json_safe_recovery_payload(self) -> None:
+        orchestrator = mock.Mock()
+        orchestrator.run_worker_recovery_once = mock.Mock(
+            return_value={
+                "status": "completed",
+                "runtime_path": Path("/tmp/runtime/projection-state.json"),
+                "candidate_ids": [f"candidate-{index}" for index in range(30)],
+                "items": [
+                    {
+                        "status": "partial",
+                        "profile_url_batch": [
+                            f"https://www.linkedin.com/in/profile-{index}/" for index in range(29)
+                        ],
+                        "queued_urls": [f"https://www.linkedin.com/in/member-{index}/" for index in range(28)],
+                    }
+                ],
+            }
+        )
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "run-worker-daemon-once",
+                    "--job-id",
+                    "job-123",
+                    "--disable-profile-prefetch-refill",
+                ],
+            ),
+            mock.patch("builtins.print") as print_mock,
+        ):
+            cli.main()
+
+        orchestrator.run_worker_recovery_once.assert_called_once()
+        printed_payload = json.loads(print_mock.call_args.args[0])
+        self.assertEqual(printed_payload["runtime_path"], "/tmp/runtime/projection-state.json")
+        self.assertEqual(printed_payload["candidate_ids"]["count"], 30)
+        self.assertEqual(len(printed_payload["candidate_ids"]["sample"]), 24)
+        self.assertTrue(printed_payload["candidate_ids"]["truncated"])
+        self.assertEqual(printed_payload["items"][0]["queued_urls"]["count"], 28)
+        self.assertEqual(printed_payload["items"][0]["profile_url_batch"]["count"], 29)
+
+    def test_refresh_company_public_web_assets_command_delegates_to_api_cli_lane(self) -> None:
+        orchestrator = mock.Mock()
+        orchestrator.refresh_company_public_web_assets = mock.Mock(
+            return_value={"status": "completed", "summary": {"asset_count": 1}}
+        )
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "refresh-company-public-web-assets",
+                    "--target-company",
+                    "OpenAI",
+                    "--source-family",
+                    "company_research",
+                    "--seed-url",
+                    "https://openai.com/research",
+                    "--max-assets",
+                    "5",
+                ],
+            ),
+            mock.patch("builtins.print") as print_mock,
+        ):
+            cli.main()
+
+        orchestrator.refresh_company_public_web_assets.assert_called_once()
+        payload = orchestrator.refresh_company_public_web_assets.call_args.args[0]
+        self.assertEqual(payload["target_company"], "OpenAI")
+        self.assertEqual(payload["source_families"], ["company_research"])
+        self.assertEqual(payload["seed_urls"], ["https://openai.com/research"])
+        self.assertEqual(payload["options"]["max_assets"], 5)
+        self.assertEqual(payload["options"]["collection_mode"], "seed_url_only")
+        print_mock.assert_called_once()
+
+    def test_refresh_company_public_web_assets_command_passes_provider_search_options(self) -> None:
+        orchestrator = mock.Mock()
+        orchestrator.refresh_company_public_web_assets = mock.Mock(
+            return_value={"status": "completed", "summary": {"asset_count": 2}}
+        )
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "refresh-company-public-web-assets",
+                    "--target-company",
+                    "OpenAI",
+                    "--collection-mode",
+                    "provider_search",
+                    "--max-queries",
+                    "2",
+                    "--max-results-per-query",
+                    "3",
+                ],
+            ),
+            mock.patch("builtins.print") as print_mock,
+        ):
+            cli.main()
+
+        orchestrator.refresh_company_public_web_assets.assert_called_once()
+        payload = orchestrator.refresh_company_public_web_assets.call_args.args[0]
+        self.assertEqual(payload["options"]["collection_mode"], "provider_search")
+        self.assertEqual(payload["options"]["max_queries"], 2)
+        self.assertEqual(payload["options"]["max_results_per_query"], 3)
+        print_mock.assert_called_once()
+
+    def test_refresh_company_public_web_assets_command_passes_collector_bundle_json(self) -> None:
+        orchestrator = mock.Mock()
+        orchestrator.refresh_company_public_web_assets = mock.Mock(
+            return_value={"status": "completed", "summary": {"asset_count": 1}}
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            collector_path = Path(tempdir) / "collector_inputs.json"
+            collector_path.write_text(
+                json.dumps(
+                    {
+                        "collector_inputs": {
+                            "arxiv_publications": [
+                                {"title": "Inference Systems", "url": "https://arxiv.org/abs/2601.00001"}
+                            ]
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+                mock.patch.object(
+                    cli.sys,
+                    "argv",
+                    [
+                        "cli",
+                        "refresh-company-public-web-assets",
+                        "--target-company",
+                        "OpenAI",
+                        "--collection-mode",
+                        "collector_bundle",
+                        "--collector-input-json",
+                        str(collector_path),
+                    ],
+                ),
+                mock.patch("builtins.print") as print_mock,
+            ):
+                cli.main()
+
+        orchestrator.refresh_company_public_web_assets.assert_called_once()
+        payload = orchestrator.refresh_company_public_web_assets.call_args.args[0]
+        self.assertEqual(payload["options"]["collection_mode"], "collector_bundle")
+        self.assertEqual(payload["collector_inputs"]["arxiv_publications"][0]["title"], "Inference Systems")
+        print_mock.assert_called_once()
+
+    def test_refresh_company_public_web_assets_command_passes_live_collector_sources(self) -> None:
+        orchestrator = mock.Mock()
+        orchestrator.refresh_company_public_web_assets = mock.Mock(
+            return_value={"status": "completed", "summary": {"asset_count": 1}}
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            collector_source_path = Path(tempdir) / "collector_sources.json"
+            collector_source_path.write_text(
+                json.dumps(
+                    {
+                        "collector_sources": [
+                            {"url": "https://openai.com/research/rss.xml", "collector_type": "rss_items"}
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+                mock.patch.object(
+                    cli.sys,
+                    "argv",
+                    [
+                        "cli",
+                        "refresh-company-public-web-assets",
+                        "--target-company",
+                        "OpenAI",
+                        "--collection-mode",
+                        "collector_bundle",
+                        "--collector-source-json",
+                        str(collector_source_path),
+                        "--collector-source-url",
+                        "https://openai.com/engineering",
+                        "--discover-collector-sources",
+                        "--max-discovered-collector-sources",
+                        "7",
+                    ],
+                ),
+                mock.patch("builtins.print") as print_mock,
+            ):
+                cli.main()
+
+        orchestrator.refresh_company_public_web_assets.assert_called_once()
+        payload = orchestrator.refresh_company_public_web_assets.call_args.args[0]
+        self.assertEqual(payload["options"]["collection_mode"], "collector_bundle")
+        self.assertTrue(payload["options"]["discover_collector_sources"])
+        self.assertEqual(payload["options"]["max_discovered_collector_sources"], 7)
+        self.assertEqual(payload["collector_sources"][0]["collector_type"], "rss_items")
+        self.assertEqual(payload["collector_sources"][1], "https://openai.com/engineering")
+        print_mock.assert_called_once()
+
+    def test_list_company_public_web_assets_command_does_not_trigger_refresh(self) -> None:
+        orchestrator = mock.Mock()
+        orchestrator.list_company_public_web_assets = mock.Mock(return_value={"status": "ok", "assets": []})
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                ["cli", "list-company-public-web-assets", "--target-company", "OpenAI", "--limit", "25"],
+            ),
+            mock.patch("builtins.print") as print_mock,
+        ):
+            cli.main()
+
+        orchestrator.list_company_public_web_assets.assert_called_once()
+        self.assertEqual(orchestrator.list_company_public_web_assets.call_args.args[0]["target_company"], "OpenAI")
+        self.assertEqual(orchestrator.list_company_public_web_assets.call_args.args[0]["limit"], 25)
+        self.assertFalse(orchestrator.refresh_company_public_web_assets.called)
+        print_mock.assert_called_once()
+
     def test_show_system_progress_command_delegates_to_orchestrator(self) -> None:
         orchestrator = mock.Mock()
         orchestrator.get_system_progress = mock.Mock(return_value={"status": "ok", "workflow_jobs": {"count": 0}})
@@ -409,6 +647,252 @@ class CliWorkflowRunnerTest(unittest.TestCase):
             }
         )
         print_mock.assert_called_once()
+
+    def test_backfill_job_result_lifecycle_cli_dry_run_delegates_with_progress_callback(self) -> None:
+        orchestrator = mock.Mock()
+
+        def _fake_backfill(*, orchestrator, dry_run, batch_size, progress_callback):
+            self.assertIsNotNone(orchestrator)
+            self.assertTrue(dry_run)
+            self.assertEqual(batch_size, 2)
+
+            class _Stats:
+                def to_dict(self) -> dict[str, int]:
+                    return {
+                        "total_jobs": 1,
+                        "jobs_with_lifecycle": 0,
+                        "jobs_backfilled": 1,
+                        "jobs_skipped": 0,
+                        "errors": 0,
+                    }
+
+            progress_callback("job-123", _Stats())
+            return {"total_jobs": 1, "jobs_backfilled": 1, "schema_preflight": {"status": "synced"}}
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator) as build_mock,
+            mock.patch.object(cli, "backfill_job_result_lifecycle", side_effect=_fake_backfill) as backfill_mock,
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "backfill-job-result-lifecycle",
+                    "--dry-run",
+                    "--batch-size",
+                    "2",
+                    "--verbose",
+                ],
+            ),
+            mock.patch("builtins.print") as print_mock,
+        ):
+            cli.main()
+
+        build_mock.assert_called_once()
+        backfill_mock.assert_called_once()
+        self.assertGreaterEqual(print_mock.call_count, 2)
+
+    def test_backfill_snapshot_full_materialization_items_cli_defaults_to_dry_run(self) -> None:
+        orchestrator = mock.Mock()
+
+        def _fake_backfill(*, orchestrator, dry_run, limit, batch_size, progress_callback):
+            self.assertIsNotNone(orchestrator)
+            self.assertTrue(dry_run)
+            self.assertEqual(limit, 3)
+            self.assertEqual(batch_size, 2)
+
+            class _Stats:
+                def to_dict(self) -> dict[str, int]:
+                    return {
+                        "total_jobs": 1,
+                        "eligible_jobs": 1,
+                        "existing_items": 0,
+                        "items_enqueued": 1,
+                        "jobs_skipped": 0,
+                        "errors": 0,
+                    }
+
+            progress_callback("job-123", _Stats())
+            return {"dry_run": True, "eligible_jobs": 1, "items_enqueued": 1}
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator) as build_mock,
+            mock.patch.object(
+                cli,
+                "backfill_snapshot_full_materialization_items",
+                side_effect=_fake_backfill,
+            ) as backfill_mock,
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "backfill-snapshot-full-materialization-items",
+                    "--limit",
+                    "3",
+                    "--batch-size",
+                    "2",
+                    "--verbose",
+                ],
+            ),
+            mock.patch("builtins.print") as print_mock,
+        ):
+            cli.main()
+
+        build_mock.assert_called_once()
+        backfill_mock.assert_called_once()
+        self.assertGreaterEqual(print_mock.call_count, 2)
+
+    def test_backfill_snapshot_full_materialization_items_cli_apply_persists(self) -> None:
+        orchestrator = mock.Mock()
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+            mock.patch.object(
+                cli,
+                "backfill_snapshot_full_materialization_items",
+                return_value={"dry_run": False, "items_enqueued": 1},
+            ) as backfill_mock,
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "backfill-snapshot-full-materialization-items",
+                    "--apply",
+                ],
+            ),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        self.assertFalse(backfill_mock.call_args.kwargs["dry_run"])
+
+    def test_backfill_local_apply_closure_items_cli_defaults_to_dry_run(self) -> None:
+        orchestrator = mock.Mock()
+        orchestrator.backfill_local_apply_closure_items.return_value = {
+            "status": "dry_run",
+            "dry_run": True,
+            "candidate_worker_count": 1,
+        }
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator) as build_mock,
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "backfill-local-apply-closure-items",
+                    "--job-id",
+                    "job-123",
+                    "--limit",
+                    "7",
+                    "--job-scan-limit",
+                    "11",
+                ],
+            ),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        build_mock.assert_called_once()
+        orchestrator.backfill_local_apply_closure_items.assert_called_once_with(
+            {
+                "dry_run": True,
+                "job_id": "job-123",
+                "local_apply_backlog_worker_limit": 7,
+                "local_apply_backlog_job_scan_limit": 11,
+            }
+        )
+
+    def test_backfill_local_apply_closure_items_cli_apply_persists(self) -> None:
+        orchestrator = mock.Mock()
+        orchestrator.backfill_local_apply_closure_items.return_value = {
+            "status": "completed",
+            "dry_run": False,
+            "enqueued_count": 1,
+        }
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "backfill-local-apply-closure-items",
+                    "--apply",
+                ],
+            ),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        self.assertFalse(orchestrator.backfill_local_apply_closure_items.call_args.args[0]["dry_run"])
+
+    def test_backfill_search_seed_discovery_items_cli_defaults_to_dry_run(self) -> None:
+        orchestrator = mock.Mock()
+        orchestrator.backfill_search_seed_discovery_query_items.return_value = {
+            "status": "dry_run",
+            "dry_run": True,
+            "candidate_worker_count": 1,
+        }
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator) as build_mock,
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "backfill-search-seed-discovery-items",
+                    "--job-id",
+                    "job-123",
+                    "--limit",
+                    "7",
+                    "--job-scan-limit",
+                    "11",
+                ],
+            ),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        build_mock.assert_called_once()
+        orchestrator.backfill_search_seed_discovery_query_items.assert_called_once_with(
+            {
+                "dry_run": True,
+                "job_id": "job-123",
+                "search_seed_discovery_worker_limit": 7,
+                "search_seed_discovery_job_scan_limit": 11,
+            }
+        )
+
+    def test_backfill_search_seed_discovery_items_cli_apply_persists(self) -> None:
+        orchestrator = mock.Mock()
+        orchestrator.backfill_search_seed_discovery_query_items.return_value = {
+            "status": "completed",
+            "dry_run": False,
+            "backfilled_count": 1,
+        }
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "backfill-search-seed-discovery-items",
+                    "--apply",
+                ],
+            ),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        self.assertFalse(orchestrator.backfill_search_seed_discovery_query_items.call_args.args[0]["dry_run"])
 
     def test_repair_company_candidate_artifacts_command_delegates_to_repair_helper(self) -> None:
         catalog = SimpleNamespace(project_root=Path("/tmp/project"))
@@ -584,6 +1068,33 @@ class CliWorkflowRunnerTest(unittest.TestCase):
                 cli.main()
 
         orchestrator.continue_excel_intake_review.assert_called_once_with(payload)
+        print_mock.assert_called_once()
+
+    def test_repair_excel_intake_artifacts_command_delegates_to_orchestrator(self) -> None:
+        orchestrator = mock.Mock()
+        orchestrator.repair_excel_intake_artifacts = mock.Mock(
+            return_value={"status": "completed", "job_id": "excel-job-1"}
+        )
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                ["cli", "repair-excel-intake-artifacts", "--job-id", "excel-job-1", "--apply", "--run-now"],
+            ),
+            mock.patch("builtins.print") as print_mock,
+        ):
+            cli.main()
+
+        orchestrator.repair_excel_intake_artifacts.assert_called_once_with(
+            {
+                "job_id": "excel-job-1",
+                "dry_run": False,
+                "run_now": True,
+                "source": "repair_excel_intake_artifacts_cli",
+            }
+        )
         print_mock.assert_called_once()
 
     def test_serve_command_starts_watchdog_without_blocking_bootstrap_pass(self) -> None:
@@ -792,6 +1303,749 @@ class CliWorkflowRunnerTest(unittest.TestCase):
             include_all_sqlite_tables=True,
             source_backend="sqlite",
         )
+
+    def test_audit_company_serving_view_reports_projection_and_job_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            artifact_dir = runtime_dir / "company_assets" / "acme" / "snap-new" / "normalized_artifacts"
+            pages_dir = artifact_dir / "pages"
+            pages_dir.mkdir(parents=True, exist_ok=True)
+            (artifact_dir / "artifact_summary.json").write_text(
+                json.dumps(
+                    {
+                        "target_company": "Acme",
+                        "company_key": "acme",
+                        "snapshot_id": "snap-new",
+                        "asset_view": "canonical_merged",
+                        "candidate_count": 1,
+                        "candidate_shard_count": 1,
+                        "build_profile": "foreground_fast",
+                        "projection_version": "candidate_artifact_projection_v20260427_source_matches",
+                        "materialization_generation_key": "gen-new",
+                        "source_snapshot_selection": {
+                            "mode": "current_snapshot_only_large_org",
+                            "selected_snapshot_ids": ["snap-new"],
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (artifact_dir / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "target_company": "Acme",
+                        "company_key": "acme",
+                        "snapshot_id": "snap-new",
+                        "asset_view": "canonical_merged",
+                        "candidate_count": 1,
+                        "build_profile": "foreground_fast",
+                        "projection_version": "candidate_artifact_projection_v20260427_source_matches",
+                        "pagination": {"page_count": 1, "page_size": 50},
+                        "candidate_shards": [{"candidate_id": "c1", "path": "candidates/c1.json"}],
+                        "pages": [{"page": 1, "path": "pages/page-0001.json", "candidate_count": 1}],
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (pages_dir / "page-0001.json").write_text(
+                json.dumps(
+                    {
+                        "candidates": [
+                            {
+                                "candidate_id": "c1",
+                                "display_name": "Ada Example",
+                                "matched_keywords": ["Gemini"],
+                                "source_matches": [
+                                    {
+                                        "source_type": "harvest_profile_search",
+                                        "source_query": "Gemini",
+                                        "matched_keywords": ["Gemini"],
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            store = self.make_pg_store(runtime_dir / "sourcing_agent.db")
+            store.upsert_organization_asset_registry(
+                {
+                    "target_company": "Acme",
+                    "company_key": "acme",
+                    "snapshot_id": "snap-new",
+                    "asset_view": "canonical_merged",
+                    "candidate_count": 1,
+                    "evidence_count": 0,
+                    "source_path": str(artifact_dir / "artifact_summary.json"),
+                    "materialization_generation_key": "gen-new",
+                    "summary": {"candidate_count": 1},
+                },
+                authoritative=True,
+            )
+            store.upsert_job_result_view(
+                job_id="job-1",
+                target_company="Acme",
+                source_kind="company_snapshot",
+                view_kind="asset_population",
+                snapshot_id="snap-old",
+                asset_view="canonical_merged",
+            )
+
+            result = cli.audit_company_serving_view(
+                runtime_dir=runtime_dir,
+                store=store,
+                company="Acme",
+                job_id="job-1",
+                sample_pages=0,
+            )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["artifact"]["build_profile"], "foreground_fast")
+        self.assertEqual(
+            result["artifact"]["projection_version"],
+            "candidate_artifact_projection_v20260427_source_matches",
+        )
+        self.assertEqual(result["artifact"]["projection_version_source"], "artifact_summary")
+        self.assertEqual(result["source_provenance"]["source_matches_records"], 1)
+        self.assertEqual(result["source_provenance"]["matched_keywords_records"], 1)
+        self.assertTrue(result["drift"]["policy_required_for_repoint"])
+
+    def test_audit_job_result_view_consistency_only_auto_repairs_full_reuse_jobs(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            artifact_dir = runtime_dir / "company_assets" / "acme" / "snap-new" / "normalized_artifacts"
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            (artifact_dir / "artifact_summary.json").write_text(
+                json.dumps(
+                    {
+                        "target_company": "Acme",
+                        "company_key": "acme",
+                        "snapshot_id": "snap-new",
+                        "asset_view": "canonical_merged",
+                        "candidate_count": 42,
+                        "projection_version": "candidate_artifact_projection_v20260427_source_matches",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (artifact_dir / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "target_company": "Acme",
+                        "company_key": "acme",
+                        "snapshot_id": "snap-new",
+                        "asset_view": "canonical_merged",
+                        "candidate_count": 42,
+                        "pagination": {"page_count": 1},
+                        "pages": [],
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            store = self.make_pg_store(runtime_dir / "sourcing_agent.db")
+            store.upsert_organization_asset_registry(
+                {
+                    "target_company": "Acme",
+                    "company_key": "acme",
+                    "snapshot_id": "snap-new",
+                    "asset_view": "canonical_merged",
+                    "candidate_count": 42,
+                    "source_path": str(artifact_dir / "artifact_summary.json"),
+                    "summary": {"candidate_count": 42},
+                },
+                authoritative=True,
+            )
+            store.save_job(
+                job_id="job-full-reuse",
+                job_type="workflow",
+                status="completed",
+                stage="completed",
+                request_payload={
+                    "raw_user_request": "给我 Acme 的全部成员",
+                    "target_company": "Acme",
+                    "target_scope": "full_company_asset",
+                },
+                plan_payload={"asset_reuse_plan": {"planner_mode": "reuse_snapshot_only"}},
+                summary_payload={
+                    "candidate_source": {
+                        "source_kind": "company_snapshot",
+                        "snapshot_id": "snap-old",
+                        "asset_view": "canonical_merged",
+                        "candidate_count": 2,
+                    }
+                },
+            )
+            store.upsert_job_result_view(
+                job_id="job-full-reuse",
+                target_company="Acme",
+                source_kind="company_snapshot",
+                view_kind="asset_population",
+                snapshot_id="snap-old",
+                asset_view="canonical_merged",
+                summary={"candidate_count": 2},
+            )
+            store.save_job(
+                job_id="job-scoped-overlay",
+                job_type="workflow",
+                status="completed",
+                stage="completed",
+                request_payload={
+                    "raw_user_request": "给我 Acme 做 Agent 的人",
+                    "target_company": "Acme",
+                    "target_scope": "full_company_asset",
+                    "keywords": ["Agent"],
+                },
+                plan_payload={"asset_reuse_plan": {"planner_mode": "delta_from_snapshot"}},
+                summary_payload={
+                    "candidate_source": {
+                        "source_kind": "company_snapshot",
+                        "snapshot_id": "snap-old",
+                        "asset_view": "canonical_merged",
+                        "candidate_count": 2,
+                        "asset_population_overlay_path": str(runtime_dir / "overlay.json"),
+                    }
+                },
+            )
+            store.upsert_job_result_view(
+                job_id="job-scoped-overlay",
+                target_company="Acme",
+                source_kind="company_snapshot",
+                view_kind="asset_population",
+                snapshot_id="snap-old",
+                asset_view="canonical_merged",
+                summary={"candidate_count": 2},
+                metadata={"asset_population_overlay_path": str(runtime_dir / "overlay.json")},
+            )
+
+            dry_run = cli.audit_job_result_view_consistency(
+                runtime_dir=runtime_dir,
+                store=store,
+                company="Acme",
+                limit=10,
+                apply=False,
+            )
+            applied = cli.audit_job_result_view_consistency(
+                runtime_dir=runtime_dir,
+                store=store,
+                company="Acme",
+                limit=10,
+                apply=True,
+            )
+
+        dry_run_by_job = {record["job_id"]: record for record in dry_run["jobs"]}
+        self.assertEqual(dry_run["summary"]["auto_repoint_candidate_count"], 1)
+        self.assertEqual(dry_run["summary"]["manual_review_count"], 1)
+        self.assertEqual(
+            dry_run_by_job["job-full-reuse"]["recommended_action"],
+            "dry_run_repoint_to_authoritative",
+        )
+        self.assertEqual(
+            dry_run_by_job["job-scoped-overlay"]["recommended_action"],
+            "manual_review_required",
+        )
+        self.assertTrue(dry_run_by_job["job-full-reuse"]["eligibility"]["eligible"])
+        self.assertFalse(dry_run_by_job["job-scoped-overlay"]["eligibility"]["eligible"])
+        self.assertEqual(applied["summary"]["applied_repoint_count"], 1)
+        self.assertEqual(store.get_job_result_view(job_id="job-full-reuse")["snapshot_id"], "snap-new")
+        self.assertEqual(store.get_job_result_view(job_id="job-scoped-overlay")["snapshot_id"], "snap-old")
+
+    def test_audit_hot_cache_serving_artifacts_command_is_read_only_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            project_root = Path(tempdir)
+            output_path = project_root / "reports" / "hot-cache-audit.json"
+            catalog = SimpleNamespace(project_root=project_root)
+            settings = SimpleNamespace(
+                runtime_dir=project_root / "runtime",
+                db_path=project_root / "runtime" / "sourcing_agent.db",
+            )
+            with (
+                mock.patch.object(cli.AssetCatalog, "discover", return_value=catalog),
+                mock.patch.object(cli, "load_settings", return_value=settings),
+                mock.patch.object(
+                    cli,
+                    "audit_candidate_artifact_hot_cache",
+                    return_value={"status": "needs_rehydrate", "summary": {"rehydrate_candidate_count": 1}},
+                ) as audit_mock,
+                mock.patch.object(
+                    cli.sys,
+                    "argv",
+                    [
+                        "cli",
+                        "audit-hot-cache-serving-artifacts",
+                        "--company",
+                        "Acme",
+                        "--snapshot-id",
+                        "snap-1",
+                        "--limit",
+                        "5",
+                        "--output",
+                        "reports/hot-cache-audit.json",
+                    ],
+                ),
+                mock.patch("builtins.print"),
+            ):
+                cli.main()
+
+            audit_mock.assert_called_once_with(
+                runtime_dir=settings.runtime_dir,
+                companies=["Acme"],
+                snapshot_id="snap-1",
+                asset_view="canonical_merged",
+                limit=5,
+            )
+            self.assertTrue(output_path.exists())
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["status"], "needs_rehydrate")
+
+    def test_cleanup_hot_cache_serving_artifacts_command_defaults_to_dry_run(self) -> None:
+        catalog = SimpleNamespace(project_root=Path("/tmp/project"))
+        settings = SimpleNamespace(
+            runtime_dir=Path("/tmp/project/runtime"),
+            db_path=Path("/tmp/project/runtime/sourcing_agent.db"),
+        )
+        store = object()
+        with (
+            mock.patch.object(cli.AssetCatalog, "discover", return_value=catalog),
+            mock.patch.object(cli, "load_settings", return_value=settings),
+            mock.patch.object(cli, "build_runtime_store", return_value=store),
+            mock.patch.object(
+                cli,
+                "cleanup_candidate_artifact_hot_cache",
+                return_value={"status": "completed", "dry_run": True},
+            ) as cleanup_mock,
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "cleanup-hot-cache-serving-artifacts",
+                    "--company",
+                    "Acme",
+                    "--snapshot-id",
+                    "snap-1",
+                    "--ttl-seconds",
+                    "3600",
+                    "--keep-compatibility-exports",
+                ],
+            ),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        cleanup_mock.assert_called_once_with(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            companies=["Acme"],
+            snapshot_id="snap-1",
+            dry_run=True,
+            drop_compatibility_exports=False,
+            ttl_seconds=3600,
+            size_budget_bytes=0,
+            max_bytes_per_company=0,
+            keep_latest_snapshots_per_company=1,
+            max_generations_per_scope=0,
+        )
+
+    def test_publish_candidate_generation_runs_post_publish_hot_cache_governance(self) -> None:
+        catalog = SimpleNamespace(project_root=Path("/tmp/project"))
+        settings = SimpleNamespace(
+            runtime_dir=Path("/tmp/project/runtime"),
+            db_path=Path("/tmp/project/runtime/sourcing_agent.db"),
+        )
+        store = object()
+        storage_client = object()
+        bundle_manager = mock.Mock()
+        bundle_manager.publish_candidate_generation.return_value = {
+            "status": "uploaded",
+            "generation_key": "gen-1",
+        }
+        with (
+            mock.patch.object(cli, "build_asset_bundle_manager", return_value=bundle_manager),
+            mock.patch.object(cli, "build_object_storage", return_value=storage_client),
+            mock.patch.object(cli.AssetCatalog, "discover", return_value=catalog),
+            mock.patch.object(cli, "load_settings", return_value=settings),
+            mock.patch.object(cli, "build_runtime_store", return_value=store),
+            mock.patch.object(
+                cli,
+                "run_hot_cache_governance_cycle",
+                return_value={"status": "completed"},
+            ) as governance_mock,
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "publish-candidate-generation",
+                    "--company",
+                    "Acme",
+                    "--snapshot-id",
+                    "snap-1",
+                ],
+            ),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        bundle_manager.publish_candidate_generation.assert_called_once_with(
+            target_company="Acme",
+            snapshot_id="snap-1",
+            asset_view="canonical_merged",
+            client=storage_client,
+            max_workers=None,
+            resume=True,
+            include_compatibility_exports=False,
+        )
+        governance_mock.assert_called_once_with(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            min_interval_seconds=0.0,
+            force=True,
+        )
+
+    def test_audit_authoritative_reuse_planning_command_is_read_only_report(self) -> None:
+        catalog = SimpleNamespace(project_root=Path("/tmp/project"))
+        settings = SimpleNamespace(
+            runtime_dir=Path("/tmp/project/runtime"),
+            db_path=Path("/tmp/project/runtime/sourcing_agent.db"),
+        )
+        store = object()
+        with (
+            mock.patch.object(cli.AssetCatalog, "discover", return_value=catalog),
+            mock.patch.object(cli, "load_settings", return_value=settings),
+            mock.patch.object(cli, "build_runtime_store", return_value=store),
+            mock.patch.object(
+                cli,
+                "audit_authoritative_reuse_planning_many",
+                return_value={"status": "ok", "read_only": True, "audits": []},
+            ) as audit_mock,
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "audit-authoritative-reuse-planning",
+                    "--company",
+                    "OpenAI",
+                    "--query",
+                    "帮我找OpenAI做Agent方向的人",
+                    "--query",
+                    "我想要OpenAI在health组的人",
+                ],
+            ),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        audit_mock.assert_called_once_with(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            company="OpenAI",
+            queries=["帮我找OpenAI做Agent方向的人", "我想要OpenAI在health组的人"],
+            asset_view="canonical_merged",
+        )
+
+    def test_repair_authoritative_serving_generation_command_defaults_to_dry_run(self) -> None:
+        catalog = SimpleNamespace(project_root=Path("/tmp/project"))
+        settings = SimpleNamespace(
+            runtime_dir=Path("/tmp/project/runtime"),
+            db_path=Path("/tmp/project/runtime/sourcing_agent.db"),
+        )
+        store = object()
+        with (
+            mock.patch.object(cli.AssetCatalog, "discover", return_value=catalog),
+            mock.patch.object(cli, "load_settings", return_value=settings),
+            mock.patch.object(cli, "build_runtime_store", return_value=store),
+            mock.patch.object(
+                cli,
+                "repair_authoritative_serving_generation",
+                return_value={"status": "dry_run", "applied": False},
+            ) as repair_mock,
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "repair-authoritative-serving-generation",
+                    "--company",
+                    "OpenAI",
+                    "--query",
+                    "我想要OpenAI在health组的人",
+                    "--repair-snapshot-id",
+                    "repair-health",
+                ],
+            ),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        repair_mock.assert_called_once_with(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            company="OpenAI",
+            queries=["我想要OpenAI在health组的人"],
+            asset_view="canonical_merged",
+            snapshot_id="",
+            repair_snapshot_id="repair-health",
+            build_profile="foreground_fast",
+            output_dir=None,
+            apply=False,
+        )
+
+    def test_normalize_authoritative_source_provenance_command_defaults_to_dry_run(self) -> None:
+        catalog = SimpleNamespace(project_root=Path("/tmp/project"))
+        settings = SimpleNamespace(
+            runtime_dir=Path("/tmp/project/runtime"),
+            db_path=Path("/tmp/project/runtime/sourcing_agent.db"),
+        )
+        store = object()
+        with (
+            mock.patch.object(cli.AssetCatalog, "discover", return_value=catalog),
+            mock.patch.object(cli, "load_settings", return_value=settings),
+            mock.patch.object(cli, "build_runtime_store", return_value=store),
+            mock.patch.object(
+                cli,
+                "normalize_authoritative_source_provenance",
+                return_value={"status": "dry_run", "applied": False},
+            ) as normalize_mock,
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "normalize-authoritative-source-provenance",
+                    "--company",
+                    "OpenAI",
+                ],
+            ),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        normalize_mock.assert_called_once_with(
+            store=store,
+            company="OpenAI",
+            asset_view="canonical_merged",
+            apply=False,
+        )
+
+    def test_audit_authoritative_reuse_planning_matrix_command_loads_matrix(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            matrix_path = Path(tempdir) / "matrix.json"
+            matrix_payload = {"matrix_version": 1, "cases": []}
+            matrix_path.write_text(json.dumps(matrix_payload), encoding="utf-8")
+            catalog = SimpleNamespace(project_root=Path(tempdir))
+            settings = SimpleNamespace(
+                runtime_dir=Path(tempdir) / "runtime",
+                db_path=Path(tempdir) / "runtime" / "sourcing_agent.db",
+            )
+            store = object()
+            with (
+                mock.patch.object(cli.AssetCatalog, "discover", return_value=catalog),
+                mock.patch.object(cli, "load_settings", return_value=settings),
+                mock.patch.object(cli, "build_runtime_store", return_value=store),
+                mock.patch.object(
+                    cli,
+                    "audit_authoritative_reuse_planning_matrix",
+                    return_value={"status": "ok", "read_only": True, "cases": []},
+                ) as matrix_mock,
+                mock.patch.object(
+                    cli.sys,
+                    "argv",
+                    [
+                        "cli",
+                        "audit-authoritative-reuse-planning-matrix",
+                        "--matrix",
+                        str(matrix_path),
+                        "--summary-only",
+                    ],
+                ),
+                mock.patch("builtins.print"),
+            ):
+                cli.main()
+
+        matrix_mock.assert_called_once_with(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            matrix=matrix_payload,
+            default_asset_view="canonical_merged",
+            include_full_audit=False,
+        )
+
+    def test_compare_authoritative_reuse_planning_matrix_command_reports_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            left_path = Path(tempdir) / "left.json"
+            right_path = Path(tempdir) / "right.json"
+            left_payload = {"cases": []}
+            right_payload = {"cases": []}
+            left_path.write_text(json.dumps(left_payload), encoding="utf-8")
+            right_path.write_text(json.dumps(right_payload), encoding="utf-8")
+            with (
+                mock.patch.object(
+                    cli,
+                    "compare_authoritative_reuse_planning_matrix_reports",
+                    return_value={"status": "match", "cases": []},
+                ) as compare_mock,
+                mock.patch.object(
+                    cli.sys,
+                    "argv",
+                    [
+                        "cli",
+                        "compare-authoritative-reuse-planning-matrix",
+                        "--left",
+                        str(left_path),
+                        "--right",
+                        str(right_path),
+                    ],
+                ),
+                mock.patch("builtins.print"),
+            ):
+                cli.main()
+
+        compare_mock.assert_called_once_with(
+            left=left_payload,
+            right=right_payload,
+            compare_fields=None,
+        )
+
+    def test_backfill_authoritative_population_coverage_command_defaults_to_dry_run(self) -> None:
+        catalog = SimpleNamespace(project_root=Path("/tmp/project"))
+        settings = SimpleNamespace(
+            runtime_dir=Path("/tmp/project/runtime"),
+            db_path=Path("/tmp/project/runtime/sourcing_agent.db"),
+        )
+        store = object()
+        with (
+            mock.patch.object(cli.AssetCatalog, "discover", return_value=catalog),
+            mock.patch.object(cli, "load_settings", return_value=settings),
+            mock.patch.object(cli, "build_runtime_store", return_value=store),
+            mock.patch.object(
+                cli,
+                "backfill_authoritative_population_coverage",
+                return_value={"status": "dry_run", "changed_count": 0},
+            ) as backfill_mock,
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "backfill-authoritative-population-coverage",
+                    "--company",
+                    "OpenAI",
+                    "--company",
+                    "Meta",
+                    "--limit",
+                    "25",
+                ],
+            ),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        backfill_mock.assert_called_once_with(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            companies=["OpenAI", "Meta"],
+            asset_view="canonical_merged",
+            include_non_authoritative=False,
+            dry_run=True,
+            force=False,
+            limit=25,
+        )
+
+    def test_repoint_job_result_view_requires_explicit_apply(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            artifact_dir = runtime_dir / "company_assets" / "acme" / "snap-new" / "normalized_artifacts"
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            (artifact_dir / "artifact_summary.json").write_text(
+                json.dumps(
+                    {
+                        "target_company": "Acme",
+                        "company_key": "acme",
+                        "snapshot_id": "snap-new",
+                        "asset_view": "canonical_merged",
+                        "candidate_count": 2,
+                        "build_profile": "foreground_fast",
+                        "projection_version": "candidate_artifact_projection_v20260427_source_matches",
+                        "materialization_generation_key": "gen-new",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (artifact_dir / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "target_company": "Acme",
+                        "company_key": "acme",
+                        "snapshot_id": "snap-new",
+                        "asset_view": "canonical_merged",
+                        "candidate_count": 2,
+                        "pagination": {"page_count": 0},
+                        "pages": [],
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            store = self.make_pg_store(runtime_dir / "sourcing_agent.db")
+            store.upsert_organization_asset_registry(
+                {
+                    "target_company": "Acme",
+                    "company_key": "acme",
+                    "snapshot_id": "snap-new",
+                    "asset_view": "canonical_merged",
+                    "candidate_count": 2,
+                    "evidence_count": 0,
+                    "source_path": str(artifact_dir / "artifact_summary.json"),
+                    "materialization_generation_key": "gen-new",
+                    "summary": {"candidate_count": 2},
+                },
+                authoritative=True,
+            )
+            store.upsert_job_result_view(
+                job_id="job-2",
+                target_company="Acme",
+                source_kind="company_snapshot",
+                view_kind="asset_population",
+                snapshot_id="snap-old",
+                asset_view="canonical_merged",
+            )
+
+            dry_run = cli.repoint_job_result_view(
+                runtime_dir=runtime_dir,
+                store=store,
+                job_id="job-2",
+                policy="serve_latest_company_asset",
+            )
+            self.assertEqual(store.get_job_result_view(job_id="job-2")["snapshot_id"], "snap-old")
+
+            applied = cli.repoint_job_result_view(
+                runtime_dir=runtime_dir,
+                store=store,
+                job_id="job-2",
+                policy="serve_latest_company_asset",
+                apply=True,
+                reason="manual scoped serving repair",
+            )
+
+        self.assertEqual(dry_run["status"], "dry_run")
+        self.assertEqual(applied["status"], "updated")
+        self.assertEqual(applied["updated_view"]["snapshot_id"], "snap-new")
+        self.assertEqual(applied["updated_view"]["metadata"]["repoint_policy"], "serve_latest_company_asset")
 
     def test_sync_control_plane_postgres_command_delegates_to_helper(self) -> None:
         snapshot_path = "/tmp/control-plane.json"
