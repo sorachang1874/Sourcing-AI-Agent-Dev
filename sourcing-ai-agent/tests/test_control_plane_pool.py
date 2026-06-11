@@ -235,6 +235,57 @@ class ControlPlanePostgresPoolTest(unittest.TestCase):
             )
             self.assertEqual((int(row[0]), row[1]), (1, marker))
 
+    def test_advisory_lock_keys_are_schema_namespaced(self) -> None:
+        # Advisory locks are database-global; without schema namespacing,
+        # schema-isolated runs (per-test schemas, dev vs tests on the shared
+        # local PG) contend on identical logical keys.
+        schema_a = self._new_schema("lock_a")
+        schema_b = self._new_schema("lock_b")
+        adapter_a = self._make_adapter(schema_a)
+        adapter_b = self._make_adapter(schema_b)
+
+        logical_key = "advisory_namespace_probe:job-1"
+        self.assertEqual(adapter_a._advisory_lock_key(logical_key), f"{schema_a}:{logical_key}")
+        self.assertEqual(adapter_b._advisory_lock_key(logical_key), f"{schema_b}:{logical_key}")
+        # Empty schema must namespace deterministically so every process in a
+        # default-schema deployment computes the same lock identity.
+        class _DefaultSchema:
+            schema = ""
+
+        self.assertEqual(
+            LiveControlPlanePostgresAdapter._advisory_lock_key(_DefaultSchema(), logical_key),
+            f"public:{logical_key}",
+        )
+
+        assert psycopg is not None
+        with psycopg.connect(self.dsn, connect_timeout=5) as holder:
+            with holder.cursor() as holder_cursor:
+                holder_cursor.execute(
+                    "SELECT pg_try_advisory_xact_lock(hashtext(%s))",
+                    (adapter_a._advisory_lock_key(logical_key),),
+                )
+                held = holder_cursor.fetchone()
+                self.assertTrue(held and held[0])
+
+                with psycopg.connect(self.dsn, connect_timeout=5) as probe:
+                    with probe.cursor() as probe_cursor:
+                        # A different schema must NOT contend on the same
+                        # logical key...
+                        probe_cursor.execute(
+                            "SELECT pg_try_advisory_xact_lock(hashtext(%s))",
+                            (adapter_b._advisory_lock_key(logical_key),),
+                        )
+                        cross_schema = probe_cursor.fetchone()
+                        self.assertTrue(cross_schema and cross_schema[0])
+
+                        # ...while the SAME schema keeps mutual exclusion.
+                        probe_cursor.execute(
+                            "SELECT pg_try_advisory_xact_lock(hashtext(%s))",
+                            (adapter_a._advisory_lock_key(logical_key),),
+                        )
+                        same_schema = probe_cursor.fetchone()
+                        self.assertFalse(same_schema and same_schema[0])
+
     def test_commit_rollback_and_close_semantics(self) -> None:
         schema = self._new_schema("tx")
         adapter = self._make_adapter(schema)

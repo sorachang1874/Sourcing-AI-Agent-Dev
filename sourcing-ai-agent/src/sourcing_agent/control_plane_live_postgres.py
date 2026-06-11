@@ -530,7 +530,7 @@ class LiveControlPlanePostgresAdapter:
             try:
                 connection = self._connect()
                 with connection.cursor() as cursor:
-                    cursor.execute("SELECT pg_try_advisory_xact_lock(hashtext(%s))", (lock_key,))
+                    cursor.execute("SELECT pg_try_advisory_xact_lock(hashtext(%s))", (self._advisory_lock_key(lock_key),))
                     row = cursor.fetchone()
                     acquired = bool(row[0] if isinstance(row, (list, tuple)) and row else row)
                 if not acquired:
@@ -614,7 +614,7 @@ class LiveControlPlanePostgresAdapter:
             try:
                 connection = self._connect()
                 with connection.cursor() as cursor:
-                    cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (lock_key,))
+                    cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (self._advisory_lock_key(lock_key),))
                 break
             except Exception as exc:
                 if connection is not None:
@@ -2814,7 +2814,7 @@ class LiveControlPlanePostgresAdapter:
                     with connection.cursor() as cursor:
                         cursor.execute(
                             "SELECT pg_advisory_xact_lock(hashtext(%s))",
-                            (f"workflow_events:{workflow_run_id}",),
+                            (self._advisory_lock_key(f"workflow_events:{workflow_run_id}"),),
                         )
                         sequence_number = int(payload.get("sequence_number") or 0)
                         if sequence_number <= 0:
@@ -3169,7 +3169,7 @@ class LiveControlPlanePostgresAdapter:
                     with connection.cursor() as cursor:
                         cursor.execute(
                             "SELECT pg_advisory_xact_lock(hashtext(%s))",
-                            (f"operation_events:{event_stream_id}",),
+                            (self._advisory_lock_key(f"operation_events:{event_stream_id}"),),
                         )
                         cursor.execute(
                             """
@@ -3866,7 +3866,7 @@ class LiveControlPlanePostgresAdapter:
             try:
                 with self._connect() as connection:
                     with connection.cursor() as cursor:
-                        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"linkedin_profile:{normalized_key}",))
+                        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (self._advisory_lock_key(f"linkedin_profile:{normalized_key}"),))
                         cursor.execute(
                             """
                             INSERT INTO linkedin_profile_registry_leases (
@@ -3948,7 +3948,11 @@ class LiveControlPlanePostgresAdapter:
                     with connection.cursor() as cursor:
                         cursor.execute(
                             "SELECT pg_advisory_xact_lock(hashtext(%s))",
-                            (f"linkedin_profile_batch:{sha1('|'.join(normalized_keys).encode('utf-8')).hexdigest()}",),
+                            (
+                                self._advisory_lock_key(
+                                    f"linkedin_profile_batch:{sha1('|'.join(normalized_keys).encode('utf-8')).hexdigest()}"
+                                ),
+                            ),
                         )
                         values_sql = ", ".join(["(%s, %s, %s, %s, %s, %s)"] * len(normalized_keys))
                         values_params: list[Any] = []
@@ -4061,7 +4065,7 @@ class LiveControlPlanePostgresAdapter:
             try:
                 with self._connect() as connection:
                     with connection.cursor() as cursor:
-                        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"provider_limiter:{normalized_key}",))
+                        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (self._advisory_lock_key(f"provider_limiter:{normalized_key}"),))
                         cursor.execute(
                             """
                             DELETE FROM runtime_provider_limiter_leases
@@ -5871,6 +5875,15 @@ class LiveControlPlanePostgresAdapter:
 
     def execute_non_query(self, sql: str, params: tuple[Any, ...] | list[Any]) -> int:
         return self._execute_non_query(sql, params)
+
+    def _advisory_lock_key(self, lock_key: str) -> str:
+        # Advisory locks are database-global, not schema-scoped; prefixing the
+        # adapter's schema keeps schema-isolated runs (per-test schemas,
+        # parallel local envs) from contending on the same logical resource.
+        # This changes lock identity: rolling out requires a full process stop
+        # (no old/new overlap) — the current systemd full-restart deployment
+        # satisfies that; do not hot-deploy alongside old processes.
+        return f"{self.schema or 'public'}:{lock_key}"
 
     def _connect(self) -> Any:
         psycopg_module = self._psycopg

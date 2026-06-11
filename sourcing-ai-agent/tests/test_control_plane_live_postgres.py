@@ -2,12 +2,18 @@ import json
 import os
 import tempfile
 import unittest
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
 from sourcing_agent.control_plane_job_progress import update_job_progress_event_summary
 from sourcing_agent.control_plane_live_postgres import LiveControlPlanePostgresAdapter
 from sourcing_agent.domain import Candidate, EvidenceRecord, JobRequest
+from sourcing_agent.legacy_public_web_storage import (
+    list_legacy_target_public_web_promotions,
+    list_legacy_target_public_web_runs,
+)
 from sourcing_agent.retrieval_runtime import load_bootstrap_candidate_source
 from sourcing_agent.storage import ControlPlaneStore
 
@@ -19,8 +25,9 @@ class _RetryablePostgresError(Exception):
 
 
 class _FakeRetryCursor:
-    def __init__(self, outcomes: list[object]) -> None:
+    def __init__(self, outcomes: list[object], calls: list[dict[str, object]] | None = None) -> None:
         self._outcomes = outcomes
+        self._calls = calls
         self._current: object | None = None
         self.rowcount = 0
         self.description: list[tuple[str]] = [("value",)]
@@ -32,6 +39,8 @@ class _FakeRetryCursor:
         return False
 
     def execute(self, sql: str, params: tuple[object, ...]) -> None:
+        if self._calls is not None:
+            self._calls.append({"sql": sql, "params": tuple(params), "param_count": len(params)})
         outcome = self._outcomes.pop(0)
         if isinstance(outcome, Exception):
             raise outcome
@@ -48,11 +57,26 @@ class _FakeRetryCursor:
             return self._current.get("row")
         return self._current
 
+    def fetchall(self) -> list[object]:
+        if isinstance(self._current, dict):
+            return list(self._current.get("rows") or [])
+        if isinstance(self._current, list):
+            return list(self._current)
+        if self._current is None:
+            return []
+        return [self._current]
+
 
 class _FakeRetryConnection:
-    def __init__(self, outcomes: list[object], commit_counter: dict[str, int]) -> None:
+    def __init__(
+        self,
+        outcomes: list[object],
+        commit_counter: dict[str, int],
+        calls: list[dict[str, object]] | None = None,
+    ) -> None:
         self._outcomes = outcomes
         self._commit_counter = commit_counter
+        self._calls = calls
 
     def __enter__(self) -> "_FakeRetryConnection":
         return self
@@ -61,10 +85,67 @@ class _FakeRetryConnection:
         return False
 
     def cursor(self) -> _FakeRetryCursor:
-        return _FakeRetryCursor(self._outcomes)
+        return _FakeRetryCursor(self._outcomes, self._calls)
 
     def commit(self) -> None:
         self._commit_counter["count"] = int(self._commit_counter.get("count") or 0) + 1
+
+
+class _RecordingCursor:
+    def __init__(self, calls: list[dict[str, object]]) -> None:
+        self.calls = calls
+        self.rowcount = 0
+
+    def __enter__(self) -> "_RecordingCursor":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    def execute(self, sql: str, params: tuple[object, ...] = ()) -> None:
+        self.calls.append({"sql": sql, "params": tuple(params), "param_count": len(params)})
+        self.rowcount = max(1, len(params))
+
+    def fetchone(self) -> tuple[bool]:
+        return (True,)
+
+
+class _RecordingConnection:
+    def __init__(self, calls: list[dict[str, object]], commit_counter: dict[str, int]) -> None:
+        self.calls = calls
+        self.commit_counter = commit_counter
+        self.rollback_counter: dict[str, int] | None = None
+        self.closed = False
+
+    def __enter__(self) -> "_RecordingConnection":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    def cursor(self) -> _RecordingCursor:
+        return _RecordingCursor(self.calls)
+
+    def commit(self) -> None:
+        self.commit_counter["count"] = int(self.commit_counter.get("count") or 0) + 1
+
+    def rollback(self) -> None:
+        if self.rollback_counter is not None:
+            self.rollback_counter["count"] = int(self.rollback_counter.get("count") or 0) + 1
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _AdvisoryLockRecordingConnection(_RecordingConnection):
+    def __init__(
+        self,
+        calls: list[dict[str, object]],
+        commit_counter: dict[str, int],
+        rollback_counter: dict[str, int],
+    ) -> None:
+        super().__init__(calls, commit_counter)
+        self.rollback_counter = rollback_counter
 
 
 class _FakeConnectPsycopg:
@@ -77,6 +158,11 @@ class _FakeConnectPsycopg:
 
 
 class _FakeLiveControlPlanePostgresAdapter:
+    _LEGACY_TARGET_PUBLIC_WEB_TABLES = (
+        "target_candidate_public_web_batches",
+        "target_candidate_public_web_runs",
+        "target_candidate_public_web_promotions",
+    )
     _DEFAULT_TABLES = (
         "candidates",
         "evidence",
@@ -89,11 +175,11 @@ class _FakeLiveControlPlanePostgresAdapter:
         "manual_review_items",
         "candidate_review_registry",
         "target_candidates",
-        "target_candidate_public_web_batches",
-        "target_candidate_public_web_runs",
+        "crm_public_web_batches",
+        "crm_public_web_runs",
+        "crm_public_web_promotions",
         "person_public_web_assets",
         "person_public_web_signals",
-        "target_candidate_public_web_promotions",
         "frontend_history_links",
         "agent_runtime_sessions",
         "agent_trace_spans",
@@ -116,6 +202,11 @@ class _FakeLiveControlPlanePostgresAdapter:
         "asset_membership_index",
         "candidate_materialization_state",
         "snapshot_materialization_runs",
+        "serving_projections",
+        "serving_projection_members",
+        "projection_manifest_shards",
+        "run_projection_links",
+        "collection_authoritative_pointers",
         "linkedin_profile_registry",
         "linkedin_profile_registry_aliases",
         "linkedin_profile_registry_leases",
@@ -134,6 +225,9 @@ class _FakeLiveControlPlanePostgresAdapter:
         "target_candidates": ("record_id",),
         "target_candidate_public_web_batches": ("batch_id",),
         "target_candidate_public_web_runs": ("run_id",),
+        "crm_public_web_batches": ("batch_id",),
+        "crm_public_web_runs": ("run_id",),
+        "crm_public_web_promotions": ("promotion_id",),
         "person_public_web_assets": ("asset_id",),
         "person_public_web_signals": ("signal_id",),
         "target_candidate_public_web_promotions": ("promotion_id",),
@@ -161,6 +255,11 @@ class _FakeLiveControlPlanePostgresAdapter:
         "asset_membership_index": ("generation_key", "member_key"),
         "candidate_materialization_state": ("target_company", "snapshot_id", "asset_view", "candidate_id"),
         "snapshot_materialization_runs": ("run_id",),
+        "serving_projections": ("projection_id",),
+        "serving_projection_members": ("projection_id", "candidate_identity_key"),
+        "projection_manifest_shards": ("shard_id",),
+        "run_projection_links": ("run_id", "link_type"),
+        "collection_authoritative_pointers": ("collection_id",),
         "linkedin_profile_registry": ("profile_url_key",),
         "linkedin_profile_registry_aliases": ("alias_url_key",),
         "linkedin_profile_registry_leases": ("profile_url_key",),
@@ -225,19 +324,38 @@ class _FakeLiveControlPlanePostgresAdapter:
         self._trace_span_id = 1
         self._worker_id = 1
         self._generated_ids: dict[str, int] = {table_name: 1 for table_name in self._GENERATED_ID_COLUMNS}
+        self._legacy_target_public_web_migration_table_depth = 0
 
     @property
     def enabled(self) -> bool:
         return bool(self.dsn) and self.mode != "disabled"
 
     def should_mirror(self, table_name: str) -> bool:
-        return self.enabled and str(table_name or "").strip() in self.tables
+        normalized_table = str(table_name or "").strip()
+        return self.enabled and (
+            normalized_table in self.tables
+            or (
+                self._legacy_target_public_web_migration_table_depth > 0
+                and normalized_table in self._LEGACY_TARGET_PUBLIC_WEB_TABLES
+            )
+        )
 
     def should_prefer_read(self, table_name: str) -> bool:
         return self.should_mirror(table_name) and self.mode in {"prefer_postgres", "postgres_only"}
 
     def is_authoritative(self, table_name: str) -> bool:
         return self.should_prefer_read(table_name) and self.mode == "postgres_only"
+
+    @contextmanager
+    def legacy_target_public_web_migration_table_context(self, reason: str = ""):
+        self._legacy_target_public_web_migration_table_depth += 1
+        try:
+            yield {"reason": str(reason or ""), "tables": list(self._LEGACY_TARGET_PUBLIC_WEB_TABLES)}
+        finally:
+            self._legacy_target_public_web_migration_table_depth = max(
+                0,
+                self._legacy_target_public_web_migration_table_depth - 1,
+            )
 
     def ensure_bootstrapped(self) -> None:
         return
@@ -450,6 +568,17 @@ class _FakeLiveControlPlanePostgresAdapter:
         )
         return rows[0] if rows else None
 
+    def count_rows(
+        self,
+        table_name: str,
+        *,
+        where_sql: str = "",
+        params: list[object] | tuple[object, ...] = (),
+    ) -> int:
+        normalized_table = str(table_name or "").strip()
+        rows = self._filtered_native_rows(normalized_table, where_sql=where_sql, params=params)
+        return len(rows)
+
     def select_many(
         self,
         table_name: str,
@@ -458,6 +587,7 @@ class _FakeLiveControlPlanePostgresAdapter:
         params: list[object] | tuple[object, ...] = (),
         order_by_sql: str = "",
         limit: int = 100,
+        offset: int = 0,
     ) -> list[dict[str, object]]:
         normalized_table = str(table_name or "").strip()
         rows = list(self.select_many_rows.get(normalized_table, []))
@@ -466,6 +596,9 @@ class _FakeLiveControlPlanePostgresAdapter:
             if "DESC" in str(order_by_sql or "").upper():
                 rows = list(reversed(rows))
         normalized_limit = int(limit or 0)
+        normalized_offset = max(0, int(offset or 0))
+        if normalized_offset > 0:
+            rows = rows[normalized_offset:]
         if normalized_limit > 0:
             return rows[:normalized_limit]
         return rows
@@ -503,7 +636,7 @@ class _FakeLiveControlPlanePostgresAdapter:
             "execution_bundle_json": str(payload.get("execution_bundle_json") or "{}"),
             "matching_request_json": str(payload.get("matching_request_json") or "{}"),
             "summary_json": str(payload.get("summary_json") or "{}"),
-            "artifact_path": str(payload.get("artifact_path") or ""),
+            "artifact_path": str(payload.get("artifact_path") or (existing or {}).get("artifact_path") or ""),
             "request_signature": str(payload.get("request_signature") or ""),
             "request_family_signature": str(payload.get("request_family_signature") or ""),
             "matching_request_signature": str(payload.get("matching_request_signature") or ""),
@@ -1148,6 +1281,9 @@ class _FakeLiveControlPlanePostgresAdapter:
             "asset_membership_index",
             "candidate_materialization_state",
             "snapshot_materialization_runs",
+            "serving_projections",
+            "serving_projection_members",
+            "projection_manifest_shards",
         }:
             return [row for row in rows if self._row_matches_where(table_name, row, where_sql=where_sql, params=params)]
         return rows
@@ -1346,6 +1482,133 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(len(mirrored), 1)
         self.assertEqual(str(mirrored[0]["job_id"] or ""), "job-1")
         self.assertEqual(str(mirrored[0]["target_company"] or ""), "Acme")
+
+    def test_serving_projection_foundation_uses_live_postgres_tables(self) -> None:
+        store = self._build_store(mode="postgres_only")
+        adapter = store._control_plane_postgres
+        assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
+
+        projection = store.upsert_serving_projection(
+            {
+                "projection_id": "proj_pg_foundation",
+                "projection_type": "run_scope_projection",
+                "collection_id": "company:openai",
+                "source_run_id": "job-pg-foundation",
+                "state": "serving",
+                "counts": {"candidate_count": 1},
+            }
+        )
+        member_count = store.upsert_serving_projection_members(
+            "proj_pg_foundation",
+            [
+                {
+                    "candidate_identity_key": "linkedin:test",
+                    "person_identity_key": "linkedin:test",
+                    "rank_index": 0,
+                    "public_summary": {"name": "Test Candidate"},
+                }
+            ],
+        )
+        shard = store.upsert_projection_manifest_shard(
+            {
+                "projection_id": "proj_pg_foundation",
+                "shard_index": 0,
+                "manifest_ref": "s3://cold-path/proj_pg_foundation/shard-000.json",
+                "row_count": 1,
+            }
+        )
+
+        self.assertEqual(projection["counts"], {"candidate_count": 1})
+        self.assertEqual(member_count, 1)
+        self.assertEqual(shard["manifest_ref"], "s3://cold-path/proj_pg_foundation/shard-000.json")
+        self.assertIn("serving_projections", {table_name for table_name, _row in adapter.upserts})
+        self.assertIn("projection_manifest_shards", {table_name for table_name, _row in adapter.upserts})
+        self.assertIn("serving_projection_members", {table_name for table_name, _rows in adapter.bulk_upserts})
+        self.assertEqual(store.count_serving_projection_members("proj_pg_foundation"), 1)
+        rows = store.list_serving_projection_members("proj_pg_foundation")
+        self.assertEqual(rows[0]["public_summary"], {"name": "Test Candidate"})
+        self.assertNotIn("raw_profile", rows[0])
+
+        link = store.upsert_run_projection_link(
+            {
+                "run_id": "job-pg-foundation",
+                "projection_id": "proj_pg_foundation",
+                "collection_id": "company:openai",
+                "metadata": {"owner": "run_projection_writer_v1"},
+            }
+        )
+        pointer = store.upsert_collection_authoritative_pointer(
+            {
+                "collection_id": "company:openai",
+                "active_projection_id": "proj_pg_foundation",
+                "active_collection_version": "v1",
+            }
+        )
+
+        self.assertEqual(link["projection_id"], "proj_pg_foundation")
+        self.assertEqual(pointer["active_projection_id"], "proj_pg_foundation")
+        self.assertIn("run_projection_links", {table_name for table_name, _row in adapter.upserts})
+        self.assertIn("collection_authoritative_pointers", {table_name for table_name, _row in adapter.upserts})
+
+    def test_serving_projection_foundation_mirrors_sqlite_writes(self) -> None:
+        store = self._build_store(mode="mirror")
+        adapter = store._control_plane_postgres
+        assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
+
+        store.upsert_serving_projection(
+            {
+                "projection_id": "proj_pg_mirror",
+                "projection_type": "run_scope_projection",
+                "collection_id": "company:lovable-dev",
+                "source_run_id": "job-pg-mirror",
+                "state": "serving",
+            }
+        )
+        store.upsert_serving_projection_members(
+            "proj_pg_mirror",
+            [
+                {
+                    "candidate_identity_key": "linkedin:mirror",
+                    "person_identity_key": "linkedin:mirror",
+                    "public_summary": {"name": "Mirror Candidate"},
+                }
+            ],
+        )
+        store.upsert_projection_manifest_shard(
+            {
+                "projection_id": "proj_pg_mirror",
+                "manifest_ref": "s3://cold-path/proj_pg_mirror/shard-000.json",
+            }
+        )
+        store.upsert_run_projection_link(
+            {
+                "run_id": "job-pg-mirror",
+                "projection_id": "proj_pg_mirror",
+                "collection_id": "company:lovable-dev",
+            }
+        )
+        store.upsert_collection_authoritative_pointer(
+            {
+                "collection_id": "company:lovable-dev",
+                "active_projection_id": "proj_pg_mirror",
+                "active_collection_version": "v1",
+            }
+        )
+
+        self.assertEqual(len([row for table_name, row in adapter.upserts if table_name == "serving_projections"]), 1)
+        self.assertEqual(
+            len([row for table_name, row in adapter.upserts if table_name == "serving_projection_members"]),
+            1,
+        )
+        self.assertEqual(
+            len([row for table_name, row in adapter.upserts if table_name == "projection_manifest_shards"]),
+            1,
+        )
+        self.assertEqual(len([row for table_name, row in adapter.upserts if table_name == "run_projection_links"]), 1)
+        self.assertEqual(
+            len([row for table_name, row in adapter.upserts if table_name == "collection_authoritative_pointers"]),
+            1,
+        )
 
     def test_organization_company_key_lookup_matches_legacy_target_company_aliases(self) -> None:
         store = self._build_store(mode="postgres_only")
@@ -1685,6 +1948,8 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
 
     def test_candidate_bulk_replace_writes_natively_in_prefer_postgres(self) -> None:
         store = self._build_store(mode="prefer_postgres")
+        adapter = store._control_plane_postgres
+        assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
         candidate_one = Candidate(
             candidate_id="cand_bulk_1",
@@ -1747,6 +2012,73 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         ).fetchone()[0]
         self.assertEqual(int(sqlite_candidate_count or 0), 0)
         self.assertEqual(int(sqlite_evidence_count or 0), 0)
+        candidate_bulk_upserts = [rows for table_name, rows in adapter.bulk_upserts if table_name == "candidates"]
+        evidence_bulk_upserts = [rows for table_name, rows in adapter.bulk_upserts if table_name == "evidence"]
+        self.assertGreaterEqual(len(candidate_bulk_upserts), 2)
+        self.assertGreaterEqual(len(evidence_bulk_upserts), 2)
+        self.assertEqual(
+            [str(row.get("candidate_id") or "") for row in candidate_bulk_upserts[-1]],
+            ["cand_bulk_2"],
+        )
+        self.assertEqual(
+            [str(row.get("evidence_id") or "") for row in evidence_bulk_upserts[-1]],
+            ["ev_bulk_2"],
+        )
+
+    def test_candidate_category_replace_clears_conflicting_evidence_in_prefer_postgres(self) -> None:
+        store = self._build_store(mode="prefer_postgres")
+
+        existing_candidate = Candidate(
+            candidate_id="cand_category_conflict",
+            name_en="Conflict Existing",
+            display_name="Conflict Existing",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Engineer",
+        )
+        existing_evidence = EvidenceRecord(
+            evidence_id="ev_category_conflict_existing",
+            candidate_id="cand_category_conflict",
+            source_type="linkedin_profile",
+            title="Existing LinkedIn",
+            url="https://linkedin.com/in/conflict-existing",
+            summary="Existing evidence",
+            source_dataset="bulk_test",
+            source_path="runtime://bulk/existing",
+            metadata={},
+        )
+        store.replace_bootstrap_data([existing_candidate], [existing_evidence])
+
+        replacement_candidate = Candidate(
+            candidate_id="cand_category_conflict",
+            name_en="Conflict Replacement",
+            display_name="Conflict Replacement",
+            category="investor",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Investor",
+        )
+        replacement_evidence = EvidenceRecord(
+            evidence_id="ev_category_conflict_replacement",
+            candidate_id="cand_category_conflict",
+            source_type="linkedin_profile",
+            title="Replacement LinkedIn",
+            url="https://linkedin.com/in/conflict-replacement",
+            summary="Replacement evidence",
+            source_dataset="bulk_test",
+            source_path="runtime://bulk/replacement",
+            metadata={},
+        )
+        store.replace_company_category_data("Acme", "investor", [replacement_candidate], [replacement_evidence])
+
+        candidates = store.list_candidates_for_company("Acme")
+        evidence_rows = store.list_evidence("cand_category_conflict")
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].category, "investor")
+        self.assertEqual([row["evidence_id"] for row in evidence_rows], ["ev_category_conflict_replacement"])
 
     def test_job_result_view_prefers_postgres_read_but_falls_back_to_sqlite(self) -> None:
         store = self._build_store(mode="prefer_postgres")
@@ -1797,6 +2129,35 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         fallback_sessions = store.list_plan_review_sessions(target_company="Acme")
         self.assertGreaterEqual(len(fallback_sessions), 1)
         self.assertEqual(int(created["review_id"] or 0), int(fallback_sessions[0]["review_id"] or 0))
+
+    def test_prefer_postgres_save_job_preserves_artifact_path_on_empty_update(self) -> None:
+        store = self._build_store(mode="prefer_postgres")
+        job_id = "job-pg-artifact-pointer"
+        artifact_path = str(self.root / "jobs" / f"{job_id}.json")
+        store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="retrieving",
+            request_payload={"target_company": "Acme"},
+            plan_payload={},
+            summary_payload={"message": "terminal artifact persisted"},
+            artifact_path=artifact_path,
+        )
+
+        store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="retrieving",
+            request_payload={"target_company": "Acme"},
+            plan_payload={},
+            summary_payload={"message": "progress-only update"},
+            artifact_path="",
+        )
+
+        job = store.get_job(job_id) or {}
+        self.assertEqual(job.get("artifact_path"), artifact_path)
 
     def test_jobs_and_progress_summaries_are_mirrored_and_can_prefer_postgres_reads(self) -> None:
         store = self._build_store(mode="mirror")
@@ -1934,6 +2295,10 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
     def test_postgres_only_uses_ephemeral_sqlite_shadow_and_disables_legacy_fallbacks(self) -> None:
         store = self._build_store(mode="postgres_only")
 
+        self.assertEqual(store.compatibility_shadow_backend(), "shared_memory")
+        self.assertTrue(store.compatibility_shadow_is_ephemeral())
+        self.assertTrue(store.compatibility_shadow_connect_target().startswith("file:sourcing-agent-shadow-"))
+        self.assertEqual(store.compatibility_shadow_seed_path(), str(self.db_path))
         self.assertEqual(store.sqlite_shadow_backend(), "shared_memory")
         self.assertTrue(store.sqlite_shadow_is_ephemeral())
         self.assertTrue(store.sqlite_shadow_connect_target().startswith("file:sourcing-agent-shadow-"))
@@ -1980,6 +2345,25 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                     "SOURCING_PG_ONLY_SQLITE_BACKEND": "disk",
                 },
             )
+
+    def test_postgres_only_session_status_update_does_not_fallback_to_closed_sqlite(self) -> None:
+        store = self._build_store(mode="postgres_only")
+        adapter = store._control_plane_postgres
+        assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
+        adapter.update_agent_runtime_session_status = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+        store._connection.close()
+
+        # Missing session row: SQLite-parity no-op — returns None without
+        # raising and without touching the closed SQLite connection
+        # (legacy/recovered jobs have no session row).
+        with mock.patch.object(store, "get_agent_runtime_session", return_value=None):
+            self.assertIsNone(store.update_agent_runtime_session_status("job-missing", "failed"))
+
+        # Existing row + native writer returning no row is a real write
+        # failure: still raises instead of falling back to the closed SQLite.
+        with mock.patch.object(store, "get_agent_runtime_session", return_value={"job_id": "job-exists"}):
+            with self.assertRaisesRegex(RuntimeError, "Postgres authoritative write failed for agent_runtime_sessions"):
+                store.update_agent_runtime_session_status("job-exists", "failed")
 
     def test_postgres_only_bootstrap_source_returns_empty_without_touching_store_rows(self) -> None:
         store = self._build_store(mode="postgres_only")
@@ -2083,6 +2467,8 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                     "raw_linkedin_url": "linkedin.com/in/ALICE-EXAMPLE",
                     "sanity_linkedin_url": "https://www.linkedin.com/in/alice-example/",
                     "snapshot_dir": "/tmp/snapshot-a",
+                    "run_id": "actor-run-a",
+                    "dataset_id": "dataset-a",
                 },
                 {
                     "profile_url": "https://www.linkedin.com/in/alice-example/",
@@ -2096,6 +2482,8 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                     "raw_linkedin_url": "linkedin.com/in/ALICE-EXAMPLE",
                     "sanity_linkedin_url": "https://www.linkedin.com/in/alice-example/",
                     "snapshot_dir": "/tmp/snapshot-b",
+                    "run_id": "actor-run-b",
+                    "dataset_id": "dataset-b",
                 },
             ]
         )
@@ -2114,6 +2502,8 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertIsNotNone(by_alias)
         assert by_alias is not None
         self.assertEqual(by_alias["status"], "fetched")
+        self.assertEqual(by_alias["last_run_id"], "actor-run-b")
+        self.assertEqual(by_alias["last_dataset_id"], "dataset-b")
         self.assertIn("backfill:a", by_alias["source_shards"])
         self.assertIn("backfill:b", by_alias["source_shards"])
         alias_keys = {
@@ -2528,6 +2918,41 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         ).fetchone()[0]
         self.assertEqual(int(sqlite_view_count or 0), 0)
 
+    def test_postgres_only_raises_instead_of_falling_back_when_native_public_web_reader_fails(self) -> None:
+        store = self._build_store(mode="postgres_only")
+        adapter = store._control_plane_postgres
+        assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
+        adapter.list_latest_crm_public_web_runs_by_record_ids = mock.Mock(  # type: ignore[attr-defined]
+            side_effect=RuntimeError("postgres unavailable")
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "Postgres authoritative read failed for crm_public_web_runs"):
+            store.list_latest_crm_public_web_runs_by_record_ids(
+                ["crmrec-strict"],
+                workspace_id="default",
+            )
+
+        sqlite_run_count = store._connection.execute(
+            "SELECT COUNT(*) FROM crm_public_web_runs WHERE crm_record_id = ?",
+            ("crmrec-strict",),
+        ).fetchone()[0]
+        self.assertEqual(int(sqlite_run_count or 0), 0)
+
+    def test_postgres_only_raises_instead_of_falling_back_when_generic_public_web_reader_fails(self) -> None:
+        store = self._build_store(mode="postgres_only")
+        adapter = store._control_plane_postgres
+        assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
+        adapter.select_one = mock.Mock(side_effect=RuntimeError("postgres unavailable"))  # type: ignore[method-assign]
+
+        with self.assertRaisesRegex(RuntimeError, "Postgres authoritative read failed for crm_public_web_runs"):
+            store.get_crm_public_web_run(run_id="crm-public-web-run-strict")
+
+        sqlite_run_count = store._connection.execute(
+            "SELECT COUNT(*) FROM crm_public_web_runs WHERE run_id = ?",
+            ("crm-public-web-run-strict",),
+        ).fetchone()[0]
+        self.assertEqual(int(sqlite_run_count or 0), 0)
+
     def test_prefer_postgres_uses_native_writers_for_jobs_events_and_runtime_sessions(self) -> None:
         store = self._build_store(mode="prefer_postgres")
         adapter = store._control_plane_postgres
@@ -2665,33 +3090,34 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
-        batch = store.upsert_target_candidate_public_web_batch(
-            {
-                "batch_id": "pw-batch-1",
-                "idempotency_key": "batch-key-1",
-                "status": "queued",
-                "requested_record_ids": ["target-1"],
-                "source_families": ["profile_web_presence", "technical_presence"],
-                "options": {"max_queries_per_candidate": 4},
-                "run_ids": ["pw-run-1"],
-            }
-        )
-        run = store.upsert_target_candidate_public_web_run(
-            {
-                "run_id": "pw-run-1",
-                "batch_id": "pw-batch-1",
-                "record_id": "target-1",
-                "candidate_id": "cand-1",
-                "candidate_name": "Alice",
-                "linkedin_url_key": "alice",
-                "idempotency_key": "run-key-1",
-                "status": "searching",
-                "phase": "searching",
-                "source_families": ["profile_web_presence"],
-                "options": {"use_batch_search": True},
-                "search_checkpoint": {"stage": "waiting_remote_search", "tasks": {"q1": {"status": "waiting"}}},
-            }
-        )
+        with store.legacy_target_public_web_migration_write_context("pg_authoritative_legacy_public_web_storage_test"):
+            batch = store.upsert_target_candidate_public_web_batch(
+                {
+                    "batch_id": "pw-batch-1",
+                    "idempotency_key": "batch-key-1",
+                    "status": "queued",
+                    "requested_record_ids": ["target-1"],
+                    "source_families": ["profile_web_presence", "technical_presence"],
+                    "options": {"max_queries_per_candidate": 4},
+                    "run_ids": ["pw-run-1"],
+                }
+            )
+            run = store.upsert_target_candidate_public_web_run(
+                {
+                    "run_id": "pw-run-1",
+                    "batch_id": "pw-batch-1",
+                    "record_id": "target-1",
+                    "candidate_id": "cand-1",
+                    "candidate_name": "Alice",
+                    "linkedin_url_key": "alice",
+                    "idempotency_key": "run-key-1",
+                    "status": "searching",
+                    "phase": "searching",
+                    "source_families": ["profile_web_presence"],
+                    "options": {"use_batch_search": True},
+                    "search_checkpoint": {"stage": "waiting_remote_search", "tasks": {"q1": {"status": "waiting"}}},
+                }
+            )
         asset = store.upsert_person_public_web_asset(
             {
                 "asset_id": "asset-1",
@@ -2733,48 +3159,51 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 }
             ],
         )
-        promotion = store.upsert_target_candidate_public_web_promotion(
-            {
-                "promotion_id": "promotion-1",
-                "signal_id": "signal-1",
-                "run_id": "pw-run-1",
-                "asset_id": "asset-1",
-                "person_identity_key": "linkedin:alice",
-                "record_id": "target-1",
-                "candidate_id": "cand-1",
-                "candidate_name": "Alice",
-                "linkedin_url_key": "alice",
-                "signal_kind": "email_candidate",
-                "signal_type": "academic",
-                "email_type": "academic",
-                "value": "alice@example.edu",
-                "normalized_value": "alice@example.edu",
-                "source_url": "https://alice.example.edu/",
-                "source_domain": "alice.example.edu",
-                "source_family": "profile_web_presence",
-                "confidence_label": "high",
-                "confidence_score": 0.91,
-                "identity_match_label": "likely_same_person",
-                "identity_match_score": 0.9,
-                "publishable": True,
-                "action": "promote",
-                "promoted_field": "primary_email",
-                "new_value": "alice@example.edu",
-                "operator": "unit-test",
-            }
-        )
+        with store.legacy_target_public_web_migration_write_context("pg_authoritative_legacy_public_web_storage_test"):
+            promotion = store.upsert_target_candidate_public_web_promotion(
+                {
+                    "promotion_id": "promotion-1",
+                    "signal_id": "signal-1",
+                    "run_id": "pw-run-1",
+                    "asset_id": "asset-1",
+                    "person_identity_key": "linkedin:alice",
+                    "record_id": "target-1",
+                    "candidate_id": "cand-1",
+                    "candidate_name": "Alice",
+                    "linkedin_url_key": "alice",
+                    "signal_kind": "email_candidate",
+                    "signal_type": "academic",
+                    "email_type": "academic",
+                    "value": "alice@example.edu",
+                    "normalized_value": "alice@example.edu",
+                    "source_url": "https://alice.example.edu/",
+                    "source_domain": "alice.example.edu",
+                    "source_family": "profile_web_presence",
+                    "confidence_label": "high",
+                    "confidence_score": 0.91,
+                    "identity_match_label": "likely_same_person",
+                    "identity_match_score": 0.9,
+                    "publishable": True,
+                    "action": "promote",
+                    "promoted_field": "primary_email",
+                    "new_value": "alice@example.edu",
+                    "operator": "unit-test",
+                }
+            )
 
         self.assertEqual(batch["batch_id"], "pw-batch-1")
         self.assertEqual(run["search_checkpoint"]["stage"], "waiting_remote_search")
         self.assertEqual(asset["person_identity_key"], "linkedin:alice")
         self.assertEqual(signal_count, 1)
         self.assertEqual(promotion["promotion_status"], "manually_promoted")
-        self.assertEqual(len(store.list_target_candidate_public_web_runs(batch_id="pw-batch-1")), 1)
+        self.assertEqual(store.list_target_candidate_public_web_runs(batch_id="pw-batch-1"), [])
+        self.assertEqual(len(list_legacy_target_public_web_runs(store, batch_id="pw-batch-1")), 1)
         self.assertIsNotNone(store.get_person_public_web_asset(person_identity_key="linkedin:alice"))
         signals = store.list_person_public_web_signals(run_id="pw-run-1")
         self.assertEqual(len(signals), 1)
         self.assertEqual(signals[0]["promotion_status"], "promotion_recommended")
-        promotions = store.list_target_candidate_public_web_promotions(record_id="target-1")
+        self.assertEqual(store.list_target_candidate_public_web_promotions(record_id="target-1"), [])
+        promotions = list_legacy_target_public_web_promotions(store, record_id="target-1")
         self.assertEqual(len(promotions), 1)
         self.assertEqual(promotions[0]["signal_id"], "signal-1")
 
@@ -3872,6 +4301,247 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
 
 
 class LiveControlPlanePostgresRetryTest(unittest.TestCase):
+    def test_postgres_only_generic_reads_return_empty_for_missing_table_without_bootstrap(self) -> None:
+        class _MissingTableCursor:
+            rowcount = 0
+            description: list[tuple[str]] = [("value",)]
+
+            def __init__(self, calls: list[dict[str, object]]) -> None:
+                self.calls = calls
+
+            def __enter__(self) -> "_MissingTableCursor":
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> bool:
+                return False
+
+            def execute(self, sql: str, params: tuple[object, ...] = ()) -> None:
+                self.calls.append({"sql": sql, "params": tuple(params)})
+                if "to_regclass" not in sql:
+                    raise AssertionError("postgres-only missing-table read should not execute table query")
+
+            def fetchone(self) -> tuple[None]:
+                return (None,)
+
+            def fetchall(self) -> list[object]:
+                return []
+
+        class _MissingTableConnection:
+            def __init__(self, calls: list[dict[str, object]]) -> None:
+                self.calls = calls
+
+            def __enter__(self) -> "_MissingTableConnection":
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> bool:
+                return False
+
+            def cursor(self) -> _MissingTableCursor:
+                return _MissingTableCursor(self.calls)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+                tables=("crm_public_web_runs",),
+            )
+            calls: list[dict[str, object]] = []
+            adapter.ensure_bootstrapped = mock.Mock(  # type: ignore[method-assign]
+                side_effect=AssertionError("postgres-only reads must not bootstrap from SQLite")
+            )
+            adapter._connect = lambda: _MissingTableConnection(calls)  # type: ignore[method-assign]
+
+            rows = adapter.select_many(
+                "crm_public_web_runs",
+                where_sql="workspace_id = %s",
+                params=["default"],
+            )
+            count = adapter.count_rows(
+                "crm_public_web_runs",
+                where_sql="workspace_id = %s",
+                params=["default"],
+            )
+
+            self.assertEqual(rows, [])
+            self.assertEqual(count, 0)
+            adapter.ensure_bootstrapped.assert_not_called()
+            self.assertEqual([call["sql"] for call in calls], ["SELECT to_regclass(%s)", "SELECT to_regclass(%s)"])
+
+    def test_update_agent_trace_span_retries_zero_row_return_before_failing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+            )
+            adapter._ensure_runtime_coordination_schema = lambda: None  # type: ignore[method-assign]
+            adapter.get_agent_trace_span = lambda _span_id: {"span_id": 3, "status": "running"}  # type: ignore[method-assign]
+            calls = {"count": 0}
+
+            def _flaky_returning_one(_sql: str, _params: tuple[object, ...] | list[object]) -> dict[str, object] | None:
+                calls["count"] += 1
+                if calls["count"] == 1:
+                    return None
+                return {"span_id": 3, "status": "completed", "output_json": "{}"}
+
+            adapter._execute_returning_one = _flaky_returning_one  # type: ignore[method-assign]
+
+            with mock.patch("sourcing_agent.control_plane_live_postgres.time.sleep"):
+                row = adapter.update_agent_trace_span(3, status="completed", output_payload={"ok": True})
+
+            self.assertIsNotNone(row)
+            self.assertEqual(row["status"], "completed")
+            self.assertEqual(calls["count"], 2)
+
+    def test_materialization_completion_metadata_is_json_safe_before_pg_write(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+            )
+            adapter._ensure_table_write_schema = lambda _table_name: None  # type: ignore[method-assign]
+            adapter.select_one = lambda *_args, **_kwargs: {  # type: ignore[method-assign]
+                "item_id": "item-json-safe",
+                "result_patch_id": "",
+                "result_view_id": "",
+                "serving_projection_id": "",
+                "metadata_json": json.dumps({"existing": "kept"}, ensure_ascii=False),
+            }
+            captured_params: dict[str, tuple[object, ...]] = {}
+
+            def _capture_returning_one(_sql: str, params: tuple[object, ...] | list[object]) -> dict[str, object]:
+                captured_params["params"] = tuple(params)
+                return {
+                    "item_id": "item-json-safe",
+                    "status": "completed",
+                    "phase": "applied",
+                    "metadata_json": str(tuple(params)[3]),
+                }
+
+            adapter._execute_returning_one = _capture_returning_one  # type: ignore[method-assign]
+
+            adapter.mark_job_materialization_item_completed(
+                "item-json-safe",
+                metadata={
+                    "artifact_path": Path(temp_dir) / "snapshots" / "candidate_documents.json",
+                    "nested": {
+                        "paths": {Path(temp_dir) / "a.json", Path(temp_dir) / "b.json"},
+                        "completed_at": datetime(2026, 5, 7, 1, 2, 3, tzinfo=timezone.utc),
+                    },
+                },
+            )
+
+            params = captured_params["params"]
+            metadata_payload = json.loads(str(params[3]))
+            self.assertEqual(metadata_payload["existing"], "kept")
+            self.assertEqual(
+                metadata_payload["artifact_path"],
+                str(Path(temp_dir) / "snapshots" / "candidate_documents.json"),
+            )
+            self.assertEqual(metadata_payload["nested"]["completed_at"], "2026-05-07T01:02:03+00:00")
+            self.assertEqual(
+                set(metadata_payload["nested"]["paths"]),
+                {str(Path(temp_dir) / "a.json"), str(Path(temp_dir) / "b.json")},
+            )
+
+    def test_waiting_prerequisite_reawaken_records_source_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+            )
+            adapter._ensure_table_write_schema = lambda _table_name: None  # type: ignore[method-assign]
+            captured: dict[str, object] = {}
+
+            def _capture_non_query(sql: str, params: tuple[object, ...] | list[object]) -> int:
+                captured["sql"] = sql
+                captured["params"] = tuple(params)
+                return 1
+
+            adapter._execute_non_query = _capture_non_query  # type: ignore[method-assign]
+
+            count = adapter.reawaken_waiting_prerequisite_job_materialization_items(
+                job_id="job-a",
+                snapshot_id="snapshot-a",
+                item_kind="local_apply_closure",
+                source="search_seed_candidate_documents_projection",
+            )
+
+            self.assertEqual(count, 1)
+            self.assertIn("jsonb_set", str(captured["sql"]))
+            params = captured["params"]
+            self.assertEqual(params[0], "search_seed_candidate_documents_projection")
+            self.assertEqual(params[1], "search_seed_candidate_documents_projection")
+            self.assertTrue(str(params[2]))
+            self.assertEqual(params[4:], ("job-a", "snapshot-a", "local_apply_closure"))
+
+    def test_materialization_claim_can_reclaim_expired_running_lease(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+            )
+            adapter._ensure_table_write_schema = lambda _table_name: None  # type: ignore[method-assign]
+            captured: dict[str, object] = {}
+
+            def _capture_returning_one(sql: str, params: tuple[object, ...] | list[object]) -> dict[str, object]:
+                captured["sql"] = sql
+                captured["params"] = tuple(params)
+                return {
+                    "item_id": "item-a",
+                    "job_id": "job-a",
+                    "target_company": "OpenAI",
+                    "company_key": "openai",
+                    "snapshot_id": "snapshot-a",
+                    "baseline_snapshot_id": "",
+                    "asset_view": "canonical_merged",
+                    "item_kind": "local_apply_closure",
+                    "source": "test",
+                    "reason": "test",
+                    "status": "running",
+                    "phase": "applying",
+                    "priority": 40,
+                    "attempt_count": 2,
+                    "max_attempts": 5,
+                    "candidate_count": 0,
+                    "candidate_ids_json": "[]",
+                    "source_worker_ids_json": "[]",
+                    "idempotency_key": "item-a",
+                    "result_patch_id": "",
+                    "result_view_id": "",
+                    "serving_projection_id": "",
+                    "lease_owner": "owner-b",
+                    "lease_expires_at": "2026-05-21 00:00:00",
+                    "not_before_at": "",
+                    "last_error": "",
+                    "metadata_json": "{}",
+                    "completed_at": "",
+                    "created_at": "2026-05-20 00:00:00",
+                    "updated_at": "2026-05-20 00:00:00",
+                }
+
+            adapter._execute_returning_one = _capture_returning_one  # type: ignore[method-assign]
+
+            claimed = adapter.claim_job_materialization_item(
+                "item-a",
+                lease_owner="owner-b",
+                lease_seconds=60,
+            )
+
+            self.assertIsNotNone(claimed)
+            self.assertIn("'running'", str(captured["sql"]))
+            self.assertIn("lease_expires_at <= %s", str(captured["sql"]))
+            self.assertEqual(captured["params"][3], "item-a")
+
     def test_connect_disables_gss_for_loopback_dsn(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             adapter = LiveControlPlanePostgresAdapter(
@@ -3894,6 +4564,108 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
             )
             self.assertEqual(fake_psycopg.calls[0][1], {"client_encoding": "utf8"})
 
+    def test_adapter_freezes_schema_before_environment_restores(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime_dir = Path(temp_dir)
+            env_file = runtime_dir / ".scripted-local-postgres.env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "export SOURCING_CONTROL_PLANE_POSTGRES_DSN='postgresql://example/test'",
+                        "export SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only",
+                        "export SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA='sourcing_scripted_fixed'",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "SOURCING_LOCAL_POSTGRES_ENV_FILE": str(env_file),
+                    "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "sourcing_scripted_fixed",
+                },
+            ):
+                adapter = LiveControlPlanePostgresAdapter(
+                    runtime_dir=runtime_dir,
+                    sqlite_path=runtime_dir / "shadow.db",
+                    dsn="postgresql://example/test",
+                    mode="postgres_only",
+                )
+
+            self.assertEqual(adapter.schema, "sourcing_scripted_fixed")
+            adapter._psycopg = _FakeConnectPsycopg()
+            captured: list[str] = []
+
+            def _capture_configured_session(connection: object, *, schema: str, create_schema: bool = True) -> object:
+                del create_schema
+                captured.append(schema)
+                return connection
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "SOURCING_LOCAL_POSTGRES_ENV_FILE": "",
+                    "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "public",
+                    "SOURCING_RUNTIME_ENVIRONMENT": "",
+                },
+            ), mock.patch(
+                "sourcing_agent.control_plane_live_postgres.configure_control_plane_postgres_session",
+                side_effect=_capture_configured_session,
+            ):
+                adapter._connect()
+
+            self.assertEqual(captured, ["sourcing_scripted_fixed"])
+
+    def test_bootstrap_sync_uses_frozen_schema_after_environment_restores(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime_dir = Path(temp_dir)
+            env_file = runtime_dir / ".scripted-local-postgres.env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "export SOURCING_CONTROL_PLANE_POSTGRES_DSN='postgresql://example/test'",
+                        "export SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only",
+                        "export SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA='sourcing_scripted_bootstrap'",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "SOURCING_LOCAL_POSTGRES_ENV_FILE": str(env_file),
+                    "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "sourcing_scripted_bootstrap",
+                },
+            ):
+                adapter = LiveControlPlanePostgresAdapter(
+                    runtime_dir=runtime_dir,
+                    sqlite_path=runtime_dir / "shadow.db",
+                    dsn="postgresql://example/test",
+                    mode="postgres_only",
+                )
+            adapter._ensure_runtime_coordination_schema = lambda: None  # type: ignore[method-assign]
+            captured: list[dict[str, object]] = []
+
+            def _capture_sync(**kwargs: object) -> dict[str, object]:
+                captured.append(dict(kwargs))
+                return {"status": "completed"}
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "SOURCING_LOCAL_POSTGRES_ENV_FILE": "",
+                    "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "public",
+                    "SOURCING_RUNTIME_ENVIRONMENT": "",
+                },
+            ), mock.patch(
+                "sourcing_agent.control_plane_live_postgres.sync_runtime_control_plane_to_postgres",
+                side_effect=_capture_sync,
+            ):
+                adapter.ensure_bootstrapped()
+
+            self.assertEqual(len(captured), 1)
+            self.assertEqual(captured[0]["schema"], "sourcing_scripted_bootstrap")
+
     def test_execute_returning_one_retries_retryable_postgres_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             adapter = LiveControlPlanePostgresAdapter(
@@ -3912,7 +4684,8 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
                 },
             ]
             commit_counter = {"count": 0}
-            adapter._connect = lambda: _FakeRetryConnection(outcomes, commit_counter)  # type: ignore[method-assign]
+            calls: list[dict[str, object]] = []
+            adapter._connect = lambda: _FakeRetryConnection(outcomes, commit_counter, calls)  # type: ignore[method-assign]
 
             result = adapter._execute_returning_one("SELECT 1", ("value",))
 
@@ -3936,6 +4709,175 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
                 adapter._execute_non_query("UPDATE test SET value = %s", ("value",))
 
             self.assertEqual(commit_counter["count"], 0)
+
+    def test_profile_prefetch_scheduler_lock_uses_transaction_scoped_try_advisory_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+            )
+            calls: list[dict[str, object]] = []
+            commit_counter = {"count": 0}
+            rollback_counter = {"count": 0}
+            connections: list[_AdvisoryLockRecordingConnection] = []
+
+            def _connect() -> _AdvisoryLockRecordingConnection:
+                connection = _AdvisoryLockRecordingConnection(calls, commit_counter, rollback_counter)
+                connections.append(connection)
+                return connection
+
+            adapter._connect = _connect  # type: ignore[method-assign]
+            executed_blocks: list[str] = []
+
+            with adapter.profile_prefetch_scheduler_lock(
+                source_job="job-advisory",
+                snapshot_dir="/tmp/runtime/snapshot-advisory",
+            ):
+                executed_blocks.append("inside")
+
+            self.assertEqual(executed_blocks, ["inside"])
+            self.assertEqual(commit_counter["count"], 1)
+            self.assertEqual(rollback_counter["count"], 0)
+            self.assertEqual(len(connections), 1)
+            self.assertTrue(connections[0].closed)
+            self.assertEqual(len(calls), 1)
+            self.assertIn("pg_try_advisory_xact_lock(hashtext(%s))", str(calls[0]["sql"]))
+            # Lock keys are schema-namespaced: database-global advisory locks
+            # must not contend across schema-isolated runs.
+            self.assertEqual(
+                calls[0]["params"],
+                (
+                    f"{adapter.schema or 'public'}:"
+                    "profile_prefetch_scheduler:job-advisory:/tmp/runtime/snapshot-advisory",
+                ),
+            )
+
+    def test_profile_prefetch_scheduler_lock_yields_busy_without_blocking(self) -> None:
+        class _BusyCursor(_RecordingCursor):
+            def fetchone(self) -> tuple[bool]:
+                return (False,)
+
+        class _BusyConnection(_AdvisoryLockRecordingConnection):
+            def cursor(self) -> _RecordingCursor:
+                return _BusyCursor(self.calls)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+            )
+            calls: list[dict[str, object]] = []
+            commit_counter = {"count": 0}
+            rollback_counter = {"count": 0}
+            connection = _BusyConnection(calls, commit_counter, rollback_counter)
+            adapter._connect = lambda: connection  # type: ignore[method-assign]
+            evidence: dict[str, object] = {}
+
+            with adapter.profile_prefetch_scheduler_lock(
+                source_job="job-advisory",
+                snapshot_dir="/tmp/runtime/snapshot-advisory",
+            ) as lock_evidence:
+                evidence = dict(lock_evidence or {})
+
+            self.assertTrue(connection.closed)
+            self.assertEqual(commit_counter["count"], 0)
+            self.assertEqual(rollback_counter["count"], 0)
+            self.assertTrue(evidence["busy"])
+            self.assertFalse(evidence["acquired"])
+            self.assertEqual(evidence["reason"], "profile_prefetch_scheduler_lock_busy")
+
+    def test_profile_registry_batch_lease_uses_single_transaction_and_advisory_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+            )
+            adapter.ensure_bootstrapped = lambda: None  # type: ignore[method-assign]
+            adapter._ensure_control_plane_writer_schema = lambda: None  # type: ignore[method-assign]
+            outcomes: list[object] = [
+                {"row": None, "description": [("value",)]},
+                {"row": None, "description": [("value",)]},
+                {
+                    "rows": [
+                        (
+                            "linkedin.com/in/batch-pg-a",
+                            "batch-owner",
+                            "batch-token",
+                            "2099-01-01 00:00:00",
+                            "2026-05-08 00:00:00",
+                            "2026-05-08 00:00:00",
+                        ),
+                        (
+                            "linkedin.com/in/batch-pg-b",
+                            "batch-owner",
+                            "batch-token",
+                            "2099-01-01 00:00:00",
+                            "2026-05-08 00:00:00",
+                            "2026-05-08 00:00:00",
+                        ),
+                    ],
+                    "description": [
+                        ("profile_url_key",),
+                        ("lease_owner",),
+                        ("lease_token",),
+                        ("lease_expires_at",),
+                        ("created_at",),
+                        ("updated_at",),
+                    ],
+                },
+            ]
+            commit_counter = {"count": 0}
+            calls: list[dict[str, object]] = []
+            adapter._connect = lambda: _FakeRetryConnection(outcomes, commit_counter, calls)  # type: ignore[method-assign]
+
+            rows = adapter.acquire_linkedin_profile_registry_leases(
+                ["linkedin.com/in/batch-pg-b", "linkedin.com/in/batch-pg-a"],
+                lease_owner="batch-owner",
+                lease_seconds=120,
+                lease_token="batch-token",
+            )
+
+            self.assertEqual(commit_counter["count"], 1)
+            self.assertEqual(len(calls), 3)
+            self.assertIn("pg_advisory_xact_lock(hashtext(%s))", str(calls[0]["sql"]))
+            self.assertIn("VALUES (%s, %s, %s, %s, %s, %s), (%s, %s, %s, %s, %s, %s)", str(calls[1]["sql"]))
+            self.assertIn("WHERE profile_url_key IN (%s, %s)", str(calls[2]["sql"]))
+            self.assertEqual([row["profile_url_key"] for row in list(rows or [])], [
+                "linkedin.com/in/batch-pg-a",
+                "linkedin.com/in/batch-pg-b",
+            ])
+
+    def test_bulk_upsert_rows_chunks_before_postgres_parameter_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+            )
+            adapter.ensure_bootstrapped = lambda: None  # type: ignore[method-assign]
+            adapter._ensure_table_write_schema = lambda _table_name: None  # type: ignore[method-assign]
+            calls: list[dict[str, object]] = []
+            commit_counter = {"count": 0}
+            adapter._connect = lambda: _RecordingConnection(calls, commit_counter)  # type: ignore[method-assign]
+            rows = [
+                {"job_id": f"job-{index}", "status": "completed", "stage": "completed"}
+                for index in range(5)
+            ]
+
+            with mock.patch("sourcing_agent.control_plane_live_postgres._BULK_UPSERT_DIRECT_PARAM_LIMIT", 6):
+                affected = adapter.bulk_upsert_rows("jobs", rows)
+
+            param_counts = [int(call["param_count"]) for call in calls if int(call["param_count"]) > 0]
+            self.assertEqual(affected, 15)
+            self.assertEqual(param_counts, [6, 6, 3])
+            self.assertEqual(commit_counter["count"], 3)
 
 
 if __name__ == "__main__":
