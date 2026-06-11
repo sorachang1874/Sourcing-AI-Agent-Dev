@@ -1,29 +1,66 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import contextlib
 import json
 import os
 import re
+import socket
 import threading
 from collections.abc import Iterator
 from email.parser import BytesParser
 from email.policy import default as default_email_policy
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
-from urllib.parse import parse_qs, urlparse, urlsplit
+from typing import Any, Callable
+from urllib.parse import parse_qs, quote, unquote, urlparse, urlsplit
+
+import anyio.to_thread
+import uvicorn
+from fastapi import FastAPI
+from starlette.concurrency import run_in_threadpool
+from starlette.convertors import CONVERTOR_TYPES, Convertor, register_url_convertor
+from starlette.datastructures import Headers
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.routing import Route
 
 from .orchestrator import SourcingOrchestrator
+from .remote_provider_events import normalize_remote_provider_event
 from .storage import _json_safe_payload
 from .workflow_submission import (
     normalize_workflow_submission_payload,
     workflow_runtime_uses_managed_runner,
 )
 
+_RouteHandler = Callable[[Request, dict[str, Any], dict[str, Any]], Response]
 
-def create_server(orchestrator: SourcingOrchestrator, host: str = "127.0.0.1", port: int = 8765) -> ThreadingHTTPServer:
-    handler = _build_handler(orchestrator)
+
+class _SourcingIdentConvertor(Convertor):
+    """Path segment convertor matching the legacy `[A-Za-z0-9_-]+` route captures."""
+
+    regex = "[A-Za-z0-9_-]+"
+
+    def convert(self, value: str) -> str:
+        return value
+
+    def to_string(self, value: str) -> str:
+        return str(value)
+
+
+if "sourcing_ident" not in CONVERTOR_TYPES:
+    register_url_convertor("sourcing_ident", _SourcingIdentConvertor())
+
+
+def create_server(
+    orchestrator: SourcingOrchestrator, host: str = "127.0.0.1", port: int = 8765
+) -> "SourcingApiHTTPServer":
+    app = create_app(orchestrator)
+    return SourcingApiHTTPServer(app, host=host, port=port)
+
+
+def create_app(orchestrator: SourcingOrchestrator) -> FastAPI:
+    allowed_origins = _load_allowed_origins()
     max_parallel_requests = max(1, _env_int("SOURCING_API_MAX_PARALLEL_REQUESTS", 8))
     light_request_reserved = max(
         1,
@@ -32,535 +69,1940 @@ def create_server(orchestrator: SourcingOrchestrator, host: str = "127.0.0.1", p
             _default_light_request_reserved(max_parallel_requests),
         ),
     )
+    app = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
+    app.router.routes.extend(_build_routes(orchestrator))
+    # Middleware stack (outermost first at runtime): raw-path restore -> two-lane
+    # request concurrency -> CORS headers/OPTIONS short-circuit -> routing.
+    app.add_middleware(_CorsHeaderMiddleware, allowed_origins=allowed_origins)
+    app.add_middleware(
+        _RequestConcurrencyMiddleware,
+        shared_limit=max_parallel_requests,
+        light_reserved_limit=light_request_reserved,
+    )
+    app.add_middleware(_RawPathTargetMiddleware)
+    app.state.request_concurrency_limits = {
+        "shared": max_parallel_requests,
+        "light_reserved": light_request_reserved,
+    }
+    return app
 
-    class BoundedThreadingHTTPServer(ThreadingHTTPServer):
-        def __init__(self, server_address: tuple[str, int], request_handler_class: type[BaseHTTPRequestHandler]) -> None:
-            super().__init__(server_address, request_handler_class)
-            self.request_concurrency = _RequestConcurrencyController(
-                shared_limit=max_parallel_requests,
-                light_reserved_limit=light_request_reserved,
+
+class SourcingApiHTTPServer:
+    """ThreadingHTTPServer-compatible shim around a uvicorn-served ASGI app.
+
+    Preserves the legacy stdlib server interface used across the codebase:
+    `serve_forever()` blocks in the calling thread, `shutdown()` is callable from
+    another thread and blocks until the serve loop exits, `server_close()`
+    releases the listening socket, and `server_address` reports the real bound
+    address (including ephemeral port-0 binds) immediately after construction.
+    """
+
+    daemon_threads = True
+    block_on_close = False
+
+    def __init__(self, app: FastAPI, host: str = "127.0.0.1", port: int = 8765) -> None:
+        self.app = app
+        family = socket.AF_INET6 if ":" in str(host or "") else socket.AF_INET
+        self._socket = socket.socket(family, socket.SOCK_STREAM)
+        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._socket.bind((host, port))
+        # Listen immediately so connections issued before serve_forever() starts
+        # queue in the kernel backlog (stdlib HTTPServer activates in __init__ too).
+        self._socket.listen(2048)
+        self.server_address: tuple[str, int] = self._socket.getsockname()[:2]
+        self.server_name = str(self.server_address[0])
+        self.server_port = int(self.server_address[1])
+        config = uvicorn.Config(
+            app,
+            host=str(host),
+            port=self.server_port,
+            log_config=None,
+            log_level="critical",
+            access_log=False,
+            lifespan="off",
+        )
+        self._uvicorn_server = uvicorn.Server(config)
+        self._serve_started = threading.Event()
+        self._serve_stopped = threading.Event()
+        self._closed = False
+
+    def serve_forever(self, poll_interval: float = 0.5) -> None:
+        self._serve_started.set()
+        try:
+            self._uvicorn_server.run(sockets=[self._socket])
+        finally:
+            self._serve_stopped.set()
+
+    def shutdown(self) -> None:
+        self._uvicorn_server.should_exit = True
+        if not self._serve_started.is_set():
+            return
+        if not self._serve_stopped.wait(timeout=10.0):
+            self._uvicorn_server.force_exit = True
+            self._serve_stopped.wait()
+
+    def server_close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        with contextlib.suppress(OSError):
+            self._socket.close()
+
+    def fileno(self) -> int:
+        return self._socket.fileno()
+
+
+class _RawPathTargetMiddleware:
+    """Route on the raw (still percent-encoded) request target.
+
+    The legacy HTTP server matched route regexes against the undecoded request
+    path and only unquoted the captured path params it explicitly decoded. ASGI
+    servers pre-decode `scope["path"]`; restoring `raw_path` keeps route
+    matching and path-param decoding behavior identical to the old transport.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if scope.get("type") == "http":
+            raw_path = scope.get("raw_path")
+            if raw_path:
+                path_bytes = bytes(raw_path).split(b"?", 1)[0]
+                scope = dict(scope)
+                scope["path"] = path_bytes.decode("latin-1") or "/"
+        await self.app(scope, receive, send)
+
+
+class _RequestConcurrencyMiddleware:
+    """Two-lane request concurrency gate (asyncio mirror of the legacy semantics).
+
+    Light-lane requests first try a non-blocking claim on the shared limit and
+    fall back to a reserved light-lane semaphore; heavy requests block on the
+    shared limit. This protects HarvestAPI's hidden ~8-actor concurrency limit
+    and must not be removed before M2 provider budgets exist.
+    """
+
+    def __init__(self, app: Any, shared_limit: int, light_reserved_limit: int) -> None:
+        self.app = app
+        self.shared_limit = max(1, int(shared_limit))
+        self.light_reserved_limit = max(1, int(light_reserved_limit))
+        self._shared: asyncio.Semaphore | None = None
+        self._light_reserved: asyncio.Semaphore | None = None
+
+    def _ensure_runtime(self) -> tuple[asyncio.Semaphore, asyncio.Semaphore]:
+        if self._shared is None or self._light_reserved is None:
+            self._shared = asyncio.Semaphore(self.shared_limit)
+            self._light_reserved = asyncio.Semaphore(self.light_reserved_limit)
+            # Size the sync-handler threadpool so it never under-cuts the lane
+            # budget (handlers run sync in the threadpool while holding a slot).
+            limiter = anyio.to_thread.current_default_thread_limiter()
+            desired_tokens = max(40, (self.shared_limit + self.light_reserved_limit) * 2)
+            if limiter.total_tokens < desired_tokens:
+                limiter.total_tokens = desired_tokens
+        return self._shared, self._light_reserved
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        shared, light_reserved = self._ensure_runtime()
+        lane = _request_priority_lane(str(scope.get("method") or ""), str(scope.get("path") or "/"))
+        if lane == "light" and not shared.locked():
+            semaphore = shared
+        elif lane == "light":
+            semaphore = light_reserved
+        else:
+            semaphore = shared
+        await semaphore.acquire()
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            semaphore.release()
+
+
+class _CorsHeaderMiddleware:
+    """Legacy CORS behavior: allowlist + localhost auto-allow + header echo."""
+
+    def __init__(self, app: Any, allowed_origins: tuple[str, ...]) -> None:
+        self.app = app
+        self.allowed_origins = tuple(allowed_origins or ())
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        request_headers = Headers(scope=scope)
+        cors_headers = _cors_response_headers(request_headers, self.allowed_origins)
+        if str(scope.get("method") or "").upper() == "OPTIONS":
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": HTTPStatus.NO_CONTENT.value,
+                    "headers": list(cors_headers),
+                }
             )
-
-    return BoundedThreadingHTTPServer((host, port), handler)
-
-
-def _build_handler(orchestrator: SourcingOrchestrator):
-    allowed_origins = _load_allowed_origins()
-
-    class Handler(BaseHTTPRequestHandler):
-        def do_OPTIONS(self) -> None:  # noqa: N802
-            with self._request_slot("OPTIONS", self.path):
-                self.send_response(HTTPStatus.NO_CONTENT.value)
-                self._write_cors_headers()
-                self.send_header("Content-Length", "0")
-                self.end_headers()
-
-        def do_GET(self) -> None:  # noqa: N802
-            path, query_payload = self._request_target_payload()
-            with self._request_slot("GET", path):
-                if path == "/health":
-                    health = orchestrator.get_runtime_metrics(query_payload)
-                    status = HTTPStatus.OK if health.get("status") != "failed" else HTTPStatus.SERVICE_UNAVAILABLE
-                    return self._send_json(status, health)
-                if path == "/api/providers/health":
-                    return self._send_json(HTTPStatus.OK, orchestrator.healthcheck_model())
-                if path == "/api/runtime/health":
-                    health = orchestrator.get_runtime_health(query_payload)
-                    status = HTTPStatus.OK if health.get("status") != "failed" else HTTPStatus.SERVICE_UNAVAILABLE
-                    return self._send_json(status, health)
-                if path == "/api/runtime/metrics":
-                    health = orchestrator.get_runtime_metrics(query_payload)
-                    status = HTTPStatus.OK if health.get("status") != "failed" else HTTPStatus.SERVICE_UNAVAILABLE
-                    return self._send_json(status, health)
-                if path == "/api/runtime/progress":
-                    progress = orchestrator.get_system_progress(query_payload)
-                    status = HTTPStatus.OK if progress.get("status") != "failed" else HTTPStatus.SERVICE_UNAVAILABLE
-                    return self._send_json(status, progress)
-                if path == "/api/criteria/patterns":
-                    return self._send_json(HTTPStatus.OK, orchestrator.list_criteria_patterns())
-                if path == "/api/plan/reviews":
-                    return self._send_json(HTTPStatus.OK, orchestrator.list_plan_review_sessions())
-                if path == "/api/query-dispatches":
-                    return self._send_json(HTTPStatus.OK, orchestrator.list_query_dispatches(query_payload))
-                if path == "/api/manual-review":
-                    return self._send_json(
-                        HTTPStatus.OK,
-                        orchestrator.list_manual_review_items(
-                            target_company=str(query_payload.get("target_company") or ""),
-                            job_id=str(query_payload.get("job_id") or ""),
-                            status=str(query_payload.get("status") or "open"),
-                        ),
-                    )
-                if path == "/api/candidate-review-registry":
-                    return self._send_json(
-                        HTTPStatus.OK,
-                        orchestrator.list_candidate_review_records(
-                            job_id=str(query_payload.get("job_id") or ""),
-                            history_id=str(query_payload.get("history_id") or ""),
-                            candidate_id=str(query_payload.get("candidate_id") or ""),
-                            status=str(query_payload.get("status") or ""),
-                        ),
-                    )
-                if path == "/api/target-candidates":
-                    return self._send_json(
-                        HTTPStatus.OK,
-                        orchestrator.list_target_candidates(
-                            job_id=str(query_payload.get("job_id") or ""),
-                            history_id=str(query_payload.get("history_id") or ""),
-                            candidate_id=str(query_payload.get("candidate_id") or ""),
-                            follow_up_status=str(query_payload.get("follow_up_status") or ""),
-                        ),
-                    )
-                if path == "/api/target-candidates/public-web-search":
-                    return self._send_json(
-                        HTTPStatus.OK,
-                        orchestrator.list_target_candidate_public_web_searches(query_payload),
-                    )
-                public_web_detail_match = re.fullmatch(r"/api/target-candidates/([^/]+)/public-web-search", path)
-                if public_web_detail_match:
-                    detail = orchestrator.get_target_candidate_public_web_search_detail(
-                        public_web_detail_match.group(1)
-                    )
-                    status = HTTPStatus.OK
-                    if detail.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    elif detail.get("status") == "invalid":
-                        status = HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, detail)
-                public_web_promotions_match = re.fullmatch(
-                    r"/api/target-candidates/([^/]+)/public-web-promotions",
-                    path,
-                )
-                if public_web_promotions_match:
-                    result = orchestrator.list_target_candidate_public_web_promotions(
-                        public_web_promotions_match.group(1)
-                    )
-                    status = HTTPStatus.OK
-                    if result.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    elif result.get("status") == "invalid":
-                        status = HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/assets/governance/default-pointers":
-                    return self._send_json(HTTPStatus.OK, orchestrator.list_asset_default_pointers(query_payload))
-                if path == "/api/frontend-history":
-                    return self._send_json(
-                        HTTPStatus.OK,
-                        orchestrator.list_frontend_history(limit=_env_int_from_payload(query_payload, "limit", 24)),
-                    )
-                frontend_history_match = re.fullmatch(r"/api/frontend-history/([^/]+)", path)
-                if frontend_history_match:
-                    payload = orchestrator.get_frontend_history_recovery(frontend_history_match.group(1))
-                    status = HTTPStatus.OK
-                    if payload.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    elif payload.get("status") == "invalid":
-                        status = HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, payload)
-                if path == "/api/workers/recoverable":
-                    return self._send_json(HTTPStatus.OK, orchestrator.list_recoverable_agent_workers())
-                if path == "/api/workers/daemon/status":
-                    return self._send_json(HTTPStatus.OK, orchestrator.get_worker_daemon_status())
-                progress_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]+)/progress", path)
-                if progress_match:
-                    progress_payload = orchestrator.get_job_progress(progress_match.group(1))
-                    if progress_payload is None:
-                        return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
-                    return self._send_json(HTTPStatus.OK, progress_payload)
-                dashboard_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]+)/dashboard", path)
-                if dashboard_match:
-                    dashboard_payload = orchestrator.get_job_dashboard(dashboard_match.group(1))
-                    if dashboard_payload is None:
-                        return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
-                    return self._send_json(HTTPStatus.OK, dashboard_payload)
-                candidate_page_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]+)/candidates", path)
-                if candidate_page_match:
-                    candidate_page_payload = orchestrator.get_job_candidate_page(
-                        candidate_page_match.group(1),
-                        offset=_env_int_from_payload(query_payload, "offset", 0),
-                        limit=_env_int_from_payload(query_payload, "limit", 120),
-                        lightweight=_env_bool_from_payload(query_payload, "lightweight", False),
-                    )
-                    if candidate_page_payload is None:
-                        return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
-                    return self._send_json(HTTPStatus.OK, candidate_page_payload)
-                job_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]+)/results", path)
-                if job_match:
-                    results_payload = orchestrator.get_job_results_api(
-                        job_match.group(1),
-                        include_candidates=_env_bool_from_payload(query_payload, "include_candidates", False),
-                    )
-                    if results_payload is None:
-                        return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
-                    return self._send_json(HTTPStatus.OK, results_payload)
-                candidate_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]+)/candidates/([^/]+)", path)
-                if candidate_match:
-                    candidate_detail_payload = orchestrator.get_job_candidate_detail(
-                        candidate_match.group(1), candidate_match.group(2)
-                    )
-                    if candidate_detail_payload is None:
-                        return self._send_json(HTTPStatus.NOT_FOUND, {"error": "candidate not found"})
-                    return self._send_json(HTTPStatus.OK, candidate_detail_payload)
-                trace_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]+)/trace", path)
-                if trace_match:
-                    trace_payload = orchestrator.get_job_trace(trace_match.group(1))
-                    if trace_payload is None:
-                        return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
-                    return self._send_json(HTTPStatus.OK, trace_payload)
-                worker_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]+)/workers", path)
-                if worker_match:
-                    worker_payload = orchestrator.get_job_workers(worker_match.group(1))
-                    if worker_payload is None:
-                        return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
-                    return self._send_json(HTTPStatus.OK, worker_payload)
-                scheduler_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]+)/scheduler", path)
-                if scheduler_match:
-                    scheduler_payload = orchestrator.get_job_scheduler(scheduler_match.group(1))
-                    if scheduler_payload is None:
-                        return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
-                    return self._send_json(HTTPStatus.OK, scheduler_payload)
-                job_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]+)", path)
-                if job_match:
-                    job_payload = orchestrator.get_job_api(
-                        job_match.group(1),
-                        include_details=_env_bool_from_payload(query_payload, "include_details", False),
-                    )
-                    if job_payload is None:
-                        return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
-                    return self._send_json(HTTPStatus.OK, job_payload)
-                return self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
-
-        def do_DELETE(self) -> None:  # noqa: N802
-            path, _query_payload = self._request_target_payload()
-            with self._request_slot("DELETE", path):
-                frontend_history_match = re.fullmatch(r"/api/frontend-history/([^/]+)", path)
-                if frontend_history_match:
-                    payload = orchestrator.delete_frontend_history(frontend_history_match.group(1))
-                    status = HTTPStatus.OK
-                    if payload.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    elif payload.get("status") == "invalid":
-                        status = HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, payload)
-                return self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
-
-        def do_POST(self) -> None:  # noqa: N802
-            path, _query_payload = self._request_target_payload()
-            with self._request_slot("POST", path):
-                payload = self._read_payload()
-                if path == "/api/bootstrap":
-                    result = orchestrator.bootstrap()
-                    return self._send_json(HTTPStatus.OK, result)
-                if path == "/api/plan":
-                    result = orchestrator.plan_workflow(payload)
-                    return self._send_json(HTTPStatus.OK, result)
-                if path == "/api/plan/submit":
-                    submit_plan = getattr(orchestrator, "submit_plan_workflow", None)
-                    result = submit_plan(payload) if callable(submit_plan) else orchestrator.plan_workflow(payload)
-                    status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/workflows/explain":
-                    result = orchestrator.explain_workflow(payload)
-                    return self._send_json(HTTPStatus.OK, result)
-                if path == "/api/query-dispatches/list":
-                    result = orchestrator.list_query_dispatches(payload)
-                    return self._send_json(HTTPStatus.OK, result)
-                if path == "/api/jobs":
-                    result = orchestrator.run_job(payload)
-                    return self._send_json(HTTPStatus.CREATED, result)
-                if path == "/api/workflows":
-                    payload = normalize_workflow_submission_payload(payload)
-                    if workflow_runtime_uses_managed_runner(payload.get("runtime_execution_mode")):
-                        result = orchestrator.start_workflow_runner_managed(payload)
-                    else:
-                        result = orchestrator.start_workflow(payload)
-                    return self._send_json(HTTPStatus.ACCEPTED, result)
-                continue_stage2_match = re.fullmatch(r"/api/workflows/([A-Za-z0-9_-]+)/continue-stage2", path)
-                if continue_stage2_match:
-                    result = orchestrator.continue_workflow_stage2(
-                        {
-                            **payload,
-                            "job_id": continue_stage2_match.group(1),
-                        }
-                    )
-                    status = HTTPStatus.ACCEPTED
-                    if result.get("status") in {"not_found"}:
-                        status = HTTPStatus.NOT_FOUND
-                    elif result.get("status") in {"invalid", "conflict"}:
-                        status = HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                job_profile_completion_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]+)/profile-completion", path)
-                if job_profile_completion_match:
-                    result = orchestrator.complete_job_candidate_profiles(job_profile_completion_match.group(1), payload)
-                    status = HTTPStatus.OK
-                    if result.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    elif result.get("status") == "invalid":
-                        status = HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                candidate_batch_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]+)/candidates/batch", path)
-                if candidate_batch_match:
-                    candidate_ids = payload.get("candidate_ids")
-                    candidate_batch_result = orchestrator.get_job_candidate_details_batch(
-                        candidate_batch_match.group(1),
-                        candidate_ids if isinstance(candidate_ids, list) else [],
-                    )
-                    status = HTTPStatus.OK
-                    if candidate_batch_result is None:
-                        status = HTTPStatus.NOT_FOUND
-                        candidate_batch_result = {"error": "job not found"}
-                    return self._send_json(status, candidate_batch_result)
-                if path == "/api/company-assets/supplement":
-                    result = orchestrator.supplement_company_assets(payload)
-                    status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/intake/excel":
-                    result = orchestrator.ingest_excel_contacts(payload)
-                    status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/intake/excel/workflow":
-                    result = orchestrator.start_excel_intake_workflow(payload)
-                    status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/intake/excel/continue":
-                    result = orchestrator.continue_excel_intake_review(payload)
-                    status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/criteria/feedback":
-                    result = orchestrator.record_criteria_feedback(payload)
-                    return self._send_json(HTTPStatus.CREATED, result)
-                if path == "/api/plan/review":
-                    result = orchestrator.review_plan_session(payload)
-                    status = HTTPStatus.OK if result.get("status") != "not_found" else HTTPStatus.NOT_FOUND
-                    return self._send_json(status, result)
-                if path == "/api/plan/review/compile-instruction":
-                    result = orchestrator.compile_plan_review_instruction(payload)
-                    status = HTTPStatus.OK
-                    if result.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    elif result.get("status") == "invalid":
-                        status = HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/results/refine/compile-instruction":
-                    result = orchestrator.compile_post_acquisition_refinement(payload)
-                    status = HTTPStatus.OK
-                    if result.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    elif result.get("status") == "invalid":
-                        status = HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/results/refine":
-                    result = orchestrator.apply_post_acquisition_refinement(payload)
-                    status = HTTPStatus.OK
-                    if result.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    elif result.get("status") == "invalid":
-                        status = HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/criteria/confidence-policy":
-                    result = orchestrator.configure_confidence_policy(payload)
-                    status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/criteria/suggestions/review":
-                    result = orchestrator.review_pattern_suggestion(payload)
-                    status = HTTPStatus.OK if result.get("status") != "not_found" else HTTPStatus.NOT_FOUND
-                    return self._send_json(status, result)
-                if path == "/api/manual-review/review":
-                    result = orchestrator.review_manual_review_item(payload)
-                    status = HTTPStatus.OK
-                    if result.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    elif result.get("status") in {"invalid", "candidate_not_found"}:
-                        status = HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/candidate-review-registry":
-                    result = orchestrator.upsert_candidate_review_record(payload)
-                    status = HTTPStatus.CREATED if result.get("status") == "upserted" else HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/target-candidates/export":
-                    result = orchestrator.export_target_candidates_archive(payload)
-                    if result.get("status") == "not_found":
-                        return self._send_json(HTTPStatus.NOT_FOUND, result)
-                    if result.get("status") == "invalid":
-                        return self._send_json(HTTPStatus.BAD_REQUEST, result)
-                    return self._send_bytes(
-                        HTTPStatus.OK,
-                        bytes(result.get("body") or b""),
-                        content_type=str(result.get("content_type") or "application/octet-stream"),
-                        filename=str(result.get("filename") or "download.bin"),
-                    )
-                if path == "/api/target-candidates/public-web-export":
-                    result = orchestrator.export_target_candidate_public_web_archive(payload)
-                    if result.get("status") == "not_found":
-                        return self._send_json(HTTPStatus.NOT_FOUND, result)
-                    if result.get("status") == "invalid":
-                        return self._send_json(HTTPStatus.BAD_REQUEST, result)
-                    return self._send_bytes(
-                        HTTPStatus.OK,
-                        bytes(result.get("body") or b""),
-                        content_type=str(result.get("content_type") or "application/octet-stream"),
-                        filename=str(result.get("filename") or "download.bin"),
-                    )
-                if path == "/api/target-candidates/import-from-job":
-                    result = orchestrator.import_target_candidates_from_job(payload)
-                    status = HTTPStatus.CREATED if result.get("status") == "imported" else HTTPStatus.BAD_REQUEST
-                    if result.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    return self._send_json(status, result)
-                if path == "/api/target-candidates/public-web-search":
-                    result = orchestrator.start_target_candidate_public_web_search(payload)
-                    status = HTTPStatus.ACCEPTED if result.get("status") in {"queued", "joined"} else HTTPStatus.BAD_REQUEST
-                    if result.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    return self._send_json(status, result)
-                public_web_promotion_match = re.fullmatch(
-                    r"/api/target-candidates/([^/]+)/public-web-promotions",
-                    path,
-                )
-                if public_web_promotion_match:
-                    result = orchestrator.promote_target_candidate_public_web_signal(
-                        public_web_promotion_match.group(1),
-                        payload,
-                    )
-                    status = HTTPStatus.CREATED if result.get("status") in {"promoted", "rejected"} else HTTPStatus.BAD_REQUEST
-                    if result.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    return self._send_json(status, result)
-                if path == "/api/target-candidates":
-                    result = orchestrator.upsert_target_candidate(payload)
-                    status = HTTPStatus.CREATED if result.get("status") == "upserted" else HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/assets/governance/promote-default":
-                    result = orchestrator.promote_asset_default_pointer(payload)
-                    status = HTTPStatus.CREATED if result.get("status") == "promoted" else HTTPStatus.BAD_REQUEST
-                    if result.get("status") == "noop":
-                        status = HTTPStatus.OK
-                    return self._send_json(status, result)
-                if path == "/api/manual-review/synthesize":
-                    result = orchestrator.synthesize_manual_review_item(payload)
-                    status = HTTPStatus.OK
-                    if result.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    elif result.get("status") == "invalid":
-                        status = HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/criteria/recompile":
-                    result = orchestrator.recompile_criteria(payload)
-                    return self._send_json(HTTPStatus.OK, result)
-                if path == "/api/workers/interrupt":
-                    result = orchestrator.interrupt_agent_worker(payload)
-                    status = HTTPStatus.OK
-                    if result.get("status") == "invalid":
-                        status = HTTPStatus.BAD_REQUEST
-                    elif result.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    return self._send_json(status, result)
-                if path == "/api/workers/cleanup":
-                    result = orchestrator.cleanup_recoverable_workers(payload)
-                    return self._send_json(HTTPStatus.OK, result)
-                if path == "/api/workers/daemon/run-once":
-                    result = orchestrator.run_worker_recovery_once(payload)
-                    return self._send_json(HTTPStatus.OK, result)
-                if path == "/api/runtime/services/shutdown":
-                    result = orchestrator.request_runtime_service_shutdown(payload)
-                    status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                cancel_job_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]+)/cancel", path)
-                if cancel_job_match:
-                    result = orchestrator.cancel_workflow_job(cancel_job_match.group(1), payload)
-                    status = HTTPStatus.OK
-                    if result.get("status") == "not_found":
-                        status = HTTPStatus.NOT_FOUND
-                    elif result.get("status") == "invalid":
-                        status = HTTPStatus.BAD_REQUEST
-                    return self._send_json(status, result)
-                if path == "/api/workers/daemon/systemd-unit":
-                    result = orchestrator.write_worker_daemon_systemd_unit(payload)
-                    return self._send_json(HTTPStatus.OK, result)
-                return self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
-
-        def _request_target_payload(self) -> tuple[str, dict[str, Any]]:
-            parsed = urlsplit(self.path)
-            path = parsed.path or "/"
-            query_payload: dict[str, Any] = {}
-            for key, values in parse_qs(parsed.query, keep_blank_values=False).items():
-                if not values:
-                    continue
-                query_payload[key] = values[-1]
-            return path, query_payload
-
-        def _read_payload(self) -> dict[str, Any]:
-            content_length = int(self.headers.get("Content-Length", "0"))
-            if content_length == 0:
-                return {}
-            raw = self.rfile.read(content_length)
-            return _decode_http_request_body(raw, str(self.headers.get("Content-Type") or ""))
-
-        def _request_slot(self, method: str, path: str) -> contextlib.AbstractContextManager[None]:
-            concurrency = getattr(self.server, "request_concurrency", None)
-            if concurrency is None:
-                return contextlib.nullcontext()
-            return concurrency.claim(method, path)
-
-        def _send_json(self, status: HTTPStatus, payload: dict[str, Any]) -> None:
-            body = json.dumps(_json_safe_payload(payload), ensure_ascii=False, indent=2).encode("utf-8")
-            self.send_response(status.value)
-            self._write_cors_headers()
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            try:
-                self.wfile.write(body)
-            except BrokenPipeError:
-                return
-
-        def _send_bytes(
-            self,
-            status: HTTPStatus,
-            body: bytes,
-            *,
-            content_type: str,
-            filename: str = "",
-        ) -> None:
-            self.send_response(status.value)
-            self._write_cors_headers()
-            self.send_header("Content-Type", content_type or "application/octet-stream")
-            self.send_header("Content-Length", str(len(body)))
-            if filename:
-                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
-            self.end_headers()
-            try:
-                self.wfile.write(body)
-            except BrokenPipeError:
-                return
-
-        def _write_cors_headers(self) -> None:
-            origin = self._cors_origin()
-            if origin:
-                self.send_header("Access-Control-Allow-Origin", origin)
-                self.send_header("Vary", "Origin")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            request_headers = self.headers.get("Access-Control-Request-Headers", "").strip()
-            allow_headers = request_headers or "Content-Type"
-            self.send_header("Access-Control-Allow-Headers", allow_headers)
-            self.send_header("Access-Control-Max-Age", "600")
-
-        def _cors_origin(self) -> str:
-            request_origin = str(self.headers.get("Origin") or "").strip()
-            if not request_origin:
-                return ""
-            if "*" in allowed_origins:
-                return "*"
-            if request_origin in allowed_origins:
-                return request_origin
-            if _is_local_dev_origin(request_origin):
-                return request_origin
-            return ""
-
-        def log_message(self, format: str, *args) -> None:  # noqa: A003
+            await send({"type": "http.response.body", "body": b""})
             return
 
-    return Handler
+        async def send_with_cors(message: dict[str, Any]) -> None:
+            if message.get("type") == "http.response.start":
+                message = dict(message)
+                message["headers"] = list(message.get("headers") or []) + list(cors_headers)
+            await send(message)
+
+        await self.app(scope, receive, send_with_cors)
+
+
+def _cors_response_headers(
+    request_headers: Headers, allowed_origins: tuple[str, ...]
+) -> list[tuple[bytes, bytes]]:
+    headers: list[tuple[bytes, bytes]] = []
+    origin = _cors_allow_origin(str(request_headers.get("Origin") or "").strip(), allowed_origins)
+    if origin:
+        headers.append((b"Access-Control-Allow-Origin", origin.encode("latin-1")))
+        headers.append((b"Vary", b"Origin"))
+    headers.append((b"Access-Control-Allow-Methods", b"GET, POST, PATCH, DELETE, OPTIONS"))
+    requested_headers = str(request_headers.get("Access-Control-Request-Headers") or "").strip()
+    allow_headers = requested_headers or "Content-Type"
+    headers.append((b"Access-Control-Allow-Headers", allow_headers.encode("latin-1")))
+    headers.append(
+        (
+            b"Access-Control-Expose-Headers",
+            b"Content-Disposition, X-Sourcing-Export-Record-Count, "
+            b"X-Sourcing-Exported-Record-Count, X-Sourcing-Exported-Signal-Count, "
+            b"X-Sourcing-No-Public-Web-Result-Count, X-Sourcing-No-Exportable-Signal-Count, "
+            b"X-Sourcing-Non-Terminal-Run-Count, X-Sourcing-Projection-Id, "
+            b"X-Sourcing-Skipped-Assertion-Count",
+        )
+    )
+    headers.append((b"Access-Control-Max-Age", b"600"))
+    return headers
+
+
+def _cors_allow_origin(request_origin: str, allowed_origins: tuple[str, ...]) -> str:
+    if not request_origin:
+        return ""
+    if "*" in allowed_origins:
+        return "*"
+    if request_origin in allowed_origins:
+        return request_origin
+    if _is_local_dev_origin(request_origin):
+        return request_origin
+    return ""
+
+
+def _decode_path_param(value: str) -> str:
+    return unquote(str(value or ""))
+
+
+def _query_payload_from_scope(scope: dict[str, Any]) -> dict[str, Any]:
+    raw_query = scope.get("query_string") or b""
+    if isinstance(raw_query, bytes):
+        query_text = raw_query.decode("utf-8", errors="replace")
+    else:
+        query_text = str(raw_query)
+    query_payload: dict[str, Any] = {}
+    for key, values in parse_qs(query_text, keep_blank_values=False).items():
+        if not values:
+            continue
+        query_payload[key] = values[-1]
+    return query_payload
+
+
+def _raw_header_response(status: HTTPStatus | int, body: bytes, headers: list[tuple[str, str]]) -> Response:
+    """Response with exact (canonical-cased) header names like the legacy server.
+
+    Starlette lowercases header names when building responses; the stdlib
+    transport emitted them verbatim and several consumers index headers
+    case-sensitively, so the raw header list is set directly.
+    """
+    status_code = status.value if isinstance(status, HTTPStatus) else int(status)
+    response = Response(content=body, status_code=status_code)
+    response.raw_headers = [
+        (name.encode("latin-1"), value.encode("latin-1")) for name, value in headers
+    ]
+    return response
+
+
+def _json_response(status: HTTPStatus | int, payload: dict[str, Any]) -> Response:
+    body = json.dumps(_json_safe_payload(payload), ensure_ascii=False, indent=2).encode("utf-8")
+    return _raw_header_response(
+        status,
+        body,
+        [
+            ("Content-Type", "application/json; charset=utf-8"),
+            ("Content-Length", str(len(body))),
+        ],
+    )
+
+
+def _bytes_response(
+    status: HTTPStatus | int,
+    body: bytes,
+    *,
+    content_type: str,
+    filename: str = "",
+    extra_headers: dict[str, str] | None = None,
+) -> Response:
+    headers: list[tuple[str, str]] = [
+        ("Content-Type", content_type or "application/octet-stream"),
+        ("Content-Length", str(len(body))),
+    ]
+    if filename:
+        headers.append(("Content-Disposition", f'attachment; filename="{filename}"'))
+    for header_name, header_value in dict(extra_headers or {}).items():
+        if str(header_name or "").strip():
+            headers.append((str(header_name), str(header_value)))
+    return _raw_header_response(status, body, headers)
+
+
+def _make_endpoint(handler: _RouteHandler, *, read_body: bool) -> Callable[[Request], Any]:
+    async def endpoint(request: Request) -> Response:
+        query_payload = _query_payload_from_scope(request.scope)
+        body_payload: dict[str, Any] = {}
+        if read_body:
+            raw = await request.body()
+            body_payload = _decode_http_request_body(raw, str(request.headers.get("content-type") or ""))
+        return await run_in_threadpool(handler, request, query_payload, body_payload)
+
+    return endpoint
+
+
+def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
+    routes: list[Route] = []
+
+    def add(methods: list[str], path: str, handler: _RouteHandler, *, read_body: bool = False) -> None:
+        routes.append(Route(path, _make_endpoint(handler, read_body=read_body), methods=methods))
+
+    # ------------------------------------------------------------------ GET
+    def get_health(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        health = orchestrator.get_runtime_metrics(query)
+        status = HTTPStatus.OK if health.get("status") != "failed" else HTTPStatus.SERVICE_UNAVAILABLE
+        return _json_response(status, health)
+
+    add(["GET"], "/health", get_health)
+
+    def get_providers_health(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.healthcheck_model())
+
+    add(["GET"], "/api/providers/health", get_providers_health)
+
+    def get_runtime_health(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        health = orchestrator.get_runtime_health(query)
+        status = HTTPStatus.OK if health.get("status") != "failed" else HTTPStatus.SERVICE_UNAVAILABLE
+        return _json_response(status, health)
+
+    add(["GET"], "/api/runtime/health", get_runtime_health)
+
+    def get_runtime_metrics(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        health = orchestrator.get_runtime_metrics(query)
+        status = HTTPStatus.OK if health.get("status") != "failed" else HTTPStatus.SERVICE_UNAVAILABLE
+        return _json_response(status, health)
+
+    add(["GET"], "/api/runtime/metrics", get_runtime_metrics)
+
+    def get_runtime_progress(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        progress = orchestrator.get_system_progress(query)
+        status = HTTPStatus.OK if progress.get("status") != "failed" else HTTPStatus.SERVICE_UNAVAILABLE
+        return _json_response(status, progress)
+
+    add(["GET"], "/api/runtime/progress", get_runtime_progress)
+
+    def get_criteria_patterns(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_criteria_patterns())
+
+    add(["GET"], "/api/criteria/patterns", get_criteria_patterns)
+
+    def get_plan_reviews(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_plan_review_sessions())
+
+    add(["GET"], "/api/plan/reviews", get_plan_reviews)
+
+    def get_query_dispatches(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_query_dispatches(query))
+
+    add(["GET"], "/api/query-dispatches", get_query_dispatches)
+
+    def get_workflow_command_registry(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.get_workflow_command_registry_api())
+
+    add(["GET"], "/api/workflow/command-registry", get_workflow_command_registry)
+
+    def get_workflow_commands(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_workflow_commands_api(query))
+
+    add(["GET"], "/api/workflow/commands", get_workflow_commands)
+
+    def get_workflow_command(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_workflow_command_api(_decode_path_param(request.path_params["command_id"]))
+        status = HTTPStatus.OK if result.get("status") == "ok" else HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["GET"], "/api/workflow/commands/{command_id}", get_workflow_command)
+
+    def get_workflow_activities(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_workflow_activities_api(query))
+
+    add(["GET"], "/api/workflow/activities", get_workflow_activities)
+
+    def get_workflow_activity(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_workflow_activity_api(_decode_path_param(request.path_params["activity_id"]))
+        status = HTTPStatus.OK if result.get("status") == "ok" else HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["GET"], "/api/workflow/activities/{activity_id}", get_workflow_activity)
+
+    def get_workflow_activity_attempts(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_workflow_activity_attempts_api(query))
+
+    add(["GET"], "/api/workflow/activity-attempts", get_workflow_activity_attempts)
+
+    def get_workflow_activity_attempt(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_workflow_activity_attempt_api(
+            _decode_path_param(request.path_params["attempt_id"])
+        )
+        status = HTTPStatus.OK if result.get("status") == "ok" else HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["GET"], "/api/workflow/activity-attempts/{attempt_id}", get_workflow_activity_attempt)
+
+    def get_workflow_entity_deltas(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_workflow_entity_deltas_api(query))
+
+    add(["GET"], "/api/workflow/entity-deltas", get_workflow_entity_deltas)
+
+    def get_workflow_entity_delta(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_workflow_entity_delta_api(_decode_path_param(request.path_params["delta_id"]))
+        status = HTTPStatus.OK if result.get("status") == "ok" else HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["GET"], "/api/workflow/entity-deltas/{delta_id}", get_workflow_entity_delta)
+
+    def get_workflow_discovery_lanes(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_acquisition_discovery_lanes_api(query))
+
+    add(["GET"], "/api/workflow/discovery-lanes", get_workflow_discovery_lanes)
+
+    def get_workflow_discovery_lane(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_acquisition_discovery_lane_api(
+            _decode_path_param(request.path_params["lane_id"])
+        )
+        status = HTTPStatus.OK if result.get("status") == "ok" else HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["GET"], "/api/workflow/discovery-lanes/{lane_id}", get_workflow_discovery_lane)
+
+    def get_operation_action_registry(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.get_operation_action_registry())
+
+    add(["GET"], "/api/operations/action-registry", get_operation_action_registry)
+
+    def get_operation_actions(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_operation_actions_api(query))
+
+    add(["GET"], "/api/operations/actions", get_operation_actions)
+
+    def get_operation_runs(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_operation_runs_api(query))
+
+    add(["GET"], "/api/operations/runs", get_operation_runs)
+
+    def get_operation_run_provenance(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_operation_run_provenance_api(_decode_path_param(request.path_params["run_id"]))
+        status = HTTPStatus.OK if result.get("status") == "ok" else HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["GET"], "/api/operations/runs/{run_id}/provenance", get_operation_run_provenance)
+
+    def get_operation_action(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_operation_action_api(_decode_path_param(request.path_params["action_id"]))
+        status = HTTPStatus.OK if result.get("status") == "ok" else HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["GET"], "/api/operations/actions/{action_id}", get_operation_action)
+
+    def get_operation_run(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_operation_run_api(_decode_path_param(request.path_params["run_id"]))
+        status = HTTPStatus.OK if result.get("status") == "ok" else HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["GET"], "/api/operations/runs/{run_id}", get_operation_run)
+
+    def get_company_public_web_assets(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_company_public_web_assets(query))
+
+    add(["GET"], "/api/company-assets/public-web", get_company_public_web_assets)
+
+    def get_company_assets(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.list_company_assets_api(query)
+        status = HTTPStatus.OK if result.get("status") == "ready" else HTTPStatus.CONFLICT
+        return _json_response(status, result)
+
+    add(["GET"], "/api/company-assets", get_company_assets)
+
+    def get_company_evidence(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.list_company_evidence_api(query)
+        status = HTTPStatus.OK if result.get("status") == "ready" else HTTPStatus.CONFLICT
+        return _json_response(status, result)
+
+    add(["GET"], "/api/company-assets/evidence", get_company_evidence)
+
+    def get_company_assertions(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.list_company_assertions_api(query)
+        status = HTTPStatus.OK if result.get("status") == "ready" else HTTPStatus.CONFLICT
+        return _json_response(status, result)
+
+    add(["GET"], "/api/company-assets/assertions", get_company_assertions)
+
+    def get_media_asset(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_media_asset_content_api(_decode_path_param(request.path_params["asset_id"]))
+        payload_status = str(result.get("status") or "").strip()
+        if payload_status == "ready":
+            return _bytes_response(
+                HTTPStatus.OK,
+                bytes(result.get("content") or b""),
+                content_type=str(result.get("content_type") or "application/octet-stream"),
+                extra_headers={
+                    "Cache-Control": "public, max-age=86400",
+                    "X-Media-Asset-Contract": str(result.get("contract") or "media_asset_read_contract_v1"),
+                },
+            )
+        status = (
+            HTTPStatus.NOT_FOUND
+            if payload_status in {"not_found", ""}
+            else HTTPStatus.FORBIDDEN
+            if payload_status == "forbidden"
+            else HTTPStatus.CONFLICT
+        )
+        return _json_response(status, {key: value for key, value in result.items() if key != "content"})
+
+    add(["GET"], "/api/media/assets/{asset_id}", get_media_asset)
+
+    def get_legacy_result_endpoint_retirement(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.get_legacy_result_endpoint_retirement_status(query))
+
+    add(["GET"], "/api/migrations/legacy-result-endpoints", get_legacy_result_endpoint_retirement)
+
+    def get_legacy_public_web_retirement(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.get_legacy_public_web_retirement_status(query))
+
+    add(["GET"], "/api/migrations/legacy-public-web", get_legacy_public_web_retirement)
+
+    def get_manual_review(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(
+            HTTPStatus.OK,
+            orchestrator.list_manual_review_items(
+                target_company=str(query.get("target_company") or ""),
+                job_id=str(query.get("job_id") or ""),
+                status=str(query.get("status") or "open"),
+            ),
+        )
+
+    add(["GET"], "/api/manual-review", get_manual_review)
+
+    def get_candidate_review_registry(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(
+            HTTPStatus.OK,
+            orchestrator.list_candidate_review_records(
+                job_id=str(query.get("job_id") or ""),
+                history_id=str(query.get("history_id") or ""),
+                candidate_id=str(query.get("candidate_id") or ""),
+                status=str(query.get("status") or ""),
+            ),
+        )
+
+    add(["GET"], "/api/candidate-review-registry", get_candidate_review_registry)
+
+    def get_target_candidates(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(
+            HTTPStatus.OK,
+            orchestrator.list_target_candidates(
+                job_id=str(query.get("job_id") or ""),
+                history_id=str(query.get("history_id") or ""),
+                candidate_id=str(query.get("candidate_id") or ""),
+                follow_up_status=str(query.get("follow_up_status") or ""),
+            ),
+        )
+
+    add(["GET"], "/api/target-candidates", get_target_candidates)
+
+    def get_target_public_web_search_gone(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(
+            HTTPStatus.GONE,
+            _legacy_target_public_web_endpoint_payload(
+                legacy_endpoint="/api/target-candidates/public-web-search",
+                canonical_endpoint="/api/crm/records/public-web-search",
+                operation="list",
+            ),
+        )
+
+    add(["GET"], "/api/target-candidates/public-web-search", get_target_public_web_search_gone)
+
+    def get_crm_record_profile(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_crm_record_profile(_decode_path_param(request.path_params["record_id"]))
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["GET"], "/api/crm/records/{record_id}/profile", get_crm_record_profile)
+
+    def get_crm_public_web_detail(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_crm_record_public_web_search_detail(
+            _decode_path_param(request.path_params["record_id"])
+        )
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["GET"], "/api/crm/records/{record_id}/public-web-search", get_crm_public_web_detail)
+
+    def get_crm_public_web_promotions(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.list_crm_record_public_web_promotions(
+            _decode_path_param(request.path_params["record_id"])
+        )
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["GET"], "/api/crm/records/{record_id}/public-web-promotions", get_crm_public_web_promotions)
+
+    def get_target_candidate_profile(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_target_candidate_profile(_decode_path_param(request.path_params["record_id"]))
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["GET"], "/api/target-candidates/{record_id}/profile", get_target_candidate_profile)
+
+    def get_target_public_web_detail_gone(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(
+            HTTPStatus.GONE,
+            _legacy_target_public_web_endpoint_payload(
+                legacy_endpoint="/api/target-candidates/{record_id}/public-web-search",
+                canonical_endpoint="/api/crm/records/{crm_record_id}/public-web-search",
+                operation="detail",
+                record_id=_decode_path_param(request.path_params["record_id"]),
+            ),
+        )
+
+    add(["GET"], "/api/target-candidates/{record_id}/public-web-search", get_target_public_web_detail_gone)
+
+    def get_target_public_web_promotions_gone(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        return _json_response(
+            HTTPStatus.GONE,
+            _legacy_target_public_web_endpoint_payload(
+                legacy_endpoint="/api/target-candidates/{record_id}/public-web-promotions",
+                canonical_endpoint="/api/crm/records/{crm_record_id}/public-web-promotions",
+                operation="promotion_list",
+                record_id=_decode_path_param(request.path_params["record_id"]),
+            ),
+        )
+
+    add(["GET"], "/api/target-candidates/{record_id}/public-web-promotions", get_target_public_web_promotions_gone)
+
+    def get_asset_default_pointers(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_asset_default_pointers(query))
+
+    add(["GET"], "/api/assets/governance/default-pointers", get_asset_default_pointers)
+
+    def get_frontend_history(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(
+            HTTPStatus.OK,
+            orchestrator.list_frontend_history(limit=_env_int_from_payload(query, "limit", 24)),
+        )
+
+    add(["GET"], "/api/frontend-history", get_frontend_history)
+
+    def get_frontend_history_recovery(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_frontend_history_recovery(request.path_params["history_id"])
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["GET"], "/api/frontend-history/{history_id}", get_frontend_history_recovery)
+
+    def get_crm_records(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(
+            HTTPStatus.OK,
+            orchestrator.list_crm_records_api(
+                source_projection_id=str(query.get("source_projection_id") or ""),
+                source_collection_id=str(query.get("source_collection_id") or ""),
+                workspace_id=str(query.get("workspace_id") or "default"),
+                limit=_env_int_from_payload(query, "limit", 250),
+            ),
+        )
+
+    add(["GET"], "/api/crm/records", get_crm_records)
+
+    def get_crm_tasks(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(
+            HTTPStatus.OK,
+            orchestrator.list_crm_tasks_api(
+                workspace_id=str(query.get("workspace_id") or "default"),
+                crm_record_id=str(query.get("crm_record_id") or query.get("record_id") or ""),
+                status=str(query.get("status") or ""),
+                limit=_env_int_from_payload(query, "limit", 100),
+            ),
+        )
+
+    add(["GET"], "/api/crm/tasks", get_crm_tasks)
+
+    def get_crm_record_tasks(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.list_crm_tasks_api(
+            workspace_id=str(query.get("workspace_id") or "default"),
+            crm_record_id=_decode_path_param(request.path_params["record_id"]),
+            status=str(query.get("status") or ""),
+            limit=_env_int_from_payload(query, "limit", 100),
+        )
+        if result.get("status") == "not_found":
+            return _json_response(HTTPStatus.NOT_FOUND, result)
+        return _json_response(HTTPStatus.OK, result)
+
+    add(["GET"], "/api/crm/records/{record_id}/tasks", get_crm_record_tasks)
+
+    def get_crm_record(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.get_crm_record_api(
+            _decode_path_param(request.path_params["record_id"]),
+            workspace_id=str(query.get("workspace_id") or "default"),
+        )
+        if result is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "reason": "crm_record_not_found"})
+        return _json_response(HTTPStatus.OK, result)
+
+    add(["GET"], "/api/crm/records/{record_id}", get_crm_record)
+
+    def get_recoverable_workers(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_recoverable_agent_workers())
+
+    add(["GET"], "/api/workers/recoverable", get_recoverable_workers)
+
+    def get_worker_daemon_status(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.get_worker_daemon_status(query))
+
+    add(["GET"], "/api/workers/daemon/status", get_worker_daemon_status)
+
+    def get_run_projection_link(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        link_payload = orchestrator.get_run_projection_link(request.path_params["run_id"])
+        if link_payload is None or link_payload.get("status") == "not_found":
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "run projection link not found"})
+        if link_payload.get("status") == "invalid":
+            return _json_response(HTTPStatus.BAD_REQUEST, link_payload)
+        return _json_response(HTTPStatus.OK, link_payload)
+
+    add(["GET"], "/api/runs/{run_id:sourcing_ident}/projection-link", get_run_projection_link)
+
+    def get_collections(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(
+            HTTPStatus.OK,
+            orchestrator.list_collection_asset_overview(limit=_env_int_from_payload(query, "limit", 250)),
+        )
+
+    add(["GET"], "/api/collections", get_collections)
+
+    def get_collection_projection(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        link_payload = orchestrator.get_collection_authoritative_projection_link(
+            _decode_path_param(request.path_params["collection_id"])
+        )
+        if link_payload is None or link_payload.get("status") == "not_found":
+            return _json_response(HTTPStatus.NOT_FOUND, link_payload or {"error": "collection projection not found"})
+        if link_payload.get("status") == "invalid":
+            return _json_response(HTTPStatus.BAD_REQUEST, link_payload)
+        if link_payload.get("status") == "not_ready":
+            return _json_response(HTTPStatus.CONFLICT, link_payload)
+        return _json_response(HTTPStatus.OK, link_payload)
+
+    add(["GET"], "/api/collections/{collection_id}/authoritative-projection", get_collection_projection)
+
+    def get_collection_asset_entry(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        entry_payload = orchestrator.get_collection_authoritative_asset_entry(
+            _decode_path_param(request.path_params["collection_id"])
+        )
+        if entry_payload is None or entry_payload.get("status") == "not_found":
+            return _json_response(HTTPStatus.NOT_FOUND, entry_payload or {"error": "collection asset entry not found"})
+        if entry_payload.get("status") == "invalid":
+            return _json_response(HTTPStatus.BAD_REQUEST, entry_payload)
+        if entry_payload.get("status") == "not_ready":
+            return _json_response(HTTPStatus.CONFLICT, entry_payload)
+        return _json_response(HTTPStatus.OK, entry_payload)
+
+    add(["GET"], "/api/collections/{collection_id}/asset-entry", get_collection_asset_entry)
+
+    def get_collection_coverage(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        coverage_payload = orchestrator.get_collection_asset_coverage(
+            _decode_path_param(request.path_params["collection_id"])
+        )
+        if coverage_payload is None or coverage_payload.get("status") == "not_found":
+            return _json_response(HTTPStatus.NOT_FOUND, coverage_payload or {"error": "collection coverage not found"})
+        if coverage_payload.get("status") == "invalid":
+            return _json_response(HTTPStatus.BAD_REQUEST, coverage_payload)
+        if coverage_payload.get("status") == "not_ready":
+            return _json_response(HTTPStatus.CONFLICT, coverage_payload)
+        return _json_response(HTTPStatus.OK, coverage_payload)
+
+    add(["GET"], "/api/collections/{collection_id}/coverage", get_collection_coverage)
+
+    def get_projection_crm_state(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        crm_payload = orchestrator.get_projection_crm_state_api(
+            request.path_params["projection_id"],
+            candidate_identity_keys=[
+                value for value in str(query.get("candidate_identity_keys") or "").split(",") if value.strip()
+            ],
+            workspace_id=str(query.get("workspace_id") or "default"),
+        )
+        if crm_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "projection not found"})
+        return _json_response(HTTPStatus.OK, crm_payload)
+
+    add(["GET"], "/api/projections/{projection_id:sourcing_ident}/crm-state", get_projection_crm_state)
+
+    def get_projection_export_policy(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        policy_payload = orchestrator.get_projection_export_policy_api(request.path_params["projection_id"])
+        if policy_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "projection not found"})
+        if policy_payload.get("status") == "not_ready":
+            return _json_response(HTTPStatus.CONFLICT, policy_payload)
+        return _json_response(HTTPStatus.OK, policy_payload)
+
+    add(["GET"], "/api/projections/{projection_id:sourcing_ident}/export-policy", get_projection_export_policy)
+
+    def get_projection_search(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        search_payload = orchestrator.search_projection_person_index_api(
+            request.path_params["projection_id"],
+            search_keyword=str(query.get("search") or query.get("q") or ""),
+            offset=_env_int_from_payload(query, "offset", 0),
+            limit=_env_int_from_payload(query, "limit", 120),
+        )
+        if search_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "projection not found"})
+        if search_payload.get("status") == "not_ready":
+            return _json_response(HTTPStatus.CONFLICT, search_payload)
+        return _json_response(HTTPStatus.OK, search_payload)
+
+    add(["GET"], "/api/projections/{projection_id:sourcing_ident}/search", get_projection_search)
+
+    def get_projection_person_detail(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        person_payload = orchestrator.get_serving_projection_person_detail_api(
+            request.path_params["projection_id"],
+            _decode_path_param(request.path_params["person_key"]),
+            workspace_id=str(query.get("workspace_id") or "default"),
+        )
+        if person_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "projection not found"})
+        if person_payload.get("status") == "not_ready":
+            reason = str(person_payload.get("reason") or "")
+            status = HTTPStatus.NOT_FOUND if reason == "projection_member_not_found" else HTTPStatus.CONFLICT
+            return _json_response(status, person_payload)
+        return _json_response(HTTPStatus.OK, person_payload)
+
+    add(["GET"], "/api/projections/{projection_id:sourcing_ident}/persons/{person_key}", get_projection_person_detail)
+
+    def get_projection_candidates(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        candidate_page_payload = orchestrator.get_serving_projection_candidate_page(
+            request.path_params["projection_id"],
+            offset=_env_int_from_payload(query, "offset", 0),
+            limit=_env_int_from_payload(query, "limit", 120),
+            candidate_filter=_candidate_page_filter_from_payload(query),
+        )
+        if candidate_page_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "projection not found"})
+        if candidate_page_payload.get("status") == "not_ready":
+            return _json_response(HTTPStatus.CONFLICT, candidate_page_payload)
+        return _json_response(HTTPStatus.OK, candidate_page_payload)
+
+    add(["GET"], "/api/projections/{projection_id:sourcing_ident}/candidates", get_projection_candidates)
+
+    def get_projection(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        projection_payload = orchestrator.get_serving_projection_api(request.path_params["projection_id"])
+        if projection_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "projection not found"})
+        if projection_payload.get("status") == "not_ready":
+            return _json_response(HTTPStatus.CONFLICT, projection_payload)
+        return _json_response(HTTPStatus.OK, projection_payload)
+
+    add(["GET"], "/api/projections/{projection_id:sourcing_ident}", get_projection)
+
+    def get_person_summary(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        person_payload = orchestrator.get_person_summary_api(
+            _decode_path_param(request.path_params["person_key"]),
+            workspace_id=str(query.get("workspace_id") or "default"),
+        )
+        if person_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "person summary not found"})
+        if person_payload.get("status") == "invalid":
+            return _json_response(HTTPStatus.BAD_REQUEST, person_payload)
+        return _json_response(HTTPStatus.OK, person_payload)
+
+    add(["GET"], "/api/persons/{person_key}", get_person_summary)
+
+    def get_job_progress(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        progress_payload = orchestrator.get_job_progress(request.path_params["job_id"])
+        if progress_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        return _json_response(HTTPStatus.OK, progress_payload)
+
+    add(["GET"], "/api/jobs/{job_id:sourcing_ident}/progress", get_job_progress)
+
+    def get_job_board_patches(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        patch_payload = orchestrator.get_job_board_visible_patch_log(
+            request.path_params["job_id"],
+            after_published_at=str(query.get("after_published_at") or ""),
+            after_sequence=_env_int_from_payload(query, "after_sequence", 0),
+            limit=_env_int_from_payload(query, "limit", 50),
+        )
+        if patch_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        return _json_response(HTTPStatus.OK, patch_payload)
+
+    add(["GET"], "/api/jobs/{job_id:sourcing_ident}/board-patches", get_job_board_patches)
+
+    def get_job_dashboard(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        job_id = request.path_params["job_id"]
+        if _legacy_job_result_endpoint_retired(orchestrator, job_id):
+            return _json_response(
+                HTTPStatus.GONE,
+                _legacy_job_result_endpoint_payload(
+                    orchestrator,
+                    job_id,
+                    legacy_endpoint="/api/jobs/{job_id}/dashboard",
+                ),
+            )
+        dashboard_payload = orchestrator.get_job_dashboard(
+            job_id,
+            include_asset_population_preview=_env_bool_from_payload(query, "include_candidates", True),
+        )
+        if dashboard_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        return _json_response(HTTPStatus.OK, dashboard_payload)
+
+    add(["GET"], "/api/jobs/{job_id:sourcing_ident}/dashboard", get_job_dashboard)
+
+    def get_job_candidates(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        job_id = request.path_params["job_id"]
+        if _legacy_job_result_endpoint_retired(orchestrator, job_id):
+            return _json_response(
+                HTTPStatus.GONE,
+                _legacy_job_result_endpoint_payload(
+                    orchestrator,
+                    job_id,
+                    legacy_endpoint="/api/jobs/{job_id}/candidates",
+                ),
+            )
+        candidate_page_payload = orchestrator.get_job_candidate_page(
+            job_id,
+            offset=_env_int_from_payload(query, "offset", 0),
+            limit=_env_int_from_payload(query, "limit", 120),
+            lightweight=_env_bool_from_payload(query, "lightweight", True),
+            candidate_filter=_candidate_page_filter_from_payload(query),
+        )
+        if candidate_page_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        return _json_response(HTTPStatus.OK, candidate_page_payload)
+
+    add(["GET"], "/api/jobs/{job_id:sourcing_ident}/candidates", get_job_candidates)
+
+    def get_job_results(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        job_id = request.path_params["job_id"]
+        if _legacy_job_result_endpoint_retired(orchestrator, job_id):
+            return _json_response(
+                HTTPStatus.GONE,
+                _legacy_job_result_endpoint_payload(
+                    orchestrator,
+                    job_id,
+                    legacy_endpoint="/api/jobs/{job_id}/results",
+                ),
+            )
+        results_payload = orchestrator.get_job_results_api(
+            job_id,
+            include_candidates=_env_bool_from_payload(query, "include_candidates", False),
+            include_runtime_details=_env_bool_from_payload(query, "include_runtime_details", True),
+        )
+        if results_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        return _json_response(HTTPStatus.OK, results_payload)
+
+    add(["GET"], "/api/jobs/{job_id:sourcing_ident}/results", get_job_results)
+
+    def get_job_candidate_detail(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        job_id = request.path_params["job_id"]
+        candidate_id = request.path_params["candidate_id"]
+        if _legacy_job_result_endpoint_retired(orchestrator, job_id):
+            return _json_response(
+                HTTPStatus.GONE,
+                _legacy_job_result_endpoint_payload(
+                    orchestrator,
+                    job_id,
+                    legacy_endpoint="/api/jobs/{job_id}/candidates/{candidate_id}",
+                    candidate_identity_key=_decode_path_param(candidate_id),
+                ),
+            )
+        candidate_detail_payload = orchestrator.get_job_candidate_detail(
+            job_id,
+            candidate_id,
+            allow_legacy_profile_timeline_hydration=_env_bool_from_payload(
+                query,
+                "hydrate_legacy_timeline",
+                False,
+            ),
+        )
+        if candidate_detail_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "candidate not found"})
+        return _json_response(HTTPStatus.OK, candidate_detail_payload)
+
+    add(["GET"], "/api/jobs/{job_id:sourcing_ident}/candidates/{candidate_id}", get_job_candidate_detail)
+
+    def get_job_trace(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        trace_payload = orchestrator.get_job_trace(request.path_params["job_id"])
+        if trace_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        return _json_response(HTTPStatus.OK, trace_payload)
+
+    add(["GET"], "/api/jobs/{job_id:sourcing_ident}/trace", get_job_trace)
+
+    def get_job_workers(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        worker_payload = orchestrator.get_job_workers(request.path_params["job_id"])
+        if worker_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        return _json_response(HTTPStatus.OK, worker_payload)
+
+    add(["GET"], "/api/jobs/{job_id:sourcing_ident}/workers", get_job_workers)
+
+    def get_job_materialization_items(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        materialization_payload = orchestrator.get_job_materialization_items(request.path_params["job_id"])
+        if materialization_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        return _json_response(HTTPStatus.OK, materialization_payload)
+
+    add(["GET"], "/api/jobs/{job_id:sourcing_ident}/materialization-items", get_job_materialization_items)
+
+    def get_job_scheduler(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        scheduler_payload = orchestrator.get_job_scheduler(request.path_params["job_id"])
+        if scheduler_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        return _json_response(HTTPStatus.OK, scheduler_payload)
+
+    add(["GET"], "/api/jobs/{job_id:sourcing_ident}/scheduler", get_job_scheduler)
+
+    def get_job(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        job_payload = orchestrator.get_job_api(
+            request.path_params["job_id"],
+            include_details=_env_bool_from_payload(query, "include_details", False),
+        )
+        if job_payload is None:
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        return _json_response(HTTPStatus.OK, job_payload)
+
+    add(["GET"], "/api/jobs/{job_id:sourcing_ident}", get_job)
+
+    # --------------------------------------------------------------- DELETE
+    def delete_frontend_history(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.delete_frontend_history(request.path_params["history_id"])
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["DELETE"], "/api/frontend-history/{history_id}", delete_frontend_history)
+
+    # ----------------------------------------------------------------- POST
+    def post_bootstrap(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.bootstrap())
+
+    add(["POST"], "/api/bootstrap", post_bootstrap, read_body=True)
+
+    def post_plan(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.plan_workflow(payload))
+
+    add(["POST"], "/api/plan", post_plan, read_body=True)
+
+    def post_plan_submit(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        submit_plan = getattr(orchestrator, "submit_plan_workflow", None)
+        result = submit_plan(payload) if callable(submit_plan) else orchestrator.plan_workflow(payload)
+        status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/plan/submit", post_plan_submit, read_body=True)
+
+    def post_workflows_explain(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.explain_workflow(payload))
+
+    add(["POST"], "/api/workflows/explain", post_workflows_explain, read_body=True)
+
+    def post_apify_webhook(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        if not _provider_webhook_token_allowed(request.headers, query, orchestrator=orchestrator):
+            return _json_response(
+                HTTPStatus.FORBIDDEN,
+                {"status": "forbidden", "reason": "provider_webhook_token_required"},
+            )
+        event_source = "provider_webhook"
+        if _env_bool("SOURCING_PROVIDER_WEBHOOK_SOURCE_OVERRIDE_ENABLED", False):
+            override_source = str(query.get("source") or payload.get("source") or "").strip()
+            if override_source in {"provider_webhook", "local_provider_event_watcher"}:
+                event_source = override_source
+        event_payload = {**payload, "provider": "apify", "source": event_source}
+        event = normalize_remote_provider_event(event_payload, provider="apify")
+        if not str(event.get("run_id") or "").strip() and not str(event.get("dataset_id") or "").strip():
+            return _json_response(
+                HTTPStatus.BAD_REQUEST,
+                {
+                    "status": "invalid",
+                    "reason": "remote_provider_event_missing_run_or_dataset_id",
+                    "event": _provider_event_response_payload(event),
+                },
+            )
+        if _provider_webhook_sync_requested(query):
+            result = orchestrator.handle_remote_provider_event({**event_payload, "recovery_mode": "sync_recovery"})
+            status = HTTPStatus.ACCEPTED if result.get("status") == "accepted" else HTTPStatus.BAD_REQUEST
+            return _json_response(status, result)
+        result = orchestrator.handle_remote_provider_event(
+            {**event_payload, "recovery_mode": "job_scoped_recovery"}
+        )
+        if result.get("status") != "accepted":
+            return _json_response(HTTPStatus.BAD_REQUEST, result)
+        return _json_response(
+            HTTPStatus.ACCEPTED,
+            {
+                "status": "accepted",
+                "provider": "apify",
+                "mode": "job_scoped_recovery",
+                "event": _provider_event_response_payload(event),
+                "targets": dict(result.get("targets") or {}),
+                "recovery_dispatch_count": int(result.get("recovery_dispatch_count") or 0),
+                "recovery_dispatches": list(result.get("recovery_dispatches") or []),
+                "released_worker_ids": list(result.get("released_worker_ids") or []),
+            },
+        )
+
+    add(["POST"], "/api/providers/apify/webhook", post_apify_webhook, read_body=True)
+
+    def post_query_dispatches_list(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.list_query_dispatches(payload))
+
+    add(["POST"], "/api/query-dispatches/list", post_query_dispatches_list, read_body=True)
+
+    def post_jobs(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.CREATED, orchestrator.run_job(payload))
+
+    add(["POST"], "/api/jobs", post_jobs, read_body=True)
+
+    def post_workflows(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        payload = normalize_workflow_submission_payload(payload)
+        if workflow_runtime_uses_managed_runner(payload.get("runtime_execution_mode")):
+            result = orchestrator.start_workflow_runner_managed(payload)
+        else:
+            result = orchestrator.start_workflow(payload)
+        return _json_response(HTTPStatus.ACCEPTED, result)
+
+    add(["POST"], "/api/workflows", post_workflows, read_body=True)
+
+    def post_continue_stage2(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.continue_workflow_stage2({**payload, "job_id": request.path_params["job_id"]})
+        status = HTTPStatus.ACCEPTED
+        if result.get("status") in {"not_found"}:
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") in {"invalid", "conflict"}:
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/workflows/{job_id:sourcing_ident}/continue-stage2", post_continue_stage2, read_body=True)
+
+    def post_job_profile_completion(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.complete_job_candidate_profiles(request.path_params["job_id"], payload)
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(
+        ["POST"],
+        "/api/jobs/{job_id:sourcing_ident}/profile-completion",
+        post_job_profile_completion,
+        read_body=True,
+    )
+
+    def post_job_candidates_batch(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        candidate_ids = payload.get("candidate_ids")
+        candidate_batch_result = orchestrator.get_job_candidate_details_batch(
+            request.path_params["job_id"],
+            candidate_ids if isinstance(candidate_ids, list) else [],
+        )
+        status = HTTPStatus.OK
+        if candidate_batch_result is None:
+            status = HTTPStatus.NOT_FOUND
+            candidate_batch_result = {"error": "job not found"}
+        return _json_response(status, candidate_batch_result)
+
+    add(["POST"], "/api/jobs/{job_id:sourcing_ident}/candidates/batch", post_job_candidates_batch, read_body=True)
+
+    def post_company_assets_supplement(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.supplement_company_assets(payload)
+        status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/company-assets/supplement", post_company_assets_supplement, read_body=True)
+
+    def post_company_public_web(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.refresh_company_public_web_assets(payload)
+        status = HTTPStatus.CREATED if result.get("status") in {"completed", "joined"} else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/company-assets/public-web", post_company_public_web, read_body=True)
+
+    def post_operation_actions(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.submit_operation_action(payload)
+        status = (
+            HTTPStatus.ACCEPTED if result.get("status") in {"queued", "approval_required"} else HTTPStatus.BAD_REQUEST
+        )
+        return _json_response(status, result)
+
+    add(["POST"], "/api/operations/actions", post_operation_actions, read_body=True)
+
+    def post_operation_action_approve(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.approve_operation_action_api(
+            _decode_path_param(request.path_params["action_id"]),
+            payload,
+        )
+        status = HTTPStatus.ACCEPTED if result.get("status") == "queued" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/operations/actions/{action_id}/approve", post_operation_action_approve, read_body=True)
+
+    def post_operation_action_reject(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.reject_operation_action_api(
+            _decode_path_param(request.path_params["action_id"]),
+            payload,
+        )
+        status = HTTPStatus.OK if result.get("status") == "rejected" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/operations/actions/{action_id}/reject", post_operation_action_reject, read_body=True)
+
+    def post_operation_run_cancel(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.cancel_operation_run_api(
+            _decode_path_param(request.path_params["run_id"]),
+            payload,
+        )
+        status = HTTPStatus.OK if result.get("status") == "cancelled" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/operations/runs/{run_id}/cancel", post_operation_run_cancel, read_body=True)
+
+    def post_operation_run_retry(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.retry_operation_run_api(
+            _decode_path_param(request.path_params["run_id"]),
+            payload,
+        )
+        status = HTTPStatus.ACCEPTED if result.get("status") == "queued" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/operations/runs/{run_id}/retry", post_operation_run_retry, read_body=True)
+
+    def post_operation_run_resume(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.resume_operation_run_api(
+            _decode_path_param(request.path_params["run_id"]),
+            payload,
+        )
+        status = HTTPStatus.ACCEPTED if result.get("status") == "queued" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/operations/runs/{run_id}/resume", post_operation_run_resume, read_body=True)
+
+    def post_operation_run_dispatch(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.dispatch_operation_run_api(
+            _decode_path_param(request.path_params["run_id"]),
+            payload,
+        )
+        status = HTTPStatus.ACCEPTED if result.get("status") == "planned" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/operations/runs/{run_id}/dispatch", post_operation_run_dispatch, read_body=True)
+
+    def post_workflow_command_cancel(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.cancel_workflow_command_api(
+            _decode_path_param(request.path_params["command_id"]), payload
+        )
+        status = HTTPStatus.OK if result.get("status") == "cancelled" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/workflow/commands/{command_id}/cancel", post_workflow_command_cancel, read_body=True)
+
+    def post_workflow_command_retry(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.retry_workflow_command_api(
+            _decode_path_param(request.path_params["command_id"]), payload
+        )
+        status = HTTPStatus.ACCEPTED if result.get("status") == "queued" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/workflow/commands/{command_id}/retry", post_workflow_command_retry, read_body=True)
+
+    def post_workflow_command_resume(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.resume_workflow_command_api(
+            _decode_path_param(request.path_params["command_id"]), payload
+        )
+        status = HTTPStatus.ACCEPTED if result.get("status") == "queued" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/workflow/commands/{command_id}/resume", post_workflow_command_resume, read_body=True)
+
+    def post_intake_excel(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.ingest_excel_contacts(payload)
+        status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/intake/excel", post_intake_excel, read_body=True)
+
+    def post_intake_excel_workflow(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.start_excel_intake_workflow(payload)
+        status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/intake/excel/workflow", post_intake_excel_workflow, read_body=True)
+
+    def post_intake_excel_continue(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.continue_excel_intake_review(payload)
+        status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/intake/excel/continue", post_intake_excel_continue, read_body=True)
+
+    def post_criteria_feedback(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.CREATED, orchestrator.record_criteria_feedback(payload))
+
+    add(["POST"], "/api/criteria/feedback", post_criteria_feedback, read_body=True)
+
+    def post_plan_review(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.review_plan_session(payload)
+        status = HTTPStatus.OK if result.get("status") != "not_found" else HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/plan/review", post_plan_review, read_body=True)
+
+    def post_plan_review_compile_instruction(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.compile_plan_review_instruction(payload)
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/plan/review/compile-instruction", post_plan_review_compile_instruction, read_body=True)
+
+    def post_results_refine_compile_instruction(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.compile_post_acquisition_refinement(payload)
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/results/refine/compile-instruction", post_results_refine_compile_instruction, read_body=True)
+
+    def post_results_refine(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.apply_post_acquisition_refinement(payload)
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/results/refine", post_results_refine, read_body=True)
+
+    def post_criteria_confidence_policy(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.configure_confidence_policy(payload)
+        status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/criteria/confidence-policy", post_criteria_confidence_policy, read_body=True)
+
+    def post_criteria_suggestions_review(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.review_pattern_suggestion(payload)
+        status = HTTPStatus.OK if result.get("status") != "not_found" else HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/criteria/suggestions/review", post_criteria_suggestions_review, read_body=True)
+
+    def post_manual_review_review(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.review_manual_review_item(payload)
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") in {"invalid", "candidate_not_found"}:
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/manual-review/review", post_manual_review_review, read_body=True)
+
+    def post_candidate_review_registry(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.upsert_candidate_review_record(payload)
+        status = HTTPStatus.CREATED if result.get("status") == "upserted" else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/candidate-review-registry", post_candidate_review_registry, read_body=True)
+
+    def post_target_candidates_export(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        if not _legacy_target_candidate_export_allowed():
+            return _json_response(
+                HTTPStatus.GONE,
+                {
+                    "status": "retired",
+                    "reason": "legacy_target_candidate_export_retired",
+                    "canonical_export_path": "/api/projections/export",
+                    "read_contract": {
+                        "source": "projection_export_policy_v1",
+                        "fallback_used": False,
+                        "fail_closed": True,
+                    },
+                },
+            )
+        result = orchestrator.export_target_candidates_archive(payload)
+        if result.get("status") == "not_found":
+            return _json_response(HTTPStatus.NOT_FOUND, result)
+        if result.get("status") == "invalid":
+            return _json_response(HTTPStatus.BAD_REQUEST, result)
+        return _bytes_response(
+            HTTPStatus.OK,
+            bytes(result.get("body") or b""),
+            content_type=str(result.get("content_type") or "application/octet-stream"),
+            filename=str(result.get("filename") or "download.bin"),
+            extra_headers={
+                "X-Sourcing-Legacy-Export-Path": "target_candidates",
+                "X-Sourcing-Canonical-Export-Path": "projections_export",
+                "X-Sourcing-Export-Cutover-Status": "legacy_compatibility_path",
+            },
+        )
+
+    add(["POST"], "/api/target-candidates/export", post_target_candidates_export, read_body=True)
+
+    def post_target_public_web_export_gone(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(
+            HTTPStatus.GONE,
+            _legacy_target_public_web_endpoint_payload(
+                legacy_endpoint="/api/target-candidates/public-web-export",
+                canonical_endpoint="/api/crm/records/public-web-export",
+                operation="export",
+            ),
+        )
+
+    add(["POST"], "/api/target-candidates/public-web-export", post_target_public_web_export_gone, read_body=True)
+
+    def post_crm_public_web_export(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.export_crm_record_public_web_archive(payload)
+        if result.get("status") == "not_found":
+            return _json_response(HTTPStatus.NOT_FOUND, result)
+        if result.get("status") == "invalid":
+            return _json_response(HTTPStatus.BAD_REQUEST, result)
+        if result.get("status") != "ok":
+            return _json_response(HTTPStatus.CONFLICT, result)
+        if not result.get("body"):
+            return _json_response(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {
+                    **dict(result or {}),
+                    "status": "failed",
+                    "reason": str(result.get("reason") or "crm_public_web_export_body_missing"),
+                },
+            )
+        return _bytes_response(
+            HTTPStatus.OK,
+            bytes(result.get("body") or b""),
+            content_type=str(result.get("content_type") or "application/octet-stream"),
+            filename=str(result.get("filename") or "download.bin"),
+            extra_headers={
+                "X-Sourcing-Export-Record-Count": str(int(result.get("record_count") or 0)),
+                "X-Sourcing-Exported-Record-Count": str(int(result.get("exported_record_count") or 0)),
+                "X-Sourcing-Exported-Signal-Count": str(int(result.get("exported_signal_count") or 0)),
+                "X-Sourcing-No-Public-Web-Result-Count": str(int(result.get("no_public_web_result_count") or 0)),
+                "X-Sourcing-No-Exportable-Signal-Count": str(int(result.get("no_exportable_signal_count") or 0)),
+                "X-Sourcing-Non-Terminal-Run-Count": str(int(result.get("non_terminal_run_count") or 0)),
+                "X-Sourcing-Canonical-Public-Web-Owner": "crm_records",
+            },
+        )
+
+    add(["POST"], "/api/crm/records/public-web-export", post_crm_public_web_export, read_body=True)
+
+    def post_target_candidates_import_from_job(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.import_target_candidates_from_job(payload)
+        status = HTTPStatus.CREATED if result.get("status") == "imported" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/target-candidates/import-from-job", post_target_candidates_import_from_job, read_body=True)
+
+    def post_crm_records(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.add_projection_candidate_to_crm(payload)
+        status = HTTPStatus.CREATED if result.get("status") in {"upserted", "idempotent"} else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/crm/records", post_crm_records, read_body=True)
+
+    def post_crm_backfill_target_candidates(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.backfill_crm_from_target_candidates(payload)
+        status = HTTPStatus.OK if result.get("status") in {"backfilled", "dry_run"} else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/crm/backfill-target-candidates", post_crm_backfill_target_candidates, read_body=True)
+
+    def post_projections_backfill_from_job(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.backfill_serving_projection_for_job(payload)
+        status = HTTPStatus.CREATED if result.get("status") == "backfilled" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "skipped_existing_projection":
+            status = HTTPStatus.OK
+        elif result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "not_ready":
+            status = HTTPStatus.CONFLICT
+        return _json_response(status, result)
+
+    add(["POST"], "/api/projections/backfill-from-job", post_projections_backfill_from_job, read_body=True)
+
+    def post_projections_rebuild_person_search_index(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.rebuild_projection_person_search_index_api(payload)
+        status = HTTPStatus.OK if result.get("status") == "indexed" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(
+        ["POST"],
+        "/api/projections/rebuild-person-search-index",
+        post_projections_rebuild_person_search_index,
+        read_body=True,
+    )
+
+    def post_projections_backfill_person_summary_views(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.backfill_projection_person_summary_views_api(payload)
+        status = HTTPStatus.OK if result.get("status") in {"backfilled", "dry_run"} else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(
+        ["POST"],
+        "/api/projections/backfill-person-summary-views",
+        post_projections_backfill_person_summary_views,
+        read_body=True,
+    )
+
+    def post_projections_backfill_person_search_indexes(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.backfill_projection_person_search_indexes_api(payload)
+        status = HTTPStatus.OK if result.get("status") in {"backfilled", "dry_run"} else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(
+        ["POST"],
+        "/api/projections/backfill-person-search-indexes",
+        post_projections_backfill_person_search_indexes,
+        read_body=True,
+    )
+
+    def post_persons_backfill_raw_evidence_indexes(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.backfill_person_raw_evidence_indexes_api(payload)
+        status = HTTPStatus.OK if result.get("status") in {"backfilled", "dry_run"} else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(
+        ["POST"],
+        "/api/persons/backfill-raw-evidence-indexes",
+        post_persons_backfill_raw_evidence_indexes,
+        read_body=True,
+    )
+
+    def post_persons_backfill_public_web_signals(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.backfill_public_web_signals_to_person_asset_layer(payload)
+        status = HTTPStatus.OK if result.get("status") in {"backfilled", "dry_run"} else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(
+        ["POST"],
+        "/api/persons/backfill-public-web-signals",
+        post_persons_backfill_public_web_signals,
+        read_body=True,
+    )
+
+    def post_media_backfill_person_avatars(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.backfill_person_avatar_media_assets_api(payload)
+        status = HTTPStatus.OK if result.get("status") in {"planned", "dry_run"} else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/media/backfill-person-avatars", post_media_backfill_person_avatars, read_body=True)
+
+    def post_media_backfill_company_logos(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.backfill_company_logo_media_assets_api(payload)
+        status = HTTPStatus.OK if result.get("status") in {"planned", "dry_run"} else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/media/backfill-company-logos", post_media_backfill_company_logos, read_body=True)
+
+    def post_media_ingest_company_logo_from_profile(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.ingest_company_logo_from_profile_experience_api(payload)
+        status = (
+            HTTPStatus.OK
+            if result.get("status") in {"planned", "dry_run", "skipped", "source_discovery_required"}
+            else HTTPStatus.BAD_REQUEST
+        )
+        return _json_response(status, result)
+
+    add(
+        ["POST"],
+        "/api/media/ingest-company-logo-from-profile",
+        post_media_ingest_company_logo_from_profile,
+        read_body=True,
+    )
+
+    def post_company_assets_backfill_public_web_assets(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.backfill_company_public_web_assets_to_company_asset_layer_api(payload)
+        status = HTTPStatus.OK if result.get("status") in {"backfilled", "dry_run"} else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(
+        ["POST"],
+        "/api/company-assets/backfill-public-web-assets",
+        post_company_assets_backfill_public_web_assets,
+        read_body=True,
+    )
+
+    def post_crm_backfill_public_web_promotions(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.backfill_public_web_promotions_to_person_assertions(payload)
+        status = HTTPStatus.OK if result.get("status") in {"backfilled", "dry_run"} else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/crm/backfill-public-web-promotions", post_crm_backfill_public_web_promotions, read_body=True)
+
+    def post_projections_export(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.export_projection_candidates_archive(payload)
+        if result.get("status") == "not_found":
+            return _json_response(HTTPStatus.NOT_FOUND, result)
+        if result.get("status") in {"invalid", "not_ready"}:
+            return _json_response(HTTPStatus.BAD_REQUEST, result)
+        return _bytes_response(
+            HTTPStatus.OK,
+            bytes(result.get("body") or b""),
+            content_type=str(result.get("content_type") or "application/octet-stream"),
+            filename=str(result.get("filename") or "download.bin"),
+            extra_headers={
+                "X-Sourcing-Projection-Id": str(result.get("projection_id") or ""),
+                "X-Sourcing-Export-Record-Count": str(int(result.get("record_count") or 0)),
+                "X-Sourcing-Exported-Record-Count": str(int(result.get("exported_record_count") or 0)),
+                "X-Sourcing-Skipped-Assertion-Count": str(int(result.get("skipped_assertion_count") or 0)),
+            },
+        )
+
+    add(["POST"], "/api/projections/export", post_projections_export, read_body=True)
+
+    def post_crm_public_web_search(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.start_crm_record_public_web_search(payload)
+        status = HTTPStatus.ACCEPTED if result.get("status") in {"queued", "joined"} else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/crm/records/public-web-search", post_crm_public_web_search, read_body=True)
+
+    def post_crm_public_web_search_poll(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.list_crm_record_public_web_searches(payload)
+        status = HTTPStatus.OK if result.get("status") in {"ok", "ready"} else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/crm/records/public-web-search/poll", post_crm_public_web_search_poll, read_body=True)
+
+    def post_crm_public_web_search_cancel(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.cancel_crm_record_public_web_search(payload)
+        status = HTTPStatus.OK if result.get("status") in {"cancelled", "skipped"} else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/crm/records/public-web-search/cancel", post_crm_public_web_search_cancel, read_body=True)
+
+    def post_crm_public_web_search_retry(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.retry_crm_record_public_web_search(payload)
+        status = (
+            HTTPStatus.ACCEPTED if result.get("status") in {"retried", "queued", "joined"} else HTTPStatus.BAD_REQUEST
+        )
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/crm/records/public-web-search/retry", post_crm_public_web_search_retry, read_body=True)
+
+    def post_target_public_web_search_gone(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(
+            HTTPStatus.GONE,
+            _legacy_target_public_web_endpoint_payload(
+                legacy_endpoint="/api/target-candidates/public-web-search",
+                canonical_endpoint="/api/crm/records/public-web-search",
+                operation="start",
+            ),
+        )
+
+    add(["POST"], "/api/target-candidates/public-web-search", post_target_public_web_search_gone, read_body=True)
+
+    def post_target_public_web_search_poll_gone(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        return _json_response(
+            HTTPStatus.GONE,
+            _legacy_target_public_web_endpoint_payload(
+                legacy_endpoint="/api/target-candidates/public-web-search/poll",
+                canonical_endpoint="/api/crm/records/public-web-search/poll",
+                operation="poll",
+            ),
+        )
+
+    add(
+        ["POST"],
+        "/api/target-candidates/public-web-search/poll",
+        post_target_public_web_search_poll_gone,
+        read_body=True,
+    )
+
+    def post_target_public_web_search_cancel_gone(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        return _json_response(
+            HTTPStatus.GONE,
+            _legacy_target_public_web_endpoint_payload(
+                legacy_endpoint="/api/target-candidates/public-web-search/cancel",
+                canonical_endpoint="/api/crm/records/public-web-search/cancel",
+                operation="cancel",
+            ),
+        )
+
+    add(
+        ["POST"],
+        "/api/target-candidates/public-web-search/cancel",
+        post_target_public_web_search_cancel_gone,
+        read_body=True,
+    )
+
+    def post_target_public_web_search_retry_gone(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        return _json_response(
+            HTTPStatus.GONE,
+            _legacy_target_public_web_endpoint_payload(
+                legacy_endpoint="/api/target-candidates/public-web-search/retry",
+                canonical_endpoint="/api/crm/records/public-web-search/retry",
+                operation="retry",
+            ),
+        )
+
+    add(
+        ["POST"],
+        "/api/target-candidates/public-web-search/retry",
+        post_target_public_web_search_retry_gone,
+        read_body=True,
+    )
+
+    def post_crm_public_web_promotion(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.promote_crm_record_public_web_signal(
+            _decode_path_param(request.path_params["record_id"]),
+            payload,
+        )
+        status = HTTPStatus.CREATED if result.get("status") in {"promoted", "rejected"} else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/crm/records/{record_id}/public-web-promotions", post_crm_public_web_promotion, read_body=True)
+
+    def post_target_public_web_promotion_gone(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        return _json_response(
+            HTTPStatus.GONE,
+            _legacy_target_public_web_endpoint_payload(
+                legacy_endpoint="/api/target-candidates/{record_id}/public-web-promotions",
+                canonical_endpoint="/api/crm/records/{crm_record_id}/public-web-promotions",
+                operation="promotion",
+                record_id=_decode_path_param(request.path_params["record_id"]),
+            ),
+        )
+
+    add(
+        ["POST"],
+        "/api/target-candidates/{record_id}/public-web-promotions",
+        post_target_public_web_promotion_gone,
+        read_body=True,
+    )
+
+    def post_target_candidates(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.upsert_target_candidate(payload)
+        status = HTTPStatus.CREATED if result.get("status") == "upserted" else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/target-candidates", post_target_candidates, read_body=True)
+
+    def post_assets_governance_promote_default(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
+        result = orchestrator.promote_asset_default_pointer(payload)
+        status = HTTPStatus.CREATED if result.get("status") == "promoted" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "noop":
+            status = HTTPStatus.OK
+        return _json_response(status, result)
+
+    add(["POST"], "/api/assets/governance/promote-default", post_assets_governance_promote_default, read_body=True)
+
+    def post_manual_review_synthesize(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.synthesize_manual_review_item(payload)
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/manual-review/synthesize", post_manual_review_synthesize, read_body=True)
+
+    def post_criteria_recompile(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.recompile_criteria(payload))
+
+    add(["POST"], "/api/criteria/recompile", post_criteria_recompile, read_body=True)
+
+    def post_workers_interrupt(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.interrupt_agent_worker(payload)
+        status = HTTPStatus.OK
+        if result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        elif result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["POST"], "/api/workers/interrupt", post_workers_interrupt, read_body=True)
+
+    def post_workers_cleanup(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.cleanup_recoverable_workers(payload))
+
+    add(["POST"], "/api/workers/cleanup", post_workers_cleanup, read_body=True)
+
+    def post_workers_daemon_run_once(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.run_worker_recovery_once(payload))
+
+    add(["POST"], "/api/workers/daemon/run-once", post_workers_daemon_run_once, read_body=True)
+
+    def post_runtime_services_shutdown(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.request_runtime_service_shutdown(payload)
+        status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/runtime/services/shutdown", post_runtime_services_shutdown, read_body=True)
+
+    def post_job_cancel(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.cancel_workflow_job(request.path_params["job_id"], payload)
+        status = HTTPStatus.OK
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "invalid":
+            status = HTTPStatus.BAD_REQUEST
+        return _json_response(status, result)
+
+    add(["POST"], "/api/jobs/{job_id:sourcing_ident}/cancel", post_job_cancel, read_body=True)
+
+    def post_workers_daemon_systemd_unit(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.OK, orchestrator.write_worker_daemon_systemd_unit(payload))
+
+    add(["POST"], "/api/workers/daemon/systemd-unit", post_workers_daemon_systemd_unit, read_body=True)
+
+    # ---------------------------------------------------------------- PATCH
+    def patch_crm_record(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        result = orchestrator.update_crm_record_api(
+            _decode_path_param(request.path_params["record_id"]),
+            payload,
+        )
+        status = HTTPStatus.OK if result.get("status") == "updated" else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "not_found":
+            status = HTTPStatus.NOT_FOUND
+        return _json_response(status, result)
+
+    add(["PATCH"], "/api/crm/records/{record_id}", patch_crm_record, read_body=True)
+
+    # --------------------------------------------------------- 404 fallback
+    def not_found(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        return _json_response(HTTPStatus.NOT_FOUND, {"error": "not found"})
+
+    add(["GET", "POST", "DELETE", "PATCH"], "/{unmatched_path:path}", not_found)
+
+    return routes
 
 
 def _load_allowed_origins() -> tuple[str, ...]:
@@ -640,6 +2082,13 @@ def _is_local_dev_origin(origin: str) -> bool:
 
 
 class _RequestConcurrencyController:
+    """Legacy thread-based two-lane controller (kept for interface compatibility).
+
+    The live transport now enforces the same semantics in
+    `_RequestConcurrencyMiddleware`; this class remains for callers that built
+    against the previous stdlib server object.
+    """
+
     def __init__(self, *, shared_limit: int, light_reserved_limit: int) -> None:
         self._shared = threading.BoundedSemaphore(max(1, shared_limit))
         self._light_reserved = threading.BoundedSemaphore(max(1, light_reserved_limit))
@@ -670,7 +2119,44 @@ def _request_priority_lane(method: str, path: str) -> str:
         return "light"
     if normalized_method == "POST" and normalized_path == "/api/runtime/services/shutdown":
         return "light"
-    if normalized_method == "POST" and normalized_path == "/api/target-candidates/public-web-search":
+    if normalized_method == "POST" and normalized_path == "/api/crm/records/public-web-search":
+        return "light"
+    if normalized_method == "POST" and normalized_path == "/api/crm/records":
+        return "light"
+    if normalized_method == "POST" and (
+        normalized_path == "/api/operations/actions"
+        or re.fullmatch(r"/api/operations/actions/[^/]+/(approve|reject)", normalized_path)
+        or re.fullmatch(r"/api/operations/runs/[^/]+/(cancel|retry|resume|dispatch)", normalized_path)
+        or re.fullmatch(r"/api/workflow/commands/[^/]+/(cancel|retry|resume)", normalized_path)
+    ):
+        return "light"
+    if normalized_method == "PATCH" and re.fullmatch(r"/api/crm/records/[^/]+", normalized_path):
+        return "light"
+    if normalized_method == "POST" and normalized_path == "/api/crm/backfill-target-candidates":
+        return "shared"
+    if normalized_method == "POST" and normalized_path == "/api/crm/backfill-public-web-promotions":
+        return "shared"
+    if normalized_method == "POST" and normalized_path == "/api/persons/backfill-public-web-signals":
+        return "shared"
+    if normalized_method == "POST" and normalized_path == "/api/media/backfill-person-avatars":
+        return "shared"
+    if normalized_method == "POST" and normalized_path == "/api/media/backfill-company-logos":
+        return "shared"
+    if normalized_method == "POST" and normalized_path == "/api/company-assets/backfill-public-web-assets":
+        return "shared"
+    if normalized_method == "POST" and normalized_path == "/api/projections/backfill-from-job":
+        return "shared"
+    if normalized_method == "POST" and normalized_path == "/api/projections/rebuild-person-search-index":
+        return "shared"
+    if normalized_method == "POST" and normalized_path == "/api/projections/export":
+        return "shared"
+    if normalized_method == "POST" and normalized_path == "/api/crm/records/public-web-export":
+        return "shared"
+    if normalized_method == "POST" and normalized_path in {
+        "/api/crm/records/public-web-search/poll",
+        "/api/crm/records/public-web-search/cancel",
+        "/api/crm/records/public-web-search/retry",
+    }:
         return "light"
     if normalized_method == "POST" and re.fullmatch(r"/api/jobs/[A-Za-z0-9_-]+/cancel", normalized_path):
         return "light"
@@ -685,11 +2171,20 @@ def _request_priority_lane(method: str, path: str) -> str:
         "/api/criteria/patterns",
         "/api/plan/reviews",
         "/api/query-dispatches",
+        "/api/workflow/command-registry",
+        "/api/workflow/commands",
+        "/api/workflow/activities",
+        "/api/workflow/activity-attempts",
+        "/api/workflow/entity-deltas",
+        "/api/workflow/discovery-lanes",
+        "/api/migrations/legacy-public-web",
+        "/api/migrations/legacy-result-endpoints",
         "/api/manual-review",
             "/api/candidate-review-registry",
             "/api/target-candidates",
-            "/api/target-candidates/public-web-search",
-            "/api/assets/governance/default-pointers",
+        "/api/crm/records",
+        "/api/crm/tasks",
+        "/api/assets/governance/default-pointers",
         "/api/frontend-history",
         "/api/workers/recoverable",
         "/api/workers/daemon/status",
@@ -697,17 +2192,184 @@ def _request_priority_lane(method: str, path: str) -> str:
         return "light"
     if re.fullmatch(r"/api/frontend-history/[^/]+", normalized_path):
         return "light"
-    if re.fullmatch(r"/api/target-candidates/[^/]+/public-web-search", normalized_path):
+    if re.fullmatch(r"/api/workflow/commands/[^/]+", normalized_path):
         return "light"
-    if re.fullmatch(r"/api/jobs/[A-Za-z0-9]+/(progress|dashboard)", normalized_path):
+    if re.fullmatch(r"/api/workflow/(activities|activity-attempts)/[^/]+", normalized_path):
+        return "light"
+    if re.fullmatch(r"/api/workflow/entity-deltas/[^/]+", normalized_path):
+        return "light"
+    if re.fullmatch(r"/api/workflow/discovery-lanes/[^/]+", normalized_path):
+        return "light"
+    if re.fullmatch(r"/api/crm/records/[^/]+/tasks", normalized_path):
+        return "light"
+    if re.fullmatch(r"/api/crm/records/[^/]+/(profile|public-web-search|public-web-promotions)", normalized_path):
+        return "light"
+    if re.fullmatch(
+        r"/api/operations/(action-registry|actions|runs|actions/[^/]+|runs/[^/]+|runs/[^/]+/provenance)",
+        normalized_path,
+    ):
+        return "light"
+    if re.fullmatch(r"/api/runs/[A-Za-z0-9_-]+/projection-link", normalized_path):
+        return "light"
+    if normalized_path == "/api/collections":
+        return "light"
+    if re.fullmatch(r"/api/collections/[^/]+/(authoritative-projection|asset-entry|coverage)", normalized_path):
+        return "light"
+    if re.fullmatch(r"/api/projections/[A-Za-z0-9_-]+(/(candidates|crm-state|export-policy|search))?", normalized_path):
+        return "light"
+    if re.fullmatch(r"/api/projections/[A-Za-z0-9_-]+/persons/[^/]+", normalized_path):
+        return "light"
+    if re.fullmatch(r"/api/persons/[^/]+", normalized_path):
+        return "light"
+    if re.fullmatch(r"/api/media/assets/[^/]+", normalized_path):
+        return "light"
+    if re.fullmatch(
+        r"/api/jobs/[A-Za-z0-9_-]+/(progress|dashboard|candidates|board-patches|materialization-items)",
+        normalized_path,
+    ):
         return "light"
     return "shared"
+
+
+def _legacy_target_candidate_export_allowed() -> bool:
+    return str(os.getenv("SOURCING_ALLOW_LEGACY_TARGET_CANDIDATE_EXPORT") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _legacy_target_public_web_endpoint_payload(
+    *,
+    legacy_endpoint: str,
+    canonical_endpoint: str,
+    operation: str,
+    record_id: str = "",
+) -> dict[str, Any]:
+    return {
+        "status": "retired",
+        "reason": "legacy_target_public_web_endpoint_retired",
+        "legacy_endpoint": legacy_endpoint,
+        "canonical_endpoint": canonical_endpoint,
+        "record_id": str(record_id or "").strip(),
+        "operation": str(operation or "").strip(),
+        "migration_override_env": "SOURCING_ALLOW_LEGACY_TARGET_PUBLIC_WEB_ENDPOINTS",
+        "migration_override_status": "removed",
+        "retirement_mode": "permanent_hard_disable",
+        "read_contract": {
+            "source": "crm_records+person_public_web_assets",
+            "fallback_used": False,
+            "fail_closed": True,
+            "legacy_target_candidates_used": False,
+            "public_web_storage_bridge": "",
+            "bridge_removal_phase": "retired",
+        },
+    }
+
+
+def _legacy_job_result_endpoint_retired(orchestrator: SourcingOrchestrator, run_id: str) -> bool:
+    if _env_bool("SOURCING_ALLOW_LEGACY_JOB_RESULT_ENDPOINTS", False):
+        return False
+    explicit_cutover_value = os.getenv("SOURCING_RETIRE_LEGACY_JOB_RESULT_ENDPOINTS")
+    if explicit_cutover_value is not None:
+        return _env_bool("SOURCING_RETIRE_LEGACY_JOB_RESULT_ENDPOINTS", False)
+    status_payload = orchestrator.get_legacy_result_endpoint_retirement_status({"run_id": str(run_id or "").strip()})
+    return bool(status_payload.get("cutover_enforced"))
+
+
+def _legacy_job_result_endpoint_payload(
+    orchestrator: SourcingOrchestrator,
+    run_id: str,
+    *,
+    legacy_endpoint: str,
+    candidate_identity_key: str = "",
+) -> dict[str, Any]:
+    normalized_run_id = str(run_id or "").strip()
+    status_payload = orchestrator.get_legacy_result_endpoint_retirement_status({"run_id": normalized_run_id})
+    projection_id = str(status_payload.get("projection_id") or "").strip()
+    projection_url = f"/projections/{projection_id}" if projection_id else ""
+    if projection_id and candidate_identity_key:
+        projection_url = f"{projection_url}?candidate={quote(candidate_identity_key, safe='')}"
+    return {
+        "status": "retired",
+        "reason": (
+            "legacy_job_result_endpoint_retired"
+            if projection_id
+            else "legacy_job_result_endpoint_migration_required"
+        ),
+        "run_id": normalized_run_id,
+        "legacy_endpoint": legacy_endpoint,
+        "projection_id": projection_id,
+        "projection_url": projection_url,
+        "candidate_identity_key": str(candidate_identity_key or "").strip(),
+        "retirement": status_payload,
+        "read_contract": {
+            "source": "run_projection_links+serving_projections",
+            "fallback_used": False,
+            "fail_closed": True,
+        },
+    }
 
 
 def _default_light_request_reserved(max_parallel_requests: int) -> int:
     if max_parallel_requests <= 2:
         return 1
     return min(4, max(2, max_parallel_requests // 4))
+
+
+def _provider_webhook_token_allowed(
+    headers: Any,
+    query_payload: dict[str, Any],
+    *,
+    orchestrator: SourcingOrchestrator | None = None,
+) -> bool:
+    expected_tokens = _provider_webhook_expected_tokens(orchestrator)
+    if not expected_tokens:
+        return _env_bool("SOURCING_ALLOW_UNSIGNED_PROVIDER_WEBHOOKS", False)
+    observed = (
+        str(dict(query_payload or {}).get("token") or "").strip()
+        or str(headers.get("X-Sourcing-Provider-Webhook-Token") or "").strip()
+        or str(headers.get("X-Apify-Webhook-Token") or "").strip()
+    )
+    return bool(observed and observed in expected_tokens)
+
+
+def _provider_webhook_expected_tokens(orchestrator: SourcingOrchestrator | None = None) -> set[str]:
+    tokens = {
+        str(os.getenv("SOURCING_PROVIDER_WEBHOOK_TOKEN") or "").strip(),
+        str(os.getenv("APIFY_WEBHOOK_TOKEN") or "").strip(),
+    }
+    if _env_bool("SOURCING_PROVIDER_WEBHOOK_USE_APIFY_API_TOKEN", True):
+        acquisition_engine = getattr(orchestrator, "acquisition_engine", None)
+        settings = getattr(acquisition_engine, "settings", None)
+        harvest_settings = getattr(settings, "harvest", None)
+        for actor_name in ("profile_scraper", "profile_search", "company_employees"):
+            actor_settings = getattr(harvest_settings, actor_name, None)
+            tokens.add(str(getattr(actor_settings, "api_token", "") or "").strip())
+    return {token for token in tokens if token}
+
+
+def _provider_webhook_sync_requested(query_payload: dict[str, Any]) -> bool:
+    observed = str(dict(query_payload or {}).get("sync") or "").strip().lower()
+    if observed in {"1", "true", "yes", "on"}:
+        return True
+    return _env_bool("SOURCING_PROVIDER_WEBHOOK_SYNC_RECOVERY", False)
+
+
+def _provider_event_response_payload(event: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in dict(event or {}).items() if key != "raw_payload"}
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = str(os.getenv(name, "")).strip().lower()
+    if not raw:
+        return default
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 def _env_int(name: str, default: int) -> int:
@@ -739,3 +2401,26 @@ def _env_bool_from_payload(payload: dict[str, Any], key: str, default: bool) -> 
     if raw in {"0", "false", "no", "off"}:
         return False
     return default
+
+
+def _candidate_page_filter_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    source = dict(payload or {})
+    return {
+        "search_keyword": str(source.get("search") or source.get("search_keyword") or "").strip(),
+        "recall_buckets": _csv_query_values(source.get("recall_buckets")),
+        "employment_statuses": _csv_query_values(source.get("employment_statuses")),
+        "locations": _csv_query_values(source.get("locations")),
+        "function_buckets": _csv_query_values(source.get("function_buckets")),
+        "layer_includes": _csv_query_values(source.get("layer_includes") or source.get("layers")),
+        "layer_excludes": _csv_query_values(source.get("layer_excludes")),
+        "audit_statuses": _csv_query_values(source.get("audit_statuses")),
+    }
+
+
+def _csv_query_values(value: Any) -> list[str]:
+    values: list[str] = []
+    for item in str(value or "").split(","):
+        normalized = item.strip()
+        if normalized:
+            values.append(normalized)
+    return values
