@@ -26,7 +26,7 @@
 - [x] PG 测试 fixture 试点（2026-06-12）：`tests/pg_store_fixture.py`（`PGControlPlaneStoreTestMixin`：per-class schema + `pg_tables` 截断复用）；8 个文件先行迁移；试点即捕获一个生产缺陷（见下条）。
 - [x] PG ON CONFLICT 唯一索引缺口类修复（2026-06-12）：SQLite UNIQUE 约束从未镜像进 PG bootstrap，postgres_only 下 `upsert_criteria_pattern` 等触发 InvalidColumnReference；修复 = `_CONTROL_PLANE_UNIQUE_INDEXES` 幂等唯一索引 + 建索引前去重（有时近列保留最新，无时近列 loud failure）+ 复发守卫 `tests/test_pg_onconflict_guard.py`（机械扫描 ON CONFLICT 目标 vs 索引清单）。
 - [ ] 其余 ~40 个直接实例化 SQLite `ControlPlaneStore` 的测试文件分批迁移（~10/批；其中 ~10 个 daemon/server 进程型需 per-test context manager 变体；`testcontainers_*` 与 PG 适配器自测不在范围）。
-- [ ] advisory lock key 按 schema 命名空间化：**已评估、暂缓**——滚动部署期间新旧进程锁身份不一致会破坏互斥，需要协调切换方案，设计说明已记录待 owner 审定。
+- [x] advisory lock key 按 schema 命名空间化（2026-06-12，owner 批准趁 systemd 全量重启部署窗口落地）：7 个锁点统一走 `_advisory_lock_key()`（schema 前缀，空 schema 归一为 `public`）；跨 schema 互不争用 + 同 schema 互斥 + 默认前缀确定性均有实测锁定（`test_control_plane_pool.py`）。**部署约束：锁身份已变，上线必须全停重启，禁止新旧进程共存热部署**（现行 systemd 部署天然满足；Track C 容器化滚动部署前无需再协调）。
 - [ ] 之后：按表组把 292 个双路径方法重写为 PG-pure 并删 mirror；最后移除内存 SQLite 影子。引入正式 migration 机制（PG DDL 目前在 `control_plane_live_postgres.py` 手工第二份）。**每个方法重写时必须特征化"行不存在"语义与 SQLite fallback 一致**（已知分歧族：ON CONFLICT 唯一索引缺口、`update_agent_runtime_session_status` 在 PG-only 下对缺行 raise 而 SQLite 静默 no-op——后者已修，见 `WORKFLOW_BEHAVIOR_GUARDRAILS.md` invariant 7）。
 
 ### Track C — Serving Runtime（目标 ~20 并发用户）
@@ -61,6 +61,7 @@
 > 规则：新失败先做 control-environment 归因（在无该变更的对照环境复现）再入账；修复后移除条目。2026-06-12 凌晨批次的 8 个被举报失败已全部归因并修复（3× 测试自身 Thread.start 全局 stub 扼杀 psycopg_pool 工作线程、1× 测试未随 06-07 workspace fail-closed 契约更新、1× c942874 携带的 get_job_api include_details 压缩丢字段、3× c942874 携带的 completion-policy/W6/canonical-projection 漂移——其中投影读路径丢 job-scoped 标记是真实产品缺陷，已修）。
 
 - `tests/test_results_api.py` 全文件 36 failed / 261 passed（2026-06-12 全量首跑发现；对照实验证明与 6fe870b/7280512/139d1ca 无关——提取还原后失败集 byte-identical，叠加还原 ON CONFLICT 修复后 36 个仍原样出现）。错误桶：9× PG-only durable-runtime 守卫 RuntimeError、5× HTTP 410 Gone、10× completion/promotion 状态不匹配（与 c942874 的 completion-policy 门禁同族）、5× 投影断言（含 `get_run_projection_link` 非 `proj_` 前缀）、7× 杂项数据形状。属 pre-handoff Codex-era src/test 漂移，待按 completion-policy / serving-projection 主题分批修复。
+- `tests/test_enrichment.py` 全文件 38 failed / 97 passed（2026-06-12 advisory-lock 变更回归扫描时首次全量发现；对照实验证明与锁变更无关——还原后失败集计数相同。属 pre-handoff 漂移族，待归桶分批修复）。
 - `tests/test_workflow_explain.py::test_explain_workflow_does_not_use_legacy_standard_bundle_as_hidden_full_coverage_proof`（2026-06-11 归因：pre-handoff uncommitted worktree state，与 CommandKernel/registry 提取无关）。
 - `tests/test_control_plane_live_postgres.py::test_serving_projection_foundation_uses_live_postgres_tables`（同上）。
 
