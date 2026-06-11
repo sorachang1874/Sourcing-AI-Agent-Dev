@@ -299,6 +299,7 @@ _PUBLIC_WEB_RELATED_PATHS = {
     "src/sourcing_agent/linkedin_url_normalization.py",
     "src/sourcing_agent/public_web_quality.py",
     "src/sourcing_agent/public_web_search.py",
+    "src/sourcing_agent/crm_public_web_owner.py",
     "src/sourcing_agent/crm_public_web_runtime.py",
     "src/sourcing_agent/public_web_runtime_core.py",
     "src/sourcing_agent/legacy_public_web_storage.py",

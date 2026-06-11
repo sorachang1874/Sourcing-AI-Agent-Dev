@@ -1548,9 +1548,9 @@ def test_w7f_crm_public_web_phase_commands_are_contract_visible() -> None:
     assert "document-level `public_web_document` deltas" in durable_doc
     assert "signal-level `public_web_signal` deltas" in review_doc
     assert "signal-level `public_web_signal` deltas" in durable_doc
-    find_class_method("_record_crm_public_web_phase_entity_delta")
-    find_class_method("_record_crm_public_web_document_entity_deltas")
-    find_class_method("_record_crm_public_web_signal_entity_deltas")
+    find_class_method("_record_crm_public_web_phase_entity_delta", class_name="CrmPublicWebOwner")
+    find_class_method("_record_crm_public_web_document_entity_deltas", class_name="CrmPublicWebOwner")
+    find_class_method("_record_crm_public_web_signal_entity_deltas", class_name="CrmPublicWebOwner")
     _assert_token_in_sourcing_agent_sources("activity_type=command_type")
     assert "owner-specific running cancel" in review_doc
     assert "owner-specific control first slice" in durable_doc
@@ -1603,7 +1603,9 @@ def test_w7f_crm_public_web_phase_commands_are_contract_visible() -> None:
     assert "Orchestration, provider-attempt, and domain-mutation commands expose owner-specific running cancel/resume at safe checkpoints" in agent_doc
     assert "provider-attempt before provider EntityDelta/downstream evidence" in agent_doc
     assert "After those boundaries, cancellation remains fail-closed" in agent_doc
-    crm_public_web_phase_cancel_source = _class_method_source("_cancel_running_crm_public_web_phase_command")
+    crm_public_web_phase_cancel_source = _class_method_source(
+        "_cancel_running_crm_public_web_phase_command", class_name="CrmPublicWebOwner"
+    )
     assert "from_statuses=(\"claimed\", \"running\")" in crm_public_web_phase_cancel_source
 
 
@@ -3032,7 +3034,7 @@ def test_export_command_owners_are_activity_spine_visible() -> None:
         "_run_projection_export_generate_command"
     )
     assert "activity_type=EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE" in _class_method_source(
-        "_run_crm_public_web_export_generate_command"
+        "_run_crm_public_web_export_generate_command", class_name="CrmPublicWebOwner"
     )
 
 

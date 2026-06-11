@@ -594,8 +594,8 @@ def test_worker_daemon_keeps_crm_and_legacy_public_web_recovery_kinds_separate()
 
 
 def test_crm_public_web_promotion_owner_rejects_non_latest_run_signal() -> None:
-    _, promote_block = find_class_method("_promote_crm_public_web_signal_from_owner")
-    find_class_method("_export_crm_public_web_archive_from_owner")
+    _, promote_block = find_class_method("_promote_crm_public_web_signal_from_owner", class_name="CrmPublicWebOwner")
+    find_class_method("_export_crm_public_web_archive_from_owner", class_name="CrmPublicWebOwner")
 
     assert "list_crm_public_web_runs(" in promote_block
     assert "limit=1" in promote_block
@@ -612,8 +612,8 @@ def test_crm_public_web_promotion_owner_rejects_non_latest_run_signal() -> None:
 
 
 def test_crm_public_web_detail_owner_requires_record_owned_run_before_signal_reads() -> None:
-    _, detail_block = find_class_method("_get_crm_record_public_web_search_detail_from_owner")
-    find_class_method("_list_crm_record_public_web_promotions_from_owner")
+    _, detail_block = find_class_method("_get_crm_record_public_web_search_detail_from_owner", class_name="CrmPublicWebOwner")
+    find_class_method("_list_crm_record_public_web_promotions_from_owner", class_name="CrmPublicWebOwner")
 
     assert "list_crm_public_web_runs(" in detail_block
     assert "crm_record_id=normalized_record_id" in detail_block
@@ -626,10 +626,10 @@ def test_crm_public_web_detail_owner_requires_record_owned_run_before_signal_rea
 
 
 def test_crm_public_web_path_resource_resolves_record_workspace_without_default_filter() -> None:
-    _, single_prepare_block = find_class_method("_prepare_single_crm_public_web_record_id")
-    find_class_method("_prepare_crm_public_web_record_ids")
-    _, detail_block = find_class_method("_get_crm_record_public_web_search_detail_from_owner")
-    find_class_method("_list_crm_record_public_web_promotions_from_owner")
+    _, single_prepare_block = find_class_method("_prepare_single_crm_public_web_record_id", class_name="CrmPublicWebOwner")
+    find_class_method("_prepare_crm_public_web_record_ids", class_name="CrmPublicWebOwner")
+    _, detail_block = find_class_method("_get_crm_record_public_web_search_detail_from_owner", class_name="CrmPublicWebOwner")
+    find_class_method("_list_crm_record_public_web_promotions_from_owner", class_name="CrmPublicWebOwner")
 
     assert "self.store.get_crm_record(normalized_record_id)" in single_prepare_block
     assert "_prepare_crm_public_web_record_ids([crm_record_id]" not in single_prepare_block
@@ -639,9 +639,9 @@ def test_crm_public_web_path_resource_resolves_record_workspace_without_default_
 
 
 def test_crm_public_web_action_validation_enforces_workspace_owner_boundary() -> None:
-    _, action_block = find_class_method("_validate_crm_public_web_action_payload")
-    _, runs_validation_block = find_class_method("_validate_crm_public_web_runs")
-    _, workspace_requirement_block = find_class_method("_require_crm_public_web_body_workspace_id")
+    _, action_block = find_class_method("_validate_crm_public_web_action_payload", class_name="CrmPublicWebOwner")
+    _, runs_validation_block = find_class_method("_validate_crm_public_web_runs", class_name="CrmPublicWebOwner")
+    _, workspace_requirement_block = find_class_method("_require_crm_public_web_body_workspace_id", class_name="CrmPublicWebOwner")
 
     assert "workspace_result = self._require_crm_public_web_body_workspace_id(normalized, operation=\"action\")" in action_block
     assert 'reason": "crm_public_web_workspace_id_required"' in workspace_requirement_block
@@ -673,14 +673,14 @@ def test_crm_public_web_body_style_apis_require_explicit_workspace_id() -> None:
             "workspace_result = self._require_crm_public_web_body_workspace_id(query, operation=action_name)",
         ),
     }
-    find_class_method("_crm_public_web_runs_with_materialized_signal_metrics")
-    find_class_method("_crm_public_web_export_workflow_run_id")
-    find_class_method("_interrupt_crm_public_web_workers_for_run")
+    find_class_method("_crm_public_web_runs_with_materialized_signal_metrics", class_name="CrmPublicWebOwner")
+    find_class_method("_crm_public_web_export_workflow_run_id", class_name="CrmPublicWebOwner")
+    find_class_method("_interrupt_crm_public_web_workers_for_run", class_name="CrmPublicWebOwner")
     forbidden_default = 'workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"'
     forbidden_query_default = 'workspace_id = str(query.get("workspace_id") or "default").strip() or "default"'
 
     for _, (method_name, expected_call) in required_calls.items():
-        _, block = find_class_method(method_name)
+        _, block = find_class_method(method_name, class_name="CrmPublicWebOwner")
         assert expected_call in block
         assert forbidden_default not in block
         assert forbidden_query_default not in block
@@ -689,7 +689,7 @@ def test_crm_public_web_body_style_apis_require_explicit_workspace_id() -> None:
 def test_crm_public_web_batch_poll_and_storage_are_workspace_scoped() -> None:
     _, list_runs_block = find_class_method("list_crm_public_web_runs", class_name="ControlPlaneStore")
     find_class_method("list_latest_crm_public_web_runs_by_record_ids", class_name="ControlPlaneStore")
-    _, poll_block = find_class_method("_list_crm_public_web_searches_from_owner")
+    _, poll_block = find_class_method("_list_crm_public_web_searches_from_owner", class_name="CrmPublicWebOwner")
     find_class_method("_get_crm_record_profile_from_owner")
 
     batch_clause_index = list_runs_block.index("if batch_id:")
@@ -702,10 +702,10 @@ def test_crm_public_web_batch_poll_and_storage_are_workspace_scoped() -> None:
 
 
 def test_crm_public_web_api_start_only_plans_queue_batch_command_before_owner_writes() -> None:
-    _, start_block = find_class_method("start_crm_record_public_web_search")
-    find_class_method("list_crm_record_public_web_searches")
-    _, planner_block = find_class_method("_plan_crm_public_web_start_queue_batch_command")
-    find_class_method("_plan_crm_public_web_operation_queue_batch_command")
+    _, start_block = find_class_method("start_crm_record_public_web_search", class_name="CrmPublicWebOwner")
+    find_class_method("list_crm_record_public_web_searches", class_name="CrmPublicWebOwner")
+    _, planner_block = find_class_method("_plan_crm_public_web_start_queue_batch_command", class_name="CrmPublicWebOwner")
+    find_class_method("_plan_crm_public_web_operation_queue_batch_command", class_name="CrmPublicWebOwner")
 
     assert "_plan_crm_public_web_start_queue_batch_command(" in start_block
     assert "_drain_crm_public_web_queue_batch_commands(" in start_block
@@ -754,7 +754,7 @@ def test_crm_public_web_latest_run_selection_is_not_updated_at_owned() -> None:
         assert "_ensure_table_write_schema" not in block
         assert "sync_runtime_control_plane_to_postgres" not in block
         assert f'_postgres_table_exists(cursor, "{table_name}")' in block
-    _, phase_command_block = find_class_method("_run_crm_public_web_phase_command")
+    _, phase_command_block = find_class_method("_run_crm_public_web_phase_command", class_name="CrmPublicWebOwner")
     assert "crm_public_web_phase_stale_run_superseded" in phase_command_block
 
 
@@ -772,12 +772,12 @@ def test_crm_public_web_pg_schema_enforces_batch_and_run_idempotency() -> None:
 def test_crm_public_web_export_command_scopes_artifact_reuse_by_input_watermark() -> None:
     # The original raw-text "export planning" block spanned these methods; each
     # token is now asserted against the exact method that owns it.
-    _, snapshot_block = find_class_method("_crm_public_web_export_record_input_snapshot")
-    _, watermark_block = find_class_method("_crm_public_web_export_input_watermark")
-    _, plan_export_block = find_class_method("_plan_crm_public_web_export_generate_command")
-    _, contract_failure_block = find_class_method("_crm_public_web_export_command_contract_failure")
-    _, export_run_block = find_class_method("_run_crm_public_web_export_generate_command")
-    find_class_method("start_target_candidate_public_web_search")
+    _, snapshot_block = find_class_method("_crm_public_web_export_record_input_snapshot", class_name="CrmPublicWebOwner")
+    _, watermark_block = find_class_method("_crm_public_web_export_input_watermark", class_name="CrmPublicWebOwner")
+    _, plan_export_block = find_class_method("_plan_crm_public_web_export_generate_command", class_name="CrmPublicWebOwner")
+    _, contract_failure_block = find_class_method("_crm_public_web_export_command_contract_failure", class_name="CrmPublicWebOwner")
+    _, export_run_block = find_class_method("_run_crm_public_web_export_generate_command", class_name="CrmPublicWebOwner")
+    find_class_method("start_target_candidate_public_web_search", class_name="CrmPublicWebOwner")
     _, idempotency_block = find_module_def("export_crm_public_web_generate_idempotency_key")
     find_module_def("summarize_workflow_command_counts")
 
@@ -816,8 +816,8 @@ def test_crm_public_web_export_command_scopes_artifact_reuse_by_input_watermark(
     assert export_run_block.index("_crm_public_web_export_command_contract_failure(latest_command)") < export_run_block.index(
         "_export_crm_public_web_archive_from_owner("
     )
-    _, archive_owner_block = find_class_method("_export_crm_public_web_archive_from_owner")
-    find_class_method("_validate_crm_public_web_action_payload")
+    _, archive_owner_block = find_class_method("_export_crm_public_web_archive_from_owner", class_name="CrmPublicWebOwner")
+    find_class_method("_validate_crm_public_web_action_payload", class_name="CrmPublicWebOwner")
     assert "current_export_input_watermark" in archive_owner_block
     assert "record_export_inputs_by_id" in archive_owner_block
     assert "current_export_input_watermark_hash" in archive_owner_block
@@ -850,7 +850,7 @@ def test_crm_public_web_export_allows_durable_promotions_during_nonterminal_late
 
 
 def test_crm_public_web_phase_command_summary_uses_fixed_phase_order() -> None:
-    _, summary_block = find_class_method("_crm_public_web_phase_command_summaries_for_runs")
+    _, summary_block = find_class_method("_crm_public_web_phase_command_summaries_for_runs", class_name="CrmPublicWebOwner")
     find_class_method("_command_owned_item_result")
 
     assert '"phase_order": list(CRM_PUBLIC_WEB_PHASE_COMMAND_TYPES)' in summary_block
@@ -861,17 +861,19 @@ def test_crm_public_web_phase_command_summary_uses_fixed_phase_order() -> None:
 
 
 def test_crm_public_web_export_api_never_sends_binary_for_failed_owner_result() -> None:
+    # The FastAPI transport registers a nested handler for the canonical export
+    # route; slice its function body (nested defs are out of reach for the
+    # class-method AST helper).
     api_source = (SRC_ROOT / "api.py").read_text(encoding="utf-8")
-    route_block = api_source[
-        api_source.index('if path == "/api/crm/records/public-web-export"') : api_source.index(
-            'return self._send_bytes(\n                        HTTPStatus.OK,',
-            api_source.index('if path == "/api/crm/records/public-web-export"'),
-        )
-    ]
+    handler_start = api_source.index("def post_crm_public_web_export")
+    handler_block = api_source[handler_start : api_source.index("\n    def ", handler_start + 1)]
 
-    assert 'result.get("status") != "ok"' in route_block
-    assert "HTTPStatus.CONFLICT" in route_block
-    assert 'not result.get("body")' in route_block
+    assert 'result.get("status") != "ok"' in handler_block
+    assert "HTTPStatus.CONFLICT" in handler_block
+    assert 'not result.get("body")' in handler_block
+    # Binary response is only reachable after both guards.
+    assert handler_block.index('result.get("status") != "ok"') < handler_block.index("_bytes_response")
+    assert handler_block.index('not result.get("body")') < handler_block.index("_bytes_response")
 
 
 def test_crm_runtime_imports_physical_public_web_core_not_target_facade() -> None:
@@ -938,12 +940,12 @@ def test_orchestrator_has_no_legacy_target_public_web_execution_helpers() -> Non
                 f"{path.relative_to(REPO_ROOT)} contains retired legacy target Public Web symbol {symbol!r}"
             )
 
-    find_class_method("start_target_candidate_public_web_search")
-    find_class_method("export_target_candidate_public_web_archive")
+    find_class_method("start_target_candidate_public_web_search", class_name="CrmPublicWebOwner")
+    find_class_method("export_target_candidate_public_web_archive", class_name="CrmPublicWebOwner")
     find_def("_legacy_target_public_web_orchestrator_disabled_result", class_name=None)
-    find_class_method("_ensure_crm_public_web_job")
-    find_class_method("_plan_crm_public_web_run_phase_command")
-    find_class_method("_drain_crm_public_web_phase_commands")
+    find_class_method("_ensure_crm_public_web_job", class_name="CrmPublicWebOwner")
+    find_class_method("_plan_crm_public_web_run_phase_command", class_name="CrmPublicWebOwner")
+    find_class_method("_drain_crm_public_web_phase_commands", class_name="CrmPublicWebOwner")
     _, recovery_block = find_class_method("run_worker_recovery_once")
     assert '"crm_public_web_queue_batch"' in recovery_block
     assert "callback=lambda: self._drain_crm_public_web_queue_batch_commands(payload)" in recovery_block
