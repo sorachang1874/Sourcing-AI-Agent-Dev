@@ -6,6 +6,7 @@ import threading
 import time
 import unittest
 import zipfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -35,6 +36,7 @@ from sourcing_agent.durable_runtime import (
     PROJECTION_RUN_SCOPE_FINALIZE_OWNER,
     SNAPSHOT_COMPACTION_RUN_COMMAND_TYPE,
     SNAPSHOT_COMPACTION_RUN_OWNER,
+    legacy_job_operation_id,
     legacy_job_workflow_run_id,
 )
 from sourcing_agent.legacy_public_web_storage import (
@@ -68,13 +70,13 @@ from sourcing_agent.settings import (
     QwenSettings,
     SemanticProviderSettings,
 )
-from sourcing_agent.storage import ControlPlaneStore
 from sourcing_agent.workflow_event_response import (
     LIVE_ROSTER_DISCOVERY_LANE_ITEM_KIND,
     SEARCH_SEED_DISCOVERY_QUERY_ITEM_KIND,
 )
 from sourcing_agent.workflow_service_metrics import build_workflow_service_metrics
 from tests.pg_durable_runtime import pg_durable_runtime_env
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
 class _PublicWebServiceE2EProvider(BaseSearchProvider):
@@ -181,11 +183,12 @@ class _PublicWebServiceE2EModelClient:
         }
 
 
-class ResultsApiTest(unittest.TestCase):
+class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         self.catalog = AssetCatalog.discover()
-        self.store = ControlPlaneStore(f"{self.tempdir.name}/test.db")
+        self.store = self.make_pg_store(f"{self.tempdir.name}/test.db")
         self.settings = AppSettings(
             project_root=Path(self.tempdir.name),
             runtime_dir=Path(self.tempdir.name),
@@ -210,7 +213,7 @@ class ResultsApiTest(unittest.TestCase):
         )
 
     def _rebuild_runtime_objects_for_current_env(self) -> None:
-        self.store = ControlPlaneStore(f"{self.tempdir.name}/test.db")
+        self.store = self.make_pg_store(f"{self.tempdir.name}/test.db")
         self.acquisition_engine = AcquisitionEngine(self.catalog, self.settings, self.store, self.model_client)
         self.orchestrator = SourcingOrchestrator(
             catalog=self.catalog,
@@ -230,6 +233,33 @@ class ResultsApiTest(unittest.TestCase):
         ):
             self._rebuild_runtime_objects_for_current_env()
             return callback()
+
+    def _seed_serving_finalized_completion_proof(self, job_id: str) -> None:
+        """Seed the typed durable serving_finalized completion proof.
+
+        Completion promotion is fail-closed without a durable serving_finalized
+        proof (2026-06 completion-policy contract); tests seed it through the
+        canonical durable event writer, mirroring
+        test_frontend_history_recovery.py::test_progress_reconciliation_requires_serving_finalized_proof_for_durable_runs.
+        """
+
+        self.orchestrator.durable_runtime_writer.append_event_and_reduce(
+            workflow_run_id=legacy_job_workflow_run_id(job_id),
+            operation_id=legacy_job_operation_id(job_id),
+            command_id=f"{job_id}:run_scope_projection_finalize_seed",
+            event_family="workflow_event",
+            event_type="CompletionProofRecorded",
+            idempotency_key=f"{job_id}:serving_finalized:seed",
+            actor=PROJECTION_RUN_SCOPE_FINALIZE_OWNER,
+            source=PROJECTION_RUN_SCOPE_FINALIZE_COMMAND_TYPE,
+            payload={
+                "workflow_type": "linkedin_acquisition",
+                "stage_key": "run_scope_projection_finalize",
+                "proof_key": "serving_finalized",
+                "status": "proved",
+                "job_id": job_id,
+            },
+        )
 
     @staticmethod
     def _fixture_candidate_records(*, count: int, prefix: str = "candidate") -> list[dict[str, object]]:
@@ -1515,10 +1545,11 @@ class ResultsApiTest(unittest.TestCase):
                 "materialization_metadata": {"pending_until_workflow_completion": True},
             },
         )
+        self._seed_serving_finalized_completion_proof(job_id)
 
         result = self.orchestrator._promote_deferred_completed_workflow_if_ready(job_id)  # noqa: SLF001
 
-        self.assertEqual(result["status"], "promoted")
+        self.assertEqual(result["status"], "promoted", result)
         self.assertEqual(result["artifact_path_source"], "canonical_jobs_dir_default")
         job = self.store.get_job(job_id)
         assert job is not None
@@ -1995,6 +2026,7 @@ class ResultsApiTest(unittest.TestCase):
                 "source_validation_status": "validated",
             },
         )
+        self._seed_serving_finalized_completion_proof(job_id)
         lease = self.store.acquire_workflow_job_lease(
             job_id,
             lease_owner="active-deferred-runner",
@@ -2014,7 +2046,7 @@ class ResultsApiTest(unittest.TestCase):
                 lease_token="held-deferred-terminal-lease",
             )
 
-        self.assertEqual(result["status"], "promoted")
+        self.assertEqual(result["status"], "promoted", result)
         self.assertEqual(result["artifact_path_source"], "terminal_result_view_proof")
         job = self.store.get_job(job_id) or {}
         self.assertEqual(job.get("status"), "completed")
@@ -2077,6 +2109,7 @@ class ResultsApiTest(unittest.TestCase):
                 "source_validation_status": "validated",
             },
         )
+        self._seed_serving_finalized_completion_proof(job_id)
         lease = self.store.acquire_workflow_job_lease(
             job_id,
             lease_owner="active-deferred-runner",
@@ -2096,7 +2129,7 @@ class ResultsApiTest(unittest.TestCase):
                 lease_token="held-deferred-candidate-source-lease",
             )
 
-        self.assertEqual(result["status"], "promoted")
+        self.assertEqual(result["status"], "promoted", result)
         self.assertEqual(result["artifact_path_source"], "terminal_result_view_proof")
         job = self.store.get_job(job_id) or {}
         self.assertEqual(job.get("status"), "completed")
@@ -5700,6 +5733,10 @@ class ResultsApiTest(unittest.TestCase):
         self.assertFalse(candidate["needs_profile_completion"])
         self.assertEqual(candidate["headline"], "Agent Runtime Engineer at OpenAI")
 
+    # Legacy /api/jobs/{job_id}/... result endpoints are retired (410 by
+    # default after V1 projection cutover); legacy composition coverage uses
+    # the documented migration/test-only override.
+    @mock.patch.dict(os.environ, {"SOURCING_ALLOW_LEGACY_JOB_RESULT_ENDPOINTS": "1"}, clear=False)
     def test_job_candidate_page_filters_before_pagination(self) -> None:
         snapshot_id = "20260417T110000"
         self._write_materialized_snapshot_view(
@@ -5820,6 +5857,7 @@ class ResultsApiTest(unittest.TestCase):
         self.assertEqual(api_payload["filtered_candidate_count"], 2)
         self.assertEqual(api_payload["candidates"][0]["candidate_id"], "engineer_second")
 
+    @mock.patch.dict(os.environ, {"SOURCING_ALLOW_LEGACY_JOB_RESULT_ENDPOINTS": "1"}, clear=False)
     def test_job_candidate_page_accepts_visible_recall_bucket_label_from_api(self) -> None:
         snapshot_id = "20260417T111000"
         self._write_materialized_snapshot_view(
@@ -7091,22 +7129,41 @@ class ResultsApiTest(unittest.TestCase):
                 }
             },
         )
+        # Terminality is fail-closed for completed workflow jobs without a
+        # typed durable completion proof; make the job genuinely terminal.
+        self.store.upsert_job_result_lifecycle(
+            job_id=job_id,
+            fields={
+                "state": "current_snapshot_serving",
+                "phase": "current_snapshot_serving",
+                "source_validation_status": "validated",
+                "delta_profile_required_count": 0,
+                "stage1_deduped_candidate_count": 12,
+            },
+        )
+        self._seed_serving_finalized_completion_proof(job_id)
         self.store.acquire_workflow_job_lease(
             job_id,
             lease_owner="still-live-process:123:456",
             lease_seconds=900,
             lease_token="terminal-stale-lease",
         )
-        self.store._connection.execute(  # noqa: SLF001
+        # Backdate the AUTHORITATIVE row (PG) — a SQLite-shadow UPDATE would
+        # leave the exercised PG row untouched.
+        now_utc = datetime.now(timezone.utc).replace(microsecond=0)
+        self.store._control_plane_postgres.execute_non_query(  # noqa: SLF001
             """
             UPDATE workflow_job_leases
-            SET updated_at = datetime('now', '-5 minutes'),
-                lease_expires_at = datetime('now', '+10 minutes')
-            WHERE job_id = ?
+            SET updated_at = %s,
+                lease_expires_at = %s
+            WHERE job_id = %s
             """,
-            (job_id,),
+            (
+                (now_utc - timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S"),
+                (now_utc + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S"),
+                job_id,
+            ),
         )
-        self.store._connection.commit()  # noqa: SLF001
 
         with mock.patch.dict(os.environ, {"TERMINAL_WORKFLOW_RECONCILE_STALE_LEASE_SECONDS": "120"}):
             release = self.orchestrator._release_stale_workflow_job_lease_for_recovery(job_id)  # noqa: SLF001
@@ -8892,7 +8949,7 @@ class ResultsApiTest(unittest.TestCase):
             runtime_dir=Path(self.tempdir.name),
             schema_label="workflow_completed_requires_typed_terminal",
         ):
-            self.store = ControlPlaneStore(f"{self.tempdir.name}/test.db")
+            self.store = self.make_pg_store(f"{self.tempdir.name}/test.db")
             self.acquisition_engine = AcquisitionEngine(self.catalog, self.settings, self.store, self.model_client)
             self.orchestrator = SourcingOrchestrator(
                 catalog=self.catalog,
@@ -8987,7 +9044,7 @@ class ResultsApiTest(unittest.TestCase):
             runtime_dir=Path(self.tempdir.name),
             schema_label="workflow_supervisor_requires_typed_terminal",
         ):
-            self.store = ControlPlaneStore(f"{self.tempdir.name}/test.db")
+            self.store = self.make_pg_store(f"{self.tempdir.name}/test.db")
             self.acquisition_engine = AcquisitionEngine(self.catalog, self.settings, self.store, self.model_client)
             self.orchestrator = SourcingOrchestrator(
                 catalog=self.catalog,
@@ -9611,6 +9668,7 @@ class ResultsApiTest(unittest.TestCase):
         self.assertEqual(page_payload["returned_count"], 1)
         self.assertEqual(page_payload["candidates"][0]["candidate_id"], "cand_1")
 
+    @mock.patch.dict(os.environ, {"SOURCING_ALLOW_LEGACY_JOB_RESULT_ENDPOINTS": "1"}, clear=False)
     def test_results_api_defaults_to_summary_only_for_asset_population_and_supports_opt_in_candidates(self) -> None:
         snapshot_id = "20260417T100500"
         self._write_materialized_snapshot_view(
@@ -10992,6 +11050,7 @@ class ResultsApiTest(unittest.TestCase):
         self.assertNotIn("candidate_ids", payload["agent_workers"][0]["checkpoint"])
         self.assertNotIn("raw_profile_payload", payload["agent_workers"][0]["output"])
 
+    @mock.patch.dict(os.environ, {"SOURCING_ALLOW_LEGACY_JOB_RESULT_ENDPOINTS": "1"}, clear=False)
     def test_public_candidate_api_defaults_to_materialized_serving_rows(self) -> None:
         snapshot_dir = Path(self.tempdir.name) / "company_assets" / "anthropic" / "20260505T025000"
         raw_profile_path = snapshot_dir / "harvest_profiles" / "public-api-default.json"
@@ -11187,6 +11246,7 @@ class ResultsApiTest(unittest.TestCase):
         self.assertEqual(detail["candidate"]["headline"], "Materialized detail headline")
         self.assertNotIn("experience_lines", detail["candidate"])
 
+    @mock.patch.dict(os.environ, {"SOURCING_ALLOW_LEGACY_JOB_RESULT_ENDPOINTS": "1"}, clear=False)
     def test_public_candidate_api_explicit_legacy_timeline_hydration_opt_in(self) -> None:
         snapshot_dir = Path(self.tempdir.name) / "company_assets" / "anthropic" / "20260505T030000"
         raw_profile_path = snapshot_dir / "harvest_profiles" / "detail-api-opt-in.json"
@@ -23402,11 +23462,29 @@ class ResultsApiTest(unittest.TestCase):
             )
 
         self.assertEqual(result["status"], "applied")
-        item = self.store.get_job_materialization_item(f"{job_id}:live_roster_discovery_lane:{snapshot_id}")
-        self.assertEqual(item["item_kind"], LIVE_ROSTER_DISCOVERY_LANE_ITEM_KIND)
-        self.assertEqual(item["status"], "completed")
-        self.assertEqual(item["snapshot_id"], snapshot_id)
-        self.assertEqual(item["source_worker_ids"], [101])
+        # W6 cutover: the live-roster discovery-lane terminal contract is
+        # recorded as a durable CompletionProofRecorded workflow event
+        # (proof_key stage1_lane:live_roster:<snapshot_id>:<item_id>), not a
+        # job_materialization_items row; _stage1_lanes_terminal_for_job reads
+        # exactly these proof events.
+        item_id = f"{job_id}:live_roster_discovery_lane:{snapshot_id}"
+        lane_proofs = [
+            dict(dict(event).get("payload") or {})
+            for event in self.store.list_workflow_events(legacy_job_workflow_run_id(job_id), limit=0)
+            if str(dict(event).get("event_type") or "") == "CompletionProofRecorded"
+            and str(dict(dict(event).get("payload") or {}).get("proof_key") or "").startswith(
+                f"stage1_lane:live_roster:{snapshot_id}:"
+            )
+        ]
+        self.assertEqual(len(lane_proofs), 1, lane_proofs)
+        proof = lane_proofs[0]
+        self.assertEqual(proof["item_id"], item_id)
+        self.assertEqual(proof["item_kind"], LIVE_ROSTER_DISCOVERY_LANE_ITEM_KIND)
+        self.assertEqual(proof["status"], "completed")
+        self.assertEqual(proof["snapshot_id"], snapshot_id)
+        self.assertEqual(proof["source_worker_ids"], [101])
+        # The legacy materialization-items write path stays retired.
+        self.assertEqual(self.store.get_job_materialization_item(item_id), {})
 
     def test_lifecycle_projection_preserves_denominator_promotion_metadata(self) -> None:
         job_id = "job_lifecycle_projection_metadata"
@@ -24003,15 +24081,16 @@ class ResultsApiTest(unittest.TestCase):
             lease_seconds=60,
         )
         self.assertEqual(duplicate_claim, {})
-        with self.store._lock, self.store._connection:  # noqa: SLF001
-            self.store._connection.execute(  # noqa: SLF001
-                """
-                UPDATE job_materialization_items
-                SET lease_expires_at = '2000-01-01 00:00:00'
-                WHERE item_id = ?
-                """,
-                (item["item_id"],),
-            )
+        # Expire the lease on the AUTHORITATIVE row (PG) — a SQLite-shadow
+        # UPDATE would leave the exercised PG row untouched.
+        self.store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+            """
+            UPDATE job_materialization_items
+            SET lease_expires_at = '2000-01-01 00:00:00'
+            WHERE item_id = %s
+            """,
+            (item["item_id"],),
+        )
         ready_after_stale_lease = self.store.list_ready_job_materialization_items(
             job_id="job_board_apply_item",
             item_kind="board_visible_delta_apply",
@@ -24183,7 +24262,7 @@ class ResultsApiTest(unittest.TestCase):
             runtime_dir=Path(self.tempdir.name),
             schema_label="results_materialization_items_api",
         ):
-            self.store = ControlPlaneStore(f"{self.tempdir.name}/test.db")
+            self.store = self.make_pg_store(f"{self.tempdir.name}/test.db")
             self.acquisition_engine = AcquisitionEngine(self.catalog, self.settings, self.store, self.model_client)
             self.orchestrator = SourcingOrchestrator(
                 catalog=self.catalog,
@@ -24813,6 +24892,35 @@ class ResultsApiTest(unittest.TestCase):
                 }
             },
         )
+        # The facet-layering build queue is fail-closed on the canonical
+        # run-scope projection (legacy overlay execution is retired:
+        # canonical_projection_link_required_for_projection_facet_layering);
+        # publish the canonical projection for this run before enqueueing.
+        self.orchestrator._persist_job_result_view(  # noqa: SLF001
+            job_id=job_id,
+            request=JobRequest.from_payload((self.store.get_job(job_id) or {}).get("request") or {}),
+            candidate_source={
+                "source_kind": "company_snapshot",
+                "target_company": "OpenAI",
+                "snapshot_id": snapshot_id,
+                "asset_view": "canonical_merged",
+                "source_path": str(overlay_path),
+                "candidate_count": 597,
+                "asset_population_overlay_path": str(overlay_path),
+            },
+            summary_payload={
+                "candidate_count": 597,
+                "total_matches": 597,
+                "returned_matches": 597,
+                "default_results_mode": "asset_population",
+                "summary_provider": "current_snapshot_row_shell_overlay",
+            },
+            effective_execution_semantics={
+                "default_results_mode": "asset_population",
+                "asset_population_supported": True,
+            },
+            publish_lifecycle=False,
+        )
         lifecycle = {
             "state": "current_snapshot_materializing",
             "phase": "current_snapshot_materializing",
@@ -24899,6 +25007,7 @@ class ResultsApiTest(unittest.TestCase):
             analysis_stage_label="stage_2_final",
         )
         self.assertEqual(projection_build_item["item_kind"], "projection_facet_layering_build")
+        self.assertNotEqual(projection_build_item.get("status"), "skipped", projection_build_item)
         projection_queue_result = self.orchestrator._run_projection_facet_layering_queue_once(  # noqa: SLF001
             {
                 "job_id": job_id,
@@ -27319,12 +27428,12 @@ class ResultsApiTest(unittest.TestCase):
             delta_profile_fetched_count=50,
             delta_profile_materialized_count=20,
         )
-        # Mark the job as completed directly in the store.
-        self.store._connection.execute(  # noqa: SLF001
-            "UPDATE jobs SET status = 'completed', stage = 'completed' WHERE job_id = ?",
+        # Mark the job as completed directly in the store — on the
+        # AUTHORITATIVE PG row, not the SQLite compatibility shadow.
+        self.store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+            "UPDATE jobs SET status = 'completed', stage = 'completed' WHERE job_id = %s",
             (job_id,),
         )
-        self.store._connection.commit()  # noqa: SLF001
 
         # The canonical reader must apply the terminal-phase invariant and must
         # not report stable `results` or `baseline_serving`.
