@@ -277,6 +277,7 @@ _COMMAND_KERNEL_SUITES = (
 )
 _ORCHESTRATOR_RELATED_PATHS = {
     "src/sourcing_agent/orchestrator.py",
+    "src/sourcing_agent/acquisition_command_owner.py",
     "src/sourcing_agent/profile_fetch_owner.py",
     "src/sourcing_agent/api.py",
     "src/sourcing_agent/workflow_refresh.py",
