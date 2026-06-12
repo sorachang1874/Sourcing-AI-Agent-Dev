@@ -5,32 +5,46 @@ import time
 import unittest
 import unittest.mock
 from collections import namedtuple
+from hashlib import sha1
 from pathlib import Path
 
+import sourcing_agent.candidate_artifacts as candidate_artifacts_module
 from sourcing_agent.artifact_cache import (
     build_hot_cache_governance_policy,
+    collect_hot_cache_inventory,
     configured_hot_cache_retention_policy,
     load_hot_cache_governance_state,
+    mark_hot_cache_snapshot_access,
     run_hot_cache_governance_cycle,
 )
 from sourcing_agent.authoritative_candidates import load_authoritative_candidate_snapshot
 from sourcing_agent.candidate_artifacts import (
     CandidateArtifactError,
+    audit_candidate_artifact_hot_cache,
     backfill_structured_timeline_for_company_assets,
     build_company_candidate_artifacts,
     cleanup_candidate_artifact_hot_cache,
+    load_authoritative_company_snapshot_candidate_documents,
     load_company_snapshot_candidate_documents,
+    load_snapshot_candidate_artifact_payload,
     materialize_company_candidate_view,
     repair_missing_company_candidate_artifacts,
+    repair_paginated_candidate_artifacts_from_materialized,
     repair_projected_profile_signals_in_company_candidate_artifacts,
     rewrite_structured_timeline_in_company_candidate_artifacts,
 )
+from sourcing_agent.candidate_materialization import build_asset_population_overlay
 from sourcing_agent.domain import Candidate, EvidenceRecord, make_evidence_id
-from sourcing_agent.storage import ControlPlaneStore
+from sourcing_agent.snapshot_materializer import (
+    _prioritized_candidate_ids_for_profile,
+    _profile_apply_name_index_keys,
+)
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
-class CandidateArtifactsTest(unittest.TestCase):
+class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         self.project_root = Path(self.tempdir.name)
         self.runtime_dir = self.project_root / "runtime"
@@ -50,10 +64,139 @@ class CandidateArtifactsTest(unittest.TestCase):
                 }
             )
         )
-        self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
+        self.store = self.make_pg_store(self.runtime_dir / "sourcing_agent.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()
+
+    def test_resolve_company_snapshot_uses_direct_snapshot_key_before_global_match_scan(self) -> None:
+        snapshot_id = "20260406T120000"
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / snapshot_id
+        (snapshot_dir / "identity.json").write_text(
+            json.dumps(
+                {
+                    "requested_name": "Acme",
+                    "canonical_name": "Acme",
+                    "company_key": "acme",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        with unittest.mock.patch.object(
+            candidate_artifacts_module,
+            "resolve_company_snapshot_match_selection",
+            side_effect=AssertionError("global snapshot match scan should not run for a known snapshot id"),
+        ):
+            company_key, resolved_snapshot_dir, identity = candidate_artifacts_module._resolve_company_snapshot(
+                self.runtime_dir,
+                "Acme",
+                snapshot_id=snapshot_id,
+            )
+
+        self.assertEqual(company_key, "acme")
+        self.assertEqual(resolved_snapshot_dir.resolve(), snapshot_dir.resolve())
+        self.assertEqual(identity.get("company_key"), "acme")
+
+    def test_asset_population_overlay_preserves_baseline_order_before_delta_additions(self) -> None:
+        baseline_candidates = [
+            Candidate(
+                candidate_id="baseline-001",
+                name_en="Baseline One",
+                target_company="OpenAI",
+                organization="OpenAI",
+                linkedin_url="https://www.linkedin.com/in/baseline-001/",
+            ),
+            Candidate(
+                candidate_id="baseline-002",
+                name_en="Baseline Two",
+                target_company="OpenAI",
+                organization="OpenAI",
+                linkedin_url="https://www.linkedin.com/in/baseline-002/",
+            ),
+        ]
+        delta_candidates = [
+            Candidate(
+                candidate_id="delta-103",
+                name_en="Delta One Hundred Three",
+                target_company="OpenAI",
+                organization="OpenAI",
+                linkedin_url="https://www.linkedin.com/in/delta-103/",
+            ),
+            Candidate(
+                candidate_id="baseline-001",
+                name_en="Baseline One",
+                target_company="OpenAI",
+                organization="OpenAI",
+                role="Updated Agent role",
+                linkedin_url="https://www.linkedin.com/in/baseline-001/",
+            ),
+            Candidate(
+                candidate_id="delta-001",
+                name_en="Delta One",
+                target_company="OpenAI",
+                organization="OpenAI",
+                linkedin_url="https://www.linkedin.com/in/delta-001/",
+            ),
+        ]
+
+        overlay = build_asset_population_overlay(
+            baseline_candidates=baseline_candidates,
+            baseline_evidence_lookup={},
+            delta_candidates=delta_candidates,
+            delta_evidence_lookup={},
+            member_key_resolver=lambda candidate: str(candidate.linkedin_url or candidate.candidate_id).lower(),
+        )
+
+        self.assertEqual(
+            [candidate.candidate_id for candidate in overlay["candidates"]],
+            ["baseline-001", "baseline-002", "delta-103", "delta-001"],
+        )
+        self.assertEqual(
+            [candidate.candidate_id for candidate in overlay["touched_candidates"]],
+            ["delta-103", "baseline-001", "delta-001"],
+        )
+
+    def test_asset_population_overlay_dedupes_duplicate_baseline_member_rows(self) -> None:
+        baseline_candidates = [
+            Candidate(
+                candidate_id="baseline-001",
+                name_en="Baseline One",
+                target_company="OpenAI",
+                organization="OpenAI",
+                linkedin_url="https://www.linkedin.com/in/same-member/",
+            ),
+            Candidate(
+                candidate_id="baseline-002",
+                name_en="Baseline Duplicate",
+                target_company="OpenAI",
+                organization="OpenAI",
+                linkedin_url="https://www.linkedin.com/in/same-member/",
+            ),
+        ]
+        delta_candidates = [
+            Candidate(
+                candidate_id="delta-001",
+                name_en="Delta One",
+                target_company="OpenAI",
+                organization="OpenAI",
+                linkedin_url="https://www.linkedin.com/in/new-member/",
+            )
+        ]
+
+        overlay = build_asset_population_overlay(
+            baseline_candidates=baseline_candidates,
+            baseline_evidence_lookup={},
+            delta_candidates=delta_candidates,
+            delta_evidence_lookup={},
+            member_key_resolver=lambda candidate: str(candidate.linkedin_url or candidate.candidate_id).lower(),
+        )
+
+        self.assertEqual(
+            [candidate.candidate_id for candidate in overlay["candidates"]],
+            ["baseline-001", "delta-001"],
+        )
 
     def _load_artifact_view(
         self,
@@ -199,6 +342,63 @@ class CandidateArtifactsTest(unittest.TestCase):
             json.dumps({"generation_key": generation_key, "snapshot_id": snapshot_id}, ensure_ascii=False, indent=2)
         )
         return generation_dir
+
+    def test_authoritative_loader_falls_back_to_canonical_snapshot_when_hot_cache_manifest_is_incomplete(self) -> None:
+        snapshot_id = "20260406T121212"
+        candidate = Candidate(
+            candidate_id="canonical_fallback_1",
+            name_en="Canonical Fallback",
+            display_name="Canonical Fallback",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Research Engineer",
+            linkedin_url="https://www.linkedin.com/in/canonical-fallback/",
+        )
+        self._write_snapshot_candidate_documents(
+            snapshot_id=snapshot_id,
+            candidates=[candidate],
+            extra_payload={
+                "snapshot": {
+                    "snapshot_id": snapshot_id,
+                    "target_company": "Acme",
+                    "company_identity": {
+                        "requested_name": "Acme",
+                        "canonical_name": "Acme",
+                        "company_key": "acme",
+                    },
+                }
+            },
+        )
+        hot_cache_root = self.runtime_dir / "hot_cache_company_assets"
+        hot_snapshot_dir = self._write_hot_cache_snapshot_view(
+            hot_cache_root=hot_cache_root,
+            snapshot_id=snapshot_id,
+            generation_key="broken_hot_cache_generation",
+            generation_sequence=1,
+            candidate_id="missing_hot_cache_shard",
+        )
+        missing_shard = hot_snapshot_dir / "normalized_artifacts" / "candidate_shards" / "missing_hot_cache_shard.json"
+        missing_shard.unlink()
+
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"SOURCING_HOT_CACHE_ASSETS_DIR": str(hot_cache_root)},
+            clear=False,
+        ):
+            payload = load_authoritative_company_snapshot_candidate_documents(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                target_company="Acme",
+                snapshot_id=snapshot_id,
+                allow_materialization_fallback=False,
+                allow_candidate_documents_fallback=True,
+            )
+
+        self.assertEqual(payload["source_kind"], "candidate_documents")
+        self.assertIn("/company_assets/acme/", str(payload["source_path"]))
+        self.assertEqual([candidate.candidate_id for candidate in payload["candidates"]], ["canonical_fallback_1"])
 
     def test_build_company_candidate_artifacts_materializes_backlog_and_reusable_docs(self) -> None:
         snapshot_candidate = Candidate(
@@ -407,6 +607,10 @@ class CandidateArtifactsTest(unittest.TestCase):
         self.assertEqual(manifest["candidate_count"], 4)
         self.assertEqual(len(manifest["candidate_shards"]), 4)
         self.assertEqual(manifest["pagination"]["page_count"], 1)
+        self.assertEqual(summary["facet_summary_scope"], "global_full_population")
+        self.assertEqual(summary["public_facet_counts"]["candidate_count"], 4)
+        self.assertEqual(summary["facet_summary"]["candidate_count"], 4)
+        self.assertEqual(manifest["public_facet_counts"]["candidate_count"], 4)
         self.assertEqual(summary["candidate_shard_count"], 4)
         self.assertEqual(summary["dirty_candidate_count"], 4)
         self.assertEqual(snapshot_manifest["snapshot_id"], "20260406T120000")
@@ -502,6 +706,140 @@ class CandidateArtifactsTest(unittest.TestCase):
                 / states["c3"]["shard_path"]
             ).exists()
         )
+
+    def test_harvest_profile_apply_uses_name_index_instead_of_large_full_scan(self) -> None:
+        candidate_by_id = {
+            f"candidate-{index}": Candidate(
+                candidate_id=f"candidate-{index}",
+                name_en=f"Person {index}",
+                display_name=f"Person {index}",
+                target_company="Acme",
+                organization="Acme",
+                category="employee",
+                employment_status="current",
+            )
+            for index in range(501)
+        }
+        target = Candidate(
+            candidate_id="candidate-target",
+            name_en="Ada Lovelace",
+            display_name="Ada Lovelace",
+            target_company="Acme",
+            organization="Acme",
+            category="employee",
+            employment_status="current",
+        )
+        candidate_by_id[target.candidate_id] = target
+        candidate_ids_by_name_key: dict[str, list[str]] = {}
+        for candidate_id, candidate in candidate_by_id.items():
+            for key in _profile_apply_name_index_keys(candidate.display_name):
+                candidate_ids_by_name_key.setdefault(key, []).append(candidate_id)
+
+        prioritized = _prioritized_candidate_ids_for_profile(
+            requested_profile_url="https://www.linkedin.com/in/unknown-alias/",
+            profile_payload={"full_name": "Ada Lovelace"},
+            candidate_ids_by_profile_url={},
+            candidate_ids_by_name_key=candidate_ids_by_name_key,
+            candidate_by_id=candidate_by_id,
+        )
+
+        self.assertEqual(prioritized, ["candidate-target"])
+
+    def test_build_company_candidate_artifacts_backfills_snapshot_profile_registry_before_materializing(self) -> None:
+        requested_url = "https://www.linkedin.com/in/ACwAACGTfrQBgmQIdKFHOvpniVbkTfm4KVkMAeg"
+        canonical_url = "https://www.linkedin.com/in/aj-sakher"
+        candidate = Candidate(
+            candidate_id="c_profile_backfill",
+            name_en="AJ Sakher",
+            display_name="AJ Sakher",
+            category="employee",
+            target_company="Acme",
+            employment_status="current",
+            role="Member of Technical Staff at Acme",
+            linkedin_url=requested_url,
+            source_dataset="acme_search_seed_candidates",
+        )
+        self._write_snapshot_candidate_documents(candidates=[candidate], evidence=[])
+        harvest_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000" / "harvest_profiles"
+        harvest_dir.mkdir(parents=True, exist_ok=True)
+        profile_path = harvest_dir / f"{sha1(requested_url.encode('utf-8')).hexdigest()[:16]}.json"
+        profile_path.write_text(
+            json.dumps(
+                {
+                    "_harvest_request": {
+                        "profile_url": requested_url,
+                    },
+                    "item": {
+                        "linkedinUrl": canonical_url,
+                        "publicIdentifier": "aj-sakher",
+                        "firstName": "AJ",
+                        "lastName": "Sakher",
+                        "headline": "Member of Technical Staff @ Acme",
+                        "location": {"linkedinText": "Seattle, Washington, United States"},
+                        "experience": [
+                            {
+                                "position": "Member of Technical Staff",
+                                "companyName": "Acme",
+                                "startDate": {"year": 2026},
+                                "endDate": {"text": "Present"},
+                            },
+                            {
+                                "position": "Senior Software Engineer",
+                                "companyName": "Square",
+                                "startDate": {"year": 2023},
+                                "endDate": {"year": 2026},
+                            },
+                        ],
+                        "education": [
+                            {
+                                "degree": "Bachelor of Science (B.S.), Computer Science",
+                                "schoolName": "University of Minnesota",
+                                "startDate": {"year": 2015},
+                                "endDate": {"year": 2018},
+                            }
+                        ],
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        self.assertIsNone(self.store.get_linkedin_profile_registry(requested_url))
+
+        result = build_company_candidate_artifacts(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            target_company="Acme",
+            snapshot_id="20260406T120000",
+            build_profile="foreground_fast",
+        )
+
+        self.assertEqual(result["status"], "built")
+        self.assertEqual(result["sync_status"]["profile_registry_backfill"]["status"], "completed")
+        requested_registry = self.store.get_linkedin_profile_registry(requested_url) or {}
+        canonical_registry = self.store.get_linkedin_profile_registry(canonical_url) or {}
+        self.assertEqual(requested_registry.get("status"), "fetched")
+        self.assertEqual(canonical_registry.get("status"), "fetched")
+        loaded = self._load_artifact_view()
+        materialized = dict(loaded["source_payload"])
+        normalized = list(loaded["normalized_candidates"])
+        profile_candidate = next(
+            item for item in materialized["candidates"] if item["candidate_id"] == "c_profile_backfill"
+        )
+        normalized_candidate = next(item for item in normalized if item["candidate_id"] == "c_profile_backfill")
+        self.assertTrue(profile_candidate["has_profile_detail"])
+        self.assertFalse(profile_candidate["needs_profile_completion"])
+        self.assertEqual(profile_candidate["profile_location"], "Seattle, Washington, United States")
+        self.assertEqual(profile_candidate["public_identifier"], "aj-sakher")
+        self.assertIn("2026~Present, Acme, Member of Technical Staff", profile_candidate["experience_lines"])
+        self.assertIn(
+            "2015~2018, Bachelor of Science (B.S.), Computer Science, University of Minnesota",
+            profile_candidate["education_lines"],
+        )
+        self.assertTrue(normalized_candidate["has_profile_detail"])
+        self.assertFalse(normalized_candidate["needs_profile_completion"])
 
     def test_build_company_candidate_artifacts_foreground_fast_skips_compatibility_exports_and_hot_cache(self) -> None:
         candidate = Candidate(
@@ -601,7 +939,14 @@ class CandidateArtifactsTest(unittest.TestCase):
         )
 
         strict_summary = dict(result["views"]["strict_roster_only"]["summary"] or {})
-        strict_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000" / "normalized_artifacts" / "strict_roster_only"
+        strict_dir = (
+            self.runtime_dir
+            / "company_assets"
+            / "acme"
+            / "20260406T120000"
+            / "normalized_artifacts"
+            / "strict_roster_only"
+        )
         self.assertEqual(strict_summary.get("storage_mode"), "alias")
         self.assertEqual(strict_summary.get("alias_asset_view"), "canonical_merged")
         self.assertEqual(int(strict_summary.get("state_upsert_candidate_count") or 0), 0)
@@ -611,7 +956,9 @@ class CandidateArtifactsTest(unittest.TestCase):
 
         loaded = self._load_artifact_view(view="strict_roster_only")
         self.assertEqual(len(list(loaded["normalized_candidates"])), 3)
-        self.assertEqual(str(dict(loaded.get("artifact_summary") or {}).get("alias_asset_view") or ""), "canonical_merged")
+        self.assertEqual(
+            str(dict(loaded.get("artifact_summary") or {}).get("alias_asset_view") or ""), "canonical_merged"
+        )
 
     def test_build_company_candidate_artifacts_records_phase_timings(self) -> None:
         candidates = [
@@ -671,6 +1018,17 @@ class CandidateArtifactsTest(unittest.TestCase):
         )
 
         timings_ms = dict(result["summary"].get("timings_ms") or {})
+        self.assertEqual(result["summary"]["build_profile"], "foreground_fast")
+        self.assertEqual(
+            result["summary"]["projection_version"],
+            "candidate_artifact_projection_v20260427_source_matches",
+        )
+        manifest = json.loads(Path(result["artifact_paths"]["manifest"]).read_text(encoding="utf-8"))
+        self.assertEqual(manifest["build_profile"], "foreground_fast")
+        self.assertEqual(
+            manifest["projection_version"],
+            "candidate_artifact_projection_v20260427_source_matches",
+        )
         for key in (
             "profile_registry_lookup",
             "existing_state_load",
@@ -843,6 +1201,72 @@ class CandidateArtifactsTest(unittest.TestCase):
             [candidate.candidate_id for candidate in materialized_view["candidates"]], ["canonical_candidate"]
         )
 
+    def test_build_company_candidate_artifacts_can_use_writer_owned_snapshot_dir_without_latest_pointer(self) -> None:
+        workflow_root = self.project_root / "workflow_company_assets"
+        unrelated_root = self.project_root / "unrelated_company_assets"
+        snapshot_id = "20260520T040909"
+        snapshot_dir = workflow_root / "google" / snapshot_id
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        identity = {
+            "requested_name": "Google",
+            "canonical_name": "Google",
+            "company_key": "google",
+            "linkedin_slug": "google",
+            "aliases": ["Google"],
+        }
+        (snapshot_dir / "identity.json").write_text(json.dumps(identity, ensure_ascii=False, indent=2), encoding="utf-8")
+        (snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "snapshot": {"snapshot_id": snapshot_id, "company_identity": identity},
+                    "candidates": [
+                        Candidate(
+                            candidate_id="google_writer_owned_1",
+                            name_en="Writer Owned",
+                            display_name="Writer Owned",
+                            category="employee",
+                            target_company="Google",
+                            employment_status="current",
+                            role="Research Engineer",
+                            linkedin_url="https://www.linkedin.com/in/writer-owned/",
+                        ).to_record()
+                    ],
+                    "evidence": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (unrelated_root / "google" / "20260511T000000").mkdir(parents=True, exist_ok=True)
+        (unrelated_root / "google" / "latest_snapshot.json").write_text(
+            json.dumps({"snapshot_id": "20260511T000000", "company_identity": identity}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        with unittest.mock.patch.dict(
+            os.environ,
+            {
+                "SOURCING_CANONICAL_ASSETS_DIR": str(unrelated_root),
+                "SOURCING_HOT_CACHE_ASSETS_DIR": "disabled",
+            },
+            clear=False,
+        ):
+            result = build_company_candidate_artifacts(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                target_company="Google",
+                snapshot_id=snapshot_id,
+                snapshot_dir=snapshot_dir,
+                company_identity=identity,
+                build_profile="foreground_fast",
+            )
+
+        self.assertEqual(result["snapshot_id"], snapshot_id)
+        self.assertEqual(result["target_company"], "Google")
+        self.assertTrue((snapshot_dir / "normalized_artifacts" / "manifest.json").exists())
+        self.assertEqual(result["summary"]["candidate_count"], 1)
+
     def test_cleanup_candidate_artifact_hot_cache_removes_orphan_files_and_stale_states(self) -> None:
         snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
         candidate = Candidate(
@@ -883,7 +1307,9 @@ class CandidateArtifactsTest(unittest.TestCase):
             snapshot_id="20260406T120000",
         )
 
-        normalized_dir = self.runtime_dir / "hot_cache_company_assets" / "acme" / "20260406T120000" / "normalized_artifacts"
+        normalized_dir = (
+            self.runtime_dir / "hot_cache_company_assets" / "acme" / "20260406T120000" / "normalized_artifacts"
+        )
         orphan_shard = normalized_dir / "candidate_shards" / "orphan.json"
         orphan_page = normalized_dir / "pages" / "page-9999.json"
         compatibility_export = normalized_dir / "materialized_candidate_documents.json"
@@ -942,6 +1368,85 @@ class CandidateArtifactsTest(unittest.TestCase):
         }
         self.assertNotIn("orphan_state", state_ids)
         self.assertIn("cleanup_1", state_ids)
+
+    def test_audit_candidate_artifact_hot_cache_reports_missing_manifest_shard_rehydrate_plan(self) -> None:
+        canonical_root = self.runtime_dir / "company_assets"
+        hot_cache_root = self.runtime_dir / "hot_cache_company_assets"
+        self._write_hot_cache_snapshot_view(
+            hot_cache_root=canonical_root,
+            snapshot_id="20260406T120000",
+            generation_key="gen-canonical",
+            generation_sequence=2,
+            candidate_id="candidate_rehydrate",
+        )
+        self._write_hot_cache_snapshot_view(
+            hot_cache_root=hot_cache_root,
+            snapshot_id="20260406T120000",
+            generation_key="gen-hot",
+            generation_sequence=1,
+            candidate_id="candidate_rehydrate",
+        )
+        missing_shard = (
+            hot_cache_root
+            / "acme"
+            / "20260406T120000"
+            / "normalized_artifacts"
+            / "candidate_shards"
+            / "candidate_rehydrate.json"
+        )
+        missing_shard.unlink()
+
+        audit = audit_candidate_artifact_hot_cache(
+            runtime_dir=self.runtime_dir,
+            companies=["Acme"],
+            snapshot_id="20260406T120000",
+        )
+
+        self.assertEqual(audit["status"], "needs_rehydrate")
+        self.assertEqual(audit["summary"]["rehydrate_candidate_count"], 1)
+        view = audit["companies"][0]["snapshots"][0]["views"][0]
+        self.assertEqual(view["status"], "needs_rehydrate")
+        self.assertEqual(view["missing_required_paths"], ["candidate_shards/candidate_rehydrate.json"])
+        self.assertEqual(view["canonical_source"]["status"], "complete")
+        self.assertEqual(
+            view["rehydrate_plan"]["action"],
+            "rehydrate_hot_cache_from_canonical_serving_artifacts",
+        )
+        self.assertIn("rebuild-company-serving-view", view["rehydrate_plan"]["operator_command"])
+
+    def test_audit_candidate_artifact_hot_cache_reports_orphan_cleanup_without_rehydrate(self) -> None:
+        hot_cache_root = self.runtime_dir / "hot_cache_company_assets"
+        self._write_hot_cache_snapshot_view(
+            hot_cache_root=hot_cache_root,
+            snapshot_id="20260406T120000",
+            generation_key="gen-hot",
+            generation_sequence=1,
+            candidate_id="candidate_cleanup",
+        )
+        orphan_path = (
+            hot_cache_root
+            / "acme"
+            / "20260406T120000"
+            / "normalized_artifacts"
+            / "candidate_shards"
+            / "orphan.json"
+        )
+        orphan_path.write_text(json.dumps({"orphan": True}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        audit = audit_candidate_artifact_hot_cache(
+            runtime_dir=self.runtime_dir,
+            companies=["Acme"],
+            snapshot_id="20260406T120000",
+        )
+
+        self.assertEqual(audit["status"], "needs_cleanup")
+        self.assertEqual(audit["summary"]["cleanup_candidate_count"], 1)
+        self.assertEqual(audit["summary"]["rehydrate_candidate_count"], 0)
+        view = audit["companies"][0]["snapshots"][0]["views"][0]
+        self.assertEqual(view["status"], "needs_cleanup")
+        self.assertEqual(view["orphan_paths"], ["candidate_shards/orphan.json"])
+        self.assertEqual(view["cleanup_plan"]["action"], "cleanup_orphan_hot_cache_files")
+        self.assertEqual(view["rehydrate_plan"], {})
 
     def test_cleanup_candidate_artifact_hot_cache_applies_ttl_retention_to_old_snapshots_and_generations(self) -> None:
         hot_cache_root = self.project_root / "hot_cache_company_assets"
@@ -1169,6 +1674,43 @@ class CandidateArtifactsTest(unittest.TestCase):
         self.assertFalse(old_generation_dir.exists())
         self.assertTrue(new_generation_dir.exists())
 
+    def test_hot_cache_inventory_tracks_snapshot_access_heat(self) -> None:
+        hot_cache_root = self.project_root / "hot_cache_company_assets"
+        snapshot_dir = self._write_hot_cache_snapshot_view(
+            hot_cache_root=hot_cache_root,
+            snapshot_id="20260407T120000",
+            generation_key="gen-heat",
+            generation_sequence=1,
+            candidate_id="heat_candidate",
+        )
+
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"SOURCING_HOT_CACHE_ASSETS_DIR": str(hot_cache_root)},
+            clear=False,
+        ):
+            first = mark_hot_cache_snapshot_access(
+                snapshot_dir,
+                runtime_dir=self.runtime_dir,
+                at_epoch=1_000_000.0,
+            )
+            second = mark_hot_cache_snapshot_access(
+                snapshot_dir,
+                runtime_dir=self.runtime_dir,
+                at_epoch=1_000_060.0,
+            )
+            inventory = collect_hot_cache_inventory(self.runtime_dir)
+
+        self.assertEqual(first["access_count"], 1)
+        self.assertEqual(second["access_count"], 2)
+        snapshot_record = inventory["snapshot_records"][0]
+        self.assertEqual(snapshot_record["access_count"], 2)
+        self.assertEqual(snapshot_record["first_access_epoch"], 1_000_000.0)
+        self.assertEqual(snapshot_record["access_mtime_epoch"], 1_000_060.0)
+        self.assertGreater(float(snapshot_record["heat_score"] or 0.0), 0.0)
+        self.assertEqual(inventory["company_records"][0]["access_count"], 2)
+        self.assertGreater(float(inventory["company_records"][0]["heat_score"] or 0.0), 0.0)
+
     def test_configured_hot_cache_retention_policy_computes_auto_target_budget_when_disk_is_healthy(self) -> None:
         hot_cache_root = self.project_root / "hot_cache_company_assets"
         hot_cache_root.mkdir(parents=True, exist_ok=True)
@@ -1315,6 +1857,20 @@ class CandidateArtifactsTest(unittest.TestCase):
         first_manifest = json.loads(Path(first_result["artifact_paths"]["manifest"]).read_text(encoding="utf-8"))
         self.assertEqual(first_manifest["candidate_count"], 2)
         self.assertEqual(len(first_manifest["candidate_shards"]), 2)
+        first_candidate_shard = json.loads(
+            (
+                self.runtime_dir
+                / "company_assets"
+                / "acme"
+                / "20260406T120000"
+                / "normalized_artifacts"
+                / first_states["c10"]["shard_path"]
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            first_candidate_shard["projection_version"],
+            "candidate_artifact_projection_v20260427_source_matches",
+        )
 
         second_result = build_company_candidate_artifacts(
             runtime_dir=self.runtime_dir,
@@ -1379,6 +1935,70 @@ class CandidateArtifactsTest(unittest.TestCase):
         self.assertEqual(third_states["c20"]["fingerprint"], second_states["c20"]["fingerprint"])
         self.assertFalse(old_candidate_one_shard.exists())
 
+    def test_load_snapshot_candidate_artifact_payload_accepts_legacy_shard_without_projection_version(self) -> None:
+        artifact_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000" / "normalized_artifacts"
+        shard_path = artifact_dir / "candidates" / "legacy-c1.fp1.json"
+        shard_path.parent.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "target_company": "Acme",
+                    "company_key": "acme",
+                    "snapshot_id": "20260406T120000",
+                    "asset_view": "canonical_merged",
+                    "candidate_count": 1,
+                    "candidate_shards": [
+                        {
+                            "candidate_id": "legacy-c1",
+                            "fingerprint": "fp1",
+                            "path": "candidates/legacy-c1.fp1.json",
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (artifact_dir / "artifact_summary.json").write_text(
+            json.dumps({"candidate_count": 1, "profile_detail_count": 1}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        shard_path.write_text(
+            json.dumps(
+                {
+                    "candidate_id": "legacy-c1",
+                    "fingerprint": "fp1",
+                    "materialized_candidate": {
+                        "candidate_id": "legacy-c1",
+                        "display_name": "Legacy Candidate",
+                        "has_profile_detail": True,
+                    },
+                    "normalized_candidate": {
+                        "candidate_id": "legacy-c1",
+                        "display_name": "Legacy Candidate",
+                        "has_profile_detail": True,
+                    },
+                    "reusable_document": {"candidate_id": "legacy-c1", "display_name": "Legacy Candidate"},
+                    "evidence": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        loaded = load_snapshot_candidate_artifact_payload(
+            snapshot_dir=self.runtime_dir / "company_assets" / "acme" / "20260406T120000",
+            target_company="Acme",
+            company_key="acme",
+            allow_candidate_documents_fallback=False,
+        )
+
+        self.assertEqual(loaded["source_kind"], "materialized_candidate_documents_manifest")
+        self.assertEqual(len(loaded["source_payload"]["candidates"]), 1)
+        self.assertTrue(loaded["source_payload"]["candidates"][0]["has_profile_detail"])
+
     def test_build_company_candidate_artifacts_uses_scope_replace_when_all_states_are_dirty(self) -> None:
         candidate_one = Candidate(
             candidate_id="c10",
@@ -1404,15 +2024,18 @@ class CandidateArtifactsTest(unittest.TestCase):
         )
         self._write_snapshot_candidate_documents(candidates=[candidate_one, candidate_two])
 
-        with unittest.mock.patch.object(
-            self.store,
-            "replace_candidate_materialization_state_scope",
-            wraps=self.store.replace_candidate_materialization_state_scope,
-        ) as replace_scope, unittest.mock.patch.object(
-            self.store,
-            "prune_candidate_materialization_states",
-            wraps=self.store.prune_candidate_materialization_states,
-        ) as _prune_scope:
+        with (
+            unittest.mock.patch.object(
+                self.store,
+                "replace_candidate_materialization_state_scope",
+                wraps=self.store.replace_candidate_materialization_state_scope,
+            ) as replace_scope,
+            unittest.mock.patch.object(
+                self.store,
+                "prune_candidate_materialization_states",
+                wraps=self.store.prune_candidate_materialization_states,
+            ) as _prune_scope,
+        ):
             result = build_company_candidate_artifacts(
                 runtime_dir=self.runtime_dir,
                 store=self.store,
@@ -1725,11 +2348,35 @@ class CandidateArtifactsTest(unittest.TestCase):
         materialized = dict(loaded["source_payload"])
         candidate_record = next(item for item in normalized if item["candidate_id"] == "c_preview")
         materialized_record = next(item for item in materialized["candidates"] if item["candidate_id"] == "c_preview")
+        page_payload = json.loads(
+            (snapshot_dir / "normalized_artifacts" / "pages" / "page-0001.json").read_text(encoding="utf-8")
+        )
+        page_record = next(item for item in page_payload["candidates"] if item["candidate_id"] == "c_preview")
 
         self.assertEqual(summary["candidate_count"], 1)
         self.assertEqual(summary["profile_detail_count"], 0)
         self.assertEqual(summary["profile_completion_backlog_count"], 1)
         self.assertEqual(summary["structured_experience_count"], 1)
+        self.assertEqual(candidate_record["linkedin_url"], "https://www.linkedin.com/in/preview-candidate/")
+        self.assertEqual(page_record["linkedin_url"], "https://www.linkedin.com/in/preview-candidate/")
+        self.assertEqual(candidate_record["matched_keywords"], ["Reasoning"])
+        self.assertEqual(page_record["matched_keywords"], ["Reasoning"])
+        self.assertEqual(
+            page_record["source_matches"],
+            [
+                {
+                    "field": "source_seed_query",
+                    "matched_on": "Reasoning",
+                    "source_type": "harvest_profile_search",
+                    "source_query": "Reasoning",
+                    "source_path": str(summary_path),
+                }
+            ],
+        )
+        self.assertIn(
+            {"field": "source_seed_query", "matched_on": "Reasoning", "source_type": "harvest_profile_search"},
+            page_record["matched_fields"],
+        )
         self.assertFalse(candidate_record["has_profile_detail"])
         self.assertTrue(candidate_record["needs_profile_completion"])
         self.assertEqual(candidate_record["profile_capture_kind"], "search_seed_preview")
@@ -2839,7 +3486,7 @@ class CandidateArtifactsTest(unittest.TestCase):
         self.assertEqual(candidate.employment_status, "current")
         self.assertEqual(candidate.linkedin_url, "https://www.linkedin.com/in/deannagraham2023")
 
-    def test_materialized_view_limits_large_org_history_to_current_snapshot(self) -> None:
+    def test_materialized_view_does_not_drop_large_org_history_by_default(self) -> None:
         company_dir = self.runtime_dir / "company_assets" / "megacorp"
         current_snapshot_dir = company_dir / "20260406T130000"
         old_snapshot_dir = company_dir / "20260406T120000"
@@ -2899,10 +3546,108 @@ class CandidateArtifactsTest(unittest.TestCase):
             target_company="MegaCorp",
         )
 
-        self.assertEqual(len(materialized_view["source_snapshots"]), 1)
-        self.assertEqual(materialized_view["source_snapshots"][0]["snapshot_id"], "20260406T130000")
-        self.assertEqual(materialized_view["source_snapshot_selection"]["mode"], "current_snapshot_only_large_org")
-        self.assertEqual(len(materialized_view["candidates"]), 1200)
+        self.assertEqual(len(materialized_view["source_snapshots"]), 2)
+        self.assertEqual(materialized_view["source_snapshot_selection"]["mode"], "all_history_snapshots")
+        self.assertIn(
+            "current_snapshot_only_large_org_disabled", materialized_view["source_snapshot_selection"]["reason"]
+        )
+        self.assertEqual(len(materialized_view["candidates"]), 2300)
+
+    def test_materialized_view_large_org_preferred_subset_does_not_preload_all_history(self) -> None:
+        company_dir = self.runtime_dir / "company_assets" / "megacorp"
+        current_snapshot_dir = company_dir / "20260406T130000"
+        old_snapshot_dir = company_dir / "20260406T120000"
+        current_snapshot_dir.mkdir(parents=True, exist_ok=True)
+        old_snapshot_dir.mkdir(parents=True, exist_ok=True)
+        (company_dir / "latest_snapshot.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": "20260406T130000",
+                    "company_identity": {
+                        "requested_name": "MegaCorp",
+                        "canonical_name": "MegaCorp",
+                        "company_key": "megacorp",
+                    },
+                },
+                ensure_ascii=False,
+            )
+        )
+        (old_snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "candidates": [
+                        Candidate(
+                            candidate_id="old_1",
+                            name_en="Old Person",
+                            display_name="Old Person",
+                            category="employee",
+                            target_company="MegaCorp",
+                        ).to_record()
+                    ],
+                    "evidence": [],
+                },
+                ensure_ascii=False,
+            )
+        )
+        current_candidates = [
+            Candidate(
+                candidate_id=f"current_{index}",
+                name_en=f"Current Person {index}",
+                display_name=f"Current Person {index}",
+                category="employee",
+                target_company="MegaCorp",
+                employment_status="current",
+            ).to_record()
+            for index in range(1000)
+        ]
+        (current_snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps({"candidates": current_candidates, "evidence": []}, ensure_ascii=False)
+        )
+
+        with unittest.mock.patch(
+            "sourcing_agent.candidate_artifacts._load_company_history_snapshots",
+            side_effect=AssertionError("explicit preferred source materialization must not preload all history"),
+        ):
+            materialized_view = materialize_company_candidate_view(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                target_company="MegaCorp",
+                preferred_source_snapshot_ids=["20260406T130000"],
+            )
+
+        self.assertEqual(materialized_view["source_snapshot_selection"]["mode"], "preferred_snapshot_subset")
+        self.assertEqual(materialized_view["source_snapshot_selection"]["selected_snapshot_ids"], ["20260406T130000"])
+        self.assertEqual(len(materialized_view["candidates"]), 1000)
+
+    def test_candidate_materialization_fingerprint_can_skip_source_path_stat(self) -> None:
+        candidate = Candidate(
+            candidate_id="stat_skip_1",
+            name_en="Stat Skip",
+            display_name="Stat Skip",
+            category="employee",
+            target_company="Acme",
+            source_path="/tmp/nonexistent/source.json",
+        )
+
+        with unittest.mock.patch(
+            "pathlib.Path.stat",
+            side_effect=AssertionError("foreground-fast fingerprint should not stat source paths"),
+        ):
+            fingerprint = candidate_artifacts_module._build_candidate_materialization_fingerprint(
+                candidate=candidate,
+                evidence=[
+                    {
+                        "evidence_id": "evidence_1",
+                        "candidate_id": "stat_skip_1",
+                        "source_type": "linkedin_profile_detail",
+                        "source_path": "/tmp/nonexistent/evidence.json",
+                    }
+                ],
+                profile_registry_row={"last_raw_path": "/tmp/nonexistent/raw.json"},
+                stat_source_paths=False,
+            )
+
+        self.assertTrue(fingerprint)
 
     def test_replace_company_data_tolerates_duplicate_evidence_ids_in_same_batch(self) -> None:
         candidate = Candidate(
@@ -3226,6 +3971,145 @@ class CandidateArtifactsTest(unittest.TestCase):
             rebuilt_candidate.get("education_lines"),
             ["2018~2022, Bachelor, MIT, Computer Science"],
         )
+
+    def test_repair_paginated_candidate_artifacts_from_materialized_does_not_promote_registry(self) -> None:
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        normalized_dir = snapshot_dir / "normalized_artifacts"
+        normalized_dir.mkdir(parents=True, exist_ok=True)
+        candidates = [
+            Candidate(
+                candidate_id=f"legacy_page_{index}",
+                name_en=f"Legacy Page {index}",
+                display_name=f"Legacy Page {index}",
+                category="employee",
+                target_company="Acme",
+                organization="Acme",
+                employment_status="current",
+                role="Research Engineer",
+                linkedin_url=f"https://www.linkedin.com/in/legacy-page-{index}/",
+                source_dataset="legacy_snapshot",
+            ).to_record()
+            for index in range(3)
+        ]
+        normalized_candidates = [
+            {
+                **{key: value for key, value in candidate.items() if key != "linkedin_url"},
+                "status_bucket": "current",
+                "has_profile_detail": True,
+                "has_linkedin_url": True,
+                "needs_profile_completion": False,
+            }
+            for candidate in candidates
+        ]
+        evidence = [
+            {
+                "evidence_id": make_evidence_id(
+                    "legacy_page_0",
+                    "legacy_snapshot",
+                    "Legacy page evidence",
+                    "https://www.linkedin.com/in/legacy-page-0/",
+                ),
+                "candidate_id": "legacy_page_0",
+                "source_type": "linkedin_profile_detail",
+                "title": "Legacy page evidence",
+                "url": "https://www.linkedin.com/in/legacy-page-0/",
+                "summary": "Existing materialized evidence.",
+            }
+        ]
+        (normalized_dir / "materialized_candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "snapshot": {
+                        "company_key": "acme",
+                        "snapshot_id": "20260406T120000",
+                        "target_company": "Acme",
+                        "source_snapshots": [],
+                    },
+                    "candidates": candidates,
+                    "evidence": evidence,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (normalized_dir / "normalized_candidates.json").write_text(
+            json.dumps(normalized_candidates, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        (normalized_dir / "reusable_candidate_documents.json").write_text(
+            json.dumps(normalized_candidates, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        (normalized_dir / "manual_review_backlog.json").write_text("[]", encoding="utf-8")
+        (normalized_dir / "profile_completion_backlog.json").write_text("[]", encoding="utf-8")
+        (normalized_dir / "artifact_summary.json").write_text(
+            json.dumps(
+                {
+                    "target_company": "Acme",
+                    "company_key": "acme",
+                    "snapshot_id": "20260406T120000",
+                    "asset_view": "canonical_merged",
+                    "candidate_count": 3,
+                    "candidate_page_size": 2,
+                    "evidence_count": 1,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        self.store.upsert_organization_asset_registry(
+            {
+                "target_company": "Acme",
+                "company_key": "acme",
+                "snapshot_id": "20260406T120000",
+                "asset_view": "canonical_merged",
+                "candidate_count": 3,
+                "evidence_count": 1,
+                "source_path": str(normalized_dir / "artifact_summary.json"),
+                "summary": {"candidate_count": 3},
+            },
+            authoritative=True,
+        )
+
+        result = repair_paginated_candidate_artifacts_from_materialized(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            companies=["Acme"],
+            snapshot_id="20260406T120000",
+            include_history=True,
+        )
+
+        manifest = json.loads((normalized_dir / "manifest.json").read_text(encoding="utf-8"))
+        first_page = json.loads((normalized_dir / "pages" / "page-0001.json").read_text(encoding="utf-8"))
+        shard_path = normalized_dir / str(manifest["candidate_shards"][0]["path"])
+        shard_payload = json.loads(shard_path.read_text(encoding="utf-8"))
+        authoritative = self.store.get_authoritative_organization_asset_registry(
+            target_company="Acme",
+            asset_view="canonical_merged",
+        )
+        self.assertEqual(result["missing_paginated_view_count"], 1)
+        self.assertEqual(result["repaired_view_count"], 1)
+        self.assertEqual(manifest["pagination"]["page_size"], 2)
+        self.assertEqual(manifest["pagination"]["page_count"], 2)
+        self.assertEqual(len(first_page["candidates"]), 2)
+        self.assertEqual(
+            first_page["candidates"][0]["linkedin_url"],
+            "https://www.linkedin.com/in/legacy-page-0/",
+        )
+        self.assertEqual(
+            first_page["candidates"][0].get("role"),
+            "Research Engineer",
+        )
+        self.assertEqual(first_page["candidates"][0].get("status_bucket"), "current")
+        self.assertEqual(shard_payload["candidate_id"], "legacy_page_0")
+        self.assertEqual(
+            shard_payload["normalized_candidate"]["linkedin_url"],
+            "https://www.linkedin.com/in/legacy-page-0/",
+        )
+        self.assertEqual(len(shard_payload["evidence"]), 1)
+        self.assertEqual(str(authoritative.get("snapshot_id") or ""), "20260406T120000")
 
     def test_backfill_structured_timeline_for_company_assets_runs_profile_registry_and_force_repair(self) -> None:
         with (
