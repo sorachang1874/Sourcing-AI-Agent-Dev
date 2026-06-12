@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import time
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -22,15 +23,26 @@ from .artifact_cache import (
 )
 from .asset_logger import AssetLogger
 from .asset_paths import (
+    canonical_snapshot_dir,
+    company_key_resolution_candidates,
     company_snapshot_group_key,
+    hot_cache_company_assets_dir,
     hot_cache_snapshot_dir,
     iter_company_asset_snapshot_dirs,
     load_company_snapshot_identity,
     load_company_snapshot_json,
+    load_latest_snapshot_pointer,
+    resolve_company_snapshot_dir_by_key,
     resolve_company_snapshot_match_selection,
     score_company_snapshot_dir_match,
 )
 from .asset_registration import sync_company_asset_registration
+from .candidate_materialization import (
+    LARGE_ORG_CURRENT_SNAPSHOT_ONLY_SELECTION_ENABLED as _LARGE_ORG_CURRENT_SNAPSHOT_ONLY_SELECTION_ENABLED,
+)
+from .candidate_materialization import (
+    LARGE_ORG_HISTORY_SNAPSHOT_MIN_CANDIDATES as _LARGE_ORG_HISTORY_SNAPSHOT_MIN_CANDIDATES,
+)
 from .candidate_materialization import (
     candidate_from_payload as _candidate_from_payload,
 )
@@ -48,6 +60,9 @@ from .candidate_materialization import (
 )
 from .candidate_materialization import (
     ingest_materialized_candidate as _ingest_materialized_candidate,
+)
+from .candidate_materialization import (
+    load_company_candidate_snapshot as _load_company_candidate_snapshot,
 )
 from .candidate_materialization import (
     load_company_history_snapshots as _load_company_history_snapshots,
@@ -69,10 +84,13 @@ from .domain import (
     Candidate,
     EvidenceRecord,
     candidate_searchable_text,
+    candidate_source_match_keywords_from_metadata,
+    candidate_source_match_records_from_metadata,
     derive_candidate_facets,
-    derive_candidate_role_bucket,
+    derive_candidate_role_bucket_from_facets,
     make_evidence_id,
 )
+from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .profile_timeline import (
     candidate_profile_lookup_url,
     normalized_primary_email_metadata,
@@ -82,7 +100,12 @@ from .profile_timeline import (
     resolve_candidate_profile_timeline,
     timeline_has_complete_profile_detail,
 )
-from .linkedin_url_normalization import normalize_linkedin_profile_url_key
+from .public_candidate_facets import (
+    public_facet_counts_from_records as _public_facet_counts_from_records,
+)
+from .public_candidate_facets import (
+    public_facet_summary_from_counts as _public_facet_summary_from_counts,
+)
 from .runtime_tuning import (
     resolved_candidate_artifact_parallelism,
     resolved_materialization_global_writer_budget,
@@ -105,6 +128,7 @@ _FOREGROUND_FAST_ARTIFACT_BUILD_MAX_WORKERS = 12
 _CANDIDATE_ARTIFACT_FORCE_SERIAL_ENV = "SOURCING_CANDIDATE_ARTIFACT_FORCE_SERIAL"
 _CANDIDATE_ARTIFACT_DISABLE_BATCH_JSON_WRITES_ENV = "SOURCING_CANDIDATE_ARTIFACT_DISABLE_BATCH_JSON_WRITES"
 _CANDIDATE_ARTIFACT_DISABLE_BULK_STATE_UPSERT_ENV = "SOURCING_CANDIDATE_ARTIFACT_DISABLE_BULK_STATE_UPSERT"
+_CANDIDATE_ARTIFACT_PROJECTION_VERSION = "candidate_artifact_projection_v20260427_source_matches"
 
 
 def _candidate_artifact_flag_enabled(env_name: str) -> bool:
@@ -267,7 +291,9 @@ def _artifact_view_alias_source_asset_view(
     manifest_payload: dict[str, Any] | None,
 ) -> str:
     return str(
-        dict(manifest_payload or {}).get("alias_asset_view") or dict(artifact_summary or {}).get("alias_asset_view") or ""
+        dict(manifest_payload or {}).get("alias_asset_view")
+        or dict(artifact_summary or {}).get("alias_asset_view")
+        or ""
     ).strip()
 
 
@@ -320,22 +346,85 @@ def materialize_company_candidate_view(
     target_company: str,
     snapshot_id: str = "",
     preferred_source_snapshot_ids: list[str] | None = None,
+    snapshot_dir: str | Path | None = None,
+    company_identity: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    company_key, snapshot_dir, identity_payload = _resolve_company_snapshot(
-        runtime_dir, target_company, snapshot_id=snapshot_id, prefer_hot_cache=False
-    )
+    if snapshot_dir is not None:
+        resolved_snapshot_dir = Path(snapshot_dir).expanduser()
+        if not resolved_snapshot_dir.exists():
+            raise CandidateArtifactError(f"Snapshot not found: {resolved_snapshot_dir}")
+        identity_payload = dict(company_identity or {}) or load_company_snapshot_identity(resolved_snapshot_dir)
+        company_key = (
+            str(identity_payload.get("company_key") or resolved_snapshot_dir.parent.name).strip()
+            or resolved_snapshot_dir.parent.name
+        )
+        snapshot_dir = resolved_snapshot_dir
+    else:
+        company_key, snapshot_dir, identity_payload = _resolve_company_snapshot(
+            runtime_dir, target_company, snapshot_id=snapshot_id, prefer_hot_cache=False
+        )
     company_name = str(identity_payload.get("canonical_name") or target_company).strip() or target_company
+    preferred_source_snapshot_ids = [
+        str(item or "").strip() for item in list(preferred_source_snapshot_ids or []) if str(item or "").strip()
+    ]
 
     merged_candidates: dict[str, Candidate] = {}
     merged_evidence: dict[str, dict[str, Any]] = {}
     candidate_aliases: dict[str, str] = {}
     identity_index: dict[str, str] = {}
-    source_snapshots = _load_company_history_snapshots(snapshot_dir.parent, company_name)
-    source_snapshots, source_snapshot_selection = _select_source_snapshots_for_materialization(
-        source_snapshots,
-        current_snapshot_id=snapshot_dir.name,
-        preferred_source_snapshot_ids=preferred_source_snapshot_ids,
-    )
+    current_source_snapshot = _load_company_candidate_snapshot(snapshot_dir, company_name)
+    source_snapshots: list[dict[str, Any]]
+    source_snapshot_selection: dict[str, Any]
+    if current_source_snapshot is not None and preferred_source_snapshot_ids:
+        source_index: dict[str, dict[str, Any]] = {snapshot_dir.name: current_source_snapshot}
+        for snapshot_ref in preferred_source_snapshot_ids:
+            if snapshot_ref in source_index:
+                continue
+            loaded_snapshot = _load_company_candidate_snapshot(snapshot_dir.parent / snapshot_ref, company_name)
+            if loaded_snapshot is not None:
+                source_index[snapshot_ref] = loaded_snapshot
+        selected_ids: list[str] = []
+        for snapshot_ref in [snapshot_dir.name, *preferred_source_snapshot_ids]:
+            if snapshot_ref in source_index and snapshot_ref not in selected_ids:
+                selected_ids.append(snapshot_ref)
+        all_snapshot_ids = _candidate_document_snapshot_ids(snapshot_dir.parent)
+        source_snapshots = [source_index[snapshot_ref] for snapshot_ref in selected_ids]
+        source_snapshot_selection = {
+            "mode": "preferred_snapshot_subset",
+            "reason": (
+                "Explicit preferred baseline snapshots were requested for incremental materialization; "
+                "preserve current snapshot plus selected historical baselines."
+            ),
+            "selected_snapshot_ids": selected_ids,
+            "excluded_snapshot_ids": [
+                snapshot_id for snapshot_id in all_snapshot_ids if snapshot_id not in selected_ids
+            ],
+        }
+    elif (
+        _LARGE_ORG_CURRENT_SNAPSHOT_ONLY_SELECTION_ENABLED
+        and current_source_snapshot is not None
+        and int(current_source_snapshot.get("candidate_count") or 0) >= _LARGE_ORG_HISTORY_SNAPSHOT_MIN_CANDIDATES
+    ):
+        all_snapshot_ids = _candidate_document_snapshot_ids(snapshot_dir.parent)
+        source_snapshots = [current_source_snapshot]
+        source_snapshot_selection = {
+            "mode": "current_snapshot_only_large_org",
+            "reason": (
+                "Current snapshot candidate_documents already cover a large organization; "
+                "skip older snapshot unions and rely on the current snapshot to avoid dirty historical inflation."
+            ),
+            "selected_snapshot_ids": [snapshot_dir.name],
+            "excluded_snapshot_ids": [
+                snapshot_id for snapshot_id in all_snapshot_ids if snapshot_id != snapshot_dir.name
+            ],
+        }
+    else:
+        source_snapshots = _load_company_history_snapshots(snapshot_dir.parent, company_name)
+        source_snapshots, source_snapshot_selection = _select_source_snapshots_for_materialization(
+            source_snapshots,
+            current_snapshot_id=snapshot_dir.name,
+            preferred_source_snapshot_ids=preferred_source_snapshot_ids,
+        )
     for source_snapshot in source_snapshots:
         for candidate in source_snapshot["candidates"]:
             _ingest_materialized_candidate(
@@ -373,16 +462,27 @@ def materialize_company_candidate_view(
     }
 
 
+def _candidate_document_snapshot_ids(company_dir: Path) -> list[str]:
+    try:
+        snapshot_dirs = sorted(path for path in company_dir.iterdir() if path.is_dir())
+    except OSError:
+        return []
+    return [path.name for path in snapshot_dirs if (path / "candidate_documents.json").exists()]
+
+
 def build_company_candidate_artifacts(
     *,
     runtime_dir: str | Path,
     store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str = "",
+    snapshot_dir: str | Path | None = None,
+    company_identity: dict[str, Any] | None = None,
     output_dir: str | Path | None = None,
     preferred_source_snapshot_ids: list[str] | None = None,
     build_profile: str = _DEFAULT_ARTIFACT_BUILD_PROFILE,
     runtime_tuning_overrides: dict[str, Any] | None = None,
+    sync_registration: bool = True,
 ) -> dict[str, Any]:
     build_options = _candidate_artifact_build_profile_options(build_profile)
     materialized_view = materialize_company_candidate_view(
@@ -390,12 +490,20 @@ def build_company_candidate_artifacts(
         store=store,
         target_company=target_company,
         snapshot_id=snapshot_id,
+        snapshot_dir=snapshot_dir,
+        company_identity=company_identity,
         preferred_source_snapshot_ids=preferred_source_snapshot_ids,
     )
     snapshot_dir = Path(materialized_view["snapshot_dir"])
     artifact_dir = Path(output_dir) if output_dir else (snapshot_dir / "normalized_artifacts")
     artifact_dir.mkdir(parents=True, exist_ok=True)
     logger = AssetLogger(snapshot_dir)
+    profile_registry_backfill = _backfill_snapshot_profile_registry_for_artifacts(
+        runtime_dir=runtime_dir,
+        store=store,
+        snapshot_dir=snapshot_dir,
+        company_key=str(materialized_view.get("company_key") or snapshot_dir.parent.name),
+    )
 
     candidates = list(materialized_view["candidates"])
     evidence = list(materialized_view["evidence"])
@@ -462,6 +570,7 @@ def build_company_candidate_artifacts(
             "artifact_dir": str(artifact_dir / "strict_roster_only"),
         }
     }
+    merged_view_result["summary"]["profile_registry_backfill"] = profile_registry_backfill
     strict_finalize = _finalize_artifact_view_materialization(
         store=store,
         logger=logger,
@@ -553,22 +662,33 @@ def build_company_candidate_artifacts(
             "snapshot_dir": "",
         }
     )
-    registration_sync = sync_company_asset_registration(
-        runtime_dir=runtime_dir,
-        store=store,
-        target_company=materialized_view["target_company"],
-        snapshot_id=snapshot_dir.name,
-        asset_view="canonical_merged",
-        company_key=str(materialized_view.get("company_key") or ""),
-        registry_summary=merged_view_result["summary"],
-        source_path=str(dict(merged_finalize.get("artifact_paths") or {}).get("artifact_summary") or ""),
-        selected_snapshot_ids=list(
-            dict(merged_view_result["summary"].get("source_snapshot_selection") or {}).get("selected_snapshot_ids")
-            or []
-        ),
-        authoritative=True,
-    )
-    sync_status = dict(registration_sync.get("sync_status") or {})
+    if sync_registration:
+        registration_sync = sync_company_asset_registration(
+            runtime_dir=runtime_dir,
+            store=store,
+            target_company=materialized_view["target_company"],
+            snapshot_id=snapshot_dir.name,
+            asset_view="canonical_merged",
+            company_key=str(materialized_view.get("company_key") or ""),
+            registry_summary=merged_view_result["summary"],
+            source_path=str(dict(merged_finalize.get("artifact_paths") or {}).get("artifact_summary") or ""),
+            selected_snapshot_ids=list(
+                dict(merged_view_result["summary"].get("source_snapshot_selection") or {}).get(
+                    "selected_snapshot_ids"
+                )
+                or []
+            ),
+            authoritative=True,
+        )
+        sync_status = dict(registration_sync.get("sync_status") or {})
+    else:
+        sync_status = {
+            "organization_asset_registry_refresh": {
+                "status": "skipped",
+                "reason": "registration_sync_disabled",
+            }
+        }
+    sync_status["profile_registry_backfill"] = profile_registry_backfill
     sync_status["hot_cache_retention"] = (
         _apply_configured_hot_cache_retention_policy(
             runtime_dir=runtime_dir,
@@ -605,6 +725,47 @@ def build_company_candidate_artifacts(
             },
         },
     }
+
+
+def _backfill_snapshot_profile_registry_for_artifacts(
+    *,
+    runtime_dir: str | Path,
+    store: ControlPlaneStore,
+    snapshot_dir: Path,
+    company_key: str,
+) -> dict[str, Any]:
+    harvest_profile_dir = snapshot_dir / "harvest_profiles"
+    if not harvest_profile_dir.exists():
+        return {
+            "status": "skipped",
+            "reason": "harvest_profiles_missing",
+            "snapshot_id": snapshot_dir.name,
+        }
+    if not any(path.is_file() and path.suffix == ".json" for path in harvest_profile_dir.iterdir()):
+        return {
+            "status": "skipped",
+            "reason": "harvest_profiles_empty",
+            "snapshot_id": snapshot_dir.name,
+        }
+    try:
+        from .profile_registry_backfill import backfill_linkedin_profile_registry
+
+        return backfill_linkedin_profile_registry(
+            runtime_dir=runtime_dir if isinstance(runtime_dir, Path) else Path(runtime_dir),
+            store=store,
+            company=str(company_key or snapshot_dir.parent.name).strip().lower(),
+            snapshot_id=snapshot_dir.name,
+            resume=True,
+            progress_interval=500,
+            write_batch_size=500,
+        )
+    except Exception as exc:  # pragma: no cover - defensive runtime audit path
+        return {
+            "status": "failed",
+            "reason": "profile_registry_backfill_failed",
+            "snapshot_id": snapshot_dir.name,
+            "error": str(exc),
+        }
 
 
 def _apply_configured_hot_cache_retention_policy(
@@ -779,6 +940,374 @@ def _list_hot_cache_json_paths(artifact_dir: Path, *, asset_view: str) -> list[s
                 )
         return sorted(discovered_paths)
     return sorted({str(path.relative_to(artifact_dir)) for path in artifact_dir.rglob("*.json") if path.is_file()})
+
+
+def _manifest_referenced_hot_cache_paths(manifest_payload: dict[str, Any]) -> set[str]:
+    required_paths = {
+        "manifest.json",
+        "artifact_summary.json",
+        "snapshot_manifest.json",
+    }
+    for entry in list(manifest_payload.get("candidate_shards") or []):
+        path = str(dict(entry).get("path") or "").strip()
+        if path:
+            required_paths.add(path)
+    for entry in list(manifest_payload.get("pages") or []):
+        path = str(dict(entry).get("path") or "").strip()
+        if path:
+            required_paths.add(path)
+    for key in ("manual_review", "profile_completion"):
+        backlog_path = str(dict(manifest_payload.get("backlogs") or {}).get(key) or "").strip()
+        if backlog_path:
+            required_paths.add(backlog_path)
+    for auxiliary_path in dict(manifest_payload.get("auxiliary") or {}).values():
+        normalized_path = str(auxiliary_path or "").strip()
+        if normalized_path:
+            required_paths.add(normalized_path)
+    return required_paths
+
+
+def _read_audit_json_object(path: Path) -> dict[str, Any]:
+    if not path.exists() and not path.is_symlink():
+        return {"status": "missing", "path": str(path), "payload": {}}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return {"status": "invalid_json", "path": str(path), "error": str(exc), "payload": {}}
+    except OSError as exc:
+        return {"status": "read_error", "path": str(path), "error": str(exc), "payload": {}}
+    if not isinstance(payload, dict):
+        return {"status": "invalid_shape", "path": str(path), "payload": {}}
+    return {"status": "ok", "path": str(path), "payload": payload}
+
+
+def _audit_required_hot_cache_paths(
+    artifact_dir: Path,
+    *,
+    required_paths: set[str],
+) -> dict[str, Any]:
+    missing_paths: list[str] = []
+    invalid_json_paths: list[dict[str, str]] = []
+    for relative_path in sorted(required_paths):
+        artifact_path = artifact_dir / relative_path
+        if not artifact_path.exists() and not artifact_path.is_symlink():
+            missing_paths.append(relative_path)
+            continue
+        if relative_path not in {"manifest.json", "artifact_summary.json", "snapshot_manifest.json"}:
+            continue
+        audit = _read_audit_json_object(artifact_path)
+        if str(audit.get("status") or "") != "ok":
+            invalid_json_paths.append(
+                {
+                    "path": relative_path,
+                    "status": str(audit.get("status") or ""),
+                    "error": str(audit.get("error") or ""),
+                }
+            )
+    return {
+        "missing_paths": missing_paths,
+        "invalid_json_paths": invalid_json_paths,
+    }
+
+
+def _audit_canonical_serving_source_for_hot_cache(
+    *,
+    runtime_root: Path,
+    company_key: str,
+    snapshot_id: str,
+    asset_view: str,
+) -> dict[str, Any]:
+    canonical_snapshot = canonical_snapshot_dir(runtime_root, company_key, snapshot_id)
+    canonical_artifact_dir = compatibility_artifact_dir(canonical_snapshot, asset_view=asset_view)
+    manifest_audit = _read_audit_json_object(canonical_artifact_dir / "manifest.json")
+    manifest_status = str(manifest_audit.get("status") or "")
+    candidate_documents_path = canonical_snapshot / "candidate_documents.json"
+    if manifest_status != "ok":
+        return {
+            "status": "rebuild_required" if candidate_documents_path.exists() else "missing_source",
+            "snapshot_dir": str(canonical_snapshot),
+            "artifact_dir": str(canonical_artifact_dir),
+            "manifest_status": manifest_status,
+            "candidate_documents_exists": candidate_documents_path.exists(),
+        }
+    required_paths = _manifest_referenced_hot_cache_paths(dict(manifest_audit.get("payload") or {}))
+    path_audit = _audit_required_hot_cache_paths(canonical_artifact_dir, required_paths=required_paths)
+    missing_paths = list(path_audit.get("missing_paths") or [])
+    invalid_json_paths = list(path_audit.get("invalid_json_paths") or [])
+    if missing_paths or invalid_json_paths:
+        return {
+            "status": "rebuild_required" if candidate_documents_path.exists() else "incomplete_source",
+            "snapshot_dir": str(canonical_snapshot),
+            "artifact_dir": str(canonical_artifact_dir),
+            "manifest_status": manifest_status,
+            "candidate_documents_exists": candidate_documents_path.exists(),
+            "missing_paths": missing_paths,
+            "invalid_json_paths": invalid_json_paths,
+        }
+    return {
+        "status": "complete",
+        "snapshot_dir": str(canonical_snapshot),
+        "artifact_dir": str(canonical_artifact_dir),
+        "manifest_status": manifest_status,
+        "candidate_documents_exists": candidate_documents_path.exists(),
+        "candidate_count": int(dict(manifest_audit.get("payload") or {}).get("candidate_count") or 0),
+    }
+
+
+def _hot_cache_rehydrate_plan(
+    *,
+    target_company: str,
+    snapshot_id: str,
+    canonical_source: dict[str, Any],
+) -> dict[str, Any]:
+    source_status = str(canonical_source.get("status") or "")
+    if source_status == "complete":
+        action = "rehydrate_hot_cache_from_canonical_serving_artifacts"
+    elif source_status == "rebuild_required":
+        action = "rebuild_canonical_serving_artifacts_then_rehydrate_hot_cache"
+    else:
+        return {
+            "action": "restore_canonical_assets_before_rehydrate",
+            "source_status": source_status,
+            "operator_command": "",
+        }
+    command_company = target_company.strip() or str(canonical_source.get("company_key") or "").strip()
+    command_args = [
+        "python",
+        "-m",
+        "sourcing_agent.cli",
+        "rebuild-company-serving-view",
+        "--company",
+        command_company,
+        "--snapshot-id",
+        snapshot_id,
+        "--build-profile",
+        "foreground_fast",
+    ]
+    return {
+        "action": action,
+        "source_status": source_status,
+        "operator_command": " ".join(shlex.quote(item) for item in command_args),
+        "operator_command_argv": command_args,
+    }
+
+
+def _audit_hot_cache_artifact_view(
+    *,
+    runtime_root: Path,
+    company_key: str,
+    target_company: str,
+    snapshot_id: str,
+    asset_view: str,
+    artifact_dir: Path,
+) -> dict[str, Any]:
+    manifest_audit = _read_audit_json_object(artifact_dir / "manifest.json")
+    manifest_status = str(manifest_audit.get("status") or "")
+    manifest_payload = dict(manifest_audit.get("payload") or {})
+    required_paths = (
+        _manifest_referenced_hot_cache_paths(manifest_payload)
+        if manifest_status == "ok"
+        else {"manifest.json", "artifact_summary.json", "snapshot_manifest.json"}
+    )
+    path_audit = _audit_required_hot_cache_paths(artifact_dir, required_paths=required_paths)
+    missing_required_paths = list(path_audit.get("missing_paths") or [])
+    invalid_json_paths = list(path_audit.get("invalid_json_paths") or [])
+    expected_paths = (
+        _expected_hot_cache_paths_from_manifest(manifest_payload, keep_compatibility_exports=False)
+        if manifest_status == "ok" and artifact_dir.exists()
+        else set()
+    )
+    actual_paths = _list_hot_cache_json_paths(artifact_dir, asset_view=asset_view) if artifact_dir.exists() else []
+    orphan_paths = [path for path in actual_paths if path not in expected_paths] if expected_paths else []
+    canonical_source = _audit_canonical_serving_source_for_hot_cache(
+        runtime_root=runtime_root,
+        company_key=company_key,
+        snapshot_id=snapshot_id,
+        asset_view=asset_view,
+    )
+    requires_rehydrate = bool(manifest_status != "ok" or missing_required_paths or invalid_json_paths)
+    requires_cleanup = bool(orphan_paths)
+    if requires_rehydrate and requires_cleanup:
+        status = "needs_rehydrate_and_cleanup"
+    elif requires_rehydrate:
+        status = "needs_rehydrate"
+    elif requires_cleanup:
+        status = "needs_cleanup"
+    else:
+        status = "healthy"
+    return {
+        "asset_view": asset_view,
+        "status": status,
+        "artifact_dir": str(artifact_dir),
+        "manifest": {
+            "status": manifest_status,
+            "path": str(artifact_dir / "manifest.json"),
+            "candidate_count": int(manifest_payload.get("candidate_count") or 0),
+        },
+        "required_path_count": len(required_paths),
+        "actual_json_path_count": len(actual_paths),
+        "missing_required_paths": missing_required_paths,
+        "invalid_json_paths": invalid_json_paths,
+        "orphan_paths": orphan_paths,
+        "canonical_source": canonical_source,
+        "rehydrate_plan": (
+            _hot_cache_rehydrate_plan(
+                target_company=target_company,
+                snapshot_id=snapshot_id,
+                canonical_source=canonical_source,
+            )
+            if requires_rehydrate
+            else {}
+        ),
+        "cleanup_plan": (
+            {
+                "action": "cleanup_orphan_hot_cache_files",
+                "safe_to_delete": True,
+                "orphan_paths": orphan_paths,
+            }
+            if requires_cleanup
+            else {}
+        ),
+    }
+
+
+def audit_candidate_artifact_hot_cache(
+    *,
+    runtime_dir: str | Path,
+    companies: list[str] | None = None,
+    snapshot_id: str = "",
+    asset_view: str = "canonical_merged",
+    limit: int = 0,
+) -> dict[str, Any]:
+    runtime_root = Path(runtime_dir).expanduser()
+    hot_cache_root = hot_cache_company_assets_dir(runtime_root)
+    if hot_cache_root is None:
+        return {
+            "status": "disabled",
+            "runtime_dir": str(runtime_root),
+            "hot_cache_root": "",
+            "companies": [],
+            "summary": {
+                "scanned_snapshot_count": 0,
+                "scanned_view_count": 0,
+                "healthy_view_count": 0,
+                "cleanup_candidate_count": 0,
+                "rehydrate_candidate_count": 0,
+                "missing_required_file_count": 0,
+                "orphan_file_count": 0,
+            },
+        }
+    if not hot_cache_root.exists():
+        return {
+            "status": "missing_hot_cache_root",
+            "runtime_dir": str(runtime_root),
+            "hot_cache_root": str(hot_cache_root),
+            "companies": [],
+            "summary": {
+                "scanned_snapshot_count": 0,
+                "scanned_view_count": 0,
+                "healthy_view_count": 0,
+                "cleanup_candidate_count": 0,
+                "rehydrate_candidate_count": 0,
+                "missing_required_file_count": 0,
+                "orphan_file_count": 0,
+            },
+        }
+
+    requested_companies = [_normalize_key(item) for item in list(companies or []) if str(item or "").strip()]
+    requested_snapshot_id = str(snapshot_id or "").strip()
+    requested_asset_view = str(asset_view or "canonical_merged").strip() or "canonical_merged"
+    snapshot_limit = max(0, int(limit or 0))
+    scanned_snapshot_count = 0
+    scanned_view_count = 0
+    healthy_view_count = 0
+    cleanup_candidate_count = 0
+    rehydrate_candidate_count = 0
+    missing_required_file_count = 0
+    orphan_file_count = 0
+    company_summaries: list[dict[str, Any]] = []
+
+    stop_scanning = False
+    for company_dir in sorted(path for path in hot_cache_root.iterdir() if path.is_dir()):
+        if stop_scanning:
+            break
+        latest_payload = load_company_snapshot_json(company_dir / "latest_snapshot.json")
+        company_summary: dict[str, Any] = {
+            "company_dir": company_dir.name,
+            "snapshots": [],
+        }
+        for snapshot_dir in sorted(path for path in company_dir.iterdir() if path.is_dir()):
+            if snapshot_limit > 0 and scanned_snapshot_count >= snapshot_limit:
+                stop_scanning = True
+                break
+            if requested_snapshot_id and snapshot_dir.name != requested_snapshot_id:
+                continue
+            identity_payload = load_company_snapshot_identity(snapshot_dir, fallback_payload=latest_payload)
+            if requested_companies and not any(
+                score_company_snapshot_dir_match(company_dir, identity_payload, item) > 0
+                for item in requested_companies
+            ):
+                continue
+            scanned_snapshot_count += 1
+            company_key = str(identity_payload.get("company_key") or company_dir.name).strip() or company_dir.name
+            target_company = (
+                str(identity_payload.get("canonical_name") or "").strip()
+                or str(identity_payload.get("requested_name") or "").strip()
+                or company_key
+            )
+            artifact_dir = compatibility_artifact_dir(snapshot_dir, asset_view=requested_asset_view)
+            view_summary = _audit_hot_cache_artifact_view(
+                runtime_root=runtime_root,
+                company_key=company_key,
+                target_company=target_company,
+                snapshot_id=snapshot_dir.name,
+                asset_view=requested_asset_view,
+                artifact_dir=artifact_dir,
+            )
+            scanned_view_count += 1
+            if str(view_summary.get("status") or "") == "healthy":
+                healthy_view_count += 1
+            if view_summary.get("cleanup_plan"):
+                cleanup_candidate_count += 1
+            if view_summary.get("rehydrate_plan"):
+                rehydrate_candidate_count += 1
+            missing_required_file_count += len(list(view_summary.get("missing_required_paths") or []))
+            orphan_file_count += len(list(view_summary.get("orphan_paths") or []))
+            company_summary["snapshots"].append(
+                {
+                    "snapshot_id": snapshot_dir.name,
+                    "target_company": target_company,
+                    "company_key": company_key,
+                    "views": [view_summary],
+                }
+            )
+        if company_summary["snapshots"]:
+            company_summaries.append(company_summary)
+
+    status = "completed"
+    if rehydrate_candidate_count > 0:
+        status = "needs_rehydrate"
+    elif cleanup_candidate_count > 0:
+        status = "needs_cleanup"
+    return {
+        "status": status,
+        "runtime_dir": str(runtime_root),
+        "hot_cache_root": str(hot_cache_root),
+        "company_filters": list(companies or []),
+        "snapshot_id": requested_snapshot_id,
+        "asset_view": requested_asset_view,
+        "limit": snapshot_limit,
+        "summary": {
+            "scanned_snapshot_count": scanned_snapshot_count,
+            "scanned_view_count": scanned_view_count,
+            "healthy_view_count": healthy_view_count,
+            "cleanup_candidate_count": cleanup_candidate_count,
+            "rehydrate_candidate_count": rehydrate_candidate_count,
+            "missing_required_file_count": missing_required_file_count,
+            "orphan_file_count": orphan_file_count,
+        },
+        "companies": company_summaries,
+    }
 
 
 def cleanup_candidate_artifact_hot_cache(
@@ -1055,6 +1584,574 @@ def cleanup_candidate_artifact_hot_cache(
         "pruned_state_count": pruned_state_count,
         "retention": retention_summary,
         "companies": company_summaries,
+    }
+
+
+def _json_list_from_artifact(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if isinstance(payload, list):
+        return [dict(item) for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        for key in ("candidates", "items", "records", "evidence"):
+            values = payload.get(key)
+            if isinstance(values, list):
+                return [dict(item) for item in values if isinstance(item, dict)]
+    return []
+
+
+def _artifact_candidate_id(payload: dict[str, Any], *, fallback_index: int = 0) -> str:
+    for key in ("candidate_id", "id", "person_id"):
+        value = str(payload.get(key) or "").strip()
+        if value:
+            return value
+    seed = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    if seed and seed != "{}":
+        return sha1(seed.encode("utf-8")).hexdigest()[:16]
+    return f"candidate_{max(0, int(fallback_index or 0)) + 1:04d}"
+
+
+def _artifact_display_name(payload: dict[str, Any]) -> str:
+    for key in ("display_name", "name_en", "name", "full_name"):
+        value = str(payload.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _artifact_status_bucket(payload: dict[str, Any]) -> str:
+    value = str(payload.get("status_bucket") or "").strip()
+    if value:
+        return value
+    employment_status = str(payload.get("employment_status") or "").strip().lower()
+    if employment_status in {"current", "former"}:
+        return employment_status
+    category = str(payload.get("category") or "").strip().lower()
+    if category in {"employee", "current_employee"}:
+        return "current"
+    if category in {"former_employee", "alumni"}:
+        return "former"
+    return employment_status or category
+
+
+def _candidate_serving_linkedin_url(*records: dict[str, Any]) -> str:
+    for record in records:
+        if not isinstance(record, dict) or not record:
+            continue
+        metadata = dict(record.get("metadata") or {})
+        profile_url = candidate_profile_lookup_url(record, metadata)
+        if profile_url:
+            return profile_url
+    for record in records:
+        if not isinstance(record, dict) or not record:
+            continue
+        for key in ("urls", "known_urls"):
+            for value in list(record.get(key) or []):
+                candidate_url = str(value or "").strip()
+                if "linkedin.com/in/" in candidate_url.lower():
+                    return candidate_url
+    return ""
+
+
+def _hydrate_candidate_serving_identity_fields(
+    record: dict[str, Any],
+    *source_records: dict[str, Any],
+) -> dict[str, Any]:
+    hydrated = dict(record or {})
+    sources = (hydrated, *source_records)
+    linkedin_url = str(hydrated.get("linkedin_url") or "").strip() or _candidate_serving_linkedin_url(*sources)
+    if linkedin_url:
+        hydrated["linkedin_url"] = linkedin_url
+        hydrated["has_linkedin_url"] = True
+
+    candidate_urls: list[str] = []
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        explicit_url = str(source.get("linkedin_url") or source.get("profile_url") or "").strip()
+        if explicit_url:
+            candidate_urls.append(explicit_url)
+        candidate_urls.extend(str(item or "").strip() for item in list(source.get("urls") or []))
+        candidate_urls.extend(str(item or "").strip() for item in list(source.get("known_urls") or []))
+    if linkedin_url:
+        candidate_urls.insert(0, linkedin_url)
+    deduped_urls = _dedupe_urls([url for url in candidate_urls if url])
+    if deduped_urls:
+        hydrated["urls"] = deduped_urls[:12]
+    return hydrated
+
+
+def _build_candidate_serving_page_record(
+    *,
+    materialized_record: dict[str, Any],
+    normalized_record: dict[str, Any],
+    reusable_record: dict[str, Any],
+    profile_completion_item: dict[str, Any],
+) -> dict[str, Any]:
+    """Return the public board row projection.
+
+    Normalized records own business/index semantics such as status buckets,
+    source matches, and functional facets. Materialized records own profile
+    card signals such as timeline, headline, avatar, and location. Serving
+    pages need both so public reads do not depend on raw profile hydration.
+    """
+    merged = _hydrate_candidate_serving_identity_fields(
+        normalized_record,
+        materialized_record,
+        reusable_record,
+        profile_completion_item,
+    )
+    for key, value in dict(materialized_record or {}).items():
+        if key == "metadata":
+            continue
+        if value not in (None, "", [], {}):
+            merged[key] = value
+    metadata = dict(dict(normalized_record or {}).get("metadata") or {})
+    for source in (reusable_record, materialized_record):
+        source_metadata = dict(dict(source or {}).get("metadata") or {})
+        for key, value in source_metadata.items():
+            if value not in (None, "", [], {}):
+                metadata[key] = value
+    if metadata:
+        merged["metadata"] = metadata
+    return _project_profile_signal_fields_into_record(merged, signal_payload=materialized_record)
+
+
+def _artifact_bool(payload: dict[str, Any], *keys: str) -> bool:
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        normalized = str(value or "").strip().lower()
+        if normalized in {"1", "true", "yes", "y"}:
+            return True
+        if normalized in {"0", "false", "no", "n"}:
+            return False
+    return False
+
+
+def _write_json_artifact(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _materialized_artifact_dir_from_registry_row(
+    *,
+    runtime_dir: Path,
+    row: dict[str, Any],
+) -> Path:
+    source_path = str(row.get("source_path") or "").strip()
+    if source_path:
+        path = Path(source_path)
+        if path.name == "artifact_summary.json":
+            return path.parent
+        if path.is_dir():
+            return path
+    company_key = str(row.get("company_key") or "").strip()
+    snapshot_id = str(row.get("snapshot_id") or "").strip()
+    return runtime_dir / "company_assets" / company_key / snapshot_id / "normalized_artifacts"
+
+
+def _candidate_artifact_view_missing_paginated_serving(artifact_dir: Path) -> bool:
+    if not (artifact_dir / "artifact_summary.json").exists():
+        return False
+    if not (artifact_dir / "materialized_candidate_documents.json").exists():
+        return False
+    if not (artifact_dir / "manifest.json").exists():
+        return True
+    pages_dir = artifact_dir / "pages"
+    return not pages_dir.exists() or not any(pages_dir.glob("page-*.json"))
+
+
+def _repair_paginated_candidate_artifact_view_from_materialized(
+    *,
+    artifact_dir: Path,
+    target_company: str,
+    company_key: str,
+    snapshot_id: str,
+    asset_view: str,
+    dry_run: bool,
+) -> dict[str, Any]:
+    materialized_path = artifact_dir / "materialized_candidate_documents.json"
+    materialized_payload = load_company_snapshot_json(materialized_path)
+    if not isinstance(materialized_payload, dict):
+        return {
+            "status": "skipped",
+            "reason": "materialized_candidate_documents_invalid",
+            "asset_view": asset_view,
+            "artifact_dir": str(artifact_dir),
+        }
+    materialized_candidates = [
+        dict(item) for item in list(materialized_payload.get("candidates") or []) if isinstance(item, dict)
+    ]
+    if not materialized_candidates:
+        return {
+            "status": "skipped",
+            "reason": "materialized_candidates_empty",
+            "asset_view": asset_view,
+            "artifact_dir": str(artifact_dir),
+        }
+    artifact_summary = load_company_snapshot_json(artifact_dir / "artifact_summary.json")
+    if not isinstance(artifact_summary, dict):
+        artifact_summary = {}
+    normalized_candidates = _json_list_from_artifact(artifact_dir / "normalized_candidates.json")
+    reusable_documents = _json_list_from_artifact(artifact_dir / "reusable_candidate_documents.json")
+    manual_review_backlog = _json_list_from_artifact(artifact_dir / "manual_review_backlog.json")
+    profile_completion_backlog = _json_list_from_artifact(artifact_dir / "profile_completion_backlog.json")
+    evidence_items = [dict(item) for item in list(materialized_payload.get("evidence") or []) if isinstance(item, dict)]
+    evidence_by_candidate: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for evidence in evidence_items:
+        candidate_id = str(evidence.get("candidate_id") or "").strip()
+        if candidate_id:
+            evidence_by_candidate[candidate_id].append(evidence)
+
+    normalized_by_id = {
+        _artifact_candidate_id(candidate): candidate
+        for candidate in normalized_candidates
+        if _artifact_candidate_id(candidate)
+    }
+    reusable_by_id = {
+        _artifact_candidate_id(candidate): candidate
+        for candidate in reusable_documents
+        if _artifact_candidate_id(candidate)
+    }
+    manual_review_by_id = {
+        _artifact_candidate_id(item): item for item in manual_review_backlog if _artifact_candidate_id(item)
+    }
+    profile_completion_by_id = {
+        _artifact_candidate_id(item): item for item in profile_completion_backlog if _artifact_candidate_id(item)
+    }
+    page_size = max(int(artifact_summary.get("candidate_page_size") or _CANDIDATE_SHARD_PAGE_SIZE), 1)
+    materialized_at = _utc_now_iso()
+    shard_entries: list[dict[str, Any]] = []
+    page_candidates: list[dict[str, Any]] = []
+    shard_write_plan: list[tuple[Path, dict[str, Any]]] = []
+    for index, materialized_candidate in enumerate(materialized_candidates):
+        candidate_id = _artifact_candidate_id(materialized_candidate, fallback_index=index)
+        manual_review_item = dict(manual_review_by_id.get(candidate_id) or {})
+        profile_completion_item = dict(profile_completion_by_id.get(candidate_id) or {})
+        normalized_candidate = dict(normalized_by_id.get(candidate_id) or materialized_candidate)
+        normalized_candidate.setdefault("candidate_id", candidate_id)
+        reusable_document = dict(reusable_by_id.get(candidate_id) or normalized_candidate)
+        materialized_candidate = _hydrate_candidate_serving_identity_fields(
+            materialized_candidate,
+            normalized_candidate,
+            reusable_document,
+            profile_completion_item,
+        )
+        normalized_candidate = _hydrate_candidate_serving_identity_fields(
+            normalized_candidate,
+            materialized_candidate,
+            reusable_document,
+            profile_completion_item,
+        )
+        reusable_document = _hydrate_candidate_serving_identity_fields(
+            reusable_document,
+            materialized_candidate,
+            normalized_candidate,
+            profile_completion_item,
+        )
+        candidate_evidence = list(evidence_by_candidate.get(candidate_id) or [])
+        fingerprint_seed = {
+            "materialized_candidate": materialized_candidate,
+            "normalized_candidate": normalized_candidate,
+            "reusable_document": reusable_document,
+            "evidence": candidate_evidence,
+        }
+        fingerprint = sha1(
+            json.dumps(fingerprint_seed, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:24]
+        relative_path = _candidate_shard_relative_path(candidate_id, fingerprint)
+        list_page = (index // page_size) + 1
+        shard_entries.append(
+            {
+                "candidate_id": candidate_id,
+                "fingerprint": fingerprint,
+                "path": relative_path,
+                "page": list_page,
+                "display_name": _artifact_display_name(normalized_candidate),
+                "status_bucket": _artifact_status_bucket(normalized_candidate),
+                "has_profile_detail": _artifact_bool(normalized_candidate, "has_profile_detail"),
+                "needs_manual_review": bool(manual_review_by_id.get(candidate_id))
+                or _artifact_bool(normalized_candidate, "needs_manual_review"),
+                "needs_profile_completion": bool(profile_completion_by_id.get(candidate_id))
+                or _artifact_bool(normalized_candidate, "needs_profile_completion"),
+            }
+        )
+        shard_write_plan.append(
+            (
+                artifact_dir / relative_path,
+                {
+                    "candidate_id": candidate_id,
+                    "fingerprint": fingerprint,
+                    "target_company": target_company,
+                    "snapshot_id": snapshot_id,
+                    "asset_view": asset_view,
+                    "materialized_at": materialized_at,
+                    "materialized_candidate": materialized_candidate,
+                    "normalized_candidate": normalized_candidate,
+                    "reusable_document": reusable_document,
+                    "evidence": candidate_evidence,
+                    "manual_review_backlog_item": manual_review_item,
+                    "profile_completion_backlog_item": profile_completion_item,
+                },
+            )
+        )
+        # Serving pages back the public candidate board. They carry a card
+        # projection: normalized/index semantics plus materialized profile
+        # signals, so list correctness never depends on public-read timeline
+        # hydration.
+        page_candidates.append(
+            _build_candidate_serving_page_record(
+                materialized_record=materialized_candidate,
+                normalized_record=normalized_candidate,
+                reusable_record=reusable_document,
+                profile_completion_item=profile_completion_item,
+            )
+        )
+
+    page_payloads: list[tuple[Path, dict[str, Any]]] = []
+    pages_manifest: list[dict[str, Any]] = []
+    for page_index in range(0, len(page_candidates), page_size):
+        page_number = (page_index // page_size) + 1
+        candidates_slice = page_candidates[page_index : page_index + page_size]
+        relative_path = f"pages/page-{page_number:04d}.json"
+        pages_manifest.append(
+            {
+                "page": page_number,
+                "path": relative_path,
+                "candidate_count": len(candidates_slice),
+            }
+        )
+        page_payloads.append(
+            (
+                artifact_dir / relative_path,
+                {
+                    "target_company": target_company,
+                    "snapshot_id": snapshot_id,
+                    "asset_view": asset_view,
+                    "page": page_number,
+                    "page_size": page_size,
+                    "candidate_count": len(candidates_slice),
+                    "total_candidate_count": len(page_candidates),
+                    "candidates": candidates_slice,
+                },
+            )
+        )
+
+    snapshot_payload = dict(materialized_payload.get("snapshot") or {})
+    manifest_payload = {
+        "target_company": target_company,
+        "company_key": company_key,
+        "snapshot_id": snapshot_id,
+        "asset_view": asset_view,
+        "materialized_at": materialized_at,
+        "candidate_count": len(page_candidates),
+        "pagination": {
+            "page_size": page_size,
+            "page_count": len(page_payloads),
+        },
+        "manual_review_backlog_count": len(manual_review_backlog),
+        "profile_completion_backlog_count": len(profile_completion_backlog),
+        "dirty_candidate_count": len(page_candidates),
+        "reused_candidate_count": 0,
+        "candidate_shards": shard_entries,
+        "pages": pages_manifest,
+        "backlogs": {
+            "manual_review": "backlogs/manual_review.json",
+            "profile_completion": "backlogs/profile_completion.json",
+        },
+        "auxiliary": {
+            "publishable_primary_emails": "publishable_primary_emails.json",
+        },
+        "source_snapshots": list(
+            snapshot_payload.get("source_snapshots") or artifact_summary.get("source_snapshots") or []
+        ),
+        "source_snapshot_selection": dict(
+            snapshot_payload.get("source_snapshot_selection") or artifact_summary.get("source_snapshot_selection") or {}
+        ),
+        "control_plane_candidate_count": int(
+            snapshot_payload.get("control_plane_candidate_count")
+            or artifact_summary.get("control_plane_candidate_count")
+            or 0
+        ),
+        "control_plane_evidence_count": int(
+            snapshot_payload.get("control_plane_evidence_count")
+            or artifact_summary.get("control_plane_evidence_count")
+            or 0
+        ),
+        "maintenance_repair": {
+            "source_kind": "materialized_candidate_documents",
+            "source_path": str(materialized_path),
+            "repaired_at": materialized_at,
+            "reason": "missing_paginated_serving_artifacts",
+        },
+    }
+    repaired_paths = [
+        "manifest.json",
+        *[str(path.relative_to(artifact_dir)) for path, _ in page_payloads],
+        *[str(path.relative_to(artifact_dir)) for path, _ in shard_write_plan],
+        "backlogs/manual_review.json",
+        "backlogs/profile_completion.json",
+    ]
+    if not dry_run:
+        for path, payload in shard_write_plan:
+            _write_json_artifact(path, payload)
+        for path, payload in page_payloads:
+            _write_json_artifact(path, payload)
+        _write_json_artifact(
+            artifact_dir / "backlogs" / "manual_review.json",
+            {
+                "target_company": target_company,
+                "snapshot_id": snapshot_id,
+                "asset_view": asset_view,
+                "candidate_count": len(manual_review_backlog),
+                "candidates": manual_review_backlog,
+            },
+        )
+        _write_json_artifact(
+            artifact_dir / "backlogs" / "profile_completion.json",
+            {
+                "target_company": target_company,
+                "snapshot_id": snapshot_id,
+                "asset_view": asset_view,
+                "candidate_count": len(profile_completion_backlog),
+                "candidates": profile_completion_backlog,
+            },
+        )
+        publishable_path = artifact_dir / "publishable_primary_emails.json"
+        if not publishable_path.exists():
+            _write_json_artifact(
+                publishable_path,
+                {
+                    "target_company": target_company,
+                    "snapshot_id": snapshot_id,
+                    "asset_view": asset_view,
+                    "by_candidate_id": {},
+                    "by_profile_url_key": {},
+                },
+            )
+            repaired_paths.append("publishable_primary_emails.json")
+        _write_json_artifact(artifact_dir / "manifest.json", manifest_payload)
+        pages_dir = artifact_dir / "pages"
+        expected_pages = {str(path.relative_to(artifact_dir)) for path, _ in page_payloads}
+        if pages_dir.exists():
+            for existing_page in pages_dir.glob("page-*.json"):
+                relative_path = str(existing_page.relative_to(artifact_dir))
+                if relative_path not in expected_pages:
+                    existing_page.unlink(missing_ok=True)
+    return {
+        "status": "would_repair" if dry_run else "repaired",
+        "asset_view": asset_view,
+        "artifact_dir": str(artifact_dir),
+        "candidate_count": len(page_candidates),
+        "page_size": page_size,
+        "page_count": len(page_payloads),
+        "candidate_shard_count": len(shard_entries),
+        "repaired_path_count": len(repaired_paths),
+        "repaired_paths_sample": repaired_paths[:20],
+    }
+
+
+def repair_paginated_candidate_artifacts_from_materialized(
+    *,
+    runtime_dir: str | Path,
+    store: ControlPlaneStore,
+    companies: list[str] | None = None,
+    snapshot_id: str = "",
+    asset_view: str = "canonical_merged",
+    include_history: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    runtime_root = Path(runtime_dir)
+    requested_companies = [_normalize_key(item) for item in list(companies or []) if str(item or "").strip()]
+    requested_snapshot_id = str(snapshot_id or "").strip()
+    normalized_asset_view = str(asset_view or "canonical_merged").strip() or "canonical_merged"
+    rows = store.list_organization_asset_registry(asset_view=normalized_asset_view)
+    scanned_registry_rows = 0
+    scanned_view_count = 0
+    missing_view_count = 0
+    repaired_view_count = 0
+    skipped_view_count = 0
+    seen_view_dirs: set[str] = set()
+    companies_payload: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        company_key = str(row.get("company_key") or "").strip()
+        target_company = str(row.get("target_company") or "").strip() or company_key
+        if requested_companies and not (
+            _normalize_key(company_key) in requested_companies or _normalize_key(target_company) in requested_companies
+        ):
+            continue
+        row_snapshot_id = str(row.get("snapshot_id") or "").strip()
+        if requested_snapshot_id and row_snapshot_id != requested_snapshot_id:
+            continue
+        if not include_history and not bool(row.get("authoritative")):
+            continue
+        scanned_registry_rows += 1
+        root_artifact_dir = _materialized_artifact_dir_from_registry_row(runtime_dir=runtime_root, row=row)
+        view_dirs: list[tuple[str, Path]] = [(normalized_asset_view, root_artifact_dir)]
+        strict_dir = root_artifact_dir / "strict_roster_only"
+        if normalized_asset_view == "canonical_merged" and strict_dir.exists():
+            view_dirs.append(("strict_roster_only", strict_dir))
+        snapshot_payload = {
+            "snapshot_id": row_snapshot_id,
+            "authoritative": bool(row.get("authoritative")),
+            "views": [],
+        }
+        for view_name, artifact_dir in view_dirs:
+            view_key = str(artifact_dir.resolve())
+            if view_key in seen_view_dirs:
+                continue
+            seen_view_dirs.add(view_key)
+            if not artifact_dir.exists():
+                skipped_view_count += 1
+                continue
+            scanned_view_count += 1
+            missing = _candidate_artifact_view_missing_paginated_serving(artifact_dir)
+            if not missing:
+                continue
+            missing_view_count += 1
+            repair_result = _repair_paginated_candidate_artifact_view_from_materialized(
+                artifact_dir=artifact_dir,
+                target_company=target_company,
+                company_key=company_key,
+                snapshot_id=row_snapshot_id,
+                asset_view=view_name,
+                dry_run=dry_run,
+            )
+            if str(repair_result.get("status") or "") in {"repaired", "would_repair"}:
+                repaired_view_count += 1
+            else:
+                skipped_view_count += 1
+            snapshot_payload["views"].append(repair_result)
+        if snapshot_payload["views"]:
+            company_payload = companies_payload.setdefault(
+                company_key or target_company,
+                {
+                    "target_company": target_company,
+                    "company_key": company_key,
+                    "snapshots": [],
+                },
+            )
+            company_payload["snapshots"].append(snapshot_payload)
+    return {
+        "status": "completed",
+        "runtime_dir": str(runtime_root),
+        "asset_view": normalized_asset_view,
+        "dry_run": dry_run,
+        "include_history": include_history,
+        "scanned_registry_rows": scanned_registry_rows,
+        "scanned_view_count": scanned_view_count,
+        "missing_paginated_view_count": missing_view_count,
+        "repaired_view_count": repaired_view_count,
+        "skipped_view_count": skipped_view_count,
+        "companies": list(companies_payload.values()),
     }
 
 
@@ -1505,29 +2602,44 @@ def rewrite_structured_timeline_in_company_candidate_artifacts(
                     continue
 
                 rewritten_views: list[dict[str, Any]] = []
-                canonical_result = _rewrite_existing_candidate_artifact_view(
-                    runtime_dir=runtime_root,
-                    store=store,
-                    target_company=target_company,
-                    snapshot_id=candidate_snapshot_dir.name,
-                    asset_view="canonical_merged",
-                )
-                rewritten_views.append(
-                    {
-                        "asset_view": "canonical_merged",
-                        "artifact_dir": str(canonical_result.get("artifact_dir") or normalized_dir),
-                        "candidate_count": int(dict(canonical_result.get("summary") or {}).get("candidate_count") or 0),
+                try:
+                    canonical_result = _rewrite_existing_candidate_artifact_view(
+                        runtime_dir=runtime_root,
+                        store=store,
+                        target_company=target_company,
+                        snapshot_id=candidate_snapshot_dir.name,
+                        asset_view="canonical_merged",
+                    )
+                except CandidateArtifactError as exc:
+                    if not _candidate_artifact_error_requires_bootstrap(exc):
+                        raise
+                    artifact_result = _bootstrap_candidate_artifacts_from_candidate_documents(
+                        runtime_dir=runtime_root,
+                        store=store,
+                        target_company=target_company,
+                        snapshot_id=candidate_snapshot_dir.name,
+                    )
+                    rebuilt_missing_snapshot_count += 1
+                    touched_company = True
+                    rebuilt_summary = {
+                        "snapshot_id": candidate_snapshot_dir.name,
+                        "target_company": str(artifact_result.get("target_company") or target_company),
+                        "artifact_dir": str(artifact_result.get("artifact_dir") or normalized_dir),
+                        "artifact_paths": dict(artifact_result.get("artifact_paths") or {}),
+                        "candidate_count": int(dict(artifact_result.get("summary") or {}).get("candidate_count") or 0),
                         "structured_timeline_count": int(
-                            dict(canonical_result.get("summary") or {}).get("structured_timeline_count") or 0
+                            dict(artifact_result.get("summary") or {}).get("structured_timeline_count") or 0
                         ),
-                        "structured_experience_count": int(
-                            dict(canonical_result.get("summary") or {}).get("structured_experience_count") or 0
-                        ),
-                        "structured_education_count": int(
-                            dict(canonical_result.get("summary") or {}).get("structured_education_count") or 0
-                        ),
+                        "rewrite_mode": "candidate_documents_bootstrap_after_incomplete_manifest",
+                        "bootstrap_reason": str(exc),
                     }
-                )
+                    company_summary["rebuilt_missing_snapshots"].append(rebuilt_summary)
+                    continue
+                rewritten_views.append(_structured_timeline_view_summary(
+                    asset_view="canonical_merged",
+                    result=canonical_result,
+                    artifact_dir=normalized_dir,
+                ))
                 if strict_exists:
                     strict_result = _rewrite_existing_candidate_artifact_view(
                         runtime_dir=runtime_root,
@@ -1536,26 +2648,11 @@ def rewrite_structured_timeline_in_company_candidate_artifacts(
                         snapshot_id=candidate_snapshot_dir.name,
                         asset_view="strict_roster_only",
                     )
-                    rewritten_views.append(
-                        {
-                            "asset_view": "strict_roster_only",
-                            "artifact_dir": str(
-                                strict_result.get("artifact_dir") or (normalized_dir / "strict_roster_only")
-                            ),
-                            "candidate_count": int(
-                                dict(strict_result.get("summary") or {}).get("candidate_count") or 0
-                            ),
-                            "structured_timeline_count": int(
-                                dict(strict_result.get("summary") or {}).get("structured_timeline_count") or 0
-                            ),
-                            "structured_experience_count": int(
-                                dict(strict_result.get("summary") or {}).get("structured_experience_count") or 0
-                            ),
-                            "structured_education_count": int(
-                                dict(strict_result.get("summary") or {}).get("structured_education_count") or 0
-                            ),
-                        }
-                    )
+                    rewritten_views.append(_structured_timeline_view_summary(
+                        asset_view="strict_roster_only",
+                        result=strict_result,
+                        artifact_dir=normalized_dir / "strict_roster_only",
+                    ))
                 rewritten_snapshot_count += 1
                 rewritten_view_count += len(rewritten_views)
                 touched_company = True
@@ -1627,6 +2724,32 @@ def rewrite_structured_timeline_in_company_candidate_artifacts(
     }
 
 
+def _candidate_artifact_error_requires_bootstrap(error: CandidateArtifactError) -> bool:
+    message = str(error)
+    return (
+        "Candidate shard payload missing" in message
+        or "materialized_candidate_documents_invalid" in message
+        or "Structured timeline rewrite requires materialized candidate artifacts" in message
+    )
+
+
+def _structured_timeline_view_summary(
+    *,
+    asset_view: str,
+    result: dict[str, Any],
+    artifact_dir: Path,
+) -> dict[str, Any]:
+    summary = dict(result.get("summary") or {})
+    return {
+        "asset_view": asset_view,
+        "artifact_dir": str(result.get("artifact_dir") or artifact_dir),
+        "candidate_count": int(summary.get("candidate_count") or 0),
+        "structured_timeline_count": int(summary.get("structured_timeline_count") or 0),
+        "structured_experience_count": int(summary.get("structured_experience_count") or 0),
+        "structured_education_count": int(summary.get("structured_education_count") or 0),
+    }
+
+
 def load_snapshot_candidate_artifact_payload(
     *,
     snapshot_dir: Path,
@@ -1666,16 +2789,21 @@ def load_snapshot_candidate_artifact_payload(
     )
 
     manifest_path = artifact_dir / "manifest.json"
+    manifest_reconstruct_error: Exception | None = None
     if manifest_payload:
-        payload = _reconstruct_compatibility_payloads_from_serving_artifacts(
-            snapshot_dir=resolved_snapshot_dir,
-            artifact_dir=effective_artifact_dir,
-            target_company=company_name or target_company,
-            company_key=resolved_company_key,
-            company_identity=identity_payload,
-            asset_view=normalized_asset_view,
-            artifact_summary=artifact_summary,
-        )
+        try:
+            payload = _reconstruct_compatibility_payloads_from_serving_artifacts(
+                snapshot_dir=resolved_snapshot_dir,
+                artifact_dir=effective_artifact_dir,
+                target_company=company_name or target_company,
+                company_key=resolved_company_key,
+                company_identity=identity_payload,
+                asset_view=normalized_asset_view,
+                artifact_summary=artifact_summary,
+            )
+        except CandidateArtifactError as exc:
+            manifest_reconstruct_error = exc
+            payload = {}
         if payload:
             return {
                 "status": "loaded",
@@ -1751,6 +2879,8 @@ def load_snapshot_candidate_artifact_payload(
                     "profile_completion_backlog": [],
                 }
 
+    if manifest_reconstruct_error is not None:
+        raise manifest_reconstruct_error
     raise CandidateArtifactError(f"No candidate artifact payload found under {resolved_snapshot_dir}")
 
 
@@ -2425,14 +3555,26 @@ def load_authoritative_company_snapshot_candidate_documents(
     except CandidateArtifactError:
         if not resolved_allow_candidate_documents_fallback:
             raise
-        snapshot_payload = load_company_snapshot_candidate_documents(
-            runtime_dir=runtime_dir,
-            target_company=normalized_target_company,
-            snapshot_id=normalized_snapshot_id,
-            view=normalized_view,
-            prefer_hot_cache=prefer_hot_cache,
-            allow_candidate_documents_fallback=True,
-        )
+        try:
+            snapshot_payload = load_company_snapshot_candidate_documents(
+                runtime_dir=runtime_dir,
+                target_company=normalized_target_company,
+                snapshot_id=normalized_snapshot_id,
+                view=normalized_view,
+                prefer_hot_cache=prefer_hot_cache,
+                allow_candidate_documents_fallback=True,
+            )
+        except CandidateArtifactError:
+            if not prefer_hot_cache:
+                raise
+            snapshot_payload = load_company_snapshot_candidate_documents(
+                runtime_dir=runtime_dir,
+                target_company=normalized_target_company,
+                snapshot_id=normalized_snapshot_id,
+                view=normalized_view,
+                prefer_hot_cache=False,
+                allow_candidate_documents_fallback=True,
+            )
     if (
         not allow_materialization_fallback
         or store is None
@@ -2645,7 +3787,7 @@ def _provider_function_ids(candidate: Candidate, evidence: list[dict[str, Any]])
 def _normalize_candidate(candidate: Candidate, evidence: list[dict[str, Any]]) -> dict[str, Any]:
     metadata = dict(candidate.metadata or {})
     functional_facets = derive_candidate_facets(candidate)
-    role_bucket = derive_candidate_role_bucket(candidate)
+    role_bucket = derive_candidate_role_bucket_from_facets(candidate, functional_facets)
     function_ids = _provider_function_ids(candidate, evidence)
     source_datasets = sorted(
         {
@@ -2683,7 +3825,7 @@ def _normalize_candidate(candidate: Candidate, evidence: list[dict[str, Any]]) -
         reason = "missing_linkedin"
     elif not has_profile_detail:
         reason = "profile_detail_gap"
-    return {
+    record = {
         "candidate_id": candidate.candidate_id,
         "display_name": candidate.display_name,
         "name_en": candidate.name_en,
@@ -2696,6 +3838,7 @@ def _normalize_candidate(candidate: Candidate, evidence: list[dict[str, Any]]) -
         "role": candidate.role,
         "team": candidate.team,
         "focus_areas": candidate.focus_areas,
+        "linkedin_url": str(candidate.linkedin_url or "").strip(),
         "has_linkedin_url": has_linkedin_url,
         "has_profile_detail": has_profile_detail,
         "has_explicit_profile_capture": has_explicit_profile_capture,
@@ -2714,6 +3857,21 @@ def _normalize_candidate(candidate: Candidate, evidence: list[dict[str, Any]]) -
         "urls": urls[:12],
         "source_path": candidate.source_path,
     }
+    source_match_keywords = _candidate_source_match_keywords(metadata)
+    if source_match_keywords:
+        record["matched_keywords"] = source_match_keywords
+        source_match_records = _candidate_source_match_records(metadata)
+        record["source_matches"] = source_match_records
+        record["matched_fields"] = [
+            {
+                "field": str(match.get("field") or "source_seed_query"),
+                "matched_on": str(match.get("matched_on") or ""),
+                "source_type": str(match.get("source_type") or ""),
+            }
+            for match in source_match_records
+            if str(match.get("matched_on") or "").strip()
+        ]
+    return record
 
 
 _PROFILE_SIGNAL_SCALAR_KEYS = (
@@ -2763,6 +3921,7 @@ def _resolve_materialized_candidate_timeline(
     normalized: dict[str, Any],
     registry_rows: dict[str, dict[str, Any]],
     timeline_cache: dict[str, dict[str, Any]],
+    prefer_embedded_profile: bool = False,
 ) -> dict[str, Any]:
     candidate_record = candidate.to_record()
     metadata = dict(candidate.metadata or {})
@@ -2774,6 +3933,7 @@ def _resolve_materialized_candidate_timeline(
         source_path=str(normalized.get("source_path") or candidate.source_path or ""),
         registry_row=registry_row,
         timeline_cache=timeline_cache,
+        prefer_embedded_profile=prefer_embedded_profile,
     )
     return {
         "experience_lines": normalized_text_lines(resolved.get("experience_lines")),
@@ -3033,9 +4193,7 @@ def _write_artifact_view(
         manifest_payload = dict(incremental_artifacts.get("manifest_payload") or {})
         candidate_states = list(incremental_artifacts.get("candidate_states") or [])
         active_candidate_ids = list(incremental_artifacts.get("active_candidate_ids") or [])
-        full_scope_state_replace_eligible = bool(
-            incremental_artifacts.get("full_scope_state_replace_eligible")
-        )
+        full_scope_state_replace_eligible = bool(incremental_artifacts.get("full_scope_state_replace_eligible"))
         removed_state_shard_paths = {
             str(item).strip()
             for item in list(incremental_artifacts.get("removed_state_shard_paths") or [])
@@ -3391,7 +4549,9 @@ def _build_aliased_artifact_view_payloads(
     materialized_snapshot = dict(materialized_documents.get("snapshot") or {})
     materialized_snapshot["asset_view"] = asset_view
     materialized_documents["snapshot"] = materialized_snapshot
-    manifest_payload = deepcopy(dict(dict(source_payloads.get("incremental_artifacts") or {}).get("manifest_payload") or {}))
+    manifest_payload = deepcopy(
+        dict(dict(source_payloads.get("incremental_artifacts") or {}).get("manifest_payload") or {})
+    )
     manifest_payload.update(
         {
             "asset_view": asset_view,
@@ -3470,8 +4630,7 @@ def _candidate_materialization_state_requires_upsert(
     next_metadata = dict(next_state.get("metadata") or {})
     return any(
         (
-            str(previous_state.get("fingerprint") or "").strip()
-            != str(next_state.get("fingerprint") or "").strip(),
+            str(previous_state.get("fingerprint") or "").strip() != str(next_state.get("fingerprint") or "").strip(),
             str(previous_state.get("shard_path") or "").strip() != str(next_state.get("shard_path") or "").strip(),
             int(previous_state.get("list_page") or 0) != int(next_state.get("list_page") or 0),
             str(previous_state.get("dirty_reason") or "").strip() != str(next_state.get("dirty_reason") or "").strip(),
@@ -3939,6 +5098,7 @@ def _build_artifact_view_payloads(
         build_profile=build_profile,
         runtime_tuning_overrides=runtime_tuning_overrides,
     )
+    foreground_fast_build = str(build_profile or "").strip().lower() == _FOREGROUND_FAST_ARTIFACT_BUILD_PROFILE
     timeline_cache: dict[str, dict[str, Any]] = {}
 
     def _prepare_candidate(index: int, candidate: Candidate) -> dict[str, Any]:
@@ -3952,6 +5112,7 @@ def _build_artifact_view_payloads(
             candidate=candidate,
             evidence=candidate_evidence,
             profile_registry_row=profile_registry_row,
+            stat_source_paths=not foreground_fast_build,
         )
         previous_state = dict(existing_states.get(candidate.candidate_id) or {})
         list_page = (index // _CANDIDATE_SHARD_PAGE_SIZE) + 1 if candidates else 0
@@ -3980,12 +5141,46 @@ def _build_artifact_view_payloads(
                 evidence=candidate_evidence,
                 profile_registry_rows=profile_registry_rows,
                 timeline_cache=(timeline_cache if parallel_workers <= 1 else {}),
+                prefer_embedded_profile=foreground_fast_build,
                 target_company=target_company,
                 snapshot_id=snapshot_id,
                 asset_view=asset_view,
                 fingerprint=fingerprint,
             )
             shard_payload["materialized_at"] = _utc_now_iso()
+        materialized_record = dict(shard_payload.get("materialized_candidate") or {})
+        normalized_record = dict(shard_payload.get("normalized_candidate") or {})
+        reusable_record = dict(shard_payload.get("reusable_document") or {})
+        profile_completion_item = dict(shard_payload.get("profile_completion_backlog_item") or {})
+        hydrated_materialized_record = _hydrate_candidate_serving_identity_fields(
+            materialized_record,
+            normalized_record,
+            reusable_record,
+            profile_completion_item,
+        )
+        hydrated_normalized_record = _hydrate_candidate_serving_identity_fields(
+            normalized_record,
+            hydrated_materialized_record,
+            reusable_record,
+            profile_completion_item,
+        )
+        hydrated_reusable_record = _hydrate_candidate_serving_identity_fields(
+            reusable_record,
+            hydrated_materialized_record,
+            hydrated_normalized_record,
+            profile_completion_item,
+        )
+        if (
+            hydrated_materialized_record != materialized_record
+            or hydrated_normalized_record != normalized_record
+            or hydrated_reusable_record != reusable_record
+        ):
+            shard_payload = dict(shard_payload)
+            shard_payload["materialized_candidate"] = hydrated_materialized_record
+            shard_payload["normalized_candidate"] = hydrated_normalized_record
+            shard_payload["reusable_document"] = hydrated_reusable_record
+            if not dirty_reason:
+                dirty_reason = "serving_identity_fields_changed"
         previous_shard_path = str(previous_state.get("shard_path") or "").strip()
         return {
             "candidate": candidate,
@@ -4049,6 +5244,24 @@ def _build_artifact_view_payloads(
         reusable_record = dict(shard_payload.get("reusable_document") or {})
         manual_review_item = dict(shard_payload.get("manual_review_backlog_item") or {})
         profile_completion_item = dict(shard_payload.get("profile_completion_backlog_item") or {})
+        materialized_record = _hydrate_candidate_serving_identity_fields(
+            materialized_record,
+            normalized_record,
+            reusable_record,
+            profile_completion_item,
+        )
+        normalized_record = _hydrate_candidate_serving_identity_fields(
+            normalized_record,
+            materialized_record,
+            reusable_record,
+            profile_completion_item,
+        )
+        reusable_record = _hydrate_candidate_serving_identity_fields(
+            reusable_record,
+            materialized_record,
+            normalized_record,
+            profile_completion_item,
+        )
         primary_email = str(materialized_record.get("primary_email") or "").strip()
         primary_email_metadata = normalized_primary_email_metadata(materialized_record.get("primary_email_metadata"))
         if primary_email:
@@ -4141,7 +5354,28 @@ def _build_artifact_view_payloads(
     page_payloads: list[dict[str, Any]] = []
     for page_index in range(0, len(normalized_candidates), _CANDIDATE_SHARD_PAGE_SIZE):
         page_number = (page_index // _CANDIDATE_SHARD_PAGE_SIZE) + 1
-        page_candidates = normalized_candidates[page_index : page_index + _CANDIDATE_SHARD_PAGE_SIZE]
+        normalized_page_candidates = normalized_candidates[
+            page_index : page_index + _CANDIDATE_SHARD_PAGE_SIZE
+        ]
+        materialized_page_candidates = materialized_candidate_records[
+            page_index : page_index + _CANDIDATE_SHARD_PAGE_SIZE
+        ]
+        reusable_page_candidates = reusable_documents[page_index : page_index + _CANDIDATE_SHARD_PAGE_SIZE]
+        page_candidates = [
+            _build_candidate_serving_page_record(
+                materialized_record=materialized_candidate,
+                normalized_record=normalized_candidate,
+                reusable_record=(
+                    reusable_page_candidates[index]
+                    if index < len(reusable_page_candidates)
+                    else {}
+                ),
+                profile_completion_item={},
+            )
+            for index, (materialized_candidate, normalized_candidate) in enumerate(
+                zip(materialized_page_candidates, normalized_page_candidates, strict=False)
+            )
+        ]
         page_payloads.append(
             {
                 "relative_path": f"pages/page-{page_number:04d}.json",
@@ -4155,8 +5389,8 @@ def _build_artifact_view_payloads(
                     "total_candidate_count": len(normalized_candidates),
                     "candidates": page_candidates,
                 },
-                }
-            )
+            }
+        )
     candidate_shard_entries = [
         {
             "candidate_id": str(state.get("candidate_id") or ""),
@@ -4175,11 +5409,16 @@ def _build_artifact_view_payloads(
     removed_candidate_count = len(
         [candidate_id for candidate_id in existing_states if candidate_id not in current_candidate_ids_set]
     )
+    public_facet_counts = _public_facet_counts_from_records(normalized_candidates)
+    public_facet_summary = _public_facet_summary_from_counts(public_facet_counts)
     artifact_summary = {
         "target_company": materialized_view["target_company"],
         "company_key": materialized_view["company_key"],
         "snapshot_id": snapshot_id,
         "asset_view": asset_view,
+        "build_profile": str(build_profile or _DEFAULT_ARTIFACT_BUILD_PROFILE).strip()
+        or _DEFAULT_ARTIFACT_BUILD_PROFILE,
+        "projection_version": _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
         "candidate_count": len(candidates),
         "evidence_count": len(evidence),
         "status_counts": dict(status_counter),
@@ -4214,6 +5453,9 @@ def _build_artifact_view_payloads(
         "candidate_shard_count": len(candidate_states),
         "candidate_page_size": _CANDIDATE_SHARD_PAGE_SIZE,
         "candidate_page_count": page_count,
+        "public_facet_counts": public_facet_counts,
+        "facet_summary": public_facet_summary,
+        "facet_summary_scope": "global_full_population",
         "dirty_candidate_count": len(dirty_candidate_shards),
         "reused_candidate_count": max(0, len(candidate_states) - len(dirty_candidate_shards)),
         "state_upsert_candidate_count": len(candidate_state_upserts),
@@ -4238,6 +5480,9 @@ def _build_artifact_view_payloads(
         "company_key": str(materialized_view.get("company_key") or ""),
         "snapshot_id": snapshot_id,
         "asset_view": asset_view,
+        "build_profile": str(build_profile or _DEFAULT_ARTIFACT_BUILD_PROFILE).strip()
+        or _DEFAULT_ARTIFACT_BUILD_PROFILE,
+        "projection_version": _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
         "materialized_at": _utc_now_iso(),
         "candidate_count": len(candidate_states),
         "pagination": {
@@ -4249,6 +5494,9 @@ def _build_artifact_view_payloads(
         "dirty_candidate_count": len(dirty_candidate_shards),
         "reused_candidate_count": max(0, len(candidate_states) - len(dirty_candidate_shards)),
         "candidate_shards": candidate_shard_entries,
+        "public_facet_counts": public_facet_counts,
+        "facet_summary": public_facet_summary,
+        "facet_summary_scope": "global_full_population",
         "pages": [
             {
                 "page": int(dict(item.get("payload") or {}).get("page") or 0),
@@ -4336,10 +5584,12 @@ def _build_candidate_materialization_fingerprint(
     candidate: Candidate,
     evidence: list[dict[str, Any]],
     profile_registry_row: dict[str, Any],
+    stat_source_paths: bool = True,
 ) -> str:
     fingerprint_payload = {
+        "projection_version": _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
         "candidate": candidate.to_record(),
-        "candidate_source": _path_signature(candidate.source_path),
+        "candidate_source": _path_signature(candidate.source_path, stat_path=stat_source_paths),
         "evidence": [
             {
                 "evidence_id": str(item.get("evidence_id") or "").strip(),
@@ -4349,16 +5599,24 @@ def _build_candidate_materialization_fingerprint(
                 "summary": str(item.get("summary") or "").strip(),
                 "source_dataset": str(item.get("source_dataset") or "").strip(),
                 "source_path": str(item.get("source_path") or "").strip(),
+                "source_path_signature": _path_signature(item.get("source_path"), stat_path=stat_source_paths),
                 "metadata": dict(item.get("metadata") or {}),
             }
             for item in sorted(list(evidence or []), key=_evidence_key)
         ],
-        "profile_registry": _profile_registry_fingerprint_payload(profile_registry_row),
+        "profile_registry": _profile_registry_fingerprint_payload(
+            profile_registry_row,
+            stat_source_paths=stat_source_paths,
+        ),
     }
     return sha1(json.dumps(fingerprint_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:24]
 
 
-def _profile_registry_fingerprint_payload(profile_registry_row: dict[str, Any]) -> dict[str, Any]:
+def _profile_registry_fingerprint_payload(
+    profile_registry_row: dict[str, Any],
+    *,
+    stat_source_paths: bool = True,
+) -> dict[str, Any]:
     raw_path = str(profile_registry_row.get("last_raw_path") or "").strip()
     return {
         "profile_url_key": str(profile_registry_row.get("profile_url_key") or "").strip(),
@@ -4368,7 +5626,7 @@ def _profile_registry_fingerprint_payload(profile_registry_row: dict[str, Any]) 
         "last_error": str(profile_registry_row.get("last_error") or "").strip(),
         "last_snapshot_dir": str(profile_registry_row.get("last_snapshot_dir") or "").strip(),
         "last_raw_path": raw_path,
-        "last_raw_path_signature": _path_signature(raw_path),
+        "last_raw_path_signature": _path_signature(raw_path, stat_path=stat_source_paths),
         "last_fetched_at": str(profile_registry_row.get("last_fetched_at") or "").strip(),
         "last_failed_at": str(profile_registry_row.get("last_failed_at") or "").strip(),
         "source_shards": sorted(_normalize_string_list(profile_registry_row.get("source_shards"))),
@@ -4376,10 +5634,15 @@ def _profile_registry_fingerprint_payload(profile_registry_row: dict[str, Any]) 
     }
 
 
-def _path_signature(path_value: str | Path | None) -> dict[str, Any]:
+def _path_signature(path_value: str | Path | None, *, stat_path: bool = True) -> dict[str, Any]:
     path_text = str(path_value or "").strip()
     if not path_text:
         return {}
+    if not bool(stat_path):
+        return {
+            "path": path_text,
+            "stat_skipped": True,
+        }
     path = Path(path_text)
     try:
         stat = path.stat()
@@ -4414,6 +5677,9 @@ def _load_candidate_shard_payload(
         return None
     if str(payload.get("fingerprint") or "").strip() != str(fingerprint or "").strip():
         return None
+    projection_version = str(payload.get("projection_version") or "").strip()
+    if projection_version and projection_version != _CANDIDATE_ARTIFACT_PROJECTION_VERSION:
+        return None
     if not isinstance(payload.get("materialized_candidate"), dict):
         return None
     if not isinstance(payload.get("normalized_candidate"), dict):
@@ -4429,6 +5695,7 @@ def _build_candidate_shard_payload(
     evidence: list[dict[str, Any]],
     profile_registry_rows: dict[str, dict[str, Any]],
     timeline_cache: dict[str, dict[str, Any]],
+    prefer_embedded_profile: bool = False,
     target_company: str,
     snapshot_id: str,
     asset_view: str,
@@ -4439,6 +5706,7 @@ def _build_candidate_shard_payload(
         normalized={"source_path": candidate.source_path},
         registry_rows=profile_registry_rows,
         timeline_cache=timeline_cache,
+        prefer_embedded_profile=prefer_embedded_profile,
     )
     enriched_candidate = _candidate_with_resolved_profile_timeline(candidate, timeline)
     normalized = _normalize_candidate(enriched_candidate, evidence)
@@ -4475,6 +5743,7 @@ def _build_candidate_shard_payload(
     return {
         "candidate_id": candidate.candidate_id,
         "fingerprint": fingerprint,
+        "projection_version": _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
         "target_company": target_company,
         "snapshot_id": snapshot_id,
         "asset_view": asset_view,
@@ -4538,6 +5807,42 @@ def _resolve_company_snapshot(
     snapshot_id: str = "",
     prefer_hot_cache: bool = True,
 ) -> tuple[str, Path, dict[str, Any]]:
+    normalized_snapshot_id = str(snapshot_id or "").strip()
+    if normalized_snapshot_id:
+        for company_key in company_key_resolution_candidates(target_company):
+            snapshot_dir = resolve_company_snapshot_dir_by_key(
+                runtime_dir,
+                company_key=company_key,
+                snapshot_id=normalized_snapshot_id,
+                prefer_hot_cache=prefer_hot_cache,
+            )
+            if snapshot_dir is None:
+                continue
+            if not snapshot_dir.exists():
+                continue
+            company_dir = snapshot_dir.parent
+            if not prefer_hot_cache:
+                # Mirror the match-selection branch below: an explicit
+                # canonical request must not be outranked by a hot-cache view
+                # (the resolver's serving-preference sort key otherwise wins
+                # even with prefer_hot_cache=False, defeating the loader's
+                # canonical fallback ladder).
+                canonical_candidate = canonical_snapshot_dir(
+                    runtime_dir,
+                    company_key,
+                    normalized_snapshot_id,
+                )
+                if canonical_candidate.exists():
+                    snapshot_dir = canonical_candidate
+                    company_dir = canonical_candidate.parent
+            latest_payload = load_latest_snapshot_pointer(company_dir)
+            identity_payload = load_company_snapshot_identity(snapshot_dir, fallback_payload=latest_payload)
+            resolved_company_key = (
+                str(identity_payload.get("company_key") or company_key or company_dir.name).strip()
+                or company_dir.name
+            )
+            return resolved_company_key, snapshot_dir, identity_payload
+
     selection = resolve_company_snapshot_match_selection(
         runtime_dir,
         target_company=target_company,
@@ -4549,6 +5854,15 @@ def _resolve_company_snapshot(
     company_dir = Path(selection["company_dir"])
     latest_payload = dict(selection.get("latest_payload") or {})
     snapshot_dir = Path(selection["snapshot_dir"])
+    if not prefer_hot_cache:
+        canonical_candidate = canonical_snapshot_dir(
+            runtime_dir,
+            str(selection.get("company_key") or company_dir.name),
+            str(selection.get("snapshot_id") or snapshot_dir.name),
+        )
+        if canonical_candidate.exists():
+            company_dir = canonical_candidate.parent
+            snapshot_dir = canonical_candidate
     if not snapshot_dir.exists():
         raise CandidateArtifactError(f"Snapshot not found: {snapshot_dir}")
     identity_payload = dict(selection.get("identity_payload") or {}) or load_company_snapshot_identity(
@@ -4776,6 +6090,14 @@ def _dedupe_urls(items: list[str]) -> list[str]:
         seen.add(value)
         results.append(value)
     return results
+
+
+def _candidate_source_match_keywords(metadata: dict[str, Any]) -> list[str]:
+    return candidate_source_match_keywords_from_metadata(metadata)
+
+
+def _candidate_source_match_records(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    return candidate_source_match_records_from_metadata(metadata)
 
 
 def _utc_now_iso() -> str:
