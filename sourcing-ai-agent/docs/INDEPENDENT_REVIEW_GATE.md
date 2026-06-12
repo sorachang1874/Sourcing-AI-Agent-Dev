@@ -34,6 +34,15 @@ Small localized changes may skip this only when they do not change shared semant
 - Isolated test fixture cleanup that does not weaken expectations or alter a shared gate.
 - Refactors proven by targeted tests to preserve existing public/runtime contracts exactly.
 
+## Async Reference Review Lane (owner-approved 2026-06-12)
+
+For changes inside the narrowed gate scope that are already covered by independent adversarial subagent verification (the post-handoff standard for extractions, transport ports, and storage-contract fixes), the Codex review runs as a NON-BLOCKING parallel reference channel instead of a blocking gate:
+
+- Fire `scripts/run_independent_review_gate.py --execute` in the background once the implementation is settled (anchor `--base` to a pinned commit), while the primary subagent verification runs — both channels are read-only and review the same diff.
+- Work proceeds on the primary verification verdict; the Codex result is read when it lands and triaged under the standard finding discipline: real findings are fixed forward in a follow-up commit, false positives are recorded. Never roll back landed work solely because the reference review is pending.
+- Destructive operations on non-rebuildable assets keep the BLOCKING gate below unchanged — the async lane never applies to them.
+- First instance: `runtime/reviews/20260612T080442Z_async-reference-phase3d-acquisition-extraction.md` (Phase 3d extraction, GO; independently cross-confirmed the Claude verifier's AST findings).
+
 ## Gate Order
 
 1. Freeze or update the relevant contract first, including owner/source-of-truth/fallback/deletion semantics.
@@ -45,7 +54,7 @@ Small localized changes may skip this only when they do not change shared semant
 
 ## Codex Reviewer Command
 
-Use `codex exec` in read-only mode and write the review to a file. The runner writes the prompt to `runtime/reviews/*.prompt.md` and feeds that prompt file to Codex, so it does not wait for interactive stdin. Do not pipe through `head` or `tail`.
+Use `codex exec` in read-only mode and write the review to a file. The project default is GPT-5.5 with `model_reasoning_effort="xhigh"` and Codex fast mode via `service_tier="fast"`. The runner writes the prompt to `runtime/reviews/*.prompt.md` and feeds that prompt file to Codex, so it does not wait for interactive stdin. Do not pipe through `head` or `tail`.
 
 ```sh
 make independent-review-gate \
@@ -61,6 +70,7 @@ codex exec \
   --cd . \
   --sandbox read-only \
   --model gpt-5.5 \
+  -c service_tier='"fast"' \
   -c model_reasoning_effort='"xhigh"' \
   --output-last-message runtime/reviews/<review-id>.md \
   - \
@@ -68,7 +78,7 @@ codex exec \
 ```
 
 If `gpt-5.5` is unavailable, use another independent reviewer model and record that substitution in the review output. The author still cannot self-certify.
-The Make target defaults `REVIEW_MODEL=default`, which lets the installed Codex CLI choose its currently available default model. Set `REVIEW_MODEL=gpt-5.5` or another explicit model only when that model is supported in the local reviewer environment.
+The Make/script target defaults are `REVIEW_MODEL=gpt-5.5`, `REVIEW_REASONING_EFFORT=xhigh`, and `REVIEW_SERVICE_TIER=fast`. Override them only when the local reviewer environment cannot support that combination, and keep the substitution visible in the generated review artifact metadata.
 
 ## Required Evidence
 
@@ -77,7 +87,7 @@ The review output must record:
 - Reviewed files or diff scope.
 - Contract docs considered.
 - Validation already run by the author.
-- Command/model used for the independent review.
+- Command/model, reasoning effort, and service tier used for the independent review.
 - Blocking findings or `GO` / `NO-GO`.
 - Accepted exceptions, if any, with user/founder approval context.
 - Residual risks that should be checked in W6/nightly, live validation, or manual product review.

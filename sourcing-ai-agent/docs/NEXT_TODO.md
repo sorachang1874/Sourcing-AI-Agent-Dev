@@ -19,7 +19,8 @@
 - [x] Phase 3a：crm_public_web 域提取（2026-06-12）：首个领域 owner `crm_public_web_owner.py` 落地；orchestrator 保留全部公私方法签名等价 facade、调用点零改动；`regression_matrix` 映射更新；独立 AST 级验证（逐方法对比 git HEAD）。
 - [x] Phase 3b：excel_intake 域提取（2026-06-12）：`excel_intake_owner.py` 落地（35 方法 + 异常类 + 7 个模块级 helper verbatim 移动；orchestrator 减 ~1,800 行）；共享 snapshot-materialization 基础设施与 `_run_excel_intake_workflow`（6 个共享 spine 依赖 + instance-patch 耦合）按设计留守、经注入 callable 触达；独立对抗验证 PASS（锚定 2fc3018），`ci-pre-agent-contract` exit 0。已知小尾巴：excel 线程与 PG schema teardown 的间歇性竞态 warning（对照归因 pre-existing，teardown 应 join 线程——留待 fixture 小修）。
 - [x] Phase 3c：profile_fetch 域提取（2026-06-12）：`profile_fetch_owner.py` 落地（18 方法 verbatim；orchestrator 减 ~2,450 行）；13 个候选按纪律留守（投影读族 9 个、instance-patch 危险 2 个经 re-resolving lambda、类引用 static 2 个）；对抗验证 CONFIRMED（锚定 0f9db3d），enrichment 12 / results_api 3 预算 id 与对照完全一致；`ci-pre-agent-contract` 全绿。附带发现：test_pipeline 的 profile 切片有 15 个 pre-existing 失败（未迁移的 PG-only storage 漂移,对照归因非提取所致）——test_pipeline 单独设计时一并处理。
-- [ ] Phase 3d：acquisition（仅 command 层）按同一 playbook 提取；`run_worker_recovery_once` 的 drain 绑定改注册式。
+- [x] Phase 3d：acquisition command 层提取（2026-06-12）：`acquisition_command_owner.py` 落地（43 方法覆盖全部 8 个 `acquisition.*` 命令类型；orchestrator 净减 2,616 行,现 ~74k）；SCOPE GUARD 全模块扫描确认 Phase 4 保留核心逐字节未动；双通道验证——Claude 对抗验证 CONFIRMED + Codex 异步参考评审 GO（`runtime/reviews/20260612T080442Z_async-reference-phase3d-*.md`,异步通道首个实例）。**Phase 3 四域收官**：CommandKernel + registry + 4 个领域 owner 构成完整命令层。
+- [ ] Phase 3 收尾：`run_worker_recovery_once` 的 drain 绑定改注册式（4 个 owner 的 drain 仍经 facade wrapper 被 recovery 调用——注册式化后 recovery 不再点名 orchestrator 方法）。
 - [ ] Phase 4：纠缠核心重设计（recovery phase 编排 registry 化；projection/candidate_source/asset_population 网随 M3–M5 拆解）。
 
 ### Track B — 存储与测试基建（与 A 并行）
