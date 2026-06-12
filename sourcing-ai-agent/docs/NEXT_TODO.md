@@ -17,7 +17,8 @@
 - [x] Phase 1：`CommandKernel` 提取（2026-06-11）：17 个 store-only 协议方法迁入 `command_kernel.py`，facade 全名保留、577 调用点零改动、独立 AST 级验证。
 - [x] Phase 2：CommandTypeSpec registry（2026-06-11，= 重定义后的 M1 落地）：`DEFAULT_COMMAND_TYPE_SPECS` 41 类型单一事实源；4 张字典+policy set 族+metrics 表+orchestrator 3 张映射全部收敛；`command_type_manifest()` 导出（Agent tool spec 种子）；金快照特征化测试 + 字节码级独立比对零漂移；src/ 裸 command-type 字面量清零。
 - [x] Phase 3a：crm_public_web 域提取（2026-06-12）：首个领域 owner `crm_public_web_owner.py` 落地；orchestrator 保留全部公私方法签名等价 facade、调用点零改动；`regression_matrix` 映射更新；独立 AST 级验证（逐方法对比 git HEAD）。
-- [ ] Phase 3b–3d：excel_intake → profile_fetch → acquisition（仅 command 层）按同一 playbook 提取；`run_worker_recovery_once` 的 drain 绑定改注册式。
+- [x] Phase 3b：excel_intake 域提取（2026-06-12）：`excel_intake_owner.py` 落地（35 方法 + 异常类 + 7 个模块级 helper verbatim 移动；orchestrator 减 ~1,800 行）；共享 snapshot-materialization 基础设施与 `_run_excel_intake_workflow`（6 个共享 spine 依赖 + instance-patch 耦合）按设计留守、经注入 callable 触达；独立对抗验证 PASS（锚定 2fc3018），`ci-pre-agent-contract` exit 0。已知小尾巴：excel 线程与 PG schema teardown 的间歇性竞态 warning（对照归因 pre-existing，teardown 应 join 线程——留待 fixture 小修）。
+- [ ] Phase 3c–3d：profile_fetch → acquisition（仅 command 层）按同一 playbook 提取；`run_worker_recovery_once` 的 drain 绑定改注册式。
 - [ ] Phase 4：纠缠核心重设计（recovery phase 编排 registry 化；projection/candidate_source/asset_population 网随 M3–M5 拆解）。
 
 ### Track B — 存储与测试基建（与 A 并行）
