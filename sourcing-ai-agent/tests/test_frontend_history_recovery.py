@@ -21,6 +21,7 @@ from sourcing_agent.durable_runtime import (
     legacy_job_operation_id,
     legacy_job_workflow_run_id,
 )
+from sourcing_agent.excel_intake_owner import ExcelIntakeOwner
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import SourcingOrchestrator, _plan_hydration_request_signature
 from sourcing_agent.semantic_provider import LocalSemanticProvider
@@ -390,7 +391,7 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         }
         with (
             mock.patch("sourcing_agent.orchestrator.ExcelIntakeService.prepare_contacts", return_value=prepared_contacts),
-            mock.patch.object(SourcingOrchestrator, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None),
+            mock.patch.object(ExcelIntakeOwner, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None),
         ):
             queued = self.orchestrator.start_excel_intake_workflow(
                 {
@@ -479,7 +480,7 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         }
         with (
             mock.patch("sourcing_agent.orchestrator.ExcelIntakeService.prepare_contacts", return_value=prepared_contacts),
-            mock.patch.object(SourcingOrchestrator, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None),
+            mock.patch.object(ExcelIntakeOwner, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None),
         ):
             queued = self.orchestrator.start_excel_intake_workflow(
                 {
@@ -787,7 +788,7 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         }
         with (
             mock.patch("sourcing_agent.orchestrator.ExcelIntakeService.prepare_contacts", return_value=prepared_contacts),
-            mock.patch.object(SourcingOrchestrator, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None),
+            mock.patch.object(ExcelIntakeOwner, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None),
         ):
             queued = self.orchestrator.start_excel_intake_workflow(
                 {

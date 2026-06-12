@@ -286,6 +286,7 @@ _ORCHESTRATOR_RELATED_PATHS = {
 }
 _EXCEL_INTAKE_RELATED_PATHS = {
     "src/sourcing_agent/excel_intake.py",
+    "src/sourcing_agent/excel_intake_owner.py",
     "frontend-demo/src/components/ExcelWorkflowIntakePanel.tsx",
     "frontend-demo/scripts/run_excel_intake_e2e.mjs",
 }

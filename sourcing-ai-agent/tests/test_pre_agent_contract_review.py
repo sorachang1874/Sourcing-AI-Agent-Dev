@@ -3053,12 +3053,12 @@ def test_excel_intake_owner_is_activity_spine_visible() -> None:
     assert "excel_intake_owner.cancel_excel_intake_run_command" in durable_doc
     assert "owner-specific cooperative cancel" in next_todo
     assert "activity_type=EXCEL_INTAKE_RUN_COMMAND_TYPE" in _class_method_source(
-        "_run_excel_intake_run_command"
+        "_run_excel_intake_run_command", class_name="ExcelIntakeOwner"
     )
     assert "entity_type=\"excel_intake_job\"" in _class_method_source(
-        "_record_excel_intake_command_cancelled_terminal"
+        "_record_excel_intake_command_cancelled_terminal", class_name="ExcelIntakeOwner"
     )
-    find_class_method("_raise_if_excel_intake_command_cancelled")
+    find_class_method("_raise_if_excel_intake_command_cancelled", class_name="ExcelIntakeOwner")
 
 
 def test_crm_writer_command_owner_is_activity_spine_visible() -> None:
