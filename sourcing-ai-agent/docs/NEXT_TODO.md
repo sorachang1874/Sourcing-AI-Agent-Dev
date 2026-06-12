@@ -21,7 +21,7 @@
 - [x] Phase 3c：profile_fetch 域提取（2026-06-12）：`profile_fetch_owner.py` 落地（18 方法 verbatim；orchestrator 减 ~2,450 行）；13 个候选按纪律留守（投影读族 9 个、instance-patch 危险 2 个经 re-resolving lambda、类引用 static 2 个）；对抗验证 CONFIRMED（锚定 0f9db3d），enrichment 12 / results_api 3 预算 id 与对照完全一致；`ci-pre-agent-contract` 全绿。附带发现：test_pipeline 的 profile 切片有 15 个 pre-existing 失败（未迁移的 PG-only storage 漂移,对照归因非提取所致）——test_pipeline 单独设计时一并处理。
 - [x] Phase 3d：acquisition command 层提取（2026-06-12）：`acquisition_command_owner.py` 落地（43 方法覆盖全部 8 个 `acquisition.*` 命令类型；orchestrator 净减 2,616 行,现 ~74k）；SCOPE GUARD 全模块扫描确认 Phase 4 保留核心逐字节未动；双通道验证——Claude 对抗验证 CONFIRMED + Codex 异步参考评审 GO（`runtime/reviews/20260612T080442Z_async-reference-phase3d-*.md`,异步通道首个实例）。**Phase 3 四域收官**：CommandKernel + registry + 4 个领域 owner 构成完整命令层。
 - [x] Phase 3 收尾：drain 绑定注册式化（2026-06-12）：14 个统一形态的 flag-gated drain 调用点（202 行块）收敛为 `DEFAULT_RECOVERY_DRAIN_BINDINGS` 注册表 + 16 行循环；特征化测试先行（在 b789cd8 对照树同样跑绿）；2 个 CRM drain 因边界守卫钉死字面源码而留点名、bespoke 级联 drain 按界不动（Phase 4 处置）；owner 模块零 diff。**Track A Phase 0–3 全部完成。**
-- [ ] Phase 4：纠缠核心重设计（recovery phase 编排 registry 化；projection/candidate_source/asset_population 网随 M3–M5 拆解）——动工前先与 owner 过一次设计讨论。
+- [ ] Phase 4：纠缠核心重设计——**设计提案已交付**（2026-06-12，`docs/PHASE4_ENTANGLED_CORE_DESIGN.md`，五轴选项 + 迁移顺序 + 8 个 owner 决策点各带推荐答案），待 owner 逐项拍板后按 Step 0–5 推进（Step 0 = scheduler 契约正式化 + storeless fail-open 决策；Step 1–2 = recovery tick 特征化 + phase 对象 registry）。
 
 ### Track B — 存储与测试基建（与 A 并行）
 - [x] 测试环境契约 v2（2026-06-11）：每 run = (PG schema + runtime dir) 配对 + `.ephemeral-test-env.json` 标记；teardown `DROP SCHEMA CASCADE`（仅删自建 schema，`pre_existing` 守卫）；孤儿 janitor `scripts/prune_test_schemas.py`（先快照后扫描、活跃连接守卫、仅限本地 DSN、dry-run 默认）。
