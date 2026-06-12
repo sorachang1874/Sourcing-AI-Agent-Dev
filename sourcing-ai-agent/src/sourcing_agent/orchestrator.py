@@ -381,6 +381,10 @@ from .query_intent_rewrite import interpret_query_intent_rewrite, summarize_quer
 from .recovery_contract import (
     remote_provider_event_recovery_total_limit as _remote_provider_event_recovery_total_limit,
 )
+from .recovery_drain_registry import (
+    DEFAULT_RECOVERY_DRAIN_BINDINGS,
+    build_recovery_drain_registry,
+)
 from .recovery_sidecar import (
     build_hosted_runtime_watchdog_command as _build_hosted_runtime_watchdog_command,
 )
@@ -988,6 +992,13 @@ class SourcingOrchestrator:
             upsert_acquisition_run_phase=self._upsert_acquisition_run_phase,
             sync_operation_run_from_workflow_command_control=self._sync_operation_run_from_workflow_command_control,
             workflow_command_downstream_commands=self._workflow_command_downstream_commands,
+        )
+        # Recovery-tick drain bindings, frozen in the exact pre-registry call
+        # order. Validated against ``self`` so a renamed drain wrapper fails
+        # loudly at construction instead of silently dropping a drain phase.
+        self._recovery_drain_registry = build_recovery_drain_registry(
+            DEFAULT_RECOVERY_DRAIN_BINDINGS,
+            drain_host=self,
         )
         self._dispatch_lock = threading.Lock()
         self._progress_takeover_lock = threading.Lock()
@@ -39233,208 +39244,22 @@ class SourcingOrchestrator:
                 reason="crm_public_web_phase_commands_disabled_by_payload",
                 max_sync_work="no CRM Public Web phase command work",
             )
-        if _coerce_bool(payload.get("company_public_web_refresh_command_owner_enabled"), True):
-            company_public_web_refresh_command_owner = _run_recovery_phase(
-                "company_public_web_refresh_command_owner",
-                owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
-                max_sync_work="claim and execute ready company.public_web.refresh workflow_commands only",
-                callback=lambda: self._drain_company_public_web_refresh_commands(payload),
-            )
-        else:
-            company_public_web_refresh_command_owner = _skipped_phase(
-                "company_public_web_refresh_command_owner",
-                owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
-                reason="company_public_web_refresh_command_owner_disabled_by_payload",
-                max_sync_work="no company Public Web refresh command work",
-            )
-        if _coerce_bool(payload.get("company_logo_profile_experience_discover_command_owner_enabled"), True):
-            company_logo_profile_experience_discover_command_owner = _run_recovery_phase(
-                "company_logo_profile_experience_discover_command_owner",
-                owner=COMPANY_ASSET_OWNER,
-                max_sync_work="claim ready company.logo.profile_experience.discover commands; read at most one profile per command",
-                callback=lambda: self._drain_company_logo_profile_experience_discover_commands(payload),
-            )
-        else:
-            company_logo_profile_experience_discover_command_owner = _skipped_phase(
-                "company_logo_profile_experience_discover_command_owner",
-                owner=COMPANY_ASSET_OWNER,
-                reason="company_logo_profile_experience_discover_command_owner_disabled_by_payload",
-                max_sync_work="no profile-experience company logo discovery command work",
-            )
-        if _coerce_bool(payload.get("media_asset_cache_command_owner_enabled"), True):
-            media_asset_cache_command_owner = _run_recovery_phase(
-                "media_asset_cache_command_owner",
-                owner=MEDIA_ASSET_OWNER,
-                max_sync_work="claim and execute ready media.asset.cache workflow_commands only",
-                callback=lambda: self._drain_media_asset_cache_commands(payload),
-            )
-        else:
-            media_asset_cache_command_owner = _skipped_phase(
-                "media_asset_cache_command_owner",
-                owner=MEDIA_ASSET_OWNER,
-                reason="media_asset_cache_command_owner_disabled_by_payload",
-                max_sync_work="no media asset cache command work",
-            )
-        if _coerce_bool(payload.get("acquisition_run_create_command_owner_enabled"), True):
-            acquisition_run_create_command_owner = _run_recovery_phase(
-                "acquisition_run_create_command_owner",
-                owner=ACQUISITION_RUN_CREATE_OWNER,
-                max_sync_work="claim and execute ready acquisition.run.create workflow_commands only",
-                callback=lambda: self._drain_acquisition_run_create_commands(payload),
-            )
-        else:
-            acquisition_run_create_command_owner = _skipped_phase(
-                "acquisition_run_create_command_owner",
-                owner=ACQUISITION_RUN_CREATE_OWNER,
-                reason="acquisition_run_create_command_owner_disabled_by_payload",
-                max_sync_work="no acquisition run create command work",
-            )
-        if _coerce_bool(payload.get("acquisition_intent_resolve_command_owner_enabled"), True):
-            acquisition_intent_resolve_command_owner = _run_recovery_phase(
-                "acquisition_intent_resolve_command_owner",
-                owner=ACQUISITION_INTENT_RESOLVE_OWNER,
-                max_sync_work="claim and execute ready acquisition.intent.resolve workflow_commands only",
-                callback=lambda: self._drain_acquisition_intent_resolve_commands(payload),
-            )
-        else:
-            acquisition_intent_resolve_command_owner = _skipped_phase(
-                "acquisition_intent_resolve_command_owner",
-                owner=ACQUISITION_INTENT_RESOLVE_OWNER,
-                reason="acquisition_intent_resolve_command_owner_disabled_by_payload",
-                max_sync_work="no acquisition intent resolve command work",
-            )
-        if _coerce_bool(payload.get("acquisition_plan_build_command_owner_enabled"), True):
-            acquisition_plan_build_command_owner = _run_recovery_phase(
-                "acquisition_plan_build_command_owner",
-                owner=ACQUISITION_PLAN_BUILD_OWNER,
-                max_sync_work="claim and execute ready acquisition.plan.build workflow_commands only",
-                callback=lambda: self._drain_acquisition_plan_build_commands(payload),
-            )
-        else:
-            acquisition_plan_build_command_owner = _skipped_phase(
-                "acquisition_plan_build_command_owner",
-                owner=ACQUISITION_PLAN_BUILD_OWNER,
-                reason="acquisition_plan_build_command_owner_disabled_by_payload",
-                max_sync_work="no acquisition plan build command work",
-            )
-        if _coerce_bool(payload.get("acquisition_plan_review_request_command_owner_enabled"), True):
-            acquisition_plan_review_request_command_owner = _run_recovery_phase(
-                "acquisition_plan_review_request_command_owner",
-                owner=ACQUISITION_PLAN_REVIEW_REQUEST_OWNER,
-                max_sync_work="claim and execute ready acquisition.plan_review.request workflow_commands only",
-                callback=lambda: self._drain_acquisition_plan_review_request_commands(payload),
-            )
-        else:
-            acquisition_plan_review_request_command_owner = _skipped_phase(
-                "acquisition_plan_review_request_command_owner",
-                owner=ACQUISITION_PLAN_REVIEW_REQUEST_OWNER,
-                reason="acquisition_plan_review_request_command_owner_disabled_by_payload",
-                max_sync_work="no acquisition plan review request command work",
-            )
-        if _coerce_bool(payload.get("acquisition_plan_commit_command_owner_enabled"), True):
-            acquisition_plan_commit_command_owner = _run_recovery_phase(
-                "acquisition_plan_commit_command_owner",
-                owner=ACQUISITION_PLAN_COMMIT_OWNER,
-                max_sync_work="claim and execute ready acquisition.plan.commit workflow_commands only",
-                callback=lambda: self._drain_acquisition_plan_commit_commands(payload),
-            )
-        else:
-            acquisition_plan_commit_command_owner = _skipped_phase(
-                "acquisition_plan_commit_command_owner",
-                owner=ACQUISITION_PLAN_COMMIT_OWNER,
-                reason="acquisition_plan_commit_command_owner_disabled_by_payload",
-                max_sync_work="no acquisition plan commit command work",
-            )
-        if _coerce_bool(payload.get("acquisition_probe_command_owner_enabled"), True):
-            acquisition_probe_command_owner = _run_recovery_phase(
-                "acquisition_probe_command_owner",
-                owner=ACQUISITION_PROBE_OWNER,
-                max_sync_work="claim and execute ready acquisition.probe.* workflow_commands only",
-                callback=lambda: self._drain_acquisition_probe_commands(payload),
-            )
-        else:
-            acquisition_probe_command_owner = _skipped_phase(
-                "acquisition_probe_command_owner",
-                owner=ACQUISITION_PROBE_OWNER,
-                reason="acquisition_probe_command_owner_disabled_by_payload",
-                max_sync_work="no acquisition probe command work",
-            )
-        if _coerce_bool(payload.get("acquisition_scale_plan_command_owner_enabled"), True):
-            acquisition_scale_plan_command_owner = _run_recovery_phase(
-                "acquisition_scale_plan_command_owner",
-                owner=ACQUISITION_SCALE_PLAN_OWNER,
-                max_sync_work="claim and execute ready acquisition.scale.plan workflow_commands only",
-                callback=lambda: self._drain_acquisition_scale_plan_commands(payload),
-            )
-        else:
-            acquisition_scale_plan_command_owner = _skipped_phase(
-                "acquisition_scale_plan_command_owner",
-                owner=ACQUISITION_SCALE_PLAN_OWNER,
-                reason="acquisition_scale_plan_command_owner_disabled_by_payload",
-                max_sync_work="no acquisition scale plan command work",
-            )
-        if _coerce_bool(payload.get("operation_native_discovery_activity_owner_enabled"), True):
-            operation_native_discovery_activity_owner = _run_recovery_phase(
-                "operation_native_discovery_activity_owner",
-                owner=LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
-                max_sync_work="claim operation-native discovery workflow_commands and update Activity/Attempt/EntityDelta state only",
-                callback=lambda: self._drain_operation_native_discovery_activity_commands(payload),
-            )
-        else:
-            operation_native_discovery_activity_owner = _skipped_phase(
-                "operation_native_discovery_activity_owner",
-                owner=LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
-                reason="operation_native_discovery_activity_owner_disabled_by_payload",
-                max_sync_work="no operation-native discovery activity command work",
-            )
-        if _coerce_bool(payload.get("operation_native_profile_fetch_activity_owner_enabled"), True):
-            operation_native_profile_fetch_activity_owner = _run_recovery_phase(
-                "operation_native_profile_fetch_activity_owner",
-                owner=LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER,
-                max_sync_work=(
-                    "claim operation-native profile-fetch workflow_commands and update "
-                    "Activity/Attempt/EntityDelta state only; no legacy job shell"
-                ),
-                callback=lambda: self._drain_operation_native_profile_fetch_activity_commands(payload),
-            )
-        else:
-            operation_native_profile_fetch_activity_owner = _skipped_phase(
-                "operation_native_profile_fetch_activity_owner",
-                owner=LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER,
-                reason="operation_native_profile_fetch_activity_owner_disabled_by_payload",
-                max_sync_work="no operation-native profile-fetch activity command work",
-            )
-        if _coerce_bool(payload.get("operation_native_projection_admission_owner_enabled"), True):
-            operation_native_projection_admission_owner = _run_recovery_phase(
-                "operation_native_projection_admission_owner",
-                owner=PROJECTION_PROFILE_ADMISSION_APPLY_OWNER,
-                max_sync_work=(
-                    "claim operation-native projection-admission workflow_commands and write "
-                    "canonical serving projection membership only through serving_projection_owner"
-                ),
-                callback=lambda: self._drain_operation_native_projection_admission_commands(payload),
-            )
-        else:
-            operation_native_projection_admission_owner = _skipped_phase(
-                "operation_native_projection_admission_owner",
-                owner=PROJECTION_PROFILE_ADMISSION_APPLY_OWNER,
-                reason="operation_native_projection_admission_owner_disabled_by_payload",
-                max_sync_work="no operation-native projection-admission command work",
-            )
-        if _coerce_bool(payload.get("crm_writer_command_owner_enabled"), True):
-            crm_writer_command_owner = _run_recovery_phase(
-                "crm_writer_command_owner",
-                owner=CRM_WRITER_OWNER,
-                max_sync_work="claim and execute ready CRM writer workflow_commands only",
-                callback=lambda: self._drain_crm_writer_commands(payload),
-            )
-        else:
-            crm_writer_command_owner = _skipped_phase(
-                "crm_writer_command_owner",
-                owner=CRM_WRITER_OWNER,
-                reason="crm_writer_command_owner_disabled_by_payload",
-                max_sync_work="no CRM writer command work",
-            )
+        registry_drain_results: dict[str, dict[str, Any]] = {}
+        for drain_binding in self._recovery_drain_registry:
+            if _coerce_bool(payload.get(drain_binding.payload_flag), True):
+                registry_drain_results[drain_binding.phase] = _run_recovery_phase(
+                    drain_binding.phase,
+                    owner=drain_binding.owner,
+                    max_sync_work=drain_binding.max_sync_work,
+                    callback=lambda _drain_method=drain_binding.drain_method: getattr(self, _drain_method)(payload),
+                )
+            else:
+                registry_drain_results[drain_binding.phase] = _skipped_phase(
+                    drain_binding.phase,
+                    owner=drain_binding.owner,
+                    reason=drain_binding.disabled_reason,
+                    max_sync_work=drain_binding.skipped_max_sync_work,
+                )
         if same_tick_visibility_handoff_required:
             board_visible_apply = _skipped_phase(
                 "board_visible_apply",
@@ -40156,19 +39981,11 @@ class SourcingOrchestrator:
                 "legacy_materialization_adapter": legacy_materialization_adapter,
                 "crm_public_web_queue_batch": crm_public_web_queue_batch,
                 "crm_public_web_phase_commands": crm_public_web_phase_commands,
-                "company_public_web_refresh_command_owner": company_public_web_refresh_command_owner,
-                "company_logo_profile_experience_discover_command_owner": company_logo_profile_experience_discover_command_owner,
-                "media_asset_cache_command_owner": media_asset_cache_command_owner,
-                "acquisition_run_create_command_owner": acquisition_run_create_command_owner,
-                "acquisition_intent_resolve_command_owner": acquisition_intent_resolve_command_owner,
-                "acquisition_plan_build_command_owner": acquisition_plan_build_command_owner,
-                "acquisition_plan_review_request_command_owner": acquisition_plan_review_request_command_owner,
-                "acquisition_plan_commit_command_owner": acquisition_plan_commit_command_owner,
-                "acquisition_probe_command_owner": acquisition_probe_command_owner,
-                "acquisition_scale_plan_command_owner": acquisition_scale_plan_command_owner,
-                "operation_native_discovery_activity_owner": operation_native_discovery_activity_owner,
-                "operation_native_profile_fetch_activity_owner": operation_native_profile_fetch_activity_owner,
-                "operation_native_projection_admission_owner": operation_native_projection_admission_owner,
+                **{
+                    drain_binding.phase: registry_drain_results[drain_binding.phase]
+                    for drain_binding in self._recovery_drain_registry
+                    if drain_binding.include_in_phase_budget_scan
+                },
                 "post_followup_event_level_materialization_followup": post_followup_event_level_materialization_followup,
                 "post_followup_profile_prefetch_refill": post_followup_profile_prefetch_refill,
             }
@@ -40214,19 +40031,11 @@ class SourcingOrchestrator:
             "excel_intake_recovery": excel_intake_recovery,
             "crm_public_web_queue_batch": crm_public_web_queue_batch,
             "crm_public_web_phase_commands": crm_public_web_phase_commands,
-            "company_public_web_refresh_command_owner": company_public_web_refresh_command_owner,
-            "company_logo_profile_experience_discover_command_owner": company_logo_profile_experience_discover_command_owner,
-            "media_asset_cache_command_owner": media_asset_cache_command_owner,
-            "acquisition_run_create_command_owner": acquisition_run_create_command_owner,
-            "acquisition_intent_resolve_command_owner": acquisition_intent_resolve_command_owner,
-            "acquisition_plan_build_command_owner": acquisition_plan_build_command_owner,
-            "acquisition_plan_review_request_command_owner": acquisition_plan_review_request_command_owner,
-            "acquisition_plan_commit_command_owner": acquisition_plan_commit_command_owner,
-            "acquisition_probe_command_owner": acquisition_probe_command_owner,
-            "acquisition_scale_plan_command_owner": acquisition_scale_plan_command_owner,
-            "operation_native_discovery_activity_owner": operation_native_discovery_activity_owner,
-            "operation_native_profile_fetch_activity_owner": operation_native_profile_fetch_activity_owner,
-            "operation_native_projection_admission_owner": operation_native_projection_admission_owner,
+            **{
+                drain_binding.phase: registry_drain_results[drain_binding.phase]
+                for drain_binding in self._recovery_drain_registry
+                if drain_binding.include_in_result
+            },
             "search_seed_discovery": search_seed_discovery,
             "local_apply_backlog": local_apply_backlog,
             "event_level_materialization_followup": event_level_materialization_followup,

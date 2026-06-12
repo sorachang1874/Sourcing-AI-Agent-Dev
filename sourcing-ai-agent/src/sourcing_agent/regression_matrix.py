@@ -275,6 +275,29 @@ _COMMAND_KERNEL_SUITES = (
         reason="command kernel extracted from the orchestrator workflow-command spine",
     ),
 )
+# recovery_drain_registry.py holds the recovery-tick drain bindings consumed by
+# run_worker_recovery_once; changes must re-run the drain characterization
+# contract plus the recovery/workflow-command spine suites.
+_RECOVERY_DRAIN_REGISTRY_RELATED_PATHS = {
+    "src/sourcing_agent/recovery_drain_registry.py",
+}
+_RECOVERY_DRAIN_REGISTRY_SUITES = (
+    PytestInvocation(
+        label="paired::tests/test_recovery_drain_registry.py",
+        args=("tests/test_recovery_drain_registry.py",),
+        reason="recovery-tick drain binding registry and characterization contract",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_durable_runtime.py",
+        args=("tests/test_durable_runtime.py",),
+        reason="recovery tick consumes the drain registry inside the workflow-command spine",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_worker_recovery_daemon.py",
+        args=("tests/test_worker_recovery_daemon.py",),
+        reason="worker recovery daemon drives the recovery tick that iterates the drain registry",
+    ),
+)
 _ORCHESTRATOR_RELATED_PATHS = {
     "src/sourcing_agent/orchestrator.py",
     "src/sourcing_agent/acquisition_command_owner.py",
@@ -386,6 +409,11 @@ def infer_pytest_invocations(
         if path in _COMMAND_KERNEL_RELATED_PATHS:
             saw_backend_change = True
             for invocation in _COMMAND_KERNEL_SUITES:
+                add(invocation)
+            continue
+        if path in _RECOVERY_DRAIN_REGISTRY_RELATED_PATHS:
+            saw_backend_change = True
+            for invocation in _RECOVERY_DRAIN_REGISTRY_SUITES:
                 add(invocation)
             continue
         if path in _ORCHESTRATOR_RELATED_PATHS:
