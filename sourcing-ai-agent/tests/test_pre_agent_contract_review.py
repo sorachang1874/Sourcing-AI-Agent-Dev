@@ -483,7 +483,7 @@ def test_pre_agent_direction_gates_are_explicit_before_goal_closeout() -> None:
     markdown = DOC_PATH.read_text(encoding="utf-8")
     durable_doc = (REPO_ROOT / "docs" / "DURABLE_EXECUTION_RUNTIME_CONTRACT.md").read_text(encoding="utf-8")
     provider_retry_owner_source = _class_method_source(
-        "_execute_operation_native_profile_fetch_provider_command_payload"
+        "_execute_operation_native_profile_fetch_provider_command_payload", class_name="ProfileFetchOwner"
     )
 
     assert "## Direction Gates Before Closing This Goal" in markdown
