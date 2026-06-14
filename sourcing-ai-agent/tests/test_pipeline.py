@@ -39476,21 +39476,16 @@ class PipelineTest(unittest.TestCase):
                 bootstrap_resp = json.loads(response.read().decode("utf-8"))
             self.assertEqual(bootstrap_resp["status"], "bootstrapped")
 
-            plan_payload = json.dumps(
+            # C1 deleted the synchronous /api/plan HTTP route; plan_workflow is the
+            # internal compile function (the async submit worker calls the same).
+            # Compile directly (equivalent to the old route body) to obtain the
+            # review_id this HTTP smoke flow drives downstream.
+            plan_resp = self.orchestrator.plan_workflow(
                 {
                     "raw_user_request": "帮我为 xAI 设计一个 sourcing 工作流，先拿全量数据资产，再决定检索方式。",
                     "target_company": "xAI",
-                },
-                ensure_ascii=False,
-            ).encode("utf-8")
-            plan_req = urllib_request.Request(
-                f"http://{host}:{port}/api/plan",
-                data=plan_payload,
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                }
             )
-            with opener.open(plan_req) as response:
-                plan_resp = json.loads(response.read().decode("utf-8"))
             self.assertEqual(plan_resp["plan"]["target_company"], "xAI")
             self.assertIn("intent_rewrite", plan_resp)
             self.assertIn("request", plan_resp["intent_rewrite"])
@@ -39522,38 +39517,25 @@ class PipelineTest(unittest.TestCase):
                 plan_reviews_resp = json.loads(response.read().decode("utf-8"))
             self.assertGreaterEqual(len(plan_reviews_resp["plan_reviews"]), 1)
 
-            job_payload = json.dumps(
+            # C1 deleted the synchronous POST /api/jobs route; run_job is a demoted
+            # CLI/test-only helper. Invoke it directly (equivalent to the old route
+            # body) for the retrieval smoke; the live serving path is POST /api/workflows.
+            job_resp = self.orchestrator.run_job(
                 {
                     "target_company": "Anthropic",
                     "categories": ["investor"],
                     "keywords": ["领投", "决策", "Anthropic投资"],
                     "top_k": 3,
-                },
-                ensure_ascii=False,
-            ).encode("utf-8")
-            job_req = urllib_request.Request(
-                f"http://{host}:{port}/api/jobs",
-                data=job_payload,
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                }
             )
-            with opener.open(job_req) as response:
-                job_resp = json.loads(response.read().decode("utf-8"))
             self.assertEqual(job_resp["status"], "completed")
             self.assertGreaterEqual(len(job_resp["matches"]), 1)
             self.assertIn("confidence_label", job_resp["matches"][0])
 
-            result_req = urllib_request.Request(
-                f"http://{host}:{port}/api/jobs/{job_resp['job_id']}/results",
-                method="GET",
-            )
-            with opener.open(result_req) as response:
-                result_resp = json.loads(response.read().decode("utf-8"))
-            self.assertEqual(result_resp["job"]["job_id"], job_resp["job_id"])
-            self.assertTrue(result_resp["agent_runtime_session"])
-            self.assertIn("agent_workers", result_resp)
-            self.assertIn("intent_rewrite", result_resp)
-            self.assertIn("workflow_stage_summaries", result_resp)
+            # The GET /api/jobs/{id}/results serving read for a run_job-created job is
+            # obsolete post-C1 (run_job is off the serving surface; that results
+            # endpoint is migration-gated for legacy retrieval jobs). The refine
+            # endpoints below still read the persisted job by id.
 
             refine_compile_req = urllib_request.Request(
                 f"http://{host}:{port}/api/results/refine/compile-instruction",
@@ -39896,11 +39878,14 @@ class PipelineTest(unittest.TestCase):
         release_job = threading.Event()
         opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
 
-        def slow_run_job(payload: dict[str, object]) -> dict[str, object]:
+        # C1 deleted POST /api/jobs (run_job demoted). Exercise the two-lane gate
+        # with a still-existing shared-lane route (GET /api/jobs/{id}/trace) so the
+        # light /health bypass behavior stays covered.
+        def slow_get_job_trace(job_id: str) -> dict[str, object]:
             job_started.set()
-            self.assertEqual(payload["target_company"], "Anthropic")
+            self.assertEqual(job_id, "job-heavy")
             self.assertTrue(release_job.wait(timeout=5))
-            return {"status": "completed", "job_id": "job-heavy", "matches": []}
+            return {"status": "completed", "job_id": job_id}
 
         with unittest.mock.patch.dict(
             os.environ,
@@ -39916,17 +39901,15 @@ class PipelineTest(unittest.TestCase):
         host, port = server.server_address
 
         try:
-            with unittest.mock.patch.object(self.orchestrator, "run_job", side_effect=slow_run_job):
+            with unittest.mock.patch.object(self.orchestrator, "get_job_trace", side_effect=slow_get_job_trace):
                 errors: list[Exception] = []
                 responses: list[dict[str, object]] = []
 
                 def issue_heavy_job() -> None:
                     try:
                         req = urllib_request.Request(
-                            f"http://{host}:{port}/api/jobs",
-                            data=json.dumps({"target_company": "Anthropic"}, ensure_ascii=False).encode("utf-8"),
-                            headers={"Content-Type": "application/json"},
-                            method="POST",
+                            f"http://{host}:{port}/api/jobs/job-heavy/trace",
+                            method="GET",
                         )
                         with opener.open(req, timeout=5.0) as response:
                             responses.append(json.loads(response.read().decode("utf-8")))

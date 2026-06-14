@@ -99,6 +99,14 @@
 - (R3) 导出 202 改 X-Sourcing-* headers 现由同步 blob 直接带；异步下载 handle 必须复刻全部 header（parity 测试守）。
 - (R4) `run_job` demote 后若有未审计的非前端 HTTP consumer（监控/脚本直打 `/api/jobs`）会 404——删 route 前 grep 部署侧脚本/反代日志确认。
 
+**R4 pre-flight 结果（2026-06-15 核验）**：live demo 前端（`frontend-demo/src/lib/api.ts`）确实零 POST `/api/jobs`、零活 `/api/plan`（`getPlan`/`getPlanEnvelope` 死代码、无组件 caller；live 走 `submitPlanEnvelope`→`/api/plan/submit`）。但路由删除有**两类非 live-前端 consumer 必须同步处理**：
+1. **测试**：`tests/test_pipeline.py`（POST `/api/jobs` HTTP 集成测试 + 两车道并发用例以 `/api/jobs` 为 heavy 范例 + `_request_priority_lane` 分类）；`tests/test_results_api.py` / `tests/test_projection_crm_api_contracts.py`（POST `/api/target-candidates/export`）。这些随各自路由提交一并改（HTTP 集成测试转直调 `run_job`；并发用例 heavy 范例改指仍存的 shared 路由）。
+2. **contracts/ 参考 SDK**（`frontend_api_adapter.ts` 的 `plan()`/`runJob()` 方法、`frontend_api_contract.ts`/`.schema.json` 的 `PlanResponse`、`frontend_react_hooks.example.tsx` 的 `useSourcingPlan`、dashboard 示例）——一个**自洽的参考工件**，删路由会波及全套。**决策：contracts/ SDK 不在 C1.3 逐路由零敲碎打，而是随 C4（OpenAPI + 契约重生成）整体反映 async-only 契约（plan-submit/poll、workflow、export-async、refine-async）一次刷新**。依据：contracts/ 非编译进 live 前端、governance 测试（`test_pre_agent_contract_review`）不强制 adapter↔route 双射、且已 pre-handoff dirty；逐路由切割一个连贯参考件风险高价值低，与 decision (c)「定形状现在、OpenAPI/形式化随 C4」一致。C1.3 期间 contracts/ 的 `plan()`/`runJob()` 指向已删路由属**已知 interim 陈旧**（仅参考文档，不影响 live serving），C4 统一修。
+
+**C1.3 实际作用域**：live api.py 路由删除 + live frontend-demo 死代码删除 + live 测试更新；contracts/ 参考 SDK 刷新 → C4。
+
+**target-candidates export 处置细化**：不做裸 route 删除（裸 404 丢失 `canonical_export_path` 重定向提示），而是**转纯 410 GONE tombstone**（移除 `_legacy_target_candidate_export_allowed()` env 逃生阀 + 删 legacy `export_target_candidates_archive`），对齐既有 `post_target_public_web_export_gone` 模式。默认（非 legacy-flag）可观察契约 410+payload **不变**（characterize-first 测试保持绿），删除的只是无人用的 env-gated 真导出双轨——「删 legacy 双轨」的实质达成，且对 straggler 更友好。
+
 **Owner 决策点**：
 - (a) **导出 download UX 时机**：建议 plan/jobs/target 删除（§子步2-4，零前端摩擦）**立即切**；两导出的 202+poll+download **稍后灰度**（需前端新交互）——与 Track C plan §4(c) 分端点灰度一致。是否接受导出晚于其余落地？
 - (b) **`run_job` 是否彻底删**：现保留作 CLI/test one-shot。若 owner 要更彻底，可把 CLI `run-job` 也改为「内部 enqueue 同一 workflow tail」从而完全删 `run_job`——但 `run_job` 跳过 acquisition、是 retrieval-over-existing-snapshot，CLI 语义会变（会触发 acquisition）。建议**保留**。请裁定。

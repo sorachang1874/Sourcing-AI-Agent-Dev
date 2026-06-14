@@ -44,8 +44,12 @@ class ApiJsonSerializationTest(unittest.TestCase):
         host, port = server.server_address
         opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
         try:
+            # C1 deleted the synchronous /api/plan route; /api/plan/submit is the
+            # plan entrypoint. This stub exposes only plan_workflow, so the submit
+            # route falls back to it — the transport bytes-normalization under test
+            # is identical.
             request = urllib_request.Request(
-                f"http://{host}:{port}/api/plan",
+                f"http://{host}:{port}/api/plan/submit",
                 data=json.dumps({"raw_user_request": "我想要OpenAI做Reasoning方向的人"}, ensure_ascii=False).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
                 method="POST",

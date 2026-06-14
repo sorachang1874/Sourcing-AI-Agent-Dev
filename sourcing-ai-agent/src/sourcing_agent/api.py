@@ -1131,11 +1131,12 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
 
     add(["POST"], "/api/bootstrap", post_bootstrap, read_body=True)
 
-    def post_plan(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        return _json_response(HTTPStatus.OK, orchestrator.plan_workflow(payload))
-
-    add(["POST"], "/api/plan", post_plan, read_body=True)
-
+    # C1 (substrate-unify): the synchronous POST /api/plan route is deleted.
+    # It ran the full LLM plan-compile inline on a shared request slot and is
+    # fully redundant with the async POST /api/plan/submit path the live UI uses
+    # (submit -> 202/pending -> poll the frontend history link), whose worker
+    # literally calls the same orchestrator.plan_workflow. plan_workflow itself
+    # is retained as the internal compile function.
     def post_plan_submit(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
         submit_plan = getattr(orchestrator, "submit_plan_workflow", None)
         result = submit_plan(payload) if callable(submit_plan) else orchestrator.plan_workflow(payload)
@@ -1201,11 +1202,14 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
 
     add(["POST"], "/api/query-dispatches/list", post_query_dispatches_list, read_body=True)
 
-    def post_jobs(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        return _json_response(HTTPStatus.CREATED, orchestrator.run_job(payload))
-
-    add(["POST"], "/api/jobs", post_jobs, read_body=True)
-
+    # C1 (substrate-unify): the synchronous POST /api/jobs route is deleted.
+    # run_job is a retrieval-only sync shim (no acquisition; reads a pre-existing
+    # materialized source ~ the tail half of a workflow) that the live frontend
+    # never POSTs — it submits exclusively via POST /api/workflows and reads GET
+    # /api/jobs/{id}/* subresources keyed by the workflow-created job_id. run_job
+    # is retained as a CLI/test one-shot helper (cli.py run-job + tests), demoted
+    # off the serving surface. Heavy retrieval reaches the request tier only via
+    # the durable workflow path.
     def post_workflows(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
         payload = normalize_workflow_submission_payload(payload)
         if workflow_runtime_uses_managed_runner(payload.get("runtime_execution_mode")):

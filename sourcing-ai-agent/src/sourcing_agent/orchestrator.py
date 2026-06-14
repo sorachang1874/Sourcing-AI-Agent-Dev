@@ -3701,6 +3701,15 @@ class SourcingOrchestrator:
         return snapshot
 
     def run_job(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Synchronous retrieval-only one-shot (inline plan-compile + retrieval over
+        a pre-existing materialized source; no provider acquisition).
+
+        C1 (substrate-unify) demoted this off the serving surface: the POST /api/jobs
+        route is deleted. run_job is now a CLI/test-only helper (cli.py run-job +
+        tests). Production heavy retrieval reaches the request tier only via the
+        durable workflow path (POST /api/workflows -> queue_workflow -> worker), of
+        which this is the retrieval tail.
+        """
         request = JobRequest.from_payload(self._prepare_request_payload(payload))
         plan = self._build_augmented_sourcing_plan(request)
         job_id = uuid.uuid4().hex[:12]

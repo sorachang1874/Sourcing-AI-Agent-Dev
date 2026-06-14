@@ -7901,7 +7901,35 @@ def run_hosted_smoke_case(
     timings_ms["explain"] = round((time.perf_counter() - explain_started_at) * 1000, 2)
     record["explain"] = _build_smoke_explain_digest(explain=explain, effective_payload=effective_payload)
     plan_started_at = time.perf_counter()
-    plan = client.post("/api/plan", effective_payload)
+    # C1 (substrate-unify): the synchronous /api/plan route was deleted. Plan
+    # compile is the async submit path the frontend uses — POST /api/plan/submit
+    # returns pending, a worker compiles, and the result lands on the frontend
+    # history link. Submit, then poll the history recovery until the plan is
+    # hydrated (review_id present) or generation terminates. This smoke-tests the
+    # real async plan path instead of a removed sync shortcut.
+    submit = client.post("/api/plan/submit", effective_payload)
+    plan = dict(submit)
+    plan_history_id = str(submit.get("history_id") or "").strip()
+    if plan_history_id:
+        plan_poll_ticks = max(1, int(max_poll_seconds / max(0.1, poll_seconds)))
+        for _plan_tick in range(plan_poll_ticks + 1):
+            recovered = client.get(f"/api/frontend-history/{plan_history_id}")
+            recovery = dict(recovered.get("recovery") or {})
+            plan_generation = dict(dict(recovery.get("metadata") or {}).get("plan_generation") or {})
+            generation_status = str(plan_generation.get("status") or "").strip().lower()
+            recovered_review_id = int(recovery.get("review_id") or 0)
+            if recovered_review_id > 0 or generation_status in {"completed", "failed"}:
+                plan = {
+                    "status": "needs_plan_review" if recovered_review_id > 0 else (generation_status or "pending"),
+                    "history_id": plan_history_id,
+                    "request": dict(recovery.get("request") or {}),
+                    "plan": dict(recovery.get("plan") or {}),
+                    "plan_review_gate": dict(recovery.get("plan_review_gate") or {}),
+                    "plan_review_session": dict(recovery.get("plan_review_session") or {}),
+                    "error_message": str(recovery.get("error_message") or ""),
+                }
+                break
+            time.sleep(max(0.05, poll_seconds))
     timings_ms["plan"] = round((time.perf_counter() - plan_started_at) * 1000, 2)
     review_id = (plan.get("plan_review_session") or {}).get("review_id")
     record["plan_review"] = {

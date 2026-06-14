@@ -97,12 +97,12 @@ EXPECTED_ROUTES = [
     ("GET", "/api/jobs/{job_id:sourcing_ident}"),
     ("DELETE", "/api/frontend-history/{history_id}"),
     ("POST", "/api/bootstrap"),
-    ("POST", "/api/plan"),
+    # POST /api/plan deleted in C1 (substrate-unify) — unified on /api/plan/submit.
     ("POST", "/api/plan/submit"),
     ("POST", "/api/workflows/explain"),
     ("POST", "/api/providers/apify/webhook"),
     ("POST", "/api/query-dispatches/list"),
-    ("POST", "/api/jobs"),
+    # POST /api/jobs deleted in C1 (substrate-unify) — run_job demoted to CLI/test.
     ("POST", "/api/workflows"),
     ("POST", "/api/workflows/{job_id:sourcing_ident}/continue-stage2"),
     ("POST", "/api/jobs/{job_id:sourcing_ident}/profile-completion"),
@@ -228,27 +228,6 @@ class _StubOrchestrator:
             "no_public_web_result_count": 1,
             "no_exportable_signal_count": 2,
             "non_terminal_run_count": 0,
-        }
-
-    def plan_workflow(self, _payload):
-        # Synchronous /api/plan envelope (the route C1 deletes; pinned so the
-        # removal is a visible, intentional contract diff).
-        return {
-            "status": "needs_plan_review",
-            "request": {"target_company": "Acme"},
-            "plan": {"_parity_marker": "sync-plan-envelope"},
-            "plan_review_gate": {},
-            "plan_review_session": {"review_id": 7},
-            "intent_rewrite": {},
-        }
-
-    def run_job(self, _payload):
-        # Synchronous /api/jobs retrieval artifact (the serving route C1 deletes;
-        # run_job itself is demoted to a CLI/test helper, not removed).
-        return {
-            "status": "completed",
-            "job_id": "job-sync-1",
-            "_parity_marker": "sync-run-job-artifact",
         }
 
 
@@ -503,34 +482,32 @@ class ApiTransportParityTest(unittest.TestCase):
         ):
             self.assertIn(header_name, exact_cased)
 
-    def test_c1_pre_migration_sync_heavy_op_contracts(self) -> None:
-        """Characterize-first baseline for the C1 substrate-unify migration.
-
-        Pins the CURRENT synchronous transport contracts of the heavy-op routes
-        C1 changes, so each change lands as a visible, intentional diff:
-          - POST /api/plan        : 200 + plan_workflow envelope passthrough  -> DELETED (unify on /api/plan/submit)
-          - POST /api/jobs        : 201 + run_job artifact passthrough        -> DELETED (run_job demoted to CLI/test)
-          - POST /api/crm/.../public-web-export : 200 + zip bytes + 7 X-Sourcing headers -> async 202+poll+artifact handle
-          - POST /api/target-candidates/export  : 410 GONE retirement payload -> DELETED
+    def test_c1_heavy_op_route_contracts(self) -> None:
+        """Transport contracts of the heavy-op routes across the C1 substrate-unify
+        migration. Each assertion tracks the CURRENT reality and flips as its route
+        lands, so every commit's diff is a visible, intentional contract change:
+          - POST /api/plan        : DELETED (404) — unified on /api/plan/submit
+          - POST /api/jobs        : 201 + run_job artifact passthrough        -> DELETED in C1.3b (run_job demoted to CLI/test)
+          - POST /api/crm/.../public-web-export : 200 + zip bytes + 7 X-Sourcing headers -> async 202+poll+artifact handle (C1.4/C1.5)
+          - POST /api/target-candidates/export  : 410 GONE retirement payload  (legacy track retired -> pure tombstone)
         The CRM public-web export headers are the byte/header baseline the async
         artifact-download handle (C1.4/C1.5) must replicate exactly.
         """
         _server, _thread, base_url, opener, _orchestrator = self._start_server()
         json_headers = {"Content-Type": "application/json"}
 
-        # POST /api/plan -> 200 + verbatim plan_workflow envelope.
-        status, headers, body = self._request(
+        # POST /api/plan -> 404: route deleted in C1, plan unified on /api/plan/submit.
+        status, _headers, body = self._request(
             opener,
             f"{base_url}/api/plan",
             method="POST",
             data=json.dumps({"raw_user_request": "find me people"}).encode("utf-8"),
             headers=json_headers,
         )
-        self.assertEqual(status, 200)
-        self.assertEqual(headers.get("Content-Type"), "application/json; charset=utf-8")
-        self.assertEqual(json.loads(body).get("plan", {}).get("_parity_marker"), "sync-plan-envelope")
+        self.assertEqual(status, 404)
+        self.assertEqual(json.loads(body), {"error": "not found"})
 
-        # POST /api/jobs -> 201 + verbatim run_job artifact.
+        # POST /api/jobs -> 404: route deleted in C1, run_job demoted to CLI/test helper.
         status, _headers, body = self._request(
             opener,
             f"{base_url}/api/jobs",
@@ -538,8 +515,8 @@ class ApiTransportParityTest(unittest.TestCase):
             data=json.dumps({"raw_user_request": "find me people"}).encode("utf-8"),
             headers=json_headers,
         )
-        self.assertEqual(status, 201)
-        self.assertEqual(json.loads(body).get("_parity_marker"), "sync-run-job-artifact")
+        self.assertEqual(status, 404)
+        self.assertEqual(json.loads(body), {"error": "not found"})
 
         # POST /api/crm/records/public-web-export -> 200 + zip bytes + 7 X-Sourcing headers.
         status, headers, body = self._request(

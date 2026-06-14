@@ -1664,20 +1664,16 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         host, port = server.server_address
         opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
         try:
-            plan_req = urllib_request.Request(
-                f"http://{host}:{port}/api/plan",
-                data=json.dumps(
-                    {
-                        "raw_user_request": "我想要OpenAI做Reasoning方向的人",
-                        "history_id": history_id,
-                    },
-                    ensure_ascii=False,
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+            # C1 deleted the synchronous /api/plan HTTP route; plan_workflow is the
+            # internal compile function the async submit worker calls. Invoke it
+            # directly (equivalent to the old route body) to drive the history_id
+            # round-trip; the recovery surface below is still exercised over HTTP.
+            plan_payload = self.orchestrator.plan_workflow(
+                {
+                    "raw_user_request": "我想要OpenAI做Reasoning方向的人",
+                    "history_id": history_id,
+                }
             )
-            with opener.open(plan_req) as response:
-                plan_payload = json.loads(response.read().decode("utf-8"))
 
             recovery_req = urllib_request.Request(
                 f"http://{host}:{port}/api/frontend-history/{history_id}",
