@@ -21,7 +21,13 @@
 - [x] Phase 3c：profile_fetch 域提取（2026-06-12）：`profile_fetch_owner.py` 落地（18 方法 verbatim；orchestrator 减 ~2,450 行）；13 个候选按纪律留守（投影读族 9 个、instance-patch 危险 2 个经 re-resolving lambda、类引用 static 2 个）；对抗验证 CONFIRMED（锚定 0f9db3d），enrichment 12 / results_api 3 预算 id 与对照完全一致；`ci-pre-agent-contract` 全绿。附带发现：test_pipeline 的 profile 切片有 15 个 pre-existing 失败（未迁移的 PG-only storage 漂移,对照归因非提取所致）——test_pipeline 单独设计时一并处理。
 - [x] Phase 3d：acquisition command 层提取（2026-06-12）：`acquisition_command_owner.py` 落地（43 方法覆盖全部 8 个 `acquisition.*` 命令类型；orchestrator 净减 2,616 行,现 ~74k）；SCOPE GUARD 全模块扫描确认 Phase 4 保留核心逐字节未动；双通道验证——Claude 对抗验证 CONFIRMED + Codex 异步参考评审 GO（`runtime/reviews/20260612T080442Z_async-reference-phase3d-*.md`,异步通道首个实例）。**Phase 3 四域收官**：CommandKernel + registry + 4 个领域 owner 构成完整命令层。
 - [x] Phase 3 收尾：drain 绑定注册式化（2026-06-12）：14 个统一形态的 flag-gated drain 调用点（202 行块）收敛为 `DEFAULT_RECOVERY_DRAIN_BINDINGS` 注册表 + 16 行循环；特征化测试先行（在 b789cd8 对照树同样跑绿）；2 个 CRM drain 因边界守卫钉死字面源码而留点名、bespoke 级联 drain 按界不动（Phase 4 处置）；owner 模块零 diff。**Track A Phase 0–3 全部完成。**
-- [ ] Phase 4：纠缠核心重设计——**设计提案已交付**（2026-06-12，`docs/PHASE4_ENTANGLED_CORE_DESIGN.md`，五轴选项 + 迁移顺序 + 8 个 owner 决策点各带推荐答案），待 owner 逐项拍板后按 Step 0–5 推进（Step 0 = scheduler 契约正式化 + storeless fail-open 决策；Step 1–2 = recovery tick 特征化 + phase 对象 registry）。
+- [ ] Phase 4：纠缠核心重设计（设计 `docs/PHASE4_ENTANGLED_CORE_DESIGN.md`，owner 2026-06-12 整体批准按推荐执行）：
+  - [x] Step 0：scheduler 契约正式化（`PROFILE_PREFETCH_SCHEDULER_CONTRACT.md`）+ storeless fail-closed + 15 失败清账（enrichment 12→0；results_api 3 移交 B 带）（2026-06-12，`f4c8331`+`ef74475`）。
+  - [ ] Step 1：recovery tick 特征化（金快照 = phase 名序列 + per-phase owner/max_sync_work/gating/skip/结果摘要 + recovery_phase_metrics 形态；当前树与对照树双跑）。
+  - [ ] Step 2：A2 phase 对象 registry（`RecoveryPhase` + `TickContext`；逐 phase verbatim 提取，nonlocal→ctx 是唯一非 verbatim 点）。
+  - [ ] Step 3：C1 cancel/resume → CommandTypeSpec handler 槽位。
+  - [ ] Step 4：B2 网格边界冻结成文（resolver 接口 + 四块切分清单；不搬代码，搬动随 M3–M5）。
+  - [ ] Step 5：recovery 触发点收编（(d) 进程分离前置 ①–③）。
 
 ### Track B — 存储与测试基建（与 A 并行）
 - [x] 测试环境契约 v2（2026-06-11）：每 run = (PG schema + runtime dir) 配对 + `.ephemeral-test-env.json` 标记；teardown `DROP SCHEMA CASCADE`（仅删自建 schema，`pre_existing` 守卫）；孤儿 janitor `scripts/prune_test_schemas.py`（先快照后扫描、活跃连接守卫、仅限本地 DSN、dry-run 默认）。
@@ -68,7 +74,8 @@
 > 规则：新失败先做 control-environment 归因（在无该变更的对照环境复现）再入账；修复后移除条目。2026-06-12 凌晨批次的 8 个被举报失败已全部归因并修复（3× 测试自身 Thread.start 全局 stub 扼杀 psycopg_pool 工作线程、1× 测试未随 06-07 workspace fail-closed 契约更新、1× c942874 携带的 get_job_api include_details 压缩丢字段、3× c942874 携带的 completion-policy/W6/canonical-projection 漂移——其中投影读路径丢 job-scoped 标记是真实产品缺陷，已修）。
 
 - `tests/test_results_api.py`：36 → **3**（2026-06-12 迁移+契约修复后）。剩余 = 看板合并计数桶（卡片详情已合入看板 112/297 vs 186/297、115/140 vs 140/140、population floor 80≠297）——pre-handoff 投影/看板漂移，无可引用已提交契约。
-- `tests/test_enrichment.py`：38 → **12**（2026-06-12 迁移+修复后）。剩余 = pre-handoff 调度器重构的 envelope/packing/coalescing 漂移（批大小、波次预留、tiny-coalescing；契约只存在于未跟踪文档）+ 1 个手写 store stub 缺 typed-command 面。**与调度器重构 reconciliation 一起修**；同主题 owner 决策项：storeless enricher 零派发却报 completed 的 fail-open（`enrichment.py:3056-3060`，invariant 7 族）。
+- `tests/test_enrichment.py`：38 → 12 → **0**（2026-06-12 Phase 4 Step 0 清账，`ef74475`）。调度器契约正式化于 `docs/PROFILE_PREFETCH_SCHEDULER_CONTRACT.md`；5 个 stale 测试更新到大信封契约、5 个 refill/tiny 碎片化回归改代码、1 个 plan/window reconciliation 回归（D1）、1 个 stub 面（D2）全部解决；storeless fail-open（决策 #1）改 fail-closed。
+- `tests/test_results_api.py`：**3**（看板合并计数族——`卡片详情已合入看板 X/Y`、population floor）。**已确认下游于调度器、属投影计数族,2026-06-12 移交 Phase 4 B 带（决策 D3）**;Step 0 不动。另注:全量跑偶现第 4 个失败 `test_job_result_lifecycle_stage1_event_time_write_before_public_read` 是 PG teardown 竞态 flake（隔离跑绿、对照归因 pre-existing），非预算项。
 - `tests/test_workflow_explain.py::test_explain_workflow_does_not_use_legacy_standard_bundle_as_hidden_full_coverage_proof`（2026-06-11 归因：pre-handoff uncommitted worktree state，与 CommandKernel/registry 提取无关）。
 - `tests/test_control_plane_live_postgres.py::test_serving_projection_foundation_uses_live_postgres_tables`（同上）。
 
