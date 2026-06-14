@@ -83,6 +83,7 @@
 - [PROFILE_PREFETCH_SCHEDULER_CONTRACT.md](PROFILE_PREFETCH_SCHEDULER_CONTRACT.md) — Profile-Prefetch 调度器契约（2026-06-12，Phase 4 Step 0；envelope/coalescing/wave + storeless fail-closed）。
 - [SERVING_MESH_OWNERSHIP_BOUNDARY.md](SERVING_MESH_OWNERSHIP_BOUNDARY.md) — Serving mesh 所有权边界冻结（2026-06-14，Phase 4 Step 4；四块切分 + resolver 接口 + 双向环解法,代码随 M3-M5 搬）。
 - [RECOVERY_DRIVING_REDESIGN_STUDY.md](RECOVERY_DRIVING_REDESIGN_STUDY.md) — recovery 驱动机制事件化重设计研究（2026-06-14，重定义 Phase 4 Step 5；待 owner 审定 §6 决策点）。
+- [RECOVERY_TAKEOVER_INTENT_DESIGN.md](RECOVERY_TAKEOVER_INTENT_DESIGN.md) — Option B 设计：durable per-job 接管意图表（2026-06-14，owner 审定；分离 notification 与 intent，解决 5e 两次 NO-GO 的 F1 注入 / F2 clobber）。
 - [NEXT_TODO.md](NEXT_TODO.md) — 活跃待办（滚动文件）。
 - [../PROGRESS.md](../PROGRESS.md) — 进展日志（滚动文件，月度归档于 `archive/progress/`）。
 - [PG_ONLY_CUTOVER_TRACKER.md](PG_ONLY_CUTOVER_TRACKER.md) — PG-only cutover 尾巴。
