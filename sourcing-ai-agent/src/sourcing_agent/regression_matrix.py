@@ -451,6 +451,16 @@ def infer_pytest_invocations(
             for invocation in _RECOVERY_PHASES_SUITES:
                 add(invocation)
             continue
+        if path == "src/sourcing_agent/orchestrator.py":
+            # run_worker_recovery_once and its deferred inline phase clusters
+            # still live in orchestrator.py (Phase 4 Step 2 was partial), so an
+            # edit here can drift the pinned recovery phase sequence — the tick
+            # oracle must be selected for orchestrator.py too, not only for
+            # recovery_phases.py. Additive (no continue): orchestrator.py also
+            # gets its standard orchestrator+results suites below.
+            saw_backend_change = True
+            for invocation in _RECOVERY_PHASES_SUITES:
+                add(invocation)
         if path in _ORCHESTRATOR_RELATED_PATHS:
             saw_backend_change = True
             for invocation in _ORCHESTRATOR_AND_RESULTS_SUITES:

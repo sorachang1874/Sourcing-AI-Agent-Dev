@@ -168,6 +168,36 @@ def test_infer_pytest_invocations_for_product_journey_frontend_changes_selects_j
     assert "frontend-build" in labels
 
 
+def test_orchestrator_change_selects_recovery_tick_oracle() -> None:
+    # The recovery tick (run_worker_recovery_once + its deferred inline phase
+    # clusters) still lives in orchestrator.py after the partial Phase 4 Step 2,
+    # so an edit there must route to the tick characterization oracle — not only
+    # changes to recovery_phases.py. Regression lock for the async-review catch
+    # (2026-06-14): the oracle's safety net must be connected to the file it
+    # actually guards.
+    labels = {
+        invocation.label
+        for invocation in infer_pytest_invocations(
+            ["src/sourcing_agent/orchestrator.py"],
+            repo_root=_repo_root(),
+        )
+    }
+    assert "paired::tests/test_recovery_tick_characterization.py" in labels
+    # ...and still keeps its standard orchestrator+results coverage.
+    assert any("results" in label or "orchestrator" in label.lower() for label in labels)
+
+
+def test_recovery_phases_change_selects_recovery_tick_oracle() -> None:
+    labels = {
+        invocation.label
+        for invocation in infer_pytest_invocations(
+            ["src/sourcing_agent/recovery_phases.py"],
+            repo_root=_repo_root(),
+        )
+    }
+    assert "paired::tests/test_recovery_tick_characterization.py" in labels
+
+
 def test_infer_pytest_invocations_defaults_to_smoke_when_no_changes_are_known() -> None:
     invocations = infer_pytest_invocations([], repo_root=_repo_root())
     assert invocations == smoke_pytest_invocations()
