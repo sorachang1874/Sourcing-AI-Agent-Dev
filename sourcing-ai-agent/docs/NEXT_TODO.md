@@ -30,7 +30,7 @@
   - [x] Step 4：B2 网格边界冻结成文（2026-06-14，`docs/SERVING_MESH_OWNERSHIP_BOUNDARY.md`）：四块切分（CandidateSourceResolver / ServingReadModel / ProjectionCommandOwner+9 读族 / fast-path 拆两半）逐方法 file:line + 自然 owner + 冻结 resolver 接口签名 + candidate_source↔reader 双向环两条边精确定位与 B2 解法（消 Edge B 重解）+ 迁移顺序（先搬 resolver 解环）；不搬代码,随 M3–M5。纠正一处审计前提:9 读族非 profile_fetch 消费,归读模型层。
   - [ ] Step 5（Option 2,owner 2026-06-14 整体认可；`docs/RECOVERY_DRIVING_REDESIGN_STUDY.md`）：
     - [x] 5a daemon-保证 fail-closed 断言 + 5b 事件信号唤醒（2026-06-14，`767f77a`）：serve 启动 `assert_recovery_coverage_or_fail_closed`(缺 driver 则 raise);`DurableRuntimeWriter._signal_recovery_wakeup` 在 reduce_and_persist 尾部仅当提交新 recovery 工作时发 `request_service_wakeup`(闭合 invariant 3 的 5s gap);纯加法、零新 infra;wakeup 写改原子 temp+replace。invariant 1/3 变异证明 load-bearing,oracle 仍 10/10。
-    - [ ] 5c poll 降为 backstop（shared daemon poll_seconds 5s→30-60s,仅覆盖 lease/crash/stuck;依赖 5b 已证）。
+    - [x] 5c poll 降为 backstop（2026-06-14，`<pending>`）：shared daemon 默认 poll 5s→30s(在 stale 90s/lease 300s 窗口内安全,空闲控制面扫描负载 ~6x 下降);特征化测试钉死 backstop 默认在窗口内 + override 生效。5a+5b Codex re-review GO。
     - [ ] 5d（可选）补 `runtime_outbox` consumer（`claim_runtime_outbox`+dispatch loop,把 wakeup 升级为 durable PG 通道）。
     - [ ] 5e 移除/改写 inline 触发 ①请求路径②读路径③bootstrap 为 signal-only（依赖 5a 不变式已成立）。
     - 之后：Option 3 全事件流 driver = Track D 北极星(`agent_events`/SSE 表尚不存在)。
