@@ -24,7 +24,8 @@
 - [ ] Phase 4：纠缠核心重设计（设计 `docs/PHASE4_ENTANGLED_CORE_DESIGN.md`，owner 2026-06-12 整体批准按推荐执行）：
   - [x] Step 0：scheduler 契约正式化（`PROFILE_PREFETCH_SCHEDULER_CONTRACT.md`）+ storeless fail-closed + 15 失败清账（enrichment 12→0；results_api 3 移交 B 带）（2026-06-12，`f4c8331`+`ef74475`）。
   - [x] Step 1：recovery tick 特征化（2026-06-14，`77bf767`）：`tests/test_recovery_tick_characterization.py`（549 行，10 tests）钉死 49 行 phase 序列 + per-phase gating 双向 + summary 槽位映射 + 跨阶段 ladder 可观测效果；零产品码改动；独立变异敏感性验证 PASS（reorder/gate-flip/summary-drop 三种全捕获,对照树绿）。
-  - [ ] Step 2：A2 phase 对象 registry（`RecoveryPhase` + `TickContext`；逐 phase verbatim 提取，nonlocal→ctx 是唯一非 verbatim 点）。
+  - [x] Step 2（部分采用）：A2 phase 对象 registry（2026-06-14，`7463404`）：`recovery_phases.py`（`RecoveryPhase`+`TickContext`+loud-failure registry）；8 个 registry 形态 phase + 14-drain group 迁入 seam；oracle 逐字节未改且 10/10。**刻意留 inline 的级联簇**（per-branch owner 分歧、result-vs-metrics 分歧、4-7 路 skip ladder 选 reason+max_sync_work 的 *_work_observed 线程态、workflow_resume 多波、remote_event_followup 4-tuple）——其线程态无法经 ctx 无损表达,迁移会改 pinned phase records,按部分采用纪律留守待后续。
+  - [ ] Step 2b（后续）：级联簇迁移——需先解开 per-branch owner（RecoveryPhase.owner 改可计算）、result-vs-metrics 分歧、threaded *_work_observed → ctx 的无损表达；oracle 仍为硬门。
   - [ ] Step 3：C1 cancel/resume → CommandTypeSpec handler 槽位。
   - [ ] Step 4：B2 网格边界冻结成文（resolver 接口 + 四块切分清单；不搬代码，搬动随 M3–M5）。
   - [ ] Step 5：recovery 触发点收编（(d) 进程分离前置 ①–③）。
