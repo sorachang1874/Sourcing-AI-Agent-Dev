@@ -216,6 +216,41 @@ class _StubOrchestrator:
             "skipped_assertion_count": 1,
         }
 
+    def export_crm_record_public_web_archive(self, _payload):
+        return {
+            "status": "ok",
+            "body": b"CRM-PUBLIC-WEB-ZIP-BYTES",
+            "content_type": "application/zip",
+            "filename": "crm-public-web-export.zip",
+            "record_count": 5,
+            "exported_record_count": 4,
+            "exported_signal_count": 9,
+            "no_public_web_result_count": 1,
+            "no_exportable_signal_count": 2,
+            "non_terminal_run_count": 0,
+        }
+
+    def plan_workflow(self, _payload):
+        # Synchronous /api/plan envelope (the route C1 deletes; pinned so the
+        # removal is a visible, intentional contract diff).
+        return {
+            "status": "needs_plan_review",
+            "request": {"target_company": "Acme"},
+            "plan": {"_parity_marker": "sync-plan-envelope"},
+            "plan_review_gate": {},
+            "plan_review_session": {"review_id": 7},
+            "intent_rewrite": {},
+        }
+
+    def run_job(self, _payload):
+        # Synchronous /api/jobs retrieval artifact (the serving route C1 deletes;
+        # run_job itself is demoted to a CLI/test helper, not removed).
+        return {
+            "status": "completed",
+            "job_id": "job-sync-1",
+            "_parity_marker": "sync-run-job-artifact",
+        }
+
 
 class ApiTransportParityTest(unittest.TestCase):
     def _start_server(self, orchestrator=None, env=None):
@@ -467,6 +502,80 @@ class ApiTransportParityTest(unittest.TestCase):
             "X-Sourcing-Skipped-Assertion-Count",
         ):
             self.assertIn(header_name, exact_cased)
+
+    def test_c1_pre_migration_sync_heavy_op_contracts(self) -> None:
+        """Characterize-first baseline for the C1 substrate-unify migration.
+
+        Pins the CURRENT synchronous transport contracts of the heavy-op routes
+        C1 changes, so each change lands as a visible, intentional diff:
+          - POST /api/plan        : 200 + plan_workflow envelope passthrough  -> DELETED (unify on /api/plan/submit)
+          - POST /api/jobs        : 201 + run_job artifact passthrough        -> DELETED (run_job demoted to CLI/test)
+          - POST /api/crm/.../public-web-export : 200 + zip bytes + 7 X-Sourcing headers -> async 202+poll+artifact handle
+          - POST /api/target-candidates/export  : 410 GONE retirement payload -> DELETED
+        The CRM public-web export headers are the byte/header baseline the async
+        artifact-download handle (C1.4/C1.5) must replicate exactly.
+        """
+        _server, _thread, base_url, opener, _orchestrator = self._start_server()
+        json_headers = {"Content-Type": "application/json"}
+
+        # POST /api/plan -> 200 + verbatim plan_workflow envelope.
+        status, headers, body = self._request(
+            opener,
+            f"{base_url}/api/plan",
+            method="POST",
+            data=json.dumps({"raw_user_request": "find me people"}).encode("utf-8"),
+            headers=json_headers,
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(headers.get("Content-Type"), "application/json; charset=utf-8")
+        self.assertEqual(json.loads(body).get("plan", {}).get("_parity_marker"), "sync-plan-envelope")
+
+        # POST /api/jobs -> 201 + verbatim run_job artifact.
+        status, _headers, body = self._request(
+            opener,
+            f"{base_url}/api/jobs",
+            method="POST",
+            data=json.dumps({"raw_user_request": "find me people"}).encode("utf-8"),
+            headers=json_headers,
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(json.loads(body).get("_parity_marker"), "sync-run-job-artifact")
+
+        # POST /api/crm/records/public-web-export -> 200 + zip bytes + 7 X-Sourcing headers.
+        status, headers, body = self._request(
+            opener,
+            f"{base_url}/api/crm/records/public-web-export",
+            method="POST",
+            data=json.dumps({}).encode("utf-8"),
+            headers=json_headers,
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body, b"CRM-PUBLIC-WEB-ZIP-BYTES")
+        self.assertEqual(headers.get("Content-Type"), "application/zip")
+        self.assertEqual(
+            headers.get("Content-Disposition"), 'attachment; filename="crm-public-web-export.zip"'
+        )
+        self.assertEqual(headers.get("X-Sourcing-Export-Record-Count"), "5")
+        self.assertEqual(headers.get("X-Sourcing-Exported-Record-Count"), "4")
+        self.assertEqual(headers.get("X-Sourcing-Exported-Signal-Count"), "9")
+        self.assertEqual(headers.get("X-Sourcing-No-Public-Web-Result-Count"), "1")
+        self.assertEqual(headers.get("X-Sourcing-No-Exportable-Signal-Count"), "2")
+        self.assertEqual(headers.get("X-Sourcing-Non-Terminal-Run-Count"), "0")
+        self.assertEqual(headers.get("X-Sourcing-Canonical-Public-Web-Owner"), "crm_records")
+
+        # POST /api/target-candidates/export -> 410 GONE (legacy retired by default).
+        status, _headers, body = self._request(
+            opener,
+            f"{base_url}/api/target-candidates/export",
+            method="POST",
+            data=json.dumps({}).encode("utf-8"),
+            headers=json_headers,
+        )
+        self.assertEqual(status, 410)
+        retired = json.loads(body)
+        self.assertEqual(retired.get("status"), "retired")
+        self.assertEqual(retired.get("reason"), "legacy_target_candidate_export_retired")
+        self.assertEqual(retired.get("canonical_export_path"), "/api/projections/export")
 
     def test_shutdown_stops_serve_forever_and_releases_port(self) -> None:
         server = create_server(_StubOrchestrator(), host="127.0.0.1", port=0)

@@ -234,6 +234,74 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertTrue(dict(link["metadata"].get("effective_execution_semantics") or {}))
         self.assertTrue(dict(link["metadata"].get("dispatch_preview") or {}))
 
+    def test_sync_plan_and_async_hydrated_plan_are_equivalent_for_same_request(self) -> None:
+        """C1 consolidation-safety oracle: deleting the synchronous /api/plan route
+        loses nothing, because the async submit path runs the SAME plan_workflow and
+        persists a field-equal compiled plan to the frontend history link (which the
+        live UI reads via /api/plan/submit + poll). Pinned before the route deletion.
+        """
+        raw_request = "我想要OpenAI做Reasoning方向的人"
+        self._write_company_identity_snapshot(target_company="OpenAI", snapshot_id="20260424T012345")
+
+        # Synchronous path (the route C1 deletes).
+        sync_result = self.orchestrator.plan_workflow(
+            {"raw_user_request": raw_request, "history_id": "history-equiv-sync"}
+        )
+        link_sync = self.store.get_frontend_history_link("history-equiv-sync")
+
+        # Async path: the hydration worker literally calls plan_workflow (orch:1799).
+        history_id = "history-equiv-async"
+        plan_request_id = "req-equiv-async"
+        queued_at = "2026-04-24T01:23:45+00:00"
+        self.store.upsert_frontend_history_link(
+            {
+                "history_id": history_id,
+                "query_text": raw_request,
+                "target_company": "OpenAI",
+                "phase": "plan",
+                "request": {"raw_user_request": raw_request, "history_id": history_id},
+                "metadata": {
+                    "source": "plan_workflow_submit",
+                    "plan_generation": {
+                        "status": "queued",
+                        "request_id": plan_request_id,
+                        "queued_at": queued_at,
+                        "submitted_at": queued_at,
+                    },
+                },
+            }
+        )
+        with self.orchestrator._plan_hydration_lock:
+            self.orchestrator._plan_hydration_inflight[history_id] = {
+                "request_id": plan_request_id,
+                "queued_at": queued_at,
+                "payload": {"raw_user_request": raw_request, "history_id": history_id},
+            }
+        self.orchestrator._run_plan_hydration(
+            history_id=history_id,
+            payload={"raw_user_request": raw_request, "history_id": history_id},
+            plan_request_id=plan_request_id,
+            queued_at=queued_at,
+        )
+        link_async = self.store.get_frontend_history_link(history_id)
+
+        assert link_sync is not None and link_async is not None
+        # The compiled plan the frontend consumes is field-equal across transports.
+        self.assertTrue(link_sync["plan"])
+        self.assertEqual(link_sync["plan"], sync_result["plan"])
+        self.assertEqual(link_async["plan"], link_sync["plan"])
+        # Both transports produce a real review session and the same execution semantics.
+        self.assertGreater(int(link_sync["review_id"] or 0), 0)
+        self.assertGreater(int(link_async["review_id"] or 0), 0)
+        self.assertEqual(
+            dict(link_async["metadata"].get("effective_execution_semantics") or {}),
+            dict(link_sync["metadata"].get("effective_execution_semantics") or {}),
+        )
+        self.assertEqual(
+            dict(link_async["metadata"].get("dispatch_preview") or {}),
+            dict(link_sync["metadata"].get("dispatch_preview") or {}),
+        )
+
     def test_run_plan_hydration_coalesces_same_request_signature_across_histories(self) -> None:
         queued_at = "2026-04-24T01:23:45+00:00"
         base_payload = {"raw_user_request": "我想要OpenAI做Reasoning方向的人"}
