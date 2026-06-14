@@ -9784,14 +9784,16 @@ class PipelineTest(unittest.TestCase):
                 ("2026-01-01 00:00:00", job_id),
             )
 
-        # Phase 4 Step 5e re-point: the read path no longer RUNS the recovery
-        # tick (run_worker_recovery_once) on a request-serving thread — it SIGNALS
-        # the guaranteed shared daemon (_signal_shared_recovery_wakeup, 5b). The
-        # observable contract is preserved: the takeover entry still reports a
-        # "queued" auto_recovery for the runner_not_alive classification, the
-        # job-scoped recovery_payload (stale_after_seconds=0, queue-takeover on)
-        # is still threaded through, and the cooldown still throttles the next
-        # poll. run_worker_recovery_once must NOT run inline.
+        # Phase 4 Step 5e Option B re-point (docs/RECOVERY_TAKEOVER_INTENT_DESIGN.md):
+        # the read path no longer RUNS the recovery tick on a request-serving
+        # thread, and it no longer forwards the bounded-recovery contract through
+        # the wake-file signal (that was F1 injection + F2 clobber). It now WRITES
+        # a durable per-job recovery-takeover INTENT (server-side literals only)
+        # and emits a PURE NUDGE. The signal is still called exactly once, but with
+        # NO payload-carried recovery controls; the contract lives in the intent
+        # table. The takeover entry still reports a "queued" auto_recovery for the
+        # runner_not_alive classification; run_worker_recovery_once must NOT run
+        # inline.
         captured_payloads: list[dict[str, object]] = []
         tick_mock = unittest.mock.Mock(name="run_worker_recovery_once")
 
@@ -9812,10 +9814,19 @@ class PipelineTest(unittest.TestCase):
         self.assertIsNotNone(progress)
         assert progress is not None
         tick_mock.assert_not_called()
+        # The signal is a PURE NUDGE: invoked once, with no recovery-control payload.
         self.assertEqual(len(captured_payloads), 1)
-        self.assertEqual(captured_payloads[0]["job_id"], job_id)
-        self.assertEqual(int(captured_payloads[0]["stale_after_seconds"]), 0)
-        self.assertTrue(bool(captured_payloads[0]["workflow_queue_auto_takeover_enabled"]))
+        self.assertEqual(captured_payloads[0], {})
+        # The takeover contract lives in the DURABLE intent: server-side literals,
+        # scoped to this job, zero stale, queue-takeover on.
+        intent = self.store.get_workflow_recovery_intent(job_id)
+        self.assertEqual(intent.get("status"), "pending")
+        self.assertEqual(intent.get("classification"), "runner_not_alive")
+        intent_params = dict(intent.get("params") or {})
+        self.assertEqual(intent_params.get("workflow_stale_scope_job_id"), job_id)
+        self.assertEqual(int(intent_params.get("stale_after_seconds")), 0)
+        self.assertEqual(int(intent_params.get("workflow_resume_stale_after_seconds")), 0)
+        self.assertTrue(bool(intent_params.get("workflow_queue_auto_takeover_enabled")))
         self.assertEqual(progress["auto_recovery"]["status"], "queued")
         self.assertEqual(progress["auto_recovery"]["classification"], "runner_not_alive")
 
@@ -10315,11 +10326,12 @@ class PipelineTest(unittest.TestCase):
             handoff_from_lane="triage_planner",
         )
 
-        # Phase 4 Step 5e re-point: read-path takeover SIGNALS the guaranteed
-        # daemon (5b) rather than RUNNING the tick inline. Contract preserved:
-        # "queued" auto_recovery for the blocked_on_acquisition_workers
-        # classification with the job-scoped recovery_payload (stale_after_seconds=0)
-        # threaded to the signal; run_worker_recovery_once must NOT run inline.
+        # Phase 4 Step 5e Option B re-point: read-path takeover WRITES a durable
+        # per-job recovery-takeover INTENT (server-side literals, stale=0) and
+        # emits a PURE NUDGE (no payload-carried recovery controls); it does NOT
+        # run the tick inline. Contract preserved: "queued" auto_recovery for the
+        # blocked_on_acquisition_workers classification; the stale=0 contract lives
+        # in the intent table, not the wake-file signal.
         captured_payloads: list[dict[str, object]] = []
         tick_mock = unittest.mock.Mock(name="run_worker_recovery_once")
 
@@ -10341,8 +10353,11 @@ class PipelineTest(unittest.TestCase):
         assert progress is not None
         tick_mock.assert_not_called()
         self.assertEqual(len(captured_payloads), 1)
-        self.assertEqual(captured_payloads[0]["job_id"], job_id)
-        self.assertEqual(int(captured_payloads[0]["stale_after_seconds"]), 0)
+        self.assertEqual(captured_payloads[0], {})
+        intent = self.store.get_workflow_recovery_intent(job_id)
+        self.assertEqual(intent.get("status"), "pending")
+        self.assertEqual(intent.get("classification"), "blocked_on_acquisition_workers")
+        self.assertEqual(int(dict(intent.get("params") or {}).get("stale_after_seconds")), 0)
         self.assertEqual(progress["auto_recovery"]["status"], "queued")
         self.assertEqual(progress["auto_recovery"]["classification"], "blocked_on_acquisition_workers")
 
@@ -10460,10 +10475,11 @@ class PipelineTest(unittest.TestCase):
             },
             output_payload={"summary": {"status": "submitted"}},
         )
-        # Phase 4 Step 5e re-point: takeover SIGNALS the guaranteed daemon (5b),
-        # threading the job-scoped recovery_payload to the signal; it never RUNS
-        # the tick inline. The "queued"/blocked_on_acquisition_workers contract is
-        # preserved.
+        # Phase 4 Step 5e Option B re-point: takeover WRITES a durable per-job
+        # recovery-takeover INTENT and emits a PURE NUDGE (no payload-carried
+        # recovery controls); it never RUNS the tick inline. The
+        # "queued"/blocked_on_acquisition_workers contract is preserved via the
+        # durable intent.
         captured_payloads: list[dict[str, object]] = []
         tick_mock = unittest.mock.Mock(name="run_worker_recovery_once")
 
@@ -10484,7 +10500,11 @@ class PipelineTest(unittest.TestCase):
         self.assertIsNotNone(progress)
         assert progress is not None
         tick_mock.assert_not_called()
-        self.assertEqual(captured_payloads[0]["job_id"], job_id)
+        self.assertEqual(captured_payloads[0], {})
+        self.assertEqual(
+            self.store.get_workflow_recovery_intent(job_id).get("classification"),
+            "blocked_on_acquisition_workers",
+        )
         self.assertEqual(progress["auto_recovery"]["status"], "queued")
         self.assertEqual(progress["auto_recovery"]["classification"], "blocked_on_acquisition_workers")
 
@@ -10563,7 +10583,13 @@ class PipelineTest(unittest.TestCase):
         self.assertIsNotNone(progress)
         assert progress is not None
         tick_mock.assert_not_called()
-        self.assertEqual(captured_payloads[0]["job_id"], job_id)
+        # Pure nudge (Option B): no payload-carried recovery controls; the durable
+        # intent carries the takeover contract.
+        self.assertEqual(captured_payloads[0], {})
+        self.assertEqual(
+            self.store.get_workflow_recovery_intent(job_id).get("classification"),
+            "blocked_on_acquisition_workers",
+        )
         self.assertEqual(progress["auto_recovery"]["status"], "queued")
         self.assertEqual(progress["auto_recovery"]["classification"], "blocked_on_acquisition_workers")
 

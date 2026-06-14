@@ -2384,32 +2384,21 @@ class SourcingOrchestrator:
         if self.runtime_dir is None:
             return {**base, "status": "signal_skipped", "reason": "runtime_dir_unset"}
         service_name = self._shared_recovery_service_name(payload)
+        # PURE NUDGE (Option B, docs/RECOVERY_TAKEOVER_INTENT_DESIGN.md §5): the
+        # wake file is a coalesced scalar "wake now" notification ONLY. It NEVER
+        # carries the bounded-recovery control contract (workflow_stale_scope_job_id
+        # / zero stale thresholds / resume limits / enable flags). Those are an
+        # INTENT, persisted durably per-job in workflow_recovery_intents and
+        # claimed by the workflow_takeover_intent_drain phase — separating
+        # NOTIFICATION from INTENT. This eliminates F1 (request-payload injection
+        # of internal recovery controls through the forwarding loop) and F2 (two
+        # intents clobbering the single coalesced scalar wake slot). callback_payload
+        # converges to exactly {"source": reason} (+ request_path_job_id when a job
+        # id is present); the `payload` arg is retained for service-name routing /
+        # back-compat but its recovery-control fields are intentionally NOT forwarded.
         callback_payload: dict[str, Any] = {"source": reason}
         if normalized_job_id:
             callback_payload["request_path_job_id"] = normalized_job_id
-        # Forward the bounded-recovery contract the caller built into the wakeup
-        # callback_payload — the daemon consumes THIS payload (via
-        # _consume_wakeup_request -> run_worker_recovery_once ->
-        # _workflow_recovery_settings), NOT the helper's `payload` arg. The read
-        # path's progress auto-takeover sets workflow_stale_scope_job_id +
-        # zero stale thresholds precisely so the woken tick takes over a
-        # classified dead-runner job IMMEDIATELY rather than at the default stale
-        # window; dropping these silently regresses takeover latency. Only keys
-        # actually present in the caller payload are forwarded (the request path
-        # carries none, so it stays an unscoped global-sweep nudge).
-        forwarded_payload = dict(payload or {})
-        for field_name in (
-            "workflow_stale_scope_job_id",
-            "workflow_resume_explicit_job",
-            "workflow_resume_stale_after_seconds",
-            "workflow_resume_limit",
-            "workflow_auto_resume_enabled",
-            "workflow_queue_resume_stale_after_seconds",
-            "workflow_queue_resume_limit",
-            "workflow_queue_auto_takeover_enabled",
-        ):
-            if field_name in forwarded_payload and forwarded_payload[field_name] is not None:
-                callback_payload[field_name] = forwarded_payload[field_name]
         try:
             wakeup = request_service_wakeup(
                 self.runtime_dir,
@@ -36788,22 +36777,48 @@ class SourcingOrchestrator:
         queued_at: str,
     ) -> None:
         try:
-            # Signal-only: do NOT run run_worker_recovery_once on this thread.
-            # Signal the guaranteed shared daemon (5b) so its global tick — which
-            # is the same run_worker_recovery_once body, off the request path —
-            # picks up the stuck workflow. Best-effort; the 5c poll backstops.
+            # Option B (docs/RECOVERY_TAKEOVER_INTENT_DESIGN.md §3+§5): the read
+            # path WRITES a durable per-job recovery-takeover INTENT and then
+            # emits a pure "wake now" NUDGE. The intent carries the server-side
+            # bounded-recovery contract (8 literal fields, NEVER request-derived);
+            # the nudge carries no recovery controls. The daemon's
+            # workflow_takeover_intent_drain phase claims the intent and runs the
+            # stale=0 scoped resume. This replaces the prior wake-file forwarding
+            # (which injected internal recovery controls into the coalesced scalar
+            # wake slot — F1 injection + F2 clobber). Do NOT run
+            # run_worker_recovery_once on this thread; the guaranteed daemon (5a)
+            # drains the intent, with the 5c poll as backstop.
+            intent_params = {
+                "workflow_stale_scope_job_id": job_id,
+                "workflow_resume_explicit_job": True,
+                "workflow_auto_resume_enabled": True,
+                "workflow_resume_stale_after_seconds": 0,
+                "workflow_resume_limit": 1,
+                "workflow_queue_auto_takeover_enabled": True,
+                "workflow_queue_resume_stale_after_seconds": 0,
+                "workflow_queue_resume_limit": 1,
+                "stale_after_seconds": 0,
+            }
+            intent = self.store.upsert_workflow_recovery_intent(
+                job_id,
+                classification=classification,
+                params=intent_params,
+                requested_by="progress_poll",
+            )
+            # Pure global nudge: wake the daemon NOW. The wake file is notification
+            # only — it carries NO recovery-control keys (the intent is the only
+            # carrier of the takeover contract).
             signal = self._signal_shared_recovery_wakeup(
                 reason="progress_auto_takeover",
                 requested_by="progress_poll",
                 job_id=job_id,
-                payload=recovery_payload,
                 scope="job_scoped",
             )
             self.store.append_job_event(
                 job_id,
                 stage="runtime_control",
                 status="running",
-                detail=f"Progress auto takeover signaled recovery daemon for `{classification}`.",
+                detail=f"Progress auto takeover wrote recovery intent + nudged daemon for `{classification}`.",
                 payload={
                     "control": "progress_auto_takeover_result",
                     "classification": classification,
@@ -36811,6 +36826,7 @@ class SourcingOrchestrator:
                     "effective_execution_mode": effective_execution_mode,
                     "queued_at": queued_at,
                     "recovery_status": str(signal.get("status") or ""),
+                    "recovery_intent_status": str(dict(intent or {}).get("status") or ""),
                     "signal": signal,
                     "workflow_resume": [],
                 },
@@ -39308,6 +39324,33 @@ class SourcingOrchestrator:
                 ),
                 max_sync_work="no post-event-level profile refill",
             )
+        # workflow_takeover_intent_drain — Option B durable takeover intents.
+        # Claims pending per-job recovery-takeover intents (single-winner) and,
+        # for each claimed job_id, runs the stale=0 SCOPED resume that the read
+        # path wrote into the intent table, then marks the intent consumed. This
+        # phase runs BEFORE the generic workflow_resume phase (which keeps its
+        # default/unscoped stale window) so a classified dead-runner job carrying
+        # a pending intent is taken over immediately rather than at the 60s
+        # default. See docs/RECOVERY_TAKEOVER_INTENT_DESIGN.md §4.
+        workflow_takeover_intent_drain = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="workflow_takeover_intent_drain",
+                default_owner="workflow_takeover_intent_drain",
+                default_max_sync_work="claim + stale=0 scoped resume of pending recovery-takeover intents only",
+                guard=lambda ctx: True,
+                body=lambda ctx: ctx.run_phase(
+                    "workflow_takeover_intent_drain",
+                    owner="workflow_takeover_intent_drain",
+                    max_sync_work="claim + stale=0 scoped resume of pending recovery-takeover intents only",
+                    callback=lambda: ctx.orchestrator._drain_workflow_takeover_intents(
+                        summary,
+                        payload=ctx.payload,
+                    ),
+                    default_result=[],
+                ),
+            ),
+            _tick_ctx,
+        )
         event_level_work_observed = _phase_work_observed(event_level_materialization_followup)
         same_tick_visibility_handoff_required = (
             worker_recovery_handoff_required
@@ -39393,6 +39436,15 @@ class SourcingOrchestrator:
                     skip_job_ids=search_seed_resume_skip_job_ids,
                 ),
                 default_result=[],
+            )
+        # Fold the durable-intent drain's per-job scoped resume results into the
+        # tick's accumulated workflow_resume list (a real takeover for a job the
+        # generic resume's default stale window would have skipped this tick).
+        if workflow_takeover_intent_drain:
+            workflow_resume.extend(
+                item
+                for item in workflow_takeover_intent_drain
+                if isinstance(item, dict) and str(item.get("status") or "") not in {"", "skipped"}
             )
         post_completion_reconcile_enabled = _coerce_bool(payload.get("post_completion_reconcile_enabled"), True)
         if post_completion_reconcile_enabled and not workflow_resume_barrier:
@@ -60099,6 +60151,79 @@ class SourcingOrchestrator:
         ):
             return None
         return 0
+
+    def _drain_workflow_takeover_intents(
+        self,
+        daemon_summary: dict[str, Any],
+        *,
+        payload: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Claim + consume durable per-job recovery-takeover intents (Option B).
+
+        Single-winner ``claim_workflow_recovery_intents`` guarantees two
+        concurrent daemon ticks claim disjoint sets, so a job is taken over
+        exactly once per pending intent. For each claimed ``job_id`` the read
+        path's server-side ``stale=0`` scoped resume contract is replayed via
+        ``_resume_blocked_workflows_after_recovery(stale_job_scope_job_id=job_id,
+        stale_after_seconds=0, queued_stale_after_seconds=0, resume_limit=1)`` so
+        the classified dead-runner job is taken over IMMEDIATELY rather than at
+        the generic resume phase's default stale window. The intent is marked
+        consumed after a successful resume; a failed resume leaves the lease to
+        expire and be re-claimed (resume is keyed on durable job state, so a
+        re-claim is idempotent).
+        """
+
+        resolved_payload = dict(payload or {})
+        if not _coerce_bool(resolved_payload.get("workflow_takeover_intent_drain_enabled"), True):
+            return [{"status": "skipped", "reason": "workflow_takeover_intent_drain_disabled_by_payload"}]
+        claim_limit = max(1, _coerce_int(resolved_payload.get("workflow_takeover_intent_claim_limit"), 25))
+        lease_seconds = max(
+            1,
+            _coerce_int(
+                resolved_payload.get("workflow_takeover_intent_lease_seconds"),
+                _env_int("WORKFLOW_TAKEOVER_INTENT_LEASE_SECONDS", 120),
+            ),
+        )
+        lease_owner = self._workflow_job_lease_owner()
+        try:
+            claimed_intents = self.store.claim_workflow_recovery_intents(
+                lease_owner=lease_owner,
+                lease_seconds=lease_seconds,
+                limit=claim_limit,
+            )
+        except Exception as exc:
+            return [{"status": "failed", "reason": f"claim_failed:{type(exc).__name__}: {exc}"}]
+        results: list[dict[str, Any]] = []
+        for intent in claimed_intents:
+            job_id = str(dict(intent or {}).get("job_id") or "").strip()
+            if not job_id:
+                continue
+            resumed = self._resume_blocked_workflows_after_recovery(
+                daemon_summary,
+                explicit_job_id=job_id,
+                stale_job_scope_job_id=job_id,
+                include_stale_acquiring=True,
+                stale_after_seconds=0,
+                resume_limit=1,
+                include_stale_queued=True,
+                queued_stale_after_seconds=0,
+                queued_resume_limit=1,
+            )
+            for item in resumed:
+                if isinstance(item, dict):
+                    enriched = dict(item)
+                    enriched.setdefault("takeover_intent_job_id", job_id)
+                    enriched["takeover_intent_classification"] = str(
+                        dict(intent or {}).get("classification") or ""
+                    )
+                    results.append(enriched)
+            try:
+                self.store.mark_workflow_recovery_intent_consumed(job_id)
+            except Exception:
+                # Leave the lease to expire and be re-claimed; resume is keyed on
+                # durable job state so a re-claim is idempotent.
+                pass
+        return results
 
     def _resume_blocked_workflows_after_recovery(
         self,

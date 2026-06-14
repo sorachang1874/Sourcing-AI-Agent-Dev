@@ -72,6 +72,7 @@ DEFAULT_CONTROL_PLANE_TABLES = [
     "agent_trace_spans",
     "agent_worker_runs",
     "workflow_job_leases",
+    "workflow_recovery_intents",
     "workflow_events",
     "workflow_current_state",
     "workflow_commands",

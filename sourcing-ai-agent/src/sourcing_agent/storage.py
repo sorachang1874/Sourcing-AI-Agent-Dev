@@ -132,6 +132,9 @@ _CONTROL_PLANE_POSTGRES_NATIVE_TABLES = {
     "get_workflow_job_lease": "workflow_job_leases",
     "renew_workflow_job_lease": "workflow_job_leases",
     "release_workflow_job_lease": "workflow_job_leases",
+    "upsert_workflow_recovery_intent": "workflow_recovery_intents",
+    "claim_workflow_recovery_intents": "workflow_recovery_intents",
+    "mark_workflow_recovery_intent_consumed": "workflow_recovery_intents",
     "supersede_workflow_runtime_state": "agent_worker_runs",
     "append_workflow_event": "workflow_events",
     "upsert_workflow_current_state": "workflow_current_state",
@@ -215,6 +218,7 @@ _DURABLE_RUNTIME_TABLES = {
     "workflow_events",
     "workflow_current_state",
     "workflow_commands",
+    "workflow_recovery_intents",
     "runtime_outbox",
     "agent_actions",
     "operation_runs",
@@ -2347,6 +2351,21 @@ class ControlPlaneStore:
                     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
 
+                CREATE TABLE IF NOT EXISTS workflow_recovery_intents (
+                    job_id TEXT PRIMARY KEY,
+                    classification TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    requested_at TEXT NOT NULL DEFAULT '',
+                    requested_by TEXT NOT NULL DEFAULT '',
+                    params_json TEXT NOT NULL DEFAULT '{}',
+                    lease_owner TEXT NOT NULL DEFAULT '',
+                    lease_expires_at TEXT NOT NULL DEFAULT '',
+                    claimed_at TEXT NOT NULL DEFAULT '',
+                    schema_version TEXT NOT NULL DEFAULT 'workflow_recovery_intent_v1',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE TABLE IF NOT EXISTS query_dispatches (
                     dispatch_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     target_company TEXT,
@@ -2926,6 +2945,9 @@ class ControlPlaneStore:
 
                 CREATE INDEX IF NOT EXISTS idx_workflow_job_leases_expires
                     ON workflow_job_leases (lease_expires_at);
+
+                CREATE INDEX IF NOT EXISTS idx_workflow_recovery_intents_status
+                    ON workflow_recovery_intents (status, lease_expires_at);
 
                 CREATE INDEX IF NOT EXISTS idx_linkedin_profile_registry_status
                     ON linkedin_profile_registry (status, updated_at);
@@ -12893,6 +12915,244 @@ class ControlPlaneStore:
                 """,
                 (normalized_job_id,),
             )
+
+    def upsert_workflow_recovery_intent(
+        self,
+        job_id: str,
+        *,
+        classification: str = "",
+        params: dict[str, Any] | None = None,
+        requested_by: str = "",
+    ) -> dict[str, Any]:
+        """Read-path write of a durable per-job recovery-takeover intent.
+
+        ``job_id`` is the PRIMARY KEY; concurrent upserts for distinct jobs keep
+        independent rows. ``ON CONFLICT(job_id) DO UPDATE`` is latest-wins and
+        resets the row to ``status='pending'`` with leases cleared so a stale
+        consumed/claimed row is re-armed by a fresh takeover request.
+        """
+
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("workflow_recovery_intents"):
+            row = self._call_control_plane_postgres_native(
+                "upsert_workflow_recovery_intent",
+                normalized_job_id,
+                classification=classification,
+                params=dict(params or {}),
+                requested_by=requested_by,
+            )
+            if row is not None:
+                return self._workflow_recovery_intent_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_recovery_intents"):
+                return {}
+        now = _utc_now_timestamp()
+        params_json = json.dumps(_json_safe_payload(dict(params or {})), ensure_ascii=False)
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO workflow_recovery_intents (
+                    job_id,
+                    classification,
+                    status,
+                    requested_at,
+                    requested_by,
+                    params_json,
+                    lease_owner,
+                    lease_expires_at,
+                    claimed_at,
+                    schema_version,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, 'pending', ?, ?, ?, '', '', '', 'workflow_recovery_intent_v1', ?, ?)
+                ON CONFLICT(job_id) DO UPDATE SET
+                    classification = excluded.classification,
+                    status = 'pending',
+                    requested_at = excluded.requested_at,
+                    requested_by = excluded.requested_by,
+                    params_json = excluded.params_json,
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    claimed_at = '',
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    normalized_job_id,
+                    str(classification or ""),
+                    now,
+                    str(requested_by or ""),
+                    params_json,
+                    now,
+                    now,
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM workflow_recovery_intents WHERE job_id = ? LIMIT 1",
+                (normalized_job_id,),
+            ).fetchone()
+        self._mirror_control_plane_row("workflow_recovery_intents", row)
+        return self._workflow_recovery_intent_from_row(row)
+
+    def claim_workflow_recovery_intents(
+        self,
+        *,
+        lease_owner: str,
+        lease_seconds: int = 300,
+        limit: int = 1,
+    ) -> list[dict[str, Any]]:
+        """Single-winner claim of pending recovery intents (drain phase).
+
+        Copies the ``claim_job_materialization_item`` single-winner semantics:
+        the conditional ``UPDATE ... WHERE status='pending' AND (lease expired)``
+        guarantees two concurrent daemon ticks claim disjoint sets — a row whose
+        status is flipped to ``claimed`` by one tick no longer matches the
+        predicate for the other.
+        """
+
+        normalized_owner = str(lease_owner or "").strip()
+        if not normalized_owner:
+            return []
+        normalized_limit = max(1, int(limit or 1))
+        if self._control_plane_postgres_should_prefer_read("workflow_recovery_intents"):
+            rows = self._call_control_plane_postgres_native(
+                "claim_workflow_recovery_intents",
+                lease_owner=normalized_owner,
+                lease_seconds=max(1, int(lease_seconds or 300)),
+                limit=normalized_limit,
+            )
+            if rows is not None:
+                return [self._workflow_recovery_intent_from_row(row) for row in rows]
+            if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_recovery_intents"):
+                return []
+        now = _utc_now_timestamp()
+        claimed: list[Any] = []
+        with self._lock, self._connection:
+            candidate_rows = self._connection.execute(
+                """
+                SELECT job_id FROM workflow_recovery_intents
+                WHERE status = 'pending'
+                  AND (lease_expires_at = '' OR datetime(lease_expires_at) <= datetime('now'))
+                ORDER BY requested_at, job_id
+                LIMIT ?
+                """,
+                (normalized_limit,),
+            ).fetchall()
+            for candidate in candidate_rows:
+                candidate_job_id = str(candidate["job_id"] or "")
+                if not candidate_job_id:
+                    continue
+                self._connection.execute(
+                    """
+                    UPDATE workflow_recovery_intents
+                    SET status = 'claimed',
+                        lease_owner = ?,
+                        lease_expires_at = datetime('now', ?),
+                        claimed_at = ?,
+                        updated_at = ?
+                    WHERE job_id = ?
+                      AND status = 'pending'
+                      AND (lease_expires_at = '' OR datetime(lease_expires_at) <= datetime('now'))
+                    """,
+                    (
+                        normalized_owner,
+                        f"+{max(1, int(lease_seconds or 300))} seconds",
+                        now,
+                        now,
+                        candidate_job_id,
+                    ),
+                )
+                if not int(self._connection.execute("SELECT changes()").fetchone()[0] or 0):
+                    continue
+                row = self._connection.execute(
+                    "SELECT * FROM workflow_recovery_intents WHERE job_id = ? LIMIT 1",
+                    (candidate_job_id,),
+                ).fetchone()
+                if row is not None:
+                    claimed.append(row)
+        for row in claimed:
+            self._mirror_control_plane_row("workflow_recovery_intents", row)
+        return [self._workflow_recovery_intent_from_row(row) for row in claimed]
+
+    def mark_workflow_recovery_intent_consumed(self, job_id: str) -> dict[str, Any]:
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("workflow_recovery_intents"):
+            row = self._call_control_plane_postgres_native(
+                "mark_workflow_recovery_intent_consumed",
+                normalized_job_id,
+            )
+            if row is not None:
+                return self._workflow_recovery_intent_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_recovery_intents"):
+                return {}
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE workflow_recovery_intents
+                SET status = 'consumed',
+                    lease_owner = '',
+                    lease_expires_at = '',
+                    updated_at = ?
+                WHERE job_id = ?
+                """,
+                (_utc_now_timestamp(), normalized_job_id),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM workflow_recovery_intents WHERE job_id = ? LIMIT 1",
+                (normalized_job_id,),
+            ).fetchone()
+        self._mirror_control_plane_row("workflow_recovery_intents", row)
+        return self._workflow_recovery_intent_from_row(row)
+
+    def get_workflow_recovery_intent(self, job_id: str) -> dict[str, Any]:
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id:
+            return {}
+        if self._control_plane_postgres_should_prefer_read("workflow_recovery_intents"):
+            select_one = getattr(self._control_plane_postgres, "select_one", None)
+            if callable(select_one):
+                try:
+                    row = select_one(
+                        "workflow_recovery_intents",
+                        where_sql="job_id = %s",
+                        params=[normalized_job_id],
+                    )
+                except Exception:
+                    row = None
+                if row is not None:
+                    return self._workflow_recovery_intent_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_recovery_intents"):
+                return {}
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM workflow_recovery_intents WHERE job_id = ? LIMIT 1",
+                (normalized_job_id,),
+            ).fetchone()
+        return self._workflow_recovery_intent_from_row(row)
+
+    def _workflow_recovery_intent_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        lease_expires_at = str(_row_value(row, "lease_expires_at", "") or "")
+        return {
+            "job_id": str(_row_value(row, "job_id", "") or ""),
+            "classification": str(_row_value(row, "classification", "") or ""),
+            "status": str(_row_value(row, "status", "") or ""),
+            "requested_at": str(_row_value(row, "requested_at", "") or ""),
+            "requested_by": str(_row_value(row, "requested_by", "") or ""),
+            "params": _loads_json_dict(_row_value(row, "params_json", "{}")),
+            "lease_owner": str(_row_value(row, "lease_owner", "") or ""),
+            "lease_expires_at": lease_expires_at,
+            "claimed_at": str(_row_value(row, "claimed_at", "") or ""),
+            "schema_version": str(
+                _row_value(row, "schema_version", "workflow_recovery_intent_v1")
+                or "workflow_recovery_intent_v1"
+            ),
+            "created_at": str(_row_value(row, "created_at", "") or ""),
+            "updated_at": str(_row_value(row, "updated_at", "") or ""),
+        }
 
     def append_workflow_event(
         self,

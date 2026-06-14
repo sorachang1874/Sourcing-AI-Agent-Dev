@@ -320,17 +320,39 @@ class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase
         self.assertEqual(wakeup["service_name"], SHARED_DAEMON)
         self.assertEqual(wakeup["reason"], "progress_auto_takeover")
         self.assertEqual(wakeup["requested_by"], "progress_poll")
-        # The bounded-recovery contract MUST reach the daemon via the wakeup
-        # callback_payload (the daemon consumes this, not the helper's arg), or
-        # the woken tick would wait on default stale thresholds instead of
-        # taking over the classified job now. (Regression guard for the Step 5e
-        # NO-GO: the helper previously dropped these fields.)
+        # Option B (docs/RECOVERY_TAKEOVER_INTENT_DESIGN.md §5): the wake file is
+        # a PURE NUDGE. The bounded-recovery contract MUST NOT ride the coalesced
+        # scalar callback_payload (that was F1 injection + F2 clobber). The wake
+        # file carries only {source, request_path_job_id} — NO recovery-control
+        # keys.
         callback = dict(wakeup.get("callback_payload") or {})
-        self.assertEqual(callback.get("workflow_stale_scope_job_id"), job_id)
-        self.assertEqual(callback.get("workflow_resume_stale_after_seconds"), 0)
-        self.assertEqual(callback.get("workflow_queue_resume_stale_after_seconds"), 0)
-        self.assertTrue(callback.get("workflow_queue_auto_takeover_enabled"))
-        self.assertTrue(callback.get("workflow_auto_resume_enabled"))
+        self.assertEqual(callback.get("source"), "progress_auto_takeover")
+        self.assertEqual(callback.get("request_path_job_id"), job_id)
+        for control_key in (
+            "workflow_stale_scope_job_id",
+            "workflow_resume_explicit_job",
+            "workflow_resume_stale_after_seconds",
+            "workflow_resume_limit",
+            "workflow_auto_resume_enabled",
+            "workflow_queue_resume_stale_after_seconds",
+            "workflow_queue_resume_limit",
+            "workflow_queue_auto_takeover_enabled",
+        ):
+            self.assertNotIn(control_key, callback, f"wake file must not carry {control_key}")
+
+        # The takeover contract now lives in the DURABLE per-job intent table:
+        # all 8 params are server-side literals (not request-derived), scoped to
+        # THIS job_id, with zero stale thresholds.
+        intent = self.store.get_workflow_recovery_intent(job_id)
+        self.assertEqual(intent.get("status"), "pending")
+        self.assertEqual(intent.get("classification"), "runner_not_alive")
+        self.assertEqual(intent.get("requested_by"), "progress_poll")
+        intent_params = dict(intent.get("params") or {})
+        self.assertEqual(intent_params.get("workflow_stale_scope_job_id"), job_id)
+        self.assertEqual(intent_params.get("workflow_resume_stale_after_seconds"), 0)
+        self.assertEqual(intent_params.get("workflow_queue_resume_stale_after_seconds"), 0)
+        self.assertTrue(intent_params.get("workflow_queue_auto_takeover_enabled"))
+        self.assertTrue(intent_params.get("workflow_auto_resume_enabled"))
 
         # The cooldown-anchor event must still be written so consecutive polls
         # throttle (get_job_progress reads control=="progress_auto_takeover").
@@ -391,19 +413,19 @@ class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase
     # =====================================================================
 
     def test_signal_then_daemon_tick_drives_queued_workflow_recovery(self) -> None:
-        # End-to-end safety: the read path only SIGNALS, but the guaranteed
-        # daemon's tick (run_worker_recovery_once — the same body 5a guarantees
-        # runs) STILL drives the queued workflow's recovery via run_queued_workflow
-        # — AND it does so using THE EXACT wakeup callback_payload the signal
-        # persisted, with no test-only stronger settings. This is the decisive
-        # regression guard for the Step 5e NO-GO: if the helper drops the
-        # bounded-recovery fields, the replayed payload would lack the zero-stale
-        # scope and the daemon would NOT take over now.
+        # End-to-end safety (Option B): the read path WRITES a durable per-job
+        # recovery-takeover INTENT and emits a pure NUDGE. The guaranteed daemon's
+        # tick (run_worker_recovery_once — the same body 5a guarantees runs) STILL
+        # drives the queued workflow's recovery via run_queued_workflow — and it
+        # does so by DRAINING the durable intent (stale=0 scoped resume) on a
+        # PLAIN global tick, with no hand-built scoped payload. This is the
+        # decisive regression guard for the Step 5e NO-GO replacement: the daemon
+        # takes over via the intent table, not via wake-file-forwarded controls.
         job_id = "job_fallback_daemon_drives"
         self._save_queued_workflow(job_id)
 
-        # Step 1: read-path takeover signals the daemon with the scoped/zero-stale
-        # payload the real progress poll builds (no inline driving on this path).
+        # Step 1: read-path takeover writes the durable intent + nudges the daemon
+        # (no inline driving on this path).
         clear_service_wakeup_request(self.runtime_dir, SHARED_DAEMON)
         scoped_recovery_payload = {
             "workflow_stale_scope_job_id": job_id,
@@ -427,17 +449,17 @@ class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase
         tick.assert_not_called()
         wakeup = self._wakeup()
         self.assertEqual(wakeup["status"], "requested")
-        # Replay the daemon's actual consumption: the woken tick runs with the
-        # callback_payload persisted to the wake file — nothing hand-strengthened.
-        daemon_tick_payload = dict(wakeup.get("callback_payload") or {})
-        self.assertEqual(daemon_tick_payload.get("workflow_stale_scope_job_id"), job_id)
-        self.assertEqual(daemon_tick_payload.get("workflow_queue_resume_stale_after_seconds"), 0)
+        # The wake file is a pure nudge; the takeover contract is in the intent.
+        callback = dict(wakeup.get("callback_payload") or {})
+        self.assertNotIn("workflow_stale_scope_job_id", callback)
+        intent = self.store.get_workflow_recovery_intent(job_id)
+        self.assertEqual(intent.get("status"), "pending")
 
-        # Step 2: the woken daemon runs the recovery tick with that payload. Its
-        # workflow_resume (queue-takeover) phase must reach the queued workflow
-        # and take it over — i.e. recovery is DAEMON-DRIVEN, not request-driven.
-        # The takeover's spawned run_queued_workflow thread is replaced with a
-        # kwargs-tolerant no-op so the assertion is deterministic.
+        # Step 2: the woken daemon runs a PLAIN global recovery tick. Its
+        # workflow_takeover_intent_drain phase claims the pending intent and runs
+        # the stale=0 scoped resume, taking over the queued workflow — i.e.
+        # recovery is DAEMON-DRIVEN via the durable intent, not request-driven and
+        # not via a hand-strengthened payload.
         drove_via_daemon: list[str] = []
 
         def _noop_run_queued(**kwargs: object) -> dict:
@@ -446,7 +468,7 @@ class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase
             return {"job_id": jid, "status": "skipped", "reason": "stubbed_thread_target"}
 
         with mock.patch.object(self.orchestrator, "run_queued_workflow", side_effect=_noop_run_queued):
-            result = self.orchestrator.run_worker_recovery_once(daemon_tick_payload)
+            result = self.orchestrator.run_worker_recovery_once({})
             # Let the takeover's spawned (now no-op) thread run to completion.
             for thread in threading.enumerate():
                 if thread.name == f"hosted-workflow-{job_id}":
@@ -467,6 +489,8 @@ class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase
         # And the daemon-driven dispatch actually invoked run_queued_workflow for
         # this job (off the request/read path, on the daemon's behalf).
         self.assertIn(job_id, drove_via_daemon)
+        # The intent was consumed by the drain phase (taken over exactly once).
+        self.assertEqual(self.store.get_workflow_recovery_intent(job_id).get("status"), "consumed")
 
 
 if __name__ == "__main__":

@@ -84,6 +84,7 @@ CHARACTERIZED_PHASE_SEQUENCE: tuple[tuple[str, str], ...] = (
     ("legacy_materialization_adapter", "durable_runtime_migration_adapter"),
     ("event_level_materialization_followup", "event_level_local_apply_to_board_visible"),
     ("post_event_level_profile_prefetch_refill", "profile_refill_daemon"),
+    ("workflow_takeover_intent_drain", "workflow_takeover_intent_drain"),
     ("workflow_resume", "workflow_resume_controller"),
     ("post_completion_reconcile", "completed_workflow_reconcile"),
     ("excel_intake_recovery", "excel_intake_recovery"),
@@ -155,6 +156,9 @@ PHASES_ABSENT_FROM_SUMMARY: frozenset[str] = frozenset(
         "crm_writer_command_owner",
         "explicit_job_followup_rounds",
         "post_recovery_housekeeping",
+        # workflow_takeover_intent_drain is metered into recovery_phase_metrics
+        # but never returned as its own summary key (metrics-only drain phase).
+        "workflow_takeover_intent_drain",
         "total",
     }
 )

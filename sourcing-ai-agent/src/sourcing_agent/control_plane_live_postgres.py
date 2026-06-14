@@ -80,6 +80,7 @@ CONTROL_PLANE_LIVE_TABLES = (
     "agent_trace_spans",
     "agent_worker_runs",
     "workflow_job_leases",
+    "workflow_recovery_intents",
     "workflow_events",
     "workflow_current_state",
     "workflow_commands",
@@ -167,6 +168,7 @@ _PRIMARY_KEY_COLUMNS = {
     "agent_trace_spans": ("span_id",),
     "agent_worker_runs": ("worker_id",),
     "workflow_job_leases": ("job_id",),
+    "workflow_recovery_intents": ("job_id",),
     "workflow_events": ("event_id",),
     "workflow_current_state": ("workflow_run_id",),
     "workflow_commands": ("command_id",),
@@ -232,6 +234,7 @@ _RUNTIME_COORDINATION_TABLES = {
     "agent_trace_spans",
     "agent_worker_runs",
     "workflow_job_leases",
+    "workflow_recovery_intents",
     "workflow_events",
     "workflow_current_state",
     "workflow_commands",
@@ -2795,6 +2798,138 @@ class LiveControlPlanePostgresAdapter:
             tuple(params),
         )
 
+    def upsert_workflow_recovery_intent(
+        self,
+        job_id: str,
+        *,
+        classification: str = "",
+        params: dict[str, Any] | None = None,
+        requested_by: str = "",
+    ) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_recovery_intents"):
+            return None
+        self._ensure_runtime_coordination_schema()
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id:
+            return None
+        now = _utc_now_sql_timestamp()
+        return self._execute_returning_one(
+            """
+            INSERT INTO workflow_recovery_intents (
+                job_id,
+                classification,
+                status,
+                requested_at,
+                requested_by,
+                params_json,
+                lease_owner,
+                lease_expires_at,
+                claimed_at,
+                schema_version,
+                created_at,
+                updated_at
+            ) VALUES (%s, %s, 'pending', %s, %s, %s, '', '', '', 'workflow_recovery_intent_v1', %s, %s)
+            ON CONFLICT (job_id) DO UPDATE SET
+                classification = EXCLUDED.classification,
+                status = 'pending',
+                requested_at = EXCLUDED.requested_at,
+                requested_by = EXCLUDED.requested_by,
+                params_json = EXCLUDED.params_json,
+                lease_owner = '',
+                lease_expires_at = '',
+                claimed_at = '',
+                updated_at = EXCLUDED.updated_at
+            RETURNING *
+            """,
+            (
+                normalized_job_id,
+                str(classification or ""),
+                now,
+                str(requested_by or ""),
+                _json_dump(dict(params or {})),
+                now,
+                now,
+            ),
+        )
+
+    def claim_workflow_recovery_intents(
+        self,
+        *,
+        lease_owner: str,
+        lease_seconds: int = 300,
+        limit: int = 1,
+    ) -> list[dict[str, Any]]:
+        if not self.should_prefer_read("workflow_recovery_intents"):
+            return []
+        self._ensure_runtime_coordination_schema()
+        normalized_owner = str(lease_owner or "").strip()
+        if not normalized_owner:
+            return []
+        now = _utc_now_sql_timestamp()
+        normalized_limit = max(1, int(limit or 1))
+        sql = """
+            UPDATE workflow_recovery_intents
+            SET status = 'claimed',
+                lease_owner = %s,
+                lease_expires_at = %s,
+                claimed_at = %s,
+                updated_at = %s
+            WHERE job_id IN (
+                SELECT job_id FROM workflow_recovery_intents
+                WHERE status = 'pending'
+                  AND (lease_expires_at = '' OR lease_expires_at <= %s)
+                ORDER BY requested_at, job_id
+                LIMIT %s
+                FOR UPDATE SKIP LOCKED
+            )
+            RETURNING *
+        """
+        normalized_params = tuple(
+            _normalize_postgres_payload(item)
+            for item in (
+                normalized_owner,
+                _expiry_timestamp(int(lease_seconds or 300)),
+                now,
+                now,
+                now,
+                normalized_limit,
+            )
+        )
+        self.ensure_bootstrapped()
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(sql, normalized_params)
+                        rows = _fetch_all_dict_rows(cursor)
+                    connection.commit()
+                return rows
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def mark_workflow_recovery_intent_consumed(self, job_id: str) -> dict[str, Any] | None:
+        if not self.should_prefer_read("workflow_recovery_intents"):
+            return None
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id:
+            return None
+        return self._execute_returning_one(
+            """
+            UPDATE workflow_recovery_intents
+            SET status = 'consumed',
+                lease_owner = '',
+                lease_expires_at = '',
+                updated_at = %s
+            WHERE job_id = %s
+            RETURNING *
+            """,
+            (_utc_now_sql_timestamp(), normalized_job_id),
+        )
+
     def append_workflow_event(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
         if not self.should_prefer_read("workflow_events"):
             return None
@@ -4987,6 +5122,24 @@ class LiveControlPlanePostgresAdapter:
                     )
                     cursor.execute(
                         """
+                        CREATE TABLE IF NOT EXISTS workflow_recovery_intents (
+                            job_id TEXT PRIMARY KEY,
+                            classification TEXT NOT NULL DEFAULT '',
+                            status TEXT NOT NULL DEFAULT 'pending',
+                            requested_at TEXT NOT NULL DEFAULT '',
+                            requested_by TEXT NOT NULL DEFAULT '',
+                            params_json TEXT NOT NULL DEFAULT '{}',
+                            lease_owner TEXT NOT NULL DEFAULT '',
+                            lease_expires_at TEXT NOT NULL DEFAULT '',
+                            claimed_at TEXT NOT NULL DEFAULT '',
+                            schema_version TEXT NOT NULL DEFAULT 'workflow_recovery_intent_v1',
+                            created_at TEXT,
+                            updated_at TEXT
+                        )
+                        """
+                    )
+                    cursor.execute(
+                        """
                         CREATE TABLE IF NOT EXISTS runtime_provider_limiter_leases (
                             lease_token TEXT PRIMARY KEY,
                             limiter_key TEXT NOT NULL,
@@ -5067,6 +5220,12 @@ class LiveControlPlanePostgresAdapter:
                         """
                         CREATE INDEX IF NOT EXISTS idx_workflow_job_leases_expires
                         ON workflow_job_leases (lease_expires_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_workflow_recovery_intents_status
+                        ON workflow_recovery_intents (status, lease_expires_at)
                         """
                     )
                     cursor.execute(

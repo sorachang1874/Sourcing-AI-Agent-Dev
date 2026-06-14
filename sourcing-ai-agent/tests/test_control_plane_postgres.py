@@ -81,6 +81,7 @@ class _FakePsycopg:
 
 class _FakeSnapshotPostgresCursor:
     def __init__(self) -> None:
+        self.executed: list[tuple[str, tuple[object, ...] | None]] = []
         self.description: list[tuple[str]] = []
         self._rows: list[object] = []
         self._offset = 0
@@ -92,6 +93,7 @@ class _FakeSnapshotPostgresCursor:
         return False
 
     def execute(self, sql: str, params: tuple[object, ...] | None = None) -> None:
+        self.executed.append((sql, params))
         self._offset = 0
         normalized = " ".join(sql.split())
         if "FROM information_schema.tables" in normalized and "LIMIT 1" in normalized:
@@ -146,7 +148,7 @@ class _FakeSnapshotPostgresCursor:
         if self._offset >= len(self._rows):
             return []
         next_offset = min(len(self._rows), self._offset + max(1, size))
-        chunk = self._rows[self._offset:next_offset]
+        chunk = self._rows[self._offset : next_offset]
         self._offset = next_offset
         return list(chunk)
 
@@ -181,7 +183,9 @@ class ControlPlanePostgresTest(unittest.TestCase):
                 normalized = " ".join(sql.split())
                 if "SELECT class_rel.relkind" in normalized:
                     relation_name = str((params or ("",))[0] or "")
-                    self._fetchone_result = ("r",) if relation_name == ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE else None
+                    self._fetchone_result = (
+                        ("r",) if relation_name == ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE else None
+                    )
                     return
                 self._fetchone_result = None
 
@@ -414,11 +418,21 @@ class ControlPlanePostgresTest(unittest.TestCase):
             runtime_dir.mkdir(parents=True, exist_ok=True)
             output_path = runtime_dir / "exports" / "control-plane-from-postgres.json"
 
-            fake_psycopg = SimpleNamespace(connect=lambda dsn: _FakeSnapshotPostgresConnection(dsn))
+            connections: list[_FakeSnapshotPostgresConnection] = []
+
+            def _connect(dsn: str, **_kwargs: object) -> _FakeSnapshotPostgresConnection:
+                connection = _FakeSnapshotPostgresConnection(dsn)
+                connections.append(connection)
+                return connection
+
+            fake_psycopg = SimpleNamespace(connect=_connect)
             with mock.patch.dict(
                 "os.environ",
-                {"SOURCING_CONTROL_PLANE_POSTGRES_DSN": "postgresql://local/test"},
-                clear=False,
+                {
+                    "SOURCING_CONTROL_PLANE_POSTGRES_DSN": "postgresql://local/test",
+                    "SOURCING_RUNTIME_ENVIRONMENT": "scripted",
+                },
+                clear=True,
             ):
                 with mock.patch(
                     "sourcing_agent.control_plane_postgres._import_psycopg",
@@ -436,6 +450,9 @@ class ControlPlanePostgresTest(unittest.TestCase):
             self.assertEqual(snapshot_payload["source_backend"], "postgres")
             self.assertEqual(snapshot_payload["tables"]["jobs"]["row_count"], 1)
             self.assertEqual(snapshot_payload["tables"]["jobs"]["rows"][0]["job_id"], "job-pg")
+            self.assertTrue(connections)
+            executed_sql = [sql for sql, _params in connections[0].cursor_instance.executed]
+            self.assertIn('SET search_path TO "sourcing_scripted", public', executed_sql)
 
     def test_sync_control_plane_snapshot_to_postgres_requires_dsn(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
