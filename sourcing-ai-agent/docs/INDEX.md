@@ -84,6 +84,7 @@
 - [SERVING_MESH_OWNERSHIP_BOUNDARY.md](SERVING_MESH_OWNERSHIP_BOUNDARY.md) — Serving mesh 所有权边界冻结（2026-06-14，Phase 4 Step 4；四块切分 + resolver 接口 + 双向环解法,代码随 M3-M5 搬）。
 - [RECOVERY_DRIVING_REDESIGN_STUDY.md](RECOVERY_DRIVING_REDESIGN_STUDY.md) — recovery 驱动机制事件化重设计研究（2026-06-14，重定义 Phase 4 Step 5；待 owner 审定 §6 决策点）。
 - [RECOVERY_TAKEOVER_INTENT_DESIGN.md](RECOVERY_TAKEOVER_INTENT_DESIGN.md) — Option B 设计：durable per-job 接管意图表（2026-06-14，owner 审定；分离 notification 与 intent，解决 5e 两次 NO-GO 的 F1 注入 / F2 clobber）。
+- [TRACK_C_SERVING_RUNTIME_PLAN.md](TRACK_C_SERVING_RUNTIME_PLAN.md) — Track C serving runtime 排序计划（2026-06-15，待 owner 审定 §4 决策点；C1 重活出线程 → C2 鉴权 → C3 进程分离+5d → C4 OpenAPI+SSE → C5 并入 Track D → C6 later）。
 - [NEXT_TODO.md](NEXT_TODO.md) — 活跃待办（滚动文件）。
 - [../PROGRESS.md](../PROGRESS.md) — 进展日志（滚动文件，月度归档于 `archive/progress/`）。
 - [PG_ONLY_CUTOVER_TRACKER.md](PG_ONLY_CUTOVER_TRACKER.md) — PG-only cutover 尾巴。
