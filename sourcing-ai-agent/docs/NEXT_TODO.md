@@ -28,7 +28,7 @@
   - [ ] Step 2b（后续）：级联簇迁移——需先解开 per-branch owner（RecoveryPhase.owner 改可计算）、result-vs-metrics 分歧、threaded *_work_observed → ctx 的无损表达；oracle 仍为硬门。
   - [x] Step 3：C1 cancel/resume → CommandTypeSpec 槽位（2026-06-14，`4991d2c`）：两个分发器（cancel 15 / resume 11 分支）改查表；`CommandTypeSpec` 加 `cancel_handler`/`resume_handler`（纯名,getattr 解析）；owner-mismatch fall-through 经 sibling owner-agnostic registry 保留；**全部 1025 个 (owner, command_type) 组合等价 0 mismatch**；API 不变量逐字节一致；manifest 导出 cancel 语义（Track E）；characterize-first（对照树同绿）。
   - [x] Step 4：B2 网格边界冻结成文（2026-06-14，`docs/SERVING_MESH_OWNERSHIP_BOUNDARY.md`）：四块切分（CandidateSourceResolver / ServingReadModel / ProjectionCommandOwner+9 读族 / fast-path 拆两半）逐方法 file:line + 自然 owner + 冻结 resolver 接口签名 + candidate_source↔reader 双向环两条边精确定位与 B2 解法（消 Edge B 重解）+ 迁移顺序（先搬 resolver 解环）；不搬代码,随 M3–M5。纠正一处审计前提:9 读族非 profile_fetch 消费,归读模型层。
-  - [ ] Step 5：recovery 触发点收编（(d) 进程分离前置 ①–③）。
+  - [ ] Step 5（已重定义,待 owner 拍板 §6）：从"inline→enqueue 收编"重定义为**事件信号唤醒 + poll backstop**（`docs/RECOVERY_DRIVING_REDESIGN_STUDY.md`，推荐 Option 2，零新 infra）。审计定论:生产 daemon 保证非代码强制(隐式部署约定),且 (a) command/worker/provider 迁移已 emit durable 事件却只靠 5s poll 兜底(违 invariant 3)、(b) crash/lease/stuck 本质需 poll。子步:5a daemon-保证不变式(serve 启动 fail-closed 断言)→5b 泛化 `request_service_wakeup` 入口(已给 sub-second)→5c poll 降为 backstop→5d 可选补 `runtime_outbox` consumer(现成 PG 通道缺消费者)→5e 移除 ①②③。Option 3(全事件流 driver)= Track D 北极星(`agent_events`/SSE 表尚不存在)。
 
 ### Track B — 存储与测试基建（与 A 并行）
 - [x] 测试环境契约 v2（2026-06-11）：每 run = (PG schema + runtime dir) 配对 + `.ephemeral-test-env.json` 标记；teardown `DROP SCHEMA CASCADE`（仅删自建 schema，`pre_existing` 守卫）；孤儿 janitor `scripts/prune_test_schemas.py`（先快照后扫描、活跃连接守卫、仅限本地 DSN、dry-run 默认）。
