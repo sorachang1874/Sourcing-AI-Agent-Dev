@@ -35,6 +35,7 @@ from sourcing_agent.durable_runtime import CommandOwnerRegistry, DurableRuntimeW
 from sourcing_agent.service_daemon import (
     WorkerDaemonService,
     read_service_wakeup_request,
+    request_service_wakeup,
     service_state_dir,
 )
 from sourcing_agent.storage import ControlPlaneStore
@@ -287,13 +288,18 @@ class DurableRuntimeWakeupSignalTest(PGDurableRuntimeTestMixin, unittest.TestCas
         self.assertEqual(wakeup["reason"], "durable_runtime_event")
         self.assertEqual(wakeup["requested_by"], "durable_runtime_writer")
         callback = dict(wakeup.get("callback_payload") or {})
+        # Honest global-sweep accelerator: the payload carries only an
+        # observability source, NOT per-workflow scope fields (workflow_run_id
+        # is a one-way hash that recovery cannot consume as a scope, so carrying
+        # it would imply a targeting that does not exist).
         self.assertEqual(callback.get("source"), "durable_runtime_event")
-        self.assertEqual(callback.get("workflow_stale_scope_workflow_run_id"), "wf_wakeup_cmd")
-        self.assertEqual(callback.get("workflow_stale_scope_operation_id"), "op_wakeup_cmd")
+        self.assertNotIn("workflow_stale_scope_workflow_run_id", callback)
+        self.assertNotIn("workflow_stale_scope_operation_id", callback)
 
-    def test_workflow_completed_outbox_row_emits_scoped_wakeup(self) -> None:
+    def test_workflow_completed_outbox_row_emits_global_sweep_wakeup(self) -> None:
         # Invariant 3: the runtime_outbox workflow.completed row (durable_runtime
-        # ~3333-3339) emits a wakeup carrying the completion-reconcile scope.
+        # ~3333-3339) wakes the shared daemon's global tick now instead of waiting
+        # for the poll. The wake is a global-sweep accelerator, not scoped.
         writer = DurableRuntimeWriter(
             self.store,
             owner_registry=self.registry,
@@ -320,9 +326,10 @@ class DurableRuntimeWakeupSignalTest(PGDurableRuntimeTestMixin, unittest.TestCas
         self.assertEqual(completed.outbox[0]["outbox_type"], "workflow.completed")
         wakeup = self._wakeup()
         self.assertEqual(wakeup["status"], "requested")
+        self.assertEqual(wakeup["reason"], "durable_runtime_event")
         callback = dict(wakeup.get("callback_payload") or {})
-        self.assertEqual(callback.get("workflow_stale_scope_workflow_run_id"), "wf_wakeup_done")
-        self.assertTrue(callback.get("workflow_completed_reconcile_requested"))
+        self.assertEqual(callback.get("source"), "durable_runtime_event")
+        self.assertNotIn("workflow_stale_scope_workflow_run_id", callback)
 
     def test_fan_out_of_events_coalesces_into_one_pending_wakeup(self) -> None:
         # Guard against signal storms: many event-producing reduces for one logical
@@ -363,13 +370,12 @@ class DurableRuntimeWakeupSignalTest(PGDurableRuntimeTestMixin, unittest.TestCas
             payload={"stage_key": "serving_finalized"},
         )
 
-        # Exactly one pending wake file exists; its merged callback carries both the
-        # scope and the completion-reconcile flag from the coalesced signals.
+        # Exactly one pending wake file exists across the three signals (the daemon
+        # consumes one tick, not three) — the storm-coalescing guarantee.
         wakeup = self._wakeup()
         self.assertEqual(wakeup["status"], "requested")
         callback = dict(wakeup.get("callback_payload") or {})
-        self.assertEqual(callback.get("workflow_stale_scope_workflow_run_id"), "wf_coalesce")
-        self.assertTrue(callback.get("workflow_completed_reconcile_requested"))
+        self.assertEqual(callback.get("source"), "durable_runtime_event")
 
     def test_wakeup_failure_never_breaks_the_durable_write(self) -> None:
         # Acceleration only: if request_service_wakeup raises, the durable write still
@@ -407,6 +413,49 @@ class DurableRuntimeWakeupSignalTest(PGDurableRuntimeTestMixin, unittest.TestCas
         self.assertEqual(len(planned.commands), 1)
         commands = self.store.list_workflow_commands(workflow_run_id="wf_wakeup_fail", limit=0)
         self.assertEqual(len(commands), 1)
+
+    def test_concurrent_wakeups_preserve_every_merged_scope(self) -> None:
+        # Finding 2 (concurrency): Step 5b makes request_service_wakeup a hot path
+        # — many threads in the same process signal concurrently. The read-merge-
+        # replace runs under a per-service flock and uses per-(pid,thread,counter)
+        # temp files, so concurrent writers cannot clobber each other's merged
+        # callback nor collide on the temp path. Drive N threads each contributing
+        # a distinct list entry and assert ALL survive the merge (none lost).
+        import threading
+
+        thread_count = 16
+        barrier = threading.Barrier(thread_count)
+        errors: list[BaseException] = []
+
+        def _signal(index: int) -> None:
+            try:
+                barrier.wait(timeout=10)
+                request_service_wakeup(
+                    self.runtime_dir,
+                    "worker-recovery-daemon",
+                    reason="concurrency_probe",
+                    requested_by=f"thread-{index}",
+                    # explicit_worker_ids is a union-merged field (positive ints),
+                    # so a correct locked read-merge-replace must preserve every
+                    # thread's id.
+                    callback_payload={"explicit_worker_ids": [index + 1]},
+                )
+            except BaseException as exc:  # noqa: BLE001 - surface to the assertion
+                errors.append(exc)
+
+        threads = [threading.Thread(target=_signal, args=(i,)) for i in range(thread_count)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=15)
+
+        self.assertEqual(errors, [])
+        callback = dict(self._wakeup().get("callback_payload") or {})
+        merged = set(callback.get("explicit_worker_ids") or [])
+        # Every concurrent contribution survived the locked read-merge-replace;
+        # without the in-process lock, racing read-merge-write would drop ids (a
+        # writer would overwrite another's stale-read merge).
+        self.assertEqual(merged, {i + 1 for i in range(thread_count)})
 
 
 # ---------------------------------------------------------------------------

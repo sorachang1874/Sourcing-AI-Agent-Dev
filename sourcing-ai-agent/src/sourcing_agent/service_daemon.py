@@ -15,11 +15,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
+import itertools
+
 from .recovery_contract import coerce_positive_int, remote_provider_event_recovery_total_limit
 
 ServiceCallback = Callable[[dict[str, Any]], dict[str, Any]]
 _COMPACT_SERVICE_LIST_LIMIT = 20
 _COMPACT_SERVICE_DETAIL_LIST_LIMIT = 10
+# Unique-suffix source for wake-request temp files so concurrent writers in the
+# same process never collide on the temp path (see request_service_wakeup).
+_WAKEUP_TMP_COUNTER = itertools.count()
+# In-process serialization of the wake-request read-merge-replace. fcntl.flock
+# across separate fds in ONE process is not reliably mutually exclusive across
+# threads (notably on Darwin), so a threading.Lock guards same-process writers;
+# the flock inside still guards cross-process writers.
+_WAKEUP_WRITE_LOCK = threading.Lock()
 
 
 def _json_safe_payload(value: Any) -> Any:
@@ -592,37 +602,47 @@ def request_service_wakeup(
     normalized_service_name = str(service_name or "worker-recovery-daemon").strip() or "worker-recovery-daemon"
     request_path = service_wakeup_request_path(runtime_dir, normalized_service_name)
     request_path.parent.mkdir(parents=True, exist_ok=True)
-    existing_payload: dict[str, Any] = {}
-    if request_path.exists():
+    # Concurrency-safe coalescing (Step 5b makes this a hot path: many durable
+    # writes in the same multi-threaded API process signal here concurrently).
+    # The whole read-merge-replace runs under an exclusive per-service flock so
+    # two concurrent writers cannot both read the same stale payload and clobber
+    # each other's merged callback. The temp file is per-(pid,thread,counter) so
+    # concurrent writers never collide on it, and os.replace makes the swap
+    # atomic for readers (which also degrade to "corrupted" + poll backstop).
+    lock_path = request_path.with_name(f"{request_path.name}.lock")
+    with _WAKEUP_WRITE_LOCK, open(lock_path, "w", encoding="utf-8") as lock_handle:
+        fcntl.flock(lock_handle, fcntl.LOCK_EX)
         try:
-            existing = json.loads(request_path.read_text())
-            if isinstance(existing, dict):
-                existing_payload = dict(existing.get("callback_payload") or {})
-        except (OSError, json.JSONDecodeError):
-            existing_payload = {}
-    merged_callback_payload = _merge_service_callback_payload(
-        existing_payload,
-        dict(callback_payload or {}),
-    )
-    payload = {
-        "status": "requested",
-        "service_name": normalized_service_name,
-        "requested_at": _utc_now(),
-        "requested_by": str(requested_by or "").strip() or "operator",
-        "reason": str(reason or "").strip() or "service_wakeup_requested",
-        "path": str(request_path),
-    }
-    if merged_callback_payload:
-        payload["callback_payload"] = merged_callback_payload
-    # Atomic write (temp + os.replace): Step 5b makes this a hot path — every
-    # durable-event commit signals here, not just rare provider events — so a
-    # concurrent daemon reader must never observe a half-written request file.
-    # The read side already degrades to "corrupted" + poll backstop, but the
-    # rename keeps the fast path clean.
-    tmp_path = request_path.with_name(f"{request_path.name}.{os.getpid()}.tmp")
-    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
-    os.replace(tmp_path, request_path)
-    return payload
+            existing_payload: dict[str, Any] = {}
+            if request_path.exists():
+                try:
+                    existing = json.loads(request_path.read_text())
+                    if isinstance(existing, dict):
+                        existing_payload = dict(existing.get("callback_payload") or {})
+                except (OSError, json.JSONDecodeError):
+                    existing_payload = {}
+            merged_callback_payload = _merge_service_callback_payload(
+                existing_payload,
+                dict(callback_payload or {}),
+            )
+            payload = {
+                "status": "requested",
+                "service_name": normalized_service_name,
+                "requested_at": _utc_now(),
+                "requested_by": str(requested_by or "").strip() or "operator",
+                "reason": str(reason or "").strip() or "service_wakeup_requested",
+                "path": str(request_path),
+            }
+            if merged_callback_payload:
+                payload["callback_payload"] = merged_callback_payload
+            tmp_path = request_path.with_name(
+                f"{request_path.name}.{os.getpid()}.{threading.get_ident()}.{next(_WAKEUP_TMP_COUNTER)}.tmp"
+            )
+            tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+            os.replace(tmp_path, request_path)
+            return payload
+        finally:
+            fcntl.flock(lock_handle, fcntl.LOCK_UN)
 
 
 def read_service_wakeup_request(runtime_dir: str | Path, service_name: str = "worker-recovery-daemon") -> dict[str, Any]:

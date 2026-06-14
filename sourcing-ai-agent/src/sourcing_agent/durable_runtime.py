@@ -3271,8 +3271,6 @@ class DurableRuntimeWriter:
         # the same event-time signal shape the provider-event caller already uses
         # (orchestrator.py ~37871); the daemon poll remains the backstop.
         self._signal_recovery_wakeup(
-            workflow_run_id=normalized_run_id,
-            operation_id=operation_id,
             committed_commands=committed_commands,
             committed_outbox=committed_outbox,
         )
@@ -3288,42 +3286,40 @@ class DurableRuntimeWriter:
     def _signal_recovery_wakeup(
         self,
         *,
-        workflow_run_id: str,
-        operation_id: str,
         committed_commands: tuple[dict[str, Any], ...],
         committed_outbox: tuple[dict[str, Any], ...],
     ) -> dict[str, Any] | None:
         """Best-effort sub-second wakeup of the shared recovery daemon (5b).
 
         Emitted only when this transition committed durable work the daemon must
-        act on: one or more typed commands, or a runtime_outbox row (the
-        workflow.completed row in particular drives post-completion reconcile).
-        The wake file coalesces signal storms for one logical operation because
-        request_service_wakeup merges callback_payload into any pending request
-        via _merge_service_callback_payload, and the daemon's _consume_wakeup_request
-        de-dupes by file mtime — so a fan-out of commands in a single reduce
-        produces at most one extra woken tick, not a storm. Failures here never
-        affect the durable write; the poll still guarantees eventual progress.
+        act on: one or more typed commands, or a runtime_outbox row. This is a
+        GLOBAL-SWEEP ACCELERATOR, not a scoped wakeup: the shared
+        ``worker-recovery-daemon`` runs a global recovery tick by design, and
+        this signal only makes that tick run NOW instead of waiting up to the
+        poll interval (closing the invariant-3 latency gap). It is deliberately
+        NOT carrying a per-workflow scope: ``workflow_run_id`` is a one-way
+        ``legacy_job_workflow_run_id`` hash that cannot be inverted to the
+        daemon's ``workflow_stale_scope_job_id``, and genuine per-workflow
+        scoping would require threading a workflow-run scope through every drain
+        in run_worker_recovery_once — which would change the tick body the Step 1
+        characterization oracle pins. That belongs with the Step 2b cascade
+        migration, not here; the prior "scoped" framing was inaccurate.
+
+        Concurrency-safe coalescing: request_service_wakeup serializes its
+        read-merge-replace under a per-service flock (service_daemon.py), so a
+        fan-out of concurrent reduces collapses to bounded pending wakes rather
+        than a storm; the daemon de-dupes by file mtime; the poll backstops.
+        Failures here never affect the durable write.
         """
 
         if self.runtime_dir is None:
             return None
         if not committed_commands and not committed_outbox:
             return None
-        produced_completed_outbox = any(
-            str(item.get("outbox_type") or "").strip() == "workflow.completed" for item in committed_outbox
-        )
-        # Scope the callback so the woken tick is targeted and idempotent, mirroring
-        # the provider-event caller's job/workflow-scoped payload.
-        callback_payload: dict[str, Any] = {
-            "source": "durable_runtime_event",
-            "workflow_stale_scope_workflow_run_id": str(workflow_run_id or "").strip(),
-        }
-        normalized_operation_id = str(operation_id or "").strip()
-        if normalized_operation_id:
-            callback_payload["workflow_stale_scope_operation_id"] = normalized_operation_id
-        if produced_completed_outbox:
-            callback_payload["workflow_completed_reconcile_requested"] = True
+        # Honest minimal payload: the wake just runs the global tick now. No
+        # scope fields — none were consumed by recovery (verified), and carrying
+        # them implied a targeting that does not exist.
+        callback_payload: dict[str, Any] = {"source": "durable_runtime_event"}
         try:
             return request_service_wakeup(
                 self.runtime_dir,
