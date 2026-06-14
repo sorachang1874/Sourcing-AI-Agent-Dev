@@ -23,7 +23,7 @@
 - [x] Phase 3 收尾：drain 绑定注册式化（2026-06-12）：14 个统一形态的 flag-gated drain 调用点（202 行块）收敛为 `DEFAULT_RECOVERY_DRAIN_BINDINGS` 注册表 + 16 行循环；特征化测试先行（在 b789cd8 对照树同样跑绿）；2 个 CRM drain 因边界守卫钉死字面源码而留点名、bespoke 级联 drain 按界不动（Phase 4 处置）；owner 模块零 diff。**Track A Phase 0–3 全部完成。**
 - [ ] Phase 4：纠缠核心重设计（设计 `docs/PHASE4_ENTANGLED_CORE_DESIGN.md`，owner 2026-06-12 整体批准按推荐执行）：
   - [x] Step 0：scheduler 契约正式化（`PROFILE_PREFETCH_SCHEDULER_CONTRACT.md`）+ storeless fail-closed + 15 失败清账（enrichment 12→0；results_api 3 移交 B 带）（2026-06-12，`f4c8331`+`ef74475`）。
-  - [ ] Step 1：recovery tick 特征化（金快照 = phase 名序列 + per-phase owner/max_sync_work/gating/skip/结果摘要 + recovery_phase_metrics 形态；当前树与对照树双跑）。
+  - [x] Step 1：recovery tick 特征化（2026-06-14，`77bf767`）：`tests/test_recovery_tick_characterization.py`（549 行，10 tests）钉死 49 行 phase 序列 + per-phase gating 双向 + summary 槽位映射 + 跨阶段 ladder 可观测效果；零产品码改动；独立变异敏感性验证 PASS（reorder/gate-flip/summary-drop 三种全捕获,对照树绿）。
   - [ ] Step 2：A2 phase 对象 registry（`RecoveryPhase` + `TickContext`；逐 phase verbatim 提取，nonlocal→ctx 是唯一非 verbatim 点）。
   - [ ] Step 3：C1 cancel/resume → CommandTypeSpec handler 槽位。
   - [ ] Step 4：B2 网格边界冻结成文（resolver 接口 + 四块切分清单；不搬代码，搬动随 M3–M5）。
