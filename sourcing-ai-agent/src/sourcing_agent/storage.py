@@ -13001,13 +13001,17 @@ class ControlPlaneStore:
         lease_seconds: int = 300,
         limit: int = 1,
     ) -> list[dict[str, Any]]:
-        """Single-winner claim of pending recovery intents (drain phase).
+        """Single-winner claim of claimable recovery intents (drain phase).
 
         Copies the ``claim_job_materialization_item`` single-winner semantics:
-        the conditional ``UPDATE ... WHERE status='pending' AND (lease expired)``
-        guarantees two concurrent daemon ticks claim disjoint sets — a row whose
-        status is flipped to ``claimed`` by one tick no longer matches the
-        predicate for the other.
+        the conditional ``UPDATE ... WHERE <claimable>`` guarantees two
+        concurrent daemon ticks claim disjoint sets — a row whose status is
+        flipped to ``claimed`` (with a fresh future lease) by one tick no longer
+        matches the predicate for the other. Claimable = ``status='pending'`` OR
+        an EXPIRED-lease ``status='claimed'`` row, so a takeover_failed intent
+        left claimed (and a row whose claiming daemon crashed) is reclaimed once
+        its lease expires — without this, a failed/crashed claim would strand the
+        intent forever (the drain leaves it claimed on retryable failure).
         """
 
         normalized_owner = str(lease_owner or "").strip()
@@ -13032,7 +13036,9 @@ class ControlPlaneStore:
                 """
                 SELECT job_id FROM workflow_recovery_intents
                 WHERE status = 'pending'
-                  AND (lease_expires_at = '' OR datetime(lease_expires_at) <= datetime('now'))
+                   OR (status = 'claimed'
+                       AND lease_expires_at != ''
+                       AND datetime(lease_expires_at) <= datetime('now'))
                 ORDER BY requested_at, job_id
                 LIMIT ?
                 """,
@@ -13051,8 +13057,10 @@ class ControlPlaneStore:
                         claimed_at = ?,
                         updated_at = ?
                     WHERE job_id = ?
-                      AND status = 'pending'
-                      AND (lease_expires_at = '' OR datetime(lease_expires_at) <= datetime('now'))
+                      AND (status = 'pending'
+                           OR (status = 'claimed'
+                               AND lease_expires_at != ''
+                               AND datetime(lease_expires_at) <= datetime('now')))
                     """,
                     (
                         normalized_owner,

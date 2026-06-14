@@ -569,6 +569,43 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertTrue(any(str(item.get("status") or "") == "takeover_failed" for item in result))
         self.assertNotEqual(self.store.get_workflow_recovery_intent(job_id).get("status"), "consumed")
 
+    def test_claim_reclaims_expired_claimed_intent_so_failed_takeover_retries(self) -> None:
+        # NO-GO finding (retry path): the drain leaves a takeover_failed intent in
+        # status='claimed'. The claimer must reclaim such a row once its lease
+        # expires, or the intent strands forever (it would never return to
+        # 'pending'). This also covers a daemon that crashes while holding a claim.
+        # Deterministic: claim, backdate the lease to the past, re-claim.
+        job_id = "job_claim_reclaim_expired"
+        self._save_queued_workflow(job_id)
+        self.store.upsert_workflow_recovery_intent(
+            job_id,
+            classification="runner_not_alive",
+            params={"workflow_stale_scope_job_id": job_id},
+            requested_by="progress_poll",
+        )
+        first = self.store.claim_workflow_recovery_intents(
+            lease_owner="daemon-A", lease_seconds=120, limit=10
+        )
+        self.assertEqual([str(r.get("job_id") or "") for r in first], [job_id])
+        # Simulate takeover_failed: the row stays 'claimed' (NOT consumed), then
+        # its lease expires (backdated to the past via the authoritative adapter).
+        self.assertEqual(self.store.get_workflow_recovery_intent(job_id).get("status"), "claimed")
+        self.store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+            "UPDATE workflow_recovery_intents SET lease_expires_at = %s WHERE job_id = %s",
+            ("2000-01-01T00:00:00+00:00", job_id),
+        )
+        # A different daemon reclaims the expired-claimed intent.
+        reclaimed = self.store.claim_workflow_recovery_intents(
+            lease_owner="daemon-B", lease_seconds=120, limit=10
+        )
+        self.assertEqual([str(r.get("job_id") or "") for r in reclaimed], [job_id])
+        self.assertEqual(str(reclaimed[0].get("lease_owner") or ""), "daemon-B")
+        # A non-expired claimed row is NOT reclaimable (single-winner during lease).
+        third = self.store.claim_workflow_recovery_intents(
+            lease_owner="daemon-C", lease_seconds=120, limit=10
+        )
+        self.assertEqual(third, [])
+
     # -- internal: join the takeover's spawned no-op thread deterministically ----
 
     def _join_takeover_thread(self, job_id: str) -> None:

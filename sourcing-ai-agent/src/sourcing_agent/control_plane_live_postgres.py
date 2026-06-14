@@ -2877,7 +2877,7 @@ class LiveControlPlanePostgresAdapter:
             WHERE job_id IN (
                 SELECT job_id FROM workflow_recovery_intents
                 WHERE status = 'pending'
-                  AND (lease_expires_at = '' OR lease_expires_at <= %s)
+                   OR (status = 'claimed' AND lease_expires_at != '' AND lease_expires_at <= %s)
                 ORDER BY requested_at, job_id
                 LIMIT %s
                 FOR UPDATE SKIP LOCKED
