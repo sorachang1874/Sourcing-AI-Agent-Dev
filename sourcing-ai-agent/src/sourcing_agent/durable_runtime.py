@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from hashlib import sha1
 from typing import Any
 
@@ -118,6 +118,15 @@ class CommandTypeSpec:
     migration_step_id: str = ""
     # Run statuses in which this phase command is expected to execute (() elsewhere).
     expected_run_statuses: tuple[str, ...] = ()
+    # Phase 4 Step 3 (docs/PHASE4_ENTANGLED_CORE_DESIGN.md §3 Step 3): name of the
+    # SourcingOrchestrator method that performs the owner-specific RUNNING cancel
+    # for a command of this type, when the command's owner matches this spec's
+    # owner. The orchestrator resolves the name to a bound method via getattr at
+    # dispatch time (the spec stays a pure data record — no bound methods).
+    # "" means the command type has no owner-specific running-cancel handler.
+    cancel_handler: str = ""
+    # As cancel_handler, for the owner-specific RUNNING resume dispatch.
+    resume_handler: str = ""
 
 
 DEFAULT_COMMAND_TYPE_SPECS: dict[str, CommandTypeSpec] = {
@@ -678,6 +687,8 @@ def command_type_manifest() -> dict[str, dict]:
             "product_label_zh": spec.product_label_zh,
             "migration_step_id": spec.migration_step_id,
             "expected_run_statuses": list(spec.expected_run_statuses),
+            "cancel_handler": spec.cancel_handler,
+            "resume_handler": spec.resume_handler,
         }
         for command_type, spec in sorted(DEFAULT_COMMAND_TYPE_SPECS.items())
     }
@@ -1082,6 +1093,134 @@ CRM_WRITER_COMMAND_TYPES = (
     CRM_NOTE_ADD_COMMAND_TYPE,
     CRM_TASK_CREATE_COMMAND_TYPE,
 )
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 Step 3: owner-specific RUNNING cancel/resume handler slots.
+#
+# These tables are the EXACT pre-refactor branch mapping from the two hand-
+# maintained ladders in orchestrator.py
+#   _cancel_running_workflow_command_via_owner / _resume_running_workflow_command_via_owner
+# Each command type maps to the SourcingOrchestrator method name that the
+# canonical-owner branch routed to (first-match-wins over the original ladder).
+# A command type absent from a table had no owner-specific handler for that
+# action and falls through to the dispatcher's default response. Defined here
+# (after the running-control category tuples it derives from) and baked into
+# the frozen specs below.
+#
+# Pinned by tests/test_cancel_resume_dispatch_contract.py and
+# tests/test_command_type_specs.py — do NOT edit to make a failing test pass.
+_COMMAND_TYPE_CANCEL_HANDLERS: dict[str, str] = {
+    ACQUISITION_RUN_CREATE_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
+    ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
+    ACQUISITION_PLAN_BUILD_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
+    COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
+    ACQUISITION_PLAN_COMMIT_COMMAND_TYPE: '_cancel_running_acquisition_plan_commit_before_probe',
+    ACQUISITION_SCALE_PLAN_COMMAND_TYPE: '_cancel_running_acquisition_scale_plan_before_discovery',
+    ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE: '_cancel_running_acquisition_plan_review_request_command',
+    CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE: '_cancel_running_crm_public_web_queue_batch_before_phase_commands',
+    EXCEL_INTAKE_RUN_COMMAND_TYPE: '_cancel_running_excel_intake_command',
+    COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE: '_cancel_running_company_public_web_assets_materialize_before_sync',
+    LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE: '_cancel_running_profile_fetch_activity_before_cache_lookup_attempt',
+    MEDIA_ASSET_CACHE_COMMAND_TYPE: '_cancel_running_media_asset_cache_command_before_fetch_upload_attempt',
+    EXPORT_PROJECTION_GENERATE_COMMAND_TYPE: '_cancel_running_export_command',
+    EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE: '_cancel_running_export_command',
+    **{ct: '_cancel_running_crm_public_web_phase_command' for ct in CRM_PUBLIC_WEB_PHASE_COMMAND_TYPES},
+    **{ct: '_cancel_running_provider_attempt_command_before_attempt' for ct in PROVIDER_ATTEMPT_COMMAND_TYPES},
+    **{ct: '_cancel_running_crm_writer_command_before_mutation_attempt' for ct in CRM_WRITER_COMMAND_TYPES},
+}
+# DOMAIN_MUTATION is the lowest-priority command-type-only branch; only the
+# members not already claimed by a higher-priority branch above keep it as their
+# canonical-owner handler (setdefault preserves the earlier, more specific map).
+for _ct in DOMAIN_MUTATION_COMMAND_TYPES:
+    _COMMAND_TYPE_CANCEL_HANDLERS.setdefault(
+        _ct, '_cancel_running_domain_mutation_command_before_attempt'
+    )
+
+_COMMAND_TYPE_RESUME_HANDLERS: dict[str, str] = {
+    **{ct: '_resume_running_orchestration_command' for ct in ORCHESTRATION_COMMAND_TYPES},
+    COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE: '_resume_running_company_public_web_source_collect_command',
+    EXCEL_INTAKE_RUN_COMMAND_TYPE: '_resume_running_excel_intake_command',
+    COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE: '_resume_running_company_public_web_assets_materialize_command',
+    MEDIA_ASSET_CACHE_COMMAND_TYPE: '_resume_running_media_asset_cache_command',
+    EXPORT_PROJECTION_GENERATE_COMMAND_TYPE: '_resume_running_export_command',
+    EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE: '_resume_running_export_command',
+}
+# source.collect is in PROVIDER_ATTEMPT but its owner-guarded resume branch wins
+# under the canonical owner (set above); the remaining provider-attempt types,
+# then the CRM Public Web phase, CRM writer, and domain-mutation members keep
+# their respective resume handlers (lower branch priority).
+for _ct in PROVIDER_ATTEMPT_COMMAND_TYPES:
+    _COMMAND_TYPE_RESUME_HANDLERS.setdefault(_ct, '_resume_running_provider_attempt_command')
+for _ct in CRM_PUBLIC_WEB_PHASE_COMMAND_TYPES:
+    _COMMAND_TYPE_RESUME_HANDLERS.setdefault(_ct, '_resume_running_crm_public_web_phase_command')
+for _ct in CRM_WRITER_COMMAND_TYPES:
+    _COMMAND_TYPE_RESUME_HANDLERS.setdefault(_ct, '_resume_running_crm_writer_command')
+for _ct in DOMAIN_MUTATION_COMMAND_TYPES:
+    _COMMAND_TYPE_RESUME_HANDLERS.setdefault(_ct, '_resume_running_domain_mutation_command')
+
+# Bake the canonical-owner handler names into the frozen specs (pure data).
+DEFAULT_COMMAND_TYPE_SPECS = {
+    command_type: replace(
+        spec,
+        cancel_handler=_COMMAND_TYPE_CANCEL_HANDLERS.get(command_type, ''),
+        resume_handler=_COMMAND_TYPE_RESUME_HANDLERS.get(command_type, ''),
+    )
+    for command_type, spec in DEFAULT_COMMAND_TYPE_SPECS.items()
+}
+
+# Owner-agnostic RUNNING cancel/resume fall-through: when a KNOWN command type is
+# presented with a NON-canonical owner, the owner-guarded branches are skipped
+# but the command-type-only (unconditional) branches still match. These tables
+# capture exactly those unconditional branches (EXPORT, the four acquisition
+# orchestration cancel command types / the ORCHESTRATION resume set,
+# PROVIDER_ATTEMPT, and DOMAIN_MUTATION). A command type absent here has no
+# unconditional branch and falls through to the default response on owner
+# mismatch. Pinned by tests/test_cancel_resume_dispatch_contract.py.
+_CANCEL_OWNER_AGNOSTIC_HANDLERS: dict[str, str] = {
+    ACQUISITION_RUN_CREATE_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
+    ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
+    ACQUISITION_PLAN_BUILD_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
+    COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
+    EXPORT_PROJECTION_GENERATE_COMMAND_TYPE: '_cancel_running_export_command',
+    EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE: '_cancel_running_export_command',
+    **{ct: '_cancel_running_provider_attempt_command_before_attempt' for ct in PROVIDER_ATTEMPT_COMMAND_TYPES},
+    **{ct: '_cancel_running_domain_mutation_command_before_attempt' for ct in DOMAIN_MUTATION_COMMAND_TYPES},
+}
+_RESUME_OWNER_AGNOSTIC_HANDLERS: dict[str, str] = {
+    **{ct: '_resume_running_orchestration_command' for ct in ORCHESTRATION_COMMAND_TYPES},
+    EXPORT_PROJECTION_GENERATE_COMMAND_TYPE: '_resume_running_export_command',
+    EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE: '_resume_running_export_command',
+    **{ct: '_resume_running_provider_attempt_command' for ct in PROVIDER_ATTEMPT_COMMAND_TYPES},
+    **{ct: '_resume_running_domain_mutation_command' for ct in DOMAIN_MUTATION_COMMAND_TYPES},
+}
+
+
+def workflow_command_cancel_handler(command_type: str) -> str:
+    """Owner-matched RUNNING cancel handler name for ``command_type`` ("" if none)."""
+
+    spec = DEFAULT_COMMAND_TYPE_SPECS.get(command_type)
+    return spec.cancel_handler if spec is not None else ""
+
+
+def workflow_command_resume_handler(command_type: str) -> str:
+    """Owner-matched RUNNING resume handler name for ``command_type`` ("" if none)."""
+
+    spec = DEFAULT_COMMAND_TYPE_SPECS.get(command_type)
+    return spec.resume_handler if spec is not None else ""
+
+
+def workflow_command_cancel_owner_agnostic_handler(command_type: str) -> str:
+    """RUNNING cancel handler used when ``command_type`` arrives with a non-canonical owner."""
+
+    return _CANCEL_OWNER_AGNOSTIC_HANDLERS.get(command_type, "")
+
+
+def workflow_command_resume_owner_agnostic_handler(command_type: str) -> str:
+    """RUNNING resume handler used when ``command_type`` arrives with a non-canonical owner."""
+
+    return _RESUME_OWNER_AGNOSTIC_HANDLERS.get(command_type, "")
+
 
 _EXPORT_RUNNING_CANCEL_SUPPORTED_COMMAND_TYPES = _command_types_with_running_control_category(
     "export_artifact"

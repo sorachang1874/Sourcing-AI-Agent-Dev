@@ -115,18 +115,15 @@ from .durable_runtime import (
     ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
     ACQUISITION_INTENT_RESOLVE_OWNER,
     ACQUISITION_PLAN_COMMIT_COMMAND_TYPE,
-    ACQUISITION_PLAN_COMMIT_OWNER,
     ACQUISITION_PLAN_BUILD_COMMAND_TYPE,
     ACQUISITION_PLAN_BUILD_OWNER,
     ACQUISITION_PROBE_COLLECT_COMMAND_TYPE,
     ACQUISITION_PROBE_OWNER,
     ACQUISITION_PROBE_SUBMIT_COMMAND_TYPE,
     ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE,
-    ACQUISITION_PLAN_REVIEW_REQUEST_OWNER,
     ACQUISITION_RUN_CREATE_COMMAND_TYPE,
     ACQUISITION_RUN_CREATE_OWNER,
     ACQUISITION_SCALE_PLAN_COMMAND_TYPE,
-    ACQUISITION_SCALE_PLAN_OWNER,
     COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
     COMPANY_ASSET_OWNER,
     COMPANY_LOGO_PROFILE_EXPERIENCE_DISCOVER_COMMAND_TYPE,
@@ -140,7 +137,6 @@ from .durable_runtime import (
     CRM_PUBLIC_WEB_DOCUMENTS_FETCH_COMMAND_TYPE,
     CRM_PUBLIC_WEB_EVIDENCE_ADJUDICATE_COMMAND_TYPE,
     CRM_PUBLIC_WEB_MODEL_SAFE_FINALIZE_COMMAND_TYPE,
-    CRM_PUBLIC_WEB_PHASE_COMMAND_TYPES,
     CRM_PUBLIC_WEB_PHASE_OWNER,
     CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE,
     CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER,
@@ -150,10 +146,9 @@ from .durable_runtime import (
     CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE,
     CRM_RECORD_UPDATE_COMMAND_TYPE,
     CRM_TASK_CREATE_COMMAND_TYPE,
-    CRM_WRITER_COMMAND_TYPES,
     CRM_WRITER_OWNER,
     DEFAULT_COMMAND_OWNER_REGISTRY,
-    DOMAIN_MUTATION_COMMAND_TYPES,
+    DEFAULT_COMMAND_TYPE_SPECS,
     EXCEL_INTAKE_RUN_COMMAND_TYPE,
     EXCEL_INTAKE_RUN_OWNER,
     EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE,
@@ -164,7 +159,6 @@ from .durable_runtime import (
     LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
     LINKEDIN_LOCAL_PROFILE_DELTA_APPLY_COMMAND_TYPE,
     LINKEDIN_LOCAL_PROFILE_DELTA_APPLY_OWNER,
-    LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER,
     LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE,
     LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE,
     LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH_COMMAND_TYPE,
@@ -173,7 +167,6 @@ from .durable_runtime import (
     LINKEDIN_PROFILE_URL_TERMINAL_RECORD_COMMAND_TYPE,
     MEDIA_ASSET_CACHE_COMMAND_TYPE,
     MEDIA_ASSET_OWNER,
-    ORCHESTRATION_COMMAND_TYPES,
     PROJECTION_BOARD_VISIBLE_PATCH_PUBLISH_COMMAND_TYPE,
     PROJECTION_BOARD_VISIBLE_PATCH_PUBLISH_OWNER,
     PROJECTION_FACET_LAYERING_BUILD_COMMAND_TYPE,
@@ -185,7 +178,6 @@ from .durable_runtime import (
     PROJECTION_RUN_SCOPE_FINALIZE_COMMAND_TYPE,
     PROJECTION_RUN_SCOPE_FINALIZE_OWNER,
     PROVIDER_AFTER_START_CONTROL_MODE_POLL_CANCEL_QUARANTINE,
-    PROVIDER_ATTEMPT_COMMAND_TYPES,
     SNAPSHOT_COMPACTION_RUN_COMMAND_TYPE,
     SNAPSHOT_COMPACTION_RUN_OWNER,
     DurableRuntimeWriter,
@@ -207,12 +199,14 @@ from .durable_runtime import (
     projection_run_scope_finalize_idempotency_key,
     snapshot_compaction_run_idempotency_key,
     workflow_command_activity_spine_policy,
+    workflow_command_cancel_owner_agnostic_handler,
     workflow_command_control_policy,
     workflow_command_control_state,
     workflow_command_display_contract,
     workflow_command_expected_run_statuses,
     workflow_command_migration_step_id,
     workflow_command_product_label_zh,
+    workflow_command_resume_owner_agnostic_handler,
 )
 from .excel_intake import ExcelIntakeService, group_contacts_by_company_hints
 from .excel_intake_owner import (
@@ -43064,48 +43058,23 @@ class SourcingOrchestrator:
         command_payload = dict(command or {})
         command_type = str(command_payload.get("command_type") or "").strip()
         owner = str(command_payload.get("owner") or "").strip()
-        if owner == CRM_PUBLIC_WEB_PHASE_OWNER and command_type in set(CRM_PUBLIC_WEB_PHASE_COMMAND_TYPES):
-            return self._cancel_running_crm_public_web_phase_command(command_payload, payload=payload)
-        if command_type in {EXPORT_PROJECTION_GENERATE_COMMAND_TYPE, EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE}:
-            return self._cancel_running_export_command(command_payload, payload=payload)
-        if command_type == EXCEL_INTAKE_RUN_COMMAND_TYPE and owner == EXCEL_INTAKE_RUN_OWNER:
-            return self._cancel_running_excel_intake_command(command_payload, payload=payload)
-        if command_type in {
-            ACQUISITION_RUN_CREATE_COMMAND_TYPE,
-            ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
-            ACQUISITION_PLAN_BUILD_COMMAND_TYPE,
-            COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
-        }:
-            return self._cancel_running_orchestration_before_downstream(command_payload, payload=payload)
-        if command_type == ACQUISITION_PLAN_COMMIT_COMMAND_TYPE and owner == ACQUISITION_PLAN_COMMIT_OWNER:
-            return self._cancel_running_acquisition_plan_commit_before_probe(command_payload, payload=payload)
-        if command_type == ACQUISITION_SCALE_PLAN_COMMAND_TYPE and owner == ACQUISITION_SCALE_PLAN_OWNER:
-            return self._cancel_running_acquisition_scale_plan_before_discovery(command_payload, payload=payload)
-        if command_type == CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE and owner == CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER:
-            return self._cancel_running_crm_public_web_queue_batch_before_phase_commands(command_payload, payload=payload)
-        if command_type in set(PROVIDER_ATTEMPT_COMMAND_TYPES):
-            return self._cancel_running_provider_attempt_command_before_attempt(command_payload, payload=payload)
-        if owner == COMPANY_PUBLIC_WEB_REFRESH_OWNER and command_type == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE:
-            return self._cancel_running_company_public_web_assets_materialize_before_sync(
-                command_payload,
-                payload=payload,
-            )
-        if (
-            command_type == LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE
-            and owner == LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER
-        ):
-            return self._cancel_running_profile_fetch_activity_before_cache_lookup_attempt(command_payload, payload=payload)
-        if command_type == MEDIA_ASSET_CACHE_COMMAND_TYPE and owner == MEDIA_ASSET_OWNER:
-            return self._cancel_running_media_asset_cache_command_before_fetch_upload_attempt(
-                command_payload,
-                payload=payload,
-            )
-        if command_type in set(CRM_WRITER_COMMAND_TYPES) and owner == CRM_WRITER_OWNER:
-            return self._cancel_running_crm_writer_command_before_mutation_attempt(command_payload, payload=payload)
-        if command_type == ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE and owner == ACQUISITION_PLAN_REVIEW_REQUEST_OWNER:
-            return self._cancel_running_acquisition_plan_review_request_command(command_payload, payload=payload)
-        if command_type in set(DOMAIN_MUTATION_COMMAND_TYPES):
-            return self._cancel_running_domain_mutation_command_before_attempt(command_payload, payload=payload)
+        # Phase 4 Step 3 (docs/PHASE4_ENTANGLED_CORE_DESIGN.md §3 Step 3): the
+        # former owner+command_type branch ladder is now a CommandTypeSpec slot
+        # lookup. When the command's owner matches the spec's canonical owner,
+        # route to the spec's cancel_handler (the owner-specific branch). When
+        # the owner mismatches, fall through to the owner-agnostic handler that
+        # the command-type-only ladder branches (export / orchestration-cancel /
+        # provider-attempt / domain-mutation) matched regardless of owner. Both
+        # tables are baked from the EXACT pre-refactor ladder mapping and pinned
+        # by tests/test_cancel_resume_dispatch_contract.py.
+        spec = DEFAULT_COMMAND_TYPE_SPECS.get(command_type)
+        handler_name = ""
+        if spec is not None and owner == spec.owner and spec.cancel_handler:
+            handler_name = spec.cancel_handler
+        else:
+            handler_name = workflow_command_cancel_owner_agnostic_handler(command_type)
+        if handler_name:
+            return getattr(self, handler_name)(command_payload, payload=payload)
         return {
             "status": "invalid",
             "reason": "running_command_requires_owner_specific_cancel",
@@ -45443,26 +45412,22 @@ class SourcingOrchestrator:
         command_payload = dict(command or {})
         command_type = str(command_payload.get("command_type") or "").strip()
         owner = str(command_payload.get("owner") or "").strip()
-        if command_type in set(ORCHESTRATION_COMMAND_TYPES):
-            return self._resume_running_orchestration_command(command_payload, payload=payload)
-        if owner == COMPANY_PUBLIC_WEB_REFRESH_OWNER and command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE:
-            return self._resume_running_company_public_web_source_collect_command(command_payload, payload=payload)
-        if command_type in set(PROVIDER_ATTEMPT_COMMAND_TYPES):
-            return self._resume_running_provider_attempt_command(command_payload, payload=payload)
-        if owner == CRM_PUBLIC_WEB_PHASE_OWNER and command_type in set(CRM_PUBLIC_WEB_PHASE_COMMAND_TYPES):
-            return self._resume_running_crm_public_web_phase_command(command_payload, payload=payload)
-        if command_type in {EXPORT_PROJECTION_GENERATE_COMMAND_TYPE, EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE}:
-            return self._resume_running_export_command(command_payload, payload=payload)
-        if owner == EXCEL_INTAKE_RUN_OWNER and command_type == EXCEL_INTAKE_RUN_COMMAND_TYPE:
-            return self._resume_running_excel_intake_command(command_payload, payload=payload)
-        if owner == COMPANY_PUBLIC_WEB_REFRESH_OWNER and command_type == COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE:
-            return self._resume_running_company_public_web_assets_materialize_command(command_payload, payload=payload)
-        if owner == MEDIA_ASSET_OWNER and command_type == MEDIA_ASSET_CACHE_COMMAND_TYPE:
-            return self._resume_running_media_asset_cache_command(command_payload, payload=payload)
-        if owner == CRM_WRITER_OWNER and command_type in set(CRM_WRITER_COMMAND_TYPES):
-            return self._resume_running_crm_writer_command(command_payload, payload=payload)
-        if command_type in set(DOMAIN_MUTATION_COMMAND_TYPES):
-            return self._resume_running_domain_mutation_command(command_payload, payload=payload)
+        # Phase 4 Step 3 (docs/PHASE4_ENTANGLED_CORE_DESIGN.md §3 Step 3): the
+        # former owner+command_type branch ladder is now a CommandTypeSpec slot
+        # lookup, mirroring the cancel dispatcher. Owner-matched commands route
+        # to the spec's resume_handler; owner-mismatched known commands fall
+        # through to the owner-agnostic handler that the command-type-only ladder
+        # branches (orchestration / export / provider-attempt / domain-mutation)
+        # matched regardless of owner. Pinned by
+        # tests/test_cancel_resume_dispatch_contract.py.
+        spec = DEFAULT_COMMAND_TYPE_SPECS.get(command_type)
+        handler_name = ""
+        if spec is not None and owner == spec.owner and spec.resume_handler:
+            handler_name = spec.resume_handler
+        else:
+            handler_name = workflow_command_resume_owner_agnostic_handler(command_type)
+        if handler_name:
+            return getattr(self, handler_name)(command_payload, payload=payload)
         return {
             "status": "invalid",
             "reason": "running_command_requires_owner_specific_resume",

@@ -1134,6 +1134,9 @@ MANIFEST_ENTRY_FIELDS = {
     "product_label_zh",
     "migration_step_id",
     "expected_run_statuses",
+    # Phase 4 Step 3: owner-specific RUNNING cancel/resume handler slots.
+    "cancel_handler",
+    "resume_handler",
 }
 
 
@@ -1189,6 +1192,8 @@ def test_command_type_manifest_spot_checks():
         "product_label_zh": "提交公开搜索",
         "migration_step_id": "W7f_crm_public_web_search_submit",
         "expected_run_statuses": ["queued"],
+        "cancel_handler": "_cancel_running_crm_public_web_phase_command",
+        "resume_handler": "_resume_running_crm_public_web_phase_command",
     }
     assert manifest["excel.intake.run"] == {
         "command_type": "excel.intake.run",
@@ -1207,6 +1212,8 @@ def test_command_type_manifest_spot_checks():
         "product_label_zh": "",
         "migration_step_id": "",
         "expected_run_statuses": [],
+        "cancel_handler": "_cancel_running_excel_intake_command",
+        "resume_handler": "_resume_running_excel_intake_command",
     }
     assert manifest["acquisition.scale.plan"] == {
         "command_type": "acquisition.scale.plan",
@@ -1225,6 +1232,8 @@ def test_command_type_manifest_spot_checks():
         "product_label_zh": "",
         "migration_step_id": "",
         "expected_run_statuses": [],
+        "cancel_handler": "_cancel_running_acquisition_scale_plan_before_discovery",
+        "resume_handler": "_resume_running_orchestration_command",
     }
 
 
@@ -1305,3 +1314,43 @@ def test_new_spec_field_accessor_unknown_type_defaults_are_pinned():
     assert dr.workflow_command_product_label_zh(BOGUS_COMMAND_TYPE) == ""
     assert dr.workflow_command_migration_step_id(BOGUS_COMMAND_TYPE) == ""
     assert dr.workflow_command_expected_run_statuses(BOGUS_COMMAND_TYPE) == ()
+
+
+def test_cancel_resume_handler_slots_populated_for_every_command_type():
+    # Phase 4 Step 3: every known command type carries an owner-specific cancel
+    # and resume handler slot (no canonical-owner command type falls through to
+    # the dispatcher default). The slot is a method NAME, not a bound method.
+    for command_type in GOLDEN_COMMAND_TYPE_SNAPSHOT:
+        cancel_name = dr.workflow_command_cancel_handler(command_type)
+        resume_name = dr.workflow_command_resume_handler(command_type)
+        assert cancel_name and isinstance(cancel_name, str), command_type
+        assert resume_name and isinstance(resume_name, str), command_type
+        assert cancel_name.startswith("_cancel_running_"), command_type
+        assert resume_name.startswith("_resume_running_"), command_type
+
+
+def test_cancel_resume_handler_slots_resolve_to_orchestrator_methods():
+    # Name-based resolution contract: every slot name (owner-matched and
+    # owner-agnostic) is a real callable on SourcingOrchestrator, so the
+    # getattr(self, name) dispatch never KeyErrors/AttributeErrors at runtime.
+    from sourcing_agent.orchestrator import SourcingOrchestrator
+
+    names: set[str] = set()
+    for command_type in GOLDEN_COMMAND_TYPE_SNAPSHOT:
+        names.add(dr.workflow_command_cancel_handler(command_type))
+        names.add(dr.workflow_command_resume_handler(command_type))
+        agnostic_cancel = dr.workflow_command_cancel_owner_agnostic_handler(command_type)
+        agnostic_resume = dr.workflow_command_resume_owner_agnostic_handler(command_type)
+        if agnostic_cancel:
+            names.add(agnostic_cancel)
+        if agnostic_resume:
+            names.add(agnostic_resume)
+    for name in names:
+        assert callable(getattr(SourcingOrchestrator, name, None)), name
+
+
+def test_cancel_resume_handler_slot_accessor_unknown_type_defaults_are_pinned():
+    assert dr.workflow_command_cancel_handler(BOGUS_COMMAND_TYPE) == ""
+    assert dr.workflow_command_resume_handler(BOGUS_COMMAND_TYPE) == ""
+    assert dr.workflow_command_cancel_owner_agnostic_handler(BOGUS_COMMAND_TYPE) == ""
+    assert dr.workflow_command_resume_owner_agnostic_handler(BOGUS_COMMAND_TYPE) == ""
