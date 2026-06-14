@@ -65,10 +65,13 @@ from .model_provider import ModelClient
 from .provider_execution_policy import normalize_former_member_search_contract
 from .request_normalization import build_effective_request_payload, resolve_request_intent_view
 from .runtime_tuning import (
+    acquire_runtime_provider_limiter_slot,
+    release_runtime_provider_limiter_slot,
     resolve_runtime_timing_overrides,
     resolved_harvest_company_roster_global_inflight,
     resolved_harvest_company_roster_parallel_shards,
     runtime_inflight_slot,
+    runtime_provider_limiter_slot,
 )
 from .search_provider import SearchProviderError, build_search_provider
 from .search_seed_registry import (
@@ -78,18 +81,28 @@ from .search_seed_registry import (
     dedupe_search_seed_records as _registry_dedupe_search_seed_records,
 )
 from .search_seed_registry import (
+    load_search_seed_snapshot_from_snapshot_dir as _registry_load_search_seed_snapshot_from_snapshot_dir,
+)
+from .search_seed_registry import (
     merge_search_seed_snapshots as _registry_merge_search_seed_snapshots,
 )
 from .search_seed_registry import (
     persist_search_seed_snapshot as _registry_persist_search_seed_snapshot,
 )
+from .search_seed_registry import (
+    project_search_seed_snapshot_to_candidate_documents as _registry_project_search_seed_snapshot_to_candidate_documents,
+)
 from .seed_discovery import (
+    PROVIDER_SEARCH_RETRY_ITEM_KIND,
     SearchSeedAcquirer,
     SearchSeedSnapshot,
     build_candidates_from_seed_entries,
     build_candidates_from_seed_snapshot,
+    collect_search_seed_provider_retry_items,
 )
 from .settings import AppSettings
+from .snapshot_state import company_identity_from_record as _company_identity_from_record
+from .snapshot_state import merge_background_reconcile_candidate as _merge_background_reconcile_candidate
 from .storage import ControlPlaneStore
 
 _FULL_ROSTER_BASELINE_REUSE_MIN_CANDIDATES = 1000
@@ -97,6 +110,22 @@ _FULL_ROSTER_BASELINE_REUSE_CURRENT_RATIO_THRESHOLD = 0.6
 _FULL_ROSTER_BASELINE_REUSE_MIN_CURRENT_COUNT = 250
 _FULL_ROSTER_BASELINE_REUSE_REFERENCE_DISTANCE_RATIO = 0.45
 _FULL_ROSTER_BASELINE_REUSE_REFERENCE_DISTANCE_FLOOR = 250
+
+
+def _read_company_asset_json(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return dict(payload) if isinstance(payload, dict) else {}
+
+
+def _read_company_asset_json_list(path: Path) -> list[dict[str, Any]]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return [dict(item) for item in list(payload or []) if isinstance(item, dict)]
 
 
 @dataclass(slots=True)
@@ -251,17 +280,110 @@ def _merge_profile_prefetch_dispatch_summaries(
     summary_paths = _dedupe_string_values(
         [path for item in normalized_summaries for path in list(item.get("summary_paths") or [])]
     )
+    batch_envelopes = [
+        dict(envelope)
+        for item in normalized_summaries
+        for envelope in list(item.get("batch_envelopes") or [])
+        if isinstance(envelope, dict)
+    ]
+    prefetch_events: list[dict[str, Any]] = []
+    batch_plans: list[dict[str, Any]] = []
+    queue_snapshots: list[dict[str, Any]] = []
+    for event_index, item in enumerate(normalized_summaries, start=1):
+        item_events = item.get("profile_prefetch_events")
+        if isinstance(item_events, list) and item_events:
+            for nested_event in item_events:
+                if isinstance(nested_event, dict) and dict(nested_event or {}):
+                    prefetch_events.append(dict(nested_event))
+            continue
+        event_batch_plans = [
+            dict(plan)
+            for plan in list(item.get("batch_plans") or item.get("profile_prefetch_batch_plans") or [])
+            if isinstance(plan, dict) and dict(plan or {})
+        ]
+        single_batch_plan = dict(item.get("batch_plan") or item.get("profile_prefetch_batch_plan") or {})
+        if single_batch_plan and not event_batch_plans:
+            event_batch_plans = [single_batch_plan]
+        event_queue_snapshots = [
+            dict(snapshot)
+            for snapshot in list(item.get("profile_prefetch_queues") or [])
+            if isinstance(snapshot, dict) and dict(snapshot or {})
+        ]
+        single_queue_snapshot = dict(item.get("profile_prefetch_queue") or {})
+        if single_queue_snapshot and not event_queue_snapshots:
+            event_queue_snapshots = [single_queue_snapshot]
+        event_payload = {
+            "event_index": event_index,
+            "status": str(item.get("status") or "").strip(),
+            "reason": str(item.get("reason") or "").strip(),
+            "requested_url_count": int(item.get("requested_url_count") or 0),
+            "dispatched_url_count": int(item.get("dispatched_url_count") or 0),
+            "cached_profile_count": int(item.get("cached_profile_count") or 0),
+            "queued_worker_count": int(item.get("queued_worker_count") or 0),
+            "deferred_url_count": int(item.get("deferred_url_count") or 0),
+            "failed_url_count": len(list(item.get("failed_urls") or [])),
+            "queued_url_count": len(list(item.get("queued_urls") or [])),
+            "batch_plan_count": len(event_batch_plans),
+            "profile_prefetch_queue_count": len(event_queue_snapshots),
+            "batch_plans": event_batch_plans,
+            "profile_prefetch_queues": event_queue_snapshots,
+        }
+        candidate_documents_projection = dict(item.get("candidate_documents_projection") or {})
+        if candidate_documents_projection:
+            event_payload["candidate_documents_projection"] = candidate_documents_projection
+        prefetch_events.append(event_payload)
+    for event in prefetch_events:
+        batch_plans.extend(
+            dict(plan)
+            for plan in list(dict(event or {}).get("batch_plans") or [])
+            if isinstance(plan, dict) and dict(plan or {})
+        )
+        queue_snapshots.extend(
+            dict(snapshot)
+            for snapshot in list(dict(event or {}).get("profile_prefetch_queues") or [])
+            if isinstance(snapshot, dict) and dict(snapshot or {})
+        )
+    candidate_documents_projections = [
+        dict(dict(event or {}).get("candidate_documents_projection") or {})
+        for event in prefetch_events
+        if dict(dict(event or {}).get("candidate_documents_projection") or {})
+    ]
     errors = _dedupe_string_values(
         [error for item in normalized_summaries for error in list(item.get("errors") or [])]
     )
     queued_worker_count = sum(int(item.get("queued_worker_count") or 0) for item in normalized_summaries)
     cached_profile_count = sum(int(item.get("cached_profile_count") or 0) for item in normalized_summaries)
     dispatched_url_count = sum(int(item.get("dispatched_url_count") or 0) for item in normalized_summaries)
+    # Fail-closed terminal bubble (decision #1 / invariant 7,
+    # PROFILE_PREFETCH_SCHEDULER_CONTRACT.md:61): a blocked input summary
+    # (store/infrastructure unavailable, queued_worker_count=0) must NOT merge
+    # into "completed" (which would claim "all satisfied"). Blocked wins over
+    # every other merged status and its two-signal shape is preserved so the
+    # recovery chain can tell "infrastructure missing" from "nothing to do".
+    blocked_urls_merged = _dedupe_string_values(
+        [
+            profile_url
+            for item in normalized_summaries
+            for profile_url in list(item.get("blocked_urls") or [])
+        ]
+    )
+    blocked_inputs = [
+        item
+        for item in normalized_summaries
+        if str(item.get("status") or "").strip().lower() == "blocked" or bool(item.get("blocked"))
+    ]
     merged_status = "queued" if queued_worker_count > 0 else "completed"
     merged_reason = ""
     if all(str(item.get("status") or "").strip().lower() == "skipped" for item in normalized_summaries):
         merged_status = "skipped"
         merged_reason = str(normalized_summaries[-1].get("reason") or "no_prefetch_dispatch").strip()
+    if blocked_inputs:
+        merged_status = "blocked"
+        merged_reason = str(
+            blocked_inputs[0].get("blocked_reason")
+            or blocked_inputs[0].get("reason")
+            or "profile_refill_store_unavailable"
+        ).strip()
 
     merged_payload = {
         "status": merged_status,
@@ -275,11 +397,166 @@ def _merge_profile_prefetch_dispatch_summaries(
         "failed_urls": failed_urls,
         "summary_paths": summary_paths,
         "errors": errors,
+        **(
+            {
+                "blocked": True,
+                "blocked_url_count": len(blocked_urls_merged),
+                "blocked_urls": blocked_urls_merged,
+                "blocked_reason": merged_reason or "profile_refill_store_unavailable",
+            }
+            if blocked_inputs
+            else {}
+        ),
         "dispatch_event_count": len(normalized_summaries),
+        "profile_prefetch_event_count": len(prefetch_events),
+        "batch_plan_count": len(batch_plans),
+        "profile_prefetch_queue_count": len(queue_snapshots),
+        "profile_prefetch_events": prefetch_events,
+        "candidate_documents_projection_count": len(candidate_documents_projections),
+        "batch_envelopes": batch_envelopes,
+        "tiny_batch_count": sum(1 for item in batch_envelopes if bool(item.get("is_tiny_batch"))),
+        "unexplained_tiny_batch_count": sum(
+            1
+            for item in batch_envelopes
+            if bool(item.get("is_tiny_batch")) and not bool(item.get("tiny_batch_allowed"))
+        ),
+        "provider_slot_underuse_with_backlog_count": sum(
+            1 for item in batch_envelopes if bool(item.get("provider_slot_underuse_with_backlog"))
+        ),
+        "tiny_batch_coalesced_count": sum(
+            int(item.get("tiny_batch_coalesced_count") or 0) for item in normalized_summaries
+        ),
     }
+    if batch_plans:
+        merged_payload["latest_batch_plan"] = batch_plans[-1]
+        merged_payload["batch_plan"] = batch_plans[-1]
+        merged_payload["batch_plans"] = batch_plans
+    if queue_snapshots:
+        merged_payload["latest_profile_prefetch_queue"] = queue_snapshots[-1]
+        merged_payload["profile_prefetch_queue"] = queue_snapshots[-1]
+        merged_payload["profile_prefetch_queues"] = queue_snapshots
+    if candidate_documents_projections:
+        merged_payload["candidate_documents_projections"] = candidate_documents_projections
+        merged_payload["latest_candidate_documents_projection"] = candidate_documents_projections[-1]
     if merged_reason:
         merged_payload["reason"] = merged_reason
+    terminal_proof_summary = _profile_prefetch_terminal_proof_summary(
+        normalized_summaries,
+        requested_url_count=int(merged_payload.get("requested_url_count") or 0),
+    )
+    if terminal_proof_summary:
+        merged_payload.update(terminal_proof_summary)
     return merged_payload
+
+
+def _profile_prefetch_terminal_proof_summary(
+    summaries: list[dict[str, Any]],
+    *,
+    requested_url_count: int,
+) -> dict[str, Any]:
+    terminal_summary: dict[str, Any] = {}
+    terminal_queue: dict[str, Any] = {}
+    for item in reversed([dict(summary or {}) for summary in list(summaries or []) if isinstance(summary, dict)]):
+        candidate_terminal_summary = dict(item.get("registry_terminal_summary") or {})
+        candidate_queue = dict(
+            item.get("latest_profile_prefetch_queue")
+            or item.get("profile_prefetch_queue")
+            or {}
+        )
+        all_requested_terminal = bool(
+            candidate_terminal_summary.get("all_requested_terminal")
+            or candidate_queue.get("registry_all_requested_terminal")
+        )
+        if not all_requested_terminal:
+            continue
+        terminal_summary = candidate_terminal_summary
+        terminal_queue = candidate_queue
+        break
+    if not terminal_summary and not terminal_queue:
+        return {}
+
+    unrecoverable_count = int(
+        terminal_summary.get("unrecoverable_url_count")
+        or terminal_queue.get("registry_unrecoverable_url_count")
+        or 0
+    )
+    fetched_count = int(
+        terminal_summary.get("fetched_url_count")
+        or terminal_queue.get("registry_fetched_url_count")
+        or 0
+    )
+    terminal_count = int(
+        terminal_summary.get("terminal_url_count")
+        or terminal_queue.get("registry_terminal_url_count")
+        or fetched_count + unrecoverable_count
+        or 0
+    )
+    missing_count = int(
+        terminal_summary.get("missing_url_count")
+        or terminal_queue.get("registry_missing_url_count")
+        or 0
+    )
+    open_count = int(
+        terminal_summary.get("open_url_count")
+        or terminal_queue.get("registry_open_url_count")
+        or 0
+    )
+    reason = (
+        "registry_all_requested_profiles_terminal"
+        if unrecoverable_count > 0
+        else "registry_all_requested_profiles_fetched"
+    )
+    queue = dict(terminal_queue)
+    queue.update(
+        {
+            "queued_url_count": 0,
+            "newly_queued_url_count": 0,
+            "deferred_url_count": 0,
+            "failed_url_count": 0,
+            "pending_url_count": 0,
+            "ready_after_dispatch_url_count": 0,
+            "queue_quiescent": True,
+            "local_queue_quiescent": True,
+            "remote_queue_quiescent": True,
+            "registry_all_requested_terminal": True,
+        }
+    )
+    if requested_url_count > 0:
+        queue.setdefault("requested_url_count", requested_url_count)
+    return {
+        "status": "completed",
+        "reason": reason,
+        "terminal_proof_only": True,
+        "submit_anchor": False,
+        "dispatched_url_count": 0,
+        "queued_worker_count": 0,
+        "active_worker_count": 0,
+        "deferred_url_count": 0,
+        "queued_urls": [],
+        "failed_urls": [],
+        "summary_paths": [],
+        "batch_envelopes": [],
+        "batch_plan": {},
+        "latest_batch_plan": {},
+        "batch_plans": [],
+        "profile_prefetch_batch_plan": {},
+        "profile_prefetch_batch_plans": [],
+        "profile_prefetch_queue": queue,
+        "latest_profile_prefetch_queue": queue,
+        "registry_terminal_summary": {
+            **terminal_summary,
+            "all_requested_terminal": True,
+            "terminal_url_count": terminal_count,
+            "fetched_url_count": fetched_count,
+            "unrecoverable_url_count": unrecoverable_count,
+            "missing_url_count": missing_count,
+            "open_url_count": open_count,
+        },
+        "tiny_batch_count": 0,
+        "unexplained_tiny_batch_count": 0,
+        "provider_slot_underuse_with_backlog_count": 0,
+        "tiny_batch_coalesced_count": 0,
+    }
 
 
 def _persist_search_seed_snapshot(snapshot: SearchSeedSnapshot) -> SearchSeedSnapshot:
@@ -291,6 +568,113 @@ def _merge_search_seed_snapshots(
     incoming: SearchSeedSnapshot | None,
 ) -> SearchSeedSnapshot | None:
     return _registry_merge_search_seed_snapshots(existing, incoming)
+
+
+def _search_seed_snapshot_lane_entries(snapshot: SearchSeedSnapshot | None, lane: str) -> list[dict[str, Any]]:
+    if not isinstance(snapshot, SearchSeedSnapshot):
+        return []
+    normalized_lane = str(lane or "").strip().lower()
+    if not normalized_lane:
+        return []
+    lane_entries = dict(snapshot.lane_entries or {})
+    direct_entries = lane_entries.get(normalized_lane)
+    if direct_entries:
+        return [dict(item) for item in list(direct_entries or []) if isinstance(item, dict)]
+    return [
+        dict(entry)
+        for entry in list(snapshot.entries or [])
+        if isinstance(entry, dict)
+        and str(entry.get("employment_status") or entry.get("employment_scope") or "").strip().lower()
+        == normalized_lane
+    ]
+
+
+def _search_seed_incomplete_provider_query_count(snapshot: SearchSeedSnapshot | None) -> int:
+    if not isinstance(snapshot, SearchSeedSnapshot):
+        return 0
+    summary_payload = dict(snapshot.summary_payload or {})
+    try:
+        summary_count = int(summary_payload.get("incomplete_provider_query_count") or 0)
+    except (TypeError, ValueError):
+        summary_count = 0
+    provider_retry_items = collect_search_seed_provider_retry_items(snapshot)
+    exhausted_retry_count = len(
+        [
+            item
+            for item in provider_retry_items
+            if str(item.get("status") or "").strip().lower() == "exhausted"
+            or str(item.get("queue_status") or "").strip().lower() == "failed"
+        ]
+    )
+    query_count = 0
+    for summary in list(snapshot.query_summaries or []):
+        if not isinstance(summary, dict):
+            continue
+        status = str(summary.get("status") or "").strip().lower()
+        if (
+            status in {"incomplete", "retry_wait"}
+            or bool(summary.get("provider_search_incomplete"))
+            or bool(summary.get("provider_search_retryable"))
+        ):
+            query_count += 1
+    return max(summary_count, query_count, exhausted_retry_count)
+
+
+def _snapshot_query_tokens_for_lane(snapshot: SearchSeedSnapshot | None, lane: str) -> set[str]:
+    if not isinstance(snapshot, SearchSeedSnapshot):
+        return set()
+    normalized_lane = str(lane or "").strip().lower()
+    observed: set[str] = set()
+    for summary in list(snapshot.query_summaries or []):
+        if not isinstance(summary, dict):
+            continue
+        summary_lane = str(
+            summary.get("employment_status")
+            or summary.get("employment_scope")
+            or summary.get("lane")
+            or ""
+        ).strip().lower()
+        if normalized_lane and summary_lane and summary_lane != normalized_lane:
+            continue
+        for key in ("query", "source_query", "effective_query_text", "seed_query"):
+            value = str(summary.get(key) or "").strip().lower()
+            if value:
+                observed.add(value)
+    for entry in _search_seed_snapshot_lane_entries(snapshot, normalized_lane):
+        for key in ("source_query", "query", "seed_query"):
+            value = str(entry.get(key) or "").strip().lower()
+            if value:
+                observed.add(value)
+        metadata = dict(entry.get("metadata") or {})
+        for key in ("source_query", "query", "seed_query"):
+            value = str(metadata.get(key) or "").strip().lower()
+            if value:
+                observed.add(value)
+    return observed
+
+
+def _search_seed_snapshot_satisfies_lane_queries(
+    snapshot: SearchSeedSnapshot | None,
+    *,
+    lane: str,
+    expected_queries: list[str],
+) -> bool:
+    if not _search_seed_snapshot_lane_entries(snapshot, lane):
+        return False
+    normalized_expected = [
+        str(query or "").strip().lower()
+        for query in list(expected_queries or [])
+        if str(query or "").strip()
+    ]
+    if not normalized_expected:
+        return True
+    observed = _snapshot_query_tokens_for_lane(snapshot, lane)
+    if not observed:
+        return False
+    return all(
+        any(expected == token or expected in token or token in expected for token in observed)
+        for expected in normalized_expected
+    )
 
 
 class AcquisitionEngine:
@@ -345,6 +729,115 @@ class AcquisitionEngine:
             store=self.store,
         )
         self.inline_worker_completion_callback: Callable[[dict[str, Any]], None] | None = None
+
+    def _reawaken_waiting_prerequisite_after_candidate_documents_write(
+        self,
+        *,
+        job_id: str,
+        snapshot: SearchSeedSnapshot | None,
+    ) -> dict[str, Any]:
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id or not isinstance(snapshot, SearchSeedSnapshot):
+            return {"status": "skipped", "reason": "scope_missing"}
+        candidate_doc_path = snapshot.snapshot_dir / "candidate_documents.json"
+        if not candidate_doc_path.exists():
+            return {
+                "status": "skipped",
+                "reason": "candidate_documents_missing",
+                "snapshot_id": snapshot.snapshot_id,
+                "candidate_doc_path": str(candidate_doc_path),
+            }
+        reawaken = getattr(self.store, "reawaken_waiting_prerequisite_job_materialization_items", None)
+        if not callable(reawaken):
+            return {"status": "skipped", "reason": "store_reawaken_helper_missing"}
+        reawakened_count = int(
+            reawaken(
+                job_id=normalized_job_id,
+                snapshot_id=snapshot.snapshot_id,
+                item_kind="local_apply_closure",
+                source="search_seed_candidate_documents_projection",
+            )
+            or 0
+        )
+        return {
+            "status": "completed",
+            "snapshot_id": snapshot.snapshot_id,
+            "candidate_doc_path": str(candidate_doc_path),
+            "reawakened_count": reawakened_count,
+        }
+
+    def _project_incremental_search_seed_candidate_documents(
+        self,
+        *,
+        job_id: str,
+        identity: CompanyIdentity,
+        snapshot_dir: Path,
+        entries: list[dict[str, Any]],
+        summary: dict[str, Any],
+        raw_path: str,
+        employment_status: str,
+    ) -> dict[str, Any]:
+        """Write candidate shell rows before dispatching profile prefetch.
+
+        Incremental search-seed results are allowed to feed the profile scheduler
+        before the full `discover()` call returns. The matching candidate shell
+        rows must therefore be projected first; otherwise a fast profile batch can
+        complete while `candidate_documents.json` still lacks its URLs and local
+        apply falls back to `waiting_prerequisite` timer recovery.
+        """
+
+        normalized_entries = [dict(item) for item in list(entries or []) if isinstance(item, dict)]
+        if not normalized_entries:
+            return {"status": "skipped", "reason": "no_incremental_entries"}
+        discovery_dir = snapshot_dir / "search_seed_discovery"
+        summary_path = discovery_dir / "summary.json"
+        entries_path = Path(str(raw_path or "")).expanduser() if str(raw_path or "").strip() else discovery_dir / "entries.json"
+        query_summary = dict(summary or {})
+        if raw_path and not str(query_summary.get("raw_path") or "").strip():
+            query_summary["raw_path"] = str(raw_path)
+        incremental_snapshot = SearchSeedSnapshot(
+            snapshot_id=snapshot_dir.name,
+            target_company=identity.canonical_name,
+            company_identity=identity,
+            snapshot_dir=snapshot_dir,
+            entries=normalized_entries,
+            query_summaries=[query_summary] if query_summary else [],
+            accounts_used=[],
+            errors=[],
+            stop_reason="incremental_query_result",
+            summary_path=summary_path,
+            entries_path=entries_path,
+            summary_payload={
+                "snapshot_id": snapshot_dir.name,
+                "target_company": identity.canonical_name,
+                "company_identity": identity.to_record(),
+                "entry_count": len(normalized_entries),
+                "query_summaries": [query_summary] if query_summary else [],
+                "stop_reason": "incremental_query_result",
+            },
+            lane_payloads={
+                str(employment_status or "all").strip() or "all": {
+                    "employment_scope": str(employment_status or "all").strip() or "all",
+                    "employment_status": str(employment_status or "all").strip() or "all",
+                    "query_summaries": [query_summary] if query_summary else [],
+                }
+            },
+            lane_entries={str(employment_status or "all").strip() or "all": normalized_entries},
+        )
+        projection = _registry_project_search_seed_snapshot_to_candidate_documents(
+            incremental_snapshot,
+            source_kind="search_seed_discovery:incremental_candidate_documents_projection",
+            reason="incremental_query_result_before_profile_prefetch",
+        )
+        reawakened = self._reawaken_waiting_prerequisite_after_candidate_documents_write(
+            job_id=job_id,
+            snapshot=incremental_snapshot,
+        )
+        return {
+            **dict(projection or {}),
+            "prerequisite_ready_event": reawakened,
+            "reawakened_count": int(dict(reawakened or {}).get("reawakened_count") or 0),
+        }
 
     def _resolve_harvest_settings(self, actor_settings: Any, legacy_harvest_token: str) -> Any:
         if getattr(actor_settings, "enabled", False):
@@ -1381,6 +1874,13 @@ class AcquisitionEngine:
         ]
         if delta_queries:
             return delta_queries
+        cost_policy = self._task_cost_policy(task, job_request)
+        if (
+            self._task_strategy_type(task, job_request) == "former_employee_search"
+            and bool(cost_policy.get("former_broad_past_company_only"))
+            and not bool(cost_policy.get("former_keyword_queries_only"))
+        ):
+            return []
         return [
             str(item).strip()
             for item in self._task_execution_list(task, job_request, "search_seed_queries")
@@ -1524,6 +2024,7 @@ class AcquisitionEngine:
             or self._task_execution_bool(task, job_request, "reuse_existing_roster")
         )
         acquisition_mode = "live_roster_acquisition"
+        reuse_existing_roster_miss = False
         explicitly_requested_former_seed = "run_former_search_seed" in effective_execution_preferences
         should_run_former_search_seed = self._should_run_default_former_search_seed(task, job_request)
         former_parallel_executor: ThreadPoolExecutor | None = None
@@ -1535,13 +2036,14 @@ class AcquisitionEngine:
                 return
             if former_parallel_future is not None:
                 return
-            if self.worker_runtime is not None and job_id:
-                return
-            former_parallel_executor = ThreadPoolExecutor(max_workers=1)
+            former_parallel_executor = ThreadPoolExecutor(
+                max_workers=1,
+                thread_name_prefix="acquisition-former-seed",
+            )
             former_parallel_future = former_parallel_executor.submit(
                 self._acquire_default_former_search_seed,
                 task,
-                state,
+                dict(state),
                 job_request,
                 identity,
             )
@@ -1550,7 +2052,7 @@ class AcquisitionEngine:
             nonlocal former_parallel_executor, former_parallel_future
             if former_parallel_executor is None:
                 return
-            former_parallel_executor.shutdown(wait=wait)
+            former_parallel_executor.shutdown(wait=wait, cancel_futures=not wait)
             former_parallel_executor = None
             former_parallel_future = None
 
@@ -1574,19 +2076,14 @@ class AcquisitionEngine:
         try:
             if reuse_existing_roster:
                 cached_snapshot = self._load_cached_roster_snapshot(identity, exclude_snapshot_dir=snapshot_dir)
-                if cached_snapshot is None:
-                    return AcquisitionExecution(
-                        task_id=task.task_id,
-                        status="blocked",
-                        detail=(
-                            "Requested incremental roster reuse, but no existing local roster snapshot was available "
-                            "for this company."
-                        ),
-                        payload={"target_company": identity.canonical_name, "reuse_existing_roster": True},
-                    )
-                snapshot = self._materialize_reused_roster_snapshot(identity, cached_snapshot, snapshot_dir)
-                acquisition_mode = "reused_cached_roster"
-            elif harvest_connector_available(self.harvest_company_connector.settings) and bool(
+                if cached_snapshot is not None:
+                    snapshot = self._materialize_reused_roster_snapshot(identity, cached_snapshot, snapshot_dir)
+                    acquisition_mode = "reused_cached_roster"
+                else:
+                    reuse_existing_roster_miss = True
+            if acquisition_mode != "reused_cached_roster" and harvest_connector_available(
+                self.harvest_company_connector.settings
+            ) and bool(
                 cost_policy.get("allow_company_employee_api", True)
             ):
                 adaptive_shard_plan: dict[str, Any] = {}
@@ -1638,6 +2135,9 @@ class AcquisitionEngine:
                                 ),
                                 "former_search_seed_status": former_search_status,
                             }
+                            if reuse_existing_roster_miss:
+                                queued_payload["reuse_existing_roster_miss"] = True
+                                queued_payload["reuse_existing_roster_miss_reason"] = "no_cached_roster_snapshot"
                             if former_search_detail:
                                 queued_payload["former_search_seed_detail"] = former_search_detail
                             if former_search_error:
@@ -1702,6 +2202,9 @@ class AcquisitionEngine:
                             "harvest_worker": summary,
                             "former_search_seed_status": former_search_status,
                         }
+                        if reuse_existing_roster_miss:
+                            queued_payload["reuse_existing_roster_miss"] = True
+                            queued_payload["reuse_existing_roster_miss_reason"] = "no_cached_roster_snapshot"
                         if former_search_detail:
                             queued_payload["former_search_seed_detail"] = former_search_detail
                         if former_search_error:
@@ -1732,39 +2235,55 @@ class AcquisitionEngine:
                                 "from the available full-roster baseline while profile detail hydrates incrementally."
                             ),
                         )
-                    with runtime_inflight_slot(
-                        "harvest_company_roster",
+                    with runtime_provider_limiter_slot(
+                        self.store,
+                        limiter_key="harvest_company_employees_actor",
                         budget=resolved_harvest_company_roster_global_inflight(runtime_timing_overrides),
+                        lease_owner=f"harvest_company_employees:direct:{job_id or identity.company_key}",
+                        lease_seconds=7200,
                         metadata={"company": identity.company_key, "source": "direct_full_roster"},
                     ):
-                        snapshot = _apply_optional_runtime_timing_overrides(
-                            self.harvest_company_connector.fetch_company_roster,
-                            identity,
-                            snapshot_dir,
-                            asset_logger=AssetLogger(snapshot_dir),
-                            max_pages=max_pages,
-                            page_limit=page_limit,
-                            allow_shared_provider_cache=allow_shared_provider_cache,
-                            runtime_timing_overrides=runtime_timing_overrides,
-                        )
+                        with runtime_inflight_slot(
+                            "harvest_company_roster",
+                            budget=resolved_harvest_company_roster_global_inflight(runtime_timing_overrides),
+                            metadata={"company": identity.company_key, "source": "direct_full_roster"},
+                        ):
+                            snapshot = _apply_optional_runtime_timing_overrides(
+                                self.harvest_company_connector.fetch_company_roster,
+                                identity,
+                                snapshot_dir,
+                                asset_logger=AssetLogger(snapshot_dir),
+                                max_pages=max_pages,
+                                page_limit=page_limit,
+                                allow_shared_provider_cache=allow_shared_provider_cache,
+                                runtime_timing_overrides=runtime_timing_overrides,
+                            )
                 else:
                     _start_parallel_former_search_seed_if_needed()
-                    with runtime_inflight_slot(
-                        "harvest_company_roster",
+                    with runtime_provider_limiter_slot(
+                        self.store,
+                        limiter_key="harvest_company_employees_actor",
                         budget=resolved_harvest_company_roster_global_inflight(runtime_timing_overrides),
+                        lease_owner=f"harvest_company_employees:direct:{job_id or identity.company_key}",
+                        lease_seconds=7200,
                         metadata={"company": identity.company_key, "source": "direct_full_roster"},
                     ):
-                        snapshot = _apply_optional_runtime_timing_overrides(
-                            self.harvest_company_connector.fetch_company_roster,
-                            identity,
-                            snapshot_dir,
-                            asset_logger=AssetLogger(snapshot_dir),
-                            max_pages=max_pages,
-                            page_limit=page_limit,
-                            allow_shared_provider_cache=allow_shared_provider_cache,
-                            runtime_timing_overrides=runtime_timing_overrides,
-                        )
-            else:
+                        with runtime_inflight_slot(
+                            "harvest_company_roster",
+                            budget=resolved_harvest_company_roster_global_inflight(runtime_timing_overrides),
+                            metadata={"company": identity.company_key, "source": "direct_full_roster"},
+                        ):
+                            snapshot = _apply_optional_runtime_timing_overrides(
+                                self.harvest_company_connector.fetch_company_roster,
+                                identity,
+                                snapshot_dir,
+                                asset_logger=AssetLogger(snapshot_dir),
+                                max_pages=max_pages,
+                                page_limit=page_limit,
+                                allow_shared_provider_cache=allow_shared_provider_cache,
+                                runtime_timing_overrides=runtime_timing_overrides,
+                            )
+            elif acquisition_mode != "reused_cached_roster":
                 _start_parallel_former_search_seed_if_needed()
                 snapshot = self.roster_connector.fetch_company_roster(
                     identity,
@@ -1774,7 +2293,7 @@ class AcquisitionEngine:
                     page_limit=page_limit,
                 )
         except Exception as exc:
-            _shutdown_parallel_former(wait=False)
+            _shutdown_parallel_former(wait=True)
             cached_snapshot = (
                 self._load_cached_roster_snapshot(identity, exclude_snapshot_dir=snapshot_dir)
                 if allow_cached_roster_fallback
@@ -1808,7 +2327,7 @@ class AcquisitionEngine:
             )
 
         if not snapshot.visible_entries:
-            _shutdown_parallel_former(wait=False)
+            _shutdown_parallel_former(wait=True)
             cached_snapshot = (
                 self._load_cached_roster_snapshot(identity, exclude_snapshot_dir=snapshot_dir)
                 if allow_cached_roster_fallback
@@ -1852,7 +2371,7 @@ class AcquisitionEngine:
                 try:
                     former_execution = former_parallel_future.result()
                 finally:
-                    _shutdown_parallel_former(wait=False)
+                    _shutdown_parallel_former(wait=True)
             else:
                 former_execution = self._acquire_default_former_search_seed(task, state, job_request, identity)
             former_search_seed_snapshot = former_execution.state_updates.get("search_seed_snapshot")
@@ -1914,6 +2433,9 @@ class AcquisitionEngine:
             detail += f" Used {len(company_employee_shards)} segmented Harvest company-employee shards."
         payload = snapshot.to_record()
         payload["acquisition_mode"] = acquisition_mode
+        if reuse_existing_roster_miss:
+            payload["reuse_existing_roster_miss"] = True
+            payload["reuse_existing_roster_miss_reason"] = "no_cached_roster_snapshot"
         final_state_updates: dict[str, Any] = {"roster_snapshot": snapshot}
         if isinstance(former_search_seed_snapshot, SearchSeedSnapshot):
             detail += f" Added {len(former_search_seed_snapshot.entries)} former-member search seeds."
@@ -1925,7 +2447,7 @@ class AcquisitionEngine:
         if former_search_detail:
             payload["former_search_seed_detail"] = former_search_detail
 
-        _shutdown_parallel_former(wait=False)
+        _shutdown_parallel_former(wait=True)
         return AcquisitionExecution(
             task_id=task.task_id,
             status="completed",
@@ -1933,6 +2455,124 @@ class AcquisitionEngine:
             payload=payload,
             state_updates=final_state_updates,
         )
+
+    @staticmethod
+    def _provider_search_retry_materialization_item_id(
+        *,
+        job_id: str,
+        snapshot_id: str,
+        retry_item: dict[str, Any],
+    ) -> str:
+        item_key = str(retry_item.get("item_key") or "").strip()
+        if not item_key:
+            signature_payload = {
+                "provider_retry_type": str(retry_item.get("provider_retry_type") or ""),
+                "provider": str(retry_item.get("provider") or ""),
+                "query": str(retry_item.get("query") or ""),
+                "effective_query_text": str(retry_item.get("effective_query_text") or ""),
+                "employment_status": str(retry_item.get("employment_status") or ""),
+                "incomplete_reason": str(retry_item.get("incomplete_reason") or ""),
+            }
+            item_key = sha1(
+                json.dumps(signature_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            ).hexdigest()[:24]
+        return f"{job_id}|{snapshot_id}|{PROVIDER_SEARCH_RETRY_ITEM_KIND}|{item_key}"
+
+    def _record_search_seed_provider_retry_items(
+        self,
+        *,
+        job_id: str,
+        target_company: str,
+        snapshot: SearchSeedSnapshot | None,
+    ) -> dict[str, Any]:
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id or not isinstance(snapshot, SearchSeedSnapshot):
+            return {"status": "skipped", "reason": "job_or_snapshot_missing", "item_count": 0}
+        retry_items = collect_search_seed_provider_retry_items(snapshot)
+        if not retry_items:
+            return {"status": "skipped", "reason": "no_provider_retry_items", "item_count": 0}
+        persisted_items: list[dict[str, Any]] = []
+        skipped_terminal_count = 0
+        for retry_item in retry_items:
+            retry_item = dict(retry_item)
+            snapshot_id = str(retry_item.get("snapshot_id") or snapshot.snapshot_id or snapshot.snapshot_dir.name).strip()
+            item_id = self._provider_search_retry_materialization_item_id(
+                job_id=normalized_job_id,
+                snapshot_id=snapshot_id,
+                retry_item=retry_item,
+            )
+            existing = self.store.get_job_materialization_item(item_id)
+            existing_status = str(dict(existing or {}).get("status") or "").strip().lower()
+            if existing_status in {"completed", "cancelled", "canceled", "superseded"}:
+                skipped_terminal_count += 1
+                persisted_items.append(dict(existing))
+                continue
+            queue_status = str(retry_item.get("queue_status") or "").strip().lower()
+            if not queue_status:
+                queue_status = (
+                    "failed"
+                    if str(retry_item.get("status") or "").strip().lower() == "exhausted"
+                    else "queued"
+                )
+            phase = str(retry_item.get("phase") or "").strip().lower()
+            if not phase:
+                phase = "terminal" if queue_status == "failed" else queue_status
+            max_attempts = max(1, int(retry_item.get("max_attempts") or retry_item.get("provider_attempt_count") or 1))
+            item = self.store.upsert_job_materialization_item(
+                item_id=item_id,
+                job_id=normalized_job_id,
+                target_company=target_company or snapshot.target_company,
+                snapshot_id=snapshot_id,
+                item_kind=PROVIDER_SEARCH_RETRY_ITEM_KIND,
+                source="search_seed_discovery",
+                reason=str(retry_item.get("provider_retry_type") or "provider_retry"),
+                status=queue_status,
+                phase=phase,
+                priority=-20,
+                idempotency_key=item_id,
+                max_attempts=max_attempts,
+                metadata={
+                    "provider_retry_item": retry_item,
+                    "summary_path": str(snapshot.summary_path),
+                    "entries_path": str(snapshot.entries_path or ""),
+                    "target_company": target_company or snapshot.target_company,
+                    "snapshot_id": snapshot_id,
+                },
+            )
+            if queue_status == "failed":
+                item = self.store.mark_job_materialization_item_failed(
+                    item_id,
+                    error_text=str(
+                        retry_item.get("incomplete_reason")
+                        or retry_item.get("provider_retry_type")
+                        or "provider_search_retry_exhausted"
+                    ),
+                    retryable=False,
+                    metadata={
+                        "provider_retry_item": retry_item,
+                        "terminal_writer": "search_seed_provider_retry_projection",
+                    },
+                )
+            persisted_items.append(dict(item or {}))
+        return {
+            "status": "recorded",
+            "item_kind": PROVIDER_SEARCH_RETRY_ITEM_KIND,
+            "item_count": len(retry_items),
+            "persisted_count": len([item for item in persisted_items if item]),
+            "failed_count": len(
+                [item for item in persisted_items if str(item.get("status") or "").strip().lower() == "failed"]
+            ),
+            "retryable_count": len(
+                [
+                    item
+                    for item in persisted_items
+                    if str(item.get("status") or "").strip().lower()
+                    in {"queued", "deferred", "failed_retryable"}
+                ]
+            ),
+            "skipped_terminal_count": skipped_terminal_count,
+            "item_ids": [str(item.get("item_id") or "") for item in persisted_items if str(item.get("item_id") or "")],
+        }
 
     def _acquire_search_seed_pool(
         self,
@@ -1965,6 +2605,49 @@ class AcquisitionEngine:
         baseline_snapshot_id = self._delta_baseline_snapshot_id(task, job_request)
         delta_execution_plan = self._task_delta_execution_plan(task, job_request)
         baseline_selection_explanation = self._task_baseline_selection_explanation(task, job_request)
+        parallel_former_executor: ThreadPoolExecutor | None = None
+        parallel_former_future = None
+        parallel_former_execution: AcquisitionExecution | None = None
+        should_run_parallel_former_search_seed = False
+
+        def _start_scoped_parallel_former_search_seed_if_needed() -> None:
+            nonlocal parallel_former_executor, parallel_former_future
+            if not should_run_parallel_former_search_seed or parallel_former_future is not None:
+                return
+            parallel_former_executor = ThreadPoolExecutor(
+                max_workers=1,
+                thread_name_prefix="acquisition-scoped-former-seed",
+            )
+            parallel_former_future = parallel_former_executor.submit(
+                self._acquire_default_former_search_seed,
+                task,
+                dict(state),
+                job_request,
+                identity,
+            )
+
+        def _wait_for_scoped_parallel_former_search_seed() -> AcquisitionExecution | None:
+            nonlocal parallel_former_executor, parallel_former_future, parallel_former_execution
+            if parallel_former_future is None:
+                return parallel_former_execution
+            try:
+                parallel_former_execution = parallel_former_future.result()
+            finally:
+                if parallel_former_executor is not None:
+                    parallel_former_executor.shutdown(wait=True, cancel_futures=False)
+                parallel_former_executor = None
+                parallel_former_future = None
+            return parallel_former_execution
+
+        def _cancel_scoped_parallel_former_search_seed() -> None:
+            nonlocal parallel_former_executor, parallel_former_future
+            if parallel_former_future is not None:
+                parallel_former_future.cancel()
+            if parallel_former_executor is not None:
+                parallel_former_executor.shutdown(wait=True, cancel_futures=True)
+            parallel_former_executor = None
+            parallel_former_future = None
+
         if (
             self._task_delta_noop(task, job_request) or bool(delta_execution_plan.get("delta_noop"))
         ) and baseline_snapshot_id:
@@ -1985,6 +2668,11 @@ class AcquisitionEngine:
             )
         employment_statuses = self._task_employment_statuses(task, job_request)
         employment_status = employment_statuses[0] if employment_statuses else "current"
+        should_run_parallel_former_search_seed = (
+            self._task_strategy_type(task, job_request) == "scoped_search_roster"
+            and self._task_include_former_search_seed(task, job_request)
+            and str(employment_status or "").strip().lower() != "former"
+        )
         provider_only_former_pass = employment_status == "former" and bool(
             list(filter_hints.get("past_companies") or []) or str(identity.linkedin_company_url or "").strip()
         )
@@ -2011,6 +2699,8 @@ class AcquisitionEngine:
                 payload={"strategy_type": self._task_strategy_type(task, job_request)},
             )
 
+        _start_scoped_parallel_former_search_seed_if_needed()
+
         def _queue_incremental_search_seed_prefetch(result: dict[str, Any]) -> None:
             incremental_entries = list(result.get("entries") or [])
             if not incremental_entries:
@@ -2022,6 +2712,15 @@ class AcquisitionEngine:
             source_path = str(result.get("raw_path") or "").strip()
             if not source_path:
                 source_path = str(snapshot_dir / "search_seed_discovery" / "summary.json")
+            candidate_documents_projection = self._project_incremental_search_seed_candidate_documents(
+                job_id=job_id,
+                identity=identity,
+                snapshot_dir=snapshot_dir,
+                entries=[dict(entry) for entry in incremental_entries if isinstance(entry, dict)],
+                summary=dict(result.get("summary") or {}),
+                raw_path=source_path,
+                employment_status=str(result.get("employment_status") or employment_status),
+            )
             prefetch_result = self._queue_background_profile_prefetch_for_search_seed_entries(
                 identity=identity,
                 entries=incremental_entries,
@@ -2035,6 +2734,7 @@ class AcquisitionEngine:
                 priority=True,
                 exclude_profile_urls=incremental_prefetched_profile_urls,
             )
+            prefetch_result["candidate_documents_projection"] = dict(candidate_documents_projection or {})
             incremental_prefetch_events.append(dict(prefetch_result))
             failed_urls = {
                 str(profile_url or "").strip()
@@ -2054,33 +2754,41 @@ class AcquisitionEngine:
                     if profile_url and profile_url not in failed_urls:
                         incremental_prefetched_profile_urls.add(profile_url)
 
-        snapshot = self.search_seed_acquirer.discover(
-            identity,
-            snapshot_dir,
-            asset_logger=AssetLogger(snapshot_dir),
-            search_seed_queries=search_seed_queries,
-            query_bundles=query_bundles,
-            filter_hints=filter_hints,
-            cost_policy=cost_policy,
-            employment_status=employment_status,
-            worker_runtime=self.worker_runtime,
-            job_id=job_id,
-            request_payload=effective_request_payload,
-            plan_payload=plan_payload,
-            runtime_mode=runtime_mode,
-            intent_view=self._task_execution_view(task, job_request),
-            delta_execution_plan=self._task_delta_execution_plan(task, job_request),
-            lane_context={
-                "task_id": task.task_id,
-                "task_type": task.task_type,
-                "strategy_type": self._task_strategy_type(task, job_request),
-                "employment_status": employment_status,
-                "baseline_snapshot_id": baseline_snapshot_id,
-                "asset_reuse_plan": self._task_asset_reuse_plan(task, job_request),
-            },
-            on_incremental_query_result=_queue_incremental_search_seed_prefetch,
-        )
+        try:
+            snapshot = self.search_seed_acquirer.discover(
+                identity,
+                snapshot_dir,
+                asset_logger=AssetLogger(snapshot_dir),
+                search_seed_queries=search_seed_queries,
+                query_bundles=query_bundles,
+                filter_hints=filter_hints,
+                cost_policy=cost_policy,
+                employment_status=employment_status,
+                worker_runtime=self.worker_runtime,
+                job_id=job_id,
+                request_payload=effective_request_payload,
+                plan_payload=plan_payload,
+                runtime_mode=runtime_mode,
+                intent_view=self._task_execution_view(task, job_request),
+                delta_execution_plan=self._task_delta_execution_plan(task, job_request),
+                lane_context={
+                    "task_id": task.task_id,
+                    "task_type": task.task_type,
+                    "strategy_type": self._task_strategy_type(task, job_request),
+                    "employment_status": employment_status,
+                    "baseline_snapshot_id": baseline_snapshot_id,
+                    "asset_reuse_plan": self._task_asset_reuse_plan(task, job_request),
+                },
+                on_incremental_query_result=_queue_incremental_search_seed_prefetch,
+            )
+        except Exception:
+            _cancel_scoped_parallel_former_search_seed()
+            raise
         snapshot = _persist_search_seed_snapshot(snapshot)
+        candidate_documents_projection = self._reawaken_waiting_prerequisite_after_candidate_documents_write(
+            job_id=job_id,
+            snapshot=snapshot,
+        )
         profile_prefetch = self._queue_background_profile_prefetch_for_search_seed_entries(
             identity=identity,
             entries=list(snapshot.entries or []),
@@ -2106,9 +2814,55 @@ class AcquisitionEngine:
             [*incremental_prefetch_events, dict(profile_prefetch)],
             requested_profile_urls=requested_profile_urls,
         )
+        former_profile_prefetch: dict[str, Any] = {}
+        former_search_seed_status = ""
+        former_search_seed_detail = ""
+        former_search_seed_error = ""
+        former_execution = _wait_for_scoped_parallel_former_search_seed()
+        if former_execution is not None:
+            former_search_seed_status = str(former_execution.status or "").strip()
+            former_search_seed_detail = str(former_execution.detail or "").strip()
+            if former_search_seed_status == "blocked":
+                former_search_seed_error = former_search_seed_detail
+            incoming_snapshot = former_execution.state_updates.get("search_seed_snapshot")
+            if isinstance(incoming_snapshot, SearchSeedSnapshot):
+                merged_snapshot = _merge_search_seed_snapshots(snapshot, incoming_snapshot)
+                if isinstance(merged_snapshot, SearchSeedSnapshot):
+                    snapshot = merged_snapshot
+                    candidate_documents_projection = (
+                        self._reawaken_waiting_prerequisite_after_candidate_documents_write(
+                            job_id=job_id,
+                            snapshot=snapshot,
+                        )
+                    )
+            former_profile_prefetch = dict(dict(former_execution.payload or {}).get("profile_prefetch") or {})
+            if former_profile_prefetch:
+                requested_profile_urls.update(
+                    {
+                        str(dict(entry or {}).get("profile_url") or "").strip()
+                        for entry in list(snapshot.entries or [])
+                        if str(dict(entry or {}).get("profile_url") or "").strip()
+                    }
+                )
+                profile_prefetch = _merge_profile_prefetch_dispatch_summaries(
+                    [dict(profile_prefetch), former_profile_prefetch],
+                    requested_profile_urls=requested_profile_urls,
+                )
+        provider_retry_items = collect_search_seed_provider_retry_items(snapshot)
+        provider_retry_projection = self._record_search_seed_provider_retry_items(
+            job_id=job_id,
+            target_company=identity.canonical_name,
+            snapshot=snapshot,
+        )
+        provider_retry_payload = {
+            "provider_retry_items": provider_retry_items,
+            "provider_retry_item_count": len(provider_retry_items),
+            "provider_retry_projection": provider_retry_projection,
+        }
         queued_query_count = len(
             [item for item in list(snapshot.query_summaries or []) if str(item.get("status") or "") == "queued"]
         )
+        incomplete_provider_query_count = _search_seed_incomplete_provider_query_count(snapshot)
         if snapshot.stop_reason == "queued_background_search" or queued_query_count > 0:
             payload = {
                 **snapshot.to_record(),
@@ -2116,7 +2870,15 @@ class AcquisitionEngine:
                 "cost_policy": cost_policy,
                 "queued_query_count": queued_query_count,
                 "profile_prefetch": dict(profile_prefetch),
+                "candidate_documents_projection": dict(candidate_documents_projection),
+                **provider_retry_payload,
             }
+            if former_search_seed_status:
+                payload["parallel_former_search_seed_status"] = former_search_seed_status
+            if former_search_seed_detail:
+                payload["parallel_former_search_seed_detail"] = former_search_seed_detail
+            if former_search_seed_error:
+                payload["parallel_former_search_seed_error"] = former_search_seed_error
             if snapshot.entries:
                 return AcquisitionExecution(
                     task_id=task.task_id,
@@ -2136,6 +2898,39 @@ class AcquisitionEngine:
                     f"Search-seed acquisition queued {queued_query_count} background web searches; "
                     "resume the worker daemon to finish remote task_get before fallback or downstream enrichment."
                 ),
+                    payload=payload,
+                    state_updates={"search_seed_snapshot": snapshot},
+                )
+        if snapshot.stop_reason == "provider_people_search_incomplete" or incomplete_provider_query_count > 0:
+            payload = {
+                **snapshot.to_record(),
+                "strategy_type": self._task_strategy_type(task, job_request),
+                "cost_policy": cost_policy,
+                "incomplete_provider_query_count": incomplete_provider_query_count,
+                "profile_prefetch": dict(profile_prefetch),
+                "candidate_documents_projection": dict(candidate_documents_projection),
+                **provider_retry_payload,
+            }
+            if former_search_seed_status:
+                payload["parallel_former_search_seed_status"] = former_search_seed_status
+            if former_search_seed_detail:
+                payload["parallel_former_search_seed_detail"] = former_search_seed_detail
+            if former_search_seed_error:
+                payload["parallel_former_search_seed_error"] = former_search_seed_error
+            blocked_detail = (
+                "Search-seed acquisition exhausted at least one provider retry item. The workflow is blocked "
+                "on the durable provider_search_retry item instead of treating this as a normal zero-result lane."
+                if provider_retry_items
+                else (
+                    "Search-seed acquisition recovered partial provider results, but at least one Harvest "
+                    "profile-search query reported more remote results than were fetched. Retry after provider "
+                    "page-chunk recovery completes before marking Stage 1 final."
+                )
+            )
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="blocked",
+                detail=blocked_detail,
                 payload=payload,
                 state_updates={"search_seed_snapshot": snapshot},
             )
@@ -2155,6 +2950,7 @@ class AcquisitionEngine:
                         "delta_execution_noop": True,
                         "delta_execution_reason": "no_new_search_seed_entries",
                         "baseline_selection_explanation": baseline_selection_explanation,
+                        "candidate_documents_projection": dict(candidate_documents_projection),
                     },
                     state_updates={"search_seed_snapshot": snapshot},
                 )
@@ -2178,6 +2974,16 @@ class AcquisitionEngine:
                 "strategy_type": self._task_strategy_type(task, job_request),
                 "cost_policy": cost_policy,
                 "profile_prefetch": dict(profile_prefetch),
+                "candidate_documents_projection": dict(candidate_documents_projection),
+                **provider_retry_payload,
+                **(
+                    {
+                        "parallel_former_search_seed_status": former_search_seed_status,
+                        "parallel_former_search_seed_detail": former_search_seed_detail,
+                    }
+                    if former_search_seed_status
+                    else {}
+                ),
             },
             state_updates={"search_seed_snapshot": snapshot},
         )
@@ -2196,6 +3002,51 @@ class AcquisitionEngine:
                 status="blocked",
                 detail="Company identity must be resolved before former-member LinkedIn search can run.",
                 payload={},
+            )
+        expected_queries = [
+            str(query or "").strip()
+            for query in self._task_execution_list(task, job_request, "search_seed_queries")
+            if str(query or "").strip()
+        ]
+        existing_search_seed_snapshot = state.get("search_seed_snapshot")
+        durable_search_seed_snapshot = _registry_load_search_seed_snapshot_from_snapshot_dir(
+            snapshot_dir,
+            identity=identity,
+            auto_backfill_lanes=True,
+        )
+        reusable_search_seed_snapshot = _merge_search_seed_snapshots(
+            existing_search_seed_snapshot if isinstance(existing_search_seed_snapshot, SearchSeedSnapshot) else None,
+            durable_search_seed_snapshot,
+        )
+        if _search_seed_snapshot_satisfies_lane_queries(
+            reusable_search_seed_snapshot,
+            lane="former",
+            expected_queries=expected_queries,
+        ):
+            former_entries = _search_seed_snapshot_lane_entries(reusable_search_seed_snapshot, "former")
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="completed",
+                detail=(
+                    f"Former-member search seed lane already has {len(former_entries)} durable entries; "
+                    "skipped duplicate provider execution."
+                ),
+                payload={
+                    **reusable_search_seed_snapshot.to_record(),
+                    "lane_entry_count": len(former_entries),
+                    "reused_existing_search_seed_lane": True,
+                    "reused_existing_search_seed_lane_key": "former",
+                    "profile_prefetch": {
+                        "status": "reused_existing_lane",
+                        "requested_url_count": len(former_entries),
+                        "dispatched_url_count": 0,
+                        "queued_worker_count": 0,
+                        "cached_profile_count": 0,
+                        "queued_urls": [],
+                        "failed_urls": [],
+                    },
+                },
+                state_updates={"search_seed_snapshot": reusable_search_seed_snapshot},
             )
         filter_hints = _build_former_filter_hints(
             identity=identity,
@@ -2381,6 +3232,16 @@ class AcquisitionEngine:
         source_snapshots: dict[str, Any] = {}
         candidates: list[Candidate] = []
         evidence: list[EvidenceRecord] = []
+
+        snapshot, search_seed_snapshot = self._hydrate_acquisition_snapshots_for_enrichment(
+            state=state,
+            roster_snapshot=snapshot if isinstance(snapshot, CompanyRosterSnapshot) else None,
+            search_seed_snapshot=(
+                search_seed_snapshot if isinstance(search_seed_snapshot, SearchSeedSnapshot) else None
+            ),
+            snapshot_dir=snapshot_dir,
+            fallback_target_company=effective_target_company,
+        )
 
         def _reuse_delta_baseline_if_available() -> AcquisitionExecution | None:
             delta_baseline_snapshot_id = self._delta_baseline_snapshot_id(task, job_request)
@@ -2648,6 +3509,7 @@ class AcquisitionEngine:
             stage_evidence: list[EvidenceRecord],
             stage_enrichment: Any,
             write_stage_archive: bool = True,
+            preserve_root_candidate_superset: bool = False,
         ) -> None:
             payload = {
                 "snapshot": source_snapshots.get("roster_snapshot")
@@ -2668,39 +3530,117 @@ class AcquisitionEngine:
                     "task_type": task.task_type,
                 },
             }
+            root_payload = dict(payload)
+            if preserve_root_candidate_superset and candidate_doc_path.exists():
+                existing_payload = _read_company_asset_json(candidate_doc_path)
+                existing_candidates, existing_evidence = _load_snapshot_candidate_payload(
+                    candidate_doc_path,
+                    effective_target_company,
+                )
+                if existing_candidates or existing_evidence:
+                    merged_candidates = {
+                        candidate.candidate_id: candidate
+                        for candidate in existing_candidates
+                        if str(candidate.candidate_id or "").strip()
+                    }
+                    for candidate in stage_candidates:
+                        candidate_id = str(candidate.candidate_id or "").strip()
+                        if not candidate_id:
+                            continue
+                        merged_candidates[candidate_id] = _merge_background_reconcile_candidate(
+                            merged_candidates.get(candidate_id),
+                            candidate,
+                        )
+                    merged_evidence = {
+                        item.evidence_id: item
+                        for item in existing_evidence
+                        if str(item.evidence_id or "").strip()
+                    }
+                    for item in stage_evidence:
+                        evidence_id = str(item.evidence_id or "").strip()
+                        if evidence_id:
+                            merged_evidence[evidence_id] = item
+                    merged_candidate_list = sorted(
+                        list(merged_candidates.values()),
+                        key=lambda item: item.display_name,
+                    )
+                    merged_evidence_list = list(merged_evidence.values())
+                    if len(merged_candidate_list) > len(stage_candidates):
+                        root_payload = {
+                            **existing_payload,
+                            **payload,
+                            "snapshot": {
+                                **dict(existing_payload.get("snapshot") or {}),
+                                **dict(payload.get("snapshot") or {}),
+                            },
+                            "acquisition_sources": {
+                                **dict(existing_payload.get("acquisition_sources") or {}),
+                                **dict(payload.get("acquisition_sources") or {}),
+                            },
+                            "candidates": [candidate.to_record() for candidate in merged_candidate_list],
+                            "evidence": [item.to_record() for item in merged_evidence_list],
+                            "candidate_count": len(merged_candidate_list),
+                            "evidence_count": len(merged_evidence_list),
+                            "root_candidate_documents_contract": {
+                                "status": "superset_preserved",
+                                "reason": "profile_prefetch_pending",
+                                "existing_candidate_count": len(existing_candidates),
+                                "stage_candidate_count": len(stage_candidates),
+                                "merged_candidate_count": len(merged_candidate_list),
+                            },
+                        }
             if int(getattr(stage_enrichment, "queued_harvest_worker_count", 0) or 0) > 0:
-                payload["background_reconcile"] = {
+                background_reconcile = {
                     "kind": "harvest_profile_prefetch",
                     "queued_harvest_worker_count": int(
                         getattr(stage_enrichment, "queued_harvest_worker_count", 0) or 0
                     ),
                     "stop_reason": str(getattr(stage_enrichment, "stop_reason", "") or ""),
                 }
+                payload["background_reconcile"] = dict(background_reconcile)
+                root_payload["background_reconcile"] = dict(background_reconcile)
             elif int(getattr(stage_enrichment, "queued_exploration_count", 0) or 0) > 0:
-                payload["background_reconcile"] = {
+                background_reconcile = {
                     "kind": "public_web_exploration",
                     "queued_exploration_count": int(getattr(stage_enrichment, "queued_exploration_count", 0) or 0),
                     "stop_reason": str(getattr(stage_enrichment, "stop_reason", "") or ""),
                 }
+                payload["background_reconcile"] = dict(background_reconcile)
+                root_payload["background_reconcile"] = dict(background_reconcile)
             if enrichment_scope == "linkedin_stage_1":
-                payload["next_connectors"] = {
+                next_connectors = {
                     "profile_detail_accounts": [
                         account.account_id for account in profile_detail_accounts(self.accounts)
                     ],
                     "note": "LinkedIn stage-1 baseline is ready and can power deterministic layering or retrieval preview.",
                 }
+                payload["next_connectors"] = dict(next_connectors)
+                root_payload["next_connectors"] = dict(next_connectors)
             elif enrichment_scope == "public_web_stage_2":
-                payload["next_connectors"] = {
+                next_connectors = {
                     "note": "Public-web stage-2 enrichment extended the LinkedIn baseline with publications, coauthor, and exploration evidence.",
                 }
+                payload["next_connectors"] = dict(next_connectors)
+                root_payload["next_connectors"] = dict(next_connectors)
             logger.write_json(
                 candidate_doc_path,
-                payload,
+                root_payload,
                 asset_type="candidate_documents",
                 source_kind=stage_source_kind,
                 is_raw_asset=False,
                 model_safe=True,
             )
+            job_id_for_reawaken = str(state.get("job_id") or "").strip()
+            if job_id_for_reawaken:
+                try:
+                    self.store.reawaken_waiting_prerequisite_job_materialization_items(
+                        job_id=job_id_for_reawaken,
+                        snapshot_id=snapshot_dir.name,
+                        item_kind="local_apply_closure",
+                        source="acquisition_candidate_documents_write",
+                    )
+                except Exception:
+                    pass
             if write_stage_archive and isinstance(stage_archive_path, Path):
                 logger.write_json(
                     stage_archive_path,
@@ -2719,6 +3659,7 @@ class AcquisitionEngine:
                 stage_evidence=evidence,
                 stage_enrichment=enrichment,
                 write_stage_archive=True,
+                preserve_root_candidate_superset=True,
             )
             state_updates = {
                 "candidates": candidates,
@@ -2726,15 +3667,15 @@ class AcquisitionEngine:
                 "candidate_doc_path": candidate_doc_path,
             }
             if enrichment_scope == "linkedin_stage_1":
-                state_updates["linkedin_stage_candidate_doc_path"] = stage_archive_path or candidate_doc_path
                 state_updates["linkedin_stage_completed"] = True
+                state_updates["linkedin_stage_candidate_doc_path"] = stage_archive_path or candidate_doc_path
             return AcquisitionExecution(
                 task_id=task.task_id,
-                status="completed",
+                status="blocked",
                 detail=(
                     "Built LinkedIn stage-1 candidate documents and queued "
                     f"{int(getattr(enrichment, 'queued_harvest_worker_count', 0) or 0)} background Harvest profile "
-                    "prefetch workers; workflow will continue while profile detail reconciles in the background."
+                    "prefetch workers; waiting for profile detail before final results."
                 ),
                 payload={
                     "candidate_count": len(candidates),
@@ -2750,22 +3691,37 @@ class AcquisitionEngine:
                     "publication_match_count": len(enrichment.publication_matches),
                     "lead_candidate_count": len(enrichment.lead_candidates),
                     "acquisition_canonicalization": canonicalization_summary,
+                    "profile_prefetch": dict(getattr(enrichment, "profile_prefetch", {}) or {}),
                     "background_reconcile_pending": True,
+                    "blocking_reason": "harvest_profile_prefetch_pending",
                 },
                 state_updates=state_updates,
             )
 
         candidates = enrichment.candidates
         evidence.extend(enrichment.evidence)
-        _write_candidate_documents(stage_candidates=candidates, stage_evidence=evidence, stage_enrichment=enrichment)
+        _write_candidate_documents(
+            stage_candidates=candidates,
+            stage_evidence=evidence,
+            stage_enrichment=enrichment,
+            preserve_root_candidate_superset=(
+                enrichment_scope != "public_web_stage_2"
+                and int(getattr(enrichment, "queued_harvest_worker_count", 0) or 0) > 0
+            ),
+        )
         state_updates = {
             "candidates": candidates,
             "evidence": evidence,
             "candidate_doc_path": candidate_doc_path,
         }
+        linkedin_profile_prefetch_pending = (
+            enrichment_scope != "public_web_stage_2"
+            and int(getattr(enrichment, "queued_harvest_worker_count", 0) or 0) > 0
+        )
         if enrichment_scope == "linkedin_stage_1":
             state_updates["linkedin_stage_candidate_doc_path"] = stage_archive_path
-            state_updates["linkedin_stage_completed"] = True
+            if not linkedin_profile_prefetch_pending:
+                state_updates["linkedin_stage_completed"] = True
         elif enrichment_scope == "public_web_stage_2":
             state_updates["public_web_stage_candidate_doc_path"] = stage_archive_path
             state_updates["public_web_stage_completed"] = True
@@ -2779,29 +3735,41 @@ class AcquisitionEngine:
                 else "Built candidate documents from roster + multisource enrichment."
             )
         )
+        payload = {
+            "candidate_count": len(candidates),
+            "evidence_count": len(evidence),
+            "candidate_doc_path": str(candidate_doc_path),
+            "stage_archive_path": str(stage_archive_path or ""),
+            "enrichment_mode": stage_mode,
+            "enrichment_scope": enrichment_scope,
+            "resolved_profile_count": len(enrichment.resolved_profiles),
+            "publication_match_count": len(enrichment.publication_matches),
+            "lead_candidate_count": len(enrichment.lead_candidates),
+            "artifact_paths": enrichment.artifact_paths,
+            "profile_prefetch": dict(getattr(enrichment, "profile_prefetch", {}) or {}),
+            "acquisition_canonicalization": canonicalization_summary,
+            "queued_harvest_worker_count": int(getattr(enrichment, "queued_harvest_worker_count", 0) or 0),
+            "queued_exploration_count": int(getattr(enrichment, "queued_exploration_count", 0) or 0),
+            "stop_reason": str(getattr(enrichment, "stop_reason", "") or ""),
+        }
+        if linkedin_profile_prefetch_pending:
+            payload["background_reconcile_pending"] = True
+            payload["blocking_reason"] = "harvest_profile_prefetch_pending"
         return AcquisitionExecution(
             task_id=task.task_id,
-            status="completed",
+            status="blocked" if linkedin_profile_prefetch_pending else "completed",
             detail=(
-                f"{detail_prefix} Resolved {len(enrichment.resolved_profiles)} profile details and "
-                f"matched {len(enrichment.publication_matches)} publications."
+                (
+                    f"{detail_prefix} Queued {int(getattr(enrichment, 'queued_harvest_worker_count', 0) or 0)} "
+                    "Harvest profile prefetch workers; waiting for profile detail before final results."
+                )
+                if linkedin_profile_prefetch_pending
+                else (
+                    f"{detail_prefix} Resolved {len(enrichment.resolved_profiles)} profile details and "
+                    f"matched {len(enrichment.publication_matches)} publications."
+                )
             ),
-            payload={
-                "candidate_count": len(candidates),
-                "evidence_count": len(evidence),
-                "candidate_doc_path": str(candidate_doc_path),
-                "stage_archive_path": str(stage_archive_path or ""),
-                "enrichment_mode": stage_mode,
-                "enrichment_scope": enrichment_scope,
-                "resolved_profile_count": len(enrichment.resolved_profiles),
-                "publication_match_count": len(enrichment.publication_matches),
-                "lead_candidate_count": len(enrichment.lead_candidates),
-                "artifact_paths": enrichment.artifact_paths,
-                "acquisition_canonicalization": canonicalization_summary,
-                "queued_harvest_worker_count": int(getattr(enrichment, "queued_harvest_worker_count", 0) or 0),
-                "queued_exploration_count": int(getattr(enrichment, "queued_exploration_count", 0) or 0),
-                "stop_reason": str(getattr(enrichment, "stop_reason", "") or ""),
-            },
+            payload=payload,
             state_updates=state_updates,
         )
 
@@ -2831,12 +3799,22 @@ class AcquisitionEngine:
         allow_shared_provider_cache: bool,
         priority: bool = False,
         exclude_profile_urls: set[str] | None = None,
+        load_cached_profile_payloads: bool = True,
+        extra_profile_urls: list[str] | None = None,
+        submit_provider: bool = True,
+        nonblocking_submit: bool = False,
+        allow_under_target_final_tail_dispatch: bool | None = None,
     ) -> dict[str, Any]:
         excluded_urls = {
             str(profile_url or "").strip()
             for profile_url in list(exclude_profile_urls or set())
             if str(profile_url or "").strip()
         }
+        filtered_extra_profile_urls = [
+            str(profile_url or "").strip()
+            for profile_url in list(extra_profile_urls or [])
+            if str(profile_url or "").strip() and str(profile_url or "").strip() not in excluded_urls
+        ]
         filtered_candidates: list[Candidate] = []
         if excluded_urls:
             for candidate in list(candidates or []):
@@ -2853,10 +3831,11 @@ class AcquisitionEngine:
                 filtered_candidates.append(candidate)
         else:
             filtered_candidates = list(candidates or [])
-        if not filtered_candidates:
+        if not filtered_candidates and not filtered_extra_profile_urls:
             return {"status": "skipped", "reason": "no_candidates"}
         return self.multi_source_enricher.queue_background_profile_prefetch(
             candidates=filtered_candidates,
+            extra_profile_urls=filtered_extra_profile_urls,
             snapshot_dir=snapshot_dir,
             job_id=job_id,
             request_payload=request_payload,
@@ -2864,6 +3843,10 @@ class AcquisitionEngine:
             runtime_mode=runtime_mode,
             allow_shared_provider_cache=allow_shared_provider_cache,
             priority=priority,
+            load_cached_profile_payloads=load_cached_profile_payloads,
+            submit_provider=submit_provider,
+            nonblocking_submit=nonblocking_submit,
+            allow_under_target_final_tail_dispatch=allow_under_target_final_tail_dispatch,
         )
 
     def _queue_background_profile_prefetch_for_search_seed_entries(
@@ -2880,6 +3863,8 @@ class AcquisitionEngine:
         allow_shared_provider_cache: bool,
         priority: bool = False,
         exclude_profile_urls: set[str] | None = None,
+        load_cached_profile_payloads: bool = True,
+        submit_provider: bool = True,
     ) -> dict[str, Any]:
         normalized_entries: list[dict[str, Any]] = []
         for entry in list(entries or []):
@@ -2896,6 +3881,11 @@ class AcquisitionEngine:
             entries=normalized_entries,
             source_path=source_path,
         )
+        raw_profile_urls = [
+            str(entry.get("profile_url") or "").strip()
+            for entry in normalized_entries
+            if str(entry.get("profile_url") or "").strip()
+        ]
         return self._queue_background_profile_prefetch_for_candidates(
             candidates=seed_candidates,
             snapshot_dir=snapshot_dir,
@@ -2906,6 +3896,9 @@ class AcquisitionEngine:
             allow_shared_provider_cache=allow_shared_provider_cache,
             priority=priority,
             exclude_profile_urls=exclude_profile_urls,
+            load_cached_profile_payloads=load_cached_profile_payloads,
+            extra_profile_urls=raw_profile_urls,
+            submit_provider=submit_provider,
         )
 
     def _queue_background_profile_prefetch_from_full_roster_baselines(
@@ -2919,6 +3912,8 @@ class AcquisitionEngine:
         plan_payload: dict[str, Any],
         runtime_mode: str,
         allow_shared_provider_cache: bool,
+        load_cached_profile_payloads: bool = True,
+        submit_provider: bool = True,
     ) -> dict[str, Any]:
         baseline_candidates: list[Candidate] = []
         if isinstance(roster_snapshot, CompanyRosterSnapshot):
@@ -2927,6 +3922,11 @@ class AcquisitionEngine:
         if isinstance(search_seed_snapshot, SearchSeedSnapshot):
             search_seed_candidates, _ = build_candidates_from_seed_snapshot(search_seed_snapshot)
             baseline_candidates.extend(search_seed_candidates)
+        raw_search_seed_profile_urls = [
+            str(entry.get("profile_url") or "").strip()
+            for entry in list(getattr(search_seed_snapshot, "entries", []) or [])
+            if str(entry.get("profile_url") or "").strip()
+        ] if isinstance(search_seed_snapshot, SearchSeedSnapshot) else []
         return self._queue_background_profile_prefetch_for_candidates(
             candidates=baseline_candidates,
             snapshot_dir=snapshot_dir,
@@ -2936,6 +3936,11 @@ class AcquisitionEngine:
             runtime_mode=runtime_mode,
             allow_shared_provider_cache=allow_shared_provider_cache,
             priority=True,
+            load_cached_profile_payloads=load_cached_profile_payloads,
+            extra_profile_urls=raw_search_seed_profile_urls,
+            submit_provider=submit_provider,
+            nonblocking_submit=True,
+            allow_under_target_final_tail_dispatch=True,
         )
 
     def _continue_full_roster_with_available_baseline(
@@ -3024,7 +4029,12 @@ class AcquisitionEngine:
             ),
         }
         former_search_seed_queries: list[str] = []
-        if bool(former_cost_policy.get("large_org_keyword_probe_mode")):
+        should_preserve_former_keywords = (
+            bool(former_cost_policy.get("large_org_keyword_probe_mode"))
+            or bool(former_cost_policy.get("former_keyword_queries_only"))
+            or self._task_strategy_type(task, job_request) == "scoped_search_roster"
+        )
+        if should_preserve_former_keywords:
             former_search_seed_queries = [
                 str(item).strip()
                 for item in self._task_execution_list(task, job_request, "search_seed_queries")
@@ -3221,21 +4231,41 @@ class AcquisitionEngine:
         harvest_dir.mkdir(parents=True, exist_ok=True)
         artifact_default_path = harvest_dir / "harvest_company_employees_queue.json"
         runtime_timing_overrides = _runtime_timing_overrides_from_request_payload(effective_request_payload)
-        with runtime_inflight_slot(
-            "harvest_company_roster",
-            budget=resolved_harvest_company_roster_global_inflight(runtime_timing_overrides),
-            metadata={"company": identity.company_key, "source": "checkpoint_worker"},
-        ):
-            execution = self.harvest_company_connector.execute_with_checkpoint(
-                identity,
-                snapshot_dir,
-                max_pages=max_pages,
-                page_limit=page_limit,
-                company_filters=normalized_company_filters,
-                checkpoint=checkpoint,
-                allow_shared_provider_cache=allow_shared_provider_cache,
-                runtime_timing_overrides=runtime_timing_overrides,
+        provider_limiter_lease = dict(checkpoint.get("provider_limiter_lease") or {})
+        if not provider_limiter_lease:
+            provider_limiter_lease = acquire_runtime_provider_limiter_slot(
+                self.store,
+                limiter_key="harvest_company_employees_actor",
+                budget=resolved_harvest_company_roster_global_inflight(runtime_timing_overrides),
+                lease_owner=f"harvest_company_employees:{job_id}:{identity.company_key}{worker_key_suffix}",
+                lease_seconds=7200,
+                metadata={
+                    "source": "checkpoint_worker",
+                    "job_id": job_id,
+                    "company_key": identity.company_key,
+                    "max_pages": max_pages,
+                    "page_limit": page_limit,
+                },
             )
+        try:
+            with runtime_inflight_slot(
+                "harvest_company_roster",
+                budget=resolved_harvest_company_roster_global_inflight(runtime_timing_overrides),
+                metadata={"company": identity.company_key, "source": "checkpoint_worker"},
+            ):
+                execution = self.harvest_company_connector.execute_with_checkpoint(
+                    identity,
+                    snapshot_dir,
+                    max_pages=max_pages,
+                    page_limit=page_limit,
+                    company_filters=normalized_company_filters,
+                    checkpoint=checkpoint,
+                    allow_shared_provider_cache=allow_shared_provider_cache,
+                    runtime_timing_overrides=runtime_timing_overrides,
+                )
+        except Exception:
+            release_runtime_provider_limiter_slot(self.store, provider_limiter_lease)
+            raise
         artifact_paths = {
             str(key): str(value)
             for key, value in dict(checkpoint.get("artifact_paths") or {}).items()
@@ -3251,6 +4281,8 @@ class AcquisitionEngine:
                 metadata={"company_key": identity.company_key, "logical_name": execution.logical_name},
             )
             artifact_paths[str(artifact.label)] = str(artifact_path)
+        execution_request_context = dict(dict(execution.checkpoint or {}).get("request_context") or {})
+        probe_context = dict(execution_request_context.get("probe") or {})
         summary = {
             "logical_name": execution.logical_name,
             "company_identity": identity.to_record(),
@@ -3261,9 +4293,27 @@ class AcquisitionEngine:
             "artifact_paths": artifact_paths,
             "requested_pages": max_pages,
             "requested_item_limit": page_limit,
+            "effective_take_pages": int(execution_request_context.get("effective_take_pages") or max_pages or 1),
+            "effective_max_items": int(execution_request_context.get("effective_max_items") or 0),
+            "requested_item_count_before_probe": int(
+                probe_context.get("requested_items_before_probe")
+                or execution_request_context.get("requested_item_count")
+                or 0
+            ),
+            "estimated_total_count": int(probe_context.get("estimated_total_count") or 0),
+            "provider_result_cap": int(probe_context.get("provider_result_cap") or 2500),
+            "provider_cap_hit": bool(probe_context.get("provider_cap_hit") or probe_context.get("provider_result_limited")),
+            "requested_limit_would_truncate": bool(probe_context.get("requested_limit_would_truncate")),
+            "probe": probe_context,
             "company_filters": normalized_company_filters,
             "snapshot_dir": str(snapshot_dir),
             "root_snapshot_dir": str(effective_root_snapshot_dir),
+            "provider_limiter": {
+                "limiter_key": str(provider_limiter_lease.get("limiter_key") or ""),
+                "active_count": int(provider_limiter_lease.get("active_count") or 0),
+                "budget": int(provider_limiter_lease.get("budget") or 0),
+                "wait_ms": provider_limiter_lease.get("wait_ms"),
+            },
         }
         summary_path = harvest_dir / "harvest_company_employees_queue_summary.json"
         logger.write_json(
@@ -3279,6 +4329,7 @@ class AcquisitionEngine:
             "artifact_paths": artifact_paths,
             "summary_path": str(summary_path),
             "stage": "waiting_remote_harvest" if execution.pending else "completed",
+            "provider_limiter_lease": provider_limiter_lease,
         }
         updated_output = {
             "summary": {**summary, "summary_path": str(summary_path)},
@@ -3296,6 +4347,7 @@ class AcquisitionEngine:
                 "summary": updated_output["summary"],
             }
 
+        release_runtime_provider_limiter_slot(self.store, provider_limiter_lease)
         self.worker_runtime.complete_worker(
             worker_handle,
             status="completed",
@@ -3468,25 +4520,34 @@ class AcquisitionEngine:
 
         def _fetch_shard(spec: dict[str, Any]) -> dict[str, Any]:
             shard = dict(spec.get("shard") or {})
-            with runtime_inflight_slot(
-                "harvest_company_roster",
+            shard_id = str(spec.get("shard_id") or "")
+            with runtime_provider_limiter_slot(
+                self.store,
+                limiter_key="harvest_company_employees_actor",
                 budget=resolved_harvest_company_roster_global_inflight(runtime_timing_overrides),
-                metadata={"company": identity.company_key, "source": "segmented_shard"},
+                lease_owner=f"harvest_company_employees:shard:{identity.company_key}:{shard_id}",
+                lease_seconds=7200,
+                metadata={"company": identity.company_key, "source": "segmented_shard", "shard_id": shard_id},
             ):
-                shard_snapshot = _apply_optional_runtime_timing_overrides(
-                    self.harvest_company_connector.fetch_company_roster,
-                    identity,
-                    Path(spec["shard_snapshot_dir"]),
-                    max_pages=int(shard.get("max_pages") or 1),
-                    page_limit=int(shard.get("page_limit") or 25),
-                    company_filters=dict(shard.get("company_filters") or {}),
-                    allow_shared_provider_cache=allow_shared_provider_cache,
-                    runtime_timing_overrides=runtime_timing_overrides,
-                )
+                with runtime_inflight_slot(
+                    "harvest_company_roster",
+                    budget=resolved_harvest_company_roster_global_inflight(runtime_timing_overrides),
+                    metadata={"company": identity.company_key, "source": "segmented_shard"},
+                ):
+                    shard_snapshot = _apply_optional_runtime_timing_overrides(
+                        self.harvest_company_connector.fetch_company_roster,
+                        identity,
+                        Path(spec["shard_snapshot_dir"]),
+                        max_pages=int(shard.get("max_pages") or 1),
+                        page_limit=int(shard.get("page_limit") or 25),
+                        company_filters=dict(shard.get("company_filters") or {}),
+                        allow_shared_provider_cache=allow_shared_provider_cache,
+                        runtime_timing_overrides=runtime_timing_overrides,
+                    )
             return {
                 "index": int(spec.get("index") or 0),
                 "shard": shard,
-                "shard_id": str(spec.get("shard_id") or ""),
+                "shard_id": shard_id,
                 "snapshot": shard_snapshot,
             }
 
@@ -3897,6 +4958,12 @@ class AcquisitionEngine:
             is_raw_asset=False,
             model_safe=True,
         )
+        if str(normalization_scope.get("mode") or "") != "category":
+            self._write_latest_snapshot_pointer(
+                identity,
+                str(state.get("snapshot_id") or snapshot_dir.name).strip() or snapshot_dir.name,
+                snapshot_dir,
+            )
 
         artifact_build: dict[str, Any] = {}
         artifact_build_error = ""
@@ -4021,6 +5088,8 @@ class AcquisitionEngine:
             "store": self.store,
             "target_company": identity.canonical_name,
             "snapshot_id": snapshot_dir.name,
+            "snapshot_dir": snapshot_dir,
+            "company_identity": identity.to_record(),
             "preferred_source_snapshot_ids": preferred_source_snapshot_ids or None,
             "build_profile": build_profile,
         }
@@ -4118,6 +5187,110 @@ class AcquisitionEngine:
                 snapshot_dir=hot_cache_snapshot_dir,
             )
 
+    def _hydrate_acquisition_snapshots_for_enrichment(
+        self,
+        *,
+        state: dict[str, Any],
+        roster_snapshot: CompanyRosterSnapshot | None,
+        search_seed_snapshot: SearchSeedSnapshot | None,
+        snapshot_dir: Path,
+        fallback_target_company: str,
+    ) -> tuple[CompanyRosterSnapshot | None, SearchSeedSnapshot | None]:
+        identity = self._resolve_snapshot_hydration_identity(
+            state=state,
+            roster_snapshot=roster_snapshot,
+            search_seed_snapshot=search_seed_snapshot,
+            snapshot_dir=snapshot_dir,
+            fallback_target_company=fallback_target_company,
+        )
+        restored_search_seed = _registry_load_search_seed_snapshot_from_snapshot_dir(
+            snapshot_dir,
+            identity=identity,
+        )
+        if restored_search_seed is not None:
+            search_seed_snapshot = _merge_search_seed_snapshots(search_seed_snapshot, restored_search_seed)
+            if isinstance(search_seed_snapshot, SearchSeedSnapshot):
+                state["search_seed_snapshot"] = search_seed_snapshot
+                identity = search_seed_snapshot.company_identity
+                state["company_identity"] = identity
+        if not isinstance(identity, CompanyIdentity):
+            identity = self._resolve_snapshot_hydration_identity(
+                state=state,
+                roster_snapshot=roster_snapshot,
+                search_seed_snapshot=search_seed_snapshot,
+                snapshot_dir=snapshot_dir,
+                fallback_target_company=fallback_target_company,
+            )
+        if isinstance(identity, CompanyIdentity):
+            restored_roster = self._load_roster_snapshot_from_snapshot_dir(identity, snapshot_dir)
+            if restored_roster is not None and self._roster_snapshot_entry_count(
+                restored_roster
+            ) >= self._roster_snapshot_entry_count(roster_snapshot):
+                roster_snapshot = restored_roster
+                state["roster_snapshot"] = roster_snapshot
+                state["company_identity"] = roster_snapshot.company_identity
+        elif roster_snapshot is not None:
+            state["roster_snapshot"] = roster_snapshot
+            state["company_identity"] = roster_snapshot.company_identity
+        if isinstance(search_seed_snapshot, SearchSeedSnapshot):
+            state["search_seed_snapshot"] = search_seed_snapshot
+            state.setdefault("company_identity", search_seed_snapshot.company_identity)
+        return roster_snapshot, search_seed_snapshot
+
+    def _resolve_snapshot_hydration_identity(
+        self,
+        *,
+        state: dict[str, Any],
+        roster_snapshot: CompanyRosterSnapshot | None,
+        search_seed_snapshot: SearchSeedSnapshot | None,
+        snapshot_dir: Path,
+        fallback_target_company: str,
+    ) -> CompanyIdentity | None:
+        state_identity = state.get("company_identity")
+        if isinstance(state_identity, CompanyIdentity):
+            return state_identity
+        if isinstance(roster_snapshot, CompanyRosterSnapshot):
+            return roster_snapshot.company_identity
+        if isinstance(search_seed_snapshot, SearchSeedSnapshot):
+            return search_seed_snapshot.company_identity
+        artifact_payloads: list[dict[str, Any]] = [_read_company_asset_json(snapshot_dir / "identity.json")]
+        candidate_doc_payload = _read_company_asset_json(snapshot_dir / "candidate_documents.json")
+        if candidate_doc_payload:
+            artifact_payloads.append(dict(candidate_doc_payload.get("snapshot") or {}))
+            acquisition_sources = dict(candidate_doc_payload.get("acquisition_sources") or {})
+            artifact_payloads.extend(
+                dict(acquisition_sources.get(key) or {}) for key in ("roster_snapshot", "search_seed_snapshot")
+            )
+        artifact_payloads.append(_read_company_asset_json(snapshot_dir / "search_seed_discovery" / "summary.json"))
+        artifact_payloads.append(
+            _read_company_asset_json(
+                snapshot_dir / "harvest_company_employees" / "harvest_company_employees_summary.json"
+            )
+        )
+        artifact_payloads.append(_read_company_asset_json(snapshot_dir / "linkedin_company_people_summary.json"))
+        for payload in artifact_payloads:
+            identity = _company_identity_from_record(dict(payload.get("company_identity") or payload))
+            if identity is not None:
+                return identity
+        normalized_target_company = str(fallback_target_company or "").strip()
+        if not normalized_target_company:
+            return None
+        return CompanyIdentity(
+            requested_name=normalized_target_company,
+            canonical_name=normalized_target_company,
+            company_key=normalize_name_token(normalized_target_company),
+            linkedin_slug="",
+            resolver="snapshot_hydration_fallback",
+        )
+
+    @staticmethod
+    def _roster_snapshot_entry_count(snapshot: CompanyRosterSnapshot | None) -> int:
+        if not isinstance(snapshot, CompanyRosterSnapshot):
+            return 0
+        visible_count = len(list(snapshot.visible_entries or []))
+        raw_count = len(list(snapshot.raw_entries or []))
+        return max(visible_count, raw_count)
+
     def _load_cached_roster_snapshot(
         self,
         identity: CompanyIdentity,
@@ -4174,6 +5347,65 @@ class AcquisitionEngine:
                 )
             except (OSError, json.JSONDecodeError):
                 continue
+        return None
+
+    def _load_roster_snapshot_from_snapshot_dir(
+        self,
+        identity: CompanyIdentity,
+        snapshot_dir: Path,
+    ) -> CompanyRosterSnapshot | None:
+        roster_layouts = (
+            {
+                "summary_path": snapshot_dir / "harvest_company_employees" / "harvest_company_employees_summary.json",
+                "merged_path": snapshot_dir / "harvest_company_employees" / "harvest_company_employees_merged.json",
+                "visible_path": snapshot_dir / "harvest_company_employees" / "harvest_company_employees_visible.json",
+                "headless_path": snapshot_dir / "harvest_company_employees" / "harvest_company_employees_headless.json",
+            },
+            {
+                "summary_path": snapshot_dir / "linkedin_company_people_summary.json",
+                "merged_path": snapshot_dir / "linkedin_company_people_all.json",
+                "visible_path": snapshot_dir / "linkedin_company_people_visible.json",
+                "headless_path": snapshot_dir / "linkedin_company_people_headless.json",
+            },
+        )
+        for layout in roster_layouts:
+            summary_path = Path(layout["summary_path"])
+            visible_path = Path(layout["visible_path"])
+            merged_path = Path(layout["merged_path"])
+            headless_path = Path(layout["headless_path"])
+            if not summary_path.exists() or not visible_path.exists():
+                continue
+            summary = _read_company_asset_json(summary_path)
+            visible_entries = _read_company_asset_json_list(visible_path)
+            if not visible_entries:
+                continue
+            summary_identity = _company_identity_from_record(dict(summary.get("company_identity") or {}))
+            effective_identity = summary_identity or identity
+            return CompanyRosterSnapshot(
+                snapshot_id=str(summary.get("snapshot_id") or snapshot_dir.name),
+                target_company=str(summary.get("target_company") or effective_identity.canonical_name),
+                company_identity=effective_identity,
+                snapshot_dir=snapshot_dir,
+                raw_entries=_read_company_asset_json_list(merged_path) if merged_path.exists() else visible_entries,
+                visible_entries=visible_entries,
+                headless_entries=_read_company_asset_json_list(headless_path) if headless_path.exists() else [],
+                page_summaries=[dict(item) for item in list(summary.get("page_summaries") or []) if isinstance(item, dict)],
+                accounts_used=[
+                    str(item or "").strip()
+                    for item in list(summary.get("accounts_used") or [])
+                    if str(item or "").strip()
+                ],
+                errors=[
+                    str(item or "").strip()
+                    for item in list(summary.get("errors") or [])
+                    if str(item or "").strip()
+                ],
+                stop_reason=str(summary.get("stop_reason") or "restored_snapshot_roster"),
+                merged_path=merged_path,
+                visible_path=visible_path,
+                headless_path=headless_path,
+                summary_path=summary_path,
+            )
         return None
 
     def _materialize_reused_roster_snapshot(
