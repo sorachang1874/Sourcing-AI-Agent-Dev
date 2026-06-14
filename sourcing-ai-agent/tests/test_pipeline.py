@@ -9784,33 +9784,34 @@ class PipelineTest(unittest.TestCase):
                 ("2026-01-01 00:00:00", job_id),
             )
 
+        # Phase 4 Step 5e re-point: the read path no longer RUNS the recovery
+        # tick (run_worker_recovery_once) on a request-serving thread — it SIGNALS
+        # the guaranteed shared daemon (_signal_shared_recovery_wakeup, 5b). The
+        # observable contract is preserved: the takeover entry still reports a
+        # "queued" auto_recovery for the runner_not_alive classification, the
+        # job-scoped recovery_payload (stale_after_seconds=0, queue-takeover on)
+        # is still threaded through, and the cooldown still throttles the next
+        # poll. run_worker_recovery_once must NOT run inline.
         captured_payloads: list[dict[str, object]] = []
-        recovery_called = threading.Event()
-        with unittest.mock.patch.object(
-            self.orchestrator,
-            "run_worker_recovery_once",
-            side_effect=lambda payload=None: (
-                captured_payloads.append(dict(payload or {}))
-                or recovery_called.set()
-                or {
-                    "status": "completed",
-                    "workflow_resume": [
-                        {
-                            "job_id": job_id,
-                            "status": "resumed",
-                            "resume_mode": "running_acquiring_recovery",
-                            "job_status": "running",
-                            "job_stage": "acquiring",
-                        }
-                    ],
-                }
+        tick_mock = unittest.mock.Mock(name="run_worker_recovery_once")
+
+        def fake_signal(*, payload=None, **kwargs):
+            captured_payloads.append(dict(payload or {}))
+            return {"status": "signaled", "scope": str(kwargs.get("scope") or ""), "mode": "signal_only"}
+
+        with (
+            unittest.mock.patch.object(self.orchestrator, "run_worker_recovery_once", tick_mock),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_signal_shared_recovery_wakeup",
+                side_effect=fake_signal,
             ),
         ):
             progress = self.orchestrator.get_job_progress(job_id)
 
         self.assertIsNotNone(progress)
         assert progress is not None
-        self.assertTrue(recovery_called.wait(timeout=1.0))
+        tick_mock.assert_not_called()
         self.assertEqual(len(captured_payloads), 1)
         self.assertEqual(captured_payloads[0]["job_id"], job_id)
         self.assertEqual(int(captured_payloads[0]["stale_after_seconds"]), 0)
@@ -9818,12 +9819,16 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(progress["auto_recovery"]["status"], "queued")
         self.assertEqual(progress["auto_recovery"]["classification"], "runner_not_alive")
 
-        with unittest.mock.patch.object(self.orchestrator, "run_worker_recovery_once") as recovery_mock:
+        with (
+            unittest.mock.patch.object(self.orchestrator, "run_worker_recovery_once") as recovery_mock,
+            unittest.mock.patch.object(self.orchestrator, "_signal_shared_recovery_wakeup") as signal_mock,
+        ):
             second_progress = self.orchestrator.get_job_progress(job_id)
 
         self.assertIsNotNone(second_progress)
         assert second_progress is not None
         recovery_mock.assert_not_called()
+        signal_mock.assert_not_called()
         self.assertEqual(second_progress["auto_recovery"]["status"], "skipped")
         self.assertEqual(second_progress["auto_recovery"]["reason"], "cooldown_active")
 
@@ -9850,30 +9855,30 @@ class PipelineTest(unittest.TestCase):
             "queued_at": "2026-01-01T00:00:00+00:00",
         }
 
+        # Phase 4 Step 5e re-point: after the stale inflight marker is cleared,
+        # the retry SIGNALS the guaranteed daemon (5b) instead of RUNNING the tick
+        # inline. The reset event + the "queued" auto_recovery contract are
+        # preserved; run_worker_recovery_once must NOT run inline.
         captured_payloads: list[dict[str, object]] = []
-        with unittest.mock.patch.object(
-            self.orchestrator,
-            "run_worker_recovery_once",
-            side_effect=lambda payload=None: (
-                captured_payloads.append(dict(payload or {}))
-                or {
-                    "status": "completed",
-                    "workflow_resume": [
-                        {
-                            "job_id": job_id,
-                            "status": "resumed",
-                            "resume_mode": "running_acquiring_recovery",
-                            "job_status": "running",
-                            "job_stage": "acquiring",
-                        }
-                    ],
-                }
+        tick_mock = unittest.mock.Mock(name="run_worker_recovery_once")
+
+        def fake_signal(*, payload=None, **kwargs):
+            captured_payloads.append(dict(payload or {}))
+            return {"status": "signaled", "scope": str(kwargs.get("scope") or ""), "mode": "signal_only"}
+
+        with (
+            unittest.mock.patch.object(self.orchestrator, "run_worker_recovery_once", tick_mock),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_signal_shared_recovery_wakeup",
+                side_effect=fake_signal,
             ),
         ):
             progress = self.orchestrator.get_job_progress(job_id)
 
         self.assertIsNotNone(progress)
         assert progress is not None
+        tick_mock.assert_not_called()
         self.assertEqual(progress["auto_recovery"]["status"], "queued")
         self.assertEqual(len(captured_payloads), 1)
         runtime_events = self.store.list_job_events(job_id, stage="runtime_control", limit=10, descending=True)
@@ -10310,25 +10315,31 @@ class PipelineTest(unittest.TestCase):
             handoff_from_lane="triage_planner",
         )
 
+        # Phase 4 Step 5e re-point: read-path takeover SIGNALS the guaranteed
+        # daemon (5b) rather than RUNNING the tick inline. Contract preserved:
+        # "queued" auto_recovery for the blocked_on_acquisition_workers
+        # classification with the job-scoped recovery_payload (stale_after_seconds=0)
+        # threaded to the signal; run_worker_recovery_once must NOT run inline.
         captured_payloads: list[dict[str, object]] = []
-        recovery_called = threading.Event()
-        with unittest.mock.patch.object(
-            self.orchestrator,
-            "run_worker_recovery_once",
-            side_effect=lambda payload=None: (
-                captured_payloads.append(dict(payload or {}))
-                or recovery_called.set()
-                or {
-                    "status": "completed",
-                    "workflow_resume": [],
-                }
+        tick_mock = unittest.mock.Mock(name="run_worker_recovery_once")
+
+        def fake_signal(*, payload=None, **kwargs):
+            captured_payloads.append(dict(payload or {}))
+            return {"status": "signaled", "scope": str(kwargs.get("scope") or ""), "mode": "signal_only"}
+
+        with (
+            unittest.mock.patch.object(self.orchestrator, "run_worker_recovery_once", tick_mock),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_signal_shared_recovery_wakeup",
+                side_effect=fake_signal,
             ),
         ):
             progress = self.orchestrator.get_job_progress(job_id)
 
         self.assertIsNotNone(progress)
         assert progress is not None
-        self.assertTrue(recovery_called.wait(timeout=1.0))
+        tick_mock.assert_not_called()
         self.assertEqual(len(captured_payloads), 1)
         self.assertEqual(captured_payloads[0]["job_id"], job_id)
         self.assertEqual(int(captured_payloads[0]["stale_after_seconds"]), 0)
@@ -10449,25 +10460,30 @@ class PipelineTest(unittest.TestCase):
             },
             output_payload={"summary": {"status": "submitted"}},
         )
+        # Phase 4 Step 5e re-point: takeover SIGNALS the guaranteed daemon (5b),
+        # threading the job-scoped recovery_payload to the signal; it never RUNS
+        # the tick inline. The "queued"/blocked_on_acquisition_workers contract is
+        # preserved.
         captured_payloads: list[dict[str, object]] = []
-        recovery_called = threading.Event()
-        with unittest.mock.patch.object(
-            self.orchestrator,
-            "run_worker_recovery_once",
-            side_effect=lambda payload=None: (
-                captured_payloads.append(dict(payload or {}))
-                or recovery_called.set()
-                or {
-                    "status": "completed",
-                    "workflow_resume": [],
-                }
+        tick_mock = unittest.mock.Mock(name="run_worker_recovery_once")
+
+        def fake_signal(*, payload=None, **kwargs):
+            captured_payloads.append(dict(payload or {}))
+            return {"status": "signaled", "scope": str(kwargs.get("scope") or ""), "mode": "signal_only"}
+
+        with (
+            unittest.mock.patch.object(self.orchestrator, "run_worker_recovery_once", tick_mock),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_signal_shared_recovery_wakeup",
+                side_effect=fake_signal,
             ),
         ):
             progress = self.orchestrator.get_job_progress(job_id)
 
         self.assertIsNotNone(progress)
         assert progress is not None
-        self.assertTrue(recovery_called.wait(timeout=1.0))
+        tick_mock.assert_not_called()
         self.assertEqual(captured_payloads[0]["job_id"], job_id)
         self.assertEqual(progress["auto_recovery"]["status"], "queued")
         self.assertEqual(progress["auto_recovery"]["classification"], "blocked_on_acquisition_workers")
@@ -10519,32 +10535,34 @@ class PipelineTest(unittest.TestCase):
             },
             output_payload={"summary": {"status": "submitted"}},
         )
+        # Phase 4 Step 5e re-point: SIGNAL-only takeover (see the terminal-event
+        # variant above). The provider-SLA gate still admits the takeover; the
+        # read path signals the guaranteed daemon rather than running the tick.
         captured_payloads: list[dict[str, object]] = []
-        recovery_called = threading.Event()
+        tick_mock = unittest.mock.Mock(name="run_worker_recovery_once")
+
+        def fake_signal(*, payload=None, **kwargs):
+            captured_payloads.append(dict(payload or {}))
+            return {"status": "signaled", "scope": str(kwargs.get("scope") or ""), "mode": "signal_only"}
+
         with (
             unittest.mock.patch.dict(
                 os.environ,
                 {"WORKFLOW_PROGRESS_REMOTE_WAIT_TAKEOVER_AFTER_SECONDS": "30"},
                 clear=False,
             ),
+            unittest.mock.patch.object(self.orchestrator, "run_worker_recovery_once", tick_mock),
             unittest.mock.patch.object(
                 self.orchestrator,
-                "run_worker_recovery_once",
-                side_effect=lambda payload=None: (
-                    captured_payloads.append(dict(payload or {}))
-                    or recovery_called.set()
-                    or {
-                        "status": "completed",
-                        "workflow_resume": [],
-                    }
-                ),
+                "_signal_shared_recovery_wakeup",
+                side_effect=fake_signal,
             ),
         ):
             progress = self.orchestrator.get_job_progress(job_id)
 
         self.assertIsNotNone(progress)
         assert progress is not None
-        self.assertTrue(recovery_called.wait(timeout=1.0))
+        tick_mock.assert_not_called()
         self.assertEqual(captured_payloads[0]["job_id"], job_id)
         self.assertEqual(progress["auto_recovery"]["status"], "queued")
         self.assertEqual(progress["auto_recovery"]["classification"], "blocked_on_acquisition_workers")
@@ -10566,25 +10584,38 @@ class PipelineTest(unittest.TestCase):
                 ("2026-01-01 00:00:00", job_id),
             )
 
-        recovery_started = threading.Event()
-        recovery_can_finish = threading.Event()
+        # Phase 4 Step 5e re-point: the read path does not block on recovery
+        # because it no longer RUNS the recovery tick at all — it only SIGNALS the
+        # guaranteed daemon (5b), which is instant. This is a strictly stronger
+        # non-blocking guarantee than the prior "run the tick on a background
+        # thread" approach: run_worker_recovery_once never executes on the read
+        # path. We assert get_job_progress returns fast, the tick is never called,
+        # the signal fired, and the takeover control event is recorded.
+        signal_called: list[bool] = []
 
-        def _slow_recovery(payload=None):  # type: ignore[no-untyped-def]
-            recovery_started.set()
-            recovery_can_finish.wait(timeout=1.0)
-            return {"status": "completed", "workflow_resume": []}
+        def fake_signal(**kwargs):
+            signal_called.append(True)
+            return {"status": "signaled", "scope": str(kwargs.get("scope") or ""), "mode": "signal_only"}
 
+        tick_mock = unittest.mock.Mock(name="run_worker_recovery_once")
         started_at = time.perf_counter()
-        with unittest.mock.patch.object(self.orchestrator, "run_worker_recovery_once", side_effect=_slow_recovery):
+        with (
+            unittest.mock.patch.object(self.orchestrator, "run_worker_recovery_once", tick_mock),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_signal_shared_recovery_wakeup",
+                side_effect=fake_signal,
+            ),
+        ):
             progress = self.orchestrator.get_job_progress(job_id)
             elapsed = time.perf_counter() - started_at
-            self.assertTrue(recovery_started.wait(timeout=1.0))
             self.assertLess(elapsed, 0.2)
             self.assertIsNotNone(progress)
             assert progress is not None
+            tick_mock.assert_not_called()
+            self.assertTrue(signal_called)
             self.assertEqual(progress["auto_recovery"]["status"], "queued")
             self.assertEqual(progress["auto_recovery"]["classification"], "runner_not_alive")
-            recovery_can_finish.set()
 
         runtime_events = self.store.list_job_events(job_id, stage="runtime_control", limit=10, descending=True)
         controls = [dict(event.get("payload") or {}).get("control") for event in runtime_events]
@@ -11592,24 +11623,30 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(result["reason"], "workflow_job_lease_inflight")
 
     def test_start_workflow_dispatches_hosted_runner_before_recovery_daemons(self) -> None:
+        # Phase 4 Step 5e re-point: the request path no longer ENSURES/SPAWNS a
+        # recovery daemon (5a guarantees one); it SIGNALS the guaranteed shared
+        # daemon via _signal_shared_recovery_wakeup. The guardrail invariant is
+        # unchanged — the hosted runner must be dispatched BEFORE recovery is
+        # engaged — but recovery engagement is now a signal, not an ensure.
         call_order: list[str] = []
 
         def fake_hosted_dispatch(job_id: str, *, source: str) -> dict[str, object]:
             call_order.append(f"dispatch:{source}")
             return {"job_id": job_id, "status": "started", "mode": "workflow", "source": source}
 
-        def fake_shared_recovery(payload: dict[str, object] | None = None) -> dict[str, object]:
-            call_order.append("shared_recovery")
-            return {"status": "stubbed"}
+        def fake_signal(**kwargs: object) -> dict[str, object]:
+            scope = str(kwargs.get("scope") or "")
+            call_order.append(f"signal:{scope}")
+            return {"status": "signaled", "scope": scope, "mode": "signal_only"}
 
-        def fake_job_recovery(job_id: str, payload: dict[str, object] | None = None) -> dict[str, object]:
-            call_order.append("job_recovery")
-            return {"status": "stubbed", "job_id": job_id}
+        ensure_shared_spy = unittest.mock.Mock(name="ensure_shared_recovery")
+        ensure_job_spy = unittest.mock.Mock(name="ensure_job_scoped_recovery")
 
         with (
             unittest.mock.patch.object(self.orchestrator, "_start_hosted_workflow_thread", side_effect=fake_hosted_dispatch),
-            unittest.mock.patch.object(self.orchestrator, "ensure_shared_recovery", side_effect=fake_shared_recovery),
-            unittest.mock.patch.object(self.orchestrator, "ensure_job_scoped_recovery", side_effect=fake_job_recovery),
+            unittest.mock.patch.object(self.orchestrator, "_signal_shared_recovery_wakeup", side_effect=fake_signal),
+            unittest.mock.patch.object(self.orchestrator, "ensure_shared_recovery", ensure_shared_spy),
+            unittest.mock.patch.object(self.orchestrator, "ensure_job_scoped_recovery", ensure_job_spy),
         ):
             workflow = self.orchestrator.start_workflow(
                 {
@@ -11620,7 +11657,16 @@ class PipelineTest(unittest.TestCase):
             )
 
         self.assertEqual(workflow["status"], "queued")
-        self.assertEqual(call_order[:3], ["dispatch:start_workflow", "shared_recovery", "job_recovery"])
+        # Dispatch first, then the signal-only recovery engagement (shared then
+        # job-scoped slot) — the request path drives recovery by SIGNAL, never
+        # by ENSURE/SPAWN.
+        self.assertEqual(call_order[:3], ["dispatch:start_workflow", "signal:shared", "signal:job_scoped"])
+        ensure_shared_spy.assert_not_called()
+        ensure_job_spy.assert_not_called()
+        # Response contract: the queued["shared_recovery"]/["job_recovery"]
+        # fields are still present with a sensible status shape.
+        self.assertEqual(workflow["shared_recovery"]["status"], "signaled")
+        self.assertEqual(workflow["job_recovery"]["status"], "signaled")
 
     def test_start_hosted_workflow_thread_skips_duplicate_dispatch_with_fresh_marker(self) -> None:
         job_id = "job_hosted_dispatch_deduped"

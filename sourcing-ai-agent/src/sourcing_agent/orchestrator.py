@@ -2223,12 +2223,40 @@ class SourcingOrchestrator:
         )
         if should_run_worker:
             queued["hosted_dispatch"] = self._start_hosted_workflow_thread(job_id, source="start_workflow")
-            queued["shared_recovery"] = self.ensure_shared_recovery(payload)
-            queued["job_recovery"] = self.ensure_job_scoped_recovery(job_id, payload)
+            # 5e: the request path no longer ENSURES/SPAWNS a recovery daemon —
+            # 5a guarantees the shared worker-recovery-daemon is already running
+            # (or serve refused to start). It only SIGNALS that daemon to run its
+            # global tick now (5b), with the 5c poll as backstop. The hosted
+            # workflow thread above is the primary driver; this wake just closes
+            # the recovery latency gap if that thread does not claim the worker.
+            queued["shared_recovery"] = self._signal_shared_recovery_wakeup(
+                reason="start_workflow",
+                requested_by="start_workflow",
+                payload=payload,
+                scope="shared",
+            )
+            queued["job_recovery"] = self._signal_shared_recovery_wakeup(
+                reason="start_workflow",
+                requested_by="start_workflow",
+                job_id=job_id,
+                payload=payload,
+                scope="job_scoped",
+            )
             return queued
         if workflow_status == "joined_existing_job":
-            queued["shared_recovery"] = self.ensure_shared_recovery(payload)
-            queued["job_recovery"] = self.ensure_job_scoped_recovery(job_id, payload)
+            queued["shared_recovery"] = self._signal_shared_recovery_wakeup(
+                reason="start_workflow_joined_existing_job",
+                requested_by="start_workflow",
+                payload=payload,
+                scope="shared",
+            )
+            queued["job_recovery"] = self._signal_shared_recovery_wakeup(
+                reason="start_workflow_joined_existing_job",
+                requested_by="start_workflow",
+                job_id=job_id,
+                payload=payload,
+                scope="job_scoped",
+            )
             return queued
         if workflow_status == "reused_completed_job":
             queued["shared_recovery"] = {"status": "not_needed"}
@@ -2310,6 +2338,74 @@ class SourcingOrchestrator:
 
     def ensure_job_scoped_recovery(self, job_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._start_job_scoped_recovery(job_id, dict(payload or {}))
+
+    def _shared_recovery_service_name(self, payload: dict[str, Any] | None = None) -> str:
+        """Resolve the guaranteed shared recovery daemon's service name.
+
+        Mirrors the resolution used by the global recovery tick and health read
+        (orchestrator.py ~40435): ``shared_service_name`` override or the
+        ``worker-recovery-daemon`` default that cli.serve's 5a coverage
+        assertion guarantees is running.
+        """
+
+        return str(dict(payload or {}).get("shared_service_name") or "worker-recovery-daemon").strip() or (
+            "worker-recovery-daemon"
+        )
+
+    def _signal_shared_recovery_wakeup(
+        self,
+        *,
+        reason: str,
+        requested_by: str,
+        job_id: str = "",
+        payload: dict[str, Any] | None = None,
+        scope: str = "shared",
+    ) -> dict[str, Any]:
+        """Phase 4 Step 5e — request/read-path signal to the guaranteed daemon.
+
+        5a guarantees the shared ``worker-recovery-daemon`` is running whenever
+        serve is up (or serve refuses to start), so the request/read paths no
+        longer ENSURE/SPAWN/RUN recovery inline; they only SIGNAL that daemon to
+        run its global tick NOW (the 5b ``request_service_wakeup`` primitive),
+        with the 5c poll as the crash/lease/stuck backstop. Best-effort and
+        non-blocking: a wake-file failure degrades to the poll backstop and never
+        propagates into the request/read response.
+
+        Preserves the request-path response contract: the returned shape carries
+        ``status`` / ``scope`` (+ ``job_id`` for the job-scoped slot) like the
+        previous ensure-result, with ``status="signaled"`` (or ``"signal_failed"``
+        on a best-effort miss) instead of ensure's ``disabled`` / sidecar shape.
+        """
+
+        normalized_job_id = str(job_id or "").strip()
+        base: dict[str, Any] = {"scope": scope, "mode": "signal_only"}
+        if normalized_job_id:
+            base["job_id"] = normalized_job_id
+        if self.runtime_dir is None:
+            return {**base, "status": "signal_skipped", "reason": "runtime_dir_unset"}
+        service_name = self._shared_recovery_service_name(payload)
+        callback_payload: dict[str, Any] = {"source": reason}
+        if normalized_job_id:
+            # The global tick does not consume per-workflow scope (see
+            # durable_runtime._signal_recovery_wakeup), but recording the job id
+            # keeps the wake-file observable/attributable for operators.
+            callback_payload["request_path_job_id"] = normalized_job_id
+        try:
+            wakeup = request_service_wakeup(
+                self.runtime_dir,
+                service_name,
+                reason=reason,
+                requested_by=requested_by,
+                callback_payload=callback_payload,
+            )
+        except Exception as exc:
+            return {**base, "status": "signal_failed", "service_name": service_name, "error": str(exc)}
+        return {
+            **base,
+            "status": "signaled",
+            "service_name": service_name,
+            "wakeup": dict(wakeup or {}),
+        }
 
     def queue_workflow(self, payload: dict[str, Any]) -> dict[str, Any]:
         resolved = self._resolve_workflow_plan(payload)
@@ -2606,8 +2702,18 @@ class SourcingOrchestrator:
                     "reason": "already_terminal",
                 }
             if recovery_payload is not None:
-                self.ensure_shared_recovery(recovery_payload)
-                self.ensure_job_scoped_recovery(job_id, recovery_payload)
+                # 5e: signal-only. run_queued_workflow already drives the work
+                # inline below (under the job-run lock it holds); 5a guarantees
+                # the shared daemon exists, so instead of ENSURING/SPAWNING one
+                # we only signal it (5b) to accelerate any sibling sweep, with
+                # the 5c poll as backstop. Best-effort, never blocks the run.
+                self._signal_shared_recovery_wakeup(
+                    reason="run_queued_workflow",
+                    requested_by="run_queued_workflow",
+                    job_id=job_id,
+                    payload=recovery_payload,
+                    scope="job_scoped",
+                )
 
             job_status = str(job.get("status") or "")
             job_stage = str(job.get("stage") or "")
@@ -36626,20 +36732,22 @@ class SourcingOrchestrator:
             detail=f"Progress polling queued automatic workflow takeover for `{classification}`.",
             payload=control_payload,
         )
-        thread = threading.Thread(
-            target=self._run_progress_auto_takeover,
-            kwargs={
-                "job_id": normalized_job_id,
-                "classification": classification,
-                "requested_execution_mode": requested_execution_mode,
-                "effective_execution_mode": effective_execution_mode,
-                "recovery_payload": dict(recovery_payload),
-                "queued_at": queued_at,
-            },
-            name=f"progress-auto-takeover-{normalized_job_id}",
-            daemon=True,
+        # 5e: read-path takeover is now SIGNAL-ONLY. Previously this spawned a
+        # request-serving daemon thread that ran run_worker_recovery_once inline
+        # (the global recovery tick) inside the API process. 5a guarantees the
+        # shared worker-recovery-daemon is already running, so the read path only
+        # SIGNALS it (5b request_service_wakeup) to run its global tick now; the
+        # 5c poll backstops. No tick runs on a server thread anymore, so the work
+        # is fully off the read path. The inflight marker + cooldown event still
+        # throttle re-signaling across consecutive polls.
+        self._run_progress_auto_takeover(
+            job_id=normalized_job_id,
+            classification=classification,
+            requested_execution_mode=requested_execution_mode,
+            effective_execution_mode=effective_execution_mode,
+            recovery_payload=dict(recovery_payload),
+            queued_at=queued_at,
         )
-        thread.start()
         return {
             "status": "queued",
             "classification": classification,
@@ -36660,21 +36768,31 @@ class SourcingOrchestrator:
         queued_at: str,
     ) -> None:
         try:
-            recovery = self.run_worker_recovery_once(recovery_payload)
-            workflow_resume = self._extract_progress_takeover_workflow_resume(job_id=job_id, recovery=recovery)
+            # Signal-only: do NOT run run_worker_recovery_once on this thread.
+            # Signal the guaranteed shared daemon (5b) so its global tick — which
+            # is the same run_worker_recovery_once body, off the request path —
+            # picks up the stuck workflow. Best-effort; the 5c poll backstops.
+            signal = self._signal_shared_recovery_wakeup(
+                reason="progress_auto_takeover",
+                requested_by="progress_poll",
+                job_id=job_id,
+                payload=recovery_payload,
+                scope="job_scoped",
+            )
             self.store.append_job_event(
                 job_id,
                 stage="runtime_control",
                 status="running",
-                detail=f"Progress auto takeover finished for `{classification}`.",
+                detail=f"Progress auto takeover signaled recovery daemon for `{classification}`.",
                 payload={
                     "control": "progress_auto_takeover_result",
                     "classification": classification,
                     "requested_execution_mode": requested_execution_mode,
                     "effective_execution_mode": effective_execution_mode,
                     "queued_at": queued_at,
-                    "recovery_status": str(recovery.get("status") or ""),
-                    "workflow_resume": workflow_resume,
+                    "recovery_status": str(signal.get("status") or ""),
+                    "signal": signal,
+                    "workflow_resume": [],
                 },
             )
         except Exception as exc:
@@ -36682,7 +36800,7 @@ class SourcingOrchestrator:
                 job_id,
                 stage="runtime_control",
                 status="failed",
-                detail=f"Progress auto takeover failed for `{classification}`: {exc}",
+                detail=f"Progress auto takeover signal failed for `{classification}`: {exc}",
                 payload={
                     "control": "progress_auto_takeover_result",
                     "classification": classification,
