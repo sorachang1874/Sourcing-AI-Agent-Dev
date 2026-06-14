@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -60,7 +61,7 @@ from .public_web_quality import evaluate_public_web_quality_paths, write_public_
 from .runtime_rebuild import rebuild_runtime_control_plane
 from .search_provider import build_search_provider
 from .semantic_provider import build_semantic_provider
-from .service_daemon import SingleInstanceError, WorkerDaemonService
+from .service_daemon import SingleInstanceError, WorkerDaemonService, read_service_status
 from .settings import load_settings
 from .snapshot_materialization_backfill import backfill_snapshot_full_materialization_items
 from .storage import ControlPlaneStore, _json_safe_payload
@@ -1234,6 +1235,121 @@ def start_shared_recovery_service(
     )
     thread.start()
     return stop_event, thread
+
+
+class RecoveryCoverageError(RuntimeError):
+    """serve refused to start because nothing drives worker recovery (Step 5a).
+
+    Recovery being driven is a runtime invariant, not an implicit deployment
+    convention (study docs/RECOVERY_DRIVING_REDESIGN_STUDY.md §5). serve fails
+    closed rather than start a server that silently believes recovery is
+    covered when no in-process thread and no fresh external daemon exist.
+    """
+
+
+def external_recovery_daemon_is_fresh(
+    runtime_dir: str | Path,
+    *,
+    service_name: str = "worker-recovery-daemon",
+) -> tuple[bool, dict[str, Any]]:
+    """Return (is_fresh, status) for an out-of-process recovery daemon.
+
+    A standalone systemd daemon (the production guarantee) holds the flock, so
+    the in-process shared thread yields with SingleInstanceError. Coverage in
+    that case means a reachable daemon whose status file resolves "running" —
+    read_service_status only keeps "running" when the lock is held AND the
+    heartbeat is fresh (poll_seconds*3+2 budget); a dead/stale daemon is
+    downgraded to "stale"/"not_started"/"corrupted" (service_daemon.py
+    ~656-716). We treat only "running" as covering recovery.
+    """
+
+    status = read_service_status(runtime_dir, service_name)
+    resolved = str(status.get("status") or "").strip()
+    return resolved == "running", status
+
+
+def assert_recovery_coverage_or_fail_closed(
+    orchestrator: SourcingOrchestrator,
+    *,
+    shared_recovery_thread: threading.Thread | None,
+    watchdog_disabled: bool,
+    allow_uncovered_recovery: bool = False,
+    service_name: str = "worker-recovery-daemon",
+    recheck_window_seconds: float = 5.0,
+    recheck_interval_seconds: float = 0.25,
+    sleep: Any = time.sleep,
+) -> dict[str, Any]:
+    """Fail closed unless something actually drives worker recovery (Step 5a).
+
+    Coverage sources, in priority order:
+      1. The in-process shared recovery thread is alive — it started cleanly
+         (watchdog enabled, no external daemon held the lock). Covered.
+      2. Otherwise (watchdog disabled, OR the in-process thread yielded to an
+         external daemon via SingleInstanceError and is no longer alive) — a
+         FRESH external recovery daemon must exist. Because a just-launched
+         systemd daemon can race serve's boot, we re-check within a short
+         bounded window before deciding, then refuse.
+
+    If neither source covers recovery, raise RecoveryCoverageError so serve never
+    starts believing recovery is covered when nothing drives it. The
+    --allow-uncovered-recovery opt-out is the ONLY way to proceed uncovered
+    ("API-only, recovery elsewhere, I accept it"); it is intentionally loud.
+    """
+
+    if shared_recovery_thread is not None and shared_recovery_thread.is_alive():
+        return {
+            "coverage": "in_process_shared_recovery_thread",
+            "watchdog_disabled": watchdog_disabled,
+        }
+
+    # No live in-process thread: require a fresh external daemon, tolerating a
+    # short boot race before refusing.
+    deadline = time.monotonic() + max(0.0, float(recheck_window_seconds or 0.0))
+    interval = max(0.01, float(recheck_interval_seconds or 0.25))
+    is_fresh, status = external_recovery_daemon_is_fresh(orchestrator.runtime_dir, service_name=service_name)
+    while not is_fresh and time.monotonic() < deadline:
+        sleep(min(interval, max(0.0, deadline - time.monotonic())))
+        is_fresh, status = external_recovery_daemon_is_fresh(orchestrator.runtime_dir, service_name=service_name)
+
+    if is_fresh:
+        return {
+            "coverage": "external_recovery_daemon",
+            "watchdog_disabled": watchdog_disabled,
+            "external_status": str(status.get("status") or ""),
+        }
+
+    detail = {
+        "event": "serve_recovery_coverage_check",
+        "coverage": "none",
+        "watchdog_disabled": watchdog_disabled,
+        "service_name": service_name,
+        "external_status": str(status.get("status") or "not_started"),
+        "external_stale_reason": str(status.get("stale_reason") or ""),
+        "runtime_dir": str(orchestrator.runtime_dir),
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if allow_uncovered_recovery:
+        detail["coverage"] = "opt_out_allow_uncovered_recovery"
+        detail["severity"] = "warning"
+        detail["message"] = (
+            "serve starting WITHOUT a recovery driver because --allow-uncovered-recovery "
+            "was set: no in-process recovery thread and no fresh external "
+            "worker-recovery-daemon. Stuck/in-flight work will NOT be recovered by "
+            "this process. You asserted recovery runs elsewhere."
+        )
+        print(json.dumps(detail, ensure_ascii=False), file=sys.stderr, flush=True)
+        return detail
+
+    detail["severity"] = "error"
+    detail["message"] = (
+        "serve refused to start: worker recovery is not covered. No in-process "
+        "recovery thread is running and no fresh external worker-recovery-daemon "
+        "was found. Start the standalone recovery daemon, drop "
+        "--disable-runtime-watchdog, or pass --allow-uncovered-recovery if recovery "
+        "truly runs elsewhere."
+    )
+    print(json.dumps(detail, ensure_ascii=False), file=sys.stderr, flush=True)
+    raise RecoveryCoverageError(detail["message"])
 
 
 def _resolve_hosted_api_base_url(explicit_base_url: str = "") -> str:
@@ -3262,6 +3378,15 @@ def main() -> None:
         default=15.0,
         help="Poll interval for the server-side recovery watchdog",
     )
+    serve_parser.add_argument(
+        "--allow-uncovered-recovery",
+        action="store_true",
+        help=(
+            "API-only deployment opt-out (Step 5a): start serve even when neither an "
+            "in-process recovery thread nor a fresh external worker-recovery-daemon "
+            "covers recovery. Loudly logged. Only use when recovery truly runs elsewhere."
+        ),
+    )
 
     args = parser.parse_args()
     if args.command == "show-control-plane-runtime":
@@ -4920,6 +5045,15 @@ def main() -> None:
                 orchestrator,
                 poll_seconds=float(args.runtime_watchdog_poll_seconds or 15.0),
             )
+        # Step 5a: make "recovery is driven" a code invariant. If neither the
+        # in-process shared recovery thread nor a fresh external daemon covers
+        # recovery, refuse to serve (study docs/RECOVERY_DRIVING_REDESIGN_STUDY.md §5).
+        assert_recovery_coverage_or_fail_closed(
+            orchestrator,
+            shared_recovery_thread=shared_recovery_thread,
+            watchdog_disabled=bool(args.disable_runtime_watchdog),
+            allow_uncovered_recovery=bool(getattr(args, "allow_uncovered_recovery", False)),
+        )
         orchestrator.start_background_organization_asset_warmup()
         server = create_server(orchestrator, host=args.host, port=args.port)
         print(f"Serving on http://{args.host}:{args.port}")

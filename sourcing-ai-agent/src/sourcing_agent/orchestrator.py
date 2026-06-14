@@ -923,7 +923,7 @@ class SourcingOrchestrator:
             acquisition_engine=self.acquisition_engine,
             model_client=self.model_client,
         )
-        self.durable_runtime_writer = DurableRuntimeWriter(self.store)
+        self.durable_runtime_writer = DurableRuntimeWriter(self.store, runtime_dir=self.runtime_dir)
         self.operation_runtime_writer = OperationRuntimeWriter(self.store)
         self.serving_projection_writer = ServingProjectionWriter(self.store)
         self.serving_projection_reader = ServingProjectionReader(self.store)

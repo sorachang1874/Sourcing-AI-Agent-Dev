@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field, replace
 from hashlib import sha1
+from pathlib import Path
 from typing import Any
+
+from .service_daemon import request_service_wakeup
 
 TERMINAL_COMMAND_STATUSES = {"succeeded", "failed_terminal", "cancelled", "superseded"}
 TERMINAL_WORKFLOW_STATUSES = {"completed", "failed", "cancelled", "superseded"}
@@ -3105,9 +3108,24 @@ class DurableRuntimeWriter:
         store: Any,
         *,
         owner_registry: CommandOwnerRegistry = DEFAULT_COMMAND_OWNER_REGISTRY,
+        runtime_dir: str | Path | None = None,
+        recovery_service_name: str = "worker-recovery-daemon",
     ) -> None:
         self.store = store
         self.owner_registry = owner_registry
+        # Phase 4 Step 5b (additive event-signaled wakeup): when a runtime_dir is
+        # wired, reduce_and_persist signals the shared recovery daemon the moment a
+        # durable transition produces new recovery work (a typed command is enqueued
+        # or a workflow.completed outbox row is committed) so the daemon's 5s poll is
+        # short-circuited to sub-second (study docs/RECOVERY_DRIVING_REDESIGN_STUDY.md
+        # §5, invariant 3 — signal at event time, not poll time). This is purely an
+        # acceleration layer on top of the existing poll/inline triggers/provider-event
+        # caller; callers that do not pass runtime_dir keep the legacy poll-only
+        # behavior unchanged.
+        self.runtime_dir: Path | None = Path(runtime_dir) if runtime_dir is not None else None
+        self.recovery_service_name = (
+            str(recovery_service_name or "worker-recovery-daemon").strip() or "worker-recovery-daemon"
+        )
 
     def append_event_and_reduce(
         self,
@@ -3245,14 +3263,78 @@ class DurableRuntimeWriter:
             reducer_version=reducer_result.reducer_version,
             metadata=reducer_result.metadata,
         )
+        committed_commands = tuple(command for command in written_commands if command)
+        committed_outbox = tuple(outbox_item for outbox_item in written_outbox if outbox_item)
+        # 5b: signal the shared recovery daemon at exactly the durable transition that
+        # produced new recovery work — a typed command enqueue or the
+        # runtime_outbox workflow.completed row (durable_runtime ~3333-3339). This is
+        # the same event-time signal shape the provider-event caller already uses
+        # (orchestrator.py ~37871); the daemon poll remains the backstop.
+        self._signal_recovery_wakeup(
+            workflow_run_id=normalized_run_id,
+            operation_id=operation_id,
+            committed_commands=committed_commands,
+            committed_outbox=committed_outbox,
+        )
         return RuntimeApplyResult(
             workflow_run_id=normalized_run_id,
             event=dict(event or {}),
             state=state,
-            commands=tuple(command for command in written_commands if command),
-            outbox=tuple(outbox_item for outbox_item in written_outbox if outbox_item),
+            commands=committed_commands,
+            outbox=committed_outbox,
             applied_event_count=len(new_events),
         )
+
+    def _signal_recovery_wakeup(
+        self,
+        *,
+        workflow_run_id: str,
+        operation_id: str,
+        committed_commands: tuple[dict[str, Any], ...],
+        committed_outbox: tuple[dict[str, Any], ...],
+    ) -> dict[str, Any] | None:
+        """Best-effort sub-second wakeup of the shared recovery daemon (5b).
+
+        Emitted only when this transition committed durable work the daemon must
+        act on: one or more typed commands, or a runtime_outbox row (the
+        workflow.completed row in particular drives post-completion reconcile).
+        The wake file coalesces signal storms for one logical operation because
+        request_service_wakeup merges callback_payload into any pending request
+        via _merge_service_callback_payload, and the daemon's _consume_wakeup_request
+        de-dupes by file mtime — so a fan-out of commands in a single reduce
+        produces at most one extra woken tick, not a storm. Failures here never
+        affect the durable write; the poll still guarantees eventual progress.
+        """
+
+        if self.runtime_dir is None:
+            return None
+        if not committed_commands and not committed_outbox:
+            return None
+        produced_completed_outbox = any(
+            str(item.get("outbox_type") or "").strip() == "workflow.completed" for item in committed_outbox
+        )
+        # Scope the callback so the woken tick is targeted and idempotent, mirroring
+        # the provider-event caller's job/workflow-scoped payload.
+        callback_payload: dict[str, Any] = {
+            "source": "durable_runtime_event",
+            "workflow_stale_scope_workflow_run_id": str(workflow_run_id or "").strip(),
+        }
+        normalized_operation_id = str(operation_id or "").strip()
+        if normalized_operation_id:
+            callback_payload["workflow_stale_scope_operation_id"] = normalized_operation_id
+        if produced_completed_outbox:
+            callback_payload["workflow_completed_reconcile_requested"] = True
+        try:
+            return request_service_wakeup(
+                self.runtime_dir,
+                self.recovery_service_name,
+                reason="durable_runtime_event",
+                requested_by="durable_runtime_writer",
+                callback_payload=callback_payload,
+            )
+        except Exception:
+            # Acceleration only — never let a wake-file failure break the durable write.
+            return None
 
 
 def reduce_workflow_events(
