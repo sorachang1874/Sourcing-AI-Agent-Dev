@@ -25,6 +25,10 @@ from typing import Any, NamedTuple
 
 from sourcing_agent.acquisition import AcquisitionEngine
 from sourcing_agent.asset_catalog import AssetCatalog
+from sourcing_agent.durable_runtime import (
+    EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
+    EXPORT_PROJECTION_GENERATE_OWNER,
+)
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.recovery_drain_registry import (
@@ -269,6 +273,62 @@ class RecoveryTickDrainCharacterizationTest(PGDurableRuntimeTestMixin, unittest.
     def tearDown(self) -> None:
         self._stop_pg_durable_runtime()
         self.tempdir.cleanup()
+
+    def test_export_projection_drain_reclaims_expired_claimed_command(self) -> None:
+        """C1.4a review NO-GO fix: a worker that crashes between claim and
+        mark_workflow_command_running leaves the export command status='claimed'
+        with a lease that expires. list_ready_workflow_commands and
+        claim_workflow_command now include expired-claimed rows, so the worker
+        drain reclaims and runs it instead of stranding it forever; an active
+        (non-expired) claim stays single-winner protected.
+        """
+        planned = self.orchestrator._plan_projection_export_generate_command(
+            {"projection_id": "proj_reclaim_test"}
+        )
+        command_id = str(planned.get("command_id") or "")
+        self.assertTrue(command_id)
+        # A worker claims it then dies before mark_running -> stranded 'claimed'.
+        self.store.claim_workflow_command(command_id, lease_owner="dead-worker", lease_seconds=300)
+        self.assertEqual(str(self.store.get_workflow_command(command_id).get("status") or ""), "claimed")
+        # Backdate the lease to the past (authoritative adapter) to simulate expiry.
+        self.store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+            "UPDATE workflow_commands SET lease_expires_at = %s WHERE command_id = %s",
+            ("2000-01-01T00:00:00+00:00", command_id),
+        )
+        # Storage fix: the expired-claimed row is now in the ready set.
+        ready_ids = [
+            str(c.get("command_id") or "")
+            for c in self.store.list_ready_workflow_commands(
+                owner=EXPORT_PROJECTION_GENERATE_OWNER,
+                command_type=EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
+                limit=10,
+            )
+        ]
+        self.assertIn(command_id, ready_ids)
+        # Drain fix: the export drain reclaims and runs it (no longer stranded);
+        # a NEW owner takes the lease (proves the dead claim was reclaimed).
+        drained = self.orchestrator._drain_export_projection_generate_commands({})
+        self.assertGreaterEqual(int(drained.get("command_count") or 0), 1)
+        self.assertNotEqual(
+            str(self.store.get_workflow_command(command_id).get("lease_owner") or ""),
+            "dead-worker",
+        )
+        # Active-claim protection: a freshly-claimed (non-expired) command is NOT
+        # reclaimable while its lease is valid (single-winner during the lease).
+        planned2 = self.orchestrator._plan_projection_export_generate_command(
+            {"projection_id": "proj_active_claim"}
+        )
+        command_id2 = str(planned2.get("command_id") or "")
+        self.store.claim_workflow_command(command_id2, lease_owner="live-worker", lease_seconds=600)
+        active_ready_ids = [
+            str(c.get("command_id") or "")
+            for c in self.store.list_ready_workflow_commands(
+                owner=EXPORT_PROJECTION_GENERATE_OWNER,
+                command_type=EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
+                limit=10,
+            )
+        ]
+        self.assertNotIn(command_id2, active_ready_ids)
 
     def _install_drain_recorders(self) -> list[dict[str, Any]]:
         calls: list[dict[str, Any]] = []

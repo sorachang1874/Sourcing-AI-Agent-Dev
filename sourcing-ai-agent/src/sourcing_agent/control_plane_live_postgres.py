@@ -3567,7 +3567,10 @@ class LiveControlPlanePostgresAdapter:
                 heartbeat_at = %s,
                 updated_at = %s
             WHERE command_id = %s
-              AND status IN ('queued', 'retry_wait', 'running')
+              -- 'claimed' lets a new owner reclaim an expired-lease claim left by a
+              -- worker that crashed before mark_workflow_command_running; the
+              -- lease-expiry clause below still protects active claims.
+              AND status IN ('queued', 'retry_wait', 'running', 'claimed')
               AND (not_before_at = '' OR not_before_at <= %s)
               AND (lease_expires_at = '' OR lease_expires_at <= %s)
             RETURNING *

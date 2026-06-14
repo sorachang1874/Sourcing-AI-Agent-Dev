@@ -15030,14 +15030,18 @@ class ControlPlaneStore:
         normalized_owner = str(owner or "").strip()
         normalized_type = str(command_type or "").strip()
         now = _utc_now_timestamp()
+        # 'claimed' is included so an expired-lease claimed row (a worker that
+        # crashed between claim_workflow_command and mark_workflow_command_running)
+        # is reclaimable — the trailing lease-expiry clause excludes still-active
+        # claims, mirroring how 'running' is reclaimed only once its lease lapses.
         clauses = [
-            "status IN ('queued', 'retry_wait', 'running')",
+            "status IN ('queued', 'retry_wait', 'running', 'claimed')",
             "(not_before_at = '' OR datetime(not_before_at) <= datetime(?))",
             "(lease_expires_at = '' OR datetime(lease_expires_at) <= datetime(?))",
         ]
         params: list[Any] = [now, now]
         pg_clauses = [
-            "status IN ('queued', 'retry_wait', 'running')",
+            "status IN ('queued', 'retry_wait', 'running', 'claimed')",
             "(not_before_at = '' OR not_before_at <= %s)",
             "(lease_expires_at = '' OR lease_expires_at <= %s)",
         ]
@@ -15111,7 +15115,10 @@ class ControlPlaneStore:
                     heartbeat_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE command_id = ?
-                  AND status IN ('queued', 'retry_wait', 'running')
+                  -- 'claimed' lets a new owner reclaim an expired-lease claim left
+                  -- by a worker that crashed before mark_workflow_command_running;
+                  -- the lease-expiry clause below still protects active claims.
+                  AND status IN ('queued', 'retry_wait', 'running', 'claimed')
                   AND (not_before_at = '' OR datetime(not_before_at) <= datetime('now'))
                   AND (lease_expires_at = '' OR datetime(lease_expires_at) <= datetime('now'))
                 """,
