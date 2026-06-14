@@ -2386,10 +2386,30 @@ class SourcingOrchestrator:
         service_name = self._shared_recovery_service_name(payload)
         callback_payload: dict[str, Any] = {"source": reason}
         if normalized_job_id:
-            # The global tick does not consume per-workflow scope (see
-            # durable_runtime._signal_recovery_wakeup), but recording the job id
-            # keeps the wake-file observable/attributable for operators.
             callback_payload["request_path_job_id"] = normalized_job_id
+        # Forward the bounded-recovery contract the caller built into the wakeup
+        # callback_payload — the daemon consumes THIS payload (via
+        # _consume_wakeup_request -> run_worker_recovery_once ->
+        # _workflow_recovery_settings), NOT the helper's `payload` arg. The read
+        # path's progress auto-takeover sets workflow_stale_scope_job_id +
+        # zero stale thresholds precisely so the woken tick takes over a
+        # classified dead-runner job IMMEDIATELY rather than at the default stale
+        # window; dropping these silently regresses takeover latency. Only keys
+        # actually present in the caller payload are forwarded (the request path
+        # carries none, so it stays an unscoped global-sweep nudge).
+        forwarded_payload = dict(payload or {})
+        for field_name in (
+            "workflow_stale_scope_job_id",
+            "workflow_resume_explicit_job",
+            "workflow_resume_stale_after_seconds",
+            "workflow_resume_limit",
+            "workflow_auto_resume_enabled",
+            "workflow_queue_resume_stale_after_seconds",
+            "workflow_queue_resume_limit",
+            "workflow_queue_auto_takeover_enabled",
+        ):
+            if field_name in forwarded_payload and forwarded_payload[field_name] is not None:
+                callback_payload[field_name] = forwarded_payload[field_name]
         try:
             wakeup = request_service_wakeup(
                 self.runtime_dir,

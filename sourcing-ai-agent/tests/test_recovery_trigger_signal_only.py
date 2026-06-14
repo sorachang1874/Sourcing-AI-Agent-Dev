@@ -292,6 +292,18 @@ class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase
         self._save_queued_workflow(job_id)
         self.assertEqual(self._wakeup()["status"], "not_requested")
 
+        # The read path builds a job-scoped, ZERO-STALE takeover payload so the
+        # woken daemon takes over THIS classified dead-runner job immediately.
+        scoped_recovery_payload = {
+            "workflow_stale_scope_job_id": job_id,
+            "workflow_resume_explicit_job": True,
+            "workflow_auto_resume_enabled": True,
+            "workflow_resume_stale_after_seconds": 0,
+            "workflow_resume_limit": 1,
+            "workflow_queue_auto_takeover_enabled": True,
+            "workflow_queue_resume_stale_after_seconds": 0,
+            "workflow_queue_resume_limit": 1,
+        }
         tick = mock.Mock(name="run_worker_recovery_once")
         with mock.patch.object(self.orchestrator, "run_worker_recovery_once", tick):
             self.orchestrator._queue_progress_auto_takeover(  # noqa: SLF001
@@ -299,7 +311,7 @@ class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase
                 classification="runner_not_alive",
                 requested_execution_mode="hosted",
                 effective_execution_mode="hosted",
-                recovery_payload={"workflow_queue_auto_takeover_enabled": True},
+                recovery_payload=scoped_recovery_payload,
             )
 
         tick.assert_not_called()
@@ -308,6 +320,17 @@ class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase
         self.assertEqual(wakeup["service_name"], SHARED_DAEMON)
         self.assertEqual(wakeup["reason"], "progress_auto_takeover")
         self.assertEqual(wakeup["requested_by"], "progress_poll")
+        # The bounded-recovery contract MUST reach the daemon via the wakeup
+        # callback_payload (the daemon consumes this, not the helper's arg), or
+        # the woken tick would wait on default stale thresholds instead of
+        # taking over the classified job now. (Regression guard for the Step 5e
+        # NO-GO: the helper previously dropped these fields.)
+        callback = dict(wakeup.get("callback_payload") or {})
+        self.assertEqual(callback.get("workflow_stale_scope_job_id"), job_id)
+        self.assertEqual(callback.get("workflow_resume_stale_after_seconds"), 0)
+        self.assertEqual(callback.get("workflow_queue_resume_stale_after_seconds"), 0)
+        self.assertTrue(callback.get("workflow_queue_auto_takeover_enabled"))
+        self.assertTrue(callback.get("workflow_auto_resume_enabled"))
 
         # The cooldown-anchor event must still be written so consecutive polls
         # throttle (get_job_progress reads control=="progress_auto_takeover").
@@ -368,33 +391,53 @@ class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase
     # =====================================================================
 
     def test_signal_then_daemon_tick_drives_queued_workflow_recovery(self) -> None:
-        # End-to-end safety: the request path only SIGNALS, but the guaranteed
+        # End-to-end safety: the read path only SIGNALS, but the guaranteed
         # daemon's tick (run_worker_recovery_once — the same body 5a guarantees
-        # runs) STILL drives the queued workflow's recovery via run_queued_workflow.
-        # We model the woken daemon by invoking the tick directly after the signal
-        # and asserting it reaches the queued workflow.
+        # runs) STILL drives the queued workflow's recovery via run_queued_workflow
+        # — AND it does so using THE EXACT wakeup callback_payload the signal
+        # persisted, with no test-only stronger settings. This is the decisive
+        # regression guard for the Step 5e NO-GO: if the helper drops the
+        # bounded-recovery fields, the replayed payload would lack the zero-stale
+        # scope and the daemon would NOT take over now.
         job_id = "job_fallback_daemon_drives"
         self._save_queued_workflow(job_id)
 
-        # Step 1: request-side signal (no inline driving on this path).
+        # Step 1: read-path takeover signals the daemon with the scoped/zero-stale
+        # payload the real progress poll builds (no inline driving on this path).
         clear_service_wakeup_request(self.runtime_dir, SHARED_DAEMON)
-        signal = self.orchestrator._signal_shared_recovery_wakeup(  # noqa: SLF001
-            reason="start_workflow",
-            requested_by="start_workflow",
-            job_id=job_id,
-            scope="job_scoped",
-        )
-        self.assertEqual(signal["status"], "signaled")
-        self.assertEqual(self._wakeup()["status"], "requested")
+        scoped_recovery_payload = {
+            "workflow_stale_scope_job_id": job_id,
+            "workflow_resume_explicit_job": True,
+            "workflow_auto_resume_enabled": True,
+            "workflow_resume_stale_after_seconds": 0,
+            "workflow_resume_limit": 1,
+            "workflow_queue_auto_takeover_enabled": True,
+            "workflow_queue_resume_stale_after_seconds": 0,
+            "workflow_queue_resume_limit": 1,
+        }
+        tick = mock.Mock(name="run_worker_recovery_once")
+        with mock.patch.object(self.orchestrator, "run_worker_recovery_once", tick):
+            self.orchestrator._queue_progress_auto_takeover(  # noqa: SLF001
+                job_id=job_id,
+                classification="runner_not_alive",
+                requested_execution_mode="hosted",
+                effective_execution_mode="hosted",
+                recovery_payload=scoped_recovery_payload,
+            )
+        tick.assert_not_called()
+        wakeup = self._wakeup()
+        self.assertEqual(wakeup["status"], "requested")
+        # Replay the daemon's actual consumption: the woken tick runs with the
+        # callback_payload persisted to the wake file — nothing hand-strengthened.
+        daemon_tick_payload = dict(wakeup.get("callback_payload") or {})
+        self.assertEqual(daemon_tick_payload.get("workflow_stale_scope_job_id"), job_id)
+        self.assertEqual(daemon_tick_payload.get("workflow_queue_resume_stale_after_seconds"), 0)
 
-        # Step 2: the woken daemon runs the global recovery tick. Its
+        # Step 2: the woken daemon runs the recovery tick with that payload. Its
         # workflow_resume (queue-takeover) phase must reach the queued workflow
         # and take it over — i.e. recovery is DAEMON-DRIVEN, not request-driven.
-        # We assert on the synchronous tick result (the takeover-dispatch record),
-        # not on the background thread, so the proof is race-free. The takeover's
-        # spawned run_queued_workflow thread is replaced with a kwargs-tolerant
-        # no-op so the assertion is deterministic and no background thread races
-        # the test (the takeover DECISION is what proves daemon-driven recovery).
+        # The takeover's spawned run_queued_workflow thread is replaced with a
+        # kwargs-tolerant no-op so the assertion is deterministic.
         drove_via_daemon: list[str] = []
 
         def _noop_run_queued(**kwargs: object) -> dict:
@@ -403,18 +446,7 @@ class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase
             return {"job_id": jid, "status": "skipped", "reason": "stubbed_thread_target"}
 
         with mock.patch.object(self.orchestrator, "run_queued_workflow", side_effect=_noop_run_queued):
-            result = self.orchestrator.run_worker_recovery_once(
-                {
-                    "job_id": job_id,
-                    "workflow_stale_scope_job_id": job_id,
-                    "workflow_queue_auto_takeover_enabled": True,
-                    "workflow_queue_resume_stale_after_seconds": 0,
-                    "workflow_queue_resume_limit": 1,
-                    "workflow_auto_resume_enabled": True,
-                    "workflow_resume_stale_after_seconds": 0,
-                    "workflow_resume_limit": 1,
-                }
-            )
+            result = self.orchestrator.run_worker_recovery_once(daemon_tick_payload)
             # Let the takeover's spawned (now no-op) thread run to completion.
             for thread in threading.enumerate():
                 if thread.name == f"hosted-workflow-{job_id}":
