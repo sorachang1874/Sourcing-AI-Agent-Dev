@@ -81,6 +81,7 @@
 - [SERVICE_GRADE_ARCHITECTURE_PLAN.md](SERVICE_GRADE_ARCHITECTURE_PLAN.md) — 服务级重构计划（含 2026-06-11 五轨道 revision）。
 - [PHASE4_ENTANGLED_CORE_DESIGN.md](PHASE4_ENTANGLED_CORE_DESIGN.md) — Phase 4 纠缠核心重设计提案（2026-06-12，待 owner 审定 §4 决策点）。
 - [PROFILE_PREFETCH_SCHEDULER_CONTRACT.md](PROFILE_PREFETCH_SCHEDULER_CONTRACT.md) — Profile-Prefetch 调度器契约（2026-06-12，Phase 4 Step 0；envelope/coalescing/wave + storeless fail-closed）。
+- [SERVING_MESH_OWNERSHIP_BOUNDARY.md](SERVING_MESH_OWNERSHIP_BOUNDARY.md) — Serving mesh 所有权边界冻结（2026-06-14，Phase 4 Step 4；四块切分 + resolver 接口 + 双向环解法,代码随 M3-M5 搬）。
 - [NEXT_TODO.md](NEXT_TODO.md) — 活跃待办（滚动文件）。
 - [../PROGRESS.md](../PROGRESS.md) — 进展日志（滚动文件，月度归档于 `archive/progress/`）。
 - [PG_ONLY_CUTOVER_TRACKER.md](PG_ONLY_CUTOVER_TRACKER.md) — PG-only cutover 尾巴。

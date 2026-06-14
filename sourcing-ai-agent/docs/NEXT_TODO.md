@@ -27,7 +27,7 @@
   - [x] Step 2（部分采用）：A2 phase 对象 registry（2026-06-14，`7463404`）：`recovery_phases.py`（`RecoveryPhase`+`TickContext`+loud-failure registry）；8 个 registry 形态 phase + 14-drain group 迁入 seam；oracle 逐字节未改且 10/10。**刻意留 inline 的级联簇**（per-branch owner 分歧、result-vs-metrics 分歧、4-7 路 skip ladder 选 reason+max_sync_work 的 *_work_observed 线程态、workflow_resume 多波、remote_event_followup 4-tuple）——其线程态无法经 ctx 无损表达,迁移会改 pinned phase records,按部分采用纪律留守待后续。
   - [ ] Step 2b（后续）：级联簇迁移——需先解开 per-branch owner（RecoveryPhase.owner 改可计算）、result-vs-metrics 分歧、threaded *_work_observed → ctx 的无损表达；oracle 仍为硬门。
   - [x] Step 3：C1 cancel/resume → CommandTypeSpec 槽位（2026-06-14，`4991d2c`）：两个分发器（cancel 15 / resume 11 分支）改查表；`CommandTypeSpec` 加 `cancel_handler`/`resume_handler`（纯名,getattr 解析）；owner-mismatch fall-through 经 sibling owner-agnostic registry 保留；**全部 1025 个 (owner, command_type) 组合等价 0 mismatch**；API 不变量逐字节一致；manifest 导出 cancel 语义（Track E）；characterize-first（对照树同绿）。
-  - [ ] Step 4：B2 网格边界冻结成文（resolver 接口 + 四块切分清单；不搬代码，搬动随 M3–M5）。
+  - [x] Step 4：B2 网格边界冻结成文（2026-06-14，`docs/SERVING_MESH_OWNERSHIP_BOUNDARY.md`）：四块切分（CandidateSourceResolver / ServingReadModel / ProjectionCommandOwner+9 读族 / fast-path 拆两半）逐方法 file:line + 自然 owner + 冻结 resolver 接口签名 + candidate_source↔reader 双向环两条边精确定位与 B2 解法（消 Edge B 重解）+ 迁移顺序（先搬 resolver 解环）；不搬代码,随 M3–M5。纠正一处审计前提:9 读族非 profile_fetch 消费,归读模型层。
   - [ ] Step 5：recovery 触发点收编（(d) 进程分离前置 ①–③）。
 
 ### Track B — 存储与测试基建（与 A 并行）
