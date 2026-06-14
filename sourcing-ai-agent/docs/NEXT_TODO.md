@@ -32,7 +32,8 @@
     - [x] 5a daemon-保证 fail-closed 断言 + 5b 事件信号唤醒（2026-06-14，`767f77a`）：serve 启动 `assert_recovery_coverage_or_fail_closed`(缺 driver 则 raise);`DurableRuntimeWriter._signal_recovery_wakeup` 在 reduce_and_persist 尾部仅当提交新 recovery 工作时发 `request_service_wakeup`(闭合 invariant 3 的 5s gap);纯加法、零新 infra;wakeup 写改原子 temp+replace。invariant 1/3 变异证明 load-bearing,oracle 仍 10/10。
     - [x] 5c poll 降为 backstop（2026-06-14，`81afd10`）：shared daemon 默认 poll 5s→30s(在 stale 90s/lease 300s 窗口内安全,空闲控制面扫描负载 ~6x 下降);特征化测试钉死 backstop 默认在窗口内 + override 生效。5a+5b Codex re-review GO。
     - [ ] 5d（可选,**建议推迟到 Track C worker 拆进程时**）：补 `runtime_outbox` consumer 把 wakeup 升级为 durable PG 通道。单机 ~20 用户阶段 wake-file 已足够;拆进程后才真正需要(届时同步评估 PG LISTEN/NOTIFY)。
-    - [ ] 5e（最高风险剩余步,移除生产 fallback 路径,建议作为独立聚焦 pass）：移除/改写 inline 触发 ①请求路径②读路径③bootstrap 为 signal-only。审计已证三者多为 vestigial(auto_job_daemon 默认 False→请求路径几乎不触发;读路径仅机会性);5a 保证 + 5b 唤醒 + 5c backstop 已就位使其安全,但仍 characterize-first + Codex review。
+    - [x] 5e（2026-06-14，`3410293`）：请求/读路径 recovery 触发改 signal-only（`_signal_shared_recovery_wakeup`→5b 唤醒原语）。读路径删除了在 API 进程内跑 tick 的 server 线程 spawn;响应契约保留;`ensure_*_recovery` 方法与 tick 本体不动,oracle 10/10。fallback 已证仍由 serve 保证的 daemon 驱动(默认开 auto_resume/queue_takeover)。characterize-first(9 tests)+ test_pipeline 7 个守卫 re-point 为"断言 tick 不再 inline 跑"。
+    - **Phase 4 收官**（除下述显式推迟项）：命令层四域 owner + CommandKernel + registry；recovery tick 部分 phase 对象化 + 事件驱动(5a 保证/5b 唤醒/5c backstop/5e signal-only)；cancel/resume 槽位化；mesh 边界冻结。orchestrator ~87k→~74k 行。
     - 之后：Option 3 全事件流 driver = Track D 北极星(`agent_events`/SSE 表尚不存在)。
 
 ### Track B — 存储与测试基建（与 A 并行）
