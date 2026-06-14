@@ -298,6 +298,36 @@ _RECOVERY_DRAIN_REGISTRY_SUITES = (
         reason="worker recovery daemon drives the recovery tick that iterates the drain registry",
     ),
 )
+# recovery_phases.py holds the recovery-tick phase objects + TickContext +
+# registry seam (Phase 4 Step 2 A2) that run_worker_recovery_once iterates for
+# the migrated self-contained phases and the drain group. Changes must re-run
+# the whole-tick characterization oracle plus the recovery/workflow-command
+# spine suites that drive the tick.
+_RECOVERY_PHASES_RELATED_PATHS = {
+    "src/sourcing_agent/recovery_phases.py",
+}
+_RECOVERY_PHASES_SUITES = (
+    PytestInvocation(
+        label="paired::tests/test_recovery_tick_characterization.py",
+        args=("tests/test_recovery_tick_characterization.py",),
+        reason="whole-tick characterization oracle pins the phase sequence/owners/skip reasons the registry seam must reproduce",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_recovery_drain_registry.py",
+        args=("tests/test_recovery_drain_registry.py",),
+        reason="the 14 uniform drains flow through the recovery-phase registry as a phase-group",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_durable_runtime.py",
+        args=("tests/test_durable_runtime.py",),
+        reason="recovery tick iterates the phase registry inside the workflow-command spine",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_worker_recovery_daemon.py",
+        args=("tests/test_worker_recovery_daemon.py",),
+        reason="worker recovery daemon drives the recovery tick that iterates the phase registry",
+    ),
+)
 _ORCHESTRATOR_RELATED_PATHS = {
     "src/sourcing_agent/orchestrator.py",
     "src/sourcing_agent/acquisition_command_owner.py",
@@ -414,6 +444,11 @@ def infer_pytest_invocations(
         if path in _RECOVERY_DRAIN_REGISTRY_RELATED_PATHS:
             saw_backend_change = True
             for invocation in _RECOVERY_DRAIN_REGISTRY_SUITES:
+                add(invocation)
+            continue
+        if path in _RECOVERY_PHASES_RELATED_PATHS:
+            saw_backend_change = True
+            for invocation in _RECOVERY_PHASES_SUITES:
                 add(invocation)
             continue
         if path in _ORCHESTRATOR_RELATED_PATHS:

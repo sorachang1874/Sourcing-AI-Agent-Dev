@@ -385,6 +385,14 @@ from .recovery_drain_registry import (
     DEFAULT_RECOVERY_DRAIN_BINDINGS,
     build_recovery_drain_registry,
 )
+from .recovery_phases import (
+    SkipDecision,
+    TickContext,
+    CallbackRecoveryPhase,
+    build_drain_group_phases,
+    build_recovery_phase_registry,
+    run_registry_phase,
+)
 from .recovery_sidecar import (
     build_hosted_runtime_watchdog_command as _build_hosted_runtime_watchdog_command,
 )
@@ -38518,32 +38526,68 @@ class SourcingOrchestrator:
             return bool(ready_items)
 
         recovery_stale_after_seconds = _coerce_int(payload.get("stale_after_seconds"), 180)
-        dead_local_recovery_lease_repair = _run_recovery_phase(
-            "dead_local_recovery_lease_repair",
-            owner="recovery_lease_repair",
-            max_sync_work="release leases held by dead local recovery owner processes only",
-            callback=lambda: self.repair_dead_local_recovery_leases(
-                {
-                    "job_id": str(payload.get("job_id") or "").strip(),
-                    "source": "run_worker_recovery_once_preflight",
-                    "limit": payload.get("dead_local_recovery_lease_repair_limit") or payload.get("total_limit") or 500,
-                }
-            ),
+        # Phase 4 Step 2 (A2): shared per-tick context + registry seam. Only the
+        # self-contained phases (constant owner, gating = pure predicate over
+        # already-settled state, no trailing threaded-local write the next phase
+        # consumes) and the 14-binding drain group run through this seam; the
+        # entangled cascade clusters stay inline below as named phase calls
+        # (their trailing *_work_observed / submit-observed / handoff-reason
+        # threading cannot move into ctx without changing the pinned phase
+        # records). See src/sourcing_agent/recovery_phases.py.
+        _tick_ctx = TickContext(
+            orchestrator=self,
+            payload=payload,
+            run_phase=_run_recovery_phase,
+            skipped_phase=_skipped_phase,
+            request_durable_work_handoff_yield=_request_durable_work_handoff_yield,
+            tick_budget_exhausted=_tick_budget_exhausted,
+            recovery_tick_elapsed_ms=_recovery_tick_elapsed_ms,
         )
-        if _coerce_bool(payload.get("search_seed_discovery_enabled"), True):
-            search_seed_discovery = _run_recovery_phase(
-                "search_seed_discovery",
-                owner="search_seed_discovery_query_queue",
-                max_sync_work="bounded durable search-seed discovery items only",
-                callback=lambda: self._run_search_seed_discovery_query_queue_once(payload),
-            )
-        else:
-            search_seed_discovery = _skipped_phase(
-                "search_seed_discovery",
-                owner="search_seed_discovery_query_queue",
-                reason="search_seed_discovery_disabled_by_payload",
-                max_sync_work="no search-seed discovery work",
-            )
+        dead_local_recovery_lease_repair = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="dead_local_recovery_lease_repair",
+                default_owner="recovery_lease_repair",
+                default_max_sync_work="release leases held by dead local recovery owner processes only",
+                guard=lambda ctx: True,
+                body=lambda ctx: ctx.run_phase(
+                    "dead_local_recovery_lease_repair",
+                    owner="recovery_lease_repair",
+                    max_sync_work="release leases held by dead local recovery owner processes only",
+                    callback=lambda: ctx.orchestrator.repair_dead_local_recovery_leases(
+                        {
+                            "job_id": str(ctx.payload.get("job_id") or "").strip(),
+                            "source": "run_worker_recovery_once_preflight",
+                            "limit": ctx.payload.get("dead_local_recovery_lease_repair_limit")
+                            or ctx.payload.get("total_limit")
+                            or 500,
+                        }
+                    ),
+                ),
+            ),
+            _tick_ctx,
+        )
+        search_seed_discovery = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="search_seed_discovery",
+                default_owner="search_seed_discovery_query_queue",
+                default_max_sync_work="bounded durable search-seed discovery items only",
+                guard=lambda ctx: (
+                    True
+                    if _coerce_bool(ctx.payload.get("search_seed_discovery_enabled"), True)
+                    else SkipDecision(
+                        reason="search_seed_discovery_disabled_by_payload",
+                        max_sync_work="no search-seed discovery work",
+                    )
+                ),
+                body=lambda ctx: ctx.run_phase(
+                    "search_seed_discovery",
+                    owner="search_seed_discovery_query_queue",
+                    max_sync_work="bounded durable search-seed discovery items only",
+                    callback=lambda: ctx.orchestrator._run_search_seed_discovery_query_queue_once(ctx.payload),
+                ),
+            ),
+            _tick_ctx,
+        )
         search_seed_resume_skip_job_ids: set[str] = set()
         if not _coerce_bool(payload.get("search_seed_discovery_allow_same_tick_workflow_resume"), False):
             search_seed_resume_skip_job_ids = self._search_seed_discovery_resume_skip_job_ids(search_seed_discovery)
@@ -38724,30 +38768,41 @@ class SourcingOrchestrator:
                 resolved_harvest_profile_actor_global_inflight({}),
             ),
         )
-        if profile_refill_command_owner_enabled:
-            profile_refill_command_owner = _run_recovery_phase(
-                "profile_refill_command_owner",
-                owner="linkedin_profile_refill_command_owner",
-                max_sync_work=(
+        profile_refill_command_owner = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="profile_refill_command_owner",
+                default_owner="linkedin_profile_refill_command_owner",
+                default_max_sync_work=(
                     "claim and execute ready linkedin.profile_refill.submit_batch workflow_commands only; "
                     "scheduler phases may plan commands but provider submit belongs to this owner"
                 ),
-                callback=lambda: self.acquisition_engine.multi_source_enricher.drain_linkedin_profile_refill_submit_commands(
-                    workflow_run_id=legacy_job_workflow_run_id(explicit_job_id) if explicit_job_id else "",
-                    limit=profile_refill_command_owner_limit,
+                guard=lambda ctx, _enabled=profile_refill_command_owner_enabled: (
+                    True
+                    if _enabled
+                    else SkipDecision(
+                        reason=(
+                            "profile_refill_command_owner_disabled_by_payload"
+                            if not _enabled
+                            else "profile_prefetch_refill_disabled_by_payload"
+                        ),
+                        max_sync_work="no LinkedIn profile-refill command owner work",
+                    )
                 ),
-            )
-        else:
-            profile_refill_command_owner = _skipped_phase(
-                "profile_refill_command_owner",
-                owner="linkedin_profile_refill_command_owner",
-                reason=(
-                    "profile_refill_command_owner_disabled_by_payload"
-                    if not profile_refill_command_owner_enabled
-                    else "profile_prefetch_refill_disabled_by_payload"
+                body=lambda ctx, _limit=profile_refill_command_owner_limit, _job=explicit_job_id: ctx.run_phase(
+                    "profile_refill_command_owner",
+                    owner="linkedin_profile_refill_command_owner",
+                    max_sync_work=(
+                        "claim and execute ready linkedin.profile_refill.submit_batch workflow_commands only; "
+                        "scheduler phases may plan commands but provider submit belongs to this owner"
+                    ),
+                    callback=lambda: ctx.orchestrator.acquisition_engine.multi_source_enricher.drain_linkedin_profile_refill_submit_commands(
+                        workflow_run_id=legacy_job_workflow_run_id(_job) if _job else "",
+                        limit=_limit,
+                    ),
                 ),
-                max_sync_work="no LinkedIn profile-refill command owner work",
-            )
+            ),
+            _tick_ctx,
+        )
         profile_refill_submit_observed_this_tick = (
             profile_refill_submit_observed_this_tick
             or _profile_refill_worker_submit_observed(profile_refill_command_owner)
@@ -38756,49 +38811,71 @@ class SourcingOrchestrator:
             payload.get("profile_url_terminal_record_command_owner_limit"),
             _env_int("LINKEDIN_PROFILE_URL_TERMINAL_RECORD_COMMAND_OWNER_LIMIT", 50),
         )
-        if profile_url_terminal_record_command_owner_enabled:
-            profile_url_terminal_record_command_owner = _run_recovery_phase(
-                "profile_url_terminal_record_command_owner",
-                owner="linkedin_profile_url_terminal_record_command_owner",
-                max_sync_work=(
+        profile_url_terminal_record_command_owner = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="profile_url_terminal_record_command_owner",
+                default_owner="linkedin_profile_url_terminal_record_command_owner",
+                default_max_sync_work=(
                     "claim and execute ready linkedin.profile_url_terminal.record workflow_commands only; "
                     "profile workers plan URL terminal state, this owner writes linkedin_profile_registry"
                 ),
-                callback=lambda: self.acquisition_engine.multi_source_enricher.drain_linkedin_profile_url_terminal_record_commands(
-                    workflow_run_id=legacy_job_workflow_run_id(explicit_job_id) if explicit_job_id else "",
-                    limit=profile_url_terminal_record_command_owner_limit,
+                guard=lambda ctx, _enabled=profile_url_terminal_record_command_owner_enabled: (
+                    True
+                    if _enabled
+                    else SkipDecision(
+                        reason="profile_url_terminal_record_command_owner_disabled_by_payload",
+                        max_sync_work="no LinkedIn profile URL terminal-record command work",
+                    )
                 ),
-            )
-        else:
-            profile_url_terminal_record_command_owner = _skipped_phase(
-                "profile_url_terminal_record_command_owner",
-                owner="linkedin_profile_url_terminal_record_command_owner",
-                reason="profile_url_terminal_record_command_owner_disabled_by_payload",
-                max_sync_work="no LinkedIn profile URL terminal-record command work",
-            )
-        if explicit_job_id and _coerce_bool(payload.get("stage1_preview_recovery_enabled"), True):
-            stage1_preview_recovery = _run_recovery_phase(
-                "stage1_preview_recovery_bridge",
-                owner="workflow_preview_projection",
-                max_sync_work=(
+                body=lambda ctx, _limit=profile_url_terminal_record_command_owner_limit, _job=explicit_job_id: ctx.run_phase(
+                    "profile_url_terminal_record_command_owner",
+                    owner="linkedin_profile_url_terminal_record_command_owner",
+                    max_sync_work=(
+                        "claim and execute ready linkedin.profile_url_terminal.record workflow_commands only; "
+                        "profile workers plan URL terminal state, this owner writes linkedin_profile_registry"
+                    ),
+                    callback=lambda: ctx.orchestrator.acquisition_engine.multi_source_enricher.drain_linkedin_profile_url_terminal_record_commands(
+                        workflow_run_id=legacy_job_workflow_run_id(_job) if _job else "",
+                        limit=_limit,
+                    ),
+                ),
+            ),
+            _tick_ctx,
+        )
+        stage1_preview_recovery = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="stage1_preview_recovery_bridge",
+                default_owner="workflow_preview_projection",
+                default_max_sync_work=(
                     "publish Stage 1 deterministic preview from terminal lane evidence only; "
                     "does not resume finalization or drain post-profile queues"
                 ),
-                callback=lambda: self._publish_stage1_preview_for_terminal_linkedin_stage_if_ready(
-                    explicit_job_id
+                guard=lambda ctx, _job=explicit_job_id: (
+                    True
+                    if _job and _coerce_bool(ctx.payload.get("stage1_preview_recovery_enabled"), True)
+                    else SkipDecision(
+                        reason=(
+                            "stage1_preview_recovery_disabled_by_payload"
+                            if _job
+                            else "job_scope_missing"
+                        ),
+                        max_sync_work="no Stage 1 preview recovery bridge",
+                    )
                 ),
-            )
-        else:
-            stage1_preview_recovery = _skipped_phase(
-                "stage1_preview_recovery_bridge",
-                owner="workflow_preview_projection",
-                reason=(
-                    "stage1_preview_recovery_disabled_by_payload"
-                    if explicit_job_id
-                    else "job_scope_missing"
+                body=lambda ctx, _job=explicit_job_id: ctx.run_phase(
+                    "stage1_preview_recovery_bridge",
+                    owner="workflow_preview_projection",
+                    max_sync_work=(
+                        "publish Stage 1 deterministic preview from terminal lane evidence only; "
+                        "does not resume finalization or drain post-profile queues"
+                    ),
+                    callback=lambda: ctx.orchestrator._publish_stage1_preview_for_terminal_linkedin_stage_if_ready(
+                        _job
+                    ),
                 ),
-                max_sync_work="no Stage 1 preview recovery bridge",
-            )
+            ),
+            _tick_ctx,
+        )
         provider_control_open_work: dict[str, Any] = {}
         profile_refill_event_level_materialization_followup = {"status": "skipped", "reason": "job_scope_missing"}
         profile_refill_work_observed = _phase_work_observed(profile_prefetch_refill)
@@ -38948,28 +39025,39 @@ class SourcingOrchestrator:
             )
         local_apply_backlog_work_observed = _phase_work_observed(local_apply_backlog)
         legacy_materialization_adapter_enabled = _legacy_materialization_adapter_enabled_for_payload(payload)
-        if legacy_materialization_adapter_enabled:
-            legacy_materialization_adapter = _run_recovery_phase(
-                "legacy_materialization_adapter",
-                owner="durable_runtime_migration_adapter",
-                max_sync_work=(
+        legacy_materialization_adapter = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="legacy_materialization_adapter",
+                default_owner="durable_runtime_migration_adapter",
+                default_max_sync_work=(
                     "plan reducer-owned workflow_commands from selected in-flight/historical "
                     "job_materialization_items after typed local-apply owner drain; typed owners execute on a later tick"
                 ),
-                callback=lambda: self.convert_legacy_job_materialization_items_to_workflow_commands(
-                    {
-                        **payload,
-                        "limit": payload.get("legacy_materialization_adapter_limit") or 100,
-                    }
+                guard=lambda ctx, _enabled=legacy_materialization_adapter_enabled: (
+                    True
+                    if _enabled
+                    else SkipDecision(
+                        reason="legacy_materialization_adapter_disabled_after_w6_signoff",
+                        max_sync_work="legacy materialization adapter requires explicit historical migration opt-in",
+                    )
                 ),
-            )
-        else:
-            legacy_materialization_adapter = _skipped_phase(
-                "legacy_materialization_adapter",
-                owner="durable_runtime_migration_adapter",
-                reason="legacy_materialization_adapter_disabled_after_w6_signoff",
-                max_sync_work="legacy materialization adapter requires explicit historical migration opt-in",
-            )
+                body=lambda ctx: ctx.run_phase(
+                    "legacy_materialization_adapter",
+                    owner="durable_runtime_migration_adapter",
+                    max_sync_work=(
+                        "plan reducer-owned workflow_commands from selected in-flight/historical "
+                        "job_materialization_items after typed local-apply owner drain; typed owners execute on a later tick"
+                    ),
+                    callback=lambda: ctx.orchestrator.convert_legacy_job_materialization_items_to_workflow_commands(
+                        {
+                            **ctx.payload,
+                            "limit": ctx.payload.get("legacy_materialization_adapter_limit") or 100,
+                        }
+                    ),
+                ),
+            ),
+            _tick_ctx,
+        )
         legacy_materialization_adapter_work_observed = _phase_work_observed(legacy_materialization_adapter)
         event_level_materialization_followup = {"status": "skipped", "reason": "job_scope_missing"}
         if (
@@ -39202,20 +39290,28 @@ class SourcingOrchestrator:
                     else "no completed-workflow reconcile work"
                 ),
             )
-        if _coerce_bool(payload.get("excel_intake_recovery_enabled"), True):
-            excel_intake_recovery = _run_recovery_phase(
-                "excel_intake_recovery",
-                owner="excel_intake_recovery",
-                max_sync_work="bounded stale Excel intake recovery only",
-                callback=lambda: self._recover_stale_excel_intake_jobs_once(payload),
-            )
-        else:
-            excel_intake_recovery = _skipped_phase(
-                "excel_intake_recovery",
-                owner="excel_intake_recovery",
-                reason="excel_intake_recovery_disabled_by_payload",
-                max_sync_work="no Excel intake recovery work",
-            )
+        excel_intake_recovery = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="excel_intake_recovery",
+                default_owner="excel_intake_recovery",
+                default_max_sync_work="bounded stale Excel intake recovery only",
+                guard=lambda ctx: (
+                    True
+                    if _coerce_bool(ctx.payload.get("excel_intake_recovery_enabled"), True)
+                    else SkipDecision(
+                        reason="excel_intake_recovery_disabled_by_payload",
+                        max_sync_work="no Excel intake recovery work",
+                    )
+                ),
+                body=lambda ctx: ctx.run_phase(
+                    "excel_intake_recovery",
+                    owner="excel_intake_recovery",
+                    max_sync_work="bounded stale Excel intake recovery only",
+                    callback=lambda: ctx.orchestrator._recover_stale_excel_intake_jobs_once(ctx.payload),
+                ),
+            ),
+            _tick_ctx,
+        )
         if _coerce_bool(payload.get("crm_public_web_queue_batch_enabled"), True):
             crm_public_web_queue_batch = _run_recovery_phase(
                 "crm_public_web_queue_batch",
@@ -39244,22 +39340,21 @@ class SourcingOrchestrator:
                 reason="crm_public_web_phase_commands_disabled_by_payload",
                 max_sync_work="no CRM Public Web phase command work",
             )
+        # Phase 4 Step 2 (A2): the 14 uniform drains flow through the shared
+        # recovery-phase registry loop as a phase-group (one RecoveryPhase per
+        # binding), preserving binding order, the payload-flag gate, the
+        # getattr(self, drain_method)(payload) call, and the per-binding skip
+        # record. The 2 CRM pinned drains above (crm_public_web_*) stay named
+        # inline calls (guardrail-pinned literal source); the crm_writer
+        # binding's summary-invisibility (include_in_result=False) is preserved
+        # by the result-projection comprehensions below.
         registry_drain_results: dict[str, dict[str, Any]] = {}
-        for drain_binding in self._recovery_drain_registry:
-            if _coerce_bool(payload.get(drain_binding.payload_flag), True):
-                registry_drain_results[drain_binding.phase] = _run_recovery_phase(
-                    drain_binding.phase,
-                    owner=drain_binding.owner,
-                    max_sync_work=drain_binding.max_sync_work,
-                    callback=lambda _drain_method=drain_binding.drain_method: getattr(self, _drain_method)(payload),
-                )
-            else:
-                registry_drain_results[drain_binding.phase] = _skipped_phase(
-                    drain_binding.phase,
-                    owner=drain_binding.owner,
-                    reason=drain_binding.disabled_reason,
-                    max_sync_work=drain_binding.skipped_max_sync_work,
-                )
+        for _drain_phase in build_recovery_phase_registry(
+            build_drain_group_phases(self._recovery_drain_registry)
+        ):
+            registry_drain_results[_drain_phase.name] = run_registry_phase(
+                _drain_phase, _tick_ctx
+            )
         if same_tick_visibility_handoff_required:
             board_visible_apply = _skipped_phase(
                 "board_visible_apply",
