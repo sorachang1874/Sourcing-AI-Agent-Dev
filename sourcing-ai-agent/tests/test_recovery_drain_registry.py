@@ -180,6 +180,16 @@ CHARACTERIZED_DRAIN_PHASES: tuple[CharacterizedDrainPhase, ...] = (
         "serving_projection_owner",
         True,
     ),
+    # C1: export.projection.generate worker drain (additive binding before
+    # crm_writer); summary-visible like the other registry drains.
+    CharacterizedDrainPhase(
+        "export_projection_generate_command_owner",
+        "export_projection_generate_command_owner_enabled",
+        "_drain_export_projection_generate_commands",
+        "export_projection_generate_command_owner_disabled_by_payload",
+        "projection_exporter",
+        True,
+    ),
     # Executed and metered like every other drain, but its result is
     # intentionally absent from the returned recovery summary and from the
     # tick-level phase-budget scan (audited pre-registry behavior).

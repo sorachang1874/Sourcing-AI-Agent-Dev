@@ -105,6 +105,9 @@ CHARACTERIZED_PHASE_SEQUENCE: tuple[tuple[str, str], ...] = (
     ("operation_native_discovery_activity_owner", "linkedin_acquisition_owner"),
     ("operation_native_profile_fetch_activity_owner", "linkedin_profile_activity_owner"),
     ("operation_native_projection_admission_owner", "serving_projection_owner"),
+    # C1: export.projection.generate moved off the request thread onto the worker
+    # drain (additive registry binding before crm_writer).
+    ("export_projection_generate_command_owner", "projection_exporter"),
     # crm_writer_command_owner is metered here but intentionally absent from the
     # returned summary (the only summary-invisible drain) — pinned below.
     ("crm_writer_command_owner", "crm_writer"),

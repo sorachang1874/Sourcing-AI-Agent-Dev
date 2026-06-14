@@ -49889,6 +49889,70 @@ class SourcingOrchestrator:
             "items": results,
         }
 
+    def _drain_export_projection_generate_commands(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Worker-tick drain for ready export.projection.generate commands.
+
+        C1 (substrate-unify): the projection export build moves out of the request
+        thread onto the durable worker. The request path enqueues the command and
+        returns 202; this drain claims and runs each ready command via the existing
+        _run_projection_export_generate_command (which builds the archive, publishes
+        the artifact atomically, and marks the command succeeded). Mirrors the
+        media/acquisition drains; idempotent re-runs short-circuit to the artifact.
+        """
+        payload = dict(payload or {})
+        if not _env_bool("EXPORT_PROJECTION_GENERATE_COMMAND_OWNER_ENABLED", True):
+            return {
+                "status": "skipped",
+                "reason": "export_projection_generate_command_owner_disabled",
+                "owner": EXPORT_PROJECTION_GENERATE_OWNER,
+                "command_count": 0,
+                "executed_command_count": 0,
+                "completed_count": 0,
+                "failed_count": 0,
+                "migration_phase": "W7_projection_export_command_owner",
+            }
+        workflow_run_id = str(payload.get("workflow_run_id") or "").strip()
+        limit = max(
+            1,
+            _coerce_int(
+                payload.get("command_limit") or payload.get("export_projection_generate_command_limit"),
+                4,
+            ),
+        )
+        ready_commands = self.store.list_ready_workflow_commands(
+            workflow_run_id=workflow_run_id,
+            owner=EXPORT_PROJECTION_GENERATE_OWNER,
+            command_type=EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
+            limit=limit,
+        )
+        results: list[dict[str, Any]] = []
+        completed_count = 0
+        failed_count = 0
+        for command in ready_commands:
+            result = self._run_projection_export_generate_command(dict(command))
+            results.append(result)
+            status = str(result.get("status") or "")
+            if status in {"ok", "succeeded", "completed"}:
+                completed_count += 1
+            elif status == "failed":
+                failed_count += 1
+        return {
+            "status": "active" if ready_commands else "idle",
+            "reason": (
+                "export_projection_generate_command_owner"
+                if ready_commands
+                else "no_ready_export_projection_generate_commands"
+            ),
+            "workflow_run_id": workflow_run_id,
+            "command_count": len(ready_commands),
+            "executed_command_count": len(results),
+            "completed_count": completed_count,
+            "failed_count": failed_count,
+            "owner": EXPORT_PROJECTION_GENERATE_OWNER,
+            "migration_phase": "W7_projection_export_command_owner",
+            "items": results,
+        }
+
     def compile_post_acquisition_refinement(self, payload: dict[str, Any]) -> dict[str, Any]:
         baseline_job = self._resolve_baseline_job_for_refinement(payload)
         if isinstance(baseline_job, dict) and baseline_job.get("status") in {"not_found", "invalid"}:
