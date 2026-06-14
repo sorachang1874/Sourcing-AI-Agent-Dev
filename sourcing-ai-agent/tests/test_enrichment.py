@@ -5545,26 +5545,40 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     priority=True,
                 )
 
+        # R1.b ("fewer larger envelopes"): the 180-url profile-search set now packs into a
+        # single durable-unit envelope dispatched by one worker, instead of the old 2-way
+        # 50-slot fan-out. The underuse semantics this test pins are re-derived against the
+        # new envelope count rather than deleted: provider-slot underuse is "idle actor
+        # slots WITH a deferred backlog", and a single complete envelope with zero deferral
+        # is correctly NOT flagged as underuse (no false positive), so the underuse count
+        # is 0 and no envelope carries an underuse reason.
         self.assertEqual(result["status"], "queued")
-        self.assertEqual(result["queued_worker_count"], 2)
-        self.assertGreater(int(result.get("deferred_url_count") or 0), 0)
+        self.assertEqual(result["queued_worker_count"], 1)
+        self.assertEqual(int(result.get("deferred_url_count") or 0), 0)
         envelopes = list(result.get("batch_envelopes") or [])
-        self.assertEqual(len(envelopes), 2)
-        self.assertEqual(result["provider_slot_underuse_with_backlog_count"], 2)
-        self.assertTrue(all(dict(item).get("provider_slot_underuse_with_backlog") for item in envelopes))
-        self.assertTrue(
-            all(str(dict(item).get("underuse_reason") or "") == "submit_budget_below_actor_budget" for item in envelopes)
-        )
+        self.assertEqual(len(envelopes), 1)
+        self.assertEqual(result["recommended_batch_size"], 180)
+        self.assertEqual(result["provider_slot_underuse_with_backlog_count"], 0)
+        self.assertFalse(any(dict(item).get("provider_slot_underuse_with_backlog") for item in envelopes))
+        self.assertTrue(all(str(dict(item).get("underuse_reason") or "") == "" for item in envelopes))
 
     def test_queue_background_profile_prefetch_reports_profile_queue_snapshot(self) -> None:
         class _Connector:
             settings = type("_Settings", (), {"enabled": True})()
 
+        # D2 (test-infra only): the new durable scheduler needs the full typed-command /
+        # refill-item-ownership surface to actually dispatch. The hand-written stub only
+        # modelled the two registry-shape rows this test cares about (one fetched/cached,
+        # one already-queued), so it never satisfied the durable-command writes and the
+        # plan never dispatched. We keep the bespoke registry-row injection but delegate
+        # every other method (workflow commands, activity runs, durable events, refill-item
+        # ownership) to a real PG store so the scheduler can form and own a wave.
         class _Store:
-            def __init__(self, cached_url: str, queued_url: str, raw_path: Path) -> None:
+            def __init__(self, cached_url: str, queued_url: str, raw_path: Path, backing) -> None:
                 self.cached_url = cached_url
                 self.queued_url = queued_url
                 self.raw_path = raw_path
+                self._backing = backing
 
             def get_linkedin_profile_registry_bulk(self, profile_urls):
                 rows = {}
@@ -5588,6 +5602,21 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             def upsert_linkedin_profile_registry_sources(self, *args, **kwargs):
                 return {}
 
+            def __getattr__(self, name):
+                # Delegate the durable typed-command / refill-item surface (and anything
+                # else the scheduler reaches for) to the backing PG store, EXCEPT the
+                # worker-state scan methods. The original hand-written stub exposed no
+                # worker-listing surface, so the partition logic took its conservative
+                # "cannot inspect worker state -> treat the queued row as already-active"
+                # path. Keep that surface absent so the already-queued row is still
+                # detected as already queued rather than reclaimed for a duplicate submit.
+                if name in {
+                    "list_agent_workers",
+                    "list_agent_workers_by_remote_provider_identifiers",
+                }:
+                    raise AttributeError(name)
+                return getattr(self.__dict__["_backing"], name)
+
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
             raw_path = root / "cached-profile.json"
@@ -5610,11 +5639,12 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 investor_scan_skill=root / "investor_skill.md",
                 onepager_skill=root / "onepager_skill.md",
             )
+            backing_store = self.make_pg_store(str(root / "control_plane.db"))
             enricher = MultiSourceEnricher(
                 catalog,
                 accounts=[],
                 harvest_profile_connector=_Connector(),
-                store=_Store(cached_url, queued_url, raw_path),
+                store=_Store(cached_url, queued_url, raw_path, backing_store),
             )
             enricher.worker_runtime = object()
             dispatched_chunks: list[list[str]] = []
@@ -6320,24 +6350,37 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 queue_items=queue_items,
             )
 
+        # The invariant this test pins is that per-item queue metadata (source shards,
+        # source jobs, priority, registry status) survives the budget split intact — on
+        # both the dispatched and the deferred side. Under the new contract a tiny/mocked
+        # window (batch_size=2) over a 105-url set floors to a single actor-slot envelope
+        # (R1.a) and a single available worker dispatches one 50-slot envelope while the
+        # remaining 55 defer as a worker-budget backlog (R5), instead of the old
+        # single-105-chunk. We re-derive the split counts but keep every metadata check.
         self.assertEqual(plan.queue_item_count, 105)
-        self.assertEqual(plan.planned_dispatch_item_count, 105)
-        self.assertEqual(plan.planned_deferred_item_count, 0)
-        self.assertEqual(plan.dispatch_specs, [(1, profile_urls)])
-        self.assertEqual(plan.deferred_urls, [])
+        self.assertEqual(plan.planned_dispatch_item_count, 50)
+        self.assertEqual(plan.planned_deferred_item_count, 55)
+        self.assertEqual(plan.dispatch_specs, [(1, profile_urls[:50])])
+        self.assertEqual(plan.deferred_urls, profile_urls[50:])
+        # Dispatched-side metadata preserved (item 0 carries shards + retryable status).
         self.assertEqual(plan.dispatch_item_specs[0][1][0].source_shards, ["openai::agent", "openai::infra"])
         self.assertEqual(plan.dispatch_item_specs[0][1][0].source_jobs, ["job_item_plan"])
         self.assertTrue(plan.dispatch_item_specs[0][1][0].priority)
         self.assertEqual(plan.dispatch_item_specs[0][1][0].registry_status, "failed_retryable")
-        self.assertEqual(plan.dispatch_item_specs[0][1][75].source_shards, ["openai::health"])
+        # Deferred-side metadata preserved (item 75, now in the deferred wave, keeps shards).
+        deferred_item_75 = next(item for item in plan.deferred_items if item.profile_url == profile_urls[75])
+        self.assertEqual(deferred_item_75.source_shards, ["openai::health"])
+        self.assertEqual(deferred_item_75.source_jobs, ["job_item_plan"])
+        self.assertTrue(deferred_item_75.priority)
         self.assertEqual(plan.to_record()["item_store"], "linkedin_profile_registry")
-        self.assertEqual(plan.to_record()["planned_deferred_item_count"], 0)
+        self.assertEqual(plan.to_record()["planned_deferred_item_count"], 55)
         self.assertEqual(plan.to_record()["planned_tail_coalescing_item_count"], 0)
+        self.assertEqual(plan.to_record()["planned_worker_budget_deferred_item_count"], 55)
         self.assertEqual(plan.to_record()["refill_policy"], "continuous_ready_item_refill")
         self.assertEqual(plan.to_record()["available_slot_count"], 1)
         self.assertEqual(plan.to_record()["planned_new_worker_count"], 1)
         self.assertEqual(plan.to_record()["unfilled_available_slot_count"], 0)
-        self.assertEqual(plan.to_record()["refill_saturation"], "filled_available_slots")
+        self.assertEqual(plan.to_record()["refill_saturation"], "worker_budget_saturated")
 
     def test_profile_prefetch_queue_items_preserve_registry_refill_state_for_replan(self) -> None:
         profile_urls = [f"https://www.linkedin.com/in/refill-state-{index}/" for index in range(24)]
@@ -7163,21 +7206,23 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 )
 
             nested_result = dict(nested_results[0])
-            head_entries = store.get_linkedin_profile_registry_bulk(profile_urls[:100])
-            tail_entries = store.get_linkedin_profile_registry_bulk(profile_urls[100:])
+            all_entries = store.get_linkedin_profile_registry_bulk(profile_urls)
 
-        self.assertEqual([len(chunk) for chunk in dispatched_chunks], [50, 50])
-        self.assertEqual(result["queued_worker_count"], 2)
-        self.assertEqual(result["deferred_url_count"], 15)
+        # R1.b ("fewer larger envelopes"): the 115-url wave now reserves into a single
+        # durable-unit envelope instead of the old 50+50 fan-out with a 15-item
+        # deferred_coalescing tail. The invariant this test pins — same-wave URLs are
+        # reserved before submit so a concurrent replan cannot re-dispatch them — is
+        # preserved: the whole wave reaches planned_dispatch, and the nested replan over
+        # the identical URL set sees all 115 already reserved and dispatches nothing.
+        self.assertEqual([len(chunk) for chunk in dispatched_chunks], [115])
+        self.assertEqual(result["queued_worker_count"], 1)
+        self.assertEqual(result["deferred_url_count"], 0)
         self.assertEqual(nested_result["dispatched_url_count"], 0)
         nested_queue = dict(nested_result.get("profile_prefetch_queue") or {})
-        self.assertEqual(nested_queue["already_queued_url_count"], 100)
-        self.assertEqual(nested_result["deferred_url_count"], 15)
+        self.assertEqual(nested_queue["already_queued_url_count"], 115)
+        self.assertEqual(nested_result["queued_worker_count"], 0)
         self.assertTrue(
-            all(str(entry.get("refill_queue_state") or "") == "planned_dispatch" for entry in head_entries.values())
-        )
-        self.assertTrue(
-            all(str(entry.get("refill_queue_state") or "") == "deferred_coalescing" for entry in tail_entries.values())
+            all(str(entry.get("refill_queue_state") or "") == "planned_dispatch" for entry in all_entries.values())
         )
 
     def test_profile_prefetch_reserved_url_requires_matching_payload_hash_to_dispatch(self) -> None:
@@ -7506,13 +7551,19 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             nested_result = dict(nested_results[0])
             nested_queue = dict(nested_result.get("profile_prefetch_queue") or {})
 
-        self.assertEqual([len(chunk) for chunk in dispatched_chunks], [50, 50, 50, 50])
-        self.assertEqual(result["queued_worker_count"], 4)
-        self.assertEqual(result["deferred_url_count"], 23)
-        self.assertEqual(nested_result["dispatched_url_count"], 0)
-        self.assertEqual(nested_result["queued_worker_count"], 0)
-        self.assertEqual(nested_queue["scheduler_reserved_worker_count"], 4)
-        self.assertEqual(nested_queue["available_new_worker_count"], 0)
+        # R1.b ("fewer larger envelopes"): each wave now packs into a single
+        # provider/durable envelope (223 current, then 74 former) instead of the old
+        # per-50-slot fan-out. The reserved-actor-budget invariant is unchanged and is
+        # what this test pins: the nested replan must see the slot the outer wave already
+        # holds in flight (scheduler_reserved_worker_count=1) and dispatch only against the
+        # remaining slots — it must never re-consume the reserved slot.
+        self.assertEqual([len(chunk) for chunk in dispatched_chunks], [223, 74])
+        self.assertEqual(result["queued_worker_count"], 1)
+        self.assertEqual(result["deferred_url_count"], 0)
+        self.assertEqual(nested_result["dispatched_url_count"], 74)
+        self.assertEqual(nested_result["queued_worker_count"], 1)
+        self.assertEqual(nested_queue["scheduler_reserved_worker_count"], 1)
+        self.assertEqual(nested_queue["available_new_worker_count"], 3)
 
     def test_queue_background_profile_prefetch_revalidates_owned_urls_inside_scheduler_lock(self) -> None:
         class _Connector:
@@ -7838,10 +7889,15 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 dispatch_window=window,
             )
 
-        self.assertEqual(window["batch_size"], 200)
-        self.assertEqual(window["batch_count"], 8)
-        self.assertEqual([len(chunk) for _, chunk in plan.dispatch_specs], [200, 200, 200, 200])
-        self.assertEqual(len(plan.deferred_urls), 800)
+        # R1.c (balanced provider envelopes, decoupled from the 200 durable-unit cap):
+        # ceil(1600/300)=6 balanced envelopes of max(50,min(300,ceil(1600/6)))=267 each,
+        # replacing the old 200-cap 8-way split. available_new_worker_count=4 dispatches
+        # the first four 267 envelopes; the remaining two (1600-4*267=532) defer.
+        self.assertEqual(window["batch_size"], 267)
+        self.assertEqual(window["batch_count"], 6)
+        self.assertEqual(window["batch_size_reason"], "large_ready_set_provider_envelope_target")
+        self.assertEqual([len(chunk) for _, chunk in plan.dispatch_specs], [267, 267, 267, 267])
+        self.assertEqual(len(plan.deferred_urls), 1600 - 4 * 267)
 
     def test_profile_prefetch_batch_envelope_completed_zero_dispatch_is_not_slot_underuse(self) -> None:
         envelope = _build_profile_prefetch_batch_envelope(
@@ -10469,9 +10525,12 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             )
 
         self.assertEqual(window["strategy"], "actor_slot_item_packing_scripted_prefetch_window")
-        self.assertEqual(window["batch_size"], 124)
-        self.assertEqual(window["batch_count"], 2)
-        self.assertEqual(window["max_workers"], 2)
+        # R1.b ("fewer larger envelopes"): a 51..provider-cap profile-search tail packs into
+        # a single durable-unit envelope rather than the old 124x2 half-split.
+        self.assertEqual(window["batch_size"], 247)
+        self.assertEqual(window["batch_count"], 1)
+        self.assertEqual(window["max_workers"], 1)
+        self.assertEqual(window["batch_size_reason"], "single_durable_unit_ready_set")
 
     def test_enrich_full_roster_prefetch_uses_canonical_scheduler_without_tiny_parallel_submit(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
