@@ -60209,6 +60209,7 @@ class SourcingOrchestrator:
                 queued_stale_after_seconds=0,
                 queued_resume_limit=1,
             )
+            resume_had_retryable_failure = False
             for item in resumed:
                 if isinstance(item, dict):
                     enriched = dict(item)
@@ -60217,8 +60218,24 @@ class SourcingOrchestrator:
                         dict(intent or {}).get("classification") or ""
                     )
                     results.append(enriched)
+                    if str(enriched.get("status") or "").strip() == "takeover_failed":
+                        resume_had_retryable_failure = True
+            if resume_had_retryable_failure:
+                # A transient takeover_failed must NOT consume the intent — leave
+                # the claim's lease to expire so the immediate-takeover intent is
+                # re-claimed and retried next tick (resume is idempotent on
+                # durable job state). Consuming here would lose the intent and
+                # drop the job back to the generic default-stale window.
+                continue
             try:
-                self.store.mark_workflow_recovery_intent_consumed(job_id)
+                # Consume only the row THIS daemon claimed (identity = lease_owner
+                # + claimed_at), so a newer upsert that re-armed the row between
+                # claim and consume is not clobbered.
+                self.store.mark_workflow_recovery_intent_consumed(
+                    job_id,
+                    lease_owner=lease_owner,
+                    claimed_at=str(dict(intent or {}).get("claimed_at") or ""),
+                )
             except Exception:
                 # Leave the lease to expire and be re-claimed; resume is keyed on
                 # durable job state so a re-claim is idempotent.

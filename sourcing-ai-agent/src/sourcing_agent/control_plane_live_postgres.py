@@ -2911,12 +2911,18 @@ class LiveControlPlanePostgresAdapter:
                     raise
                 time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
-    def mark_workflow_recovery_intent_consumed(self, job_id: str) -> dict[str, Any] | None:
+    def mark_workflow_recovery_intent_consumed(
+        self, job_id: str, lease_owner: str = "", claimed_at: str = ""
+    ) -> dict[str, Any] | None:
         if not self.should_prefer_read("workflow_recovery_intents"):
             return None
         normalized_job_id = str(job_id or "").strip()
         if not normalized_job_id:
             return None
+        # Claim-identity-scoped consume: only the row this daemon actually
+        # claimed. A newer upsert that re-armed the row to 'pending' between
+        # claim and consume changes status/lease_owner/claimed_at, so this
+        # UPDATE matches nothing and the fresh same-job intent survives.
         return self._execute_returning_one(
             """
             UPDATE workflow_recovery_intents
@@ -2925,9 +2931,17 @@ class LiveControlPlanePostgresAdapter:
                 lease_expires_at = '',
                 updated_at = %s
             WHERE job_id = %s
+              AND status = 'claimed'
+              AND lease_owner = %s
+              AND claimed_at = %s
             RETURNING *
             """,
-            (_utc_now_sql_timestamp(), normalized_job_id),
+            (
+                _utc_now_sql_timestamp(),
+                normalized_job_id,
+                str(lease_owner or "").strip(),
+                str(claimed_at or "").strip(),
+            ),
         )
 
     def append_workflow_event(self, row: dict[str, Any] | None) -> dict[str, Any] | None:

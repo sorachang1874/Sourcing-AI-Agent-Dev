@@ -491,6 +491,84 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertTrue(scoped_zero_stale, "drain phase must invoke a scoped stale=0 resume")
         self.assertTrue(generic_default, "generic resume phase must keep default unscoped 60s settings")
 
+    # =====================================================================
+    # Claim/consume lifecycle (Option B NO-GO fixes)
+    # =====================================================================
+
+    def test_consume_is_claim_identity_scoped_and_does_not_clobber_a_newer_intent(self) -> None:
+        # NO-GO finding 1 (stale-claim clobber): a daemon claims intent v1, then a
+        # NEWER same-job intent v2 is upserted (re-arming the row to 'pending')
+        # before the daemon consumes. mark_workflow_recovery_intent_consumed must
+        # match the CLAIM identity (lease_owner + claimed_at), so the stale
+        # consume is a no-op and v2 survives as pending for the next drain.
+        job_id = "job_consume_identity"
+        self._save_queued_workflow(job_id)
+        self.store.upsert_workflow_recovery_intent(
+            job_id,
+            classification="runner_not_alive",
+            params={"workflow_stale_scope_job_id": job_id, "generation": "v1"},
+            requested_by="progress_poll",
+        )
+        claimed = self.store.claim_workflow_recovery_intents(
+            lease_owner="daemon-A", lease_seconds=120, limit=10
+        )
+        self.assertEqual(len(claimed), 1)
+        claim_owner = str(claimed[0].get("lease_owner") or "")
+        claim_claimed_at = str(claimed[0].get("claimed_at") or "")
+        self.assertEqual(claim_owner, "daemon-A")
+        self.assertTrue(claim_claimed_at)
+
+        # A newer same-job intent arrives between claim and consume → re-armed pending.
+        self.store.upsert_workflow_recovery_intent(
+            job_id,
+            classification="runner_not_alive",
+            params={"workflow_stale_scope_job_id": job_id, "generation": "v2"},
+            requested_by="progress_poll",
+        )
+        self.assertEqual(self.store.get_workflow_recovery_intent(job_id).get("status"), "pending")
+
+        # The stale claim's consume must NOT clobber v2.
+        self.store.mark_workflow_recovery_intent_consumed(
+            job_id, lease_owner=claim_owner, claimed_at=claim_claimed_at
+        )
+        survived = self.store.get_workflow_recovery_intent(job_id)
+        self.assertEqual(survived.get("status"), "pending")
+        self.assertEqual(dict(survived.get("params") or {}).get("generation"), "v2")
+        # The fresh intent is re-claimable.
+        reclaimed = self.store.claim_workflow_recovery_intents(
+            lease_owner="daemon-B", lease_seconds=120, limit=10
+        )
+        self.assertEqual([str(r.get("job_id") or "") for r in reclaimed], [job_id])
+
+    def test_drain_leaves_intent_for_retry_when_resume_fails(self) -> None:
+        # NO-GO finding 2 (consume-on-failure): a transient takeover_failed must
+        # NOT consume the intent — the drain leaves the claim's lease to expire so
+        # the immediate-takeover intent is re-claimed and retried next tick,
+        # instead of dropping the job to the generic default-stale window.
+        job_id = "job_resume_fails_retry"
+        self._save_queued_workflow(job_id)
+        self.store.upsert_workflow_recovery_intent(
+            job_id,
+            classification="runner_not_alive",
+            params={"workflow_stale_scope_job_id": job_id},
+            requested_by="progress_poll",
+        )
+
+        def _failing_resume(summary: object, **kwargs: object) -> list:
+            return [{"status": "takeover_failed", "job_id": job_id, "reason": "dispatch_raced"}]
+
+        with mock.patch.object(
+            self.orchestrator, "_resume_blocked_workflows_after_recovery", side_effect=_failing_resume
+        ):
+            result = self.orchestrator._drain_workflow_takeover_intents(  # noqa: SLF001
+                {"jobs": []}, payload={}
+            )
+
+        # The intent was NOT consumed; it stays claimed with its lease so it is
+        # re-claimable once the lease expires (retryable), not lost.
+        self.assertTrue(any(str(item.get("status") or "") == "takeover_failed" for item in result))
+        self.assertNotEqual(self.store.get_workflow_recovery_intent(job_id).get("status"), "consumed")
+
     # -- internal: join the takeover's spawned no-op thread deterministically ----
 
     def _join_takeover_thread(self, job_id: str) -> None:

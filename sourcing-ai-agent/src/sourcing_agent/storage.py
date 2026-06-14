@@ -13074,20 +13074,31 @@ class ControlPlaneStore:
             self._mirror_control_plane_row("workflow_recovery_intents", row)
         return [self._workflow_recovery_intent_from_row(row) for row in claimed]
 
-    def mark_workflow_recovery_intent_consumed(self, job_id: str) -> dict[str, Any]:
+    def mark_workflow_recovery_intent_consumed(
+        self, job_id: str, *, lease_owner: str = "", claimed_at: str = ""
+    ) -> dict[str, Any]:
         normalized_job_id = str(job_id or "").strip()
         if not normalized_job_id:
             return {}
+        normalized_lease_owner = str(lease_owner or "").strip()
+        normalized_claimed_at = str(claimed_at or "").strip()
         if self._control_plane_postgres_should_prefer_read("workflow_recovery_intents"):
             row = self._call_control_plane_postgres_native(
                 "mark_workflow_recovery_intent_consumed",
                 normalized_job_id,
+                normalized_lease_owner,
+                normalized_claimed_at,
             )
             if row is not None:
                 return self._workflow_recovery_intent_from_row(row)
             if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_recovery_intents"):
                 return {}
         with self._lock, self._connection:
+            # Consume only the exact row this daemon claimed (status='claimed'
+            # AND lease_owner AND claimed_at). If a newer upsert re-armed the row
+            # to 'pending' between claim and consume, this UPDATE matches nothing
+            # and the fresh intent survives for the next drain (no stale-claim
+            # clobber of a newer same-job intent).
             self._connection.execute(
                 """
                 UPDATE workflow_recovery_intents
@@ -13096,8 +13107,11 @@ class ControlPlaneStore:
                     lease_expires_at = '',
                     updated_at = ?
                 WHERE job_id = ?
+                  AND status = 'claimed'
+                  AND lease_owner = ?
+                  AND claimed_at = ?
                 """,
-                (_utc_now_timestamp(), normalized_job_id),
+                (_utc_now_timestamp(), normalized_job_id, normalized_lease_owner, normalized_claimed_at),
             )
             row = self._connection.execute(
                 "SELECT * FROM workflow_recovery_intents WHERE job_id = ? LIMIT 1",
