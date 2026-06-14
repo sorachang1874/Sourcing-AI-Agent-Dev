@@ -105,7 +105,10 @@
 
 **C1.3 实际作用域**：live api.py 路由删除 + live frontend-demo 死代码删除 + live 测试更新；contracts/ 参考 SDK 刷新 → C4。
 
-**target-candidates export 处置细化**：不做裸 route 删除（裸 404 丢失 `canonical_export_path` 重定向提示），而是**转纯 410 GONE tombstone**（移除 `_legacy_target_candidate_export_allowed()` env 逃生阀 + 删 legacy `export_target_candidates_archive`），对齐既有 `post_target_public_web_export_gone` 模式。默认（非 legacy-flag）可观察契约 410+payload **不变**（characterize-first 测试保持绿），删除的只是无人用的 env-gated 真导出双轨——「删 legacy 双轨」的实质达成，且对 straggler 更友好。
+**target-candidates export 处置 —— 改为 DEFER（2026-06-15 深查后修正）**：原计划「DELETE（GONE 已门控）」假设它是死代码。深查发现 `_legacy_target_candidate_export_allowed()` 的 env 逃生阀（`SOURCING_ALLOW_LEGACY_TARGET_CANDIDATE_EXPORT`）**不是死代码，而是一个有意保留、有契约、有测试的迁移 affordance**：
+- `tests/test_pre_agent_contract_review.py`（governance）把该 env flag 与 `_legacy_target_candidate_export_allowed` 断言进 **migration-only env inventory**（contract-visible 要求）；
+- `tests/test_results_api.py:15097+/15396+` 设 flag=1 **实测 legacy 真导出（200）路径**。
+默认（flag 未设）已返回 410 GONE tombstone（含 `canonical_export_path` 重定向）——**生产零 serving 成本**。移除逃生阀 + 删 `export_target_candidates_archive`（唯一 caller 是该 route）会改动 governance 迁移契约 + 两个 migration 测试，属**迁移 cutover 决策，非 C1 serving 清理**。按 deep-context 原则（目标若非计划所设想的「死/冗余」则重新评估），**defer 到迁移 cutover 里程碑**（cutover 完成、affordance 可证不需要时一并删 flag/inventory/tests/method）。characterize-first 的 410 断言不受影响（默认行为不变）。C1.3 实际交付 = `/api/plan` + `/api/jobs` 两条同步 serving 路由删除（c92e5fe）。
 
 **Owner 决策点**：
 - (a) **导出 download UX 时机**：建议 plan/jobs/target 删除（§子步2-4，零前端摩擦）**立即切**；两导出的 202+poll+download **稍后灰度**（需前端新交互）——与 Track C plan §4(c) 分端点灰度一致。是否接受导出晚于其余落地？
