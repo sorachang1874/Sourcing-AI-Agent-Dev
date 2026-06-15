@@ -22,10 +22,15 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Minimal Dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install \
+            "fastapi>=0.136,<0.137" \
+            "uvicorn>=0.49,<0.50" \
+            "psycopg[binary]>=3.2,<3.3" \
+            "psycopg-pool>=3.2,<3.4" \
+            "requests>=2.33,<2.34"
 
       - name: Compile Python Sources
         run: |
@@ -33,6 +38,9 @@ jobs:
 
       - name: Run Unit Tests
         env:
-          PYTHONPATH: src
+          # src -> sourcing_agent package; . -> repo subdir so `scripts.*` and `tests.*` packages resolve.
+          # No live Postgres in CI: pg_store_fixture raises unittest.SkipTest (set
+          # SOURCING_REQUIRE_PG_STORE_TESTS=1 to turn those skips into hard failures).
+          PYTHONPATH: src:.
         run: |
           python -m unittest discover -s tests -q
