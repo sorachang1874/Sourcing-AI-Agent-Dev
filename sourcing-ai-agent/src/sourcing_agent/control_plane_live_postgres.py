@@ -3548,6 +3548,7 @@ class LiveControlPlanePostgresAdapter:
         *,
         lease_owner: str,
         lease_seconds: int = 300,
+        reclaim_claimed: bool = False,
     ) -> dict[str, Any] | None:
         if not self.should_prefer_read("workflow_commands"):
             return None
@@ -3557,8 +3558,18 @@ class LiveControlPlanePostgresAdapter:
         if not normalized_command_id or not normalized_owner:
             return None
         now = _utc_now_sql_timestamp()
+        # reclaim_claimed (opt-in, currently export-only) lets a new owner reclaim an
+        # expired-lease claim left by a worker that crashed before
+        # mark_workflow_command_running; the lease-expiry clause still protects
+        # active claims. Scoped pending general ownership-fencing hardening
+        # (docs/DURABLE_COMMAND_OWNERSHIP_FENCING.md).
+        claim_status_in = (
+            "('queued', 'retry_wait', 'running', 'claimed')"
+            if reclaim_claimed
+            else "('queued', 'retry_wait', 'running')"
+        )
         return self._execute_returning_one(
-            """
+            f"""
             UPDATE workflow_commands
             SET status = 'claimed',
                 lease_owner = %s,
@@ -3567,10 +3578,7 @@ class LiveControlPlanePostgresAdapter:
                 heartbeat_at = %s,
                 updated_at = %s
             WHERE command_id = %s
-              -- 'claimed' lets a new owner reclaim an expired-lease claim left by a
-              -- worker that crashed before mark_workflow_command_running; the
-              -- lease-expiry clause below still protects active claims.
-              AND status IN ('queued', 'retry_wait', 'running', 'claimed')
+              AND status IN {claim_status_in}
               AND (not_before_at = '' OR not_before_at <= %s)
               AND (lease_expires_at = '' OR lease_expires_at <= %s)
             RETURNING *

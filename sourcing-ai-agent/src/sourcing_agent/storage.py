@@ -15024,24 +15024,34 @@ class ControlPlaneStore:
         owner: str = "",
         command_type: str = "",
         limit: int = 100,
+        reclaim_claimed: bool = False,
     ) -> list[dict[str, Any]]:
         self._require_postgres_for_durable_runtime("workflow_commands")
         normalized_run_id = str(workflow_run_id or "").strip()
         normalized_owner = str(owner or "").strip()
         normalized_type = str(command_type or "").strip()
         now = _utc_now_timestamp()
-        # 'claimed' is included so an expired-lease claimed row (a worker that
-        # crashed between claim_workflow_command and mark_workflow_command_running)
-        # is reclaimable — the trailing lease-expiry clause excludes still-active
-        # claims, mirroring how 'running' is reclaimed only once its lease lapses.
+        # reclaim_claimed (opt-in) additionally surfaces an expired-lease 'claimed'
+        # row — a worker that crashed between claim_workflow_command and
+        # mark_workflow_command_running. The trailing lease-expiry clause still
+        # excludes still-active claims (mirroring how 'running' is reclaimed only
+        # once its lease lapses). SCOPED to idempotent export commands until the
+        # general ownership-fencing hardening (docs/DURABLE_COMMAND_OWNERSHIP_FENCING.md)
+        # makes reclaim universally safe against a stalled original claimant
+        # resuming; non-export callers keep the original queued/retry_wait/running set.
+        ready_status_in = (
+            "status IN ('queued', 'retry_wait', 'running', 'claimed')"
+            if reclaim_claimed
+            else "status IN ('queued', 'retry_wait', 'running')"
+        )
         clauses = [
-            "status IN ('queued', 'retry_wait', 'running', 'claimed')",
+            ready_status_in,
             "(not_before_at = '' OR datetime(not_before_at) <= datetime(?))",
             "(lease_expires_at = '' OR datetime(lease_expires_at) <= datetime(?))",
         ]
         params: list[Any] = [now, now]
         pg_clauses = [
-            "status IN ('queued', 'retry_wait', 'running', 'claimed')",
+            ready_status_in,
             "(not_before_at = '' OR not_before_at <= %s)",
             "(lease_expires_at = '' OR lease_expires_at <= %s)",
         ]
@@ -15090,6 +15100,7 @@ class ControlPlaneStore:
         *,
         lease_owner: str,
         lease_seconds: int = 300,
+        reclaim_claimed: bool = False,
     ) -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("workflow_commands")
         normalized_command_id = str(command_id or "").strip()
@@ -15102,11 +15113,21 @@ class ControlPlaneStore:
                 normalized_command_id,
                 lease_owner=normalized_owner,
                 lease_seconds=max(1, int(lease_seconds or 300)),
+                reclaim_claimed=bool(reclaim_claimed),
             )
             return self._workflow_command_from_row(row) if row is not None else {}
+        # reclaim_claimed (opt-in, currently export-only) lets a new owner reclaim an
+        # expired-lease claim left by a worker that crashed before
+        # mark_workflow_command_running; the lease-expiry clause still protects
+        # active claims. See list_ready_workflow_commands for the scoping rationale.
+        claim_status_in = (
+            "('queued', 'retry_wait', 'running', 'claimed')"
+            if reclaim_claimed
+            else "('queued', 'retry_wait', 'running')"
+        )
         with self._lock, self._connection:
             self._connection.execute(
-                """
+                f"""
                 UPDATE workflow_commands
                 SET status = 'claimed',
                     lease_owner = ?,
@@ -15115,10 +15136,7 @@ class ControlPlaneStore:
                     heartbeat_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE command_id = ?
-                  -- 'claimed' lets a new owner reclaim an expired-lease claim left
-                  -- by a worker that crashed before mark_workflow_command_running;
-                  -- the lease-expiry clause below still protects active claims.
-                  AND status IN ('queued', 'retry_wait', 'running', 'claimed')
+                  AND status IN {claim_status_in}
                   AND (not_before_at = '' OR datetime(not_before_at) <= datetime('now'))
                   AND (lease_expires_at = '' OR datetime(lease_expires_at) <= datetime('now'))
                 """,

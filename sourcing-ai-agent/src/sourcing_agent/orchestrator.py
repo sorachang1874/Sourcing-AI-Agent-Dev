@@ -28143,7 +28143,10 @@ class SourcingOrchestrator:
                 filename=str(result_payload.get("filename") or ""),
             )
         lease_owner = f"{EXPORT_PROJECTION_GENERATE_OWNER}-{uuid.uuid4().hex[:8]}"
-        claimed = self.store.claim_workflow_command(command_id, lease_owner=lease_owner, lease_seconds=600)
+        # Idempotent export build -> safe to reclaim an expired-lease 'claimed' row.
+        claimed = self.store.claim_workflow_command(
+            command_id, lease_owner=lease_owner, lease_seconds=600, reclaim_claimed=True
+        )
         if not claimed:
             latest = self.store.get_workflow_command(command_id) or command_payload
             if str(latest.get("status") or "").strip() == "succeeded":
@@ -49924,6 +49927,12 @@ class SourcingOrchestrator:
             owner=EXPORT_PROJECTION_GENERATE_OWNER,
             command_type=EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
             limit=limit,
+            # Export builds are idempotent (deterministic archive + atomic artifact),
+            # so reclaiming an expired-lease 'claimed' row (crashed between claim and
+            # mark_running) is safe even if the original claimant later resumes. See
+            # docs/DURABLE_COMMAND_OWNERSHIP_FENCING.md for the general (non-export)
+            # fencing hardening this scoping waits on.
+            reclaim_claimed=True,
         )
         results: list[dict[str, Any]] = []
         completed_count = 0

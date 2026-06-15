@@ -274,13 +274,26 @@ class RecoveryTickDrainCharacterizationTest(PGDurableRuntimeTestMixin, unittest.
         self._stop_pg_durable_runtime()
         self.tempdir.cleanup()
 
+    def _export_ready_ids(self, *, reclaim_claimed: bool) -> list[str]:
+        return [
+            str(c.get("command_id") or "")
+            for c in self.store.list_ready_workflow_commands(
+                owner=EXPORT_PROJECTION_GENERATE_OWNER,
+                command_type=EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
+                limit=10,
+                reclaim_claimed=reclaim_claimed,
+            )
+        ]
+
     def test_export_projection_drain_reclaims_expired_claimed_command(self) -> None:
-        """C1.4a review NO-GO fix: a worker that crashes between claim and
-        mark_workflow_command_running leaves the export command status='claimed'
-        with a lease that expires. list_ready_workflow_commands and
-        claim_workflow_command now include expired-claimed rows, so the worker
-        drain reclaims and runs it instead of stranding it forever; an active
-        (non-expired) claim stays single-winner protected.
+        """C1.4a review NO-GO fix (scoped to export): a worker that crashes between
+        claim and mark_workflow_command_running leaves the export command
+        status='claimed' with a lease that expires. The reclaim is opt-in
+        (reclaim_claimed) and currently export-only — export builds are idempotent
+        so a reclaim is safe even if the original claimant later resumes. The
+        export drain passes reclaim_claimed=True and reclaims the row; non-export
+        semantics are unchanged (default excludes 'claimed'); an active claim stays
+        single-winner protected. See docs/DURABLE_COMMAND_OWNERSHIP_FENCING.md.
         """
         planned = self.orchestrator._plan_projection_export_generate_command(
             {"projection_id": "proj_reclaim_test"}
@@ -295,18 +308,13 @@ class RecoveryTickDrainCharacterizationTest(PGDurableRuntimeTestMixin, unittest.
             "UPDATE workflow_commands SET lease_expires_at = %s WHERE command_id = %s",
             ("2000-01-01T00:00:00+00:00", command_id),
         )
-        # Storage fix: the expired-claimed row is now in the ready set.
-        ready_ids = [
-            str(c.get("command_id") or "")
-            for c in self.store.list_ready_workflow_commands(
-                owner=EXPORT_PROJECTION_GENERATE_OWNER,
-                command_type=EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
-                limit=10,
-            )
-        ]
-        self.assertIn(command_id, ready_ids)
-        # Drain fix: the export drain reclaims and runs it (no longer stranded);
-        # a NEW owner takes the lease (proves the dead claim was reclaimed).
+        # Scoping: WITHOUT the opt-in, an expired-claimed row is NOT surfaced
+        # (non-export command semantics are unchanged — no widened exposure).
+        self.assertNotIn(command_id, self._export_ready_ids(reclaim_claimed=False))
+        # Export opt-in: the expired-claimed row IS reclaimable.
+        self.assertIn(command_id, self._export_ready_ids(reclaim_claimed=True))
+        # Drain fix: the export drain (which opts in) reclaims and runs it; a NEW
+        # owner takes the lease (proves the dead claim was reclaimed).
         drained = self.orchestrator._drain_export_projection_generate_commands({})
         self.assertGreaterEqual(int(drained.get("command_count") or 0), 1)
         self.assertNotEqual(
@@ -314,21 +322,13 @@ class RecoveryTickDrainCharacterizationTest(PGDurableRuntimeTestMixin, unittest.
             "dead-worker",
         )
         # Active-claim protection: a freshly-claimed (non-expired) command is NOT
-        # reclaimable while its lease is valid (single-winner during the lease).
+        # reclaimable even with the opt-in (single-winner during the lease).
         planned2 = self.orchestrator._plan_projection_export_generate_command(
             {"projection_id": "proj_active_claim"}
         )
         command_id2 = str(planned2.get("command_id") or "")
         self.store.claim_workflow_command(command_id2, lease_owner="live-worker", lease_seconds=600)
-        active_ready_ids = [
-            str(c.get("command_id") or "")
-            for c in self.store.list_ready_workflow_commands(
-                owner=EXPORT_PROJECTION_GENERATE_OWNER,
-                command_type=EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
-                limit=10,
-            )
-        ]
-        self.assertNotIn(command_id2, active_ready_ids)
+        self.assertNotIn(command_id2, self._export_ready_ids(reclaim_claimed=True))
 
     def _install_drain_recorders(self) -> list[dict[str, Any]]:
         calls: list[dict[str, Any]] = []
