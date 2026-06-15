@@ -134,9 +134,7 @@ _CONTROL_PLANE_UNIQUE_INDEXES: dict[str, tuple[tuple[str, tuple[str, ...], str],
     ),
     # SQLite declares job_id UNIQUE on job_result_views and storage upserts with
     # ON CONFLICT(job_id); Postgres only carried the view_id primary key.
-    "job_result_views": (
-        ("idx_job_result_views_job_id_unique", ("job_id",), ""),
-    ),
+    "job_result_views": (("idx_job_result_views_job_id_unique", ("job_id",), ""),),
 }
 
 # Deterministic recency ranking used to keep the NEWEST row per duplicate group

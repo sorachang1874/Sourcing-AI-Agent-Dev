@@ -11,7 +11,6 @@ from sourcing_agent.asset_sync import AssetBundleError, AssetBundleManager
 from sourcing_agent.cloud_asset_import import hydrate_cloud_generation, import_cloud_assets
 from sourcing_agent.domain import Candidate, make_evidence_id
 from sourcing_agent.object_storage import ObjectStorageConfig, build_object_storage_client
-
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 

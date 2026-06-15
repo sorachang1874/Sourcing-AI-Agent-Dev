@@ -673,9 +673,7 @@ def build_company_candidate_artifacts(
             registry_summary=merged_view_result["summary"],
             source_path=str(dict(merged_finalize.get("artifact_paths") or {}).get("artifact_summary") or ""),
             selected_snapshot_ids=list(
-                dict(merged_view_result["summary"].get("source_snapshot_selection") or {}).get(
-                    "selected_snapshot_ids"
-                )
+                dict(merged_view_result["summary"].get("source_snapshot_selection") or {}).get("selected_snapshot_ids")
                 or []
             ),
             authoritative=True,
@@ -2635,11 +2633,13 @@ def rewrite_structured_timeline_in_company_candidate_artifacts(
                     }
                     company_summary["rebuilt_missing_snapshots"].append(rebuilt_summary)
                     continue
-                rewritten_views.append(_structured_timeline_view_summary(
-                    asset_view="canonical_merged",
-                    result=canonical_result,
-                    artifact_dir=normalized_dir,
-                ))
+                rewritten_views.append(
+                    _structured_timeline_view_summary(
+                        asset_view="canonical_merged",
+                        result=canonical_result,
+                        artifact_dir=normalized_dir,
+                    )
+                )
                 if strict_exists:
                     strict_result = _rewrite_existing_candidate_artifact_view(
                         runtime_dir=runtime_root,
@@ -2648,11 +2648,13 @@ def rewrite_structured_timeline_in_company_candidate_artifacts(
                         snapshot_id=candidate_snapshot_dir.name,
                         asset_view="strict_roster_only",
                     )
-                    rewritten_views.append(_structured_timeline_view_summary(
-                        asset_view="strict_roster_only",
-                        result=strict_result,
-                        artifact_dir=normalized_dir / "strict_roster_only",
-                    ))
+                    rewritten_views.append(
+                        _structured_timeline_view_summary(
+                            asset_view="strict_roster_only",
+                            result=strict_result,
+                            artifact_dir=normalized_dir / "strict_roster_only",
+                        )
+                    )
                 rewritten_snapshot_count += 1
                 rewritten_view_count += len(rewritten_views)
                 touched_company = True
@@ -5354,9 +5356,7 @@ def _build_artifact_view_payloads(
     page_payloads: list[dict[str, Any]] = []
     for page_index in range(0, len(normalized_candidates), _CANDIDATE_SHARD_PAGE_SIZE):
         page_number = (page_index // _CANDIDATE_SHARD_PAGE_SIZE) + 1
-        normalized_page_candidates = normalized_candidates[
-            page_index : page_index + _CANDIDATE_SHARD_PAGE_SIZE
-        ]
+        normalized_page_candidates = normalized_candidates[page_index : page_index + _CANDIDATE_SHARD_PAGE_SIZE]
         materialized_page_candidates = materialized_candidate_records[
             page_index : page_index + _CANDIDATE_SHARD_PAGE_SIZE
         ]
@@ -5365,11 +5365,7 @@ def _build_artifact_view_payloads(
             _build_candidate_serving_page_record(
                 materialized_record=materialized_candidate,
                 normalized_record=normalized_candidate,
-                reusable_record=(
-                    reusable_page_candidates[index]
-                    if index < len(reusable_page_candidates)
-                    else {}
-                ),
+                reusable_record=(reusable_page_candidates[index] if index < len(reusable_page_candidates) else {}),
                 profile_completion_item={},
             )
             for index, (materialized_candidate, normalized_candidate) in enumerate(
@@ -5838,8 +5834,7 @@ def _resolve_company_snapshot(
             latest_payload = load_latest_snapshot_pointer(company_dir)
             identity_payload = load_company_snapshot_identity(snapshot_dir, fallback_payload=latest_payload)
             resolved_company_key = (
-                str(identity_payload.get("company_key") or company_key or company_dir.name).strip()
-                or company_dir.name
+                str(identity_payload.get("company_key") or company_key or company_dir.name).strip() or company_dir.name
             )
             return resolved_company_key, snapshot_dir, identity_payload
 

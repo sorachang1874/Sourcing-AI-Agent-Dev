@@ -6,7 +6,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sourcing_agent.profile_registry_backfill import backfill_linkedin_profile_registry
-
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 

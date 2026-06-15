@@ -24,8 +24,8 @@ from sourcing_agent.public_web_search import (
     apply_email_adjudication,
     apply_link_adjudication,
     build_candidate_adjudication_context,
-    build_public_web_candidate_adjudication_input,
     build_diversified_fetch_queue,
+    build_public_web_candidate_adjudication_input,
     candidate_context_from_target_candidate,
     canonicalize_profile_link_type_from_url,
     classify_entry_links_from_document_signals,
@@ -36,9 +36,9 @@ from sourcing_agent.public_web_search import (
     is_clean_profile_link,
     is_publishable_profile_link,
     load_target_candidates_from_json,
-    normalize_model_link_signal_type,
     normalize_ai_entry_link_limit,
     normalize_ai_evidence_document_limit,
+    normalize_model_link_signal_type,
     plan_candidate_public_web_queries,
     public_web_link_shape_warnings,
     public_web_query_identity_key,
@@ -660,9 +660,13 @@ class PublicWebSearchTest(unittest.TestCase):
         query_texts = [query.query_text for query in queries]
 
         self.assertTrue(query_texts)
-        self.assertFalse(any('site:scholar.google.com/citations' in query and '"Anthropic"' not in query for query in query_texts))
-        self.assertFalse(any('(site:x.com OR site:twitter.com)' in query and '"Anthropic"' not in query for query in query_texts))
-        self.assertFalse(any('site:substack.com' in query and '"Anthropic"' not in query for query in query_texts))
+        self.assertFalse(
+            any("site:scholar.google.com/citations" in query and '"Anthropic"' not in query for query in query_texts)
+        )
+        self.assertFalse(
+            any("(site:x.com OR site:twitter.com)" in query and '"Anthropic"' not in query for query in query_texts)
+        )
+        self.assertFalse(any("site:substack.com" in query and '"Anthropic"' not in query for query in query_texts))
 
     def test_company_match_requires_company_entity_not_lowercase_adjective(self) -> None:
         candidate = PublicWebCandidateContext(
@@ -749,7 +753,9 @@ class PublicWebSearchTest(unittest.TestCase):
     def test_publishable_profile_link_excludes_other_and_publication_evidence(self) -> None:
         self.assertTrue(is_publishable_profile_link("scholar_url", "https://scholar.google.com/citations?user=abc"))
         self.assertTrue(is_publishable_profile_link("github_url", "https://github.com/example-user"))
-        self.assertFalse(is_publishable_profile_link("other", "https://www.databricks.com/dataaisummit/speaker/jackie-bow"))
+        self.assertFalse(
+            is_publishable_profile_link("other", "https://www.databricks.com/dataaisummit/speaker/jackie-bow")
+        )
         self.assertFalse(is_publishable_profile_link("publication_url", "https://researchgate.net/publication/123"))
         self.assertFalse(is_publishable_profile_link("company_page", "https://example.com/blog/person-interview"))
 
@@ -764,9 +770,7 @@ class PublicWebSearchTest(unittest.TestCase):
             canonicalize_profile_link_type_from_url("other", "https://github.com/orgs/CodeForPhilly/followers"),
             "github_url",
         )
-        self.assertFalse(
-            is_publishable_profile_link("github_url", "https://github.com/orgs/CodeForPhilly/followers")
-        )
+        self.assertFalse(is_publishable_profile_link("github_url", "https://github.com/orgs/CodeForPhilly/followers"))
 
     def test_adjudication_selection_prefers_owned_x_profile_over_third_party_mention(self) -> None:
         candidate = PublicWebCandidateContext(
@@ -1008,14 +1012,19 @@ class PublicWebSearchTest(unittest.TestCase):
             candidate=candidate,
             email_candidates=[],
             entry_links=[third_party, owned_profile, wrong_scholar],
-            fetched_documents=[{"evidence_slice": {"source_url": "https://example.com", "selected_text": "Jackie Bow"}}],
+            fetched_documents=[
+                {"evidence_slice": {"source_url": "https://example.com", "selected_text": "Jackie Bow"}}
+            ],
         )
 
         selected_urls = [item["url"] for item in payload["entry_links"]]
         self.assertIn("https://x.com/jbowocky", selected_urls)
         self.assertNotIn("https://x.com/staceywueste", selected_urls)
         self.assertNotIn("https://scholar.google.com/citations?user=hnhLmh4AAAAJ&hl=en", selected_urls)
-        self.assertEqual(payload["input_contract"]["entry_link_selection_owner"], "public_web_search.select_entry_links_for_adjudication")
+        self.assertEqual(
+            payload["input_contract"]["entry_link_selection_owner"],
+            "public_web_search.select_entry_links_for_adjudication",
+        )
 
     def test_adjudication_result_exposes_model_input_snapshot_for_audit(self) -> None:
         candidate = PublicWebCandidateContext(
@@ -1041,7 +1050,9 @@ class PublicWebSearchTest(unittest.TestCase):
             candidate=candidate,
             email_candidates=[],
             entry_links=[link],
-            fetched_documents=[{"evidence_slice": {"source_url": "https://example.com", "selected_text": "Ada Lovelace"}}],
+            fetched_documents=[
+                {"evidence_slice": {"source_url": "https://example.com", "selected_text": "Ada Lovelace"}}
+            ],
             model_client=model,
             ai_extraction="on",
         )
@@ -1049,7 +1060,9 @@ class PublicWebSearchTest(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertEqual(model.payloads[0], result["input_snapshot"])
         self.assertEqual(result["input_snapshot"]["entry_links"][0]["url"], "https://x.com/ada_lovelace")
-        self.assertEqual(result["input_snapshot"]["input_contract"]["contract"], "public_web_candidate_adjudication_input_v1")
+        self.assertEqual(
+            result["input_snapshot"]["input_contract"]["contract"], "public_web_candidate_adjudication_input_v1"
+        )
         self.assertEqual(
             result["input_snapshot"]["input_contract"]["expected_output_contract"],
             "public_web_signal_adjudication_output_v2_user_visible_signal",

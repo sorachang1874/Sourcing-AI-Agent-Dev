@@ -17,7 +17,6 @@ import time
 import uuid
 import zipfile
 from collections import Counter, defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -27,26 +26,27 @@ from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
 from .acquisition import AcquisitionEngine, _normalize_company_employee_shards
+from .acquisition_command_owner import AcquisitionCommandOwner
 from .agent_runtime import AgentRuntimeCoordinator
-from .asset_logger import AssetLogger
 from .artifact_cache import (
     collect_hot_cache_inventory,
     load_hot_cache_governance_state,
     run_hot_cache_governance_cycle,
 )
-from .async_task_contract import (
-    async_task_accepted,
-    async_task_artifact,
-    async_task_status,
-    normalize_task_status,
-)
 from .asset_catalog import AssetCatalog
+from .asset_logger import AssetLogger
 from .asset_paths import (
     resolve_company_snapshot_dir,
     resolve_snapshot_dir_from_source_path,
     resolve_snapshot_serving_artifact_path,
 )
 from .asset_reuse_planning import apply_asset_reuse_plan_to_sourcing_plan, compile_asset_reuse_plan
+from .async_task_contract import (
+    async_task_accepted,
+    async_task_artifact,
+    async_task_status,
+    normalize_task_status,
+)
 from .authoritative_candidates import load_authoritative_candidate_detail, load_authoritative_candidate_details
 from .candidate_artifacts import (
     CandidateArtifactError,
@@ -63,14 +63,6 @@ from .candidate_materialization import (
 )
 from .canonicalization import canonicalize_company_records
 from .command_kernel import CommandKernel
-from .crm_public_web_owner import (
-    CrmPublicWebOwner,
-    _coerce_public_web_float,
-    _coerce_public_web_record_ids,
-    _public_web_signal_is_rejected,
-    _public_web_target_candidate_summary,
-    _target_candidate_archive_name_component,
-)
 from .company_asset_completion import CompanyAssetCompletionManager
 from .company_asset_supplement import CompanyAssetSupplementManager
 from .company_asset_writer import CompanyAssetWriter
@@ -90,21 +82,16 @@ from .control_plane_postgres import (
 )
 from .criteria_evolution import CriteriaEvolutionEngine
 from .crm_migration import CRMTargetCandidateMigrationBackfill
+from .crm_public_web_owner import (
+    CrmPublicWebOwner,
+    _coerce_public_web_float,
+    _coerce_public_web_record_ids,
+    _public_web_signal_is_rejected,
+    _public_web_target_candidate_summary,
+    _target_candidate_archive_name_component,
+)
 from .crm_public_web_runtime import (
     CRM_PUBLIC_WEB_EXECUTION_BACKEND,
-    CRM_PUBLIC_WEB_JOB_TYPE,
-    CRM_PUBLIC_WEB_WORKER_RECOVERY_KIND,
-    PUBLIC_WEB_RETRYABLE_TERMINAL_STATUSES,
-    PUBLIC_WEB_TERMINAL_STATUSES,
-    PUBLIC_WEB_WORKER_LANE,
-    build_crm_public_web_batch_idempotency_key,
-    cancel_crm_public_web_run,
-    execute_crm_public_web_run_once,
-    public_web_signal_identity_key,
-    public_web_options_from_record,
-    public_web_worker_key,
-    start_crm_public_web_batch,
-    sync_crm_public_web_batch_summary,
 )
 from .crm_writer import CRMWriter
 from .domain import (
@@ -118,44 +105,25 @@ from .domain import (
     normalize_candidate,
 )
 from .durable_runtime import (
-    ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
-    ACQUISITION_INTENT_RESOLVE_OWNER,
-    ACQUISITION_PLAN_COMMIT_COMMAND_TYPE,
-    ACQUISITION_PLAN_BUILD_COMMAND_TYPE,
-    ACQUISITION_PLAN_BUILD_OWNER,
-    ACQUISITION_PROBE_COLLECT_COMMAND_TYPE,
-    ACQUISITION_PROBE_OWNER,
-    ACQUISITION_PROBE_SUBMIT_COMMAND_TYPE,
-    ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE,
     ACQUISITION_RUN_CREATE_COMMAND_TYPE,
-    ACQUISITION_RUN_CREATE_OWNER,
-    ACQUISITION_SCALE_PLAN_COMMAND_TYPE,
-    COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
+    COLLECTION_AUTHORITATIVE_MERGE_COMMAND_TYPE,
+    COLLECTION_AUTHORITATIVE_MERGE_OWNER,
     COMPANY_ASSET_OWNER,
     COMPANY_LOGO_PROFILE_EXPERIENCE_DISCOVER_COMMAND_TYPE,
+    COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
     COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
     COMPANY_PUBLIC_WEB_REFRESH_OWNER,
     COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
-    COLLECTION_AUTHORITATIVE_MERGE_COMMAND_TYPE,
-    COLLECTION_AUTHORITATIVE_MERGE_OWNER,
     CRM_NOTE_ADD_COMMAND_TYPE,
     CRM_PUBLIC_WEB_EXPORT_CONTRACT_VERSION,
-    CRM_PUBLIC_WEB_DOCUMENTS_FETCH_COMMAND_TYPE,
-    CRM_PUBLIC_WEB_EVIDENCE_ADJUDICATE_COMMAND_TYPE,
-    CRM_PUBLIC_WEB_MODEL_SAFE_FINALIZE_COMMAND_TYPE,
     CRM_PUBLIC_WEB_PHASE_OWNER,
-    CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE,
     CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER,
-    CRM_PUBLIC_WEB_SEARCH_POLL_FETCH_COMMAND_TYPE,
-    CRM_PUBLIC_WEB_SEARCH_SUBMIT_COMMAND_TYPE,
-    CRM_PUBLIC_WEB_SIGNALS_MATERIALIZE_COMMAND_TYPE,
     CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE,
     CRM_RECORD_UPDATE_COMMAND_TYPE,
     CRM_TASK_CREATE_COMMAND_TYPE,
     CRM_WRITER_OWNER,
     DEFAULT_COMMAND_OWNER_REGISTRY,
     DEFAULT_COMMAND_TYPE_SPECS,
-    EXCEL_INTAKE_RUN_COMMAND_TYPE,
     EXCEL_INTAKE_RUN_OWNER,
     EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE,
     EXPORT_CRM_PUBLIC_WEB_GENERATE_OWNER,
@@ -168,9 +136,7 @@ from .durable_runtime import (
     LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE,
     LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE,
     LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH_COMMAND_TYPE,
-    LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH_OWNER,
     LINKEDIN_PROFILE_TERMINAL_ADMIT_COMMAND_TYPE,
-    LINKEDIN_PROFILE_URL_TERMINAL_RECORD_COMMAND_TYPE,
     MEDIA_ASSET_CACHE_COMMAND_TYPE,
     MEDIA_ASSET_OWNER,
     PROJECTION_BOARD_VISIBLE_PATCH_PUBLISH_COMMAND_TYPE,
@@ -188,12 +154,8 @@ from .durable_runtime import (
     SNAPSHOT_COMPACTION_RUN_OWNER,
     DurableRuntimeWriter,
     collection_authoritative_merge_idempotency_key,
-    crm_public_web_queue_batch_idempotency_key,
-    crm_public_web_run_phase_idempotency_key,
     default_readiness_effect_for_command_type,
     default_stage_id_for_command_type,
-    excel_intake_run_idempotency_key,
-    export_crm_public_web_generate_idempotency_key,
     export_projection_generate_idempotency_key,
     legacy_job_operation_id,
     legacy_job_workflow_run_id,
@@ -204,17 +166,10 @@ from .durable_runtime import (
     projection_person_search_index_build_idempotency_key,
     projection_run_scope_finalize_idempotency_key,
     snapshot_compaction_run_idempotency_key,
-    workflow_command_activity_spine_policy,
     workflow_command_cancel_owner_agnostic_handler,
-    workflow_command_control_policy,
-    workflow_command_control_state,
-    workflow_command_display_contract,
-    workflow_command_expected_run_statuses,
-    workflow_command_migration_step_id,
-    workflow_command_product_label_zh,
     workflow_command_resume_owner_agnostic_handler,
 )
-from .excel_intake import ExcelIntakeService, group_contacts_by_company_hints
+from .excel_intake import ExcelIntakeService
 from .excel_intake_owner import (
     ExcelIntakeOwner,
     _ExcelIntakeCommandCancelled,
@@ -234,11 +189,6 @@ from .manual_review_resolution import apply_manual_review_resolution
 from .manual_review_synthesis import compile_manual_review_synthesis
 from .media_asset_owner import cache_media_asset, media_asset_frontend_url, read_media_asset_content
 from .model_provider import DeterministicModelClient, ModelClient
-from .organization_assets import warmup_existing_organization_assets
-from .organization_execution_profile import (
-    ensure_organization_execution_profile,
-    organization_execution_profile_snapshot_reuse_limit,
-)
 from .operation_runtime import (
     ACTION_ADD_CRM_NOTE,
     ACTION_ADD_TO_CRM,
@@ -249,14 +199,17 @@ from .operation_runtime import (
     ACTION_FETCH_PROFILE_SAMPLE,
     ACTION_FILTER_PROJECTION,
     ACTION_REFRESH_COMPANY_PUBLIC_WEB,
-    ACTION_START_ACQUISITION_RUN,
     ACTION_SEARCH_PROJECTION,
     ACTION_SET_CRM_STAGE,
+    ACTION_START_ACQUISITION_RUN,
     DEFAULT_ACTION_REGISTRY,
     OperationRuntimeWriter,
-    WORKFLOW_COMMAND_EXPOSURE_GATE_SOURCE,
-    WORKFLOW_COMMAND_EXPOSURE_STATUS_ALLOWLISTED,
     operation_run_control_state,
+)
+from .organization_assets import warmup_existing_organization_assets
+from .organization_execution_profile import (
+    ensure_organization_execution_profile,
+    organization_execution_profile_snapshot_reuse_limit,
 )
 from .outreach_layering import analyze_company_outreach_layers, build_outreach_layer_analysis
 from .pattern_suggestions import derive_pattern_suggestions
@@ -292,7 +245,6 @@ from .process_supervision import (
 from .process_supervision import (
     wait_for_service_ready as _wait_for_service_ready,
 )
-from .acquisition_command_owner import AcquisitionCommandOwner
 from .profile_fetch_owner import ProfileFetchOwner
 from .profile_timeline import (
     candidate_profile_lookup_url as _candidate_profile_lookup_url,
@@ -320,7 +272,6 @@ from .profile_timeline import (
 )
 from .public_candidate_facets import (
     EXCEL_INTAKE_CURRENT_JOB_MARKER_ID,
-    EXCEL_INTAKE_CURRENT_JOB_MARKER_LABEL,
 )
 from .public_candidate_facets import (
     apply_candidate_page_filter as _public_apply_candidate_page_filter,
@@ -386,9 +337,9 @@ from .recovery_drain_registry import (
     build_recovery_drain_registry,
 )
 from .recovery_phases import (
+    CallbackRecoveryPhase,
     SkipDecision,
     TickContext,
-    CallbackRecoveryPhase,
     build_drain_group_phases,
     build_recovery_phase_registry,
     run_registry_phase,
@@ -986,8 +937,12 @@ class SourcingOrchestrator:
             # These two stay on the orchestrator (instance-patched by existing
             # tests); the lambdas re-resolve through ``self`` at call time so
             # those patches keep intercepting calls made from moved bodies.
-            queue_background_profile_prefetch_from_available_baselines=lambda *args, **kwargs: self._queue_background_profile_prefetch_from_available_baselines(*args, **kwargs),
-            run_profile_completion_next_submit_opportunity=lambda *args, **kwargs: self._run_profile_completion_next_submit_opportunity(*args, **kwargs),
+            queue_background_profile_prefetch_from_available_baselines=lambda *args, **kwargs: (
+                self._queue_background_profile_prefetch_from_available_baselines(*args, **kwargs)
+            ),
+            run_profile_completion_next_submit_opportunity=lambda *args, **kwargs: (
+                self._run_profile_completion_next_submit_opportunity(*args, **kwargs)
+            ),
         )
         self._acquisition_command_owner = AcquisitionCommandOwner(
             store=self.store,
@@ -1062,7 +1017,7 @@ class SourcingOrchestrator:
             "evidence_count": len(bundle.evidence),
             "candidate_breakdown": bundle.stats.get("candidate_counts", {}),
             "asset_paths": bundle.stats.get("assets", {}),
-            }
+        }
         bootstrap_path = self.jobs_dir.parent / "bootstrap_summary.json"
         bootstrap_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
         return summary
@@ -1364,7 +1319,13 @@ class SourcingOrchestrator:
         filename: str,
         prepared_contact_batch: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._excel_intake_owner._persist_excel_intake_prepared_batch_contract(job_id=job_id, batch_id=batch_id, target_company=target_company, filename=filename, prepared_contact_batch=prepared_contact_batch)
+        return self._excel_intake_owner._persist_excel_intake_prepared_batch_contract(
+            job_id=job_id,
+            batch_id=batch_id,
+            target_company=target_company,
+            filename=filename,
+            prepared_contact_batch=prepared_contact_batch,
+        )
 
     def _build_excel_intake_execution_bundle(
         self,
@@ -1380,7 +1341,18 @@ class SourcingOrchestrator:
         source_companies: list[str],
         prepared_batch_contract: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._excel_intake_owner._build_excel_intake_execution_bundle(batch_id=batch_id, target_company=target_company, history_id=history_id, parent_history_id=parent_history_id, query_text=query_text, filename=filename, attach_to_snapshot=attach_to_snapshot, build_artifacts=build_artifacts, source_companies=source_companies, prepared_batch_contract=prepared_batch_contract)
+        return self._excel_intake_owner._build_excel_intake_execution_bundle(
+            batch_id=batch_id,
+            target_company=target_company,
+            history_id=history_id,
+            parent_history_id=parent_history_id,
+            query_text=query_text,
+            filename=filename,
+            attach_to_snapshot=attach_to_snapshot,
+            build_artifacts=build_artifacts,
+            source_companies=source_companies,
+            prepared_batch_contract=prepared_batch_contract,
+        )
 
     def _load_excel_intake_prepared_contact_batch_from_path(self, path_value: str) -> dict[str, Any]:
         return self._excel_intake_owner._load_excel_intake_prepared_contact_batch_from_path(path_value)
@@ -1391,7 +1363,9 @@ class SourcingOrchestrator:
         job: dict[str, Any],
         fallback_payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return self._excel_intake_owner._excel_intake_payload_from_execution_bundle(job=job, fallback_payload=fallback_payload)
+        return self._excel_intake_owner._excel_intake_payload_from_execution_bundle(
+            job=job, fallback_payload=fallback_payload
+        )
 
     def _queue_excel_intake_workflow_job(
         self,
@@ -1407,7 +1381,18 @@ class SourcingOrchestrator:
         source_companies: list[str],
         prepared_contact_batch: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._excel_intake_owner._queue_excel_intake_workflow_job(target_company=target_company, history_id=history_id, parent_history_id=parent_history_id, query_text=query_text, filename=filename, attach_to_snapshot=attach_to_snapshot, build_artifacts=build_artifacts, batch_id=batch_id, source_companies=source_companies, prepared_contact_batch=prepared_contact_batch)
+        return self._excel_intake_owner._queue_excel_intake_workflow_job(
+            target_company=target_company,
+            history_id=history_id,
+            parent_history_id=parent_history_id,
+            query_text=query_text,
+            filename=filename,
+            attach_to_snapshot=attach_to_snapshot,
+            build_artifacts=build_artifacts,
+            batch_id=batch_id,
+            source_companies=source_companies,
+            prepared_contact_batch=prepared_contact_batch,
+        )
 
     def _excel_intake_workflow_run_id(self, job_id: str) -> str:
         return self._excel_intake_owner._excel_intake_workflow_run_id(job_id)
@@ -1437,7 +1422,9 @@ class SourcingOrchestrator:
         reason: str = "excel_intake_run_cancelled_by_command_control",
         actor: str = EXCEL_INTAKE_RUN_OWNER,
     ) -> dict[str, Any]:
-        return self._excel_intake_owner._record_excel_intake_command_cancelled_terminal(command_id=command_id, job_id=job_id, activity=activity, attempt=attempt, reason=reason, actor=actor)
+        return self._excel_intake_owner._record_excel_intake_command_cancelled_terminal(
+            command_id=command_id, job_id=job_id, activity=activity, attempt=attempt, reason=reason, actor=actor
+        )
 
     def _raise_if_excel_intake_command_cancelled(
         self,
@@ -1447,7 +1434,9 @@ class SourcingOrchestrator:
         request: JobRequest,
         checkpoint: str,
     ) -> None:
-        return self._excel_intake_owner._raise_if_excel_intake_command_cancelled(command_id=command_id, job_id=job_id, request=request, checkpoint=checkpoint)
+        return self._excel_intake_owner._raise_if_excel_intake_command_cancelled(
+            command_id=command_id, job_id=job_id, request=request, checkpoint=checkpoint
+        )
 
     def _run_excel_intake_workflow_command_thread(
         self,
@@ -1459,7 +1448,9 @@ class SourcingOrchestrator:
         activity: dict[str, Any] | None = None,
         attempt: dict[str, Any] | None = None,
     ) -> None:
-        return self._excel_intake_owner._run_excel_intake_workflow_command_thread(command_id=command_id, job_id=job_id, request=request, payload=payload, activity=activity, attempt=attempt)
+        return self._excel_intake_owner._run_excel_intake_workflow_command_thread(
+            command_id=command_id, job_id=job_id, request=request, payload=payload, activity=activity, attempt=attempt
+        )
 
     def _excel_intake_command_is_active(self, command: dict[str, Any]) -> bool:
         return self._excel_intake_owner._excel_intake_command_is_active(command)
@@ -3841,11 +3832,11 @@ class SourcingOrchestrator:
         }
 
         if not current_candidate_ids:
-            return _dedupe_texts(candidate_ids), [
-                dict(item)
-                for item in list(profile_delta_candidate_records or [])
-                if isinstance(item, dict)
-            ], {}
+            return (
+                _dedupe_texts(candidate_ids),
+                [dict(item) for item in list(profile_delta_candidate_records or []) if isinstance(item, dict)],
+                {},
+            )
 
         candidate_id_aliases: dict[str, str] = {}
         for item in list(profile_delta_candidate_records or []):
@@ -4408,9 +4399,7 @@ class SourcingOrchestrator:
         normalized_path = str(overlay_path)
         with self._asset_population_overlay_payload_cache_lock:
             stale_keys = [
-                key
-                for key in self._asset_population_overlay_payload_cache
-                if key and key[0] == normalized_path
+                key for key in self._asset_population_overlay_payload_cache if key and key[0] == normalized_path
             ]
             for key in stale_keys:
                 self._asset_population_overlay_payload_cache.pop(key, None)
@@ -4497,8 +4486,7 @@ class SourcingOrchestrator:
                 fallback_candidate_count=fallback_candidate_count,
             )
             if summary and (
-                int(summary.get("candidate_count") or 0) > 0
-                or bool(summary.get("quality_fields_available"))
+                int(summary.get("candidate_count") or 0) > 0 or bool(summary.get("quality_fields_available"))
             ):
                 return summary
         return {}
@@ -4700,10 +4688,7 @@ class SourcingOrchestrator:
         )
         if not lifecycle_payload:
             job_id = str(
-                source_payload.get("job_id")
-                or view_payload.get("job_id")
-                or metadata_payload.get("job_id")
-                or ""
+                source_payload.get("job_id") or view_payload.get("job_id") or metadata_payload.get("job_id") or ""
             ).strip()
             if job_id:
                 try:
@@ -4731,12 +4716,16 @@ class SourcingOrchestrator:
         )
         if expected_count <= 0 or served_count < expected_count:
             return False
-        delta_profile_progress_applicable = bool(lifecycle_payload.get("delta_profile_progress_applicable") is not False)
+        delta_profile_progress_applicable = bool(
+            lifecycle_payload.get("delta_profile_progress_applicable") is not False
+        )
         delta_required_count = max(0, _coerce_int(lifecycle_payload.get("delta_profile_required_count"), 0))
         if delta_profile_progress_applicable and delta_required_count > 0:
             delta_fetched_count = max(0, _coerce_int(lifecycle_payload.get("delta_profile_fetched_count"), 0))
             delta_materialized_count = max(0, _coerce_int(lifecycle_payload.get("delta_profile_materialized_count"), 0))
-            delta_board_visible_count = max(0, _coerce_int(lifecycle_payload.get("delta_profile_board_visible_count"), 0))
+            delta_board_visible_count = max(
+                0, _coerce_int(lifecycle_payload.get("delta_profile_board_visible_count"), 0)
+            )
             if (
                 delta_fetched_count < delta_required_count
                 or delta_materialized_count < delta_required_count
@@ -4910,9 +4899,7 @@ class SourcingOrchestrator:
         if cached_proof is not None:
             return cached_proof
         source_path_value = str(
-            source_payload.get("source_path")
-            or dict(source_payload.get("result_view") or {}).get("source_path")
-            or ""
+            source_payload.get("source_path") or dict(source_payload.get("result_view") or {}).get("source_path") or ""
         ).strip()
         candidate_paths: list[Path] = []
 
@@ -4960,9 +4947,7 @@ class SourcingOrchestrator:
             or ""
         ).strip()
         snapshot_id = str(
-            source_payload.get("snapshot_id")
-            or dict(source_payload.get("result_view") or {}).get("snapshot_id")
-            or ""
+            source_payload.get("snapshot_id") or dict(source_payload.get("result_view") or {}).get("snapshot_id") or ""
         ).strip()
         if target_company and snapshot_id:
             snapshot_dir = resolve_company_snapshot_dir(
@@ -4982,12 +4967,15 @@ class SourcingOrchestrator:
         target_path_proof = _ready_proof_from_candidate_paths(candidate_paths)
         if target_path_proof:
             return self._store_public_serving_artifact_proof_cache(cache_key, target_path_proof)
-        return self._store_public_serving_artifact_proof_cache(cache_key, {
-            "status": "missing",
-            "ready": False,
-            "source_path": source_path_value,
-            "reason": "public_serving_artifact_missing",
-        })
+        return self._store_public_serving_artifact_proof_cache(
+            cache_key,
+            {
+                "status": "missing",
+                "ready": False,
+                "source_path": source_path_value,
+                "reason": "public_serving_artifact_missing",
+            },
+        )
 
     def _open_public_serving_artifact_store_from_candidate_source(
         self,
@@ -5020,9 +5008,7 @@ class SourcingOrchestrator:
         proof_path_value = str(proof.get("resolved_path") or proof.get("path") or "").strip()
         if not proof_path_value:
             return None
-        artifact_dir = self._normalized_artifact_dir_for_public_serving_path(
-            Path(proof_path_value).expanduser()
-        )
+        artifact_dir = self._normalized_artifact_dir_for_public_serving_path(Path(proof_path_value).expanduser())
         if artifact_dir is None:
             return None
         artifact_dir = artifact_dir.resolve()
@@ -5053,8 +5039,7 @@ class SourcingOrchestrator:
             runtime_dir=self.runtime_dir,
             target_company=resolved_target_company,
             snapshot_id=str(snapshot_dir.name or snapshot_id or "").strip(),
-            asset_view=str(resolved_asset_view or asset_view or "canonical_merged").strip()
-            or "canonical_merged",
+            asset_view=str(resolved_asset_view or asset_view or "canonical_merged").strip() or "canonical_merged",
             company_key=company_key,
             snapshot_dir=snapshot_dir,
             artifact_dir=artifact_dir,
@@ -5075,9 +5060,7 @@ class SourcingOrchestrator:
         lifecycle_state = str(lifecycle_payload.get("state") or lifecycle_payload.get("phase") or "").strip()
         lifecycle_projection_phase = str(lifecycle_payload.get("serving_projection_phase") or "").strip()
         publication_payload = dict(
-            metadata_payload.get("board_visible_publication")
-            or view_metadata.get("board_visible_publication")
-            or {}
+            metadata_payload.get("board_visible_publication") or view_metadata.get("board_visible_publication") or {}
         )
         return bool(
             lifecycle_state in {"current_snapshot_serving", "post_result_layering", "current_serving"}
@@ -5188,9 +5171,7 @@ class SourcingOrchestrator:
         if result_view_payload and not result_view_metadata:
             result_view_metadata = dict(result_view_payload.get("metadata") or {})
         lifecycle_payload = dict(
-            source_payload.get("result_view_lifecycle")
-            or result_view_metadata.get("result_view_lifecycle")
-            or {}
+            source_payload.get("result_view_lifecycle") or result_view_metadata.get("result_view_lifecycle") or {}
         )
         if not lifecycle_payload:
             job_id = str(
@@ -5222,7 +5203,9 @@ class SourcingOrchestrator:
         lifecycle_validated = str(lifecycle_payload.get("source_validation_status") or "").strip() == "validated"
         if not current_snapshot_serving or not (full_snapshot_publication or lifecycle_validated):
             return False
-        source_path_value = str(source_payload.get("source_path") or result_view_payload.get("source_path") or "").strip()
+        source_path_value = str(
+            source_payload.get("source_path") or result_view_payload.get("source_path") or ""
+        ).strip()
         if not source_path_value:
             return False
         overlay_path_value = (
@@ -5559,7 +5542,9 @@ class SourcingOrchestrator:
                         records[candidate_id] = dict(item)
                 if records:
                     break
-        missing_candidate_ids = [candidate_id for candidate_id in normalized_candidate_ids if candidate_id not in records]
+        missing_candidate_ids = [
+            candidate_id for candidate_id in normalized_candidate_ids if candidate_id not in records
+        ]
         for candidate_id in missing_candidate_ids:
             try:
                 shard_payload = read_snapshot_candidate_shard(artifact_store, candidate_id=candidate_id)
@@ -5587,7 +5572,9 @@ class SourcingOrchestrator:
             or ""
         ).strip()
         asset_view = (
-            str(overlay_payload.get("asset_view") or candidate_source.get("asset_view") or request.asset_view or "").strip()
+            str(
+                overlay_payload.get("asset_view") or candidate_source.get("asset_view") or request.asset_view or ""
+            ).strip()
             or "canonical_merged"
         )
         if not target_company:
@@ -5653,9 +5640,7 @@ class SourcingOrchestrator:
         if not profile_url_by_candidate_id:
             return [dict(record) for record in records]
         try:
-            registry_rows = self.store.get_linkedin_profile_registry_bulk(
-                list(profile_url_by_candidate_id.values())
-            )
+            registry_rows = self.store.get_linkedin_profile_registry_bulk(list(profile_url_by_candidate_id.values()))
         except Exception:
             registry_rows = {}
         if not registry_rows:
@@ -5667,9 +5652,7 @@ class SourcingOrchestrator:
             metadata = dict(payload.get("metadata") or {})
             candidate_id = str(payload.get("candidate_id") or "").strip()
             profile_url = profile_url_by_candidate_id.get(candidate_id, "")
-            registry_row = dict(
-                registry_rows.get(normalize_linkedin_profile_url_key(profile_url)) or {}
-            )
+            registry_row = dict(registry_rows.get(normalize_linkedin_profile_url_key(profile_url)) or {})
             if not registry_row:
                 enriched_records.append(payload)
                 continue
@@ -5801,8 +5784,7 @@ class SourcingOrchestrator:
         ).strip()
         embedded_profile_capture_proven = _profile_capture_kind_has_profile_detail(embedded_profile_capture_kind)
         embedded_has_explicit_capture_flag = bool(
-            payload.get("has_explicit_profile_capture")
-            or metadata.get("has_explicit_profile_capture")
+            payload.get("has_explicit_profile_capture") or metadata.get("has_explicit_profile_capture")
         )
         embedded_has_profile_detail = bool(
             payload.get("has_profile_detail")
@@ -5820,8 +5802,7 @@ class SourcingOrchestrator:
             )
         )
         embedded_has_explicit_capture = bool(
-            embedded_has_explicit_capture_flag
-            or (embedded_profile_capture_proven and embedded_has_profile_detail)
+            embedded_has_explicit_capture_flag or (embedded_profile_capture_proven and embedded_has_profile_detail)
         )
         if (embedded_has_profile_detail or embedded_has_explicit_capture) and (
             embedded_experience_lines or embedded_education_lines or embedded_profile_capture_kind
@@ -6150,13 +6131,17 @@ class SourcingOrchestrator:
         existing_overlay_path = self._job_asset_population_overlay_path(normalized_job_id)
         if existing_overlay_path.exists() and not existing_overlay_path.is_dir():
             candidate_paths.append(existing_overlay_path)
-        patches = self.store.list_job_board_visible_patches(
-            job_id=normalized_job_id,
-            snapshot_id=normalized_snapshot_id,
-            limit=0,
-        ) if normalized_snapshot_id else self.store.list_job_board_visible_patches(
-            job_id=normalized_job_id,
-            limit=0,
+        patches = (
+            self.store.list_job_board_visible_patches(
+                job_id=normalized_job_id,
+                snapshot_id=normalized_snapshot_id,
+                limit=0,
+            )
+            if normalized_snapshot_id
+            else self.store.list_job_board_visible_patches(
+                job_id=normalized_job_id,
+                limit=0,
+            )
         )
         for patch in list(patches or []):
             patch_payload = dict(patch or {})
@@ -6413,7 +6398,11 @@ class SourcingOrchestrator:
     def _candidate_record_is_explicit_non_member(record: dict[str, Any]) -> bool:
         payload = dict(record or {})
         metadata = dict(payload.get("metadata") or {})
-        decision = str(metadata.get("membership_review_decision") or payload.get("membership_review_decision") or "").strip().lower()
+        decision = (
+            str(metadata.get("membership_review_decision") or payload.get("membership_review_decision") or "")
+            .strip()
+            .lower()
+        )
         return bool(
             str(payload.get("category") or metadata.get("category") or "").strip().lower() == "non_member"
             or decision.endswith("non_member")
@@ -6421,19 +6410,17 @@ class SourcingOrchestrator:
         )
 
     @staticmethod
-    def _projection_collection_id_for_request(request: JobRequest, candidate_source: dict[str, Any] | None = None) -> str:
+    def _projection_collection_id_for_request(
+        request: JobRequest, candidate_source: dict[str, Any] | None = None
+    ) -> str:
         source_payload = dict(candidate_source or {})
         explicit_collection_id = str(
-            source_payload.get("collection_id")
-            or dict(source_payload.get("metadata") or {}).get("collection_id")
-            or ""
+            source_payload.get("collection_id") or dict(source_payload.get("metadata") or {}).get("collection_id") or ""
         ).strip()
         if explicit_collection_id:
             return explicit_collection_id
         target_company = str(
-            source_payload.get("target_company")
-            or getattr(request, "target_company", "")
-            or ""
+            source_payload.get("target_company") or getattr(request, "target_company", "") or ""
         ).strip()
         if not target_company:
             return ""
@@ -6502,9 +6489,13 @@ class SourcingOrchestrator:
             candidate_identity_key = f"candidate:{candidate_id.lower()}"
         if not candidate_identity_key:
             return {}
-        has_profile_detail = bool(public_summary.get("has_profile_detail") or public_summary.get("has_explicit_profile_capture"))
+        has_profile_detail = bool(
+            public_summary.get("has_profile_detail") or public_summary.get("has_explicit_profile_capture")
+        )
         needs_profile_completion = bool(public_summary.get("needs_profile_completion"))
-        profile_readiness = "ready" if has_profile_detail else "required" if needs_profile_completion else "not_required"
+        profile_readiness = (
+            "ready" if has_profile_detail else "required" if needs_profile_completion else "not_required"
+        )
         card_readiness = "ready" if has_profile_detail and not needs_profile_completion else "row_shell"
         source_shard_key = str(
             metadata.get("seed_query")
@@ -6535,7 +6526,9 @@ class SourcingOrchestrator:
             "visibility_state": "visible" if not self._candidate_record_is_explicit_non_member(payload) else "hidden",
             "public_summary": public_summary,
             "projection_metrics": {
-                "snapshot_id": str(snapshot_id or payload.get("snapshot_id") or metadata.get("snapshot_id") or "").strip(),
+                "snapshot_id": str(
+                    snapshot_id or payload.get("snapshot_id") or metadata.get("snapshot_id") or ""
+                ).strip(),
                 "has_profile_detail": has_profile_detail,
                 "needs_profile_completion": needs_profile_completion,
                 "low_profile_richness": bool(public_summary.get("low_profile_richness")),
@@ -6544,7 +6537,9 @@ class SourcingOrchestrator:
             "provenance": {
                 "candidate_id": candidate_id,
                 "source_run_id": str(source_run_id or "").strip(),
-                "snapshot_id": str(snapshot_id or payload.get("snapshot_id") or metadata.get("snapshot_id") or "").strip(),
+                "snapshot_id": str(
+                    snapshot_id or payload.get("snapshot_id") or metadata.get("snapshot_id") or ""
+                ).strip(),
                 "source_shard_key": source_shard_key,
             },
         }
@@ -6572,7 +6567,10 @@ class SourcingOrchestrator:
             members_by_key[candidate_key] = member
         return sorted(
             members_by_key.values(),
-            key=lambda item: (int(dict(item).get("rank_index") or 0), str(dict(item).get("candidate_identity_key") or "")),
+            key=lambda item: (
+                int(dict(item).get("rank_index") or 0),
+                str(dict(item).get("candidate_identity_key") or ""),
+            ),
         )
 
     @staticmethod
@@ -6596,11 +6594,7 @@ class SourcingOrchestrator:
             record["candidate_id"] = candidate_id
         if not str(record.get("name_en") or "").strip():
             record["name_en"] = str(
-                record.get("display_name")
-                or record.get("full_name")
-                or record.get("name")
-                or candidate_id
-                or ""
+                record.get("display_name") or record.get("full_name") or record.get("name") or candidate_id or ""
             ).strip()
         if not str(record.get("display_name") or "").strip() and str(record.get("name_en") or "").strip():
             record["display_name"] = str(record.get("name_en") or "").strip()
@@ -6630,48 +6624,38 @@ class SourcingOrchestrator:
         max_records: int = 0,
     ) -> list[dict[str, Any]]:
         source_payload = dict(candidate_source or {})
-        inline_records = [
-            dict(item)
-            for item in list(source_payload.get("candidates") or [])
-            if isinstance(item, dict)
-        ]
+        inline_records = [dict(item) for item in list(source_payload.get("candidates") or []) if isinstance(item, dict)]
         if not inline_records:
             inline_records = [
-                item.to_record()
-                for item in list(source_payload.get("candidates") or [])
-                if isinstance(item, Candidate)
+                item.to_record() for item in list(source_payload.get("candidates") or []) if isinstance(item, Candidate)
             ]
         if inline_records:
             return inline_records[: max_records or None]
         overlay_payload = self._load_candidate_source_asset_population_overlay(source_payload)
         if overlay_payload:
-            records = [
-                dict(item)
-                for item in list(overlay_payload.get("candidates") or [])
-                if isinstance(item, dict)
-            ]
+            records = [dict(item) for item in list(overlay_payload.get("candidates") or []) if isinstance(item, dict)]
             return records[: max_records or None]
         target_company = str(source_payload.get("target_company") or request.target_company or "").strip()
         snapshot_id = str(source_payload.get("snapshot_id") or "").strip()
-        asset_view = str(source_payload.get("asset_view") or request.asset_view or "canonical_merged").strip() or "canonical_merged"
+        asset_view = (
+            str(source_payload.get("asset_view") or request.asset_view or "canonical_merged").strip()
+            or "canonical_merged"
+        )
         if not target_company or not snapshot_id:
             return []
         source_path = str(source_payload.get("source_path") or "").strip()
         try:
-            artifact_store = (
-                self._open_public_serving_artifact_store_from_candidate_source(
-                    request=request,
-                    candidate_source={**source_payload, "result_view": dict(result_view or {})},
-                    target_company=target_company,
-                    snapshot_id=snapshot_id,
-                    asset_view=asset_view,
-                )
-                or open_snapshot_artifact_store(
-                    runtime_dir=self.runtime_dir,
-                    target_company=target_company,
-                    snapshot_id=snapshot_id,
-                    asset_view=asset_view,
-                )
+            artifact_store = self._open_public_serving_artifact_store_from_candidate_source(
+                request=request,
+                candidate_source={**source_payload, "result_view": dict(result_view or {})},
+                target_company=target_company,
+                snapshot_id=snapshot_id,
+                asset_view=asset_view,
+            ) or open_snapshot_artifact_store(
+                runtime_dir=self.runtime_dir,
+                target_company=target_company,
+                snapshot_id=snapshot_id,
+                asset_view=asset_view,
             )
             try:
                 snapshot_window = read_snapshot_candidate_window(
@@ -6689,11 +6673,7 @@ class SourcingOrchestrator:
             if source_path:
                 return []
             return []
-        return [
-            dict(item)
-            for item in list(snapshot_window.get("candidates") or [])
-            if isinstance(item, dict)
-        ]
+        return [dict(item) for item in list(snapshot_window.get("candidates") or []) if isinstance(item, dict)]
 
     @staticmethod
     def _candidate_records_from_projection_source_rows(rows: Any) -> list[dict[str, Any]]:
@@ -6897,9 +6877,7 @@ class SourcingOrchestrator:
         )
         complete_expected_count = max(0, _coerce_int(expected_visible_member_count, 0))
         row_readiness = (
-            "complete"
-            if complete_expected_count <= 0 or after_visible_count >= complete_expected_count
-            else "partial"
+            "complete" if complete_expected_count <= 0 or after_visible_count >= complete_expected_count else "partial"
         )
         existing_counts = dict(projection.get("counts") or {})
         counts = {
@@ -6953,7 +6931,9 @@ class SourcingOrchestrator:
         self.store.upsert_serving_projection(
             {
                 **dict(projection),
-                "collection_id": str(projection.get("collection_id") or self._projection_collection_id_for_request(request) or "").strip(),
+                "collection_id": str(
+                    projection.get("collection_id") or self._projection_collection_id_for_request(request) or ""
+                ).strip(),
                 "counts": counts,
                 "readiness": readiness,
                 "metadata": metadata,
@@ -7169,7 +7149,9 @@ class SourcingOrchestrator:
         normalized_job_id = str(job_id or "").strip()
         view_payload = dict(result_view or {})
         view_id = str(view_payload.get("view_id") or "").strip()
-        snapshot_id = str(dict(candidate_source or {}).get("snapshot_id") or view_payload.get("snapshot_id") or "").strip()
+        snapshot_id = str(
+            dict(candidate_source or {}).get("snapshot_id") or view_payload.get("snapshot_id") or ""
+        ).strip()
         if not normalized_job_id or not view_id or not snapshot_id:
             return {}
         workflow_run_id = legacy_job_workflow_run_id(normalized_job_id)
@@ -7178,7 +7160,9 @@ class SourcingOrchestrator:
             job_id=normalized_job_id,
             view_id=view_id,
             snapshot_id=snapshot_id,
-            source_path=str(dict(candidate_source or {}).get("source_path") or view_payload.get("source_path") or "").strip(),
+            source_path=str(
+                dict(candidate_source or {}).get("source_path") or view_payload.get("source_path") or ""
+            ).strip(),
             finalize_scope="job_result_view_asset_population",
         )
         if not workflow_run_id or not command_idempotency_key:
@@ -7327,7 +7311,9 @@ class SourcingOrchestrator:
                 command_record=refreshed,
                 runtime_command_contention=True,
             )
-        running_command = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+        running_command = (
+            self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+        )
         activity, activity_attempt = self._start_workflow_command_activity_attempt(
             running_command,
             activity_type=PROJECTION_RUN_SCOPE_FINALIZE_COMMAND_TYPE,
@@ -7739,7 +7725,9 @@ class SourcingOrchestrator:
             return {"status": "skipped", "reason": "projection_members_empty"}
         collection_id = self._projection_collection_id_for_request(request, source_payload)
         scope_spec = self._projection_scope_spec_for_request(request, source_payload)
-        profile_required_count = sum(1 for member in members if str(member.get("profile_readiness") or "") == "required")
+        profile_required_count = sum(
+            1 for member in members if str(member.get("profile_readiness") or "") == "required"
+        )
         profile_ready_count = sum(1 for member in members if str(member.get("profile_readiness") or "") == "ready")
         profile_not_required_count = sum(
             1 for member in members if str(member.get("profile_readiness") or "") == "not_required"
@@ -7749,7 +7737,9 @@ class SourcingOrchestrator:
         counts = {
             "result_count": len(members),
             "candidate_count": len(members),
-            "visible_member_count": sum(1 for member in members if str(member.get("visibility_state") or "") == "visible"),
+            "visible_member_count": sum(
+                1 for member in members if str(member.get("visibility_state") or "") == "visible"
+            ),
             "count_scope": "exact_projection",
         }
         visible_projection_records = [
@@ -7793,7 +7783,9 @@ class SourcingOrchestrator:
                 "projection_type": "run_scope_projection",
                 "collection_id": collection_id,
                 "source_run_id": normalized_job_id,
-                "projection_version": str(existing_projection.get("projection_version") or "serving_projection_v1").strip()
+                "projection_version": str(
+                    existing_projection.get("projection_version") or "serving_projection_v1"
+                ).strip()
                 or "serving_projection_v1",
                 "counts": counts,
                 "readiness": readiness,
@@ -7866,9 +7858,7 @@ class SourcingOrchestrator:
         projection = dict(dict(projection_publication or {}).get("projection") or {})
         projection_id = str(projection.get("projection_id") or "").strip()
         collection_id = str(
-            projection.get("collection_id")
-            or self._projection_collection_id_for_request(request)
-            or ""
+            projection.get("collection_id") or self._projection_collection_id_for_request(request) or ""
         ).strip()
         normalized_job_id = str(job_id or "").strip()
         if not normalized_job_id or not projection_id or not collection_id:
@@ -7894,7 +7884,9 @@ class SourcingOrchestrator:
         ).hexdigest()[:16]
         item_id = (
             "collection_merge_"
-            + hashlib.sha1(f"{collection_id}|{projection_id}|{publication_fingerprint}".encode("utf-8")).hexdigest()[:24]
+            + hashlib.sha1(f"{collection_id}|{projection_id}|{publication_fingerprint}".encode("utf-8")).hexdigest()[
+                :24
+            ]
         )
         item = {
             "item_id": item_id,
@@ -7937,7 +7929,10 @@ class SourcingOrchestrator:
         )
         if not command:
             return {"status": "failed", "reason": "collection_merge_command_enqueue_failed"}
-        return {**item, "workflow_command": self._workflow_command_observation(command, migration_phase=migration_phase)}
+        return {
+            **item,
+            "workflow_command": self._workflow_command_observation(command, migration_phase=migration_phase),
+        }
 
     def _plan_collection_authoritative_merge_command_for_item(
         self,
@@ -7958,7 +7953,12 @@ class SourcingOrchestrator:
         if not item_id or not collection_id or not source_projection_id:
             return {}
         projection_payload = dict(source_projection or self.store.get_serving_projection(source_projection_id) or {})
-        job_id = str(item_payload.get("job_id") or metadata.get("source_run_id") or projection_payload.get("source_run_id") or source_projection_id).strip()
+        job_id = str(
+            item_payload.get("job_id")
+            or metadata.get("source_run_id")
+            or projection_payload.get("source_run_id")
+            or source_projection_id
+        ).strip()
         command_workflow_run_id = str(workflow_run_id or "").strip() or legacy_job_workflow_run_id(job_id)
         command_operation_id = str(operation_id or "").strip() or legacy_job_operation_id(job_id)
         normalized_migration_phase = str(migration_phase or "W2c_collection_authoritative_merge").strip()
@@ -8004,19 +8004,27 @@ class SourcingOrchestrator:
                     "idempotency_key": command_idempotency_key,
                     "payload": self._workflow_command_payload_with_optional_legacy_ref(
                         {
-                        "job_id": job_id,
-                        "collection_id": collection_id,
-                        "source_projection_id": source_projection_id,
-                        "item_id": item_id,
-                        "item_kind": str(item_payload.get("item_kind") or _COLLECTION_AUTHORITATIVE_MERGE_ITEM_KIND),
-                        "source_run_id": str(metadata.get("source_run_id") or projection_payload.get("source_run_id") or "").strip(),
-                        "publication_fingerprint": str(metadata.get("publication_fingerprint") or "").strip(),
-                        "projection_input_version": str(metadata.get("projection_input_version") or "").strip(),
-                        "member_count": _coerce_int(metadata.get("member_count"), 0),
-                        "materialization_metadata": metadata,
-                        "migration_phase": normalized_migration_phase,
-                        "source": str(source or item_payload.get("source") or "collection_authoritative_merge").strip(),
-                        "reason": str(reason or item_payload.get("reason") or "collection_authoritative_merge_requested").strip(),
+                            "job_id": job_id,
+                            "collection_id": collection_id,
+                            "source_projection_id": source_projection_id,
+                            "item_id": item_id,
+                            "item_kind": str(
+                                item_payload.get("item_kind") or _COLLECTION_AUTHORITATIVE_MERGE_ITEM_KIND
+                            ),
+                            "source_run_id": str(
+                                metadata.get("source_run_id") or projection_payload.get("source_run_id") or ""
+                            ).strip(),
+                            "publication_fingerprint": str(metadata.get("publication_fingerprint") or "").strip(),
+                            "projection_input_version": str(metadata.get("projection_input_version") or "").strip(),
+                            "member_count": _coerce_int(metadata.get("member_count"), 0),
+                            "materialization_metadata": metadata,
+                            "migration_phase": normalized_migration_phase,
+                            "source": str(
+                                source or item_payload.get("source") or "collection_authoritative_merge"
+                            ).strip(),
+                            "reason": str(
+                                reason or item_payload.get("reason") or "collection_authoritative_merge_requested"
+                            ).strip(),
                         },
                         item_payload=item_payload,
                         item_kind=_COLLECTION_AUTHORITATIVE_MERGE_ITEM_KIND,
@@ -8243,8 +8251,12 @@ class SourcingOrchestrator:
                         "request_payload": request_payload,
                         "materialization_metadata": metadata,
                         "migration_phase": "W6_projection_facet_layering_build",
-                        "source": str(source or item_payload.get("source") or "projection_facet_layering_build").strip(),
-                        "reason": str(reason or item_payload.get("reason") or "projection_facet_layering_build_requested").strip(),
+                        "source": str(
+                            source or item_payload.get("source") or "projection_facet_layering_build"
+                        ).strip(),
+                        "reason": str(
+                            reason or item_payload.get("reason") or "projection_facet_layering_build_requested"
+                        ).strip(),
                     },
                     item_payload=item_payload,
                     item_kind=_PROJECTION_FACET_LAYERING_ITEM_KIND,
@@ -8351,8 +8363,12 @@ class SourcingOrchestrator:
                 "member_page_size": self._projection_person_search_index_default_member_page_size(),
                 "processed_member_count": 0,
                 "next_offset": 0,
-                "raw_profile_index_watermark": str(projection.get("raw_profile_index_watermark") or projection_updated_at).strip(),
-                "evidence_index_watermark": str(projection.get("evidence_index_watermark") or projection_updated_at).strip(),
+                "raw_profile_index_watermark": str(
+                    projection.get("raw_profile_index_watermark") or projection_updated_at
+                ).strip(),
+                "evidence_index_watermark": str(
+                    projection.get("evidence_index_watermark") or projection_updated_at
+                ).strip(),
                 "reason": str(reason or "projection_event_time_index_rebuild").strip(),
             },
         }
@@ -8443,27 +8459,40 @@ class SourcingOrchestrator:
                     "idempotency_key": command_idempotency_key,
                     "payload": self._workflow_command_payload_with_optional_legacy_ref(
                         {
-                        "job_id": job_id,
-                        "projection_id": projection_id,
-                        "item_id": item_id,
-                        "item_kind": str(item_payload.get("item_kind") or _PROJECTION_PERSON_SEARCH_INDEX_ITEM_KIND),
-                        "projection_index_input_version": projection_index_input_version,
-                        "projection_type": str(metadata.get("projection_type") or projection_payload.get("projection_type") or "").strip(),
-                        "collection_id": str(metadata.get("collection_id") or projection_payload.get("collection_id") or "").strip(),
-                        "source_run_id": str(metadata.get("source_run_id") or projection_payload.get("source_run_id") or "").strip(),
-                        "member_count": _coerce_int(metadata.get("member_count"), 0),
-                        "count_scope": str(metadata.get("count_scope") or "exact_projection").strip() or "exact_projection",
-                        "member_page_size": max(
-                            1,
-                            _coerce_int(
-                                metadata.get("member_page_size"),
-                                self._projection_person_search_index_default_member_page_size(),
+                            "job_id": job_id,
+                            "projection_id": projection_id,
+                            "item_id": item_id,
+                            "item_kind": str(
+                                item_payload.get("item_kind") or _PROJECTION_PERSON_SEARCH_INDEX_ITEM_KIND
                             ),
-                        ),
-                        "materialization_metadata": metadata,
-                        "migration_phase": normalized_migration_phase,
-                        "source": str(source or item_payload.get("source") or "projection_person_search_index_build").strip(),
-                        "reason": str(reason or item_payload.get("reason") or "projection_person_search_index_build_requested").strip(),
+                            "projection_index_input_version": projection_index_input_version,
+                            "projection_type": str(
+                                metadata.get("projection_type") or projection_payload.get("projection_type") or ""
+                            ).strip(),
+                            "collection_id": str(
+                                metadata.get("collection_id") or projection_payload.get("collection_id") or ""
+                            ).strip(),
+                            "source_run_id": str(
+                                metadata.get("source_run_id") or projection_payload.get("source_run_id") or ""
+                            ).strip(),
+                            "member_count": _coerce_int(metadata.get("member_count"), 0),
+                            "count_scope": str(metadata.get("count_scope") or "exact_projection").strip()
+                            or "exact_projection",
+                            "member_page_size": max(
+                                1,
+                                _coerce_int(
+                                    metadata.get("member_page_size"),
+                                    self._projection_person_search_index_default_member_page_size(),
+                                ),
+                            ),
+                            "materialization_metadata": metadata,
+                            "migration_phase": normalized_migration_phase,
+                            "source": str(
+                                source or item_payload.get("source") or "projection_person_search_index_build"
+                            ).strip(),
+                            "reason": str(
+                                reason or item_payload.get("reason") or "projection_person_search_index_build_requested"
+                            ).strip(),
                         },
                         item_payload=item_payload,
                         item_kind=_PROJECTION_PERSON_SEARCH_INDEX_ITEM_KIND,
@@ -8531,12 +8560,10 @@ class SourcingOrchestrator:
         item_payload = dict(item or {})
         item_id = str(item_payload.get("item_id") or "").strip()
         metadata = dict(item_payload.get("metadata") or {})
-        command_owned_payload = bool(item_payload.get("command_owned_payload")) or bool(metadata.get("command_owned_payload"))
-        projection_id = str(
-            metadata.get("projection_id")
-            or item_payload.get("serving_projection_id")
-            or ""
-        ).strip()
+        command_owned_payload = bool(item_payload.get("command_owned_payload")) or bool(
+            metadata.get("command_owned_payload")
+        )
+        projection_id = str(metadata.get("projection_id") or item_payload.get("serving_projection_id") or "").strip()
         if not item_id or not projection_id:
             failed_item = (
                 {}
@@ -8833,7 +8860,9 @@ class SourcingOrchestrator:
                 command_record=refreshed,
                 runtime_command_contention=True,
             )
-        running_command = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+        running_command = (
+            self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+        )
         uses_legacy_item = self._workflow_command_payload_uses_legacy_materialization_item(payload)
         if uses_legacy_item:
             item = self.store.get_job_materialization_item(item_id)
@@ -8857,7 +8886,9 @@ class SourcingOrchestrator:
                         "reason": "projection_person_search_index_item_already_completed",
                         "item_id": item_id,
                         "projection_id": projection_id,
-                        "candidate_count": _coerce_int(dict(item.get("metadata") or {}).get("processed_member_count"), 0),
+                        "candidate_count": _coerce_int(
+                            dict(item.get("metadata") or {}).get("processed_member_count"), 0
+                        ),
                     },
                 )
                 return _result(
@@ -8995,7 +9026,9 @@ class SourcingOrchestrator:
                 "workflow_run_id": str(running_command.get("workflow_run_id") or "").strip(),
                 "operation_run_id": str(running_command.get("operation_id") or "").strip(),
                 "command_id": command_id,
-                "activity_run_id": str(final_activity.get("activity_run_id") or activity.get("activity_run_id") or "").strip(),
+                "activity_run_id": str(
+                    final_activity.get("activity_run_id") or activity.get("activity_run_id") or ""
+                ).strip(),
                 "attempt_id": str(final_attempt.get("attempt_id") or activity_attempt.get("attempt_id") or "").strip(),
                 "entity_type": "projection_index",
                 "entity_key": projection_id,
@@ -9251,7 +9284,10 @@ class SourcingOrchestrator:
         run_members: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         merged: dict[str, dict[str, Any]] = {}
-        for source_name, members in (("existing_authoritative", existing_members), ("run_scope_projection", run_members)):
+        for source_name, members in (
+            ("existing_authoritative", existing_members),
+            ("run_scope_projection", run_members),
+        ):
             for member in list(members or []):
                 if not isinstance(member, dict):
                     continue
@@ -9296,7 +9332,9 @@ class SourcingOrchestrator:
         item_payload = dict(item or {})
         item_id = str(item_payload.get("item_id") or "").strip()
         metadata = dict(item_payload.get("metadata") or {})
-        command_owned_payload = bool(item_payload.get("command_owned_payload")) or bool(metadata.get("command_owned_payload"))
+        command_owned_payload = bool(item_payload.get("command_owned_payload")) or bool(
+            metadata.get("command_owned_payload")
+        )
         collection_id = str(metadata.get("collection_id") or "").strip()
         source_projection_id = str(metadata.get("source_projection_id") or "").strip()
         if not item_id or not collection_id or not source_projection_id:
@@ -9320,7 +9358,10 @@ class SourcingOrchestrator:
                     item_id,
                     error_text="source_projection_missing",
                     retryable=False,
-                    metadata={"failure_reason": "source_projection_missing", "source_projection_id": source_projection_id},
+                    metadata={
+                        "failure_reason": "source_projection_missing",
+                        "source_projection_id": source_projection_id,
+                    },
                 )
             )
             return {"status": "failed", "reason": "source_projection_missing", "item": failed_item}
@@ -9332,7 +9373,10 @@ class SourcingOrchestrator:
                     item_id,
                     error_text="source_projection_not_run_scope",
                     retryable=False,
-                    metadata={"failure_reason": "source_projection_not_run_scope", "source_projection_id": source_projection_id},
+                    metadata={
+                        "failure_reason": "source_projection_not_run_scope",
+                        "source_projection_id": source_projection_id,
+                    },
                 )
             )
             return {"status": "failed", "reason": "source_projection_not_run_scope", "item": failed_item}
@@ -9345,7 +9389,10 @@ class SourcingOrchestrator:
                     item_id,
                     error_text="source_projection_members_missing",
                     retryable=False,
-                    metadata={"failure_reason": "source_projection_members_missing", "source_projection_id": source_projection_id},
+                    metadata={
+                        "failure_reason": "source_projection_members_missing",
+                        "source_projection_id": source_projection_id,
+                    },
                 )
             )
             return {"status": "failed", "reason": "source_projection_members_missing", "item": failed_item}
@@ -9522,7 +9569,9 @@ class SourcingOrchestrator:
                 command_record=refreshed,
                 runtime_command_contention=True,
             )
-        running_command = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+        running_command = (
+            self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+        )
         uses_legacy_item = self._workflow_command_payload_uses_legacy_materialization_item(payload)
         if uses_legacy_item:
             item = self.store.get_job_materialization_item(item_id)
@@ -9548,7 +9597,9 @@ class SourcingOrchestrator:
                         "item_id": item_id,
                         "collection_id": collection_id,
                         "source_projection_id": source_projection_id,
-                        "authoritative_projection_id": str(metadata.get("authoritative_projection_id") or item.get("serving_projection_id") or ""),
+                        "authoritative_projection_id": str(
+                            metadata.get("authoritative_projection_id") or item.get("serving_projection_id") or ""
+                        ),
                         "candidate_count": _coerce_int(metadata.get("member_count"), 0),
                     },
                 )
@@ -9643,13 +9694,7 @@ class SourcingOrchestrator:
             "source_projection_not_run_scope",
             "source_projection_members_missing",
         }
-        activity_status = (
-            "succeeded"
-            if result_status == "completed"
-            else "retry_wait"
-            if retryable
-            else "failed"
-        )
+        activity_status = "succeeded" if result_status == "completed" else "retry_wait" if retryable else "failed"
         final_activity, final_attempt = self._finish_workflow_command_activity_attempt(
             activity=activity,
             attempt=activity_attempt,
@@ -9661,7 +9706,9 @@ class SourcingOrchestrator:
                 "candidate_count": _coerce_int(item_result_payload.get("candidate_count"), 0),
                 "merged_member_count": _coerce_int(item_result_payload.get("candidate_count"), 0),
             },
-            error={} if result_status == "completed" else {"reason": result_reason or "collection_authoritative_merge_failed"},
+            error={}
+            if result_status == "completed"
+            else {"reason": result_reason or "collection_authoritative_merge_failed"},
             metadata={
                 "collection_id": collection_id,
                 "source_projection_id": source_projection_id,
@@ -9679,7 +9726,9 @@ class SourcingOrchestrator:
                 "workflow_run_id": str(running_command.get("workflow_run_id") or "").strip(),
                 "operation_run_id": str(running_command.get("operation_id") or "").strip(),
                 "command_id": command_id,
-                "activity_run_id": str(final_activity.get("activity_run_id") or activity.get("activity_run_id") or "").strip(),
+                "activity_run_id": str(
+                    final_activity.get("activity_run_id") or activity.get("activity_run_id") or ""
+                ).strip(),
                 "attempt_id": str(final_attempt.get("attempt_id") or activity_attempt.get("attempt_id") or "").strip(),
                 "entity_type": "collection_projection",
                 "entity_key": collection_id,
@@ -9923,13 +9972,13 @@ class SourcingOrchestrator:
         overlay_write_metadata: dict[str, Any],
     ) -> dict[str, Any]:
         existing_payload = dict(existing_overlay_payload or {})
-        base_records = [
-            dict(item) for item in list(existing_payload.get("candidates") or []) if isinstance(item, dict)
-        ]
+        base_records = [dict(item) for item in list(existing_payload.get("candidates") or []) if isinstance(item, dict)]
         if not base_records:
             return {"status": "fallback", "reason": "existing_overlay_candidates_missing"}
         normalized_job_id = str(job_id or "").strip()
-        current_snapshot_id = str(delta_candidate_source.get("snapshot_id") or existing_payload.get("snapshot_id") or "").strip()
+        current_snapshot_id = str(
+            delta_candidate_source.get("snapshot_id") or existing_payload.get("snapshot_id") or ""
+        ).strip()
         target_company = str(
             existing_payload.get("target_company")
             or delta_candidate_source.get("target_company")
@@ -9937,7 +9986,12 @@ class SourcingOrchestrator:
             or ""
         ).strip()
         asset_view = (
-            str(existing_payload.get("asset_view") or delta_candidate_source.get("asset_view") or request.asset_view or "").strip()
+            str(
+                existing_payload.get("asset_view")
+                or delta_candidate_source.get("asset_view")
+                or request.asset_view
+                or ""
+            ).strip()
             or "canonical_merged"
         )
         if not normalized_job_id or not current_snapshot_id or not target_company:
@@ -9952,9 +10006,7 @@ class SourcingOrchestrator:
                 return {"status": "fallback", "reason": "existing_overlay_member_key_missing"}
             candidate_id = str(record.get("candidate_id") or "").strip()
             candidate_evidence = [
-                dict(item)
-                for item in list(existing_evidence_lookup.get(candidate_id) or [])
-                if isinstance(item, dict)
+                dict(item) for item in list(existing_evidence_lookup.get(candidate_id) or []) if isinstance(item, dict)
             ]
             existing_indices = [
                 index
@@ -9977,10 +10029,7 @@ class SourcingOrchestrator:
                     authoritative_record=authoritative_record,
                     raw_result_record=raw_result_record,
                 )
-                merged_candidate_id = str(
-                    dict(merged_record).get("candidate_id")
-                    or candidate_id
-                ).strip()
+                merged_candidate_id = str(dict(merged_record).get("candidate_id") or candidate_id).strip()
                 base_slots[existing_index]["record"] = merged_record
                 base_slots[existing_index]["evidence"] = self._merge_evidence_records_for_candidate(
                     list(base_slots[existing_index].get("evidence") or []),
@@ -10059,9 +10108,7 @@ class SourcingOrchestrator:
             if len(existing_indices) > 1:
                 for duplicate_index in existing_indices[1:]:
                     base_slots[duplicate_index]["active"] = False
-            existing_record = (
-                dict(base_slots[existing_index].get("record") or {}) if existing_index is not None else {}
-            )
+            existing_record = dict(base_slots[existing_index].get("record") or {}) if existing_index is not None else {}
             if existing_index is None:
                 merged_record = dict(delta_record)
                 added_member_keys.append(member_key)
@@ -10082,12 +10129,8 @@ class SourcingOrchestrator:
                 )
                 if merged_record != existing_record:
                     updated_member_keys.append(member_key)
-            merged_candidate_id = str(
-                dict(merged_record).get("candidate_id") or delta_candidate_id or ""
-            ).strip()
-            base_evidence = (
-                list(base_slots[existing_index].get("evidence") or []) if existing_index is not None else []
-            )
+            merged_candidate_id = str(dict(merged_record).get("candidate_id") or delta_candidate_id or "").strip()
+            base_evidence = list(base_slots[existing_index].get("evidence") or []) if existing_index is not None else []
             delta_evidence = list(delta_evidence_lookup.get(delta_candidate_id) or [])
             base_slots[existing_index]["record"] = merged_record
             base_slots[existing_index]["evidence"] = self._merge_evidence_records_for_candidate(
@@ -10122,7 +10165,9 @@ class SourcingOrchestrator:
                 "base_candidate_count": len(base_records),
                 "delta_candidate_count": len(delta_records),
                 "candidate_count": len(final_records),
-                "added_member_keys": _dedupe_texts([*list(patch_payload.get("added_member_keys") or []), *added_member_keys]),
+                "added_member_keys": _dedupe_texts(
+                    [*list(patch_payload.get("added_member_keys") or []), *added_member_keys]
+                ),
                 "updated_member_keys": _dedupe_texts(
                     [*list(patch_payload.get("updated_member_keys") or []), *updated_member_keys]
                 ),
@@ -10145,8 +10190,12 @@ class SourcingOrchestrator:
                 or ""
             ).strip(),
             "asset_view": asset_view,
-            "source_kind": str(delta_candidate_source.get("source_kind") or existing_payload.get("source_kind") or "").strip(),
-            "source_path": str(delta_candidate_source.get("source_path") or existing_payload.get("source_path") or "").strip(),
+            "source_kind": str(
+                delta_candidate_source.get("source_kind") or existing_payload.get("source_kind") or ""
+            ).strip(),
+            "source_path": str(
+                delta_candidate_source.get("source_path") or existing_payload.get("source_path") or ""
+            ).strip(),
             "materialization_generation_key": str(
                 delta_candidate_source.get("materialization_generation_key")
                 or existing_payload.get("materialization_generation_key")
@@ -10184,9 +10233,10 @@ class SourcingOrchestrator:
             final_records,
             intent_keywords=list(request.keywords or []) + list(request.organization_keywords or []),
         )
-        output_payload["facet_summary_scope"] = str(
-            delta_candidate_source.get("facet_summary_scope") or "current_served_partial"
-        ).strip() or "current_served_partial"
+        output_payload["facet_summary_scope"] = (
+            str(delta_candidate_source.get("facet_summary_scope") or "current_served_partial").strip()
+            or "current_served_partial"
+        )
         overlay_info = self._write_job_asset_population_overlay_payload(
             job_id=normalized_job_id,
             overlay_payload=output_payload,
@@ -10283,16 +10333,17 @@ class SourcingOrchestrator:
         intent_keywords = list(request.keywords or []) + list(request.organization_keywords or [])
         if fast_path:
             overlay_payload["candidate_count"] = len(overlay_records)
-            overlay_payload["card_materialization_summary"] = self._build_candidate_card_materialization_summary_from_records(
-                overlay_records
+            overlay_payload["card_materialization_summary"] = (
+                self._build_candidate_card_materialization_summary_from_records(overlay_records)
             )
             overlay_payload["facet_summary"] = self._build_asset_population_facet_summary_from_records(
                 overlay_records,
                 intent_keywords=intent_keywords,
             )
-            overlay_payload["facet_summary_scope"] = str(
-                candidate_source.get("facet_summary_scope") or "current_served_partial"
-            ).strip() or "current_served_partial"
+            overlay_payload["facet_summary_scope"] = (
+                str(candidate_source.get("facet_summary_scope") or "current_served_partial").strip()
+                or "current_served_partial"
+            )
             markers = self._normalized_job_scoped_candidate_markers(candidate_source)
             if markers:
                 overlay_payload["job_scoped_candidate_markers"] = markers
@@ -10346,9 +10397,10 @@ class SourcingOrchestrator:
             enriched_candidate_records or overlay_records,
             intent_keywords=intent_keywords,
         )
-        overlay_payload["facet_summary_scope"] = str(
-            candidate_source.get("facet_summary_scope") or "current_served_partial"
-        ).strip() or "current_served_partial"
+        overlay_payload["facet_summary_scope"] = (
+            str(candidate_source.get("facet_summary_scope") or "current_served_partial").strip()
+            or "current_served_partial"
+        )
         return self._write_job_asset_population_overlay_payload(
             job_id=normalized_job_id,
             overlay_payload=overlay_payload,
@@ -10404,11 +10456,15 @@ class SourcingOrchestrator:
             or dict(metadata.get("latest_board_visible_patch") or {}).get("overlay_path")
             or ""
         ).strip()
-        if serving_projection_phase not in {
-            "current_snapshot_row_shell_overlay",
-            "current_snapshot_serving",
-            "current_serving",
-        } and not row_shell_projection_id:
+        if (
+            serving_projection_phase
+            not in {
+                "current_snapshot_row_shell_overlay",
+                "current_snapshot_serving",
+                "current_serving",
+            }
+            and not row_shell_projection_id
+        ):
             return {}
         if not serving_projection_id:
             return {}
@@ -10445,9 +10501,7 @@ class SourcingOrchestrator:
             except (OSError, json.JSONDecodeError):
                 serving_overlay_payload = {}
         overlay_records = [
-            dict(record)
-            for record in list(serving_overlay_payload.get("candidates") or [])
-            if isinstance(record, dict)
+            dict(record) for record in list(serving_overlay_payload.get("candidates") or []) if isinstance(record, dict)
         ]
         overlay_candidate_count = _coerce_int(serving_overlay_payload.get("candidate_count"), len(overlay_records))
         serving_candidate_count = max(0, overlay_candidate_count, run_projection_member_count)
@@ -10516,10 +10570,7 @@ class SourcingOrchestrator:
                 _coerce_int(latest_patch.get("cumulative_candidate_count"), 0),
             ),
         )
-        if (
-            patch_card_summary
-            and _coerce_int(patch_card_summary.get("candidate_count"), 0) == serving_candidate_count
-        ):
+        if patch_card_summary and _coerce_int(patch_card_summary.get("candidate_count"), 0) == serving_candidate_count:
             card_materialization_summary = self._normalize_candidate_card_materialization_summary(
                 patch_card_summary,
                 fallback_candidate_count=serving_candidate_count,
@@ -10726,15 +10777,21 @@ class SourcingOrchestrator:
             candidate_id_aliases,
         ) = self._canonicalize_board_visible_delta_for_current_snapshot(
             candidate_ids=patch_candidate_ids,
-            current_candidates=[candidate for candidate in list(visible_candidates or []) if isinstance(candidate, Candidate)],
+            current_candidates=[
+                candidate for candidate in list(visible_candidates or []) if isinstance(candidate, Candidate)
+            ],
             profile_delta_candidate_records=profile_delta_candidate_records,
         )
         cumulative_candidate_ids, _, _ = self._canonicalize_board_visible_delta_for_current_snapshot(
             candidate_ids=cumulative_candidate_ids,
-            current_candidates=[candidate for candidate in list(visible_candidates or []) if isinstance(candidate, Candidate)],
+            current_candidates=[
+                candidate for candidate in list(visible_candidates or []) if isinstance(candidate, Candidate)
+            ],
             profile_delta_candidate_records=canonical_profile_delta_candidate_records,
         )
-        patch_candidate_ids = [candidate_id for candidate_id in patch_candidate_ids if candidate_id in visible_candidate_id_set]
+        patch_candidate_ids = [
+            candidate_id for candidate_id in patch_candidate_ids if candidate_id in visible_candidate_id_set
+        ]
         if not patch_candidate_ids:
             return {"status": "skipped", "reason": "current_snapshot_already_served_patch_candidates_missing"}
         existing_patches = self.store.list_job_board_visible_patches(
@@ -10758,8 +10815,7 @@ class SourcingOrchestrator:
         profile_delta_records_by_id = {
             str(item.get("candidate_id") or "").strip(): dict(item)
             for item in list(canonical_profile_delta_candidate_records or [])
-            if isinstance(item, dict)
-            and str(item.get("candidate_id") or "").strip() in visible_candidate_id_set
+            if isinstance(item, dict) and str(item.get("candidate_id") or "").strip() in visible_candidate_id_set
         }
         merged_visible_candidates = list(visible_candidates or [])
         if profile_delta_records_by_id:
@@ -10773,9 +10829,7 @@ class SourcingOrchestrator:
             rebuilt_candidates: list[Candidate] = []
             for record in merged_visible_records:
                 candidate_payload = {
-                    field_name: record.get(field_name)
-                    for field_name in candidate_fields
-                    if field_name in record
+                    field_name: record.get(field_name) for field_name in candidate_fields if field_name in record
                 }
                 try:
                     rebuilt_candidates.append(normalize_candidate(Candidate(**candidate_payload)))
@@ -10838,8 +10892,7 @@ class SourcingOrchestrator:
             or snapshot_dir / "candidate_documents.json"
         ).strip()
         serving_projection_phase = (
-            str(lifecycle_payload.get("serving_projection_phase") or "").strip()
-            or "current_snapshot_row_shell_overlay"
+            str(lifecycle_payload.get("serving_projection_phase") or "").strip() or "current_snapshot_row_shell_overlay"
         )
         overlay_write_metadata = {
             "overlay_write_mode": "current_snapshot_row_shell_reuse",
@@ -10935,9 +10988,7 @@ class SourcingOrchestrator:
 
         lifecycle_metadata = dict(lifecycle_payload.get("metadata") or {})
         patches = [
-            dict(item)
-            for item in list(lifecycle_metadata.get("board_visible_patches") or [])
-            if isinstance(item, dict)
+            dict(item) for item in list(lifecycle_metadata.get("board_visible_patches") or []) if isinstance(item, dict)
         ]
         patches = [item for item in patches if str(item.get("patch_id") or "").strip() != patch_record["patch_id"]]
         patches.append(dict(patch_record))
@@ -10957,8 +11008,7 @@ class SourcingOrchestrator:
             "served_candidate_count": served_count,
             "expected_candidate_count": expected_count,
             "background_snapshot_materialization_status": str(
-                lifecycle_payload.get("background_snapshot_materialization_status")
-                or "row_shell_serving"
+                lifecycle_payload.get("background_snapshot_materialization_status") or "row_shell_serving"
             ).strip(),
             "serving_projection_id": serving_projection_id,
             "serving_projection_phase": serving_projection_phase,
@@ -11103,9 +11153,7 @@ class SourcingOrchestrator:
         )
 
         combined_profile_delta_candidate_records = [
-            dict(item)
-            for item in list(profile_delta_candidate_records or [])
-            if isinstance(item, dict)
+            dict(item) for item in list(profile_delta_candidate_records or []) if isinstance(item, dict)
         ]
         (
             normalized_candidate_ids,
@@ -11166,9 +11214,7 @@ class SourcingOrchestrator:
                 profile_delta_candidate_records=existing_profile_delta_candidate_records,
             )
             candidate_id_aliases = {**existing_candidate_id_aliases, **candidate_id_aliases}
-        cumulative_candidate_ids = _dedupe_texts(
-            [*existing_board_visible_candidate_ids, *normalized_candidate_ids]
-        )
+        cumulative_candidate_ids = _dedupe_texts([*existing_board_visible_candidate_ids, *normalized_candidate_ids])
         cumulative_candidate_id_set = set(cumulative_candidate_ids)
         visible_candidates = [
             candidate
@@ -11222,17 +11268,14 @@ class SourcingOrchestrator:
             if str(candidate.candidate_id or "").strip()
         }
         visible_evidence_lookup = {
-            str(candidate_id or "").strip(): [
-                dict(item) for item in list(items or []) if isinstance(item, dict)
-            ]
+            str(candidate_id or "").strip(): [dict(item) for item in list(items or []) if isinstance(item, dict)]
             for candidate_id, items in dict(current_candidate_source.get("evidence_lookup") or {}).items()
             if str(candidate_id or "").strip() in visible_candidate_id_set
         }
         profile_delta_records_by_id = {
             str(item.get("candidate_id") or "").strip(): dict(item)
             for item in [*existing_profile_delta_candidate_records, *combined_profile_delta_candidate_records]
-            if isinstance(item, dict)
-            and str(item.get("candidate_id") or "").strip() in visible_candidate_id_set
+            if isinstance(item, dict) and str(item.get("candidate_id") or "").strip() in visible_candidate_id_set
         }
         overlay_candidate_source = {
             **dict(current_candidate_source),
@@ -11263,9 +11306,7 @@ class SourcingOrchestrator:
             merged_visible_candidates: list[Candidate] = []
             for record in merged_visible_records:
                 candidate_payload = {
-                    field_name: record.get(field_name)
-                    for field_name in candidate_fields
-                    if field_name in record
+                    field_name: record.get(field_name) for field_name in candidate_fields if field_name in record
                 }
                 try:
                     merged_visible_candidates.append(normalize_candidate(Candidate(**candidate_payload)))
@@ -11359,7 +11400,9 @@ class SourcingOrchestrator:
             source_kind="company_snapshot",
             view_kind="asset_population",
             snapshot_id=current_snapshot_id,
-            asset_view=str(overlay_candidate_source.get("asset_view") or request.asset_view or "canonical_merged").strip()
+            asset_view=str(
+                overlay_candidate_source.get("asset_view") or request.asset_view or "canonical_merged"
+            ).strip()
             or "canonical_merged",
             source_path=str(overlay_candidate_source.get("source_path") or snapshot_dir / "candidate_documents.json"),
             authoritative_snapshot_id=current_snapshot_id,
@@ -11400,7 +11443,9 @@ class SourcingOrchestrator:
             target_company=str(request.target_company or overlay_candidate_source.get("target_company") or "").strip(),
             snapshot_id=current_snapshot_id,
             baseline_snapshot_id="",
-            asset_view=str(overlay_candidate_source.get("asset_view") or request.asset_view or "canonical_merged").strip()
+            asset_view=str(
+                overlay_candidate_source.get("asset_view") or request.asset_view or "canonical_merged"
+            ).strip()
             or "canonical_merged",
             patch_kind=str(patch_record.get("kind") or "partial_current_snapshot_board_visible_patch").strip(),
             patch_phase=str(patch_record.get("patch_phase") or "board_visible_current_snapshot_partial").strip(),
@@ -11427,9 +11472,7 @@ class SourcingOrchestrator:
             patch_record["sequence_index"] = int(persisted_patch.get("sequence_index") or 0)
         lifecycle_metadata = dict(existing_lifecycle.get("metadata") or {})
         patches = [
-            dict(item)
-            for item in list(lifecycle_metadata.get("board_visible_patches") or [])
-            if isinstance(item, dict)
+            dict(item) for item in list(lifecycle_metadata.get("board_visible_patches") or []) if isinstance(item, dict)
         ]
         patches.append(dict(patch_record))
         lifecycle_metadata["latest_board_visible_patch"] = dict(patch_record)
@@ -11586,9 +11629,7 @@ class SourcingOrchestrator:
             if not candidates:
                 return {}
             evidence_lookup = {
-                str(candidate_id or "").strip(): [
-                    dict(item) for item in list(items or []) if isinstance(item, dict)
-                ]
+                str(candidate_id or "").strip(): [dict(item) for item in list(items or []) if isinstance(item, dict)]
                 for candidate_id, items in dict(payload.get("evidence_lookup") or {}).items()
                 if str(candidate_id or "").strip()
             }
@@ -11695,19 +11736,13 @@ class SourcingOrchestrator:
                 row_shell_served_count = _coerce_int(row_shell_publication.get("served_candidate_count"), 0)
                 row_shell_projection_id = str(row_shell_publication.get("serving_projection_id") or "").strip()
                 row_shell_active = row_shell_served_count > 0
-            existing_serving_projection_phase = str(
-                active_lifecycle.get("serving_projection_phase") or ""
-            ).strip()
+            existing_serving_projection_phase = str(active_lifecycle.get("serving_projection_phase") or "").strip()
             full_current_snapshot_reuse = existing_serving_projection_phase in {
                 "current_snapshot_serving",
                 "current_serving",
             }
-            row_shell_reuse = (
-                not full_current_snapshot_reuse
-                and (
-                    existing_serving_projection_phase == "current_snapshot_row_shell_overlay"
-                    or row_shell_active
-                )
+            row_shell_reuse = not full_current_snapshot_reuse and (
+                existing_serving_projection_phase == "current_snapshot_row_shell_overlay" or row_shell_active
             )
             serving_projection_id = str(
                 (row_shell_projection_id if row_shell_reuse else "")
@@ -11721,14 +11756,20 @@ class SourcingOrchestrator:
                 row_shell_served_count if row_shell_reuse else 0,
                 _coerce_int(dict(result_view.get("summary") or {}).get("candidate_count"), 0),
             )
-            patch_source = "current_snapshot_row_shell_reuse" if row_shell_reuse else "current_snapshot_serving_idempotency"
-            patch_phase = "board_visible_delta_row_shell_reuse" if row_shell_reuse else "board_visible_delta_already_served"
+            patch_source = (
+                "current_snapshot_row_shell_reuse" if row_shell_reuse else "current_snapshot_serving_idempotency"
+            )
+            patch_phase = (
+                "board_visible_delta_row_shell_reuse" if row_shell_reuse else "board_visible_delta_already_served"
+            )
             serving_projection_phase = (
                 "current_snapshot_row_shell_overlay"
                 if row_shell_reuse
                 else (existing_serving_projection_phase or "current_snapshot_serving")
             )
-            overlay_write_mode = "current_snapshot_row_shell_reuse" if row_shell_reuse else "current_snapshot_serving_reuse"
+            overlay_write_mode = (
+                "current_snapshot_row_shell_reuse" if row_shell_reuse else "current_snapshot_serving_reuse"
+            )
             no_overlay_write_reason = (
                 "current_snapshot_row_shell_already_served"
                 if row_shell_reuse
@@ -11744,10 +11785,12 @@ class SourcingOrchestrator:
                 fallback_candidate_count=served_count or cumulative_board_visible_count,
             )
             if not card_materialization_summary:
-                card_materialization_summary = self._build_candidate_card_materialization_summary_from_lifecycle_projection(
-                    active_lifecycle,
-                    served_candidate_count=served_count or cumulative_board_visible_count,
-                    cumulative_delta_visible_count=cumulative_board_visible_count,
+                card_materialization_summary = (
+                    self._build_candidate_card_materialization_summary_from_lifecycle_projection(
+                        active_lifecycle,
+                        served_candidate_count=served_count or cumulative_board_visible_count,
+                        cumulative_delta_visible_count=cumulative_board_visible_count,
+                    )
                 )
             overlay_write_metadata = {
                 "overlay_write_mode": overlay_write_mode,
@@ -11851,11 +11894,15 @@ class SourcingOrchestrator:
                 str(active_row_shell.get("snapshot_id") or "").strip() == current_snapshot_id
                 and _coerce_int(active_row_shell.get("served_candidate_count"), 0) > 0
             )
-            if active_projection_phase not in {
-                "current_snapshot_serving",
-                "current_serving",
-                "current_snapshot_row_shell_overlay",
-            } and not row_shell_active:
+            if (
+                active_projection_phase
+                not in {
+                    "current_snapshot_serving",
+                    "current_serving",
+                    "current_snapshot_row_shell_overlay",
+                }
+                and not row_shell_active
+            ):
                 return {}
             already_visible_patch = _publish_already_visible_current_snapshot_patch(active_lifecycle)
             if str(already_visible_patch.get("status") or "").strip().lower() == "completed":
@@ -11881,8 +11928,10 @@ class SourcingOrchestrator:
                 if isinstance(loaded_projection_payload, dict):
                     existing_partial_projection_payload = dict(loaded_projection_payload)
         served_snapshot_id = str(lifecycle.get("served_snapshot_id") or result_view.get("snapshot_id") or "").strip()
-        if served_snapshot_id and served_snapshot_id != baseline_snapshot_id and not (
-            served_snapshot_id == current_snapshot_id and partial_projection_active
+        if (
+            served_snapshot_id
+            and served_snapshot_id != baseline_snapshot_id
+            and not (served_snapshot_id == current_snapshot_id and partial_projection_active)
         ):
             if served_snapshot_id == current_snapshot_id:
                 already_visible_patch = _publish_already_visible_current_snapshot_patch(lifecycle)
@@ -11910,10 +11959,7 @@ class SourcingOrchestrator:
                 baseline_candidate_source = _load_source_path_candidate_source(baseline_result_view_source_path)
             except Exception:
                 baseline_candidate_source = {}
-        if (
-            not existing_partial_projection_payload
-            and not list(baseline_candidate_source.get("candidates") or [])
-        ):
+        if not existing_partial_projection_payload and not list(baseline_candidate_source.get("candidates") or []):
             try:
                 baseline_candidate_source = self._load_retrieval_candidate_source(
                     request,
@@ -11922,10 +11968,7 @@ class SourcingOrchestrator:
                 )
             except Exception:
                 baseline_candidate_source = {}
-        if (
-            not existing_partial_projection_payload
-            and not list(baseline_candidate_source.get("candidates") or [])
-        ):
+        if not existing_partial_projection_payload and not list(baseline_candidate_source.get("candidates") or []):
             baseline_snapshot_dir = resolve_company_snapshot_dir(
                 self.runtime_dir,
                 target_company=request.target_company,
@@ -11956,8 +11999,7 @@ class SourcingOrchestrator:
         profile_delta_candidate_records_by_id = {
             str(item.get("candidate_id") or "").strip(): dict(item)
             for item in list(profile_delta_candidate_records or [])
-            if isinstance(item, dict)
-            and str(item.get("candidate_id") or "").strip() in delta_candidate_id_set
+            if isinstance(item, dict) and str(item.get("candidate_id") or "").strip() in delta_candidate_id_set
         }
         delta_candidates = [
             candidate
@@ -11967,11 +12009,10 @@ class SourcingOrchestrator:
         if not delta_candidates:
             return {"status": "skipped", "reason": "delta_candidates_missing"}
         delta_evidence_lookup = {
-            str(candidate_id or "").strip(): [
-                dict(item) for item in list(items or []) if isinstance(item, dict)
-            ]
+            str(candidate_id or "").strip(): [dict(item) for item in list(items or []) if isinstance(item, dict)]
             for candidate_id, items in dict(current_candidate_source.get("evidence_lookup") or {}).items()
-            if str(candidate_id or "").strip() in {str(candidate.candidate_id or "").strip() for candidate in delta_candidates}
+            if str(candidate_id or "").strip()
+            in {str(candidate.candidate_id or "").strip() for candidate in delta_candidates}
         }
         partial_delta_source = {
             **dict(current_candidate_source),
@@ -11987,9 +12028,9 @@ class SourcingOrchestrator:
             "overlay_fast_path_eligible": bool(partial_projection_active and existing_partial_projection_payload),
             "overlay_fast_path_used": False,
             "overlay_fallback_reason": "",
-            "base_candidate_count": len(
-                list(existing_partial_projection_payload.get("candidates") or [])
-            ) if existing_partial_projection_payload else len(baseline_candidates),
+            "base_candidate_count": len(list(existing_partial_projection_payload.get("candidates") or []))
+            if existing_partial_projection_payload
+            else len(baseline_candidates),
             "delta_candidate_count": len(delta_candidates),
             "compact_overlay_records": True,
             "overlay_record_projection": "board_visible_compact_v1",
@@ -12025,7 +12066,9 @@ class SourcingOrchestrator:
         if str(incremental_overlay_result.get("status") or "").strip().lower() == "completed":
             overlay_info = dict(incremental_overlay_result.get("overlay_info") or {})
             overlay_candidate_source = dict(incremental_overlay_result.get("overlay_candidate_source") or {})
-            overlay_write_metadata = dict(incremental_overlay_result.get("overlay_write_metadata") or overlay_write_metadata)
+            overlay_write_metadata = dict(
+                incremental_overlay_result.get("overlay_write_metadata") or overlay_write_metadata
+            )
         else:
             concurrent_current_snapshot_patch = _publish_if_current_snapshot_rows_already_served()
             if concurrent_current_snapshot_patch:
@@ -12036,7 +12079,9 @@ class SourcingOrchestrator:
                 ).strip()
             if existing_partial_projection_payload and not list(baseline_candidate_source.get("candidates") or []):
                 try:
-                    baseline_candidate_source = _load_existing_partial_projection_candidate_source(existing_projection_id)
+                    baseline_candidate_source = _load_existing_partial_projection_candidate_source(
+                        existing_projection_id
+                    )
                 except Exception:
                     baseline_candidate_source = {}
             baseline_candidates = [
@@ -12093,12 +12138,16 @@ class SourcingOrchestrator:
         overlay_patch["mode"] = "partial_delta_board_visible_overlay"
         overlay_patch["reason"] = str(reason or "partial_delta_board_visible").strip()
         overlay_patch["overlay_write_mode"] = str(
-            overlay_write_metadata.get("overlay_write_mode") or overlay_patch.get("overlay_write_mode") or "full_rebuild"
+            overlay_write_metadata.get("overlay_write_mode")
+            or overlay_patch.get("overlay_write_mode")
+            or "full_rebuild"
         )
         overlay_patch["overlay_fast_path_eligible"] = bool(overlay_write_metadata.get("overlay_fast_path_eligible"))
         overlay_patch["overlay_fast_path_used"] = bool(overlay_write_metadata.get("overlay_fast_path_used"))
         if str(overlay_write_metadata.get("overlay_fallback_reason") or "").strip():
-            overlay_patch["overlay_fallback_reason"] = str(overlay_write_metadata.get("overlay_fallback_reason") or "").strip()
+            overlay_patch["overlay_fallback_reason"] = str(
+                overlay_write_metadata.get("overlay_fallback_reason") or ""
+            ).strip()
         canonical_overlay_candidate_ids = _dedupe_texts(overlay_info.get("candidate_ids") or [])
         canonical_overlay_candidate_id_set = set(canonical_overlay_candidate_ids)
         canonical_delta_candidate_ids = _dedupe_texts(
@@ -12110,7 +12159,9 @@ class SourcingOrchestrator:
             ]
         )
         patch_candidate_ids = [
-            candidate_id for candidate_id in canonical_delta_candidate_ids if candidate_id in canonical_overlay_candidate_id_set
+            candidate_id
+            for candidate_id in canonical_delta_candidate_ids
+            if candidate_id in canonical_overlay_candidate_id_set
         ]
         filtered_candidate_ids = [
             candidate_id
@@ -12222,7 +12273,9 @@ class SourcingOrchestrator:
             source_kind="company_snapshot",
             view_kind="asset_population",
             snapshot_id=current_snapshot_id,
-            asset_view=str(overlay_candidate_source.get("asset_view") or request.asset_view or "canonical_merged").strip()
+            asset_view=str(
+                overlay_candidate_source.get("asset_view") or request.asset_view or "canonical_merged"
+            ).strip()
             or "canonical_merged",
             source_path=str(overlay_candidate_source.get("source_path") or snapshot_dir / "candidate_documents.json"),
             authoritative_snapshot_id=baseline_snapshot_id,
@@ -12264,7 +12317,9 @@ class SourcingOrchestrator:
             target_company=str(request.target_company or overlay_candidate_source.get("target_company") or "").strip(),
             snapshot_id=current_snapshot_id,
             baseline_snapshot_id=baseline_snapshot_id,
-            asset_view=str(overlay_candidate_source.get("asset_view") or request.asset_view or "canonical_merged").strip()
+            asset_view=str(
+                overlay_candidate_source.get("asset_view") or request.asset_view or "canonical_merged"
+            ).strip()
             or "canonical_merged",
             patch_kind=str(patch_record.get("kind") or "partial_delta_board_visible_patch").strip(),
             patch_phase=str(patch_record.get("patch_phase") or "board_visible_delta_applied").strip(),
@@ -12765,7 +12820,11 @@ class SourcingOrchestrator:
         )
         if not workflow_run_id or not command_idempotency_key:
             return {}
-        request_payload = request.to_record() if request is not None else dict(dict(item_payload.get("metadata") or {}).get("request_payload") or {})
+        request_payload = (
+            request.to_record()
+            if request is not None
+            else dict(dict(item_payload.get("metadata") or {}).get("request_payload") or {})
+        )
         try:
             self.durable_runtime_writer.append_event_and_reduce(
                 workflow_run_id=workflow_run_id,
@@ -12798,25 +12857,33 @@ class SourcingOrchestrator:
                     "idempotency_key": command_idempotency_key,
                     "payload": self._workflow_command_payload_with_optional_legacy_ref(
                         {
-                        "job_id": job_id,
-                        "target_company": str(item_payload.get("target_company") or dict(job or {}).get("target_company") or ""),
-                        "snapshot_id": snapshot_id,
-                        "baseline_snapshot_id": str(item_payload.get("baseline_snapshot_id") or ""),
-                        "asset_view": str(item_payload.get("asset_view") or getattr(request, "asset_view", "") or "canonical_merged"),
-                        "item_id": item_id,
-                        "item_kind": str(item_payload.get("item_kind") or _BOARD_VISIBLE_DELTA_APPLY_ITEM_KIND),
-                        "candidate_ids": candidate_ids,
-                        "candidate_count": len(candidate_ids),
-                        "source_worker_ids": [
-                            int(worker_id)
-                            for worker_id in list(item_payload.get("source_worker_ids") or [])
-                            if int(worker_id or 0) > 0
-                        ],
-                        "request_payload": request_payload,
-                        "materialization_metadata": dict(item_payload.get("metadata") or {}),
-                        "migration_phase": "W2c_board_visible_patch_publish",
-                        "source": str(source or item_payload.get("source") or "board_visible_delta_apply").strip(),
-                        "reason": str(reason or item_payload.get("reason") or "board_visible_patch_publish_requested").strip(),
+                            "job_id": job_id,
+                            "target_company": str(
+                                item_payload.get("target_company") or dict(job or {}).get("target_company") or ""
+                            ),
+                            "snapshot_id": snapshot_id,
+                            "baseline_snapshot_id": str(item_payload.get("baseline_snapshot_id") or ""),
+                            "asset_view": str(
+                                item_payload.get("asset_view")
+                                or getattr(request, "asset_view", "")
+                                or "canonical_merged"
+                            ),
+                            "item_id": item_id,
+                            "item_kind": str(item_payload.get("item_kind") or _BOARD_VISIBLE_DELTA_APPLY_ITEM_KIND),
+                            "candidate_ids": candidate_ids,
+                            "candidate_count": len(candidate_ids),
+                            "source_worker_ids": [
+                                int(worker_id)
+                                for worker_id in list(item_payload.get("source_worker_ids") or [])
+                                if int(worker_id or 0) > 0
+                            ],
+                            "request_payload": request_payload,
+                            "materialization_metadata": dict(item_payload.get("metadata") or {}),
+                            "migration_phase": "W2c_board_visible_patch_publish",
+                            "source": str(source or item_payload.get("source") or "board_visible_delta_apply").strip(),
+                            "reason": str(
+                                reason or item_payload.get("reason") or "board_visible_patch_publish_requested"
+                            ).strip(),
                         },
                         item_payload=item_payload,
                         item_kind=_BOARD_VISIBLE_DELTA_APPLY_ITEM_KIND,
@@ -12966,8 +13033,7 @@ class SourcingOrchestrator:
         profile_delta_candidate_records_by_id = {
             str(item.get("candidate_id") or "").strip(): dict(item)
             for item in list(profile_delta_candidate_records or [])
-            if isinstance(item, dict)
-            and str(item.get("candidate_id") or "").strip() in normalized_candidate_id_set
+            if isinstance(item, dict) and str(item.get("candidate_id") or "").strip() in normalized_candidate_id_set
         }
         result: dict[str, Any] = {
             "delta_control_plane_sync": {"status": "skipped", "reason": "candidate_delta_not_requested"},
@@ -13017,8 +13083,7 @@ class SourcingOrchestrator:
             else max(0, _coerce_int(inline_apply_chunk_limit, 0))
         )
         candidate_chunks = [
-            item_candidate_ids[index : index + chunk_size]
-            for index in range(0, len(item_candidate_ids), chunk_size)
+            item_candidate_ids[index : index + chunk_size] for index in range(0, len(item_candidate_ids), chunk_size)
         ]
         source_worker_ids = [int(item) for item in list(applied_worker_ids or []) if int(item or 0) > 0]
         apply_items: list[dict[str, Any]] = []
@@ -13144,9 +13209,7 @@ class SourcingOrchestrator:
                             lease_seconds=max(30, _env_int("BOARD_VISIBLE_PATCH_PUBLISH_COMMAND_LEASE_SECONDS", 300)),
                         )
                         board_visible_patch = dict(
-                            owner_result.get("board_visible_patch")
-                            or owner_result.get("item_result")
-                            or owner_result
+                            owner_result.get("board_visible_patch") or owner_result.get("item_result") or owner_result
                         )
                         board_visible_patch.setdefault("workflow_command_owner", "board_visible_projection_owner")
             elif item_status == "completed":
@@ -13158,7 +13221,9 @@ class SourcingOrchestrator:
                     "item_id": str(board_visible_apply_item.get("item_id") or ""),
                 }
                 if not board_visible_patch.get("overlay_path"):
-                    board_visible_patch["overlay_path"] = str(board_visible_apply_item.get("serving_projection_id") or "")
+                    board_visible_patch["overlay_path"] = str(
+                        board_visible_apply_item.get("serving_projection_id") or ""
+                    )
                 if not board_visible_patch.get("result_view_id"):
                     board_visible_patch["result_view_id"] = str(board_visible_apply_item.get("result_view_id") or "")
             else:
@@ -13583,9 +13648,8 @@ class SourcingOrchestrator:
     def _workflow_command_payload_uses_legacy_materialization_item(payload: dict[str, Any]) -> bool:
         command_payload = dict(payload or {})
         legacy_ref = dict(command_payload.get("legacy_materialization_item") or {})
-        return (
-            str(legacy_ref.get("table") or "").strip() == "job_materialization_items"
-            and bool(str(legacy_ref.get("item_id") or "").strip())
+        return str(legacy_ref.get("table") or "").strip() == "job_materialization_items" and bool(
+            str(legacy_ref.get("item_id") or "").strip()
         )
 
     @staticmethod
@@ -13656,7 +13720,12 @@ class SourcingOrchestrator:
             if normalized_worker_id > 0:
                 source_worker_ids.append(normalized_worker_id)
         return {
-            "item_id": str(payload.get("item_id") or command_payload.get("idempotency_key") or command_payload.get("command_id") or "").strip(),
+            "item_id": str(
+                payload.get("item_id")
+                or command_payload.get("idempotency_key")
+                or command_payload.get("command_id")
+                or ""
+            ).strip(),
             "job_id": str(payload.get("job_id") or "").strip(),
             "target_company": str(payload.get("target_company") or "").strip(),
             "snapshot_id": str(payload.get("snapshot_id") or "").strip(),
@@ -13749,9 +13818,7 @@ class SourcingOrchestrator:
         metadata = dict(item_payload.get("metadata") or {})
         worker_kind = str(metadata.get("worker_kind") or "").strip()
         source_worker_ids = [
-            int(worker_id)
-            for worker_id in list(item_payload.get("source_worker_ids") or [])
-            if int(worker_id or 0) > 0
+            int(worker_id) for worker_id in list(item_payload.get("source_worker_ids") or []) if int(worker_id or 0) > 0
         ]
         if not item_id or not job_id or not snapshot_id or not source_worker_ids:
             return {}
@@ -13800,22 +13867,32 @@ class SourcingOrchestrator:
                     "idempotency_key": command_idempotency_key,
                     "payload": self._workflow_command_payload_with_optional_legacy_ref(
                         {
-                        "job_id": job_id,
-                        "target_company": str(item_payload.get("target_company") or dict(job or {}).get("target_company") or ""),
-                        "snapshot_id": snapshot_id,
-                        "baseline_snapshot_id": str(item_payload.get("baseline_snapshot_id") or ""),
-                        "asset_view": str(item_payload.get("asset_view") or getattr(request, "asset_view", "") or "canonical_merged"),
-                        "item_id": item_id,
-                        "item_kind": str(item_payload.get("item_kind") or _LOCAL_APPLY_CLOSURE_ITEM_KIND),
-                        "worker_kind": worker_kind,
-                        "source_worker_ids": source_worker_ids,
-                        "candidate_ids": list(item_payload.get("candidate_ids") or []),
-                        "candidate_count": _coerce_int(item_payload.get("candidate_count"), len(list(item_payload.get("candidate_ids") or []))),
-                        "request_payload": request_payload,
-                        "materialization_metadata": metadata,
-                        "migration_phase": "W2c_local_profile_delta_apply",
-                        "source": str(source or item_payload.get("source") or "local_apply_closure_item").strip(),
-                        "reason": str(reason or item_payload.get("reason") or "local_profile_delta_apply_requested").strip(),
+                            "job_id": job_id,
+                            "target_company": str(
+                                item_payload.get("target_company") or dict(job or {}).get("target_company") or ""
+                            ),
+                            "snapshot_id": snapshot_id,
+                            "baseline_snapshot_id": str(item_payload.get("baseline_snapshot_id") or ""),
+                            "asset_view": str(
+                                item_payload.get("asset_view")
+                                or getattr(request, "asset_view", "")
+                                or "canonical_merged"
+                            ),
+                            "item_id": item_id,
+                            "item_kind": str(item_payload.get("item_kind") or _LOCAL_APPLY_CLOSURE_ITEM_KIND),
+                            "worker_kind": worker_kind,
+                            "source_worker_ids": source_worker_ids,
+                            "candidate_ids": list(item_payload.get("candidate_ids") or []),
+                            "candidate_count": _coerce_int(
+                                item_payload.get("candidate_count"), len(list(item_payload.get("candidate_ids") or []))
+                            ),
+                            "request_payload": request_payload,
+                            "materialization_metadata": metadata,
+                            "migration_phase": "W2c_local_profile_delta_apply",
+                            "source": str(source or item_payload.get("source") or "local_apply_closure_item").strip(),
+                            "reason": str(
+                                reason or item_payload.get("reason") or "local_profile_delta_apply_requested"
+                            ).strip(),
                         },
                         item_payload=item_payload,
                         item_kind=_LOCAL_APPLY_CLOSURE_ITEM_KIND,
@@ -13931,7 +14008,9 @@ class SourcingOrchestrator:
         command_owned_payload = bool(item_payload.get("command_owned_payload")) or bool(
             dict(item_payload.get("metadata") or {}).get("command_owned_payload")
         )
-        worker_ids = [int(worker_id) for worker_id in list(item_payload.get("source_worker_ids") or []) if int(worker_id or 0) > 0]
+        worker_ids = [
+            int(worker_id) for worker_id in list(item_payload.get("source_worker_ids") or []) if int(worker_id or 0) > 0
+        ]
         if not item_id or not worker_ids:
             return {"status": "skipped", "reason": "local_apply_closure_item_scope_missing", "item_id": item_id}
         worker_id = worker_ids[0]
@@ -13948,10 +14027,7 @@ class SourcingOrchestrator:
         item_metadata = dict(item_payload.get("metadata") or {})
         worker_kind = str(item_metadata.get("worker_kind") or "").strip()
         snapshot_id = str(item_payload.get("snapshot_id") or "").strip()
-        if (
-            worker_kind == "harvest_prefetch"
-            and self._harvest_profile_worker_is_terminal_noop_delta(dict(worker))
-        ):
+        if worker_kind == "harvest_prefetch" and self._harvest_profile_worker_is_terminal_noop_delta(dict(worker)):
             terminal_marker = self._record_harvest_profile_terminal_noop_ingest(
                 worker=dict(worker),
                 snapshot_id=snapshot_id,
@@ -14159,7 +14235,8 @@ class SourcingOrchestrator:
                 profile_url_budget_ms=profile_url_budget_ms,
             )
         command_owned_payload = all(
-            bool(item.get("command_owned_payload")) or bool(dict(item.get("metadata") or {}).get("command_owned_payload"))
+            bool(item.get("command_owned_payload"))
+            or bool(dict(item.get("metadata") or {}).get("command_owned_payload"))
             for item in claimed_items
         )
         item_ids = [str(item.get("item_id") or "").strip() for item in claimed_items]
@@ -14220,27 +14297,30 @@ class SourcingOrchestrator:
                 for worker in refreshed_workers
             ]
         if refreshed_workers and all(
-            dict(dict(worker).get("output") or {}).get("inline_incremental_ingest")
-            for worker in refreshed_workers
+            dict(dict(worker).get("output") or {}).get("inline_incremental_ingest") for worker in refreshed_workers
         ):
-            completed_items = [] if command_owned_payload else [
-                self.store.mark_job_materialization_item_completed(
-                    item_id,
-                    metadata={
-                        "completed_by": str(lease_owner or "").strip(),
-                        "reason": (
-                            "harvest_profile_terminal_without_materializable_payload"
-                            if noop_markers
-                            else "local_apply_closure_already_ingested"
-                        ),
-                        "worker_ids": worker_ids,
-                        "terminal_noop_ingest_by_worker_id": {
-                            str(worker_id): marker for worker_id, marker in noop_markers.items()
+            completed_items = (
+                []
+                if command_owned_payload
+                else [
+                    self.store.mark_job_materialization_item_completed(
+                        item_id,
+                        metadata={
+                            "completed_by": str(lease_owner or "").strip(),
+                            "reason": (
+                                "harvest_profile_terminal_without_materializable_payload"
+                                if noop_markers
+                                else "local_apply_closure_already_ingested"
+                            ),
+                            "worker_ids": worker_ids,
+                            "terminal_noop_ingest_by_worker_id": {
+                                str(worker_id): marker for worker_id, marker in noop_markers.items()
+                            },
                         },
-                    },
-                )
-                for item_id in item_ids
-            ]
+                    )
+                    for item_id in item_ids
+                ]
+            )
             return {
                 "status": "completed",
                 "reason": (
@@ -14254,11 +14334,7 @@ class SourcingOrchestrator:
                 "items": completed_items,
             }
         process_worker = next(
-            (
-                worker
-                for worker in refreshed_workers
-                if str(worker.get("status") or "").strip().lower() == "completed"
-            ),
+            (worker for worker in refreshed_workers if str(worker.get("status") or "").strip().lower() == "completed"),
             {},
         )
         if not process_worker:
@@ -14309,31 +14385,35 @@ class SourcingOrchestrator:
                     for progress in [self._local_apply_profile_progress_from_ingest_marker(marker)]
                     if progress
                 }
-                completed_items = [] if command_owned_payload else [
-                    self.store.mark_job_materialization_item_completed(
-                        item_id,
-                        metadata={
-                            "completed_by": str(lease_owner or "").strip(),
-                            "local_apply_closure": result,
-                            "inline_incremental_ingest_by_worker_id": {
-                                str(worker_id): marker for worker_id, marker in ingest_markers.items()
+                completed_items = (
+                    []
+                    if command_owned_payload
+                    else [
+                        self.store.mark_job_materialization_item_completed(
+                            item_id,
+                            metadata={
+                                "completed_by": str(lease_owner or "").strip(),
+                                "local_apply_closure": result,
+                                "inline_incremental_ingest_by_worker_id": {
+                                    str(worker_id): marker for worker_id, marker in ingest_markers.items()
+                                },
+                                **(
+                                    {"local_apply_profile_progress": next(iter(final_progress_by_worker_id.values()))}
+                                    if len(final_progress_by_worker_id) == 1
+                                    else {}
+                                ),
+                                **(
+                                    {"local_apply_profile_progress_by_worker_id": final_progress_by_worker_id}
+                                    if final_progress_by_worker_id
+                                    else {}
+                                ),
+                                "worker_ids": worker_ids,
+                                "coalesced_item_count": len(item_ids),
                             },
-                            **(
-                                {"local_apply_profile_progress": next(iter(final_progress_by_worker_id.values()))}
-                                if len(final_progress_by_worker_id) == 1
-                                else {}
-                            ),
-                            **(
-                                {"local_apply_profile_progress_by_worker_id": final_progress_by_worker_id}
-                                if final_progress_by_worker_id
-                                else {}
-                            ),
-                            "worker_ids": worker_ids,
-                            "coalesced_item_count": len(item_ids),
-                        },
-                    )
-                    for item_id in item_ids
-                ]
+                        )
+                        for item_id in item_ids
+                    ]
+                )
                 return {
                     "status": "completed",
                     "reason": "local_apply_closure_completed",
@@ -14355,18 +14435,22 @@ class SourcingOrchestrator:
                         snapshot_id=str(claimed_items[0].get("snapshot_id") or ""),
                         progress=partial_progress,
                     )
-                partial_items = [] if command_owned_payload else [
-                    self.store.mark_job_materialization_item_partial_progress(
-                        item_id,
-                        metadata={
-                            "completed_by": str(lease_owner or "").strip(),
-                            "local_apply_closure": result,
-                            "partial_progress_reason": "local_apply_profile_url_chunk_completed",
-                            "local_apply_profile_progress": partial_progress,
-                        },
-                    )
-                    for item_id in item_ids
-                ]
+                partial_items = (
+                    []
+                    if command_owned_payload
+                    else [
+                        self.store.mark_job_materialization_item_partial_progress(
+                            item_id,
+                            metadata={
+                                "completed_by": str(lease_owner or "").strip(),
+                                "local_apply_closure": result,
+                                "partial_progress_reason": "local_apply_profile_url_chunk_completed",
+                                "local_apply_profile_progress": partial_progress,
+                            },
+                        )
+                        for item_id in item_ids
+                    ]
+                )
                 return {
                     "status": "partial",
                     "reason": "local_apply_profile_url_chunk_completed",
@@ -14384,21 +14468,25 @@ class SourcingOrchestrator:
                     if reason == "completed_workflow_reconcile_inflight"
                     else "waiting_prerequisite_candidate_documents"
                 )
-                waiting_items = [] if command_owned_payload else [
-                    self.store.mark_job_materialization_item_waiting_prerequisite(
-                        item_id,
-                        retry_delay_seconds=_resolve_local_apply_waiting_prerequisite_delay_seconds(),
-                        metadata={
-                            "failure_reason": failure_reason,
-                            "prerequisite_reason": reason,
-                            "prerequisite_path": str(result.get("prerequisite_path") or ""),
-                            "snapshot_id": str(result.get("snapshot_id") or ""),
-                            "worker_ids": worker_ids,
-                            "ingested_worker_ids": sorted(ingest_markers),
-                        },  # event-level reawaken is primary; this delay is fallback
-                    )
-                    for item_id in item_ids
-                ]
+                waiting_items = (
+                    []
+                    if command_owned_payload
+                    else [
+                        self.store.mark_job_materialization_item_waiting_prerequisite(
+                            item_id,
+                            retry_delay_seconds=_resolve_local_apply_waiting_prerequisite_delay_seconds(),
+                            metadata={
+                                "failure_reason": failure_reason,
+                                "prerequisite_reason": reason,
+                                "prerequisite_path": str(result.get("prerequisite_path") or ""),
+                                "snapshot_id": str(result.get("snapshot_id") or ""),
+                                "worker_ids": worker_ids,
+                                "ingested_worker_ids": sorted(ingest_markers),
+                            },  # event-level reawaken is primary; this delay is fallback
+                        )
+                        for item_id in item_ids
+                    ]
+                )
                 return {
                     "status": "waiting_prerequisite",
                     "reason": reason,
@@ -14409,20 +14497,24 @@ class SourcingOrchestrator:
                     "callback_result": result,
                 }
             retryable = reason not in {"worker_missing", "job_missing", "job_id_missing", "snapshot_dir_missing"}
-            failed_items = [] if command_owned_payload else [
-                self.store.mark_job_materialization_item_failed(
-                    item_id,
-                    error_text=reason,
-                    retryable=retryable,
-                    retry_delay_seconds=15,
-                    metadata={
-                        "local_apply_closure": result,
-                        "worker_ids": worker_ids,
-                        "ingested_worker_ids": sorted(ingest_markers),
-                    },
-                )
-                for item_id in item_ids
-            ]
+            failed_items = (
+                []
+                if command_owned_payload
+                else [
+                    self.store.mark_job_materialization_item_failed(
+                        item_id,
+                        error_text=reason,
+                        retryable=retryable,
+                        retry_delay_seconds=15,
+                        metadata={
+                            "local_apply_closure": result,
+                            "worker_ids": worker_ids,
+                            "ingested_worker_ids": sorted(ingest_markers),
+                        },
+                    )
+                    for item_id in item_ids
+                ]
+            )
             return {
                 "status": "deferred" if retryable else "failed",
                 "reason": reason,
@@ -14433,16 +14525,20 @@ class SourcingOrchestrator:
                 "callback_result": result,
             }
         except Exception as exc:
-            failed_items = [] if command_owned_payload else [
-                self.store.mark_job_materialization_item_failed(
-                    item_id,
-                    error_text=str(exc),
-                    retryable=True,
-                    retry_delay_seconds=30,
-                    metadata={"failure_reason": "local_apply_closure_exception", "worker_ids": worker_ids},
-                )
-                for item_id in item_ids
-            ]
+            failed_items = (
+                []
+                if command_owned_payload
+                else [
+                    self.store.mark_job_materialization_item_failed(
+                        item_id,
+                        error_text=str(exc),
+                        retryable=True,
+                        retry_delay_seconds=30,
+                        metadata={"failure_reason": "local_apply_closure_exception", "worker_ids": worker_ids},
+                    )
+                    for item_id in item_ids
+                ]
+            )
             return {
                 "status": "failed",
                 "reason": "local_apply_closure_exception",
@@ -14557,7 +14653,9 @@ class SourcingOrchestrator:
                 "workflow_command": observed_command,
                 "item_id": item_id,
                 "job_id": job_id,
-                "claimed_count": 1 if status in {"completed", "partial", "waiting_prerequisite", "deferred", "failed"} else 0,
+                "claimed_count": 1
+                if status in {"completed", "partial", "waiting_prerequisite", "deferred", "failed"}
+                else 0,
                 "completed_count": 1 if status == "completed" else 0,
                 "failed_count": 1 if status in {"deferred", "failed"} else 0,
                 "partial_count": 1 if status == "partial" else 0,
@@ -14598,7 +14696,9 @@ class SourcingOrchestrator:
                 command_record=refreshed,
                 runtime_command_contention=True,
             )
-        running_command = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+        running_command = (
+            self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+        )
         if self._workflow_command_payload_uses_legacy_materialization_item(payload):
             item = self.store.get_job_materialization_item(item_id)
             if not item:
@@ -14854,7 +14954,9 @@ class SourcingOrchestrator:
                     }
                 )
                 continue
-            running_command = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            running_command = (
+                self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            )
             claimed_commands.append(dict(running_command))
 
         if not claimed_commands:
@@ -14906,7 +15008,9 @@ class SourcingOrchestrator:
                     "candidate_count": _coerce_int(command_payload.get("candidate_count"), len(candidate_ids)),
                     "source_worker_ids": source_worker_ids,
                     "source_worker_count": len(source_worker_ids),
-                    "legacy_materialization_item_used": self._workflow_command_payload_uses_legacy_materialization_item(command_payload),
+                    "legacy_materialization_item_used": self._workflow_command_payload_uses_legacy_materialization_item(
+                        command_payload
+                    ),
                 },
                 entity_counts={
                     "candidate_count": _coerce_int(command_payload.get("candidate_count"), len(candidate_ids)),
@@ -14937,8 +15041,7 @@ class SourcingOrchestrator:
             if not activity:
                 return {}
             candidate_ids = _dedupe_texts(
-                list(command_payload.get("candidate_ids") or [])
-                or list(dict(output or {}).get("candidate_ids") or [])
+                list(command_payload.get("candidate_ids") or []) or list(dict(output or {}).get("candidate_ids") or [])
             )
             candidate_count = max(
                 _coerce_int(command_payload.get("candidate_count"), 0),
@@ -15396,7 +15499,13 @@ class SourcingOrchestrator:
             )
         explicit_job_id = str(payload.get("job_id") or "").strip()
         workflow_run_id = legacy_job_workflow_run_id(explicit_job_id) if explicit_job_id else ""
-        limit = max(1, _coerce_int(payload.get("local_profile_delta_apply_command_limit") or payload.get("local_apply_closure_item_limit"), 20))
+        limit = max(
+            1,
+            _coerce_int(
+                payload.get("local_profile_delta_apply_command_limit") or payload.get("local_apply_closure_item_limit"),
+                20,
+            ),
+        )
         profile_url_limit = max(
             0,
             _coerce_int(
@@ -15481,7 +15590,9 @@ class SourcingOrchestrator:
                     continue
                 if self._local_profile_delta_apply_command_group_key(dict(candidate_command)) != group_key:
                     continue
-                payload_candidate_ids = _dedupe_texts(dict(candidate_command.get("payload") or {}).get("candidate_ids") or [])
+                payload_candidate_ids = _dedupe_texts(
+                    dict(candidate_command.get("payload") or {}).get("candidate_ids") or []
+                )
                 next_count = len(payload_candidate_ids)
                 if next_count <= 0:
                     item_id = str(dict(candidate_command.get("payload") or {}).get("item_id") or "").strip()
@@ -15507,7 +15618,13 @@ class SourcingOrchestrator:
                 profile_url_budget_ms=profile_url_budget_ms,
             )
             results.append(result)
-            if str(result.get("status") or "") in {"completed", "partial", "waiting_prerequisite", "deferred", "failed"}:
+            if str(result.get("status") or "") in {
+                "completed",
+                "partial",
+                "waiting_prerequisite",
+                "deferred",
+                "failed",
+            }:
                 executed_command_count += 1
             claimed_count += _coerce_int(result.get("claimed_count"), 0)
             completed_count += _coerce_int(result.get("completed_count"), 0)
@@ -15760,9 +15877,7 @@ class SourcingOrchestrator:
         snapshot_id = str(item_payload.get("snapshot_id") or "").strip()
         metadata = dict(item_payload.get("metadata") or {})
         query_text = str(metadata.get("query") or metadata.get("effective_query_text") or "").strip()
-        employment_status = normalize_search_seed_employment_scope(
-            str(metadata.get("employment_status") or "current")
-        )
+        employment_status = normalize_search_seed_employment_scope(str(metadata.get("employment_status") or "current"))
         if not item_id or not job_id or not snapshot_id:
             return {}
         workflow_run_id = legacy_job_workflow_run_id(job_id)
@@ -15778,9 +15893,7 @@ class SourcingOrchestrator:
         if not workflow_run_id or not command_idempotency_key:
             return {}
         source_worker_ids = [
-            int(worker_id)
-            for worker_id in list(item_payload.get("source_worker_ids") or [])
-            if int(worker_id or 0) > 0
+            int(worker_id) for worker_id in list(item_payload.get("source_worker_ids") or []) if int(worker_id or 0) > 0
         ]
         materialization_metadata = {
             **metadata,
@@ -15833,7 +15946,9 @@ class SourcingOrchestrator:
                             "materialization_metadata": materialization_metadata,
                             "migration_phase": "W6_search_seed_discovery_query_run",
                             "source": str(source or item_payload.get("source") or "search_seed_discovery").strip(),
-                            "reason": str(reason or item_payload.get("reason") or "search_seed_discovery_query_run").strip(),
+                            "reason": str(
+                                reason or item_payload.get("reason") or "search_seed_discovery_query_run"
+                            ).strip(),
                         },
                         item_payload=item_payload,
                         item_kind=SEARCH_SEED_DISCOVERY_QUERY_ITEM_KIND,
@@ -15867,11 +15982,11 @@ class SourcingOrchestrator:
         if not item_id or not job_id:
             return {"status": "skipped", "reason": "item_scope_missing", "item_id": item_id}
         metadata = dict(item_payload.get("metadata") or {})
-        command_owned_payload = bool(item_payload.get("command_owned_payload")) or bool(metadata.get("command_owned_payload"))
+        command_owned_payload = bool(item_payload.get("command_owned_payload")) or bool(
+            metadata.get("command_owned_payload")
+        )
         source_worker_ids = [
-            int(worker_id)
-            for worker_id in list(item_payload.get("source_worker_ids") or [])
-            if int(worker_id or 0) > 0
+            int(worker_id) for worker_id in list(item_payload.get("source_worker_ids") or []) if int(worker_id or 0) > 0
         ]
         if source_worker_ids:
             return {
@@ -15921,7 +16036,13 @@ class SourcingOrchestrator:
                     metadata={"failure_reason": "job_missing"},
                 )
             )
-            return {"status": "failed", "reason": "job_missing", "item_id": item_id, "job_id": job_id, "item": failed_item}
+            return {
+                "status": "failed",
+                "reason": "job_missing",
+                "item_id": item_id,
+                "job_id": job_id,
+                "item": failed_item,
+            }
         request = JobRequest.from_payload(dict(job.get("request") or {}))
         plan_payload = dict(job.get("plan") or {})
         snapshot_dir_value = str(metadata.get("snapshot_dir") or "").strip()
@@ -15951,7 +16072,9 @@ class SourcingOrchestrator:
                 )
             )
             return {"status": "deferred", "reason": "snapshot_dir_missing", "item_id": item_id, "item": failed_item}
-        discovery_dir = Path(discovery_dir_value).expanduser() if discovery_dir_value else snapshot_dir / "search_seed_discovery"
+        discovery_dir = (
+            Path(discovery_dir_value).expanduser() if discovery_dir_value else snapshot_dir / "search_seed_discovery"
+        )
         identity = _company_identity_from_record(dict(metadata.get("identity") or {}))
         if identity is None:
             identity = resolve_snapshot_company_identity(snapshot_dir, fallback_target_company=request.target_company)
@@ -16209,9 +16332,7 @@ class SourcingOrchestrator:
         if str(command_payload.get("command_type") or "").strip() != LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE:
             return False
         payload = dict(command_payload.get("payload") or {})
-        execution_mode = str(
-            payload.get("runtime_execution_mode") or payload.get("execution_mode") or ""
-        ).strip()
+        execution_mode = str(payload.get("runtime_execution_mode") or payload.get("execution_mode") or "").strip()
         if execution_mode == "operation_native_discovery":
             return True
         return bool(
@@ -16410,7 +16531,16 @@ class SourcingOrchestrator:
         source_entity_delta_ids: list[str],
         workspace_id: str = "default",
     ) -> dict[str, Any]:
-        return self._profile_fetch_owner._plan_operation_native_profile_fetch_activity_command(parent_command=parent_command, acquisition_run_id=acquisition_run_id, lane_id=lane_id, source_activity_run_id=source_activity_run_id, target_company=target_company, profile_urls=profile_urls, source_entity_delta_ids=source_entity_delta_ids, workspace_id=workspace_id)
+        return self._profile_fetch_owner._plan_operation_native_profile_fetch_activity_command(
+            parent_command=parent_command,
+            acquisition_run_id=acquisition_run_id,
+            lane_id=lane_id,
+            source_activity_run_id=source_activity_run_id,
+            target_company=target_company,
+            profile_urls=profile_urls,
+            source_entity_delta_ids=source_entity_delta_ids,
+            workspace_id=workspace_id,
+        )
 
     def _plan_operation_native_profile_fetch_provider_command(
         self,
@@ -16425,7 +16555,17 @@ class SourcingOrchestrator:
         provider_attempt_scope: str = "normal",
         retry_wave_index: int = 0,
     ) -> dict[str, Any]:
-        return self._profile_fetch_owner._plan_operation_native_profile_fetch_provider_command(parent_command=parent_command, source_profile_activity_run_id=source_profile_activity_run_id, acquisition_run_id=acquisition_run_id, target_company=target_company, profile_urls=profile_urls, source_entity_delta_ids=source_entity_delta_ids, workspace_id=workspace_id, provider_attempt_scope=provider_attempt_scope, retry_wave_index=retry_wave_index)
+        return self._profile_fetch_owner._plan_operation_native_profile_fetch_provider_command(
+            parent_command=parent_command,
+            source_profile_activity_run_id=source_profile_activity_run_id,
+            acquisition_run_id=acquisition_run_id,
+            target_company=target_company,
+            profile_urls=profile_urls,
+            source_entity_delta_ids=source_entity_delta_ids,
+            workspace_id=workspace_id,
+            provider_attempt_scope=provider_attempt_scope,
+            retry_wave_index=retry_wave_index,
+        )
 
     def _plan_operation_native_profile_terminal_admit_command(
         self,
@@ -16438,7 +16578,15 @@ class SourcingOrchestrator:
         profile_urls: list[str] | None = None,
         workspace_id: str = "default",
     ) -> dict[str, Any]:
-        return self._profile_fetch_owner._plan_operation_native_profile_terminal_admit_command(parent_command=parent_command, source_profile_activity_run_id=source_profile_activity_run_id, acquisition_run_id=acquisition_run_id, target_company=target_company, source_entity_delta_ids=source_entity_delta_ids, profile_urls=profile_urls, workspace_id=workspace_id)
+        return self._profile_fetch_owner._plan_operation_native_profile_terminal_admit_command(
+            parent_command=parent_command,
+            source_profile_activity_run_id=source_profile_activity_run_id,
+            acquisition_run_id=acquisition_run_id,
+            target_company=target_company,
+            source_entity_delta_ids=source_entity_delta_ids,
+            profile_urls=profile_urls,
+            workspace_id=workspace_id,
+        )
 
     def _plan_operation_native_projection_admission_command(
         self,
@@ -16581,7 +16729,9 @@ class SourcingOrchestrator:
                 "acquisition_run_found": bool(acquisition_run),
             }
         query_text = query_text or str(lane.get("query") or acquisition_run.get("query") or "").strip()
-        target_company = target_company or str(lane.get("target_company") or acquisition_run.get("target_company") or "").strip()
+        target_company = (
+            target_company or str(lane.get("target_company") or acquisition_run.get("target_company") or "").strip()
+        )
         if not query_text or not target_company:
             return {
                 "status": "failed",
@@ -16706,7 +16856,11 @@ class SourcingOrchestrator:
                     **running_attempt,
                     "status": "retry_wait",
                     "completed_at": _utc_now_iso(),
-                    "error": {"reason": "operation_native_discovery_provider_exception", "message": str(exc), "retryable": True},
+                    "error": {
+                        "reason": "operation_native_discovery_provider_exception",
+                        "message": str(exc),
+                        "retryable": True,
+                    },
                     "metadata": {
                         **dict(running_attempt.get("metadata") or {}),
                         "provider_exception": str(exc),
@@ -16803,7 +16957,10 @@ class SourcingOrchestrator:
                     "phase": "provider_discovery_retry_wait",
                     "output": {"latest_attempt_id": str(retry_attempt.get("attempt_id") or "").strip()},
                     "artifact_refs": artifact_refs,
-                    "entity_counts": {"candidate_count": len(entries), "profile_url_count": len(_dedupe_texts([entry.get("profile_url") for entry in entries]))},
+                    "entity_counts": {
+                        "candidate_count": len(entries),
+                        "profile_url_count": len(_dedupe_texts([entry.get("profile_url") for entry in entries])),
+                    },
                 }
             )
             self.store.upsert_acquisition_discovery_lane(
@@ -16812,7 +16969,10 @@ class SourcingOrchestrator:
                     "status": "retry_wait",
                     "phase": "provider_discovery_retry_wait",
                     "artifact_refs": artifact_refs,
-                    "entity_counts": {"candidate_count": len(entries), "profile_url_count": len(_dedupe_texts([entry.get("profile_url") for entry in entries]))},
+                    "entity_counts": {
+                        "candidate_count": len(entries),
+                        "profile_url_count": len(_dedupe_texts([entry.get("profile_url") for entry in entries])),
+                    },
                 }
             )
             return {
@@ -16885,7 +17045,11 @@ class SourcingOrchestrator:
                         "delta_kind": "no_op_zero_results",
                         "status": "not_applied",
                         "reason": "operation_native_discovery_zero_results",
-                        "source_ref": {"command_id": command_id, "activity_run_id": activity_run_id, "lane_id": lane_id},
+                        "source_ref": {
+                            "command_id": command_id,
+                            "activity_run_id": activity_run_id,
+                            "lane_id": lane_id,
+                        },
                         "entity_payload": {"query": query_text, "target_company": target_company},
                         "projection_effect": {
                             "entered_projection": False,
@@ -16969,7 +17133,9 @@ class SourcingOrchestrator:
                 "latest_discovery_lane_id": lane_id,
                 "latest_activity_run_id": activity_run_id,
                 "latest_activity_attempt_id": str(completed_attempt.get("attempt_id") or "").strip(),
-                "latest_entity_delta_ids": [str(delta.get("delta_id") or "").strip() for delta in entity_deltas if delta],
+                "latest_entity_delta_ids": [
+                    str(delta.get("delta_id") or "").strip() for delta in entity_deltas if delta
+                ],
                 "discovery_entity_counts": entity_counts,
             },
         )
@@ -16980,9 +17146,7 @@ class SourcingOrchestrator:
             source_activity_run_id=activity_run_id,
             target_company=target_company,
             profile_urls=profile_urls,
-            source_entity_delta_ids=[
-                str(delta.get("delta_id") or "").strip() for delta in entity_deltas if delta
-            ],
+            source_entity_delta_ids=[str(delta.get("delta_id") or "").strip() for delta in entity_deltas if delta],
             workspace_id=workspace_id,
         )
         downstream_profile_command_id = str(downstream_profile_command.get("command_id") or "").strip()
@@ -17037,9 +17201,7 @@ class SourcingOrchestrator:
                 10,
             ),
         )
-        lease_owner = str(
-            normalized.get("owner_id") or f"operation-native-discovery-{uuid.uuid4().hex[:8]}"
-        ).strip()
+        lease_owner = str(normalized.get("owner_id") or f"operation-native-discovery-{uuid.uuid4().hex[:8]}").strip()
         workflow_run_id = str(normalized.get("workflow_run_id") or "").strip()
         ready_commands = [
             dict(command)
@@ -17137,7 +17299,9 @@ class SourcingOrchestrator:
                 )
                 skipped_count += 1
                 continue
-            running_command = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            running_command = (
+                self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            )
             claimed_count += 1
             result_payload = self._execute_operation_native_discovery_activity_command_payload(
                 running_command,
@@ -17215,7 +17379,9 @@ class SourcingOrchestrator:
         *,
         lease_owner: str,
     ) -> dict[str, Any]:
-        return self._profile_fetch_owner._execute_operation_native_profile_fetch_activity_command_payload(command, lease_owner=lease_owner)
+        return self._profile_fetch_owner._execute_operation_native_profile_fetch_activity_command_payload(
+            command, lease_owner=lease_owner
+        )
 
     def _execute_operation_native_profile_fetch_provider_command_payload(
         self,
@@ -17223,7 +17389,9 @@ class SourcingOrchestrator:
         *,
         lease_owner: str,
     ) -> dict[str, Any]:
-        return self._profile_fetch_owner._execute_operation_native_profile_fetch_provider_command_payload(command, lease_owner=lease_owner)
+        return self._profile_fetch_owner._execute_operation_native_profile_fetch_provider_command_payload(
+            command, lease_owner=lease_owner
+        )
 
     def _execute_operation_native_profile_terminal_admit_command_payload(
         self,
@@ -17231,7 +17399,9 @@ class SourcingOrchestrator:
         *,
         lease_owner: str,
     ) -> dict[str, Any]:
-        return self._profile_fetch_owner._execute_operation_native_profile_terminal_admit_command_payload(command, lease_owner=lease_owner)
+        return self._profile_fetch_owner._execute_operation_native_profile_terminal_admit_command_payload(
+            command, lease_owner=lease_owner
+        )
 
     def _execute_operation_native_projection_admission_command_payload(
         self,
@@ -17244,10 +17414,7 @@ class SourcingOrchestrator:
         command_id = str(command_payload.get("command_id") or "").strip()
         workflow_run_id = str(command_payload.get("workflow_run_id") or payload.get("workflow_run_id") or "").strip()
         operation_run_id = str(
-            command_payload.get("operation_id")
-            or payload.get("operation_id")
-            or payload.get("operation_run_id")
-            or ""
+            command_payload.get("operation_id") or payload.get("operation_id") or payload.get("operation_run_id") or ""
         ).strip()
         workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
         acquisition_run_id = str(payload.get("acquisition_run_id") or "").strip()
@@ -17288,13 +17455,10 @@ class SourcingOrchestrator:
             }
         acquisition_run = self.store.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
         target_company = str(
-            payload.get("target_company")
-            or dict(acquisition_run or {}).get("target_company")
-            or ""
+            payload.get("target_company") or dict(acquisition_run or {}).get("target_company") or ""
         ).strip()
-        collection_id = (
-            str(payload.get("collection_id") or "").strip()
-            or (f"company:{normalize_company_key(target_company)}" if target_company else "")
+        collection_id = str(payload.get("collection_id") or "").strip() or (
+            f"company:{normalize_company_key(target_company)}" if target_company else ""
         )
         activity = self.store.upsert_workflow_activity_run(
             {
@@ -17358,17 +17522,25 @@ class SourcingOrchestrator:
             source_ref = dict(terminal_delta.get("source_ref") or {})
             direct_source_delta_id = str(source_ref.get("source_entity_delta_id") or "").strip()
             candidate_delta_ids: list[str] = []
-            source_delta = self.store.get_workflow_entity_delta(direct_source_delta_id) if direct_source_delta_id else {}
+            source_delta = (
+                self.store.get_workflow_entity_delta(direct_source_delta_id) if direct_source_delta_id else {}
+            )
             source_delta_kind = str(dict(source_delta or {}).get("delta_kind") or "").strip()
             if source_delta_kind == "profile_cache_hit":
-                candidate_delta_ids = _dedupe_texts(dict(source_delta.get("source_ref") or {}).get("source_entity_delta_ids") or [])
+                candidate_delta_ids = _dedupe_texts(
+                    dict(source_delta.get("source_ref") or {}).get("source_entity_delta_ids") or []
+                )
             elif source_delta_kind == "profile_provider_fetched":
-                required_delta_ids = _dedupe_texts(dict(source_delta.get("source_ref") or {}).get("source_entity_delta_ids") or [])
+                required_delta_ids = _dedupe_texts(
+                    dict(source_delta.get("source_ref") or {}).get("source_entity_delta_ids") or []
+                )
                 for required_delta_id in required_delta_ids:
                     required_delta = self.store.get_workflow_entity_delta(required_delta_id)
                     if required_delta:
                         candidate_delta_ids.extend(
-                            _dedupe_texts(dict(required_delta.get("source_ref") or {}).get("source_entity_delta_ids") or [])
+                            _dedupe_texts(
+                                dict(required_delta.get("source_ref") or {}).get("source_entity_delta_ids") or []
+                            )
                         )
             else:
                 candidate_delta_ids = _dedupe_texts(source_ref.get("source_entity_delta_ids") or [])
@@ -17406,9 +17578,7 @@ class SourcingOrchestrator:
                 profile_key = normalize_linkedin_profile_url_key(profile_url)
             candidate_context = _candidate_context_for_terminal_delta(terminal_delta)
             candidate_id = str(
-                candidate_context.get("candidate_id")
-                or terminal_delta.get("entity_key")
-                or f"linkedin:{profile_key}"
+                candidate_context.get("candidate_id") or terminal_delta.get("entity_key") or f"linkedin:{profile_key}"
             ).strip()
             full_name = str(
                 candidate_context.get("full_name")
@@ -17443,7 +17613,9 @@ class SourcingOrchestrator:
                     "rank_key": candidate_id or candidate_identity_key,
                     "lane": str(candidate_context.get("source_type") or "operation_native_profile_terminal").strip(),
                     "employment_scope": str(candidate_context.get("employment_status") or "current").strip(),
-                    "source_shard_key": str(candidate_context.get("source_shard_key") or source_activity_run_id).strip(),
+                    "source_shard_key": str(
+                        candidate_context.get("source_shard_key") or source_activity_run_id
+                    ).strip(),
                     "source_run_id": workflow_run_id,
                     "row_readiness": "ready",
                     "profile_readiness": "ready",
@@ -17540,11 +17712,11 @@ class SourcingOrchestrator:
         )
         projection = dict(publication.get("projection") or {})
         projection_id = str(projection.get("projection_id") or "").strip()
-        visible_count = self.store.count_serving_projection_members(projection_id, visible_only=True) if projection_id else 0
+        visible_count = (
+            self.store.count_serving_projection_members(projection_id, visible_only=True) if projection_id else 0
+        )
         readiness_counts = (
-            self.store.count_serving_projection_members_by_readiness(projection_id)
-            if projection_id
-            else {}
+            self.store.count_serving_projection_members_by_readiness(projection_id) if projection_id else {}
         )
         if projection_id:
             self.store.upsert_serving_projection(
@@ -17785,7 +17957,9 @@ class SourcingOrchestrator:
                     {
                         **command_result,
                         "status": "completed",
-                        "reason": str(command_result.get("reason") or "operation_native_projection_admission_already_succeeded"),
+                        "reason": str(
+                            command_result.get("reason") or "operation_native_projection_admission_already_succeeded"
+                        ),
                         "workflow_command": self._workflow_command_observation(
                             current_command,
                             migration_phase="W11g_operation_native_projection_admission",
@@ -17832,7 +18006,9 @@ class SourcingOrchestrator:
                 )
                 skipped_count += 1
                 continue
-            running_command = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            running_command = (
+                self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            )
             claimed_count += 1
             result_payload = self._execute_operation_native_projection_admission_command_payload(
                 running_command,
@@ -18058,10 +18234,14 @@ class SourcingOrchestrator:
                 )
                 if observed:
                     observed["runtime_command_contention"] = True
-                results.append({"status": "queued", "reason": "typed_command_claim_contention", "workflow_command": observed})
+                results.append(
+                    {"status": "queued", "reason": "typed_command_claim_contention", "workflow_command": observed}
+                )
                 skipped_count += 1
                 continue
-            running_command = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            running_command = (
+                self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            )
             claimed_count += 1
             executed_command_count += 1
             command_payload_body = dict(running_command.get("payload") or {})
@@ -18142,7 +18322,9 @@ class SourcingOrchestrator:
             else:
                 failed_command = self.store.mark_workflow_command_failed(
                     command_id,
-                    error_text=str(result_payload.get("reason") or status or "search_seed_discovery_query_not_completed"),
+                    error_text=str(
+                        result_payload.get("reason") or status or "search_seed_discovery_query_not_completed"
+                    ),
                     retryable=False,
                     retry_delay_seconds=30,
                 )
@@ -18243,9 +18425,7 @@ class SourcingOrchestrator:
             snapshot_dir=Path(snapshot_dir_value).expanduser(),
             worker_kind=worker_kind,
             pre_materialization_profile_prefetch=(
-                dict(pre_materialization_profile_prefetch or {})
-                if recovery_kind == "harvest_profile_batch"
-                else None
+                dict(pre_materialization_profile_prefetch or {}) if recovery_kind == "harvest_profile_batch" else None
             ),
             profile_completion_event_source=(
                 str(source or "local_apply_closure_item") if recovery_kind == "harvest_profile_batch" else ""
@@ -18273,8 +18453,7 @@ class SourcingOrchestrator:
         existing_status = str(existing_sync.get("status") or "").strip().lower()
         existing_candidate_ids = _dedupe_texts(existing_sync.get("candidate_ids") or [])
         if existing_status == "completed" and (
-            not normalized_candidate_ids
-            or set(normalized_candidate_ids).issubset(set(existing_candidate_ids))
+            not normalized_candidate_ids or set(normalized_candidate_ids).issubset(set(existing_candidate_ids))
         ):
             return existing_sync
         try:
@@ -18403,8 +18582,7 @@ class SourcingOrchestrator:
         profile_delta_candidate_records = [
             dict(record)
             for record in list(metadata.get("profile_delta_candidate_records") or [])
-            if isinstance(record, dict)
-            and str(record.get("candidate_id") or "").strip() in candidate_id_set
+            if isinstance(record, dict) and str(record.get("candidate_id") or "").strip() in candidate_id_set
         ]
         publication_lock_evidence: dict[str, Any] = {}
         try:
@@ -18468,10 +18646,7 @@ class SourcingOrchestrator:
                 "board_visible_patch": board_visible_patch,
             }
         prerequisite_reason = str(board_visible_patch.get("reason") or "").strip()
-        if (
-            patch_status == "waiting_prerequisite"
-            or prerequisite_reason in _BOARD_VISIBLE_DELTA_PREREQUISITE_REASONS
-        ):
+        if patch_status == "waiting_prerequisite" or prerequisite_reason in _BOARD_VISIBLE_DELTA_PREREQUISITE_REASONS:
             waiting_item = (
                 {}
                 if command_owned_payload
@@ -18540,7 +18715,8 @@ class SourcingOrchestrator:
             return result
 
         command_owned_payload = all(
-            bool(item.get("command_owned_payload")) or bool(dict(item.get("metadata") or {}).get("command_owned_payload"))
+            bool(item.get("command_owned_payload"))
+            or bool(dict(item.get("metadata") or {}).get("command_owned_payload"))
             for item in claimed_items
         )
         first_payload = claimed_items[0]
@@ -18793,10 +18969,7 @@ class SourcingOrchestrator:
                 "board_visible_patch": board_visible_patch,
             }
         prerequisite_reason = str(board_visible_patch.get("reason") or "").strip()
-        if (
-            patch_status == "waiting_prerequisite"
-            or prerequisite_reason in _BOARD_VISIBLE_DELTA_PREREQUISITE_REASONS
-        ):
+        if patch_status == "waiting_prerequisite" or prerequisite_reason in _BOARD_VISIBLE_DELTA_PREREQUISITE_REASONS:
             waiting_items: list[dict[str, Any]] = []
             if not command_owned_payload:
                 for item_id in item_ids:
@@ -18862,7 +19035,9 @@ class SourcingOrchestrator:
         commands: list[dict[str, Any]],
         lease_seconds: int = 300,
     ) -> dict[str, Any]:
-        command_payloads = [dict(command or {}) for command in list(commands or []) if dict(command or {}).get("command_id")]
+        command_payloads = [
+            dict(command or {}) for command in list(commands or []) if dict(command or {}).get("command_id")
+        ]
         if not command_payloads:
             return {"status": "skipped", "reason": "board_visible_patch_publish_command_scope_missing"}
         job_id = str(dict(command_payloads[0].get("payload") or {}).get("job_id") or "").strip()
@@ -18936,7 +19111,9 @@ class SourcingOrchestrator:
                     }
                 )
                 continue
-            running_command = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            running_command = (
+                self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            )
             claimed_commands.append(dict(running_command))
         if not claimed_commands:
             completed_count = sum(1 for item in command_results if str(item.get("status") or "") == "completed")
@@ -18977,9 +19154,13 @@ class SourcingOrchestrator:
                     "baseline_snapshot_id": str(command_payload.get("baseline_snapshot_id") or "").strip(),
                     "candidate_ids": candidate_ids,
                     "candidate_count": _coerce_int(command_payload.get("candidate_count"), len(candidate_ids)),
-                    "legacy_materialization_item_used": self._workflow_command_payload_uses_legacy_materialization_item(command_payload),
+                    "legacy_materialization_item_used": self._workflow_command_payload_uses_legacy_materialization_item(
+                        command_payload
+                    ),
                 },
-                entity_counts={"candidate_count": _coerce_int(command_payload.get("candidate_count"), len(candidate_ids))},
+                entity_counts={
+                    "candidate_count": _coerce_int(command_payload.get("candidate_count"), len(candidate_ids))
+                },
                 metadata={
                     "activity_boundary": "board_visible_patch_publish",
                     "migration_phase": "W11_board_visible_activity_spine",
@@ -19005,8 +19186,7 @@ class SourcingOrchestrator:
             if not activity:
                 return {}
             candidate_ids = _dedupe_texts(
-                list(command_payload.get("candidate_ids") or [])
-                or list(dict(output or {}).get("candidate_ids") or [])
+                list(command_payload.get("candidate_ids") or []) or list(dict(output or {}).get("candidate_ids") or [])
             )
             candidate_count = max(
                 _coerce_int(command_payload.get("candidate_count"), 0),
@@ -19256,9 +19436,7 @@ class SourcingOrchestrator:
         result_reason = str(item_result.get("reason") or result_status or "").strip()
         fallback_candidate_count = len(
             _dedupe_texts(
-                candidate_id
-                for item in claimed_items
-                for candidate_id in list(dict(item).get("candidate_ids") or [])
+                candidate_id for item in claimed_items for candidate_id in list(dict(item).get("candidate_ids") or [])
             )
         )
         candidate_count = max(_coerce_int(item_result.get("candidate_count"), 0), fallback_candidate_count)
@@ -19483,7 +19661,9 @@ class SourcingOrchestrator:
                     continue
                 if self._board_visible_patch_publish_command_group_key(dict(candidate_command)) != group_key:
                     continue
-                payload_candidate_ids = _dedupe_texts(dict(candidate_command.get("payload") or {}).get("candidate_ids") or [])
+                payload_candidate_ids = _dedupe_texts(
+                    dict(candidate_command.get("payload") or {}).get("candidate_ids") or []
+                )
                 next_count = len(payload_candidate_ids)
                 if (
                     command_group
@@ -19759,7 +19939,9 @@ class SourcingOrchestrator:
         payload["completed_count"] = local_completed + board_completed
         payload["candidate_count"] = max(local_candidate_count, board_candidate_count)
         payload["card_count"] = board_candidate_count
-        payload["status"] = "active" if int(payload["claimed_count"]) > 0 or int(payload["completed_count"]) > 0 else "idle"
+        payload["status"] = (
+            "active" if int(payload["claimed_count"]) > 0 or int(payload["completed_count"]) > 0 else "idle"
+        )
         if str(payload["status"]) == "active" or str(source or "").strip() == "worker_completion_callback":
             job = self.store.get_job(normalized_job_id) or {}
             self.store.append_job_event(
@@ -20119,8 +20301,12 @@ class SourcingOrchestrator:
         item_id = str(item_payload.get("item_id") or "").strip()
         job_id = str(item_payload.get("job_id") or "").strip()
         metadata = dict(item_payload.get("metadata") or {})
-        command_owned_payload = bool(item_payload.get("command_owned_payload")) or bool(metadata.get("command_owned_payload"))
-        projection_id = str(metadata.get("serving_projection_id") or item_payload.get("serving_projection_id") or "").strip()
+        command_owned_payload = bool(item_payload.get("command_owned_payload")) or bool(
+            metadata.get("command_owned_payload")
+        )
+        projection_id = str(
+            metadata.get("serving_projection_id") or item_payload.get("serving_projection_id") or ""
+        ).strip()
         if not item_id or not job_id or not projection_id:
             return {"status": "skipped", "reason": "projection_item_scope_missing", "item_id": item_id}
         projection = self.store.get_serving_projection(projection_id)
@@ -20166,11 +20352,17 @@ class SourcingOrchestrator:
                 )
             )
             return {"status": "completed", "reason": "serving_projection_members_empty", "item": completed_item}
-        request = JobRequest.from_payload(dict(metadata.get("request_payload") or (self.store.get_job(job_id) or {}).get("request") or {}))
+        request = JobRequest.from_payload(
+            dict(metadata.get("request_payload") or (self.store.get_job(job_id) or {}).get("request") or {})
+        )
         state_path_value = str(metadata.get("state_path") or "").strip()
-        state_path = Path(state_path_value).expanduser() if state_path_value else self._projection_facet_layering_build_state_path(
-            job_id=job_id,
-            item_id=item_id,
+        state_path = (
+            Path(state_path_value).expanduser()
+            if state_path_value
+            else self._projection_facet_layering_build_state_path(
+                job_id=job_id,
+                item_id=item_id,
+            )
         )
         input_fingerprint = str(metadata.get("input_fingerprint") or "").strip()
         state: dict[str, Any] = {}
@@ -20222,10 +20414,10 @@ class SourcingOrchestrator:
         )
         if not members and cursor < total_count:
             failed_metadata = {
-                    "failure_reason": "serving_projection_member_page_empty",
-                    "projection_id": projection_id,
-                    "processed_candidate_count": cursor,
-                    "total_candidate_count": total_count,
+                "failure_reason": "serving_projection_member_page_empty",
+                "projection_id": projection_id,
+                "processed_candidate_count": cursor,
+                "total_candidate_count": total_count,
             }
             failed_item = (
                 self._command_owned_item_result(
@@ -20254,9 +20446,9 @@ class SourcingOrchestrator:
             candidate = self._candidate_from_overlay_record(record)
             if candidate is None:
                 failed_metadata = {
-                        "failure_reason": "serving_projection_member_candidate_invalid",
-                        "candidate_id": str(record.get("candidate_id") or ""),
-                        "projection_id": projection_id,
+                    "failure_reason": "serving_projection_member_candidate_invalid",
+                    "candidate_id": str(record.get("candidate_id") or ""),
+                    "projection_id": projection_id,
                 }
                 failed_item = (
                     self._command_owned_item_result(
@@ -20273,7 +20465,11 @@ class SourcingOrchestrator:
                         metadata=failed_metadata,
                     )
                 )
-                return {"status": "failed", "reason": "serving_projection_member_candidate_invalid", "item": failed_item}
+                return {
+                    "status": "failed",
+                    "reason": "serving_projection_member_candidate_invalid",
+                    "item": failed_item,
+                }
             candidates.append(candidate)
         chunk_analysis = (
             build_outreach_layer_analysis(
@@ -20360,15 +20556,15 @@ class SourcingOrchestrator:
         )
         if cursor < total_count:
             partial_metadata = {
-                    "completed_by": str(lease_owner or "").strip(),
-                    "partial_progress_reason": "projection_facet_layering_projection_chunk_completed",
-                    "state_path": str(state_path),
-                    "projection_id": projection_id,
-                    "processed_candidate_count": cursor,
-                    "total_candidate_count": total_count,
-                    "chunk_size": len(members),
-                    "elapsed_ms": elapsed_ms,
-                    "checkpoint_contract": "projection_member_layer_counts_v1",
+                "completed_by": str(lease_owner or "").strip(),
+                "partial_progress_reason": "projection_facet_layering_projection_chunk_completed",
+                "state_path": str(state_path),
+                "projection_id": projection_id,
+                "processed_candidate_count": cursor,
+                "total_candidate_count": total_count,
+                "chunk_size": len(members),
+                "elapsed_ms": elapsed_ms,
+                "checkpoint_contract": "projection_member_layer_counts_v1",
             }
             partial_item = (
                 self._command_owned_item_result(
@@ -20454,11 +20650,15 @@ class SourcingOrchestrator:
                 view_kind=str(existing_result_view.get("view_kind") or "asset_population").strip()
                 or "asset_population",
                 snapshot_id=str(existing_result_view.get("snapshot_id") or snapshot_id).strip(),
-                asset_view=str(existing_result_view.get("asset_view") or request.asset_view or "canonical_merged").strip()
+                asset_view=str(
+                    existing_result_view.get("asset_view") or request.asset_view or "canonical_merged"
+                ).strip()
                 or "canonical_merged",
                 source_path=str(existing_result_view.get("source_path") or "").strip(),
                 authoritative_snapshot_id=str(existing_result_view.get("authoritative_snapshot_id") or "").strip(),
-                materialization_generation_key=str(existing_result_view.get("materialization_generation_key") or "").strip(),
+                materialization_generation_key=str(
+                    existing_result_view.get("materialization_generation_key") or ""
+                ).strip(),
                 request_signature_value=str(existing_result_view.get("request_signature") or "").strip(),
                 summary={**dict(existing_result_view.get("summary") or {}), "outreach_layering": summary_payload},
                 metadata={
@@ -20531,11 +20731,7 @@ class SourcingOrchestrator:
             },
         )
         completed_state = {
-            **{
-                key: value
-                for key, value in state.items()
-                if key not in {"layer_assignments", "processed_records"}
-            },
+            **{key: value for key, value in state.items() if key not in {"layer_assignments", "processed_records"}},
             "status": "completed",
             "completed_at": _utc_now_iso(),
             "processed_candidate_count": total_count,
@@ -20840,7 +21036,9 @@ class SourcingOrchestrator:
                 )
                 skipped_count += 1
                 continue
-            running_command = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            running_command = (
+                self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            )
             claimed_count += 1
             executed_command_count += 1
             payload = dict(running_command.get("payload") or {})
@@ -20867,7 +21065,9 @@ class SourcingOrchestrator:
                     ).strip(),
                     "chunk_size": chunk_size,
                     "phase_budget_ms": phase_budget_ms,
-                    "legacy_materialization_item_used": self._workflow_command_payload_uses_legacy_materialization_item(payload),
+                    "legacy_materialization_item_used": self._workflow_command_payload_uses_legacy_materialization_item(
+                        payload
+                    ),
                 },
                 entity_counts={
                     "candidate_count": _coerce_int(payload.get("candidate_count"), 0),
@@ -20928,7 +21128,9 @@ class SourcingOrchestrator:
                             "status": "queued",
                             "reason": "projection_facet_layering_item_claim_contention",
                             "activity_run_id": str((final_activity or activity).get("activity_run_id") or "").strip(),
-                            "activity_attempt_id": str((final_attempt or activity_attempt).get("attempt_id") or "").strip(),
+                            "activity_attempt_id": str(
+                                (final_attempt or activity_attempt).get("attempt_id") or ""
+                            ).strip(),
                             "entity_delta_id": str(entity_delta.get("delta_id") or "").strip(),
                             "workflow_command": self._workflow_command_observation(
                                 retry_command or running_command,
@@ -21014,7 +21216,9 @@ class SourcingOrchestrator:
                     "command_id": command_id,
                     "item_id": item_id,
                     "projection_id": projection_id,
-                    "snapshot_id": str(dict(claimed_item or {}).get("snapshot_id") or payload.get("snapshot_id") or "").strip(),
+                    "snapshot_id": str(
+                        dict(claimed_item or {}).get("snapshot_id") or payload.get("snapshot_id") or ""
+                    ).strip(),
                 },
                 entity_payload={
                     "item_id": item_id,
@@ -21034,14 +21238,18 @@ class SourcingOrchestrator:
                 },
                 artifact_refs=[
                     str(path or "").strip()
-                    for path in dict(dict(result_payload.get("outreach_layering") or {}).get("analysis_paths") or {}).values()
+                    for path in dict(
+                        dict(result_payload.get("outreach_layering") or {}).get("analysis_paths") or {}
+                    ).values()
                     if str(path or "").strip()
                 ],
                 metadata={"activity_boundary": "projection_facet_layering_build"},
                 idempotency_scope="projection_facet_layering_build",
             )
             result_payload["activity_run_id"] = str((final_activity or activity).get("activity_run_id") or "").strip()
-            result_payload["activity_attempt_id"] = str((final_attempt or activity_attempt).get("attempt_id") or "").strip()
+            result_payload["activity_attempt_id"] = str(
+                (final_attempt or activity_attempt).get("attempt_id") or ""
+            ).strip()
             result_payload["entity_delta_id"] = str(entity_delta.get("delta_id") or "").strip()
             if status == "completed":
                 terminal_command = self.store.mark_workflow_command_succeeded(
@@ -21119,7 +21327,9 @@ class SourcingOrchestrator:
         job: dict[str, Any],
         summary_payload: dict[str, Any] | None,
     ) -> dict[str, Any]:
-        return self._excel_intake_owner._excel_intake_artifact_materialization_state(job=job, summary_payload=summary_payload)
+        return self._excel_intake_owner._excel_intake_artifact_materialization_state(
+            job=job, summary_payload=summary_payload
+        )
 
     def _plan_snapshot_compaction_run_command_for_item(
         self,
@@ -21193,8 +21403,12 @@ class SourcingOrchestrator:
                             "request_payload": dict(metadata.get("request_payload") or {}),
                             "materialization_metadata": metadata,
                             "migration_phase": "W6_snapshot_compaction_run",
-                            "source": str(source or item_payload.get("source") or "snapshot_full_materialization").strip(),
-                            "reason": str(reason or item_payload.get("reason") or "snapshot_full_materialization_requested").strip(),
+                            "source": str(
+                                source or item_payload.get("source") or "snapshot_full_materialization"
+                            ).strip(),
+                            "reason": str(
+                                reason or item_payload.get("reason") or "snapshot_full_materialization_requested"
+                            ).strip(),
                         },
                         item_payload=item_payload,
                         item_kind="snapshot_full_materialization",
@@ -21237,8 +21451,9 @@ class SourcingOrchestrator:
             job=job,
             summary_payload=summary,
         )
-        workflow_snapshot_materialization_required = job_type == "workflow" and self._snapshot_materialization_requires_background_reconcile(
-            summary_payload=summary
+        workflow_snapshot_materialization_required = (
+            job_type == "workflow"
+            and self._snapshot_materialization_requires_background_reconcile(summary_payload=summary)
         )
         metadata_payload = dict(metadata or {})
         pending_on_completion = bool(metadata_payload.pop("pending_until_workflow_completion", False))
@@ -21246,9 +21461,7 @@ class SourcingOrchestrator:
             return {"status": "skipped", "reason": "snapshot_materialization_not_required", "job_id": normalized_job_id}
         snapshot_materialization = dict(summary.get("background_snapshot_materialization") or {})
         snapshot_id = str(
-            snapshot_materialization.get("snapshot_id")
-            or excel_artifact_materialization.get("snapshot_id")
-            or ""
+            snapshot_materialization.get("snapshot_id") or excel_artifact_materialization.get("snapshot_id") or ""
         ).strip()
         if not snapshot_id:
             return {"status": "skipped", "reason": "snapshot_id_missing", "job_id": normalized_job_id}
@@ -21352,19 +21565,22 @@ class SourcingOrchestrator:
         if not command:
             return {"status": "failed", "reason": "snapshot_full_materialization_command_enqueue_failed"}
         if pending_on_completion:
-            command = self._workflow_command_waiting_prerequisite(
-                str(command.get("command_id") or ""),
-                retry_delay_seconds=30,
-                result={
-                    "status": "waiting_prerequisite",
-                    "reason": "pending_until_workflow_completion",
-                    "item_id": item_id,
-                    "job_id": normalized_job_id,
-                    "snapshot_id": snapshot_id,
-                    "pending_until_workflow_completion": True,
-                },
-                from_statuses=["queued", "claimed", "running", "retry_wait"],
-            ) or command
+            command = (
+                self._workflow_command_waiting_prerequisite(
+                    str(command.get("command_id") or ""),
+                    retry_delay_seconds=30,
+                    result={
+                        "status": "waiting_prerequisite",
+                        "reason": "pending_until_workflow_completion",
+                        "item_id": item_id,
+                        "job_id": normalized_job_id,
+                        "snapshot_id": snapshot_id,
+                        "pending_until_workflow_completion": True,
+                    },
+                    from_statuses=["queued", "claimed", "running", "retry_wait"],
+                )
+                or command
+            )
         return {
             **item,
             "workflow_command": self._workflow_command_observation(
@@ -21562,7 +21778,12 @@ class SourcingOrchestrator:
         if not candidate_doc_path_value and snapshot_dir is not None:
             candidate_doc_path_value = str(snapshot_dir / "candidate_documents.json")
         candidate_doc_path = Path(candidate_doc_path_value).expanduser() if candidate_doc_path_value else None
-        if snapshot_dir is None or not snapshot_dir.exists() or candidate_doc_path is None or not candidate_doc_path.exists():
+        if (
+            snapshot_dir is None
+            or not snapshot_dir.exists()
+            or candidate_doc_path is None
+            or not candidate_doc_path.exists()
+        ):
             reason = (
                 "candidate_documents_missing"
                 if snapshot_dir is not None and snapshot_dir.exists()
@@ -22016,10 +22237,14 @@ class SourcingOrchestrator:
                 )
                 if observed:
                     observed["runtime_command_contention"] = True
-                results.append({"status": "queued", "reason": "typed_command_claim_contention", "workflow_command": observed})
+                results.append(
+                    {"status": "queued", "reason": "typed_command_claim_contention", "workflow_command": observed}
+                )
                 skipped_count += 1
                 continue
-            running_command = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            running_command = (
+                self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            )
             claimed_count += 1
             executed_command_count += 1
             command_body = dict(running_command.get("payload") or {})
@@ -22042,7 +22267,9 @@ class SourcingOrchestrator:
                     "snapshot_id": command_snapshot_id,
                     "item_id": command_item_id,
                     "item_kind": str(command_body.get("item_kind") or "snapshot_full_materialization"),
-                    "legacy_materialization_item_used": self._workflow_command_payload_uses_legacy_materialization_item(command_body),
+                    "legacy_materialization_item_used": self._workflow_command_payload_uses_legacy_materialization_item(
+                        command_body
+                    ),
                 },
                 entity_counts={"snapshot_count": 1},
                 metadata={
@@ -22251,11 +22478,17 @@ class SourcingOrchestrator:
                     delta_kind="snapshot_compaction_not_applied",
                     delta_status="not_applied",
                     reason=str(result.get("reason") or result_status or "snapshot_full_materialization_not_completed"),
-                    error={"reason": str(result.get("reason") or result_status or "snapshot_full_materialization_not_completed")},
+                    error={
+                        "reason": str(
+                            result.get("reason") or result_status or "snapshot_full_materialization_not_completed"
+                        )
+                    },
                 )
                 failed_command = self.store.mark_workflow_command_failed(
                     command_id,
-                    error_text=str(result.get("reason") or result_status or "snapshot_full_materialization_not_completed"),
+                    error_text=str(
+                        result.get("reason") or result_status or "snapshot_full_materialization_not_completed"
+                    ),
                     retryable=False,
                     retry_delay_seconds=60,
                 )
@@ -22500,8 +22733,7 @@ class SourcingOrchestrator:
             return {}
         view_summary = dict(view_payload.get("summary") or {})
         served_count = _coerce_int(
-            view_summary.get("candidate_count")
-            or dict(overlay_info or {}).get("candidate_count"),
+            view_summary.get("candidate_count") or dict(overlay_info or {}).get("candidate_count"),
             0,
         )
         if served_count <= 0:
@@ -22512,7 +22744,9 @@ class SourcingOrchestrator:
         overlay_path = str(dict(overlay_info or {}).get("path") or "").strip()
         run_scope_projection = dict(dict(view_payload.get("metadata") or {}).get("run_scope_projection") or {})
         run_scope_projection_id = str(run_scope_projection.get("projection_id") or "").strip()
-        serving_projection_id = run_scope_projection_id or overlay_path or str(view_payload.get("view_id") or "").strip()
+        serving_projection_id = (
+            run_scope_projection_id or overlay_path or str(view_payload.get("view_id") or "").strip()
+        )
         serving_projection_kind = "canonical_projection" if run_scope_projection_id else "job_asset_population_overlay"
         fields: dict[str, Any] = {
             "view_id": str(view_payload.get("view_id") or existing.get("view_id") or "").strip(),
@@ -22553,8 +22787,7 @@ class SourcingOrchestrator:
             if stage1_public_count > 0 and served_count >= stage1_public_count:
                 metadata["delta_profile_denominator_promoted"] = True
                 metadata["stage1_terminal_promoted_at"] = (
-                    str(metadata.get("stage1_terminal_promoted_at") or "").strip()
-                    or _utc_now_iso()
+                    str(metadata.get("stage1_terminal_promoted_at") or "").strip() or _utc_now_iso()
                 )
         fields["metadata"] = metadata
         return self.store.upsert_job_result_lifecycle(job_id=normalized_job_id, fields=fields)
@@ -22590,8 +22823,7 @@ class SourcingOrchestrator:
             {
                 "target_company": str(view_payload.get("target_company") or "").strip(),
                 "snapshot_id": snapshot_id,
-                "asset_view": str(view_payload.get("asset_view") or "canonical_merged").strip()
-                or "canonical_merged",
+                "asset_view": str(view_payload.get("asset_view") or "canonical_merged").strip() or "canonical_merged",
                 "source_path": str(view_payload.get("source_path") or "").strip(),
                 "result_view": view_payload,
             }
@@ -23537,12 +23769,15 @@ class SourcingOrchestrator:
             )
         if max(current_candidate_count, candidate_doc_count) >= baseline_candidate_count:
             current_candidate_count = max(current_candidate_count, candidate_doc_count)
-            resolved_asset_view = str(
-                current_candidate_source.get("asset_view")
-                or candidate_source.get("asset_view")
-                or result_view.get("asset_view")
+            resolved_asset_view = (
+                str(
+                    current_candidate_source.get("asset_view")
+                    or candidate_source.get("asset_view")
+                    or result_view.get("asset_view")
+                    or "canonical_merged"
+                ).strip()
                 or "canonical_merged"
-            ).strip() or "canonical_merged"
+            )
             materialized_path = (
                 self._candidate_source_materialized_path(snapshot_dir=snapshot_dir, asset_view=resolved_asset_view)
                 if snapshot_dir is not None
@@ -24005,10 +24240,13 @@ class SourcingOrchestrator:
         asset_reuse_plan = dict(plan_payload.get("asset_reuse_plan") or {})
         lifecycle_row = self.store.get_job_result_lifecycle(job_id)
         dynamic_stage1_progress = dict(job_summary.get("linkedin_stage_1") or {})
-        linkedin_stage_1_progress = self._stage1_progress_payload_from_lifecycle_row(
-            lifecycle_row,
-            dynamic_progress=dynamic_stage1_progress,
-        ) or dynamic_stage1_progress
+        linkedin_stage_1_progress = (
+            self._stage1_progress_payload_from_lifecycle_row(
+                lifecycle_row,
+                dynamic_progress=dynamic_stage1_progress,
+            )
+            or dynamic_stage1_progress
+        )
         if not linkedin_stage_1_progress:
             # Stage 1 detail is a separate progress/debug line. It may be
             # reconstructed from persisted worker facts for legacy/reuse rows,
@@ -24143,9 +24381,7 @@ class SourcingOrchestrator:
             or ""
         ).strip()
         if source_path_value:
-            artifact_dir = self._normalized_artifact_dir_for_public_serving_path(
-                Path(source_path_value).expanduser()
-            )
+            artifact_dir = self._normalized_artifact_dir_for_public_serving_path(Path(source_path_value).expanduser())
             if artifact_dir is not None:
                 token_parts: list[str] = []
                 for path in (
@@ -24260,35 +24496,28 @@ class SourcingOrchestrator:
                     or {}
                 ),
                 "facet_summary_scope": str(
-                    overlay_payload.get("facet_summary_scope")
-                    or candidate_source.get("facet_summary_scope")
-                    or ""
+                    overlay_payload.get("facet_summary_scope") or candidate_source.get("facet_summary_scope") or ""
                 ).strip(),
                 "facet_summary": dict(overlay_payload.get("facet_summary") or {}),
                 "profile_fetch_progress": dict(overlay_payload.get("profile_fetch_progress") or {}),
-                "card_materialization_summary": dict(
-                    overlay_payload.get("card_materialization_summary") or {}
-                ),
+                "card_materialization_summary": dict(overlay_payload.get("card_materialization_summary") or {}),
             }
             with self._asset_population_summary_cache_lock:
                 self._asset_population_summary_cache[cache_key] = dict(overlay_summary)
             return overlay_summary
 
         try:
-            artifact_store = (
-                self._open_public_serving_artifact_store_from_candidate_source(
-                    request=request,
-                    candidate_source=candidate_source,
-                    target_company=target_company,
-                    snapshot_id=snapshot_id,
-                    asset_view=asset_view,
-                )
-                or open_snapshot_artifact_store(
-                    runtime_dir=self.runtime_dir,
-                    target_company=target_company,
-                    snapshot_id=snapshot_id,
-                    asset_view=asset_view,
-                )
+            artifact_store = self._open_public_serving_artifact_store_from_candidate_source(
+                request=request,
+                candidate_source=candidate_source,
+                target_company=target_company,
+                snapshot_id=snapshot_id,
+                asset_view=asset_view,
+            ) or open_snapshot_artifact_store(
+                runtime_dir=self.runtime_dir,
+                target_company=target_company,
+                snapshot_id=snapshot_id,
+                asset_view=asset_view,
             )
             artifact_summary_payload = read_snapshot_artifact_summary(artifact_store)
             if artifact_summary_payload:
@@ -24365,9 +24594,7 @@ class SourcingOrchestrator:
                 "skills": record.get("skills") or metadata.get("skills"),
                 "profile_capture_kind": SourcingOrchestrator._candidate_record_profile_capture_kind(record),
                 "profile_capture_source_path": (
-                    record.get("profile_capture_source_path")
-                    or metadata.get("profile_capture_source_path")
-                    or ""
+                    record.get("profile_capture_source_path") or metadata.get("profile_capture_source_path") or ""
                 ),
                 "source_path": record.get("source_path") or metadata.get("source_path") or "",
             }
@@ -24404,7 +24631,9 @@ class SourcingOrchestrator:
                 or metadata.get("profile_url")
                 or ""
             ).strip()
-            experience_lines = _normalized_text_lines(record.get("experience_lines") or metadata.get("experience_lines"))
+            experience_lines = _normalized_text_lines(
+                record.get("experience_lines") or metadata.get("experience_lines")
+            )
             education_lines = _normalized_text_lines(record.get("education_lines") or metadata.get("education_lines"))
             if linkedin_url and not display_ready:
                 needs_profile_completion_count += 1
@@ -24428,11 +24657,7 @@ class SourcingOrchestrator:
         candidates: list[Candidate],
     ) -> dict[str, Any]:
         return cls._build_candidate_card_materialization_summary_from_records(
-            [
-                candidate.to_record()
-                for candidate in list(candidates or [])
-                if isinstance(candidate, Candidate)
-            ]
+            [candidate.to_record() for candidate in list(candidates or []) if isinstance(candidate, Candidate)]
         )
 
     @classmethod
@@ -24495,9 +24720,7 @@ class SourcingOrchestrator:
             needs_profile_completion_count = preview_count
         return {
             "quality_fields_available": bool(
-                existing.get("quality_fields_available")
-                or delta.get("quality_fields_available")
-                or candidate_count > 0
+                existing.get("quality_fields_available") or delta.get("quality_fields_available") or candidate_count > 0
             ),
             "candidate_count": candidate_count,
             "display_ready_candidate_count": display_ready_count,
@@ -24536,7 +24759,11 @@ class SourcingOrchestrator:
         display_ready_count = min(expected_count, baseline_count + delta_ready_count)
         # A fully served non-delta workflow has no separate baseline/delta split;
         # in that case the serving lifecycle itself is sufficient readiness proof.
-        if baseline_count <= 0 and delta_ready_count <= 0 and _coerce_int(row.get("served_candidate_count"), 0) >= expected_count:
+        if (
+            baseline_count <= 0
+            and delta_ready_count <= 0
+            and _coerce_int(row.get("served_candidate_count"), 0) >= expected_count
+        ):
             display_ready_count = expected_count
         preview_count = max(0, expected_count - display_ready_count)
         return {
@@ -24580,7 +24807,9 @@ class SourcingOrchestrator:
             0,
             int(
                 payload.get("preview_candidate_count")
-                or max(0, candidate_count - max(display_ready_count, profile_detail_count, explicit_profile_capture_count))
+                or max(
+                    0, candidate_count - max(display_ready_count, profile_detail_count, explicit_profile_capture_count)
+                )
             ),
         )
         needs_profile_completion_count = max(
@@ -24606,14 +24835,22 @@ class SourcingOrchestrator:
         return {
             "quality_fields_available": quality_fields_available,
             "candidate_count": candidate_count,
-            "display_ready_candidate_count": min(candidate_count, display_ready_count) if candidate_count else display_ready_count,
-            "profile_detail_candidate_count": min(candidate_count, profile_detail_count) if candidate_count else profile_detail_count,
+            "display_ready_candidate_count": min(candidate_count, display_ready_count)
+            if candidate_count
+            else display_ready_count,
+            "profile_detail_candidate_count": min(candidate_count, profile_detail_count)
+            if candidate_count
+            else profile_detail_count,
             "explicit_profile_capture_candidate_count": (
-                min(candidate_count, explicit_profile_capture_count) if candidate_count else explicit_profile_capture_count
+                min(candidate_count, explicit_profile_capture_count)
+                if candidate_count
+                else explicit_profile_capture_count
             ),
             "preview_candidate_count": min(candidate_count, preview_count) if candidate_count else preview_count,
             "needs_profile_completion_candidate_count": (
-                min(candidate_count, needs_profile_completion_count) if candidate_count else needs_profile_completion_count
+                min(candidate_count, needs_profile_completion_count)
+                if candidate_count
+                else needs_profile_completion_count
             ),
             "low_profile_richness_candidate_count": (
                 min(candidate_count, low_profile_richness_count) if candidate_count else low_profile_richness_count
@@ -24675,9 +24912,7 @@ class SourcingOrchestrator:
         )
         display_ready_candidate_count = min(
             candidate_count,
-            max(profile_detail_count, explicit_profile_capture_count)
-            if quality_fields_available
-            else candidate_count,
+            max(profile_detail_count, explicit_profile_capture_count) if quality_fields_available else candidate_count,
         )
         needs_profile_completion_count = max(0, int(summary.get("profile_completion_backlog_count") or 0))
         low_profile_richness_count = max(0, int(summary.get("low_profile_richness_count") or 0))
@@ -24793,9 +25028,7 @@ class SourcingOrchestrator:
                 overlay_payload = self._load_asset_population_overlay_payload_from_path(overlay_path)
                 if isinstance(overlay_payload, dict):
                     overlay_records = [
-                        dict(item)
-                        for item in list(overlay_payload.get("candidates") or [])
-                        if isinstance(item, dict)
+                        dict(item) for item in list(overlay_payload.get("candidates") or []) if isinstance(item, dict)
                     ]
                     overlay_records = self._normalize_board_visible_profile_records(overlay_records)
                     if overlay_records:
@@ -24831,7 +25064,9 @@ class SourcingOrchestrator:
                 "default_selected": False,
                 "source_kind": str(candidate_source.get("source_kind") or "").strip(),
                 "snapshot_id": str(candidate_source.get("snapshot_id") or "").strip(),
-                "asset_view": str(candidate_source.get("asset_view") or request.asset_view or "canonical_merged").strip()
+                "asset_view": str(
+                    candidate_source.get("asset_view") or request.asset_view or "canonical_merged"
+                ).strip()
                 or "canonical_merged",
                 "source_path": str(candidate_source.get("source_path") or "").strip(),
                 "candidate_count": 0,
@@ -24857,16 +25092,16 @@ class SourcingOrchestrator:
                 "default_selected": False,
                 "source_kind": str(candidate_source.get("source_kind") or "").strip(),
                 "snapshot_id": str(candidate_source.get("snapshot_id") or "").strip(),
-                "asset_view": str(candidate_source.get("asset_view") or request.asset_view or "canonical_merged").strip()
+                "asset_view": str(
+                    candidate_source.get("asset_view") or request.asset_view or "canonical_merged"
+                ).strip()
                 or "canonical_merged",
                 "source_path": str(candidate_source.get("source_path") or "").strip(),
                 "candidate_count": 0,
                 "candidates": [],
                 "status": "public_serving_artifact_missing",
                 "reason": "candidate_documents_not_public_serving_artifact",
-                "public_serving_artifact_proof": self._candidate_source_public_serving_artifact_proof(
-                    candidate_source
-                ),
+                "public_serving_artifact_proof": self._candidate_source_public_serving_artifact_proof(candidate_source),
             }
         target_company = str(request.target_company or "").strip()
         snapshot_id = str(candidate_source.get("snapshot_id") or "").strip()
@@ -24885,14 +25120,15 @@ class SourcingOrchestrator:
         stored_facet_summary_scope = self._candidate_source_stored_facet_summary_scope(candidate_source)
         overlay_path = self._candidate_source_asset_population_overlay_path(candidate_source)
         stored_facet_evidence_available = bool(stored_facet_summary or stored_facet_summary_scope)
-        serving_overlay_outranks_stored_facets = (
-            self._candidate_source_complete_serving_overlay_outranks_stored_facets(candidate_source)
+        serving_overlay_outranks_stored_facets = self._candidate_source_complete_serving_overlay_outranks_stored_facets(
+            candidate_source
         )
         stored_facet_candidate_count = _coerce_int(stored_facet_summary.get("candidate_count"), 0)
         stored_facet_summary_is_complete = bool(
             stored_facet_summary
             and stored_facet_summary_scope == "global_full_population"
-            and stored_facet_candidate_count == max(
+            and stored_facet_candidate_count
+            == max(
                 0,
                 _coerce_int(candidate_source.get("candidate_count"), 0),
                 _coerce_int(dict(candidate_source.get("result_view_summary") or {}).get("candidate_count"), 0),
@@ -24935,8 +25171,7 @@ class SourcingOrchestrator:
                 "facet_summary_scope": (
                     "global_full_population"
                     if stored_facet_summary_is_complete
-                    else stored_facet_summary_scope
-                    or "unavailable"
+                    else stored_facet_summary_scope or "unavailable"
                 ),
                 "profile_fetch_progress": stored_profile_progress or self._build_profile_fetch_progress_payload([]),
                 "card_materialization_summary": stored_card_summary,
@@ -24979,9 +25214,7 @@ class SourcingOrchestrator:
             )
             if not overlay_profile_progress:
                 overlay_records_for_progress = [
-                    dict(item)
-                    for item in list(overlay_payload.get("candidates") or [])
-                    if isinstance(item, dict)
+                    dict(item) for item in list(overlay_payload.get("candidates") or []) if isinstance(item, dict)
                 ]
                 max_progress_scan_rows = max(0, _env_int("JOB_RESULTS_PROFILE_PROGRESS_OVERLAY_SCAN_MAX_ROWS", 500))
                 if overlay_records_for_progress and len(overlay_records_for_progress) <= max_progress_scan_rows:
@@ -25007,7 +25240,9 @@ class SourcingOrchestrator:
                     "source_kind": "job_asset_population_overlay",
                     "snapshot_id": str(overlay_payload.get("snapshot_id") or snapshot_id),
                     "asset_view": str(overlay_payload.get("asset_view") or asset_view),
-                    "source_path": str(overlay_path or self._candidate_source_asset_population_overlay_path(candidate_source) or ""),
+                    "source_path": str(
+                        overlay_path or self._candidate_source_asset_population_overlay_path(candidate_source) or ""
+                    ),
                     "candidate_count": int(overlay_artifact_summary.get("candidate_count") or 0),
                     "candidates": [],
                     "facet_summary_scope": overlay_scope,
@@ -25032,9 +25267,7 @@ class SourcingOrchestrator:
                 records=overlay_records,
             )
             overlay_records = self._normalize_board_visible_profile_records(overlay_records)
-            profile_fetch_progress = self._build_profile_fetch_progress_payload(
-                overlay_records
-            )
+            profile_fetch_progress = self._build_profile_fetch_progress_payload(overlay_records)
             card_materialization_summary = self._build_candidate_card_materialization_summary_from_records(
                 overlay_records
             )
@@ -25120,14 +25353,12 @@ class SourcingOrchestrator:
                 "public_serving_artifact_proof": serving_proof,
             }
         if bool(serving_proof.get("ready")):
-            artifact_source_path = str(serving_proof.get("resolved_path") or serving_proof.get("path") or artifact_source_path)
+            artifact_source_path = str(
+                serving_proof.get("resolved_path") or serving_proof.get("path") or artifact_source_path
+            )
             if Path(artifact_source_path).name in {"manifest.json", "artifact_summary.json", "snapshot_manifest.json"}:
                 resolved_source_kind = "materialized_candidate_documents_manifest"
-        candidate_count = int(
-            artifact_summary.get("candidate_count")
-            or serving_proof.get("candidate_count")
-            or 0
-        )
+        candidate_count = int(artifact_summary.get("candidate_count") or serving_proof.get("candidate_count") or 0)
         card_materialization_summary = self._build_candidate_card_materialization_summary_from_artifact_summary(
             artifact_summary,
             fallback_candidate_count=candidate_count,
@@ -25450,7 +25681,11 @@ class SourcingOrchestrator:
             return payload
         payload_candidate_count = _coerce_int(payload.get("candidate_count"), 0)
         layering_candidate_count = _coerce_int(dict(layer_summary[0] if layer_summary else {}).get("count"), 0)
-        if payload_candidate_count > 0 and layering_candidate_count > 0 and payload_candidate_count != layering_candidate_count:
+        if (
+            payload_candidate_count > 0
+            and layering_candidate_count > 0
+            and payload_candidate_count != layering_candidate_count
+        ):
             # A completed board's public denominator is the canonical serving
             # projection. Older outreach artifacts can contain raw or pre-dedupe
             # row counts; they may annotate matching rows, but must not replace
@@ -25562,18 +25797,19 @@ class SourcingOrchestrator:
         final_serving_outranks_overlay = self._candidate_source_final_serving_artifact_outranks_overlay(
             candidate_source
         )
-        serving_overlay_outranks_stored_facets = (
-            self._candidate_source_complete_serving_overlay_outranks_stored_facets(candidate_source)
+        serving_overlay_outranks_stored_facets = self._candidate_source_complete_serving_overlay_outranks_stored_facets(
+            candidate_source
         )
         stored_facet_is_complete = bool(
             stored_facet_summary
             and stored_facet_summary_scope == "global_full_population"
-            and (
-                expected_facet_candidate_count <= 0
-                or stored_facet_candidate_count == expected_facet_candidate_count
-            )
+            and (expected_facet_candidate_count <= 0 or stored_facet_candidate_count == expected_facet_candidate_count)
         )
-        if stored_facet_is_complete and not final_serving_outranks_overlay and not serving_overlay_outranks_stored_facets:
+        if (
+            stored_facet_is_complete
+            and not final_serving_outranks_overlay
+            and not serving_overlay_outranks_stored_facets
+        ):
             stored_facet_summary = self._apply_outreach_layer_summary_to_public_facet_summary(
                 request=request,
                 candidate_source=candidate_source,
@@ -25590,9 +25826,9 @@ class SourcingOrchestrator:
             artifact_facet_counts = dict(artifact_summary.get("public_facet_counts") or {})
             artifact_count = _coerce_int(artifact_summary.get("candidate_count"), 0)
             artifact_facet_count = _coerce_int(artifact_facet_counts.get("candidate_count"), 0)
-            if (
-                artifact_facet_counts
-                and (artifact_count != expected_facet_candidate_count or artifact_facet_count != expected_facet_candidate_count)
+            if artifact_facet_counts and (
+                artifact_count != expected_facet_candidate_count
+                or artifact_facet_count != expected_facet_candidate_count
             ):
                 # A compact artifact summary from a different population must not
                 # trigger an O(all rows) request-path rebuild or leak stale global
@@ -25696,20 +25932,17 @@ class SourcingOrchestrator:
             return summary_progress
 
         try:
-            artifact_store = (
-                self._open_public_serving_artifact_store_from_candidate_source(
-                    request=request,
-                    candidate_source=candidate_source,
-                    target_company=target_company,
-                    snapshot_id=snapshot_id,
-                    asset_view=asset_view,
-                )
-                or open_snapshot_artifact_store(
-                    runtime_dir=self.runtime_dir,
-                    target_company=target_company,
-                    snapshot_id=snapshot_id,
-                    asset_view=asset_view,
-                )
+            artifact_store = self._open_public_serving_artifact_store_from_candidate_source(
+                request=request,
+                candidate_source=candidate_source,
+                target_company=target_company,
+                snapshot_id=snapshot_id,
+                asset_view=asset_view,
+            ) or open_snapshot_artifact_store(
+                runtime_dir=self.runtime_dir,
+                target_company=target_company,
+                snapshot_id=snapshot_id,
+                asset_view=asset_view,
             )
             snapshot_window = read_snapshot_candidate_window(store=artifact_store, offset=0, limit=0)
         except CandidateArtifactError:
@@ -25857,12 +26090,8 @@ class SourcingOrchestrator:
                             for worker in self._safe_list_persisted_job_workers(job_id)
                             if isinstance(worker, dict)
                         ],
-                        "intent_rewrite": _build_intent_rewrite_payload(
-                            request_payload=dict(job.get("request") or {})
-                        ),
-                        "workflow_stage_summaries": _compact_public_workflow_stage_summaries(
-                            workflow_stage_summaries
-                        ),
+                        "intent_rewrite": _build_intent_rewrite_payload(request_payload=dict(job.get("request") or {})),
+                        "workflow_stage_summaries": _compact_public_workflow_stage_summaries(workflow_stage_summaries),
                         "runtime_details_contract": {
                             "schema_version": "public_results_runtime_details_v1",
                             "payload_shape": "bounded_public_diagnostics",
@@ -25877,9 +26106,7 @@ class SourcingOrchestrator:
                         "agent_runtime_session": self.store.get_agent_runtime_session(job_id=job_id) or {},
                         "agent_trace_spans": self.store.list_agent_trace_spans(job_id=job_id),
                         "agent_workers": self._safe_list_persisted_job_workers(job_id),
-                        "intent_rewrite": _build_intent_rewrite_payload(
-                            request_payload=dict(job.get("request") or {})
-                        ),
+                        "intent_rewrite": _build_intent_rewrite_payload(request_payload=dict(job.get("request") or {})),
                         "workflow_stage_summaries": workflow_stage_summaries,
                     }
                 )
@@ -25925,9 +26152,7 @@ class SourcingOrchestrator:
         effective_execution_semantics = dict(context.get("effective_execution_semantics") or {})
         linkedin_stage_1_progress = dict(context.get("linkedin_stage_1_progress") or {})
         normalized_ranked_result_count = (
-            int(ranked_result_count)
-            if ranked_result_count is not None
-            else self.store.count_job_results(job_id)
+            int(ranked_result_count) if ranked_result_count is not None else self.store.count_job_results(job_id)
         )
         fallback_candidate_count = int(
             dict(context.get("job_summary") or {}).get("candidate_count")
@@ -26388,8 +26613,7 @@ class SourcingOrchestrator:
         readiness = dict(projection.get("readiness") or {})
         row_state = str(readiness.get("row") or "").strip().lower()
         row_complete = bool(
-            row_state == "complete"
-            or (not row_state and _coerce_int(readiness.get("row_count"), 0) >= visible_count)
+            row_state == "complete" or (not row_state and _coerce_int(readiness.get("row_count"), 0) >= visible_count)
         )
         if not row_complete:
             return payload
@@ -26619,7 +26843,11 @@ class SourcingOrchestrator:
                 compacted[key] = _compact_public_workflow_leaf(value)
         if public_candidate_count > 0:
             compacted["candidate_count"] = public_candidate_count
-        if source_candidate_count > 0 and public_candidate_count > 0 and source_candidate_count != public_candidate_count:
+        if (
+            source_candidate_count > 0
+            and public_candidate_count > 0
+            and source_candidate_count != public_candidate_count
+        ):
             compacted["source_candidate_count"] = source_candidate_count
             compacted["count_scope"] = "canonical_public_projection"
         return compacted
@@ -27019,7 +27247,9 @@ class SourcingOrchestrator:
             "display_name": display_name,
             "company_media": company_media,
             "status": "ready" if projection_ready else "not_ready",
-            "reason": "" if projection_ready else str(projection_payload.get("reason") or "active_projection_not_servable"),
+            "reason": ""
+            if projection_ready
+            else str(projection_payload.get("reason") or "active_projection_not_servable"),
             "active_projection_id": projection_id,
             "active_collection_version": str(pointer_payload.get("active_collection_version") or "").strip(),
             "candidate_count": _coerce_int(
@@ -27057,7 +27287,9 @@ class SourcingOrchestrator:
         registry: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         normalized_collection_id = str(collection_id or "").strip()
-        normalized_display_name = str(display_name or "").strip() or _display_name_from_collection_id(normalized_collection_id)
+        normalized_display_name = str(display_name or "").strip() or _display_name_from_collection_id(
+            normalized_collection_id
+        )
         registry_payload = dict(registry or {})
         registry_company_key = str(registry_payload.get("company_key") or "").strip()
         fallback_company_key = (
@@ -27075,9 +27307,10 @@ class SourcingOrchestrator:
                 limit=1,
             )
             logo_asset = dict(logo_assets[0]) if logo_assets else {}
-        logo_url = media_asset_frontend_url(logo_asset) or str(
-            logo_asset.get("content_ref") or logo_asset.get("source_url") or ""
-        ).strip()
+        logo_url = (
+            media_asset_frontend_url(logo_asset)
+            or str(logo_asset.get("content_ref") or logo_asset.get("source_url") or "").strip()
+        )
         logo_asset_id = str(logo_asset.get("asset_id") or "").strip()
         if logo_asset_id and logo_url:
             return {
@@ -27134,7 +27367,9 @@ class SourcingOrchestrator:
     ) -> list[dict[str, str]]:
         candidates: list[dict[str, str]] = []
 
-        def add_candidate(source_url: str, *, source_kind: str, source_asset_id: str = "", source_evidence_id: str = "") -> None:
+        def add_candidate(
+            source_url: str, *, source_kind: str, source_asset_id: str = "", source_evidence_id: str = ""
+        ) -> None:
             normalized_url = str(source_url or "").strip()
             if not _media_source_url_allowed(normalized_url):
                 return
@@ -27174,7 +27409,9 @@ class SourcingOrchestrator:
                 limit=limit,
             ):
                 add_candidate(
-                    str(evidence.get("source_url") or evidence.get("normalized_value") or evidence.get("value") or "").strip(),
+                    str(
+                        evidence.get("source_url") or evidence.get("normalized_value") or evidence.get("value") or ""
+                    ).strip(),
                     source_kind=f"company_evidence_{evidence_type}",
                     source_evidence_id=str(evidence.get("evidence_id") or "").strip(),
                 )
@@ -27327,7 +27564,9 @@ class SourcingOrchestrator:
         normalized_collection_id = str(collection_id or "").strip()
         if not normalized_collection_id:
             return {}
-        target_key = normalized_collection_id.split(":", 1)[1] if ":" in normalized_collection_id else normalized_collection_id
+        target_key = (
+            normalized_collection_id.split(":", 1)[1] if ":" in normalized_collection_id else normalized_collection_id
+        )
         rows = self.store.list_organization_asset_registry(target_company=target_key, authoritative_only=True, limit=1)
         if not rows:
             rows = self.store.list_organization_asset_registry(target_company=target_key, limit=1)
@@ -27341,7 +27580,9 @@ class SourcingOrchestrator:
             or dict(registry.get("population_coverage") or {})
         )
         coverage_kind = str(population_coverage.get("coverage_kind") or population_coverage.get("kind") or "").strip()
-        coverage_status = str(population_coverage.get("coverage_status") or population_coverage.get("status") or "").strip()
+        coverage_status = str(
+            population_coverage.get("coverage_status") or population_coverage.get("status") or ""
+        ).strip()
         return {
             "target_company": str(registry.get("target_company") or "").strip(),
             "company_key": str(registry.get("company_key") or "").strip(),
@@ -27401,7 +27642,9 @@ class SourcingOrchestrator:
                                 or 0,
                                 0,
                             ),
-                            "status": "ready" if bool(registry.get(f"{lane_label}_lane_effective_ready")) else "partial",
+                            "status": "ready"
+                            if bool(registry.get(f"{lane_label}_lane_effective_ready"))
+                            else "partial",
                             "provider_source": str(lane.get("provider_source") or lane.get("source") or "").strip(),
                             "scope": str(lane.get("scope") or lane.get("coverage_scope") or "").strip(),
                         }
@@ -27420,7 +27663,9 @@ class SourcingOrchestrator:
                         or payload.get("query")
                         or f"shard_{index}"
                     ).strip(),
-                    "label": str(payload.get("label") or payload.get("shard_title") or payload.get("scope") or "").strip(),
+                    "label": str(
+                        payload.get("label") or payload.get("shard_title") or payload.get("scope") or ""
+                    ).strip(),
                     "keywords": [
                         str(value or "").strip()
                         for value in list(payload.get("keywords") or [])
@@ -27429,7 +27674,9 @@ class SourcingOrchestrator:
                     "employment_status": str(
                         payload.get("employment_status") or payload.get("employment_scope") or ""
                     ).strip(),
-                    "provider_source": str(payload.get("provider_source") or payload.get("source_provider") or "").strip(),
+                    "provider_source": str(
+                        payload.get("provider_source") or payload.get("source_provider") or ""
+                    ).strip(),
                     "candidate_count": _coerce_int(
                         payload.get("candidate_count") or payload.get("result_count") or payload.get("row_count"),
                         0,
@@ -27487,8 +27734,12 @@ class SourcingOrchestrator:
                     or 0
                 ),
                 "profile_fetch_required_count": int(counts.get("profile_fetch_required_count") or 0),
-                "profile_fetched_count": int(counts.get("profile_fetched_count") or readiness.get("profile_ready_count") or 0),
-                "card_materialized_count": int(counts.get("card_materialized_count") or readiness.get("card_ready_count") or 0),
+                "profile_fetched_count": int(
+                    counts.get("profile_fetched_count") or readiness.get("profile_ready_count") or 0
+                ),
+                "card_materialized_count": int(
+                    counts.get("card_materialized_count") or readiness.get("card_ready_count") or 0
+                ),
                 "count_scope": str(counts.get("count_scope") or readiness.get("count_scope") or "exact_projection"),
                 "coverage": coverage,
                 "readiness": readiness,
@@ -27509,7 +27760,10 @@ class SourcingOrchestrator:
 
     def get_serving_projection_api(self, projection_id: str) -> dict[str, Any] | None:
         payload = self.serving_projection_reader.get_projection(projection_id)
-        if str(payload.get("status") or "") == "not_ready" and str(payload.get("reason") or "") == "projection_not_found":
+        if (
+            str(payload.get("status") or "") == "not_ready"
+            and str(payload.get("reason") or "") == "projection_not_found"
+        ):
             return None
         return payload
 
@@ -27527,7 +27781,10 @@ class SourcingOrchestrator:
             limit=limit,
             candidate_filter=candidate_filter,
         )
-        if str(payload.get("status") or "") == "not_ready" and str(payload.get("reason") or "") == "projection_not_found":
+        if (
+            str(payload.get("status") or "") == "not_ready"
+            and str(payload.get("reason") or "") == "projection_not_found"
+        ):
             return None
         return payload
 
@@ -27545,7 +27802,10 @@ class SourcingOrchestrator:
             offset=offset,
             limit=limit,
         )
-        if str(payload.get("status") or "") == "not_ready" and str(payload.get("reason") or "") == "projection_not_found":
+        if (
+            str(payload.get("status") or "") == "not_ready"
+            and str(payload.get("reason") or "") == "projection_not_found"
+        ):
             return None
         return payload
 
@@ -27569,7 +27829,9 @@ class SourcingOrchestrator:
 
     def backfill_projection_person_summary_views_api(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
-        backfill = ServingProjectionMigrationBackfill(self.store, writer_id="serving_projection_person_summary_backfill_v1")
+        backfill = ServingProjectionMigrationBackfill(
+            self.store, writer_id="serving_projection_person_summary_backfill_v1"
+        )
         return backfill.backfill_person_summary_views(
             projection_ids=[
                 str(item or "").strip()
@@ -27584,7 +27846,9 @@ class SourcingOrchestrator:
 
     def backfill_projection_person_search_indexes_api(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
-        backfill = ServingProjectionMigrationBackfill(self.store, writer_id="serving_projection_person_index_backfill_v1")
+        backfill = ServingProjectionMigrationBackfill(
+            self.store, writer_id="serving_projection_person_index_backfill_v1"
+        )
         return backfill.backfill_projection_person_search_indexes(
             projection_ids=[
                 str(item or "").strip()
@@ -27626,7 +27890,10 @@ class SourcingOrchestrator:
             candidate_identity_key,
             workspace_id=workspace_id,
         )
-        if str(payload.get("status") or "") == "not_ready" and str(payload.get("reason") or "") == "projection_not_found":
+        if (
+            str(payload.get("status") or "") == "not_ready"
+            and str(payload.get("reason") or "") == "projection_not_found"
+        ):
             return None
         return payload
 
@@ -27730,7 +27997,9 @@ class SourcingOrchestrator:
         record = self.store.get_crm_record(str(crm_record_id or "").strip())
         if not record:
             return None
-        if str(record.get("workspace_id") or "default").strip() != (str(workspace_id or "default").strip() or "default"):
+        if str(record.get("workspace_id") or "default").strip() != (
+            str(workspace_id or "default").strip() or "default"
+        ):
             return None
         return {
             "status": "ready",
@@ -27844,7 +28113,8 @@ class SourcingOrchestrator:
             "person_identity_key": str(payload.get("person_identity_key") or "").strip(),
             "candidate_identity_key": str(payload.get("candidate_identity_key") or "").strip(),
             "collection_id": str(payload.get("collection_id") or "").strip(),
-            "candidate_id": candidate_id or str(payload.get("candidate_identity_key") or payload.get("person_identity_key") or "").strip(),
+            "candidate_id": candidate_id
+            or str(payload.get("candidate_identity_key") or payload.get("person_identity_key") or "").strip(),
             "candidate_name": str(payload.get("display_name_cache") or "").strip(),
             "display_name": str(payload.get("display_name_cache") or "").strip(),
             "name": str(payload.get("display_name_cache") or "").strip(),
@@ -27908,7 +28178,9 @@ class SourcingOrchestrator:
     def update_crm_record_api(self, crm_record_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
         result = self.crm_writer.update_crm_record(
-            crm_record_id=str(crm_record_id or normalized.get("crm_record_id") or normalized.get("record_id") or "").strip(),
+            crm_record_id=str(
+                crm_record_id or normalized.get("crm_record_id") or normalized.get("record_id") or ""
+            ).strip(),
             workspace_id=str(normalized.get("workspace_id") or "default").strip() or "default",
             actor_type=str(normalized.get("actor_type") or "user").strip() or "user",
             actor_id=str(normalized.get("actor_id") or "").strip(),
@@ -28033,9 +28305,7 @@ class SourcingOrchestrator:
         if domain_status in {"failed", "failed_terminal"}:
             error = {
                 "reason": str(
-                    result.get("reason")
-                    or dict(command.get("metadata") or {}).get("failure_reason")
-                    or "export_failed"
+                    result.get("reason") or dict(command.get("metadata") or {}).get("failure_reason") or "export_failed"
                 )
             }
         return async_task_status(
@@ -28106,18 +28376,16 @@ class SourcingOrchestrator:
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             return ""
-        digest = hashlib.sha1(f"projection_export_operation:{normalized_projection_id}".encode("utf-8")).hexdigest()[:24]
+        digest = hashlib.sha1(f"projection_export_operation:{normalized_projection_id}".encode("utf-8")).hexdigest()[
+            :24
+        ]
         return f"op_projection_export_{digest}"
 
     def _normalize_projection_export_command_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
         candidate_keys = [
             str(item or "").strip()
-            for item in list(
-                normalized.get("candidate_identity_keys")
-                or normalized.get("candidateIdentityKeys")
-                or []
-            )
+            for item in list(normalized.get("candidate_identity_keys") or normalized.get("candidateIdentityKeys") or [])
             if str(item or "").strip()
         ]
         candidate_keys = list(dict.fromkeys(candidate_keys))
@@ -28150,7 +28418,9 @@ class SourcingOrchestrator:
         if not projection_id:
             return {}
         workflow_run_id = self._projection_export_workflow_run_id(projection_id)
-        operation_id = str(command_payload.get("operation_id") or "").strip() or self._projection_export_operation_id(projection_id)
+        operation_id = str(command_payload.get("operation_id") or "").strip() or self._projection_export_operation_id(
+            projection_id
+        )
         idempotency_key = export_projection_generate_idempotency_key(
             projection_id=projection_id,
             candidate_identity_keys=list(command_payload.get("candidate_identity_keys") or []),
@@ -28248,7 +28518,9 @@ class SourcingOrchestrator:
             "filename": str(filename or result.get("filename") or path.name),
             "content_type": "application/zip",
             "body": path.read_bytes(),
-            "projection_id": str(result.get("projection_id") or dict(command.get("payload") or {}).get("projection_id") or ""),
+            "projection_id": str(
+                result.get("projection_id") or dict(command.get("payload") or {}).get("projection_id") or ""
+            ),
             "record_count": int(result.get("record_count") or 0),
             "exported_record_count": int(result.get("exported_record_count") or 0),
             "skipped_assertion_count": int(result.get("skipped_assertion_count") or 0),
@@ -28416,7 +28688,9 @@ class SourcingOrchestrator:
                 migration_phase="W7_projection_export_command_owner",
             )
             return result
-        artifact_path = self._projection_export_artifact_path(command_id, str(result.get("filename") or "projection-export.zip"))
+        artifact_path = self._projection_export_artifact_path(
+            command_id, str(result.get("filename") or "projection-export.zip")
+        )
         publish_result = self._publish_export_artifact_if_command_active(
             command_id=command_id,
             artifact_path=artifact_path,
@@ -28536,11 +28810,7 @@ class SourcingOrchestrator:
             }
         requested_candidate_keys = [
             str(item or "").strip()
-            for item in list(
-                normalized.get("candidate_identity_keys")
-                or normalized.get("candidateIdentityKeys")
-                or []
-            )
+            for item in list(normalized.get("candidate_identity_keys") or normalized.get("candidateIdentityKeys") or [])
             if str(item or "").strip()
         ]
         requested_candidate_keys = list(dict.fromkeys(requested_candidate_keys))
@@ -28670,12 +28940,12 @@ class SourcingOrchestrator:
             include_unconfirmed=include_unconfirmed,
         )
         crm_record = (
-            self.store.get_crm_record_by_person_identity(person_key, workspace_id="default")
-            if person_key
-            else {}
+            self.store.get_crm_record_by_person_identity(person_key, workspace_id="default") if person_key else {}
         )
         crm_metadata = dict(crm_record.get("metadata") or {})
-        skipped_reasons = [str(item.get("reason") or "") for item in skipped_assertions if str(item.get("reason") or "")]
+        skipped_reasons = [
+            str(item.get("reason") or "") for item in skipped_assertions if str(item.get("reason") or "")
+        ]
         row = {
             "ordinal": str(ordinal),
             "projection_id": str(projection.get("projection_id") or member.get("projection_id") or ""),
@@ -28732,7 +29002,9 @@ class SourcingOrchestrator:
         request_preview = dict(job.get("request_preview") or _load_job_request_preview(job) or {})
         target_company = str(request_preview.get("target_company") or job.get("target_company") or "").strip()
         company_key = normalize_company_key(target_company) if target_company else ""
-        collection_id = str(normalized.get("collection_id") or (f"company:{company_key}" if company_key else "")).strip()
+        collection_id = str(
+            normalized.get("collection_id") or (f"company:{company_key}" if company_key else "")
+        ).strip()
         backfill = ServingProjectionMigrationBackfill(self.store)
         return backfill.backfill_run_scope_projection(
             run_id=job_id,
@@ -28989,14 +29261,16 @@ class SourcingOrchestrator:
         run_now = _coerce_bool(normalized.get("run_now"), False)
         workflow_run_id = str(normalized.get("workflow_run_id") or normalized.get("workflowRunId") or "").strip()
         if not workflow_run_id:
-            workflow_run_id = "wf_media_asset_backfill_" + hashlib.sha1(
-                f"{projection_id}:{collection_id}:person_avatar_media".encode("utf-8")
-            ).hexdigest()[:24]
+            workflow_run_id = (
+                "wf_media_asset_backfill_"
+                + hashlib.sha1(f"{projection_id}:{collection_id}:person_avatar_media".encode("utf-8")).hexdigest()[:24]
+            )
         batch_id = str(normalized.get("batch_id") or normalized.get("batchId") or "").strip()
         if not batch_id:
-            batch_id = "person_avatar_media_backfill_" + hashlib.sha1(
-                f"{projection_id}:{limit}:{force}".encode("utf-8")
-            ).hexdigest()[:16]
+            batch_id = (
+                "person_avatar_media_backfill_"
+                + hashlib.sha1(f"{projection_id}:{limit}:{force}".encode("utf-8")).hexdigest()[:16]
+            )
         members = self.store.list_serving_projection_members(
             projection_id,
             visible_only=True,
@@ -29226,14 +29500,20 @@ class SourcingOrchestrator:
         include_homepage_favicon = _coerce_bool(normalized.get("include_homepage_favicon"), False)
         workflow_run_id = str(normalized.get("workflow_run_id") or normalized.get("workflowRunId") or "").strip()
         if not workflow_run_id:
-            workflow_run_id = "wf_media_asset_backfill_" + hashlib.sha1(
-                f"{workspace_id}:{company_key}:{target_company}:company_logo_media".encode("utf-8")
-            ).hexdigest()[:24]
+            workflow_run_id = (
+                "wf_media_asset_backfill_"
+                + hashlib.sha1(
+                    f"{workspace_id}:{company_key}:{target_company}:company_logo_media".encode("utf-8")
+                ).hexdigest()[:24]
+            )
         batch_id = str(normalized.get("batch_id") or normalized.get("batchId") or "").strip()
         if not batch_id:
-            batch_id = "company_logo_media_backfill_" + hashlib.sha1(
-                f"{workspace_id}:{company_key}:{target_company}:{limit}:{force}".encode("utf-8")
-            ).hexdigest()[:16]
+            batch_id = (
+                "company_logo_media_backfill_"
+                + hashlib.sha1(
+                    f"{workspace_id}:{company_key}:{target_company}:{limit}:{force}".encode("utf-8")
+                ).hexdigest()[:16]
+            )
         stable_logo_assets = [
             asset
             for asset in self.store.list_company_assets(
@@ -29515,7 +29795,11 @@ class SourcingOrchestrator:
             for candidate in candidates
             if bool(candidate.get("eligible")) and _media_source_url_allowed(str(candidate.get("source_url") or ""))
         ]
-        expired_count = sum(1 for candidate in candidates if str(candidate.get("rejection_reason") or "") == "expired_or_insufficient_ttl")
+        expired_count = sum(
+            1
+            for candidate in candidates
+            if str(candidate.get("rejection_reason") or "") == "expired_or_insufficient_ttl"
+        )
         if dry_run:
             return {
                 "status": "dry_run",
@@ -29574,14 +29858,22 @@ class SourcingOrchestrator:
 
         workflow_run_id = str(normalized.get("workflow_run_id") or normalized.get("workflowRunId") or "").strip()
         if not workflow_run_id:
-            workflow_run_id = "wf_profile_company_logo_" + hashlib.sha1(
-                f"{workspace_id}:{company_key}:{target_company}:{source_run_id}:{source_profile_path}".encode("utf-8")
-            ).hexdigest()[:24]
+            workflow_run_id = (
+                "wf_profile_company_logo_"
+                + hashlib.sha1(
+                    f"{workspace_id}:{company_key}:{target_company}:{source_run_id}:{source_profile_path}".encode(
+                        "utf-8"
+                    )
+                ).hexdigest()[:24]
+            )
         batch_id = str(normalized.get("batch_id") or normalized.get("batchId") or "").strip()
         if not batch_id:
-            batch_id = "profile_company_logo_" + hashlib.sha1(
-                f"{workspace_id}:{company_key}:{target_company}:{workflow_run_id}".encode("utf-8")
-            ).hexdigest()[:16]
+            batch_id = (
+                "profile_company_logo_"
+                + hashlib.sha1(
+                    f"{workspace_id}:{company_key}:{target_company}:{workflow_run_id}".encode("utf-8")
+                ).hexdigest()[:16]
+            )
         writer = CompanyAssetWriter(self.store, writer_id="profile_experience_logo_evidence_writer")
         evidence_rows: list[dict[str, Any]] = []
         commands: list[dict[str, Any]] = []
@@ -29807,9 +30099,7 @@ class SourcingOrchestrator:
             source="profile_company_logo_discover_planner",
             payload={
                 "workflow_type": "company_asset_media_discovery",
-                "stage_key": default_stage_id_for_command_type(
-                    COMPANY_LOGO_PROFILE_EXPERIENCE_DISCOVER_COMMAND_TYPE
-                ),
+                "stage_key": default_stage_id_for_command_type(COMPANY_LOGO_PROFILE_EXPERIENCE_DISCOVER_COMMAND_TYPE),
                 "workspace_id": "default",
                 "company_key": company_key,
                 "target_company": target_company,
@@ -29828,9 +30118,7 @@ class SourcingOrchestrator:
             source="profile_company_logo_discover_planner",
             payload={
                 "workflow_type": "company_asset_media_discovery",
-                "stage_key": default_stage_id_for_command_type(
-                    COMPANY_LOGO_PROFILE_EXPERIENCE_DISCOVER_COMMAND_TYPE
-                ),
+                "stage_key": default_stage_id_for_command_type(COMPANY_LOGO_PROFILE_EXPERIENCE_DISCOVER_COMMAND_TYPE),
                 "command_type": COMPANY_LOGO_PROFILE_EXPERIENCE_DISCOVER_COMMAND_TYPE,
                 "idempotency_key": idempotency_key,
                 "payload": {
@@ -30243,8 +30531,7 @@ class SourcingOrchestrator:
         limit = max(
             1,
             _coerce_int(
-                payload.get("command_limit")
-                or payload.get("company_logo_profile_experience_discover_command_limit"),
+                payload.get("command_limit") or payload.get("company_logo_profile_experience_discover_command_limit"),
                 10,
             ),
         )
@@ -30328,7 +30615,10 @@ class SourcingOrchestrator:
                 cutover_mode and explicit_cutover_value is None and not legacy_override_allowed and ready_for_cutover
             ),
             "cutover_defaulted_to_migration_required": bool(
-                cutover_mode and explicit_cutover_value is None and not legacy_override_allowed and not ready_for_cutover
+                cutover_mode
+                and explicit_cutover_value is None
+                and not legacy_override_allowed
+                and not ready_for_cutover
             ),
             "legacy_override_allowed": legacy_override_allowed,
             "source_run_id": source_run_id,
@@ -30439,9 +30729,7 @@ class SourcingOrchestrator:
                             or 0
                         ),
                         "profile_fetch_progress": dict(overlay_payload.get("profile_fetch_progress") or {}),
-                        "card_materialization_summary": dict(
-                            overlay_payload.get("card_materialization_summary") or {}
-                        ),
+                        "card_materialization_summary": dict(overlay_payload.get("card_materialization_summary") or {}),
                         "facet_summary": self._normalize_public_layer_zero_facet_summary(
                             dict(overlay_payload.get("facet_summary") or {})
                         ),
@@ -30595,9 +30883,7 @@ class SourcingOrchestrator:
                 "has_more": has_more,
                 "next_offset": next_offset if has_more else None,
                 "profile_fetch_progress": dict(asset_population_page.get("profile_fetch_progress") or {}),
-                "card_materialization_summary": dict(
-                    asset_population_page.get("card_materialization_summary") or {}
-                ),
+                "card_materialization_summary": dict(asset_population_page.get("card_materialization_summary") or {}),
                 "result_view_lifecycle": result_view_lifecycle,
                 "board_runtime_state": board_runtime_state,
                 "linkedin_stage_1_progress": linkedin_stage_1_progress,
@@ -30672,7 +30958,7 @@ class SourcingOrchestrator:
                 applied_filter=normalized_candidate_filter,
                 filter_signature=filter_signature,
             ),
-                "candidates": ranked_results,
+            "candidates": ranked_results,
         }
 
     def _build_job_asset_population_page_from_canonical_projection(
@@ -30743,23 +31029,25 @@ class SourcingOrchestrator:
             records=rows,
             candidate_source=candidate_source,
         )
-        facet_summary = dict(canonical_asset_population.get("facet_summary") or projection_page.get("facet_summary") or {})
+        facet_summary = dict(
+            canonical_asset_population.get("facet_summary") or projection_page.get("facet_summary") or {}
+        )
         facet_summary_scope = str(
             canonical_asset_population.get("facet_summary_scope")
-            or (
-                "global_full_population"
-                if str(facet_summary.get("status") or "") == "complete"
-                else "unavailable"
-            )
+            or ("global_full_population" if str(facet_summary.get("status") or "") == "complete" else "unavailable")
         ).strip()
         return {
             "available": True,
             "default_selected": True,
             "source_kind": "serving_projection_members",
-            "snapshot_id": str(result_view_lifecycle.get("current_snapshot_id") or candidate_source.get("snapshot_id") or ""),
+            "snapshot_id": str(
+                result_view_lifecycle.get("current_snapshot_id") or candidate_source.get("snapshot_id") or ""
+            ),
             "asset_view": str(candidate_source.get("asset_view") or "canonical_merged").strip() or "canonical_merged",
             "source_path": projection_id,
-            "candidate_count": int(projection_page.get("total_candidates") or projection_page.get("candidate_count") or 0),
+            "candidate_count": int(
+                projection_page.get("total_candidates") or projection_page.get("candidate_count") or 0
+            ),
             "offset": int(projection_page.get("offset") or offset),
             "limit": len(rows),
             "returned_count": len(rows),
@@ -30781,7 +31069,9 @@ class SourcingOrchestrator:
             "index_filter_readiness": dict(projection_page.get("index_filter_readiness") or {}),
             "read_contract": {
                 **dict(projection_page.get("read_contract") or {}),
-                "source": str(dict(projection_page.get("read_contract") or {}).get("source") or "serving_projection_members"),
+                "source": str(
+                    dict(projection_page.get("read_contract") or {}).get("source") or "serving_projection_members"
+                ),
                 "fallback_used": bool(dict(projection_page.get("read_contract") or {}).get("fallback_used")),
                 "fail_closed": True,
             },
@@ -30806,10 +31096,7 @@ class SourcingOrchestrator:
             or candidate_id
         ).strip()
         linkedin_url = str(
-            public_summary.get("linkedin_url")
-            or public_summary.get("profile_url")
-            or public_summary.get("url")
-            or ""
+            public_summary.get("linkedin_url") or public_summary.get("profile_url") or public_summary.get("url") or ""
         ).strip()
         employment_status = str(
             payload.get("employment_scope")
@@ -30894,7 +31181,9 @@ class SourcingOrchestrator:
                     continue
             filtered_patches.append(patch)
         max_limit = min(max(int(limit or 50), 1), 200)
-        public_patches = [self._build_public_board_visible_patch_payload(patch) for patch in filtered_patches[:max_limit]]
+        public_patches = [
+            self._build_public_board_visible_patch_payload(patch) for patch in filtered_patches[:max_limit]
+        ]
         latest_patch = public_patches[-1] if public_patches else {}
         latest_known_patch = self._build_public_board_visible_patch_payload(patches[-1]) if patches else {}
         return {
@@ -30914,10 +31203,9 @@ class SourcingOrchestrator:
 
     def _build_public_board_visible_patch_payload(self, patch: dict[str, Any]) -> dict[str, Any]:
         payload = dict(patch or {})
-        card_summary = (
-            self._candidate_card_materialization_summary_from_patch_metadata(payload)
-            or self._build_candidate_card_materialization_summary_from_board_visible_patch(payload)
-        )
+        card_summary = self._candidate_card_materialization_summary_from_patch_metadata(
+            payload
+        ) or self._build_candidate_card_materialization_summary_from_board_visible_patch(payload)
         return {
             "patch_id": str(payload.get("patch_id") or ""),
             "job_id": str(payload.get("job_id") or ""),
@@ -30958,7 +31246,9 @@ class SourcingOrchestrator:
             if overlay_path.exists() and not overlay_path.is_dir():
                 overlay_payload = self._load_asset_population_overlay_payload_from_path(overlay_path)
                 overlay_records = [
-                    dict(item) for item in list(dict(overlay_payload or {}).get("candidates") or []) if isinstance(item, dict)
+                    dict(item)
+                    for item in list(dict(overlay_payload or {}).get("candidates") or [])
+                    if isinstance(item, dict)
                 ]
                 overlay_records = self._normalize_board_visible_profile_records(overlay_records)
                 if overlay_records:
@@ -31522,9 +31812,7 @@ class SourcingOrchestrator:
             serialized_candidates = [
                 self._serialize_asset_population_candidate_api_record(
                     dict(record),
-                    load_profile_timeline=bool(
-                        load_profile_timeline and index < timeline_preview_limit
-                    ),
+                    load_profile_timeline=bool(load_profile_timeline and index < timeline_preview_limit),
                     publishable_email_lookup=publishable_email_lookup,
                 )
                 for index, record in enumerate(page_records)
@@ -31566,9 +31854,7 @@ class SourcingOrchestrator:
                 "has_more": has_more,
                 "next_offset": next_offset if has_more else None,
                 "profile_fetch_progress": dict(summary_payload.get("profile_fetch_progress") or {}),
-                "card_materialization_summary": dict(
-                    summary_payload.get("card_materialization_summary") or {}
-                ),
+                "card_materialization_summary": dict(summary_payload.get("card_materialization_summary") or {}),
                 "facet_summary_scope": facet_summary_scope,
                 "facet_summary": facet_summary,
                 "candidates": serialized_candidates,
@@ -31579,20 +31865,17 @@ class SourcingOrchestrator:
             return payload
         artifact_store = None
         try:
-            artifact_store = (
-                self._open_public_serving_artifact_store_from_candidate_source(
-                    request=request,
-                    candidate_source=candidate_source,
-                    target_company=target_company,
-                    snapshot_id=snapshot_id,
-                    asset_view=asset_view,
-                )
-                or open_snapshot_artifact_store(
-                    runtime_dir=self.runtime_dir,
-                    target_company=target_company,
-                    snapshot_id=snapshot_id,
-                    asset_view=asset_view,
-                )
+            artifact_store = self._open_public_serving_artifact_store_from_candidate_source(
+                request=request,
+                candidate_source=candidate_source,
+                target_company=target_company,
+                snapshot_id=snapshot_id,
+                asset_view=asset_view,
+            ) or open_snapshot_artifact_store(
+                runtime_dir=self.runtime_dir,
+                target_company=target_company,
+                snapshot_id=snapshot_id,
+                asset_view=asset_view,
             )
             try:
                 snapshot_window = read_snapshot_candidate_window(
@@ -31635,9 +31918,7 @@ class SourcingOrchestrator:
             serialized_candidates = [
                 self._serialize_asset_population_candidate_api_record(
                     record,
-                    load_profile_timeline=bool(
-                        load_profile_timeline and index < timeline_preview_limit
-                    ),
+                    load_profile_timeline=bool(load_profile_timeline and index < timeline_preview_limit),
                     publishable_email_lookup=publishable_email_lookup,
                 )
                 for index, record in enumerate(page_records)
@@ -31668,9 +31949,7 @@ class SourcingOrchestrator:
                 "has_more": has_more,
                 "next_offset": next_offset if has_more else None,
                 "profile_fetch_progress": dict(summary_payload.get("profile_fetch_progress") or {}),
-                "card_materialization_summary": dict(
-                    summary_payload.get("card_materialization_summary") or {}
-                ),
+                "card_materialization_summary": dict(summary_payload.get("card_materialization_summary") or {}),
                 "facet_summary_scope": "global_full_population",
                 "facet_summary": self._build_asset_population_facet_summary_payload(
                     request=request,
@@ -31770,20 +32049,17 @@ class SourcingOrchestrator:
         if not target_company or not snapshot_id:
             return None
         try:
-            artifact_store = (
-                self._open_public_serving_artifact_store_from_candidate_source(
-                    request=request,
-                    candidate_source=candidate_source,
-                    target_company=target_company,
-                    snapshot_id=snapshot_id,
-                    asset_view=asset_view,
-                )
-                or open_snapshot_artifact_store(
-                    runtime_dir=self.runtime_dir,
-                    target_company=target_company,
-                    snapshot_id=snapshot_id,
-                    asset_view=asset_view,
-                )
+            artifact_store = self._open_public_serving_artifact_store_from_candidate_source(
+                request=request,
+                candidate_source=candidate_source,
+                target_company=target_company,
+                snapshot_id=snapshot_id,
+                asset_view=asset_view,
+            ) or open_snapshot_artifact_store(
+                runtime_dir=self.runtime_dir,
+                target_company=target_company,
+                snapshot_id=snapshot_id,
+                asset_view=asset_view,
             )
             return read_snapshot_candidate_shard(artifact_store, candidate_id=candidate_id)
         except CandidateArtifactError:
@@ -32189,10 +32465,7 @@ class SourcingOrchestrator:
         has_explicit_profile_capture = bool(
             serialized.get("has_explicit_profile_capture")
             or dict(serialized.get("metadata") or {}).get("has_explicit_profile_capture")
-            or (
-                _profile_capture_kind_has_profile_detail(serialized.get("profile_capture_kind"))
-                and has_profile_detail
-            )
+            or (_profile_capture_kind_has_profile_detail(serialized.get("profile_capture_kind")) and has_profile_detail)
         )
         compact["has_profile_detail"] = has_profile_detail
         compact["has_explicit_profile_capture"] = has_explicit_profile_capture
@@ -32902,10 +33175,7 @@ class SourcingOrchestrator:
         )
         workflow_kind = (
             str(
-                public_web_summary.get("workflow_kind")
-                or job_summary.get("workflow_kind")
-                or job.get("job_type")
-                or ""
+                public_web_summary.get("workflow_kind") or job_summary.get("workflow_kind") or job.get("job_type") or ""
             )
             .strip()
             .lower()
@@ -32976,10 +33246,7 @@ class SourcingOrchestrator:
         local_materialization_evidence = bool(
             baseline_delta_materialization_evidence or no_baseline_materialization_evidence
         )
-        local_materialization_active = bool(
-            local_materialization_evidence
-            and not full_local_reuse_serving_complete
-        )
+        local_materialization_active = bool(local_materialization_evidence and not full_local_reuse_serving_complete)
         explicit_local_stage_slot = bool(
             public_stage_slot_present
             and not public_web_stage_applicable
@@ -33120,9 +33387,7 @@ class SourcingOrchestrator:
         plan_payload = _plan_payload(plan)
         reuse_plan = dict(asset_reuse_plan or plan_payload.get("asset_reuse_plan") or {})
         baseline_explanation = dict(
-            reuse_plan.get("baseline_selection_explanation")
-            or reuse_plan.get("request_family_match_explanation")
-            or {}
+            reuse_plan.get("baseline_selection_explanation") or reuse_plan.get("request_family_match_explanation") or {}
         )
         semantics = dict(effective_execution_semantics or {})
         execution_preferences = dict(getattr(request, "execution_preferences", {}) or {})
@@ -33380,9 +33645,7 @@ class SourcingOrchestrator:
         )
         if patch_board_visible_count > 0:
             required_for_patch_projection = int(
-                fields.get("delta_profile_required_count")
-                or existing.get("delta_profile_required_count")
-                or 0
+                fields.get("delta_profile_required_count") or existing.get("delta_profile_required_count") or 0
             )
             if required_for_patch_projection > 0:
                 patch_board_visible_count = min(patch_board_visible_count, required_for_patch_projection)
@@ -33409,7 +33672,9 @@ class SourcingOrchestrator:
         served_current_snapshot = bool(served and current and served == current and served != baseline)
         full_current_serving_with_complete_delta = False
         if served_current_snapshot:
-            required_count = int(fields.get("delta_profile_required_count") or existing.get("delta_profile_required_count") or 0)
+            required_count = int(
+                fields.get("delta_profile_required_count") or existing.get("delta_profile_required_count") or 0
+            )
             baseline_count = int(existing.get("baseline_candidate_count") or 0)
             served_count = int(served_candidate_count or 0)
             fetched_count = max(
@@ -33430,10 +33695,7 @@ class SourcingOrchestrator:
             full_current_serving_with_complete_delta = bool(
                 required_count > 0
                 and served_count > 0
-                and (
-                    fetched_count >= required_count
-                    or served_count >= baseline_count + required_count
-                )
+                and (fetched_count >= required_count or served_count >= baseline_count + required_count)
             )
             if full_current_serving_with_complete_delta:
                 fields["delta_profile_fetched_count"] = max(
@@ -33462,7 +33724,11 @@ class SourcingOrchestrator:
             fields["serving_projection_id"] = serving_view_id
             fields["serving_projection_phase"] = "current_snapshot_serving"
             if delta_profile_board_visible_count is None:
-                materialized_count = int(fields.get("delta_profile_materialized_count") or existing.get("delta_profile_materialized_count") or 0)
+                materialized_count = int(
+                    fields.get("delta_profile_materialized_count")
+                    or existing.get("delta_profile_materialized_count")
+                    or 0
+                )
                 existing_board_visible = int(existing.get("delta_profile_board_visible_count") or 0)
                 if materialized_count > 0 or existing_board_visible > 0:
                     fields["delta_profile_board_visible_count"] = max(
@@ -33473,7 +33739,9 @@ class SourcingOrchestrator:
         if served_count_for_expected:
             delta_progress_applicable = bool(existing.get("delta_profile_progress_applicable") is not False)
             already_promoted = bool(metadata_payload.get("delta_profile_denominator_promoted"))
-            required_count = int(fields.get("delta_profile_required_count") or existing.get("delta_profile_required_count") or 0)
+            required_count = int(
+                fields.get("delta_profile_required_count") or existing.get("delta_profile_required_count") or 0
+            )
             baseline_count = int(existing.get("baseline_candidate_count") or 0)
             final_current_snapshot_serving = bool(served_current_snapshot and full_current_serving_with_complete_delta)
             can_promote_from_full_serving = bool(
@@ -33681,9 +33949,7 @@ class SourcingOrchestrator:
             "current_snapshot_serving",
             "current_serving",
         }
-        row_shell_current_snapshot_serving = (
-            resolved_serving_projection_phase == "current_snapshot_row_shell_overlay"
-        )
+        row_shell_current_snapshot_serving = resolved_serving_projection_phase == "current_snapshot_row_shell_overlay"
         incoming_partial_projection = resolved_serving_projection_phase in {
             "partial_delta_overlay",
             "partial_delta_board_visible_overlay",
@@ -33774,8 +34040,7 @@ class SourcingOrchestrator:
                         fields["expected_candidate_count"] = served_count
                         metadata["delta_profile_denominator_promoted"] = True
                         metadata["stage1_terminal_promoted_at"] = (
-                            str(metadata.get("stage1_terminal_promoted_at") or "").strip()
-                            or _utc_now_iso()
+                            str(metadata.get("stage1_terminal_promoted_at") or "").strip() or _utc_now_iso()
                         )
                         fields["metadata"] = metadata
         current_rows_projection_complete = bool(
@@ -33786,10 +34051,7 @@ class SourcingOrchestrator:
         )
         if current_rows_projection_complete:
             served_count_for_completion = int(
-                fields.get("served_candidate_count")
-                or existing_served_count
-                or row_shell_served_count
-                or 0
+                fields.get("served_candidate_count") or existing_served_count or row_shell_served_count or 0
             )
             expected_count_for_completion = int(
                 fields.get("expected_candidate_count")
@@ -33798,18 +34060,14 @@ class SourcingOrchestrator:
                 or 0
             )
             if served_count_for_completion > 0 and (
-                expected_count_for_completion <= 0
-                or served_count_for_completion >= expected_count_for_completion
+                expected_count_for_completion <= 0 or served_count_for_completion >= expected_count_for_completion
             ):
                 fields["phase"] = "current_snapshot_serving"
                 fields["state"] = "current_snapshot_serving"
         if preserve_existing_current_rows:
             fields["served_snapshot_id"] = str(current_snapshot_id or existing_served_snapshot_id).strip()
             fields["serving_projection_id"] = str(
-                row_shell_projection_id
-                or existing.get("serving_projection_id")
-                or serving_projection_id
-                or ""
+                row_shell_projection_id or existing.get("serving_projection_id") or serving_projection_id or ""
             ).strip()
             fields["serving_projection_phase"] = resolved_serving_projection_phase
         elif served_snapshot_id and serving_projection_id:
@@ -33820,9 +34078,7 @@ class SourcingOrchestrator:
             fields["view_id"] = str(view_id).strip()
         if patch:
             patches = [
-                dict(item)
-                for item in list(metadata.get("board_visible_patches") or [])
-                if isinstance(item, dict)
+                dict(item) for item in list(metadata.get("board_visible_patches") or []) if isinstance(item, dict)
             ]
             normalized_patch = dict(patch)
             patch_id = str(normalized_patch.get("patch_id") or "").strip()
@@ -33926,12 +34182,7 @@ class SourcingOrchestrator:
             fields["metadata"] = metadata_payload
         if outcome != "failed" and not delta_progress_applicable:
             served_count = int(existing.get("served_candidate_count") or 0)
-            current_snapshot_served = bool(
-                served
-                and current
-                and served == current
-                and served_count > 0
-            )
+            current_snapshot_served = bool(served and current and served == current and served_count > 0)
             if current_snapshot_served:
                 # Non-delta/live-roster workflows expose the canonical board
                 # row set. Raw lane rows can be larger before identity dedupe
@@ -33986,9 +34237,9 @@ class SourcingOrchestrator:
                     dict(event)
                     for event in self.store.list_workflow_events(workflow_run_id, limit=0)
                     if str(dict(event).get("event_type") or "").strip() == "CompletionProofRecorded"
-                    and str(dict(dict(event).get("payload") or {}).get("proof_key") or "").strip().startswith(
-                        stage1_proof_prefix
-                    )
+                    and str(dict(dict(event).get("payload") or {}).get("proof_key") or "")
+                    .strip()
+                    .startswith(stage1_proof_prefix)
                 ]
                 discovery_commands = [
                     dict(command)
@@ -33997,8 +34248,7 @@ class SourcingOrchestrator:
                         owner=LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
                         limit=0,
                     )
-                    if str(dict(command).get("command_type") or "").strip()
-                    == LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE
+                    if str(dict(command).get("command_type") or "").strip() == LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE
                     and str(dict(dict(command).get("payload") or {}).get("snapshot_id") or "").strip()
                     == normalized_snapshot_id
                 ]
@@ -34026,11 +34276,7 @@ class SourcingOrchestrator:
                 )
                 if not all_terminal:
                     return False
-            lane_workers = [
-                dict(worker)
-                for worker in workers
-                if discovery_lane_worker_matches(dict(worker), contract)
-            ]
+            lane_workers = [dict(worker) for worker in workers if discovery_lane_worker_matches(dict(worker), contract)]
             if contract.require_any_worker and not lane_workers:
                 return False
             if contract.require_snapshot_apply_marker:
@@ -34419,11 +34665,15 @@ class SourcingOrchestrator:
         else:
             state = str(row.get("state") or row.get("phase") or "").strip()
             serving_projection_phase = str(row.get("serving_projection_phase") or "").strip()
-            terminal_current_serving = state in {
-                "current_snapshot_serving",
-                "post_result_layering",
-                "current_serving",
-            } or serving_projection_phase == "current_snapshot_serving"
+            terminal_current_serving = (
+                state
+                in {
+                    "current_snapshot_serving",
+                    "post_result_layering",
+                    "current_serving",
+                }
+                or serving_projection_phase == "current_snapshot_serving"
+            )
             current_snapshot_id = str(row.get("current_snapshot_id") or "").strip()
             served_snapshot_id = str(row.get("served_snapshot_id") or "").strip()
             if (
@@ -34560,7 +34810,9 @@ class SourcingOrchestrator:
                 normalized["state"] = "delta_applying"
             else:
                 # For jobs past acquisition, check background materialization status
-                background_status = str(normalized.get("background_snapshot_materialization_status") or "").strip().lower()
+                background_status = (
+                    str(normalized.get("background_snapshot_materialization_status") or "").strip().lower()
+                )
                 normalized["state"] = (
                     "current_snapshot_materializing"
                     if background_status in {"", "deferred", "scheduled", "running"}
@@ -34598,8 +34850,7 @@ class SourcingOrchestrator:
         view_metadata = dict(view_payload.get("metadata") or {})
         source_path_value = str(view_payload.get("source_path") or source_payload.get("source_path") or "").strip()
         source_path_is_normalized_artifact = bool(
-            source_path_value
-            and self._path_is_normalized_candidate_artifact(Path(source_path_value).expanduser())
+            source_path_value and self._path_is_normalized_candidate_artifact(Path(source_path_value).expanduser())
         )
         asset_population_patch = {
             **dict(source_payload.get("asset_population_patch") or {}),
@@ -34613,20 +34864,16 @@ class SourcingOrchestrator:
             "partial_delta_board_visible_overlay",
             "current_snapshot_row_shell_overlay",
         }
-        patch_mode = str(asset_population_patch.get("mode") or asset_population_patch.get("overlay_write_mode") or "").strip()
+        patch_mode = str(
+            asset_population_patch.get("mode") or asset_population_patch.get("overlay_write_mode") or ""
+        ).strip()
         recovery_reason = str(view_summary.get("recovery_reason") or "").strip()
-        if (
-            (
-                not source_path_is_normalized_artifact
-                and (
-                    row_projection_phase in partial_projection_phases
-                    or bool(partial_board_visible_patch)
-                    or patch_mode.startswith("partial_")
-                    or recovery_reason.startswith("partial_")
-                    or str(view_summary.get("summary_provider") or "").strip()
-                    == "stage1_row_shell_publication"
-                )
-            )
+        if not source_path_is_normalized_artifact and (
+            row_projection_phase in partial_projection_phases
+            or bool(partial_board_visible_patch)
+            or patch_mode.startswith("partial_")
+            or recovery_reason.startswith("partial_")
+            or str(view_summary.get("summary_provider") or "").strip() == "stage1_row_shell_publication"
         ):
             # A partial overlay/result view is a row-publication proof, not a
             # terminal serving proof. It must not collapse expected_count down to
@@ -34689,9 +34936,13 @@ class SourcingOrchestrator:
         public_source = {
             **source_payload,
             "result_view": view_payload,
-            "target_company": str(view_payload.get("target_company") or source_payload.get("target_company") or "").strip(),
+            "target_company": str(
+                view_payload.get("target_company") or source_payload.get("target_company") or ""
+            ).strip(),
             "snapshot_id": snapshot_id,
-            "asset_view": str(view_payload.get("asset_view") or source_payload.get("asset_view") or "canonical_merged").strip()
+            "asset_view": str(
+                view_payload.get("asset_view") or source_payload.get("asset_view") or "canonical_merged"
+            ).strip()
             or "canonical_merged",
             "source_path": str(view_payload.get("source_path") or source_payload.get("source_path") or "").strip(),
         }
@@ -34863,9 +35114,7 @@ class SourcingOrchestrator:
                 if persisted_served_count > public_served_count:
                     metadata_payload["unpublished_lifecycle_served_candidate_count"] = persisted_served_count
                 if partial_public_artifact_count and partial_public_artifact_count < public_served_count:
-                    metadata_payload["partial_public_serving_artifact_candidate_count"] = (
-                        partial_public_artifact_count
-                    )
+                    metadata_payload["partial_public_serving_artifact_candidate_count"] = partial_public_artifact_count
                     metadata_payload["public_served_candidate_count_preserved_from"] = (
                         "canonical_lifecycle_or_row_shell_publication"
                     )
@@ -34979,8 +35228,10 @@ class SourcingOrchestrator:
         card_materialization_summary = dict(asset_population.get("card_materialization_summary") or {})
         normalized_result_mode = str(result_mode or "").strip() or "ranked_results"
         lifecycle_expected_count = int(lifecycle.get("expected_candidate_count") or 0)
-        expected_count = lifecycle_expected_count if lifecycle_expected_count > 0 else int(
-            asset_population.get("candidate_count") or 0
+        expected_count = (
+            lifecycle_expected_count
+            if lifecycle_expected_count > 0
+            else int(asset_population.get("candidate_count") or 0)
         )
         served_count = max(0, int(lifecycle.get("served_candidate_count") or 0))
         baseline_count = max(0, int(lifecycle.get("baseline_candidate_count") or 0))
@@ -34990,7 +35241,9 @@ class SourcingOrchestrator:
         delta_board_visible_count = max(0, int(lifecycle.get("delta_profile_board_visible_count") or 0))
         lifecycle_state = str(lifecycle.get("state") or "unavailable").strip() or "unavailable"
         serving_projection_phase = str(lifecycle.get("serving_projection_phase") or "").strip()
-        current_snapshot_id = str(lifecycle.get("current_snapshot_id") or asset_population.get("snapshot_id") or "").strip()
+        current_snapshot_id = str(
+            lifecycle.get("current_snapshot_id") or asset_population.get("snapshot_id") or ""
+        ).strip()
         patches = (
             self.store.list_job_board_visible_patches(
                 job_id=normalized_job_id,
@@ -35099,7 +35352,9 @@ class SourcingOrchestrator:
         elif latest_patch_served_count > 0:
             published_count = latest_patch_served_count
         elif latest_patch_cumulative_count > 0:
-            published_count = baseline_count + latest_patch_cumulative_count if baseline_count > 0 else latest_patch_cumulative_count
+            published_count = (
+                baseline_count + latest_patch_cumulative_count if baseline_count > 0 else latest_patch_cumulative_count
+            )
         elif served_count > 0:
             published_count = served_count
         else:
@@ -35112,12 +35367,9 @@ class SourcingOrchestrator:
             else {}
         )
         final_display_ready_count = int(card_materialization_summary.get("display_ready_candidate_count") or 0)
-        patch_display_ready_count = int(
-            patch_card_materialization_summary.get("display_ready_candidate_count") or 0
-        )
+        patch_display_ready_count = int(patch_card_materialization_summary.get("display_ready_candidate_count") or 0)
         final_card_summary_regresses_patch = bool(
-            patch_card_materialization_summary
-            and patch_display_ready_count > final_display_ready_count
+            patch_card_materialization_summary and patch_display_ready_count > final_display_ready_count
         )
         final_card_summary_complete = bool(
             terminal_serving
@@ -35302,11 +35554,7 @@ class SourcingOrchestrator:
         facet_summary_ready = bool(
             resolved_facet_scope == "global_full_population"
             and facet_candidate_count > 0
-            and (
-                facet_candidate_count == facet_candidate_denominator
-                if facet_candidate_denominator > 0
-                else True
-            )
+            and (facet_candidate_count == facet_candidate_denominator if facet_candidate_denominator > 0 else True)
         )
         effective_facet_scope = (
             "global_full_population"
@@ -35317,14 +35565,18 @@ class SourcingOrchestrator:
         )
         outreach_layering_status = str(lifecycle.get("outreach_layering_status") or "").strip().lower()
         layer_options = list(facet_summary.get("layers") or [])
-        layer_candidate_count = sum(max(0, int(dict(item).get("count") or 0)) for item in layer_options if isinstance(item, dict))
+        layer_candidate_count = sum(
+            max(0, int(dict(item).get("count") or 0)) for item in layer_options if isinstance(item, dict)
+        )
         if facet_summary_ready and layer_candidate_count > 0:
             # The complete full-population facet summary is the serving contract;
             # it must outrank stale post-result progress copied from older rows.
             outreach_layering_status = "completed"
         elif not outreach_layering_status and layer_candidate_count > 0:
             outreach_layering_status = "completed"
-        facet_summary_status = "complete" if facet_summary_ready else ("pending" if published_count > 0 else "unavailable")
+        facet_summary_status = (
+            "complete" if facet_summary_ready else ("pending" if published_count > 0 else "unavailable")
+        )
         layering_status = outreach_layering_status or ("completed" if layer_candidate_count > 0 else "unavailable")
         # Row serving and global statistics are separate readiness dimensions.
         # A complete candidate-row projection must not be downgraded to
@@ -35343,10 +35595,7 @@ class SourcingOrchestrator:
                     and display_ready_candidate_count >= stage_profile_required_count
                 )
             )
-            and (
-                stage_profile_required_count <= 0
-                or stage_profile_fetched_count >= stage_profile_required_count
-            )
+            and (stage_profile_required_count <= 0 or stage_profile_fetched_count >= stage_profile_required_count)
         )
         effective_terminal_serving = bool(terminal_serving or public_current_snapshot_rows_serving)
         if str(job.get("status") or "").strip().lower() == "failed" or lifecycle_state == "failed":
@@ -35417,10 +35666,7 @@ class SourcingOrchestrator:
             and stage_profile_required_count > 0
             and stage_profile_fetched_count >= stage_profile_required_count
         )
-        public_denominator_promoted = bool(
-            delta_profile_denominator_promoted
-            or public_stage1_profile_complete
-        )
+        public_denominator_promoted = bool(delta_profile_denominator_promoted or public_stage1_profile_complete)
         if delta_profile_progress_applicable and delta_required_count > 0:
             delta_display_ready_count = max(0, display_ready_candidate_count - baseline_count)
             delta_explicit_profile_capture_count = (
@@ -35440,12 +35686,8 @@ class SourcingOrchestrator:
             )
             if public_denominator_promoted:
                 # Stage 1 lanes are terminal; show the stable denominator.
-                profile_fetch_status_text = (
-                    f"新增 LinkedIn Profile 已取回 {min(delta_fetched_count, delta_required_count)}/{delta_required_count}"
-                )
-                card_materialization_status_text = (
-                    f"卡片详情已合入看板 {delta_card_ready_count}/{delta_required_count}"
-                )
+                profile_fetch_status_text = f"新增 LinkedIn Profile 已取回 {min(delta_fetched_count, delta_required_count)}/{delta_required_count}"
+                card_materialization_status_text = f"卡片详情已合入看板 {delta_card_ready_count}/{delta_required_count}"
             else:
                 # Before Stage 1 has promoted the canonical denominator, do not
                 # publish a user-facing profile/card fraction from a partial lane
@@ -35465,9 +35707,7 @@ class SourcingOrchestrator:
                     ),
                 )
             if public_denominator_promoted:
-                profile_fetch_status_text = (
-                    f"本次 LinkedIn Profile 已取回 {min(stage_profile_fetched_count, stage_profile_required_count)}/{stage_profile_required_count}"
-                )
+                profile_fetch_status_text = f"本次 LinkedIn Profile 已取回 {min(stage_profile_fetched_count, stage_profile_required_count)}/{stage_profile_required_count}"
                 card_materialization_status_text = (
                     f"卡片详情已合入看板 {stage_card_materialized_count}/{stage_profile_required_count}"
                 )
@@ -35487,9 +35727,11 @@ class SourcingOrchestrator:
         elif published_count > 0:
             sync_display_count = published_count
         else:
-            sync_display_count = display_ready_candidate_count if (
-                quality_fields_available or card_summary_candidate_count > 0 or stage_profile_required_count > 0
-            ) else published_count
+            sync_display_count = (
+                display_ready_candidate_count
+                if (quality_fields_available or card_summary_candidate_count > 0 or stage_profile_required_count > 0)
+                else published_count
+            )
         sync_status_text = f"{sync_display_count}/{expected_count}" if expected_count > 0 else "0/0"
         if expected_count > 0:
             discovery_display_count = (
@@ -35525,7 +35767,9 @@ class SourcingOrchestrator:
             "low_profile_richness_candidate_count": low_profile_richness_candidate_count,
             "card_materialization_quality_fields_available": quality_fields_available,
             "row_hydration_target_count": published_count,
-            "candidate_discovery_count": min(stage_discovered_count, expected_count) if expected_count > 0 else stage_discovered_count,
+            "candidate_discovery_count": min(stage_discovered_count, expected_count)
+            if expected_count > 0
+            else stage_discovered_count,
             "profile_fetch_required_count": stage_profile_required_count,
             "profile_fetched_count": stage_profile_fetched_count,
             "baseline_candidate_count": baseline_count,
@@ -36336,15 +36580,12 @@ class SourcingOrchestrator:
         stage1_preview_summary = dict(
             dict(workflow_stage_summaries.get("summaries") or {}).get("stage_1_preview") or {}
         )
-        linkedin_stage_1_progress = (
-            self._stage1_progress_payload_from_lifecycle_row(
-                lifecycle_row,
-                dynamic_progress=dict(job_summary.get("linkedin_stage_1") or {}),
-            )
-            or self._build_public_linkedin_stage1_progress_payload(
-                job=job,
-                workers=workers,
-            )
+        linkedin_stage_1_progress = self._stage1_progress_payload_from_lifecycle_row(
+            lifecycle_row,
+            dynamic_progress=dict(job_summary.get("linkedin_stage_1") or {}),
+        ) or self._build_public_linkedin_stage1_progress_payload(
+            job=job,
+            workers=workers,
         )
         result_view_lifecycle = self._load_job_result_lifecycle(
             job_id=job_id,
@@ -36550,9 +36791,7 @@ class SourcingOrchestrator:
             dict(result_view_metadata.get("result_view_lifecycle") or {}),
         )
         no_baseline_full_company_live_roster = bool(
-            full_company_scope
-            and baseline_count <= 0
-            and delta_progress_applicable is False
+            full_company_scope and baseline_count <= 0 and delta_progress_applicable is False
         )
         if no_baseline_full_company_live_roster:
             if stage1_deduped_count > 0:
@@ -37055,9 +37294,7 @@ class SourcingOrchestrator:
         command_status_counts = Counter(
             str(command.get("status") or "").strip().lower() for command in workflow_commands
         )
-        command_type_counts = Counter(
-            str(command.get("command_type") or "").strip() for command in workflow_commands
-        )
+        command_type_counts = Counter(str(command.get("command_type") or "").strip() for command in workflow_commands)
         command_owner_counts = Counter(str(command.get("owner") or "").strip() for command in workflow_commands)
         patch_kind_counts = Counter(str(item.get("patch_kind") or "").strip() for item in patches)
         patch_phase_counts = Counter(str(item.get("patch_phase") or "").strip() for item in patches)
@@ -37065,9 +37302,7 @@ class SourcingOrchestrator:
             "job_id": job_id,
             "workflow_run_id": workflow_run_id,
             "job_materialization_items": [
-                _compact_public_materialization_item_payload(dict(item))
-                for item in items
-                if isinstance(item, dict)
+                _compact_public_materialization_item_payload(dict(item)) for item in items if isinstance(item, dict)
             ],
             "item_count": len(items),
             "status_counts": {key: int(value) for key, value in sorted(status_counts.items()) if key},
@@ -37088,9 +37323,7 @@ class SourcingOrchestrator:
                 key: int(value) for key, value in sorted(command_owner_counts.items()) if key
             },
             "job_board_visible_patches": [
-                _compact_public_board_visible_patch_payload(dict(patch))
-                for patch in patches
-                if isinstance(patch, dict)
+                _compact_public_board_visible_patch_payload(dict(patch)) for patch in patches if isinstance(patch, dict)
             ],
             "patch_count": len(patches),
             "patch_kind_counts": {key: int(value) for key, value in sorted(patch_kind_counts.items()) if key},
@@ -37365,10 +37598,7 @@ class SourcingOrchestrator:
         )
         open_unconverted_count = max(
             0,
-            inspected_count
-            - converted_count
-            - already_converted_count
-            - runtime_namespace_skipped_count,
+            inspected_count - converted_count - already_converted_count - runtime_namespace_skipped_count,
         )
         status = "active" if converted_count > 0 else "idle"
         if failed_count > 0:
@@ -37397,9 +37627,7 @@ class SourcingOrchestrator:
             "runtime_namespace_skipped_count": runtime_namespace_skipped_count,
             "open_unconverted_count": open_unconverted_count,
             "by_kind": by_kind,
-            "converted_commands": [
-                command for command in converted_commands if command
-            ][:20],
+            "converted_commands": [command for command in converted_commands if command][:20],
             "items": items[:50],
         }
 
@@ -37702,9 +37930,7 @@ class SourcingOrchestrator:
                 break
             target_worker_ids_by_job = {
                 str(job_key or "").strip(): [
-                    _coerce_int(worker_id, 0)
-                    for worker_id in list(worker_ids or [])
-                    if _coerce_int(worker_id, 0) > 0
+                    _coerce_int(worker_id, 0) for worker_id in list(worker_ids or []) if _coerce_int(worker_id, 0) > 0
                 ]
                 for job_key, worker_ids in dict(targets.get("worker_ids_by_job") or {}).items()
                 if str(job_key or "").strip()
@@ -37721,10 +37947,13 @@ class SourcingOrchestrator:
                 if target_worker_ids_for_job:
                     followup_payload["explicit_worker_ids"] = target_worker_ids_for_job
                     followup_payload["force_release_explicit_worker_leases"] = True
-                    followup_payload["total_limit"] = max(1, min(
-                        _coerce_int(payload.get("total_limit"), 4),
-                        len(target_worker_ids_for_job),
-                    ))
+                    followup_payload["total_limit"] = max(
+                        1,
+                        min(
+                            _coerce_int(payload.get("total_limit"), 4),
+                            len(target_worker_ids_for_job),
+                        ),
+                    )
                 if recovery_owner_id:
                     followup_payload["owner_id"] = recovery_owner_id
                 followup_daemon = self._build_worker_recovery_daemon(followup_payload)
@@ -37788,11 +38017,15 @@ class SourcingOrchestrator:
 
     def handle_remote_provider_event(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = dict(payload or {})
-        recovery_mode = str(
-            payload.get("recovery_mode")
-            or payload.get("remote_provider_event_recovery_mode")
-            or "job_scoped_recovery"
-        ).strip().lower()
+        recovery_mode = (
+            str(
+                payload.get("recovery_mode")
+                or payload.get("remote_provider_event_recovery_mode")
+                or "job_scoped_recovery"
+            )
+            .strip()
+            .lower()
+        )
         inline_recovery = recovery_mode in {"inline", "sync", "sync_recovery", "direct", "direct_recovery"}
         event = normalize_remote_provider_event(payload, provider=str(payload.get("provider") or "apify"))
         local_event_seen_at = _utc_now_iso()
@@ -38240,10 +38473,13 @@ class SourcingOrchestrator:
             if not job_id:
                 continue
             artifact_path = str(dict(job or {}).get("artifact_path") or "").strip()
-            if artifact_path and not runtime_namespace_ownership_for_path(
-                artifact_path,
-                configured_runtime_dir=self.runtime_dir,
-            ).matches:
+            if (
+                artifact_path
+                and not runtime_namespace_ownership_for_path(
+                    artifact_path,
+                    configured_runtime_dir=self.runtime_dir,
+                ).matches
+            ):
                 skipped_runtime_namespace_count += 1
                 continue
 
@@ -38608,13 +38844,10 @@ class SourcingOrchestrator:
                     # ready board-visible work in this same recovery tick.
                     continue
                 terminal_events = [
-                    dict(item)
-                    for item in list(job_summary.get("daemon_events") or [])
-                    if isinstance(item, dict)
+                    dict(item) for item in list(job_summary.get("daemon_events") or []) if isinstance(item, dict)
                 ]
                 if any(
-                    str(item.get("status") or "").strip().lower()
-                    in {"completed", "failed", "cancelled", "canceled"}
+                    str(item.get("status") or "").strip().lower() in {"completed", "failed", "cancelled", "canceled"}
                     for item in terminal_events
                 ):
                     return True
@@ -38714,9 +38947,7 @@ class SourcingOrchestrator:
                 "job_scope_missing",
             }:
                 reasons[1] = ""
-            merged["reason"] = "+".join(reason for reason in reasons if reason) or str(
-                merged.get("reason") or ""
-            )
+            merged["reason"] = "+".join(reason for reason in reasons if reason) or str(merged.get("reason") or "")
             merged["pre_worker_recovery"] = primary_payload
             merged["post_worker_recovery"] = secondary_payload
             return merged
@@ -38738,7 +38969,9 @@ class SourcingOrchestrator:
                 payload.setdefault("status", "idle" if not items else "completed")
                 payload.setdefault("reason", "")
                 return payload
-            items = [dict(item) for item in list(value or []) if isinstance(item, dict)] if isinstance(value, list) else []
+            items = (
+                [dict(item) for item in list(value or []) if isinstance(item, dict)] if isinstance(value, list) else []
+            )
             emitted_count = sum(1 for item in items if str(item.get("status") or "") == "emitted")
             skipped_count = sum(1 for item in items if str(item.get("status") or "") == "skipped")
             if emitted_count > 0:
@@ -38804,8 +39037,20 @@ class SourcingOrchestrator:
             if not _provider_control_work_is_open(open_work):
                 return max(1, local_apply_limit), max(1, board_visible_limit)
             return (
-                max(1, min(max(1, local_apply_limit), _coerce_int(payload.get("provider_open_event_level_local_apply_limit"), 1))),
-                max(1, min(max(1, board_visible_limit), _coerce_int(payload.get("provider_open_event_level_board_visible_limit"), 1))),
+                max(
+                    1,
+                    min(
+                        max(1, local_apply_limit),
+                        _coerce_int(payload.get("provider_open_event_level_local_apply_limit"), 1),
+                    ),
+                ),
+                max(
+                    1,
+                    min(
+                        max(1, board_visible_limit),
+                        _coerce_int(payload.get("provider_open_event_level_board_visible_limit"), 1),
+                    ),
+                ),
             )
 
         def _ready_board_visible_apply_item_exists() -> bool:
@@ -39045,8 +39290,7 @@ class SourcingOrchestrator:
                 max_sync_work="no profile refill work",
             )
         profile_refill_submit_observed_this_tick = (
-            profile_refill_submit_observed_this_tick
-            or _profile_refill_worker_submit_observed(profile_prefetch_refill)
+            profile_refill_submit_observed_this_tick or _profile_refill_worker_submit_observed(profile_prefetch_refill)
         )
         profile_refill_command_planned_this_tick = (
             profile_refill_command_planned_this_tick
@@ -39091,9 +39335,11 @@ class SourcingOrchestrator:
                         "claim and execute ready linkedin.profile_refill.submit_batch workflow_commands only; "
                         "scheduler phases may plan commands but provider submit belongs to this owner"
                     ),
-                    callback=lambda: ctx.orchestrator.acquisition_engine.multi_source_enricher.drain_linkedin_profile_refill_submit_commands(
-                        workflow_run_id=legacy_job_workflow_run_id(_job) if _job else "",
-                        limit=_limit,
+                    callback=lambda: (
+                        ctx.orchestrator.acquisition_engine.multi_source_enricher.drain_linkedin_profile_refill_submit_commands(
+                            workflow_run_id=legacy_job_workflow_run_id(_job) if _job else "",
+                            limit=_limit,
+                        )
                     ),
                 ),
             ),
@@ -39123,17 +39369,21 @@ class SourcingOrchestrator:
                         max_sync_work="no LinkedIn profile URL terminal-record command work",
                     )
                 ),
-                body=lambda ctx, _limit=profile_url_terminal_record_command_owner_limit, _job=explicit_job_id: ctx.run_phase(
-                    "profile_url_terminal_record_command_owner",
-                    owner="linkedin_profile_url_terminal_record_command_owner",
-                    max_sync_work=(
-                        "claim and execute ready linkedin.profile_url_terminal.record workflow_commands only; "
-                        "profile workers plan URL terminal state, this owner writes linkedin_profile_registry"
-                    ),
-                    callback=lambda: ctx.orchestrator.acquisition_engine.multi_source_enricher.drain_linkedin_profile_url_terminal_record_commands(
-                        workflow_run_id=legacy_job_workflow_run_id(_job) if _job else "",
-                        limit=_limit,
-                    ),
+                body=lambda ctx, _limit=profile_url_terminal_record_command_owner_limit, _job=explicit_job_id: (
+                    ctx.run_phase(
+                        "profile_url_terminal_record_command_owner",
+                        owner="linkedin_profile_url_terminal_record_command_owner",
+                        max_sync_work=(
+                            "claim and execute ready linkedin.profile_url_terminal.record workflow_commands only; "
+                            "profile workers plan URL terminal state, this owner writes linkedin_profile_registry"
+                        ),
+                        callback=lambda: (
+                            ctx.orchestrator.acquisition_engine.multi_source_enricher.drain_linkedin_profile_url_terminal_record_commands(
+                                workflow_run_id=legacy_job_workflow_run_id(_job) if _job else "",
+                                limit=_limit,
+                            )
+                        ),
+                    )
                 ),
             ),
             _tick_ctx,
@@ -39150,11 +39400,7 @@ class SourcingOrchestrator:
                     True
                     if _job and _coerce_bool(ctx.payload.get("stage1_preview_recovery_enabled"), True)
                     else SkipDecision(
-                        reason=(
-                            "stage1_preview_recovery_disabled_by_payload"
-                            if _job
-                            else "job_scope_missing"
-                        ),
+                        reason=("stage1_preview_recovery_disabled_by_payload" if _job else "job_scope_missing"),
                         max_sync_work="no Stage 1 preview recovery bridge",
                     )
                 ),
@@ -39208,11 +39454,9 @@ class SourcingOrchestrator:
                 owner="event_level_local_apply_to_board_visible",
                 reason=(
                     "profile_prefetch_refill_disabled_by_payload"
-                    if explicit_job_id
-                    and not profile_prefetch_refill_enabled
+                    if explicit_job_id and not profile_prefetch_refill_enabled
                     else "worker_recovery_durable_handoff_to_daemon_tick"
-                    if explicit_job_id
-                    and worker_recovery_handoff_required
+                    if explicit_job_id and worker_recovery_handoff_required
                     else "profile_refill_submit_handoff_to_next_tick"
                     if explicit_job_id and profile_refill_submit_observed_this_tick
                     else "no_profile_refill_event_work"
@@ -39507,9 +39751,7 @@ class SourcingOrchestrator:
             or legacy_materialization_adapter_work_observed
         )
         same_tick_durable_work_observed = (
-            same_tick_visibility_handoff_required
-            or local_apply_backlog_work_observed
-            or event_level_work_observed
+            same_tick_visibility_handoff_required or local_apply_backlog_work_observed or event_level_work_observed
         )
         same_tick_durable_work_handoff_reason = ""
         same_tick_durable_work_handoff_max_sync_work = ""
@@ -39553,7 +39795,9 @@ class SourcingOrchestrator:
                 "skip_expensive_open_work_scan": True,
             }
         else:
-            workflow_resume_barrier = _daemon_owned_workflow_resume_barrier("daemon_owned_work_open_before_workflow_resume")
+            workflow_resume_barrier = _daemon_owned_workflow_resume_barrier(
+                "daemon_owned_work_open_before_workflow_resume"
+            )
         if workflow_resume_barrier:
             workflow_resume = []
             _skipped_phase(
@@ -39681,12 +39925,8 @@ class SourcingOrchestrator:
         # binding's summary-invisibility (include_in_result=False) is preserved
         # by the result-projection comprehensions below.
         registry_drain_results: dict[str, dict[str, Any]] = {}
-        for _drain_phase in build_recovery_phase_registry(
-            build_drain_group_phases(self._recovery_drain_registry)
-        ):
-            registry_drain_results[_drain_phase.name] = run_registry_phase(
-                _drain_phase, _tick_ctx
-            )
+        for _drain_phase in build_recovery_phase_registry(build_drain_group_phases(self._recovery_drain_registry)):
+            registry_drain_results[_drain_phase.name] = run_registry_phase(_drain_phase, _tick_ctx)
         if same_tick_visibility_handoff_required:
             board_visible_apply = _skipped_phase(
                 "board_visible_apply",
@@ -39736,10 +39976,10 @@ class SourcingOrchestrator:
                 post_projection_resume_trigger = "run_scope_projection_finalize_work"
             elif post_projection_job and not self._job_is_terminal(post_projection_job):
                 post_projection_stage = str(post_projection_job.get("stage") or "").strip().lower()
-                if (
-                    post_projection_stage in {"acquiring", "retrieving"}
-                    and self._canonical_terminal_run_scope_projection_proof_ready(post_projection_job)
-                ):
+                if post_projection_stage in {
+                    "acquiring",
+                    "retrieving",
+                } and self._canonical_terminal_run_scope_projection_proof_ready(post_projection_job):
                     post_projection_resume_trigger = "canonical_terminal_projection_proof_ready"
         if explicit_job_id and post_projection_resume_trigger:
             post_projection_workflow_resume_barrier = _daemon_owned_workflow_resume_barrier(
@@ -40108,8 +40348,14 @@ class SourcingOrchestrator:
                 "started_at": followup_started_at,
                 "finished_at": _utc_now_iso(),
                 "elapsed_ms": int(max(0.0, (time.perf_counter() - followup_started_monotonic) * 1000)),
-                "status": "skipped" if followup_budget_exhausted and followup_rounds_executed <= 0 else "active" if followup_rounds_executed > 0 else "idle",
-                "reason": "recovery_tick_budget_exhausted" if followup_budget_exhausted else "explicit_job_followup_rounds",
+                "status": "skipped"
+                if followup_budget_exhausted and followup_rounds_executed <= 0
+                else "active"
+                if followup_rounds_executed > 0
+                else "idle",
+                "reason": "recovery_tick_budget_exhausted"
+                if followup_budget_exhausted
+                else "explicit_job_followup_rounds",
                 "counts": {
                     "round_count": followup_rounds_executed,
                     "claimed_count": followup_claimed_count,
@@ -40157,9 +40403,7 @@ class SourcingOrchestrator:
         if remote_event_handoff_required:
             _request_durable_work_handoff_yield()
         post_followup_handoff_required = (
-            same_tick_durable_work_observed
-            or board_visible_apply_work_observed
-            or remote_event_handoff_required
+            same_tick_durable_work_observed or board_visible_apply_work_observed or remote_event_handoff_required
         )
         post_followup_event_level_materialization_followup = {"status": "skipped", "reason": "job_scope_missing"}
         if explicit_job_id and not post_followup_handoff_required:
@@ -40302,8 +40546,7 @@ class SourcingOrchestrator:
                 max_sync_work=(
                     "post-followup workflow resume waits until job-scoped daemon-owned work is clear"
                     if post_followup_workflow_resume_barrier
-                    else
-                    "no post-followup workflow resume"
+                    else "no post-followup workflow resume"
                     if explicit_job_id
                     else "no post-followup workflow resume without job scope"
                 ),
@@ -40333,8 +40576,7 @@ class SourcingOrchestrator:
                 reason=(
                     "daemon_owned_work_open_before_post_followup_post_completion_reconcile"
                     if post_followup_workflow_resume_barrier
-                    else
-                    "no_post_followup_work"
+                    else "no_post_followup_work"
                     if explicit_job_id and post_completion_reconcile_enabled
                     else "post_completion_reconcile_disabled_by_payload"
                     if explicit_job_id
@@ -40443,9 +40685,7 @@ class SourcingOrchestrator:
             "phase_budget_exhausted": phase_budget_exhausted,
             "durable_work_handoff_yield": durable_work_handoff_yield_requested,
             "next_tick_requested": (
-                recovery_tick_budget_exhausted
-                or phase_budget_exhausted
-                or durable_work_handoff_yield_requested
+                recovery_tick_budget_exhausted or phase_budget_exhausted or durable_work_handoff_yield_requested
             ),
             "recovery_tick_total_budget_ms": recovery_tick_total_budget_ms,
             "daemon": summary,
@@ -40491,10 +40731,7 @@ class SourcingOrchestrator:
 
     def run_worker_recovery_forever(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = dict(payload or {})
-        owner_id = str(
-            payload.get("owner_id")
-            or f"recovery-daemon-{socket.gethostname()}-{os.getpid()}"
-        )
+        owner_id = str(payload.get("owner_id") or f"recovery-daemon-{socket.gethostname()}-{os.getpid()}")
         poll_seconds = max(0.1, float(payload.get("poll_seconds") or 5.0))
         max_ticks = int(payload.get("max_ticks") or 0)
         tick = 0
@@ -42004,10 +42241,7 @@ class SourcingOrchestrator:
         return merged
 
     def _build_worker_recovery_daemon(self, payload: dict[str, Any]) -> PersistentWorkerRecoveryDaemon:
-        owner_id = str(
-            payload.get("owner_id")
-            or f"recovery-daemon-{socket.gethostname()}-{os.getpid()}"
-        )
+        owner_id = str(payload.get("owner_id") or f"recovery-daemon-{socket.gethostname()}-{os.getpid()}")
         stale_after_raw = payload.get("stale_after_seconds")
         stale_after_seconds = _coerce_int(stale_after_raw, 180)
         explicit_worker_ids = [
@@ -42123,7 +42357,9 @@ class SourcingOrchestrator:
         if not normalized_job_id:
             return {"status": "idle", "reason": "job_id_missing", "open_work_count": 0}
         job_payload = dict(job or self.store.get_job(normalized_job_id) or {})
-        worker_payloads = [dict(worker or {}) for worker in list(workers or self._list_persisted_job_workers(normalized_job_id))]
+        worker_payloads = [
+            dict(worker or {}) for worker in list(workers or self._list_persisted_job_workers(normalized_job_id))
+        ]
         pending_workers = [
             worker
             for worker in worker_payloads
@@ -42212,9 +42448,7 @@ class SourcingOrchestrator:
         workflow_lease_alive = _workflow_job_lease_is_alive(workflow_job_lease)
         workflow_resume_actionable = workflow_open_count > 0 and not workflow_lease_alive
         daemon_owned_open_work_count = (
-            len(pending_workers)
-            + len(profile_refill_ready_items)
-            + daemon_owned_materialization_open_count
+            len(pending_workers) + len(profile_refill_ready_items) + daemon_owned_materialization_open_count
         )
         open_work_count = (
             len(pending_workers)
@@ -42674,11 +42908,7 @@ class SourcingOrchestrator:
         ]
         open_work = self._job_scoped_recovery_open_work_summary(job_id=job_id, job=job, workers=workers)
         summary["job_recovery_open_work"] = open_work
-        if (
-            self._job_is_terminal(job)
-            and not pending_workers
-            and int(open_work.get("open_work_count") or 0) <= 0
-        ):
+        if self._job_is_terminal(job) and not pending_workers and int(open_work.get("open_work_count") or 0) <= 0:
             service = service_ref.get("service")
             if service is not None:
                 service.request_stop()
@@ -42731,14 +42961,10 @@ class SourcingOrchestrator:
                 **prior_execution_bundle,
                 **execution_bundle,
                 "workflow_run_id": str(
-                    prior_execution_bundle.get("workflow_run_id")
-                    or dict(execution_bundle).get("workflow_run_id")
-                    or ""
+                    prior_execution_bundle.get("workflow_run_id") or dict(execution_bundle).get("workflow_run_id") or ""
                 ).strip(),
                 "operation_id": str(
-                    prior_execution_bundle.get("operation_id")
-                    or dict(execution_bundle).get("operation_id")
-                    or ""
+                    prior_execution_bundle.get("operation_id") or dict(execution_bundle).get("operation_id") or ""
                 ).strip(),
                 "plan_review_request_command_id": str(
                     prior_execution_bundle.get("plan_review_request_command_id")
@@ -42751,9 +42977,7 @@ class SourcingOrchestrator:
                     or ""
                 ).strip(),
                 "causal_group_id": str(
-                    prior_execution_bundle.get("causal_group_id")
-                    or dict(execution_bundle).get("causal_group_id")
-                    or ""
+                    prior_execution_bundle.get("causal_group_id") or dict(execution_bundle).get("causal_group_id") or ""
                 ).strip(),
             }
         except Exception:
@@ -42968,9 +43192,7 @@ class SourcingOrchestrator:
             "latest_attempt": latest_attempt,
             "latest_entity_delta": latest_delta,
             "sample_limit": bounded_limit,
-            "sample_truncated": any(
-                len(rows) >= bounded_limit for rows in (activities, attempts, deltas)
-            ),
+            "sample_truncated": any(len(rows) >= bounded_limit for rows in (activities, attempts, deltas)),
         }
 
     def _workflow_command_api_record_with_execution_summary(
@@ -43079,7 +43301,9 @@ class SourcingOrchestrator:
         normalized_command_id = str(command_id or "").strip()
         normalized_activity_run_id = str(activity_run_id or "").strip()
         command = self.store.get_workflow_command(normalized_command_id) if normalized_command_id else {}
-        activity = self.store.get_workflow_activity_run(normalized_activity_run_id) if normalized_activity_run_id else {}
+        activity = (
+            self.store.get_workflow_activity_run(normalized_activity_run_id) if normalized_activity_run_id else {}
+        )
         if not command and activity:
             normalized_command_id = str(activity.get("command_id") or "").strip()
             command = self.store.get_workflow_command(normalized_command_id) if normalized_command_id else {}
@@ -43175,7 +43399,9 @@ class SourcingOrchestrator:
             limit=max(1, min(500, _coerce_int(payload.get("limit"), 100))),
         )
         if command_type:
-            commands = [command for command in commands if str(command.get("command_type") or "").strip() == command_type]
+            commands = [
+                command for command in commands if str(command.get("command_type") or "").strip() == command_type
+            ]
         include_execution_summary = _coerce_bool(payload.get("include_execution_summary"), False)
         return {
             "status": "ok",
@@ -43231,7 +43457,9 @@ class SourcingOrchestrator:
 
     def get_workflow_activity_api(self, activity_run_id: str) -> dict[str, Any]:
         normalized_activity_run_id = str(activity_run_id or "").strip()
-        activity = self.store.get_workflow_activity_run(normalized_activity_run_id) if normalized_activity_run_id else {}
+        activity = (
+            self.store.get_workflow_activity_run(normalized_activity_run_id) if normalized_activity_run_id else {}
+        )
         if not activity:
             return {"status": "not_found", "activity_run_id": normalized_activity_run_id}
         attempts = self.store.list_workflow_activity_attempts(activity_run_id=normalized_activity_run_id, limit=100)
@@ -43262,9 +43490,7 @@ class SourcingOrchestrator:
         )
         return {
             "status": "ok",
-            "workflow_activity_attempts": [
-                self._workflow_activity_attempt_api_record(attempt) for attempt in attempts
-            ],
+            "workflow_activity_attempts": [self._workflow_activity_attempt_api_record(attempt) for attempt in attempts],
             "module_state_mutated": False,
             "contract": "w11_workflow_activity_attempt_list_v1",
         }
@@ -43345,16 +43571,16 @@ class SourcingOrchestrator:
             limit=max(1, min(500, _coerce_int(payload.get("limit"), 100))),
         )
         if target_company:
-            lanes = [lane for lane in lanes if str(lane.get("target_company") or "").strip().casefold() == target_company]
+            lanes = [
+                lane for lane in lanes if str(lane.get("target_company") or "").strip().casefold() == target_company
+            ]
         if provider:
             lanes = [lane for lane in lanes if str(lane.get("provider") or "").strip().casefold() == provider]
         if query_text:
             lanes = [lane for lane in lanes if query_text in str(lane.get("query") or "").strip().casefold()]
         return {
             "status": "ok",
-            "acquisition_discovery_lanes": [
-                self._acquisition_discovery_lane_api_record(lane) for lane in lanes
-            ],
+            "acquisition_discovery_lanes": [self._acquisition_discovery_lane_api_record(lane) for lane in lanes],
             "module_state_mutated": False,
             "contract": "w11_acquisition_discovery_lane_list_v1",
         }
@@ -43983,7 +44209,6 @@ class SourcingOrchestrator:
         command_payload = dict(command or {})
         command_id = str(command_payload.get("command_id") or "").strip()
         command_type = str(command_payload.get("command_type") or "").strip()
-        body = dict(command_payload.get("payload") or {})
         actor = str(payload.get("actor") or payload.get("operator") or "api").strip() or "api"
         reason = str(payload.get("reason") or "cancelled_before_crm_writer_mutation_attempt").strip()
         force = _coerce_bool(payload.get("force"), False)
@@ -44249,7 +44474,9 @@ class SourcingOrchestrator:
         *,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._profile_fetch_owner._cancel_running_profile_fetch_activity_before_cache_lookup_attempt(command, payload=payload)
+        return self._profile_fetch_owner._cancel_running_profile_fetch_activity_before_cache_lookup_attempt(
+            command, payload=payload
+        )
 
     def _cancel_running_crm_public_web_queue_batch_before_phase_commands(
         self,
@@ -44268,7 +44495,9 @@ class SourcingOrchestrator:
         *,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._cancel_running_acquisition_scale_plan_before_discovery(command, payload=payload)
+        return self._acquisition_command_owner._cancel_running_acquisition_scale_plan_before_discovery(
+            command, payload=payload
+        )
 
     def _find_acquisition_run_for_command(self, command: dict[str, Any]) -> dict[str, Any]:
         return self._acquisition_command_owner._find_acquisition_run_for_command(command)
@@ -44279,7 +44508,9 @@ class SourcingOrchestrator:
         *,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._cancel_running_acquisition_plan_commit_before_probe(command, payload=payload)
+        return self._acquisition_command_owner._cancel_running_acquisition_plan_commit_before_probe(
+            command, payload=payload
+        )
 
     def _workflow_command_downstream_commands(self, command: dict[str, Any]) -> list[dict[str, Any]]:
         command_payload = dict(command or {})
@@ -44409,7 +44640,9 @@ class SourcingOrchestrator:
         *,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._cancel_running_acquisition_plan_review_request_command(command, payload=payload)
+        return self._acquisition_command_owner._cancel_running_acquisition_plan_review_request_command(
+            command, payload=payload
+        )
 
     def _workflow_command_lease_active(self, command: dict[str, Any]) -> bool:
         return self._command_kernel._workflow_command_lease_active(command)
@@ -45807,7 +46040,9 @@ class SourcingOrchestrator:
             if str(record_id or "").strip()
         ]
         workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
-        entity_key = hashlib.sha1(",".join(crm_record_ids).encode("utf-8")).hexdigest()[:24] if crm_record_ids else command_id
+        entity_key = (
+            hashlib.sha1(",".join(crm_record_ids).encode("utf-8")).hexdigest()[:24] if crm_record_ids else command_id
+        )
         return {
             "command_id": command_id,
             "command_type": command_type,
@@ -45819,7 +46054,11 @@ class SourcingOrchestrator:
             "entity_counts": {"crm_record_count": len(crm_record_ids)},
             "reason": "crm_public_web_export_cancelled_by_command_control",
             "provider_request_ref": ",".join(crm_record_ids) or command_id,
-            "source_ref": {"workspace_id": workspace_id, "crm_record_ids": crm_record_ids, "command_type": command_type},
+            "source_ref": {
+                "workspace_id": workspace_id,
+                "crm_record_ids": crm_record_ids,
+                "command_type": command_type,
+            },
             "entity_payload": {"workspace_id": workspace_id, "crm_record_ids": crm_record_ids},
             "metadata": {
                 "owner": EXPORT_CRM_PUBLIC_WEB_GENERATE_OWNER,
@@ -45871,7 +46110,9 @@ class SourcingOrchestrator:
         *,
         reason: str,
     ) -> dict[str, Any]:
-        latest = self.store.get_workflow_command(str(dict(command or {}).get("command_id") or "").strip()) or dict(command or {})
+        latest = self.store.get_workflow_command(str(dict(command or {}).get("command_id") or "").strip()) or dict(
+            command or {}
+        )
         return {
             "status": "cancelled",
             "reason": str(reason or "export_command_cancelled").strip() or "export_command_cancelled",
@@ -46255,9 +46496,7 @@ class SourcingOrchestrator:
             "status": "approval_required" if result.action.get("status") == "approval_required" else "queued",
             "action": self._operation_action_api_record(result.action),
             "operation_run": (
-                self._operation_run_api_record_with_status_summary(result.operation_run)
-                if result.operation_run
-                else {}
+                self._operation_run_api_record_with_status_summary(result.operation_run) if result.operation_run else {}
             ),
             "events": list(result.events),
             "module_state_mutated": False,
@@ -46335,9 +46574,7 @@ class SourcingOrchestrator:
             "latest_event_type": str(latest_event.get("event_type") or "").strip(),
             "latest_event": latest_event,
             "latest_workflow_command": (
-                self._workflow_command_api_record_with_execution_summary(latest_command)
-                if latest_command
-                else {}
+                self._workflow_command_api_record_with_execution_summary(latest_command) if latest_command else {}
             ),
         }
 
@@ -46460,8 +46697,7 @@ class SourcingOrchestrator:
             "operation_events": self.store.list_operation_events(operation_run["operation_run_id"]),
             "event_timeline": self.store.list_operation_events_for_action(str(operation_run.get("action_id") or "")),
             "workflow_commands": [
-                self._workflow_command_api_record_with_execution_summary(command)
-                for command in commands
+                self._workflow_command_api_record_with_execution_summary(command) for command in commands
             ],
             "module_state_mutated": False,
             "contract": "w9_operation_run_provenance_v1",
@@ -46651,9 +46887,10 @@ class SourcingOrchestrator:
         action: dict[str, Any],
         actor: str,
     ) -> dict[str, Any]:
-        if str(action.get("approval_policy") or "").strip() == "required" and str(
-            action.get("approval_status") or ""
-        ).strip() != "approved":
+        if (
+            str(action.get("approval_policy") or "").strip() == "required"
+            and str(action.get("approval_status") or "").strip() != "approved"
+        ):
             return {
                 "status": "approval_required",
                 "action": action,
@@ -46734,7 +46971,11 @@ class SourcingOrchestrator:
             ),
             actor=actor,
             source="api.operation_run_dispatch",
-            payload={**workflow_ref, "module_state_mutated": False, "migration_phase": "W11_agent_callable_workflow_command"},
+            payload={
+                **workflow_ref,
+                "module_state_mutated": False,
+                "migration_phase": "W11_agent_callable_workflow_command",
+            },
         )
         return {
             "status": "planned",
@@ -46753,7 +46994,11 @@ class SourcingOrchestrator:
             spec = DEFAULT_ACTION_REGISTRY.spec_for(normalized_action)
         except KeyError:
             return set()
-        return {str(command_type).strip() for command_type in spec.allowed_workflow_command_types if str(command_type).strip()}
+        return {
+            str(command_type).strip()
+            for command_type in spec.allowed_workflow_command_types
+            if str(command_type).strip()
+        }
 
     @staticmethod
     def _acquisition_decomposition_downstream_command_types() -> list[str]:
@@ -46791,10 +47036,9 @@ class SourcingOrchestrator:
         explicit_command_payload = dict(input_payload.get("command_payload") or {})
         operation_run_id = str(operation_run.get("operation_run_id") or "").strip()
         job_id = str(input_payload.get("job_id") or target_ref.get("job_id") or "").strip()
-        workflow_run_id = (
-            str(input_payload.get("workflow_run_id") or target_ref.get("workflow_run_id") or "").strip()
-            or legacy_job_workflow_run_id(job_id)
-        )
+        workflow_run_id = str(
+            input_payload.get("workflow_run_id") or target_ref.get("workflow_run_id") or ""
+        ).strip() or legacy_job_workflow_run_id(job_id)
         if command_type == ACQUISITION_RUN_CREATE_COMMAND_TYPE:
             if not workflow_run_id:
                 workflow_run_id = f"wf_operation_{hashlib.sha1(operation_run_id.encode('utf-8')).hexdigest()[:24]}"
@@ -46839,7 +47083,9 @@ class SourcingOrchestrator:
                 "requester_id": str(input_payload.get("requester_id") or target_ref.get("requester_id") or "").strip(),
                 "tenant_id": str(input_payload.get("tenant_id") or target_ref.get("tenant_id") or workspace_id).strip()
                 or workspace_id,
-                "idempotency_key": str(operation_run.get("idempotency_key") or action.get("idempotency_key") or "").strip(),
+                "idempotency_key": str(
+                    operation_run.get("idempotency_key") or action.get("idempotency_key") or ""
+                ).strip(),
             }
             if target_company:
                 workflow_payload.setdefault("target_company", target_company)
@@ -46878,7 +47124,9 @@ class SourcingOrchestrator:
             }
         if command_type == COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE:
             if not workflow_run_id:
-                workflow_run_id = f"wf_company_public_web_{hashlib.sha1(operation_run_id.encode('utf-8')).hexdigest()[:24]}"
+                workflow_run_id = (
+                    f"wf_company_public_web_{hashlib.sha1(operation_run_id.encode('utf-8')).hexdigest()[:24]}"
+                )
             target_company = str(
                 input_payload.get("target_company")
                 or target_ref.get("target_company")
@@ -46908,13 +47156,18 @@ class SourcingOrchestrator:
                 **(dict(explicit_options) if isinstance(explicit_options, dict) else {}),
                 **(dict(input_options) if isinstance(input_options, dict) else {}),
             }
-            collection_mode = str(
-                input_payload.get("collection_mode")
-                or target_ref.get("collection_mode")
-                or explicit_command_payload.get("collection_mode")
-                or options.get("collection_mode")
+            collection_mode = (
+                str(
+                    input_payload.get("collection_mode")
+                    or target_ref.get("collection_mode")
+                    or explicit_command_payload.get("collection_mode")
+                    or options.get("collection_mode")
+                    or "seed_url_only"
+                )
+                .strip()
+                .lower()
                 or "seed_url_only"
-            ).strip().lower() or "seed_url_only"
+            )
             options["collection_mode"] = collection_mode
             seed_urls = _dedupe_texts(
                 input_payload.get("seed_urls")
@@ -47236,11 +47489,7 @@ class SourcingOrchestrator:
                     if str(delta_id or "").strip()
                 ]
                 profile_urls = _dedupe_texts(
-                    [
-                        dict(delta.get("entity_payload") or {}).get("profile_url")
-                        for delta in delta_rows
-                        if delta
-                    ]
+                    [dict(delta.get("entity_payload") or {}).get("profile_url") for delta in delta_rows if delta]
                 )
             activity = self.store.get_workflow_activity_run(activity_run_id) if activity_run_id else {}
             acquisition_run_id = str(
@@ -47352,7 +47601,9 @@ class SourcingOrchestrator:
                         if delta
                     ]
                 )
-            source_activity = self.store.get_workflow_activity_run(source_activity_run_id) if source_activity_run_id else {}
+            source_activity = (
+                self.store.get_workflow_activity_run(source_activity_run_id) if source_activity_run_id else {}
+            )
             acquisition_run_id = str(
                 input_payload.get("acquisition_run_id")
                 or target_ref.get("acquisition_run_id")
@@ -47677,7 +47928,13 @@ class SourcingOrchestrator:
         query_text: str,
         plan_review_id: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._plan_acquisition_intent_resolve_command(parent_command=parent_command, workflow_payload=workflow_payload, target_company=target_company, query_text=query_text, plan_review_id=plan_review_id)
+        return self._acquisition_command_owner._plan_acquisition_intent_resolve_command(
+            parent_command=parent_command,
+            workflow_payload=workflow_payload,
+            target_company=target_company,
+            query_text=query_text,
+            plan_review_id=plan_review_id,
+        )
 
     def _plan_acquisition_plan_build_command(
         self,
@@ -47685,7 +47942,9 @@ class SourcingOrchestrator:
         parent_command: dict[str, Any],
         resolved_intent: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._plan_acquisition_plan_build_command(parent_command=parent_command, resolved_intent=resolved_intent)
+        return self._acquisition_command_owner._plan_acquisition_plan_build_command(
+            parent_command=parent_command, resolved_intent=resolved_intent
+        )
 
     def _plan_acquisition_plan_review_request_command(
         self,
@@ -47693,7 +47952,9 @@ class SourcingOrchestrator:
         parent_command: dict[str, Any],
         acquisition_plan: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._plan_acquisition_plan_review_request_command(parent_command=parent_command, acquisition_plan=acquisition_plan)
+        return self._acquisition_command_owner._plan_acquisition_plan_review_request_command(
+            parent_command=parent_command, acquisition_plan=acquisition_plan
+        )
 
     def _execute_acquisition_intent_resolve_command_payload(
         self,
@@ -47701,7 +47962,9 @@ class SourcingOrchestrator:
         *,
         lease_owner: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._execute_acquisition_intent_resolve_command_payload(command, lease_owner=lease_owner)
+        return self._acquisition_command_owner._execute_acquisition_intent_resolve_command_payload(
+            command, lease_owner=lease_owner
+        )
 
     def _run_acquisition_intent_resolve_command(self, command: dict[str, Any]) -> dict[str, Any]:
         return self._acquisition_command_owner._run_acquisition_intent_resolve_command(command)
@@ -47715,7 +47978,9 @@ class SourcingOrchestrator:
         command: dict[str, Any],
         resolved_intent: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._build_acquisition_plan_from_resolved_intent(command=command, resolved_intent=resolved_intent)
+        return self._acquisition_command_owner._build_acquisition_plan_from_resolved_intent(
+            command=command, resolved_intent=resolved_intent
+        )
 
     def _sync_acquisition_plan_ready_from_workflow_command(
         self,
@@ -47724,7 +47989,9 @@ class SourcingOrchestrator:
         actor: str,
         source: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._sync_acquisition_plan_ready_from_workflow_command(command, actor=actor, source=source)
+        return self._acquisition_command_owner._sync_acquisition_plan_ready_from_workflow_command(
+            command, actor=actor, source=source
+        )
 
     def _execute_acquisition_plan_build_command_payload(
         self,
@@ -47732,7 +47999,9 @@ class SourcingOrchestrator:
         *,
         lease_owner: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._execute_acquisition_plan_build_command_payload(command, lease_owner=lease_owner)
+        return self._acquisition_command_owner._execute_acquisition_plan_build_command_payload(
+            command, lease_owner=lease_owner
+        )
 
     def _run_acquisition_plan_build_command(self, command: dict[str, Any]) -> dict[str, Any]:
         return self._acquisition_command_owner._run_acquisition_plan_build_command(command)
@@ -47754,7 +48023,9 @@ class SourcingOrchestrator:
         target_company: str,
         plan_id: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._find_existing_acquisition_plan_review_session(target_company=target_company, plan_id=plan_id)
+        return self._acquisition_command_owner._find_existing_acquisition_plan_review_session(
+            target_company=target_company, plan_id=plan_id
+        )
 
     def _create_or_get_acquisition_plan_review_session(
         self,
@@ -47762,7 +48033,9 @@ class SourcingOrchestrator:
         acquisition_plan: dict[str, Any],
         command: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._create_or_get_acquisition_plan_review_session(acquisition_plan=acquisition_plan, command=command)
+        return self._acquisition_command_owner._create_or_get_acquisition_plan_review_session(
+            acquisition_plan=acquisition_plan, command=command
+        )
 
     def _sync_acquisition_plan_review_requested_from_workflow_command(
         self,
@@ -47771,7 +48044,9 @@ class SourcingOrchestrator:
         actor: str,
         source: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._sync_acquisition_plan_review_requested_from_workflow_command(command, actor=actor, source=source)
+        return self._acquisition_command_owner._sync_acquisition_plan_review_requested_from_workflow_command(
+            command, actor=actor, source=source
+        )
 
     def _execute_acquisition_plan_review_request_command_payload(
         self,
@@ -47779,7 +48054,9 @@ class SourcingOrchestrator:
         *,
         lease_owner: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._execute_acquisition_plan_review_request_command_payload(command, lease_owner=lease_owner)
+        return self._acquisition_command_owner._execute_acquisition_plan_review_request_command_payload(
+            command, lease_owner=lease_owner
+        )
 
     def _run_acquisition_plan_review_request_command(self, command: dict[str, Any]) -> dict[str, Any]:
         return self._acquisition_command_owner._run_acquisition_plan_review_request_command(command)
@@ -47794,7 +48071,9 @@ class SourcingOrchestrator:
         actor: str,
         source: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._plan_acquisition_plan_commit_command_from_review(review_session=review_session, actor=actor, source=source)
+        return self._acquisition_command_owner._plan_acquisition_plan_commit_command_from_review(
+            review_session=review_session, actor=actor, source=source
+        )
 
     def _plan_acquisition_run_phase_command(
         self,
@@ -47808,7 +48087,16 @@ class SourcingOrchestrator:
         retry_kind: str,
         extra_payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._plan_acquisition_run_phase_command(parent_command=parent_command, acquisition_run=acquisition_run, command_type=command_type, stage_key=stage_key, source=source, migration_phase=migration_phase, retry_kind=retry_kind, extra_payload=extra_payload)
+        return self._acquisition_command_owner._plan_acquisition_run_phase_command(
+            parent_command=parent_command,
+            acquisition_run=acquisition_run,
+            command_type=command_type,
+            stage_key=stage_key,
+            source=source,
+            migration_phase=migration_phase,
+            retry_kind=retry_kind,
+            extra_payload=extra_payload,
+        )
 
     def _plan_acquisition_probe_submit_command(
         self,
@@ -47816,7 +48104,9 @@ class SourcingOrchestrator:
         parent_command: dict[str, Any],
         acquisition_run: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._plan_acquisition_probe_submit_command(parent_command=parent_command, acquisition_run=acquisition_run)
+        return self._acquisition_command_owner._plan_acquisition_probe_submit_command(
+            parent_command=parent_command, acquisition_run=acquisition_run
+        )
 
     def _plan_acquisition_probe_collect_command(
         self,
@@ -47824,7 +48114,9 @@ class SourcingOrchestrator:
         parent_command: dict[str, Any],
         acquisition_run: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._plan_acquisition_probe_collect_command(parent_command=parent_command, acquisition_run=acquisition_run)
+        return self._acquisition_command_owner._plan_acquisition_probe_collect_command(
+            parent_command=parent_command, acquisition_run=acquisition_run
+        )
 
     def _plan_acquisition_scale_plan_command(
         self,
@@ -47833,7 +48125,9 @@ class SourcingOrchestrator:
         acquisition_run: dict[str, Any],
         probe_result: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._plan_acquisition_scale_plan_command(parent_command=parent_command, acquisition_run=acquisition_run, probe_result=probe_result)
+        return self._acquisition_command_owner._plan_acquisition_scale_plan_command(
+            parent_command=parent_command, acquisition_run=acquisition_run, probe_result=probe_result
+        )
 
     def _sync_acquisition_plan_committed_from_workflow_command(
         self,
@@ -47842,7 +48136,9 @@ class SourcingOrchestrator:
         actor: str,
         source: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._sync_acquisition_plan_committed_from_workflow_command(command, actor=actor, source=source)
+        return self._acquisition_command_owner._sync_acquisition_plan_committed_from_workflow_command(
+            command, actor=actor, source=source
+        )
 
     def _execute_acquisition_plan_commit_command_payload(
         self,
@@ -47850,7 +48146,9 @@ class SourcingOrchestrator:
         *,
         lease_owner: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._execute_acquisition_plan_commit_command_payload(command, lease_owner=lease_owner)
+        return self._acquisition_command_owner._execute_acquisition_plan_commit_command_payload(
+            command, lease_owner=lease_owner
+        )
 
     def _run_acquisition_plan_commit_command(self, command: dict[str, Any]) -> dict[str, Any]:
         return self._acquisition_command_owner._run_acquisition_plan_commit_command(command)
@@ -47865,7 +48163,9 @@ class SourcingOrchestrator:
         actor: str,
         source: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._sync_acquisition_run_phase_from_workflow_command(command, actor=actor, source=source)
+        return self._acquisition_command_owner._sync_acquisition_run_phase_from_workflow_command(
+            command, actor=actor, source=source
+        )
 
     def _upsert_acquisition_run_phase(
         self,
@@ -47911,7 +48211,9 @@ class SourcingOrchestrator:
         *,
         lease_owner: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._execute_acquisition_probe_submit_command_payload(command, lease_owner=lease_owner)
+        return self._acquisition_command_owner._execute_acquisition_probe_submit_command_payload(
+            command, lease_owner=lease_owner
+        )
 
     def _execute_acquisition_probe_collect_command_payload(
         self,
@@ -47919,7 +48221,9 @@ class SourcingOrchestrator:
         *,
         lease_owner: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._execute_acquisition_probe_collect_command_payload(command, lease_owner=lease_owner)
+        return self._acquisition_command_owner._execute_acquisition_probe_collect_command_payload(
+            command, lease_owner=lease_owner
+        )
 
     def _execute_acquisition_scale_plan_command_payload(
         self,
@@ -47927,7 +48231,9 @@ class SourcingOrchestrator:
         *,
         lease_owner: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._execute_acquisition_scale_plan_command_payload(command, lease_owner=lease_owner)
+        return self._acquisition_command_owner._execute_acquisition_scale_plan_command_payload(
+            command, lease_owner=lease_owner
+        )
 
     def _run_acquisition_run_phase_command(self, command: dict[str, Any]) -> dict[str, Any]:
         return self._acquisition_command_owner._run_acquisition_run_phase_command(command)
@@ -47944,7 +48250,9 @@ class SourcingOrchestrator:
         *,
         lease_owner: str,
     ) -> dict[str, Any]:
-        return self._acquisition_command_owner._execute_acquisition_run_create_command_payload(command, lease_owner=lease_owner)
+        return self._acquisition_command_owner._execute_acquisition_run_create_command_payload(
+            command, lease_owner=lease_owner
+        )
 
     def _run_acquisition_run_create_command(self, command: dict[str, Any]) -> dict[str, Any]:
         return self._acquisition_command_owner._run_acquisition_run_create_command(command)
@@ -48091,7 +48399,10 @@ class SourcingOrchestrator:
                 return "bulk_crm_stage_update_requires_approval"
             if stage in {"do_not_contact", "archived"}:
                 return "sensitive_crm_stage_requires_approval"
-        if action_type == ACTION_ADD_TO_CRM and len(self._operation_candidate_identity_keys(input_payload, target_ref)) > 25:
+        if (
+            action_type == ACTION_ADD_TO_CRM
+            and len(self._operation_candidate_identity_keys(input_payload, target_ref)) > 25
+        ):
             return "bulk_add_to_crm_requires_approval"
         return ""
 
@@ -48370,10 +48681,7 @@ class SourcingOrchestrator:
         action_type = str(action.get("action_type") or "").strip()
         if action_type == ACTION_SEARCH_PROJECTION:
             search_keyword = str(
-                input_payload.get("search_keyword")
-                or input_payload.get("search")
-                or input_payload.get("query")
-                or ""
+                input_payload.get("search_keyword") or input_payload.get("search") or input_payload.get("query") or ""
             ).strip()
             if not search_keyword:
                 return {
@@ -48462,9 +48770,10 @@ class SourcingOrchestrator:
         action: dict[str, Any],
         actor: str,
     ) -> dict[str, Any]:
-        if str(action.get("approval_policy") or "").strip() == "required" and str(
-            action.get("approval_status") or ""
-        ).strip() != "approved":
+        if (
+            str(action.get("approval_policy") or "").strip() == "required"
+            and str(action.get("approval_status") or "").strip() != "approved"
+        ):
             return {
                 "status": "approval_required",
                 "action": action,
@@ -48668,7 +48977,9 @@ class SourcingOrchestrator:
                 metadata_patch={"last_operation_command_control_action": normalized_action},
             )
         event = self.store.append_operation_event(
-            workspace_id=str(operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default").strip()
+            workspace_id=str(
+                operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default"
+            ).strip()
             or "default",
             event_stream_id=operation_run_id,
             operation_run_id=operation_run_id,
@@ -48789,7 +49100,9 @@ class SourcingOrchestrator:
                 status="failed",
                 phase="crm_writer_failed",
                 output=dict(result or {}),
-                error={"reason": str(result.get("reason") or result.get("status") or "crm_writer_command_not_completed")},
+                error={
+                    "reason": str(result.get("reason") or result.get("status") or "crm_writer_command_not_completed")
+                },
                 metadata={"crm_writer_owner": CRM_WRITER_OWNER},
                 attempt_status="failed",
             )
@@ -48881,8 +49194,7 @@ class SourcingOrchestrator:
                         actor_type=actor_type,
                         actor_id=actor_id,
                         idempotency_key=f"{command_key}:candidate:{candidate_key}",
-                        pipeline_id=str(payload.get("pipeline_id") or "default_sourcing").strip()
-                        or "default_sourcing",
+                        pipeline_id=str(payload.get("pipeline_id") or "default_sourcing").strip() or "default_sourcing",
                         stage=str(payload.get("stage") or "new").strip() or "new",
                         source_reason=str(payload.get("source_reason") or "selected_from_projection").strip()
                         or "selected_from_projection",
@@ -49083,9 +49395,7 @@ class SourcingOrchestrator:
                 )
             )
         return [
-            str(delta.get("delta_id") or "").strip()
-            for delta in deltas
-            if str(delta.get("delta_id") or "").strip()
+            str(delta.get("delta_id") or "").strip() for delta in deltas if str(delta.get("delta_id") or "").strip()
         ]
 
     def _drain_crm_writer_commands(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -49154,9 +49464,10 @@ class SourcingOrchestrator:
         parent_payload = dict(parent_command or {})
         parent_command_id = str(parent_payload.get("command_id") or "").strip()
         workflow_run_id = str(parent_payload.get("workflow_run_id") or "").strip()
-        operation_id = str(parent_payload.get("operation_id") or "").strip() or str(
-            dict(parent_payload.get("payload") or {}).get("operation_id") or ""
-        ).strip()
+        operation_id = (
+            str(parent_payload.get("operation_id") or "").strip()
+            or str(dict(parent_payload.get("payload") or {}).get("operation_id") or "").strip()
+        )
         if not workflow_run_id:
             return {}
         payload = {
@@ -49332,7 +49643,11 @@ class SourcingOrchestrator:
                 else "company_public_web_refresh_started"
             ),
             lease_owner=lease_owner,
-            provider=str(dict(payload.get("options") or {}).get("collection_mode") or payload.get("collection_mode") or "seed_url_only"),
+            provider=str(
+                dict(payload.get("options") or {}).get("collection_mode")
+                or payload.get("collection_mode")
+                or "seed_url_only"
+            ),
             provider_request_ref=command_id,
             input_payload={
                 "target_company": str(payload.get("target_company") or payload.get("company") or "").strip(),
@@ -49399,7 +49714,9 @@ class SourcingOrchestrator:
             retryable = str(result.get("status") or "").strip() == "failed"
             failed = self.store.mark_workflow_command_failed(
                 command_id,
-                error_text=str(result.get("reason") or result.get("status") or "company_public_web_refresh_not_completed"),
+                error_text=str(
+                    result.get("reason") or result.get("status") or "company_public_web_refresh_not_completed"
+                ),
                 retryable=retryable,
                 retry_delay_seconds=30 if retryable else 0,
             )
@@ -49456,7 +49773,9 @@ class SourcingOrchestrator:
             output={
                 "status": "completed",
                 "run_id": str(dict(result.get("run") or {}).get("run_id") or ""),
-                "asset_count": int(dict(result.get("summary") or {}).get("asset_count") or len(result.get("assets") or [])),
+                "asset_count": int(
+                    dict(result.get("summary") or {}).get("asset_count") or len(result.get("assets") or [])
+                ),
                 "company_asset_sync": dict(result.get("company_asset_sync") or {}),
                 "entity_delta_ids": entity_delta_ids,
                 "downstream_command_ids": [
@@ -49468,8 +49787,12 @@ class SourcingOrchestrator:
             entity_counts={
                 "company_public_web_run_count": 1,
                 "company_public_web_asset_count": len(list(result.get("assets") or [])),
-                "company_asset_count": len(list(dict(result.get("company_asset_sync") or {}).get("company_asset_ids") or [])),
-                "company_evidence_count": len(list(dict(result.get("company_asset_sync") or {}).get("company_evidence_ids") or [])),
+                "company_asset_count": len(
+                    list(dict(result.get("company_asset_sync") or {}).get("company_asset_ids") or [])
+                ),
+                "company_evidence_count": len(
+                    list(dict(result.get("company_asset_sync") or {}).get("company_evidence_ids") or [])
+                ),
             },
             artifact_refs=list(dict(result.get("artifact_paths") or {}).values()),
             metadata={"company_public_web_owner": COMPANY_PUBLIC_WEB_REFRESH_OWNER},
@@ -49555,7 +49878,9 @@ class SourcingOrchestrator:
         if not target_company:
             return {"status": "invalid", "reason": "target_company is required"}
         options = dict(payload.get("options") or {})
-        collection_mode = str(options.get("collection_mode") or payload.get("collection_mode") or "seed_url_only").strip().lower()
+        collection_mode = (
+            str(options.get("collection_mode") or payload.get("collection_mode") or "seed_url_only").strip().lower()
+        )
         search_provider = (
             build_search_provider(self.acquisition_engine.settings.search)
             if collection_mode == "provider_search"
@@ -49580,7 +49905,9 @@ class SourcingOrchestrator:
         result_payload = dict(result or {})
         if str(result_payload.get("status") or "").strip() == "joined":
             run = dict(result_payload.get("run") or {})
-            assets = [dict(asset or {}) for asset in list(result_payload.get("assets") or []) if isinstance(asset, dict)]
+            assets = [
+                dict(asset or {}) for asset in list(result_payload.get("assets") or []) if isinstance(asset, dict)
+            ]
             if command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE:
                 result_payload["company_asset_sync"] = {
                     "status": "deferred",
@@ -49685,9 +50012,7 @@ class SourcingOrchestrator:
                 )
             )
         return [
-            str(delta.get("delta_id") or "").strip()
-            for delta in deltas
-            if str(delta.get("delta_id") or "").strip()
+            str(delta.get("delta_id") or "").strip() for delta in deltas if str(delta.get("delta_id") or "").strip()
         ]
 
     def _drain_company_public_web_refresh_commands(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -49705,7 +50030,9 @@ class SourcingOrchestrator:
                 "migration_phase": "W11_company_public_web_refresh",
             }
         workflow_run_id = str(payload.get("workflow_run_id") or "").strip()
-        limit = max(1, _coerce_int(payload.get("command_limit") or payload.get("company_public_web_refresh_command_limit"), 10))
+        limit = max(
+            1, _coerce_int(payload.get("command_limit") or payload.get("company_public_web_refresh_command_limit"), 10)
+        )
         ready_commands = self.store.list_ready_workflow_commands(
             workflow_run_id=workflow_run_id,
             owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
@@ -49726,7 +50053,9 @@ class SourcingOrchestrator:
                 failed_count += 1
         return {
             "status": "active" if ready_commands else "idle",
-            "reason": "company_public_web_refresh_command_owner" if ready_commands else "no_ready_company_public_web_refresh_commands",
+            "reason": "company_public_web_refresh_command_owner"
+            if ready_commands
+            else "no_ready_company_public_web_refresh_commands",
             "workflow_run_id": workflow_run_id,
             "command_count": len(ready_commands),
             "executed_command_count": len(results),
@@ -49787,9 +50116,7 @@ class SourcingOrchestrator:
                 "entity_type": entity_type,
                 "asset_type": asset_type,
                 "source_url": str(payload.get("source_url") or "").strip(),
-                "has_inline_payload": bool(
-                    payload.get("payload_bytes_base64") or payload.get("content_base64")
-                ),
+                "has_inline_payload": bool(payload.get("payload_bytes_base64") or payload.get("content_base64")),
                 "person_identity_key": str(payload.get("person_identity_key") or "").strip(),
                 "company_key": str(payload.get("company_key") or "").strip(),
                 "target_company": str(payload.get("target_company") or payload.get("company") or "").strip(),
@@ -50440,13 +50767,17 @@ class SourcingOrchestrator:
     def refresh_company_public_web_assets(self, payload: dict[str, Any]) -> dict[str, Any]:
         payload = dict(payload or {})
         options = dict(payload.get("options") or {})
-        collection_mode = str(
-            options.get("collection_mode")
-            or payload.get("collection_mode")
-            or options.get("search_provider")
-            or payload.get("search_provider")
-            or "seed_url_only"
-        ).strip().lower()
+        collection_mode = (
+            str(
+                options.get("collection_mode")
+                or payload.get("collection_mode")
+                or options.get("search_provider")
+                or payload.get("search_provider")
+                or "seed_url_only"
+            )
+            .strip()
+            .lower()
+        )
         search_provider = (
             build_search_provider(self.acquisition_engine.settings.search)
             if collection_mode == "provider_search"
@@ -51368,7 +51699,9 @@ class SourcingOrchestrator:
                     or candidate_payload.get("company")
                     or ""
                 ).strip(),
-                "avatar_url": str(candidate_payload.get("avatar_url") or candidate_payload.get("photo_url") or "").strip(),
+                "avatar_url": str(
+                    candidate_payload.get("avatar_url") or candidate_payload.get("photo_url") or ""
+                ).strip(),
                 "linkedin_url": linkedin_url,
                 "primary_email": str(candidate_payload.get("primary_email") or "").strip(),
                 "follow_up_status": follow_up_status,
@@ -51515,7 +51848,9 @@ class SourcingOrchestrator:
             "source": str(metadata_payload.get("source") or "").strip(),
             "import_scope": import_scope_payload,
             "job_scoped_candidate_markers": [
-                dict(item) for item in list(metadata_payload.get("job_scoped_candidate_markers") or []) if isinstance(item, dict)
+                dict(item)
+                for item in list(metadata_payload.get("job_scoped_candidate_markers") or [])
+                if isinstance(item, dict)
             ],
             "excel_intake": {
                 key: value
@@ -52802,7 +53137,9 @@ class SourcingOrchestrator:
             source = dict(payload or {})
             if bool(normalize_execution_preferences(source).get("force_fresh_run")):
                 return True
-            return bool(normalize_execution_preferences(dict(source.get("execution_preferences") or {})).get("force_fresh_run"))
+            return bool(
+                normalize_execution_preferences(dict(source.get("execution_preferences") or {})).get("force_fresh_run")
+            )
 
         decision = dict(plan_review_session.get("decision") or {})
         if _payload_requests_force_fresh(decision):
@@ -53362,7 +53699,9 @@ class SourcingOrchestrator:
             or ""
         ).strip()
         matched_job = dict(self.store.get_job(source_run_id) or {}) if source_run_id else {}
-        strategy = "reuse_completed" if str(matched_job.get("status") or "").strip() == "completed" else "reuse_snapshot"
+        strategy = (
+            "reuse_completed" if str(matched_job.get("status") or "").strip() == "completed" else "reuse_snapshot"
+        )
         request_payload = request.to_record()
         explanation = self._build_dispatch_request_family_match_explanation(
             request_payload=request_payload,
@@ -54055,6 +54394,7 @@ class SourcingOrchestrator:
             acquisition_progress=acquisition_progress,
             acquisition_state=acquisition_state,
         )
+
         def _task_progress_recorded(progress_payload: dict[str, Any], acquisition_task: AcquisitionTask) -> bool:
             return str(acquisition_task.task_id or "").strip() in {
                 str(task_id or "").strip()
@@ -55137,9 +55477,7 @@ class SourcingOrchestrator:
             organization_execution_profile=organization_execution_profile,
             summary_payload=summary,
             effective_execution_semantics=effective_execution_semantics,
-            baseline_selection_explanation=dict(
-                plan_asset_reuse_plan.get("baseline_selection_explanation") or {}
-            ),
+            baseline_selection_explanation=dict(plan_asset_reuse_plan.get("baseline_selection_explanation") or {}),
             publish_lifecycle=False,
         )
         if not result_view:
@@ -55271,10 +55609,15 @@ class SourcingOrchestrator:
             or candidate_doc_payload.get("company_roster_background_reconcile")
             or candidate_doc_payload.get("snapshot")
         )
-        if not isinstance(search_seed_snapshot, SearchSeedSnapshot) and not isinstance(
-            roster_snapshot,
-            CompanyRosterSnapshot,
-        ) and not candidate_doc_search_seed_projection_ready and not candidate_doc_roster_projection_ready:
+        if (
+            not isinstance(search_seed_snapshot, SearchSeedSnapshot)
+            and not isinstance(
+                roster_snapshot,
+                CompanyRosterSnapshot,
+            )
+            and not candidate_doc_search_seed_projection_ready
+            and not candidate_doc_roster_projection_ready
+        ):
             return {"status": "skipped", "reason": "candidate_list_terminal_evidence_missing"}
 
         hydrated_state = dict(acquisition_state)
@@ -55826,7 +56169,9 @@ class SourcingOrchestrator:
             state["candidates"] = candidates
         if evidence:
             evidence_records = [item for item in evidence if isinstance(item, EvidenceRecord)]
-            evidence_records.extend(_evidence_records_from_payload([item for item in evidence if isinstance(item, dict)]))
+            evidence_records.extend(
+                _evidence_records_from_payload([item for item in evidence if isinstance(item, dict)])
+            )
             state["evidence"] = evidence_records
         if candidate_doc_path is not None or candidates:
             state["linkedin_stage_completed"] = True
@@ -56152,11 +56497,7 @@ class SourcingOrchestrator:
             if str(dict(item).get("item_kind") or "").strip() in _POST_PROFILE_RESUME_BLOCKING_ITEM_KINDS
         ]
         if snapshot_id:
-            items = [
-                item
-                for item in items
-                if str(dict(item).get("snapshot_id") or "").strip() in {"", snapshot_id}
-            ]
+            items = [item for item in items if str(dict(item).get("snapshot_id") or "").strip() in {"", snapshot_id}]
         blocking_items: list[dict[str, Any]] = []
         for item in items:
             item_payload = dict(item)
@@ -56388,8 +56729,13 @@ class SourcingOrchestrator:
             registry_raw_paths={},
         )
         target_company = str(overlay_payload.get("target_company") or request.target_company or "").strip()
-        snapshot_id = str(overlay_payload.get("snapshot_id") or dict(overlay_info or {}).get("snapshot_id") or "").strip()
-        asset_view = str(overlay_payload.get("asset_view") or request.asset_view or "canonical_merged").strip() or "canonical_merged"
+        snapshot_id = str(
+            overlay_payload.get("snapshot_id") or dict(overlay_info or {}).get("snapshot_id") or ""
+        ).strip()
+        asset_view = (
+            str(overlay_payload.get("asset_view") or request.asset_view or "canonical_merged").strip()
+            or "canonical_merged"
+        )
         run_token = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         analysis_dir = self.jobs_dir / f"{normalized_job_id}.outreach_layering" / run_token
         analysis_dir.mkdir(parents=True, exist_ok=True)
@@ -56416,8 +56762,7 @@ class SourcingOrchestrator:
             "layer_3_mainland_china_experience_or_chinese_language",
         ]
         layer_counts = {
-            key: int((analysis.get("layers") or {}).get(key, {}).get("count") or 0)
-            for key in primary_layer_keys
+            key: int((analysis.get("layers") or {}).get(key, {}).get("count") or 0) for key in primary_layer_keys
         }
         summary_payload = {
             "status": "completed",
@@ -56562,10 +56907,7 @@ class SourcingOrchestrator:
                     outreach_layering=cached_summary,
                 )
                 return cached_summary
-            if (
-                allow_background_defer
-                and str(request.target_scope or "").strip().lower() == "full_company_asset"
-            ):
+            if allow_background_defer and str(request.target_scope or "").strip().lower() == "full_company_asset":
                 deferred_summary_payload = {
                     "status": "deferred",
                     "target_company": target_company,
@@ -57109,14 +57451,22 @@ class SourcingOrchestrator:
         for worker_kind, workers in grouped_workers.items():
             if not workers:
                 continue
-            markers = [dict(dict(worker.get("output") or {}).get("inline_incremental_ingest") or {}) for worker in workers]
+            markers = [
+                dict(dict(worker.get("output") or {}).get("inline_incremental_ingest") or {}) for worker in workers
+            ]
             snapshot_id = next(
-                (str(marker.get("snapshot_id") or "").strip() for marker in markers if str(marker.get("snapshot_id") or "").strip()),
+                (
+                    str(marker.get("snapshot_id") or "").strip()
+                    for marker in markers
+                    if str(marker.get("snapshot_id") or "").strip()
+                ),
                 "",
             )
             if not snapshot_id:
                 continue
-            worker_ids = [int(worker.get("worker_id") or 0) for worker in workers if int(worker.get("worker_id") or 0) > 0]
+            worker_ids = [
+                int(worker.get("worker_id") or 0) for worker in workers if int(worker.get("worker_id") or 0) > 0
+            ]
             candidate_ids = _dedupe_texts(
                 candidate_id
                 for marker in markers
@@ -57157,7 +57507,9 @@ class SourcingOrchestrator:
                 ]
                 apply_result.update(
                     {
-                        "entry_count": max((int(marker.get("entry_count") or 0) for marker in inline_apply_markers), default=0),
+                        "entry_count": max(
+                            (int(marker.get("entry_count") or 0) for marker in inline_apply_markers), default=0
+                        ),
                         "added_entry_count": max(
                             (int(marker.get("added_entry_count") or 0) for marker in inline_apply_markers),
                             default=0,
@@ -57254,7 +57606,11 @@ class SourcingOrchestrator:
                 existing_value = existing.get(key)
                 if existing_value in (None, "", [], {}):
                     continue
-                if incoming.get(key) in (None, "", [], {}) or stale_message or incoming_analysis_stage != "stage_2_final":
+                if (
+                    incoming.get(key) in (None, "", [], {})
+                    or stale_message
+                    or incoming_analysis_stage != "stage_2_final"
+                ):
                     incoming[key] = existing_value
         # Candidate source is public-serving metadata. Preserve the existing
         # terminal source unless the incoming writer provides an explicit source
@@ -57656,7 +58012,15 @@ class SourcingOrchestrator:
         artifact_path: str = "",
         execution_bundle_payload: dict[str, Any] | None = None,
     ) -> None:
-        return self._excel_intake_owner._save_excel_intake_job_state(job_id=job_id, request=request, status=status, stage=stage, summary_payload=summary_payload, artifact_path=artifact_path, execution_bundle_payload=execution_bundle_payload)
+        return self._excel_intake_owner._save_excel_intake_job_state(
+            job_id=job_id,
+            request=request,
+            status=status,
+            stage=stage,
+            summary_payload=summary_payload,
+            artifact_path=artifact_path,
+            execution_bundle_payload=execution_bundle_payload,
+        )
 
     @staticmethod
     def _compact_excel_intake_review_candidate(candidate: dict[str, Any], *, ordinal: int) -> dict[str, Any]:
@@ -57674,7 +58038,9 @@ class SourcingOrchestrator:
         max_review_rows: int = 500,
         max_matched_rows: int = 500,
     ) -> dict[str, Any]:
-        return self._excel_intake_owner._persist_excel_intake_row_manifest(job_id=job_id, result=result, max_review_rows=max_review_rows, max_matched_rows=max_matched_rows)
+        return self._excel_intake_owner._persist_excel_intake_row_manifest(
+            job_id=job_id, result=result, max_review_rows=max_review_rows, max_matched_rows=max_matched_rows
+        )
 
     def _compact_excel_intake_job_summary(
         self,
@@ -57684,7 +58050,9 @@ class SourcingOrchestrator:
         request: JobRequest,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._excel_intake_owner._compact_excel_intake_job_summary(job_id=job_id, result=result, request=request, payload=payload)
+        return self._excel_intake_owner._compact_excel_intake_job_summary(
+            job_id=job_id, result=result, request=request, payload=payload
+        )
 
     def _excel_intake_current_job_candidate_marker(self, result: dict[str, Any]) -> dict[str, Any]:
         return self._excel_intake_owner._excel_intake_current_job_candidate_marker(result)
@@ -57701,7 +58069,9 @@ class SourcingOrchestrator:
         *,
         stale_after_seconds: int,
     ) -> tuple[bool, str]:
-        return self._excel_intake_owner._excel_intake_job_recovery_eligible(job, stale_after_seconds=stale_after_seconds)
+        return self._excel_intake_owner._excel_intake_job_recovery_eligible(
+            job, stale_after_seconds=stale_after_seconds
+        )
 
     def _recover_stale_excel_intake_jobs_once(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._excel_intake_owner._recover_stale_excel_intake_jobs_once(payload)
@@ -59554,7 +59924,7 @@ class SourcingOrchestrator:
                             normalized_job_id,
                             assume_lock=False,
                             allow_stale_lease_takeover=False,
-                    )
+                        )
                     latest_job = self.store.get_job(normalized_job_id) or {}
                     if self._job_is_terminal(latest_job):
                         return {
@@ -59649,9 +60019,11 @@ class SourcingOrchestrator:
             or str(artifact_summary.get("status") or "").strip().lower() == "completed"
         )
         stage2_final = str(artifact_summary.get("analysis_stage") or "stage_2_final").strip() == "stage_2_final"
-        deferred_evidence = bool(job_summary.get("workflow_completion_deferred")) or bool(
-            dict(job_summary.get("candidate_source") or {}).get("asset_population_finalization_deferred")
-        ) or bool(dict(artifact_summary.get("candidate_source") or {}).get("asset_population_finalization_deferred"))
+        deferred_evidence = (
+            bool(job_summary.get("workflow_completion_deferred"))
+            or bool(dict(job_summary.get("candidate_source") or {}).get("asset_population_finalization_deferred"))
+            or bool(dict(artifact_summary.get("candidate_source") or {}).get("asset_population_finalization_deferred"))
+        )
         deferred_evidence = deferred_evidence or terminal_result_view_proof
         if not terminal_artifact and stage2_final and deferred_evidence:
             proof_artifact = self._build_terminal_workflow_artifact_from_result_view_proof(
@@ -59664,12 +60036,8 @@ class SourcingOrchestrator:
                 artifact_path_value = str(artifact.get("artifact_path") or "").strip()
                 artifact_path_source = "terminal_result_view_proof"
                 terminal_result_view_proof = bool(artifact.get("terminal_result_view_completion_proof"))
-                terminal_result_view_proof_payload = dict(
-                    artifact.get("terminal_result_view_completion_proof") or {}
-                )
-                terminal_result_view_proof_source = str(
-                    terminal_result_view_proof_payload.get("source") or ""
-                ).strip()
+                terminal_result_view_proof_payload = dict(artifact.get("terminal_result_view_completion_proof") or {})
+                terminal_result_view_proof_source = str(terminal_result_view_proof_payload.get("source") or "").strip()
                 terminal_artifact = True
                 deferred_evidence = True
         if not terminal_artifact or not stage2_final or not deferred_evidence:
@@ -60253,14 +60621,10 @@ class SourcingOrchestrator:
                     "reason": "profile_prefetch_workers_still_inflight",
                     "snapshot_id": str(acquisition_state.get("snapshot_id") or snapshot_dir.name),
                     "candidate_count": int(
-                        company_roster_update.get("candidate_count")
-                        or search_seed_update.get("candidate_count")
-                        or 0
+                        company_roster_update.get("candidate_count") or search_seed_update.get("candidate_count") or 0
                     ),
                     "evidence_count": int(
-                        company_roster_update.get("evidence_count")
-                        or search_seed_update.get("evidence_count")
-                        or 0
+                        company_roster_update.get("evidence_count") or search_seed_update.get("evidence_count") or 0
                     ),
                     "remaining_worker_count": len(profile_prefetch_blockers),
                     "remaining_worker_ids": [
@@ -60500,9 +60864,7 @@ class SourcingOrchestrator:
                 if isinstance(item, dict):
                     enriched = dict(item)
                     enriched.setdefault("takeover_intent_job_id", job_id)
-                    enriched["takeover_intent_classification"] = str(
-                        dict(intent or {}).get("classification") or ""
-                    )
+                    enriched["takeover_intent_classification"] = str(dict(intent or {}).get("classification") or "")
                     results.append(enriched)
                     if str(enriched.get("status") or "").strip() == "takeover_failed":
                         resume_had_retryable_failure = True
@@ -60735,9 +61097,7 @@ class SourcingOrchestrator:
                 "workflow_runner_pid": int(takeover_state.get("runner_pid") or 0),
                 "workflow_runner_alive": bool(takeover_state.get("runner_alive")),
                 "terminal_workflow_reconcile_lease": release_completed_reconcile_lease,
-                "terminal_stage_artifact_resume": dict(
-                    takeover_state.get("terminal_stage_artifact_resume") or {}
-                ),
+                "terminal_stage_artifact_resume": dict(takeover_state.get("terminal_stage_artifact_resume") or {}),
             },
         )
         return {
@@ -60817,11 +61177,7 @@ class SourcingOrchestrator:
                 "candidate_checkpoint_terminal": False,
             }
         blocked_terminal_resume = next(
-            (
-                state
-                for state in terminal_resume_states
-                if str(state.get("status") or "") in {"blocked", "unknown"}
-            ),
+            (state for state in terminal_resume_states if str(state.get("status") or "") in {"blocked", "unknown"}),
             {},
         )
         if blocked_terminal_resume:
@@ -60831,9 +61187,7 @@ class SourcingOrchestrator:
                 "allowed": False,
                 "candidate_checkpoint_terminal": True,
                 "terminal_checkpoint_resume": blocked_terminal_resume,
-                "post_profile_resume_barrier": dict(
-                    blocked_terminal_resume.get("post_profile_resume_barrier") or {}
-                ),
+                "post_profile_resume_barrier": dict(blocked_terminal_resume.get("post_profile_resume_barrier") or {}),
             }
 
         open_work = self._job_scoped_recovery_open_work_summary(
@@ -60904,9 +61258,7 @@ class SourcingOrchestrator:
         snapshot_id = str(acquisition_state.get("snapshot_id") or "").strip()
         if not snapshot_id:
             snapshot_id = str(
-                lifecycle.get("projection_source_snapshot_id")
-                or lifecycle.get("current_snapshot_id")
-                or ""
+                lifecycle.get("projection_source_snapshot_id") or lifecycle.get("current_snapshot_id") or ""
             ).strip()
         snapshot_dir = self._resolved_acquisition_snapshot_dir(acquisition_state)
         if not isinstance(snapshot_dir, Path) and snapshot_id:
@@ -61132,9 +61484,8 @@ class SourcingOrchestrator:
         ):
             classification = str(terminal_stage_artifact_resume.get("classification") or classification)
             allowed = True
-        elif (
-            classification == "healthy_running"
-            and bool(terminal_stage_artifact_resume.get("candidate_checkpoint_terminal"))
+        elif classification == "healthy_running" and bool(
+            terminal_stage_artifact_resume.get("candidate_checkpoint_terminal")
         ):
             classification = str(terminal_stage_artifact_resume.get("classification") or classification)
         lease_guard_reason = ""
@@ -61649,7 +62000,9 @@ class SourcingOrchestrator:
         for job_id in sorted(candidate_job_ids):
             job = self.store.get_job(job_id)
             job_summary = dict((job or {}).get("summary") or {})
-            request = JobRequest.from_payload(dict((job or {}).get("request") or {})) if job is not None else JobRequest()
+            request = (
+                JobRequest.from_payload(dict((job or {}).get("request") or {})) if job is not None else JobRequest()
+            )
             outreach_layering_pending = (
                 self._outreach_layering_requires_background_reconcile(
                     request=request,
@@ -61890,14 +62243,8 @@ class SourcingOrchestrator:
             or ""
         ).strip()
         candidate_source = dict(job_summary.get("candidate_source") or {})
-        current_snapshot_id = str(
-            result_view.get("snapshot_id") or candidate_source.get("snapshot_id") or ""
-        ).strip()
-        if (
-            not baseline_snapshot_id
-            or not current_snapshot_id
-            or baseline_snapshot_id == current_snapshot_id
-        ):
+        current_snapshot_id = str(result_view.get("snapshot_id") or candidate_source.get("snapshot_id") or "").strip()
+        if not baseline_snapshot_id or not current_snapshot_id or baseline_snapshot_id == current_snapshot_id:
             return {}
         served_candidate_count = _coerce_int(
             dict(result_view.get("summary") or {}).get("candidate_count")
@@ -61908,9 +62255,7 @@ class SourcingOrchestrator:
         plan_payload = dict(job.get("plan") or {})
         asset_reuse_plan = dict(plan_payload.get("asset_reuse_plan") or {})
         baseline_candidate_count = _coerce_int(
-            asset_reuse_plan.get("baseline_candidate_count")
-            or metadata.get("baseline_candidate_count")
-            or 0,
+            asset_reuse_plan.get("baseline_candidate_count") or metadata.get("baseline_candidate_count") or 0,
             0,
         )
         if baseline_candidate_count <= 0:
@@ -61920,9 +62265,9 @@ class SourcingOrchestrator:
                     snapshot_id=baseline_snapshot_id,
                     allow_materialization_fallback=False,
                 )
-                baseline_candidate_count = len(
-                    list(baseline_candidate_source.get("candidates") or [])
-                ) or _coerce_int(baseline_candidate_source.get("candidate_count"), 0)
+                baseline_candidate_count = len(list(baseline_candidate_source.get("candidates") or [])) or _coerce_int(
+                    baseline_candidate_source.get("candidate_count"), 0
+                )
             except Exception:
                 baseline_candidate_count = 0
         if baseline_candidate_count <= 0 or served_candidate_count >= baseline_candidate_count:
@@ -62062,7 +62407,9 @@ class SourcingOrchestrator:
                 self.update_job_result_lifecycle_from_materialization(
                     job_id=normalized_job_id,
                     served_snapshot_id=snapshot_id,
-                    served_candidate_count=_coerce_int(dict(persisted_view.get("summary") or {}).get("candidate_count"), 0),
+                    served_candidate_count=_coerce_int(
+                        dict(persisted_view.get("summary") or {}).get("candidate_count"), 0
+                    ),
                     current_snapshot_id=snapshot_id,
                     view_id=str(persisted_view.get("view_id") or "").strip(),
                 )
@@ -62086,9 +62433,7 @@ class SourcingOrchestrator:
             "asset_view": str(source_payload.get("asset_view") or view_payload.get("asset_view") or "").strip(),
             "source_path": str(source_payload.get("source_path") or view_payload.get("source_path") or "").strip(),
             "authoritative_snapshot_id": str(
-                source_payload.get("authoritative_snapshot_id")
-                or view_payload.get("authoritative_snapshot_id")
-                or ""
+                source_payload.get("authoritative_snapshot_id") or view_payload.get("authoritative_snapshot_id") or ""
             ).strip(),
             "candidate_count": _coerce_int(
                 source_payload.get("candidate_count")
@@ -62113,11 +62458,7 @@ class SourcingOrchestrator:
         ).strip()
         if overlay_path:
             compact["asset_population_overlay_path"] = overlay_path
-        return {
-            key: value
-            for key, value in compact.items()
-            if value is not None and value != "" and value != 0
-        }
+        return {key: value for key, value in compact.items() if value is not None and value != "" and value != 0}
 
     def _reconcile_completed_workflow_after_result_view_repair(
         self,
@@ -62550,7 +62891,9 @@ class SourcingOrchestrator:
             snapshot_dir_value = str(metadata.get("root_snapshot_dir") or metadata.get("snapshot_dir") or "").strip()
             snapshot_id = Path(snapshot_dir_value).expanduser().name if snapshot_dir_value else ""
             if not snapshot_id:
-                snapshot_id = str(self._worker_inline_incremental_apply_marker(dict(worker)).get("snapshot_id") or "").strip()
+                snapshot_id = str(
+                    self._worker_inline_incremental_apply_marker(dict(worker)).get("snapshot_id") or ""
+                ).strip()
             if not snapshot_id:
                 continue
             item_id = self._local_apply_closure_item_id(
@@ -62889,8 +63232,7 @@ class SourcingOrchestrator:
             reconcile_kind="snapshot_materialization",
             status="completed",
             detail=(
-                "Background snapshot materialization completed without rewriting "
-                "canonical final workflow publication."
+                "Background snapshot materialization completed without rewriting canonical final workflow publication."
             ),
             snapshot_id=snapshot_id,
             payload=dict(updated_summary.get("background_snapshot_materialization") or {}),
@@ -63699,11 +64041,7 @@ class SourcingOrchestrator:
         snapshot_id = str((apply_result or {}).get("snapshot_id") or snapshot_dir.name).strip()
         if not snapshot_id:
             return {}
-        worker_ids = [
-            int(value)
-            for value in list(apply_result.get("worker_ids") or [])
-            if int(value or 0) > 0
-        ]
+        worker_ids = [int(value) for value in list(apply_result.get("worker_ids") or []) if int(value or 0) > 0]
         item_id = f"{normalized_job_id}:live_roster_discovery_lane:{snapshot_id}"
         roster_snapshot = apply_result.get("roster_snapshot")
         target_company = str(getattr(roster_snapshot, "target_company", "") or "").strip()
@@ -63718,11 +64056,7 @@ class SourcingOrchestrator:
             "item_kind": LIVE_ROSTER_DISCOVERY_LANE_ITEM_KIND,
             "target_company": target_company,
             "source_worker_ids": worker_ids,
-            "apply_result": {
-                key: value
-                for key, value in dict(apply_result or {}).items()
-                if key != "roster_snapshot"
-            },
+            "apply_result": {key: value for key, value in dict(apply_result or {}).items() if key != "roster_snapshot"},
             "migration_phase": "W6_live_roster_discovery_lane_proof",
         }
         try:
@@ -63811,7 +64145,14 @@ class SourcingOrchestrator:
         search_seed_snapshot: SearchSeedSnapshot | None,
         submit_provider: bool = True,
     ) -> dict[str, Any]:
-        return self._profile_fetch_owner._queue_background_profile_prefetch_from_search_seed_snapshot(job_id=job_id, request=request, plan_payload=plan_payload, snapshot_dir=snapshot_dir, search_seed_snapshot=search_seed_snapshot, submit_provider=submit_provider)
+        return self._profile_fetch_owner._queue_background_profile_prefetch_from_search_seed_snapshot(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            snapshot_dir=snapshot_dir,
+            search_seed_snapshot=search_seed_snapshot,
+            submit_provider=submit_provider,
+        )
 
     def _queue_background_profile_prefetch_after_harvest_ingest(
         self,
@@ -63822,7 +64163,13 @@ class SourcingOrchestrator:
         snapshot_dir: Path,
         defer_provider_submit: bool = False,
     ) -> dict[str, Any]:
-        return self._profile_fetch_owner._queue_background_profile_prefetch_after_harvest_ingest(job_id=job_id, request=request, plan_payload=plan_payload, snapshot_dir=snapshot_dir, defer_provider_submit=defer_provider_submit)
+        return self._profile_fetch_owner._queue_background_profile_prefetch_after_harvest_ingest(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            snapshot_dir=snapshot_dir,
+            defer_provider_submit=defer_provider_submit,
+        )
 
     @staticmethod
     def _profile_prefetch_indicates_pending_provider_work(profile_prefetch: dict[str, Any]) -> bool:
@@ -63857,7 +64204,16 @@ class SourcingOrchestrator:
         trigger_reason: str,
         defer_provider_submit: bool = True,
     ) -> dict[str, Any]:
-        return self._profile_fetch_owner._trigger_profile_prefetch_refill(job_id=job_id, request=request, plan_payload=plan_payload, snapshot_dir=snapshot_dir, source_worker_ids=source_worker_ids, trigger_source=trigger_source, trigger_reason=trigger_reason, defer_provider_submit=defer_provider_submit)
+        return self._profile_fetch_owner._trigger_profile_prefetch_refill(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            snapshot_dir=snapshot_dir,
+            source_worker_ids=source_worker_ids,
+            trigger_source=trigger_source,
+            trigger_reason=trigger_reason,
+            defer_provider_submit=defer_provider_submit,
+        )
 
     def _run_profile_prefetch_refill_queue_once(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._profile_fetch_owner._run_profile_prefetch_refill_queue_once(payload)
@@ -63881,9 +64237,7 @@ class SourcingOrchestrator:
         """
 
         normalized_job_id = str(job_id or "").strip()
-        source_worker_id_values = [
-            int(item) for item in list(source_worker_ids or []) if int(item or 0) > 0
-        ]
+        source_worker_id_values = [int(item) for item in list(source_worker_ids or []) if int(item or 0) > 0]
         started_at = _utc_now_iso()
         started_monotonic = time.perf_counter()
         if not normalized_job_id:
@@ -63908,7 +64262,7 @@ class SourcingOrchestrator:
                     "refill_daemon_signal_only": True,
                     "summary_paths": [],
                 },
-        }
+            }
         trigger_record = self._trigger_profile_prefetch_refill(
             job_id=normalized_job_id,
             request=request,
@@ -63970,7 +64324,14 @@ class SourcingOrchestrator:
         source_worker_ids: list[int],
         source: str,
     ) -> dict[str, Any]:
-        return self._profile_fetch_owner._handle_harvest_profile_completion_event(job=job, request=request, plan_payload=plan_payload, snapshot_dir=snapshot_dir, source_worker_ids=source_worker_ids, source=source)
+        return self._profile_fetch_owner._handle_harvest_profile_completion_event(
+            job=job,
+            request=request,
+            plan_payload=plan_payload,
+            snapshot_dir=snapshot_dir,
+            source_worker_ids=source_worker_ids,
+            source=source,
+        )
 
     def _synchronize_snapshot_candidate_documents(
         self,
@@ -64213,11 +64574,7 @@ class SourcingOrchestrator:
                     "profile_url_chunk_limit",
                 ):
                     if key in progress or key in apply_result:
-                        marker[key] = (
-                            progress.get(key)
-                            if key in progress
-                            else apply_result.get(key)
-                        )
+                        marker[key] = progress.get(key) if key in progress else apply_result.get(key)
                 if progress:
                     marker["profile_apply_progress_committed"] = False
             for key in (
@@ -64387,9 +64744,7 @@ class SourcingOrchestrator:
             if int(worker.get("worker_id") or 0) > 0
         ]
         new_worker_ids = [
-            int(item)
-            for item in list(resolved_apply_result.get("worker_ids") or [])
-            if int(item or 0) > 0
+            int(item) for item in list(resolved_apply_result.get("worker_ids") or []) if int(item or 0) > 0
         ] or [
             int(worker.get("worker_id") or 0)
             for worker in list(newly_applied_workers or [])
@@ -64575,9 +64930,7 @@ class SourcingOrchestrator:
         output = dict(dict(worker or {}).get("output") or {})
         summary = dict(output.get("summary") or {})
         requested_count = _coerce_int(
-            summary.get("requested_url_count")
-            or summary.get("requested_urls")
-            or output.get("requested_url_count"),
+            summary.get("requested_url_count") or summary.get("requested_urls") or output.get("requested_url_count"),
             0,
         )
         unresolved_count = _coerce_int(
@@ -64596,7 +64949,9 @@ class SourcingOrchestrator:
         source: str,
         reason: str = "harvest_profile_terminal_without_materializable_payload",
     ) -> dict[str, Any]:
-        return self._profile_fetch_owner._record_harvest_profile_terminal_noop_ingest(worker=worker, snapshot_id=snapshot_id, source=source, reason=reason)
+        return self._profile_fetch_owner._record_harvest_profile_terminal_noop_ingest(
+            worker=worker, snapshot_id=snapshot_id, source=source, reason=reason
+        )
 
     def _mark_inline_incremental_materialization_pending(
         self,
@@ -65181,16 +65536,20 @@ class SourcingOrchestrator:
         normalized_defer_full_snapshot_reason = str(defer_full_snapshot_reason or "").strip()
         defer_full_snapshot_requested = bool(normalized_defer_full_snapshot_reason)
         if resolved_remaining_workers or defer_full_snapshot_requested:
-            board_visible_result = self._publish_harvest_prefetch_board_visible_delta_item(
-                job=job,
-                request=request,
-                snapshot_dir=snapshot_dir,
-                candidate_ids=list(candidate_ids or []),
-                applied_worker_ids=applied_worker_ids,
-                reason="inline_background_harvest_prefetch_partial_board_visible",
-                profile_delta_candidate_records=profile_delta_candidate_records,
-                inline_apply_chunk_limit=board_visible_inline_apply_chunk_limit,
-            ) if worker_kind == "harvest_prefetch" and candidate_ids else {}
+            board_visible_result = (
+                self._publish_harvest_prefetch_board_visible_delta_item(
+                    job=job,
+                    request=request,
+                    snapshot_dir=snapshot_dir,
+                    candidate_ids=list(candidate_ids or []),
+                    applied_worker_ids=applied_worker_ids,
+                    reason="inline_background_harvest_prefetch_partial_board_visible",
+                    profile_delta_candidate_records=profile_delta_candidate_records,
+                    inline_apply_chunk_limit=board_visible_inline_apply_chunk_limit,
+                )
+                if worker_kind == "harvest_prefetch" and candidate_ids
+                else {}
+            )
             delta_sync: dict[str, Any] = dict(
                 board_visible_result.get("delta_control_plane_sync")
                 or {"status": "skipped", "reason": "candidate_delta_not_requested"}
@@ -65199,16 +65558,11 @@ class SourcingOrchestrator:
                 board_visible_result.get("board_visible_patch")
                 or {"status": "skipped", "reason": "candidate_delta_not_requested"}
             )
-            board_visible_apply_item: dict[str, Any] = dict(
-                board_visible_result.get("board_visible_apply_item") or {}
-            )
-            normalized_defer_contract = (
-                str(defer_full_snapshot_contract or "").strip()
-                or (
-                    "pre_profile_full_snapshot_materialization_deferred"
-                    if defer_full_snapshot_requested
-                    else "board_visible_profile_delta_deferred"
-                )
+            board_visible_apply_item: dict[str, Any] = dict(board_visible_result.get("board_visible_apply_item") or {})
+            normalized_defer_contract = str(defer_full_snapshot_contract or "").strip() or (
+                "pre_profile_full_snapshot_materialization_deferred"
+                if defer_full_snapshot_requested
+                else "board_visible_profile_delta_deferred"
             )
             sync_result = {
                 "status": "deferred",
@@ -65319,9 +65673,7 @@ class SourcingOrchestrator:
                 sync_status = "failed"
                 sync_reason = str(final_board_visible_patch.get("reason") or "profile_delta_board_visible_failed")
             materialization_contract = (
-                "board_visible_profile_delta"
-                if candidate_ids
-                else "snapshot_full_materialization_queued"
+                "board_visible_profile_delta" if candidate_ids else "snapshot_full_materialization_queued"
             )
             sync_result = {
                 "status": sync_status,
@@ -65377,7 +65729,9 @@ class SourcingOrchestrator:
                     detail="Inline workflow served profile delta through board-visible projection without full snapshot rebuild.",
                     snapshot_id=snapshot_id,
                     worker_ids=applied_worker_ids,
-                    payload={"sync_result": {key: value for key, value in sync_result.items() if key != "state_updates"}},
+                    payload={
+                        "sync_result": {key: value for key, value in sync_result.items() if key != "state_updates"}
+                    },
                 )
             return sync_result
         if emit_materialization_events:
@@ -65423,9 +65777,7 @@ class SourcingOrchestrator:
         if str(full_snapshot_board_visible_patch.get("status") or "").strip().lower() == "completed":
             sync_result["board_visible_patch"] = full_snapshot_board_visible_patch
         if board_visible_result:
-            sync_result["delta_control_plane_sync"] = dict(
-                board_visible_result.get("delta_control_plane_sync") or {}
-            )
+            sync_result["delta_control_plane_sync"] = dict(board_visible_result.get("delta_control_plane_sync") or {})
             if str(full_snapshot_board_visible_patch.get("status") or "").strip().lower() != "completed":
                 sync_result["board_visible_patch"] = final_board_visible_patch
             else:
@@ -65503,9 +65855,7 @@ class SourcingOrchestrator:
         job_id = str(job.get("job_id") or "").strip()
         if not job_id:
             return {"status": "skipped", "reason": "job_id_missing"}
-        normalized_allowed_worker_ids = {
-            int(item) for item in set(allowed_worker_ids or set()) if int(item or 0) > 0
-        }
+        normalized_allowed_worker_ids = {int(item) for item in set(allowed_worker_ids or set()) if int(item or 0) > 0}
         profile_prefetch_before_writer = dict(pre_materialization_profile_prefetch or {})
         if worker_kind == "harvest_prefetch" and not profile_prefetch_before_writer:
             pre_writer_completed_workers, _ = self._collect_inline_incremental_worker_batch(
@@ -65675,8 +66025,8 @@ class SourcingOrchestrator:
                             return {
                                 "status": "skipped",
                                 "reason": str(apply_result.get("reason") or "harvest_prefetch_apply_skipped"),
-                            "writer_lock": dict(writer_lock_metrics),
-                        }
+                                "writer_lock": dict(writer_lock_metrics),
+                            }
                     else:
                         replay_candidate_ids = self._candidate_ids_from_inline_incremental_apply_markers(
                             workers=completed_workers,
@@ -65969,9 +66319,7 @@ class SourcingOrchestrator:
             profile_prefetch["post_harvest_ingest_refill_deferred_to_daemon"] = True
             profile_prefetch["direct_refill_enabled"] = False
             phase_b_refill_finished_at = _utc_now_iso()
-            phase_b_refill_elapsed_ms = int(
-                max(0.0, (time.perf_counter() - phase_b_refill_started_monotonic) * 1000)
-            )
+            phase_b_refill_elapsed_ms = int(max(0.0, (time.perf_counter() - phase_b_refill_started_monotonic) * 1000))
             profile_prefetch["prefetch_started_at"] = phase_b_refill_started_at
             profile_prefetch["prefetch_finished_at"] = phase_b_refill_finished_at
             profile_prefetch["prefetch_elapsed_ms"] = phase_b_refill_elapsed_ms
@@ -66073,14 +66421,15 @@ class SourcingOrchestrator:
         profile_delta_candidate_records = [
             dict(item)
             for item in list(apply_result.get("profile_materialized_candidate_records") or [])
-            if isinstance(item, dict)
-            and str(item.get("candidate_id") or "").strip() in candidate_ids_for_sync_set
+            if isinstance(item, dict) and str(item.get("candidate_id") or "").strip() in candidate_ids_for_sync_set
         ]
         if worker_kind == "harvest_prefetch":
             unmatched_profile_urls = _dedupe_texts(apply_result.get("unmatched_profile_urls") or [])
             requested_url_count = _coerce_int(apply_result.get("requested_url_count"), 0)
             fetched_profile_url_count = _coerce_int(apply_result.get("fetched_profile_url_count"), 0)
-            resolved_candidate_count = _coerce_int(apply_result.get("resolved_candidate_count"), len(candidate_ids_for_sync))
+            resolved_candidate_count = _coerce_int(
+                apply_result.get("resolved_candidate_count"), len(candidate_ids_for_sync)
+            )
             profile_prefetch_queue = dict(dict(profile_prefetch or {}).get("profile_prefetch_queue") or {})
             registry_terminal_summary = dict(dict(profile_prefetch or {}).get("registry_terminal_summary") or {})
             normal_wave_terminal = bool(
@@ -66202,8 +66551,7 @@ class SourcingOrchestrator:
             and not bool(profile_apply_progress_payload.get("profile_url_apply_complete"))
         )
         profile_apply_partial = bool(
-            profile_apply_partial_scope
-            and running_sync_status in {"completed", "skipped", "deferred"}
+            profile_apply_partial_scope and running_sync_status in {"completed", "skipped", "deferred"}
         )
         if worker_kind == "harvest_prefetch":
             sync_status = running_sync_status
@@ -66314,9 +66662,7 @@ class SourcingOrchestrator:
             profile_prefetch_payload = dict(profile_prefetch or {})
             profile_prefetch_metrics = dict(profile_prefetch_payload.get("metrics") or {})
             profile_prefetch_batch_plan = dict(
-                profile_prefetch_payload.get("batch_plan")
-                or profile_prefetch_payload.get("latest_batch_plan")
-                or {}
+                profile_prefetch_payload.get("batch_plan") or profile_prefetch_payload.get("latest_batch_plan") or {}
             )
             event_payload: dict[str, Any] = {
                 "kind": "profile_prefetch_phase_b_group",
@@ -66346,8 +66692,7 @@ class SourcingOrchestrator:
                     or ""
                 ).strip(),
                 "elapsed_ms": _coerce_int(
-                    profile_prefetch_payload.get("elapsed_ms")
-                    or profile_prefetch_metrics.get("prefetch_elapsed_ms"),
+                    profile_prefetch_payload.get("elapsed_ms") or profile_prefetch_metrics.get("prefetch_elapsed_ms"),
                     0,
                 ),
                 "requested_url_count": _coerce_int(profile_prefetch_payload.get("requested_url_count"), 0),
@@ -66369,9 +66714,7 @@ class SourcingOrchestrator:
             profile_prefetch_payload = dict(profile_prefetch or {})
             profile_prefetch_metrics = dict(profile_prefetch_payload.get("metrics") or {})
             profile_prefetch_batch_plan = dict(
-                profile_prefetch_payload.get("batch_plan")
-                or profile_prefetch_payload.get("latest_batch_plan")
-                or {}
+                profile_prefetch_payload.get("batch_plan") or profile_prefetch_payload.get("latest_batch_plan") or {}
             )
             self.store.append_job_event(
                 job_id,
@@ -66706,7 +67049,9 @@ class SourcingOrchestrator:
             "items": enqueued,
         }
 
-    def _list_search_seed_discovery_backfill_workers(self, payload: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def _list_search_seed_discovery_backfill_workers(
+        self, payload: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         payload = dict(payload or {})
         limit = max(1, _coerce_int(payload.get("search_seed_discovery_worker_limit"), 100))
         explicit_job_id = str(payload.get("job_id") or "").strip()
@@ -66744,10 +67089,7 @@ class SourcingOrchestrator:
         summary = dict(output.get("summary") or {})
         raw_query_spec = dict(input_payload.get("query_spec") or {})
         query_text = str(
-            raw_query_spec.get("query")
-            or input_payload.get("query")
-            or summary.get("query")
-            or ""
+            raw_query_spec.get("query") or input_payload.get("query") or summary.get("query") or ""
         ).strip()
         if not query_text:
             return {}
@@ -66773,7 +67115,11 @@ class SourcingOrchestrator:
         if worker_status == "completed" and summary_status not in {"queued", "pending", "running"}:
             return "completed", "completed", "historical_worker_completion_backfill"
         if worker_status in {"failed", "interrupted"} or summary_status in {"failed", "interrupted"}:
-            return "failed", "interrupted" if summary_status == "interrupted" else "terminal", "historical_worker_failure_backfill"
+            return (
+                "failed",
+                "interrupted" if summary_status == "interrupted" else "terminal",
+                "historical_worker_failure_backfill",
+            )
         return "running", "provider_owned", "historical_worker_owner_backfill"
 
     def _backfill_search_seed_discovery_item_for_worker(
@@ -66804,11 +67150,14 @@ class SourcingOrchestrator:
             snapshot_id = str(dict(output.get("inline_incremental_apply") or {}).get("snapshot_id") or "").strip()
         if not snapshot_id:
             return {"status": "skipped", "reason": "snapshot_id_missing", "worker_id": worker_id, "job_id": job_id}
-        employment_status = str(
-            metadata.get("employment_status")
-            or dict(output.get("summary") or {}).get("employment_status")
+        employment_status = (
+            str(
+                metadata.get("employment_status")
+                or dict(output.get("summary") or {}).get("employment_status")
+                or "current"
+            ).strip()
             or "current"
-        ).strip() or "current"
+        )
         item_id = _search_seed_discovery_query_item_id(
             job_id=job_id,
             snapshot_id=snapshot_id,
@@ -67475,7 +67824,9 @@ class SourcingOrchestrator:
         if not pending_workers:
             return {"job_id": job_id, "status": "skipped", "reason": "no_unconsumed_harvest_prefetch_workers"}
         job_result_view = self.store.get_job_result_view(job_id=job_id)
-        previous_result_view_snapshot_id = str(job_result_view.get("snapshot_id") or "").strip() if job_result_view else ""
+        previous_result_view_snapshot_id = (
+            str(job_result_view.get("snapshot_id") or "").strip() if job_result_view else ""
+        )
         snapshot_id = _resolve_reconcile_snapshot_id(
             job_summary,
             pending_workers,
@@ -67626,8 +67977,7 @@ class SourcingOrchestrator:
             profile_delta_candidate_records = [
                 dict(item)
                 for item in list(harvest_prefetch_update.get("profile_materialized_candidate_records") or [])
-                if isinstance(item, dict)
-                and str(item.get("candidate_id") or "").strip() in candidate_ids_for_sync_set
+                if isinstance(item, dict) and str(item.get("candidate_id") or "").strip() in candidate_ids_for_sync_set
             ]
             post_profile_policy = self._post_profile_completion_materialization_policy(
                 job=job,
@@ -67704,8 +68054,7 @@ class SourcingOrchestrator:
             )
             sync_status = str(sync_result.get("status") or "").strip().lower()
             profile_delta_serving_contract = (
-                str(sync_result.get("materialization_contract") or "").strip()
-                == "board_visible_profile_delta"
+                str(sync_result.get("materialization_contract") or "").strip() == "board_visible_profile_delta"
             )
             if sync_status == "deferred":
                 self._append_completed_workflow_reconcile_event(
@@ -67971,9 +68320,7 @@ class SourcingOrchestrator:
                     ),
                     current_snapshot_id=refreshed_result_view_snapshot_id,
                     delta_profile_fetched_count=fetched_delta_count if fetched_delta_count > 0 else None,
-                    delta_profile_materialized_count=materialized_delta_count
-                    if materialized_delta_count > 0
-                    else None,
+                    delta_profile_materialized_count=materialized_delta_count if materialized_delta_count > 0 else None,
                     delta_profile_board_visible_count=materialized_delta_count
                     if materialized_delta_count > 0
                     else None,
@@ -69370,22 +69717,18 @@ class SourcingOrchestrator:
             ):
                 public_overlay_outreach_layering = {
                     **existing_outreach_layering,
-                    "status": str(existing_outreach_layering.get("status") or "deferred").strip()
-                    or "deferred",
+                    "status": str(existing_outreach_layering.get("status") or "deferred").strip() or "deferred",
                     "target_company": str(
                         existing_outreach_layering.get("target_company") or request.target_company or ""
                     ).strip(),
                     "snapshot_id": str(existing_outreach_layering.get("snapshot_id") or snapshot_id).strip(),
-                    "analysis_stage": str(
-                        existing_outreach_layering.get("analysis_stage") or analysis_stage
-                    ).strip()
+                    "analysis_stage": str(existing_outreach_layering.get("analysis_stage") or analysis_stage).strip()
                     or analysis_stage,
                     "reason": str(
                         existing_outreach_layering.get("reason") or "deferred_for_asset_population_fast_path"
                     ).strip(),
                     "background_owner": str(
-                        existing_outreach_layering.get("background_owner")
-                        or "completed_workflow_reconcile"
+                        existing_outreach_layering.get("background_owner") or "completed_workflow_reconcile"
                     ).strip(),
                     "inline_overlay_layering_skipped": True,
                     "inline_overlay_layering_skip_reason": (
@@ -69535,9 +69878,7 @@ class SourcingOrchestrator:
                             "serving_projection_phase": str(
                                 row_publication.get("serving_projection_phase") or ""
                             ).strip(),
-                            "deferred_completion_reason": str(
-                                workflow_completion_blockers.get("reason") or ""
-                            ).strip(),
+                            "deferred_completion_reason": str(workflow_completion_blockers.get("reason") or "").strip(),
                         }
                 candidate_source_summary = self._apply_job_result_view_to_candidate_source(
                     candidate_source_summary,
@@ -69573,16 +69914,8 @@ class SourcingOrchestrator:
         self.store.replace_job_results(job_id, [])
         self.store.replace_manual_review_items(job_id, manual_review_items)
         if persist_job_state:
-            final_job_status = (
-                "running"
-                if workflow_completion_deferred
-                else "completed"
-            )
-            final_job_stage = (
-                "retrieving"
-                if workflow_completion_deferred
-                else "completed"
-            )
+            final_job_status = "running" if workflow_completion_deferred else "completed"
+            final_job_stage = "retrieving" if workflow_completion_deferred else "completed"
             self.store.save_job(
                 job_id=job_id,
                 job_type=job_type,
@@ -71610,9 +71943,7 @@ def _compact_public_card_materialization_summary(value: dict[str, Any] | None) -
 def _compact_public_board_visible_patch_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
     source = dict(metadata or {})
     compacted: dict[str, Any] = {}
-    card_summary = _compact_public_card_materialization_summary(
-        dict(source.get("card_materialization_summary") or {})
-    )
+    card_summary = _compact_public_card_materialization_summary(dict(source.get("card_materialization_summary") or {}))
     if card_summary:
         compacted["card_materialization_summary"] = card_summary
     for key in (
@@ -71819,9 +72150,7 @@ def _compact_public_workflow_stage_summaries(payload: dict[str, Any] | None) -> 
             compacted["background_reconcile"] = background_reconcile
         compacted_summaries[stage_key] = compacted
     return {
-        "stage_order": [
-            str(item).strip() for item in list(source.get("stage_order") or []) if str(item).strip()
-        ],
+        "stage_order": [str(item).strip() for item in list(source.get("stage_order") or []) if str(item).strip()],
         "summaries": compacted_summaries,
     }
 
@@ -72565,9 +72894,7 @@ def _progress_auto_takeover_remote_wait_guard(
 
     threshold_seconds = max(30, _env_int("WORKFLOW_PROGRESS_REMOTE_WAIT_TAKEOVER_AFTER_SECONDS", 90))
     ages = [
-        age
-        for age in (_worker_remote_wait_age_seconds(worker) for worker in remote_wait_workers)
-        if age is not None
+        age for age in (_worker_remote_wait_age_seconds(worker) for worker in remote_wait_workers) if age is not None
     ]
     max_age_seconds = max(ages) if ages else max(0, _job_runtime_idle_seconds(job))
     active_lease_count = sum(1 for worker in remote_wait_workers if _worker_lease_is_active(worker))
@@ -73737,18 +74064,18 @@ def _build_target_candidate_profile_composition(
     evidence_links = [
         dict(item) for item in list(public_web_detail.get("evidence_links") or []) if isinstance(item, dict)
     ]
-    promotions = [
-        dict(item) for item in list(public_web_detail.get("promotions") or []) if isinstance(item, dict)
-    ]
+    promotions = [dict(item) for item in list(public_web_detail.get("promotions") or []) if isinstance(item, dict)]
     latest_run = dict(public_web_detail.get("latest_run") or {})
     primary_email = str(record.get("primary_email") or "").strip()
     promoted_email = _target_candidate_profile_promoted_email(email_candidates)
     best_public_web_email = _target_candidate_profile_best_email(email_candidates)
-    selected_email = primary_email or promoted_email or str(best_public_web_email.get("normalized_value") or best_public_web_email.get("value") or "")
+    selected_email = (
+        primary_email
+        or promoted_email
+        or str(best_public_web_email.get("normalized_value") or best_public_web_email.get("value") or "")
+    )
     clean_profile_links = [
-        signal
-        for signal in profile_links
-        if bool(signal.get("clean_profile_link")) and bool(signal.get("publishable"))
+        signal for signal in profile_links if bool(signal.get("clean_profile_link")) and bool(signal.get("publishable"))
     ]
     promoted_profile_links = [
         signal for signal in profile_links if str(signal.get("promotion_status") or "") == "manually_promoted"
@@ -73775,7 +74102,9 @@ def _build_target_candidate_profile_composition(
             {
                 "kind": "email",
                 "value": selected_email,
-                "status": "primary" if primary_email else ("manually_promoted" if promoted_email else "public_web_candidate"),
+                "status": "primary"
+                if primary_email
+                else ("manually_promoted" if promoted_email else "public_web_candidate"),
                 "source": "target_candidate_primary_email" if primary_email else "public_web_search",
             }
         )
@@ -73837,7 +74166,9 @@ def _build_target_candidate_profile_composition(
             "selected_email": selected_email,
             "selected_email_source": "target_candidate_primary_email"
             if primary_email
-            else ("manual_public_web_promotion" if promoted_email else ("public_web_candidate" if selected_email else "")),
+            else (
+                "manual_public_web_promotion" if promoted_email else ("public_web_candidate" if selected_email else "")
+            ),
             "method_count": len(contact_methods),
             "methods": contact_methods,
         },
@@ -73850,7 +74181,11 @@ def _build_target_candidate_profile_composition(
             "evidence_link_count": len(evidence_links),
             "promotion_count": len(promotions),
             "promoted_signal_count": len(
-                [item for item in [*email_candidates, *profile_links] if str(item.get("promotion_status") or "") == "manually_promoted"]
+                [
+                    item
+                    for item in [*email_candidates, *profile_links]
+                    if str(item.get("promotion_status") or "") == "manually_promoted"
+                ]
             ),
         },
         "review": {
@@ -74138,7 +74473,9 @@ def _company_logo_media_asset_is_stable(asset: dict[str, Any]) -> bool:
         return False
     metadata = dict(payload.get("metadata") or {})
     content_ref = str(payload.get("content_ref") or "").strip()
-    return bool(str(metadata.get("object_key") or "").strip() or content_ref.startswith(("file://", "/api/media/assets/")))
+    return bool(
+        str(metadata.get("object_key") or "").strip() or content_ref.startswith(("file://", "/api/media/assets/"))
+    )
 
 
 def _company_logo_experience_candidates_from_profile_payload(
@@ -74251,7 +74588,9 @@ def _company_experience_name_matches(
         return False
     if observed_key in expected_keys:
         return True
-    return any(observed_key.startswith(expected_key) or expected_key.startswith(observed_key) for expected_key in expected_keys)
+    return any(
+        observed_key.startswith(expected_key) or expected_key.startswith(observed_key) for expected_key in expected_keys
+    )
 
 
 def _logo_urls_from_company_logo_payload(logo_payload: dict[str, Any]) -> list[dict[str, Any]]:

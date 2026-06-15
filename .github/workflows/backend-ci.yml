@@ -8,14 +8,37 @@ on:
       - dev
 
 # This project is tested via curated lanes (see Makefile: ci-pre-agent-contract,
-# ci-pg-contract, *-browser-gate), NOT a wholesale `unittest discover`. The PR
-# gate below mirrors the curated, PG-backed contract lane so it stays fast and
-# green. Heavier lanes (testcontainers pg-contract, browser gates, scripted
-# large-org, live) run as separate opt-in jobs / locally via make. Ruff and mypy
-# are intentionally NOT yet gating here: the branch is mid-refactor and carries
-# pre-existing lint/type debt (incl. re-export F401 false-positives that are
-# unsafe to auto-fix); fold them back in once the refactor stabilizes.
+# ci-pg-contract, *-browser-gate), NOT a wholesale `unittest discover`. The gates
+# below mirror the project's real lanes: `lint` = ruff format+check on the quality
+# targets; `contract-tests` = the PG-backed pytest contract lane. Heavier lanes
+# (testcontainers pg-contract, browser gates, scripted large-org, live) run as
+# separate opt-in jobs / locally via make. mypy is intentionally NOT yet gating:
+# the branch is mid-refactor and carries 87 pre-existing type errors; fold it back
+# in once the refactor stabilizes. (Note: ruff F401 auto-fix is unsafe here — it
+# strips re-export imports; re-exports are guarded with `# noqa: F401`.)
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sourcing-ai-agent
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: |
+          python -m pip install --upgrade pip
+          pip install "ruff>=0.15,<0.16"
+
+      - name: Lint (ruff format --check + ruff check)
+        run: bash scripts/run_python_quality.sh lint
+
   contract-tests:
     runs-on: ubuntu-latest
     # PG-only control plane: the contract lane needs a live Postgres. The fixtures

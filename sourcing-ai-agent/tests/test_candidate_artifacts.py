@@ -1214,7 +1214,9 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             "linkedin_slug": "google",
             "aliases": ["Google"],
         }
-        (snapshot_dir / "identity.json").write_text(json.dumps(identity, ensure_ascii=False, indent=2), encoding="utf-8")
+        (snapshot_dir / "identity.json").write_text(
+            json.dumps(identity, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         (snapshot_dir / "candidate_documents.json").write_text(
             json.dumps(
                 {
@@ -1424,12 +1426,7 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             candidate_id="candidate_cleanup",
         )
         orphan_path = (
-            hot_cache_root
-            / "acme"
-            / "20260406T120000"
-            / "normalized_artifacts"
-            / "candidate_shards"
-            / "orphan.json"
+            hot_cache_root / "acme" / "20260406T120000" / "normalized_artifacts" / "candidate_shards" / "orphan.json"
         )
         orphan_path.write_text(json.dumps({"orphan": True}, ensure_ascii=False, indent=2), encoding="utf-8")
 

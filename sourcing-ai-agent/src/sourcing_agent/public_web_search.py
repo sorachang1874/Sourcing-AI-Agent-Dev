@@ -1034,10 +1034,7 @@ def build_public_web_candidate_adjudication_input(
     )
     payload = {
         "candidate": build_candidate_adjudication_context(candidate),
-        "email_candidates": [
-            _compact_email_candidate_for_adjudication(item)
-            for item in email_candidates[:8]
-        ],
+        "email_candidates": [_compact_email_candidate_for_adjudication(item) for item in email_candidates[:8]],
         "entry_links": [_compact_entry_link_for_adjudication(item) for item in adjudication_entry_links],
         "search_evidence": [_compact_search_result_for_adjudication(item) for item in adjudication_entry_links],
         "evidence_slices": evidence_slices,
@@ -1132,13 +1129,18 @@ def select_entry_links_for_adjudication(
     ] + sorted(available_types.difference(ADJUDICATION_ENTRY_TYPE_PRIORITY))
     for entry_type in ordered_types:
         candidates = [
-            link for link in deduped
+            link
+            for link in deduped
             if link.entry_type == entry_type and _is_adjudication_input_eligible(link, candidate=candidate)
         ]
-        match = min(
-            candidates,
-            key=lambda link: _adjudication_link_selection_sort_key(link, candidate=candidate),
-        ) if candidates else None
+        match = (
+            min(
+                candidates,
+                key=lambda link: _adjudication_link_selection_sort_key(link, candidate=candidate),
+            )
+            if candidates
+            else None
+        )
         if match is not None:
             add(match, honor_cap=True)
     for entry_type in ordered_types:
@@ -1473,8 +1475,7 @@ def public_web_link_shape_warnings(entry_type: str, url: str) -> list[str]:
     if normalized_entry_type == "publication_url":
         warnings.append("publication_evidence_only_not_profile")
     if normalized_entry_type == "personal_homepage" and (
-        _looks_like_non_homepage_content_url(parsed)
-        or _looks_like_third_party_person_page_not_owned_homepage(parsed)
+        _looks_like_non_homepage_content_url(parsed) or _looks_like_third_party_person_page_not_owned_homepage(parsed)
     ):
         warnings.append("personal_homepage_deep_content_or_video_not_profile_root")
     return warnings
@@ -2022,7 +2023,9 @@ def execute_candidate_search_plans_batch(
             plan_query = task_index.get(task.task_key)
             if plan_query is not None:
                 plan, query, _query_index = plan_query
-                error_text = str(checkpoint.get("error") or dict(task.metadata or {}).get("error") or "batch submit failed")
+                error_text = str(
+                    checkpoint.get("error") or dict(task.metadata or {}).get("error") or "batch submit failed"
+                )
                 outcomes[plan.candidate.record_id].errors.append(f"search_failed:{query.query_id}:{error_text[:200]}")
             continue
         pending_specs[task.task_key] = {
@@ -2842,9 +2845,7 @@ def adjudicate_candidate_public_web_experiment_from_document_fetch_payload(
         "fetched_documents": fetched_documents,
         "email_candidates": [item.to_record() for item in adjudicated_email_candidates],
         "gathered_signals": gathered_signals,
-        "ai_adjudication": {
-            key: value for key, value in ai_result.items() if key != "input_snapshot"
-        },
+        "ai_adjudication": {key: value for key, value in ai_result.items() if key != "input_snapshot"},
         "adjudication_input_contract": dict(adjudication_input_snapshot.get("input_contract") or {}),
         "adjudication_input_payload_path": adjudication_input_payload_path,
         "query_results": list(document_fetch_payload.get("query_results") or outcome.query_results),
@@ -2889,9 +2890,7 @@ def finalize_candidate_public_web_experiment_from_adjudication_payload(
         "gathered_signals": dict(adjudication_payload.get("gathered_signals") or empty_signal_bundle()),
         "ai_adjudication": dict(adjudication_payload.get("ai_adjudication") or {}),
         "errors": [
-            str(item)
-            for item in list(adjudication_payload.get("errors") or outcome.errors)
-            if str(item or "").strip()
+            str(item) for item in list(adjudication_payload.get("errors") or outcome.errors) if str(item or "").strip()
         ],
     }
     logger.write_json(
@@ -3291,8 +3290,7 @@ def _looks_like_third_party_person_page_not_owned_homepage(parsed: Any) -> bool:
     return bool(
         len(path_parts) >= 2
         and any(
-            part in third_party_profile_segments
-            or any(segment in part for segment in ("event", "speaker", "summit"))
+            part in third_party_profile_segments or any(segment in part for segment in ("event", "speaker", "summit"))
             for part in path_parts[:-1]
         )
     )

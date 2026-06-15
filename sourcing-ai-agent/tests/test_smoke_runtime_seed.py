@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 from sourcing_agent.company_registry import resolve_company_alias_key
 from sourcing_agent.smoke_runtime_seed import seed_reference_smoke_runtime
-
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 

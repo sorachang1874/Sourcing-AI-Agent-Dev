@@ -12,18 +12,18 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from sourcing_agent.legacy_public_web_storage import (
+    seed_legacy_target_public_web_batch,
+    seed_legacy_target_public_web_promotion,
+    seed_legacy_target_public_web_run,
+    update_legacy_target_public_web_run,
+)
 from sourcing_agent.legacy_target_candidate_public_web_runtime import (
     cancel_target_candidate_public_web_run,
     execute_target_candidate_public_web_run_once,
     execute_target_candidate_public_web_run_to_local_idle,
     start_target_candidate_public_web_batch,
     sync_public_web_batch_summary,
-)
-from sourcing_agent.legacy_public_web_storage import (
-    seed_legacy_target_public_web_batch,
-    seed_legacy_target_public_web_promotion,
-    seed_legacy_target_public_web_run,
-    update_legacy_target_public_web_run,
 )
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.public_web_runtime_core import (
@@ -44,7 +44,6 @@ from sourcing_agent.search_provider import (
 )
 from sourcing_agent.settings import SearchProviderSettings
 from sourcing_agent.storage import ControlPlaneStore
-
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
@@ -254,7 +253,9 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
             self.env_patch_active = False
         self.tempdir.cleanup()
 
-    @unittest.skip("legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage"
+    )
     def test_batch_trigger_is_idempotent_and_creates_per_candidate_run(self) -> None:
         payload = {
             "record_ids": ["target-ada"],
@@ -286,7 +287,9 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertEqual(runs[0]["record_id"], "target-ada")
         self.assertTrue(runs[0]["person_identity_key"].startswith("linkedin:"))
 
-    @unittest.skip("legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage"
+    )
     def test_target_batch_summary_does_not_sync_to_crm_owner_by_default(self) -> None:
         crm_record = self.store.upsert_crm_record(
             {
@@ -305,7 +308,7 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                 "idempotency_key": "legacy-sync-disabled-batch",
                 "requested_record_ids": [crm_record["crm_record_id"]],
                 "status": "queued",
-            }
+            },
         )
         run = seed_legacy_target_public_web_run(
             self.store,
@@ -318,7 +321,7 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                 "current_company": "Example AI",
                 "status": "completed",
                 "phase": "completed",
-            }
+            },
         )
 
         sync = sync_public_web_batch_to_crm_owner(self.store, batch, runs=[run])
@@ -332,7 +335,9 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertIsNone(self.store.get_crm_public_web_run(run_id=run["run_id"]))
         self.assertEqual(self.store.list_crm_public_web_batches(workspace_id="default"), [])
 
-    @unittest.skip("legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage"
+    )
     def test_run_resumes_dataforseo_style_batch_checkpoint_before_analysis(self) -> None:
         trigger = start_target_candidate_public_web_batch(
             store=self.store,
@@ -471,7 +476,9 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertTrue(signals[0]["signal_type"])
         self.assertEqual(signals[0]["source_url"], "https://ada.example.edu/")
 
-    @unittest.skip("legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage"
+    )
     def test_run_to_local_idle_does_not_wait_for_daemon_ticks_after_remote_search_ready(self) -> None:
         trigger = start_target_candidate_public_web_batch(
             store=self.store,
@@ -515,9 +522,13 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertEqual(completed["summary"]["phase_metrics"]["pending_task_count"], 0)
         self.assertEqual(completed["summary"]["phase_metrics"]["signal_materialized_count"], 1)
 
-    @unittest.skip("legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage"
+    )
     def test_scripted_fixture_materializes_publishable_profile_links(self) -> None:
-        scenario_path = Path(__file__).resolve().parents[1] / "configs" / "scripted" / "target_candidate_public_web_search.json"
+        scenario_path = (
+            Path(__file__).resolve().parents[1] / "configs" / "scripted" / "target_candidate_public_web_search.json"
+        )
         with patch.dict(
             "os.environ",
             {
@@ -525,7 +536,9 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                 "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
             },
         ):
-            search_provider = build_search_provider(SearchProviderSettings(provider_order=("dataforseo_google_organic",)))
+            search_provider = build_search_provider(
+                SearchProviderSettings(provider_order=("dataforseo_google_organic",))
+            )
         trigger = start_target_candidate_public_web_batch(
             store=self.store,
             target_candidates=[self.store.get_target_candidate("target-ada")],
@@ -576,7 +589,9 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertTrue(any(signal["publishable"] for signal in signals))
         self.assertIn("ada-lovelace.example.dev", json.dumps(summary, ensure_ascii=False))
 
-    @unittest.skip("legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage"
+    )
     def test_cancelled_run_is_terminal_and_does_not_resume_provider_work(self) -> None:
         trigger = start_target_candidate_public_web_batch(
             store=self.store,
@@ -629,7 +644,9 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertEqual(batch["summary"]["cancelled_count"], 1)
         self.assertEqual(batch["summary"]["running_count"], 0)
 
-    @unittest.skip("legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage"
+    )
     def test_documents_fetched_requires_durable_document_payload(self) -> None:
         trigger = start_target_candidate_public_web_batch(
             store=self.store,
@@ -683,7 +700,9 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertEqual(failed["status"], "failed")
         self.assertIn("document_fetch_payload_missing", failed["last_error"])
 
-    @unittest.skip("legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage"
+    )
     def test_adjudication_completed_requires_durable_adjudication_payload(self) -> None:
         trigger = start_target_candidate_public_web_batch(
             store=self.store,
@@ -737,7 +756,9 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertEqual(failed["status"], "failed")
         self.assertIn("adjudication_payload_missing", failed["last_error"])
 
-    @unittest.skip("legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage"
+    )
     def test_batch_summary_aggregates_phase_metrics_across_runs(self) -> None:
         batch = seed_legacy_target_public_web_batch(
             self.store,
@@ -747,7 +768,7 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                 "status": "searching",
                 "requested_record_ids": ["target-ada", "target-grace"],
                 "run_ids": ["run-ada-phase", "run-grace-phase"],
-            }
+            },
         )
         seed_legacy_target_public_web_run(
             self.store,
@@ -780,7 +801,7 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                         "ready_poll_count": 1,
                     }
                 },
-            }
+            },
         )
         seed_legacy_target_public_web_run(
             self.store,
@@ -816,7 +837,7 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                         "signal_materialized_count": 3,
                     }
                 },
-            }
+            },
         )
 
         synced = sync_public_web_batch_summary(self.store, batch["batch_id"])
@@ -852,7 +873,9 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertEqual(metrics["phase_lag_risk_reasons"], ["remote_search_pending", "provider_or_fetch_errors"])
         self.assertFalse(metrics["service_guardrail_violation_detected"])
 
-    @unittest.skip("legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage"
+    )
     def test_batch_summary_flags_terminal_materialization_and_metric_gaps(self) -> None:
         batch = seed_legacy_target_public_web_batch(
             self.store,
@@ -862,7 +885,7 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                 "status": "completed",
                 "requested_record_ids": ["target-ada", "target-grace"],
                 "run_ids": ["run-ada-gap", "run-grace-missing-metrics"],
-            }
+            },
         )
         seed_legacy_target_public_web_run(
             self.store,
@@ -881,7 +904,7 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                         "signal_materialized_count": 0,
                     }
                 },
-            }
+            },
         )
         seed_legacy_target_public_web_run(
             self.store,
@@ -896,7 +919,7 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                 "phase": "completed",
                 "summary": {},
                 "analysis_checkpoint": {},
-            }
+            },
         )
 
         synced = sync_public_web_batch_summary(self.store, batch["batch_id"])
@@ -910,11 +933,16 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertIn("missing_phase_metrics", metrics["phase_lag_risk_reasons"])
         self.assertIn("terminal_signal_materialization_gap", metrics["phase_lag_risk_reasons"])
 
-    @unittest.skip("legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage"
+    )
     def test_multi_candidate_batch_aggregates_staggered_progress_and_partial_failure(self) -> None:
         trigger = start_target_candidate_public_web_batch(
             store=self.store,
-            target_candidates=[self.store.get_target_candidate("target-ada"), self.store.get_target_candidate("target-grace")],
+            target_candidates=[
+                self.store.get_target_candidate("target-ada"),
+                self.store.get_target_candidate("target-grace"),
+            ],
             runtime_dir=self.tempdir.name,
             payload={
                 "record_ids": ["target-ada", "target-grace"],
@@ -1069,7 +1097,9 @@ class TargetCandidatePublicWebTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertTrue((Path(ada_run["analysis_checkpoint"]["document_fetch_payload_path"]).exists()))
         self.assertTrue((Path(grace_run["analysis_checkpoint"]["adjudication_payload_path"]).exists()))
         self.assertGreaterEqual(len(self.store.list_person_public_web_signals(run_id=runs_by_record["target-ada"])), 1)
-        self.assertGreaterEqual(len(self.store.list_person_public_web_signals(run_id=runs_by_record["target-grace"])), 0)
+        self.assertGreaterEqual(
+            len(self.store.list_person_public_web_signals(run_id=runs_by_record["target-grace"])), 0
+        )
 
     def test_signal_rows_preserve_email_identity_and_model_safe_artifact_refs(self) -> None:
         run = {
@@ -1412,7 +1442,7 @@ class TargetCandidatePublicWebSqliteLegacyTableTest(unittest.TestCase):
                 "idempotency_key": "legacy-direct-helper-disabled-batch",
                 "requested_record_ids": ["target-ada"],
                 "status": "queued",
-            }
+            },
         )
         run = seed_legacy_target_public_web_run(
             self.store,
@@ -1430,7 +1460,7 @@ class TargetCandidatePublicWebSqliteLegacyTableTest(unittest.TestCase):
                     "fetch_content": False,
                     "ai_extraction": "off",
                 },
-            }
+            },
         )
 
         with patch.dict(os.environ, {"SOURCING_ALLOW_LEGACY_TARGET_PUBLIC_WEB_ENDPOINTS": "1"}, clear=False):
@@ -1469,7 +1499,7 @@ class TargetCandidatePublicWebSqliteLegacyTableTest(unittest.TestCase):
                 "status": "failed",
                 "phase": "failed",
                 "updated_at": "2026-05-03 10:00:00",
-            }
+            },
         )
         seed_legacy_target_public_web_run(
             self.store,
@@ -1484,7 +1514,7 @@ class TargetCandidatePublicWebSqliteLegacyTableTest(unittest.TestCase):
                 "status": "completed",
                 "phase": "completed",
                 "updated_at": "2026-05-03 10:01:00",
-            }
+            },
         )
         seed_legacy_target_public_web_run(
             self.store,
@@ -1499,7 +1529,7 @@ class TargetCandidatePublicWebSqliteLegacyTableTest(unittest.TestCase):
                 "status": "queued",
                 "phase": "queued",
                 "updated_at": "2026-05-03 10:02:00",
-            }
+            },
         )
 
         runs = self.store.list_latest_target_candidate_public_web_runs_by_record_ids(
@@ -1547,7 +1577,7 @@ class TargetCandidatePublicWebSqliteLegacyTableTest(unittest.TestCase):
                     "raw_assets_included": False,
                     "raw_path": "/tmp/raw.html",
                 },
-            }
+            },
         )
 
         loaded = self.store.list_target_candidate_public_web_promotions(record_id="target-ada")

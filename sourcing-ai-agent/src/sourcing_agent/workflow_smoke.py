@@ -878,9 +878,7 @@ def _recovery_runs_from_service_status_payload(
         if isinstance(status, dict):
             services.append((str(role or "").strip() or "unknown", dict(status)))
     if not services and (
-        root.get("last_summary")
-        or root.get("last_nonempty_summary")
-        or root.get("historical_last_nonempty_summary")
+        root.get("last_summary") or root.get("last_nonempty_summary") or root.get("historical_last_nonempty_summary")
     ):
         services.append(("worker_recovery", root))
 
@@ -888,7 +886,11 @@ def _recovery_runs_from_service_status_payload(
     seen: set[tuple[str, str, str]] = set()
     for role, status in services:
         service_name = str(status.get("service_name") or role).strip() or role
-        phase = "job_scoped_recovery" if role == "job_scoped" or service_name.startswith("job-recovery-") else "service_daemon_status"
+        phase = (
+            "job_scoped_recovery"
+            if role == "job_scoped" or service_name.startswith("job-recovery-")
+            else "service_daemon_status"
+        )
         for summary_key in (
             "last_nonempty_summary",
             "historical_last_nonempty_summary",
@@ -943,7 +945,9 @@ def _smoke_recovery_service_status_report(payload: dict[str, Any] | None) -> dic
             "status": str(status.get("status") or "").strip(),
             "tick": _safe_int(status.get("tick")),
             "updated_at": str(status.get("updated_at") or "").strip(),
-            "has_last_nonempty_summary": bool(dict(status.get("last_nonempty_summary") or {}).get("recovery_phase_metrics")),
+            "has_last_nonempty_summary": bool(
+                dict(status.get("last_nonempty_summary") or {}).get("recovery_phase_metrics")
+            ),
             "has_historical_last_nonempty_summary": bool(
                 dict(status.get("historical_last_nonempty_summary") or {}).get("recovery_phase_metrics")
             ),
@@ -974,6 +978,7 @@ def _post_terminal_materialization_wait_state(
     projection_facet_layering_items: list[dict[str, Any]] = []
     projection_person_search_index_items: list[dict[str, Any]] = []
     seconds_until_ready: list[float] = []
+
     def _append_pending_item(
         *,
         item_id: str,
@@ -1241,9 +1246,7 @@ def _settle_post_terminal_worker_recovery(
                 recoverable_workers=recoverable_workers,
                 recoverable_worker_ids=recoverable_worker_ids,
                 materialization_wait_state=materialization_wait_state,
-                allow_background_snapshot_full_materialization=bool(
-                    drain_background_snapshot_full_materialization
-                ),
+                allow_background_snapshot_full_materialization=bool(drain_background_snapshot_full_materialization),
             )
         )
         latest_job_payload = client.get(f"/api/jobs/{normalized_job_id}")
@@ -1489,11 +1492,15 @@ def _run_target_public_web_smoke_action(
     timings_ms += (time.perf_counter() - started_at) * 1000
     projection_id = str(projection_link.get("projection_id") or "").strip()
     if not projection_id:
-        return {
-            "status": "invalid",
-            "reason": "run_projection_link_missing",
-            "projection_link": projection_link,
-        }, [], round(timings_ms, 2)
+        return (
+            {
+                "status": "invalid",
+                "reason": "run_projection_link_missing",
+                "projection_link": projection_link,
+            },
+            [],
+            round(timings_ms, 2),
+        )
 
     started_at = time.perf_counter()
     projection_page = client.get(
@@ -1501,9 +1508,7 @@ def _run_target_public_web_smoke_action(
     )
     timings_ms += (time.perf_counter() - started_at) * 1000
     projection_candidates = [
-        dict(item)
-        for item in list(projection_page.get("candidates") or [])
-        if isinstance(item, dict)
+        dict(item) for item in list(projection_page.get("candidates") or []) if isinstance(item, dict)
     ]
     candidate_identity_keys = [
         str(record.get("candidate_identity_key") or "").strip()
@@ -1511,16 +1516,20 @@ def _run_target_public_web_smoke_action(
         if str(record.get("candidate_identity_key") or "").strip()
     ]
     if not candidate_identity_keys:
-        return {
-            "status": "invalid",
-            "reason": "no_projection_candidates_available_for_crm_public_web",
-            "projection_id": projection_id,
-            "projection_page": {
-                "status": projection_page.get("status"),
-                "filtered_candidate_count": projection_page.get("filtered_candidate_count"),
-                "candidate_count": len(projection_candidates),
+        return (
+            {
+                "status": "invalid",
+                "reason": "no_projection_candidates_available_for_crm_public_web",
+                "projection_id": projection_id,
+                "projection_page": {
+                    "status": projection_page.get("status"),
+                    "filtered_candidate_count": projection_page.get("filtered_candidate_count"),
+                    "candidate_count": len(projection_candidates),
+                },
             },
-        }, [], round(timings_ms, 2)
+            [],
+            round(timings_ms, 2),
+        )
 
     crm_records: list[dict[str, Any]] = []
     for index, candidate_identity_key in enumerate(candidate_identity_keys, start=1):
@@ -1531,8 +1540,7 @@ def _run_target_public_web_smoke_action(
                 "projection_id": projection_id,
                 "candidate_identity_key": candidate_identity_key,
                 "idempotency_key": (
-                    str(action.get("crm_idempotency_prefix") or "").strip()
-                    or f"smoke:{case_name}:{normalized_job_id}"
+                    str(action.get("crm_idempotency_prefix") or "").strip() or f"smoke:{case_name}:{normalized_job_id}"
                 )
                 + f":{index}:{candidate_identity_key}",
                 "stage": str(action.get("crm_stage") or "researching").strip() or "researching",
@@ -1550,12 +1558,16 @@ def _run_target_public_web_smoke_action(
         if str(record.get("crm_record_id") or record.get("record_id") or "").strip()
     ]
     if not record_ids:
-        return {
-            "status": "invalid",
-            "reason": "no_crm_records_created_for_public_web_action",
-            "projection_id": projection_id,
-            "candidate_identity_keys": candidate_identity_keys,
-        }, [], round(timings_ms, 2)
+        return (
+            {
+                "status": "invalid",
+                "reason": "no_crm_records_created_for_public_web_action",
+                "projection_id": projection_id,
+                "candidate_identity_keys": candidate_identity_keys,
+            },
+            [],
+            round(timings_ms, 2),
+        )
 
     search_payload = {
         "crm_record_ids": record_ids,
@@ -1720,9 +1732,7 @@ def _build_smoke_explain_digest(
     explain_matched_job = dict(explain_dispatch_preview.get("matched_job") or {})
     explain_asset_reuse_plan = dict(explain.get("asset_reuse_plan") or {})
     explain_request_after_dispatch = dict(explain_dispatch_preview.get("request_after_dispatch_hints") or {})
-    explain_request_after_dispatch_preferences = dict(
-        explain_request_after_dispatch.get("execution_preferences") or {}
-    )
+    explain_request_after_dispatch_preferences = dict(explain_request_after_dispatch.get("execution_preferences") or {})
     explain_dispatch_explanation = dict(explain_dispatch_preview.get("request_family_match_explanation") or {})
     return {
         "status": explain.get("status"),
@@ -1759,9 +1769,9 @@ def _build_smoke_explain_digest(
         "harvest_profile_actor_global_inflight": dict(effective_payload.get("execution_preferences") or {}).get(
             "harvest_profile_actor_global_inflight"
         ),
-        "harvest_profile_batch_submit_global_inflight": dict(
-            effective_payload.get("execution_preferences") or {}
-        ).get("harvest_profile_batch_submit_global_inflight"),
+        "harvest_profile_batch_submit_global_inflight": dict(effective_payload.get("execution_preferences") or {}).get(
+            "harvest_profile_batch_submit_global_inflight"
+        ),
         "effective_acquisition_mode": (
             (explain.get("effective_execution_semantics") or {}).get("effective_acquisition_mode")
         ),
@@ -1831,11 +1841,7 @@ def load_smoke_cases(matrix_file: str = "", selected_cases: set[str] | None = No
         runtime_isolation = str(case.get("runtime_isolation") or "").strip()
         if runtime_isolation:
             normalized_case["runtime_isolation"] = runtime_isolation
-        coverage_tags = [
-            str(item).strip()
-            for item in list(case.get("coverage_tags") or [])
-            if str(item).strip()
-        ]
+        coverage_tags = [str(item).strip() for item in list(case.get("coverage_tags") or []) if str(item).strip()]
         if coverage_tags:
             normalized_case["coverage_tags"] = coverage_tags
         review_decision = case.get("review_decision")
@@ -1973,10 +1979,7 @@ def _flatten_projection_candidate_for_smoke(row: dict[str, Any]) -> dict[str, An
     candidate_id = str(payload.get("candidate_id") or public_summary.get("candidate_id") or "").strip()
     candidate_identity_key = str(payload.get("candidate_identity_key") or "").strip()
     employment_status = str(
-        payload.get("employment_scope")
-        or public_summary.get("employment_status")
-        or public_summary.get("status")
-        or ""
+        payload.get("employment_scope") or public_summary.get("employment_status") or public_summary.get("status") or ""
     ).strip()
     flattened = {
         **public_summary,
@@ -2078,9 +2081,7 @@ def _projection_board_runtime_state_for_smoke(
         facet_summary_scope = "global_full_population" if facet_summary_status == "complete" else "unavailable"
     facet_summary_candidate_count = expected_count if facet_summary_status == "complete" else 0
     layer_count = sum(
-        _safe_int(dict(item).get("count"))
-        for item in list(facet_summary.get("layers") or [])
-        if isinstance(item, dict)
+        _safe_int(dict(item).get("count")) for item in list(facet_summary.get("layers") or []) if isinstance(item, dict)
     )
     layering_status = str(
         readiness.get("layering_status")
@@ -2089,9 +2090,7 @@ def _projection_board_runtime_state_for_smoke(
     ).strip()
     if not layering_status and facet_summary_status == "complete":
         layering_status = "completed"
-    row_publication_watermark = str(
-        projection.get("updated_at") or projection.get("published_at") or ""
-    ).strip()
+    row_publication_watermark = str(projection.get("updated_at") or projection.get("published_at") or "").strip()
     if progress_board:
         watermark_parts = str(progress_board.get("row_publication_watermark") or "").split("|")
         if len(watermark_parts) >= 4:
@@ -2374,10 +2373,7 @@ def _build_legacy_artifact_coherence_report(
     terminal_drift = bool(
         artifact_terminal
         and artifact_status == "completed"
-        and (
-            (canonical_status and not canonical_terminal)
-            or (progress_status and not progress_terminal)
-        )
+        and ((canonical_status and not canonical_terminal) or (progress_status and not progress_terminal))
     )
     terminal_coherent = not terminal_drift
 
@@ -2904,11 +2900,7 @@ def _result_view_lifecycle_from_payloads(
         payload = dict(source.get("result_view_lifecycle") or {})
         if payload:
             return payload
-    result_view = dict(
-        results_payload.get("result_view")
-        or dashboard_payload.get("result_view")
-        or {}
-    )
+    result_view = dict(results_payload.get("result_view") or dashboard_payload.get("result_view") or {})
     metadata = dict(result_view.get("metadata") or {})
     return dict(metadata.get("result_view_lifecycle") or {})
 
@@ -2921,12 +2913,11 @@ def _lifecycle_supersedes_serving_publication_gap(lifecycle: dict[str, Any]) -> 
     served_snapshot_id = str(payload.get("served_snapshot_id") or "").strip()
     if current_snapshot_id and served_snapshot_id and current_snapshot_id == served_snapshot_id:
         return True
-    serving_phase = str(
-        payload.get("serving_projection_phase")
-        or payload.get("phase")
-        or payload.get("state")
-        or ""
-    ).strip().lower()
+    serving_phase = (
+        str(payload.get("serving_projection_phase") or payload.get("phase") or payload.get("state") or "")
+        .strip()
+        .lower()
+    )
     return bool(
         current_snapshot_id
         and serving_phase in {"current_snapshot_serving", "current_serving"}
@@ -3434,11 +3425,7 @@ def _materialization_sync_scope(
     metadata = _materialization_item_metadata(payload)
     source_worker_ids = _materialization_item_source_worker_ids(payload)
     source_workers = [dict(worker_by_id.get(worker_id) or {}) for worker_id in source_worker_ids]
-    source_recovery_kinds = [
-        kind
-        for kind in (_worker_recovery_kind(worker) for worker in source_workers)
-        if kind
-    ]
+    source_recovery_kinds = [kind for kind in (_worker_recovery_kind(worker) for worker in source_workers) if kind]
     metadata_recovery_kind = str(metadata.get("recovery_kind") or "").strip()
     if metadata_recovery_kind:
         source_recovery_kinds.append(metadata_recovery_kind)
@@ -3449,28 +3436,24 @@ def _materialization_sync_scope(
     ]
     worker_kind = str(metadata.get("worker_kind") or "").strip()
     profile_url_count_for_budget = _safe_int(
-        metadata.get("profile_url_count_for_budget")
-        or payload.get("profile_url_count_for_budget")
+        metadata.get("profile_url_count_for_budget") or payload.get("profile_url_count_for_budget")
     )
     is_profile_batch = (
         profile_url_count_for_budget > 0
         or any(kind == "harvest_profile_batch" for kind in source_recovery_kinds)
         or any(key.startswith("harvest_profile_batch::") for key in source_worker_keys)
     )
-    is_candidate_source = (
-        not is_profile_batch
-        and (
-            worker_kind in {"company_roster", "search_seed", "search_seed_discovery"}
-            or any(
-                kind
-                in {
-                    "harvest_company_employees",
-                    "harvest_company_people",
-                    "search_seed_discovery",
-                    "harvest_profile_search",
-                }
-                for kind in source_recovery_kinds
-            )
+    is_candidate_source = not is_profile_batch and (
+        worker_kind in {"company_roster", "search_seed", "search_seed_discovery"}
+        or any(
+            kind
+            in {
+                "harvest_company_employees",
+                "harvest_company_people",
+                "search_seed_discovery",
+                "harvest_profile_search",
+            }
+            for kind in source_recovery_kinds
         )
     )
     inline_ingest = _jsonish_dict(metadata.get("inline_incremental_ingest"))
@@ -3554,17 +3537,27 @@ def _build_post_preview_finalization_report(
             continue
         event_family = str(payload.get("event_family") or "").strip()
         materialization_event = event_family in {"completed_workflow_reconcile", "workflow_materialization"}
-        if phase in {"started", "materialize_started"} and reconcile_kind in {
-            "harvest_prefetch",
-            "snapshot_materialization",
-            "outreach_layering",
-        } and (materialization_event or not event_family):
+        if (
+            phase in {"started", "materialize_started"}
+            and reconcile_kind
+            in {
+                "harvest_prefetch",
+                "snapshot_materialization",
+                "outreach_layering",
+            }
+            and (materialization_event or not event_family)
+        ):
             finalization_started_at.append(created_at)
-        if phase in {"completed", "materialize_completed"} and reconcile_kind in {
-            "harvest_prefetch",
-            "snapshot_materialization",
-            "outreach_layering",
-        } and (materialization_event or not event_family):
+        if (
+            phase in {"completed", "materialize_completed"}
+            and reconcile_kind
+            in {
+                "harvest_prefetch",
+                "snapshot_materialization",
+                "outreach_layering",
+            }
+            and (materialization_event or not event_family)
+        ):
             finalization_completed_at.append(created_at)
         if phase == "materialize_started" and (materialization_event or not event_family):
             materialize_started_at.append(created_at)
@@ -3598,16 +3591,12 @@ def _build_post_preview_finalization_report(
         item_kind = str(payload.get("item_kind") or "").strip()
         if item_kind not in {"local_apply_closure", "board_visible_delta_apply", "snapshot_full_materialization"}:
             continue
-        completed_at = _parse_timestamp(
-            str(payload.get("completed_at") or payload.get("updated_at") or "").strip()
-        )
+        completed_at = _parse_timestamp(str(payload.get("completed_at") or payload.get("updated_at") or "").strip())
         if completed_at is None:
             continue
         materialize_completed_at.append(completed_at)
         finalization_completed_at.append(completed_at)
-        started_at = _parse_timestamp(
-            str(payload.get("started_at") or payload.get("created_at") or "").strip()
-        )
+        started_at = _parse_timestamp(str(payload.get("started_at") or payload.get("created_at") or "").strip())
         if started_at is not None:
             materialize_started_at.append(started_at)
             finalization_started_at.append(started_at)
@@ -3789,14 +3778,14 @@ def _build_post_preview_finalization_report(
         if last_finalization_completed is not None
         else None
     )
-    raw_long_post_preview_finalization = (
-        (preview_to_finalization_completed or 0.0) > _POST_PREVIEW_FINALIZATION_LAG_MS
-    )
+    raw_long_post_preview_finalization = (preview_to_finalization_completed or 0.0) > _POST_PREVIEW_FINALIZATION_LAG_MS
     finalization_lag_evaluation_ms = preview_to_finalization_completed or 0.0
     finalization_lag_evaluation_source = "preview_to_finalization_completed_ms"
     if profile_wait_excluded_ms > 0.0 and finalization_start_gate_ms is not None:
         finalization_lag_evaluation_ms = finalization_start_gate_ms
-        finalization_lag_evaluation_source = finalization_start_gate_source or "profile_terminal_finalization_start_gate"
+        finalization_lag_evaluation_source = (
+            finalization_start_gate_source or "profile_terminal_finalization_start_gate"
+        )
     return {
         "report_available": bool(
             (preview_completed_at and (job_events or stage_2_final_completed_at))
@@ -3839,8 +3828,7 @@ def _build_post_preview_finalization_report(
         "finalization_completed_event_count": len(finalization_completed_at),
         "materialize_sync_duration_ms": _numeric_summary(materialize_sync_durations),
         "materialize_sync_duration_by_scope_ms": {
-            scope: _numeric_summary(values)
-            for scope, values in sorted(materialize_sync_durations_by_scope.items())
+            scope: _numeric_summary(values) for scope, values in sorted(materialize_sync_durations_by_scope.items())
         },
         "materialize_sync_scope_counts": dict(materialize_sync_scope_counts),
         "profile_batch_local_apply_duration_ms": _numeric_summary(
@@ -4257,11 +4245,7 @@ def _build_workflow_wall_clock_report(
         2,
     )
     board_nonempty_wait_ms = round(
-        float(
-            timings_ms.get("board_nonempty_wait")
-            or timings_ms.get("board_nonempty_wait_ms")
-            or board_probe_wait_ms
-        ),
+        float(timings_ms.get("board_nonempty_wait") or timings_ms.get("board_nonempty_wait_ms") or board_probe_wait_ms),
         2,
     )
     if bool(board_probe.get("ready")) and board_ready_wait_ms >= 0.0:
@@ -4460,9 +4444,7 @@ def _provider_anomaly_query_summaries_from_search_seed_artifacts(
                     "path": str(summary_path),
                     "query": str(summary.get("query") or ""),
                     "mode": str(summary.get("mode") or summary.get("provider") or ""),
-                    "employment_status": str(
-                        summary.get("employment_status") or summary.get("employment_scope") or ""
-                    ),
+                    "employment_status": str(summary.get("employment_status") or summary.get("employment_scope") or ""),
                     "status": str(summary.get("status") or ""),
                     "reason": str(summary.get("incomplete_reason") or summary.get("degraded_reason") or ""),
                 },
@@ -4613,10 +4595,7 @@ def _normalize_board_runtime_parity_value(value: Any) -> Any:
 
 def _comparable_board_runtime_state(board_runtime_state: dict[str, Any]) -> dict[str, Any]:
     payload = dict(board_runtime_state or {})
-    return {
-        field: _normalize_board_runtime_parity_value(payload.get(field))
-        for field in _BOARD_RUNTIME_PARITY_FIELDS
-    }
+    return {field: _normalize_board_runtime_parity_value(payload.get(field)) for field in _BOARD_RUNTIME_PARITY_FIELDS}
 
 
 def _build_board_runtime_state_endpoint_parity_report(
@@ -4634,11 +4613,7 @@ def _build_board_runtime_state_endpoint_parity_report(
     }
     present_sources = [source for source, state in raw_states.items() if state]
     missing_sources = [source for source, state in raw_states.items() if not state]
-    comparable = {
-        source: _comparable_board_runtime_state(state)
-        for source, state in raw_states.items()
-        if state
-    }
+    comparable = {source: _comparable_board_runtime_state(state) for source, state in raw_states.items() if state}
     reference_source = "dashboard" if "dashboard" in comparable else (present_sources[0] if present_sources else "")
     reference = dict(comparable.get(reference_source) or {})
     mismatches: list[dict[str, Any]] = []
@@ -4665,7 +4640,9 @@ def _build_board_runtime_state_endpoint_parity_report(
         "present_endpoint_count": len(present_sources),
         "missing_sources": missing_sources,
         "mismatch_count": len(mismatches),
-        "mismatched_fields": sorted({str(item.get("field") or "") for item in mismatches if str(item.get("field") or "")}),
+        "mismatched_fields": sorted(
+            {str(item.get("field") or "") for item in mismatches if str(item.get("field") or "")}
+        ),
         "mismatches": mismatches[:25],
         "summaries": comparable,
     }
@@ -4747,7 +4724,9 @@ def _build_candidate_page_filter_probe_sample(
         "stage": str(stage or ""),
         "recall_bucket": str(recall_bucket or ""),
         "returned_count": _safe_int(payload.get("returned_count") or len(candidates)),
-        "filtered_candidate_count": _safe_int(payload.get("filtered_candidate_count") or payload.get("total_candidates")),
+        "filtered_candidate_count": _safe_int(
+            payload.get("filtered_candidate_count") or payload.get("total_candidates")
+        ),
         "display_ready_count": len(display_ready_candidates),
         "display_ready_recall_bucket_count": len(display_ready_recall_candidates),
         "applied_recall_buckets": applied_recall_buckets,
@@ -4762,7 +4741,9 @@ def _build_running_candidate_filter_probe_report(samples: list[dict[str, Any]]) 
             _safe_int(item.get("display_ready_recall_bucket_count")) > 0 for item in normalized_samples
         ),
         "max_returned_count": max([_safe_int(item.get("returned_count")) for item in normalized_samples] or [0]),
-        "max_display_ready_count": max([_safe_int(item.get("display_ready_count")) for item in normalized_samples] or [0]),
+        "max_display_ready_count": max(
+            [_safe_int(item.get("display_ready_count")) for item in normalized_samples] or [0]
+        ),
         "max_display_ready_recall_bucket_count": max(
             [_safe_int(item.get("display_ready_recall_bucket_count")) for item in normalized_samples] or [0]
         ),
@@ -5164,9 +5145,7 @@ def _build_progress_observability_report(progress_samples: list[dict[str, Any]])
                     if card_required_count > 0
                     else 0
                 )
-            card_status_fraction = _first_count_fraction(
-                board_runtime_state.get("card_materialization_status_text")
-            )
+            card_status_fraction = _first_count_fraction(board_runtime_state.get("card_materialization_status_text"))
             if (
                 card_status_fraction
                 and delta_required_count <= 0
@@ -5359,9 +5338,7 @@ def _build_case_level_smoke_exports(
     finalization_overlay = dict(service_metrics.get("finalization_overlay") or {})
     provider_anomalies = dict(service_metrics.get("provider_anomalies") or {})
     company_public_web = dict(service_metrics.get("company_public_web") or {})
-    legacy_materialization_write_contract = dict(
-        service_metrics.get("legacy_materialization_write_contract") or {}
-    )
+    legacy_materialization_write_contract = dict(service_metrics.get("legacy_materialization_write_contract") or {})
     workflow_causality_contract = dict(service_metrics.get("workflow_causality_contract") or {})
     exported_service_metrics = {}
     if remote_provider_events:
@@ -5603,9 +5580,8 @@ def _build_provider_case_report(
         workflow_commands=list(workflow_commands or []),
         agent_workers=list(agent_workers or []),
     )
-    board_visible_patch_records = (
-        list(board_visible_patches or [])
-        or _board_visible_patches_from_events(list(job_events or []))
+    board_visible_patch_records = list(board_visible_patches or []) or _board_visible_patches_from_events(
+        list(job_events or [])
     )
     workflow_wall_clock = _build_workflow_wall_clock_report(
         stage_wall_clock=stage_wall_clock,
@@ -5887,7 +5863,9 @@ def _canonical_projection_completion_proof(
         and not board_projection.get("patch_log_replay_lag")
         and not board_projection.get("patch_log_required_missing")
         and not board_projection.get("materialization_lag_violation")
-        and (not board_projection.get("patch_sequence_values") or board_projection.get("patch_sequence_contiguous", True))
+        and (
+            not board_projection.get("patch_sequence_values") or board_projection.get("patch_sequence_contiguous", True)
+        )
         and served_count > 0
         and (expected_count <= 0 or served_count >= expected_count)
         and (delta_required <= 0 or min(delta_board_visible, delta_materialized) >= delta_required)
@@ -5920,12 +5898,7 @@ def _canonical_projection_completion_proof(
         and _safe_int(recovery_phase_metrics.get("legacy_bridge_used_count")) == 0
         and not recovery_phase_metrics.get("legacy_bridge_used_present")
     )
-    serving_complete = bool(
-        canonical_reader_clean
-        and board_projection_clean
-        and post_profile_clean
-        and legacy_clean
-    )
+    serving_complete = bool(canonical_reader_clean and board_projection_clean and post_profile_clean and legacy_clean)
     return {
         "complete": serving_complete,
         "serving_complete": serving_complete,
@@ -5959,9 +5932,7 @@ def _append_service_recovery_violation_failures(
     for flag_key, label in local_apply_checks:
         if bool(local_apply_backlog.get(flag_key)):
             failures.append(f"service metrics recovery: {label} detected")
-    snapshot_full_materialization_queue = dict(
-        service_metrics.get("snapshot_full_materialization_queue") or {}
-    )
+    snapshot_full_materialization_queue = dict(service_metrics.get("snapshot_full_materialization_queue") or {})
     snapshot_checks = (
         ("retry_backlog_present", "snapshot_full_materialization retry backlog"),
         ("stale_running_present", "snapshot_full_materialization stale running item"),
@@ -5973,7 +5944,10 @@ def _append_service_recovery_violation_failures(
     discovery_checks = (
         ("item_without_worker_owner_present", "search_seed_discovery owner missing"),
         ("discovery_worker_without_item_present", "search_seed_discovery worker without discovery item"),
-        ("discovery_worker_without_local_apply_present", "search_seed_discovery worker without local_apply_closure item"),
+        (
+            "discovery_worker_without_local_apply_present",
+            "search_seed_discovery worker without local_apply_closure item",
+        ),
         ("retry_backlog_present", "search_seed_discovery ready retry backlog"),
         ("stale_provider_owned_present", "search_seed_discovery stale provider-owned item"),
         ("exhausted_without_provider_retry_present", "search_seed_discovery exhausted without provider_retry report"),
@@ -6102,18 +6076,13 @@ def _evaluate_smoke_expectations(
         if failed_driver_events:
             failures.append(
                 "remote_provider_event_driver failed: "
-                + ", ".join(
-                    str(item.get("status") or "unknown") for item in failed_driver_events[:3]
-                )
+                + ", ".join(str(item.get("status") or "unknown") for item in failed_driver_events[:3])
             )
     if bool(payload.get("drive_remote_provider_watcher_first_events")):
         driver_events = [dict(item) for item in list(remote_provider_event_driver.get("events") or [])]
         watcher_recovery = any(
             str(item.get("source") or "").strip() == "local_provider_event_watcher"
-            and (
-                _safe_int(item.get("recovery_count")) > 0
-                or _safe_int(item.get("recovery_dispatch_count")) > 0
-            )
+            and (_safe_int(item.get("recovery_count")) > 0 or _safe_int(item.get("recovery_dispatch_count")) > 0)
             for item in driver_events
         )
         provider_late = any(
@@ -6176,8 +6145,7 @@ def _evaluate_smoke_expectations(
             }
             detail_text = ", ".join(f"{key}={value}" for key, value in sorted(details.items()))
             failures.append(
-                "workflow causality contract violation detected"
-                + (f" ({detail_text})" if detail_text else "")
+                "workflow causality contract violation detected" + (f" ({detail_text})" if detail_text else "")
             )
     if bool(payload.get("require_no_post_profile_heuristic_slo_pairing")):
         profile_file_to_board_patch = dict(
@@ -6224,9 +6192,10 @@ def _evaluate_smoke_expectations(
             failures.append("post_preview_finalization_observed: report unavailable")
         elif _safe_int(post_preview_finalization.get("materialize_completed_count")) <= 0:
             failures.append("post_preview_finalization_observed: materialize_completed_count=0")
-        elif _safe_int(post_preview_finalization.get("finalization_completed_event_count")) <= 0 and not str(
-            post_preview_finalization.get("finalization_completed_at") or ""
-        ).strip():
+        elif (
+            _safe_int(post_preview_finalization.get("finalization_completed_event_count")) <= 0
+            and not str(post_preview_finalization.get("finalization_completed_at") or "").strip()
+        ):
             failures.append("post_preview_finalization_observed: finalization_completed_event_count=0")
     if "max_stage1_terminal_to_finalization_start_ms" in payload:
         if not bool(post_preview_finalization.get("report_available")):
@@ -6252,9 +6221,7 @@ def _evaluate_smoke_expectations(
             failures.append("progress contract: progress_observability missing")
         if bool(progress_observability.get("regression_detected")):
             regression_keys = sorted(
-                str(key)
-                for key in dict(progress_observability.get("counter_regressions") or {})
-                if str(key).strip()
+                str(key) for key in dict(progress_observability.get("counter_regressions") or {}) if str(key).strip()
             )
             failures.append(
                 "progress contract: public counter regression detected"
@@ -6287,9 +6254,7 @@ def _evaluate_smoke_expectations(
                 if str(key).strip() and _safe_int(value) > 0
             }
             detail = ", ".join(f"{key}={value}" for key, value in sorted(violation_counts.items()))
-            failures.append(
-                "progress contract: invariant violation detected" + (f" ({detail})" if detail else "")
-            )
+            failures.append("progress contract: invariant violation detected" + (f" ({detail})" if detail else ""))
     if bool(payload.get("require_board_runtime_state_cross_endpoint_parity")):
         parity_report = dict(provider_report.get("board_runtime_state_parity") or {})
         if not bool(parity_report.get("report_available")):
@@ -6374,9 +6339,7 @@ def _evaluate_smoke_expectations(
         if not bool(target_public_web_metrics.get("report_available")):
             failures.append("target_candidate_public_web.storage_owner: service metrics unavailable")
         elif _safe_int(target_public_web_metrics.get("crm_storage_owner_batch_count")) <= 0:
-            failures.append(
-                "target_candidate_public_web.storage_owner: crm_public_web_v1 owner batch not observed"
-            )
+            failures.append("target_candidate_public_web.storage_owner: crm_public_web_v1 owner batch not observed")
         elif _safe_int(target_public_web_metrics.get("legacy_storage_owner_batch_count")) > 0:
             failures.append(
                 _expectation_maximum_failure(
@@ -6402,7 +6365,9 @@ def _evaluate_smoke_expectations(
         if not bool(target_public_web_metrics.get("report_available")):
             failures.append("target_candidate_public_web.queue_batch_command: service metrics unavailable")
         elif bool(target_public_web_metrics.get("queue_batch_command_missing")):
-            failures.append("target_candidate_public_web.queue_batch_command: crm.public_web.queue_batch command missing")
+            failures.append(
+                "target_candidate_public_web.queue_batch_command: crm.public_web.queue_batch command missing"
+            )
         elif _safe_int(target_public_web_metrics.get("queue_batch_command_succeeded_count")) <= 0:
             failures.append(
                 "target_candidate_public_web.queue_batch_command: crm.public_web.queue_batch command did not succeed"
@@ -6460,6 +6425,7 @@ def _evaluate_smoke_expectations(
                 _safe_int(board_runtime_state.get("expected_candidate_count")),
                 _safe_int(board_visible_projection_metrics.get("served_candidate_count")),
             )
+
             def _metric_max(name: str) -> float:
                 return _safe_float(dict(board_visible_projection_metrics.get(name) or {}).get("max"))
 
@@ -6489,9 +6455,7 @@ def _evaluate_smoke_expectations(
                     "placeholder-to-final board jump: consumable card progression did not advance before final"
                 )
             if partial_visible_ms <= 0.0 or (final_results_ms > 0.0 and partial_visible_ms >= final_results_ms):
-                failures.append(
-                    "placeholder-to-final board jump: no board-visible publication before final results"
-                )
+                failures.append("placeholder-to-final board jump: no board-visible publication before final results")
     if bool(payload.get("require_partial_board_visible_before_final_results")):
         user_experience_metrics = dict(service_metrics.get("user_experience") or {})
         workflow_wall_clock = dict(provider_report.get("workflow_wall_clock_ms") or {})
@@ -6500,8 +6464,7 @@ def _evaluate_smoke_expectations(
             or workflow_wall_clock.get("job_to_board_visible_partial")
         )
         final_results_ms = _safe_float(
-            user_experience_metrics.get("job_to_final_results_ms")
-            or workflow_wall_clock.get("job_to_final_results")
+            user_experience_metrics.get("job_to_final_results_ms") or workflow_wall_clock.get("job_to_final_results")
         )
         if partial_visible_ms <= 0.0:
             failures.append("partial board visible: job_to_board_visible_partial_ms missing")
@@ -6543,10 +6506,7 @@ def _evaluate_smoke_expectations(
                 )
             waiting_age_max_ms = _safe_float(local_apply_backlog.get("waiting_prerequisite_age_max_ms"))
             if waiting_age_max_ms > 30000:
-                failures.append(
-                    "local_apply waiting_prerequisite age exceeds 30 s "
-                    f"(age_max_ms={waiting_age_max_ms})"
-                )
+                failures.append(f"local_apply waiting_prerequisite age exceeds 30 s (age_max_ms={waiting_age_max_ms})")
     if bool(payload.get("require_stable_expected_candidate_count_during_stage1")):
         if not progress_observability:
             failures.append("stable expected candidate count: progress_observability missing")
@@ -6565,7 +6525,9 @@ def _evaluate_smoke_expectations(
                 )
             promotion_count = _safe_int(progress_observability.get("stage1_denominator_promotion_count"))
             promoted_observed = bool(progress_observability.get("stage1_denominator_promoted_observed"))
-            unpromoted_sample_count = _safe_int(progress_observability.get("stage1_denominator_unpromoted_sample_count"))
+            unpromoted_sample_count = _safe_int(
+                progress_observability.get("stage1_denominator_unpromoted_sample_count")
+            )
             if promotion_count > 1:
                 failures.append(
                     "stable expected candidate count: expected at most one Stage 1 denominator promotion "
@@ -6581,16 +6543,10 @@ def _evaluate_smoke_expectations(
         if not progress_observability:
             failures.append("stable profile/card denominator: progress_observability missing")
         else:
-            denominator_violations = list(
-                progress_observability.get("stage1_user_facing_denominator_violations") or []
-            )
+            denominator_violations = list(progress_observability.get("stage1_user_facing_denominator_violations") or [])
             if denominator_violations:
                 fields = sorted(
-                    {
-                        str(dict(item).get("field") or "")
-                        for item in denominator_violations
-                        if isinstance(item, dict)
-                    }
+                    {str(dict(item).get("field") or "") for item in denominator_violations if isinstance(item, dict)}
                 )
                 failures.append(
                     "stable profile/card denominator: user-facing status text exposed /N before promotion"
@@ -7176,14 +7132,10 @@ def _evaluate_smoke_expectations(
         if not bool(event_efficiency.get("report_available")):
             failures.append(f"{metric_name}: event-level efficiency report unavailable")
             continue
-        if (
-            next_submit_metric_not_applicable
-            and metric_name
-            in {
-                "event_level_efficiency.local_to_next_submit_start_ms",
-                "event_level_efficiency.next_submit_provider_attempt_elapsed_ms",
-            }
-        ):
+        if next_submit_metric_not_applicable and metric_name in {
+            "event_level_efficiency.local_to_next_submit_start_ms",
+            "event_level_efficiency.next_submit_provider_attempt_elapsed_ms",
+        }:
             continue
         if "max" not in metric_payload:
             failures.append(f"{metric_name}: metric missing")
@@ -7201,7 +7153,9 @@ def _evaluate_smoke_expectations(
 
     if "max_remote_to_next_submit_start_ms" in payload:
         if not bool(event_efficiency.get("report_available")):
-            failures.append("event_level_efficiency.remote_to_next_submit_start_ms: event-level efficiency report unavailable")
+            failures.append(
+                "event_level_efficiency.remote_to_next_submit_start_ms: event-level efficiency report unavailable"
+            )
         else:
             remote_to_next_submit_metrics = dict(event_efficiency.get("remote_to_next_submit_start_ms") or {})
             if "max" not in remote_to_next_submit_metrics:
@@ -7235,9 +7189,7 @@ def _evaluate_smoke_expectations(
         or {}
     )
     expectation_handoff_gap_metrics = (
-        profile_scheduler_handoff_gap_metrics
-        if profile_scheduler_handoff_gap_metrics
-        else global_handoff_gap_metrics
+        profile_scheduler_handoff_gap_metrics if profile_scheduler_handoff_gap_metrics else global_handoff_gap_metrics
     )
     expectation_handoff_gap_metric_name = (
         "service_metrics.worker_timeline.profile_scheduler_next_worker_start_gap_ms"
@@ -7629,12 +7581,9 @@ def _evaluate_smoke_expectations(
     profile_file_visible_to_board_patch_visible = dict(
         post_profile_completion_metrics.get("profile_file_visible_to_board_patch_visible") or {}
     )
-    profile_file_visible_elapsed = dict(
-        profile_file_visible_to_board_patch_visible.get("elapsed_ms") or {}
-    )
+    profile_file_visible_elapsed = dict(profile_file_visible_to_board_patch_visible.get("elapsed_ms") or {})
     require_profile_file_visible_metric = bool(
-        post_profile_completion_metrics.get("report_available")
-        and not canonical_projection_proof["complete"]
+        post_profile_completion_metrics.get("report_available") and not canonical_projection_proof["complete"]
     )
     service_slo_maximum_checks = (
         (
@@ -7725,9 +7674,9 @@ def _evaluate_smoke_expectations(
             "max_event_level_materialization_callback_elapsed_ms",
             "service_metrics.post_profile_completion.event_level_callback.elapsed_ms",
             _safe_float(
-                dict(dict(post_profile_completion_metrics.get("event_level_callback") or {}).get("elapsed_ms") or {}).get(
-                    "max"
-                )
+                dict(
+                    dict(post_profile_completion_metrics.get("event_level_callback") or {}).get("elapsed_ms") or {}
+                ).get("max")
             ),
             dict(dict(post_profile_completion_metrics.get("event_level_callback") or {}).get("elapsed_ms") or {}),
             "max",
@@ -7764,7 +7713,14 @@ def _evaluate_smoke_expectations(
             bool(recovery_phase_metrics.get("report_available")),
         ),
     )
-    for expectation_key, metric_name, actual_value, metric_payload, value_key, require_metric in service_slo_maximum_checks:
+    for (
+        expectation_key,
+        metric_name,
+        actual_value,
+        metric_payload,
+        value_key,
+        require_metric,
+    ) in service_slo_maximum_checks:
         if expectation_key not in payload:
             continue
         if not bool(service_metrics.get("report_available")):
@@ -7835,8 +7791,8 @@ def _evaluate_smoke_expectations(
                         name=f"provider_invocations.{normalized_name}",
                         actual=actual_value,
                         expected=expected_count,
+                    )
                 )
-            )
     if "max_company_public_web_collector_fetch_duration_ms" in payload:
         if not bool(company_public_web_metrics.get("report_available")):
             failures.append("company_public_web.collector_fetch_duration_ms_max: company public web report unavailable")
@@ -8024,8 +7980,7 @@ def run_hosted_smoke_case(
                             client,
                             job_id=str(job_id or ""),
                             path=(
-                                f"/api/jobs/{job_id}/candidates"
-                                "?offset=0&limit=24&lightweight=1&recall_buckets=Agent"
+                                f"/api/jobs/{job_id}/candidates?offset=0&limit=24&lightweight=1&recall_buckets=Agent"
                             ),
                         )
                         running_candidate_filter_probe_samples.append(
@@ -8077,9 +8032,10 @@ def run_hosted_smoke_case(
                 stage2_continue_requested = True
             should_auto_run_recovery = _should_auto_run_worker_recovery(snapshot)
             should_drive_provider_events = (
-                (drive_remote_provider_events or drive_remote_provider_duplicate_events or drive_remote_provider_watcher_first_events)
-                and _should_drive_smoke_remote_provider_events(snapshot)
-            )
+                drive_remote_provider_events
+                or drive_remote_provider_duplicate_events
+                or drive_remote_provider_watcher_first_events
+            ) and _should_drive_smoke_remote_provider_events(snapshot)
             if should_auto_run_recovery or should_drive_provider_events:
                 now = time.monotonic()
                 if (now - last_worker_recovery_at) >= worker_recovery_cooldown_seconds:
@@ -8115,8 +8071,7 @@ def run_hosted_smoke_case(
                         if provider_events:
                             remote_provider_event_sequence += len(provider_events)
                             remote_provider_event_driver_runs.extend(
-                                {"tick": tick, "phase": "webhook_recovery", **dict(item)}
-                                for item in provider_events
+                                {"tick": tick, "phase": "webhook_recovery", **dict(item)} for item in provider_events
                             )
                             if accepted_workers:
                                 drove_provider_event = True
@@ -8419,12 +8374,14 @@ def run_hosted_smoke_case(
             2,
         )
         if _target_public_web_action_enabled(normalized_target_public_web_action):
-            public_web_action, public_web_action_recovery_runs, public_web_action_ms = _run_target_public_web_smoke_action(
-                client,
-                source_job_id=job_id,
-                action=normalized_target_public_web_action,
-                poll_seconds=poll_seconds,
-                case_name=case_name,
+            public_web_action, public_web_action_recovery_runs, public_web_action_ms = (
+                _run_target_public_web_smoke_action(
+                    client,
+                    source_job_id=job_id,
+                    action=normalized_target_public_web_action,
+                    poll_seconds=poll_seconds,
+                    case_name=case_name,
+                )
             )
             timings_ms["target_public_web_action"] = round(public_web_action_ms, 2)
             record["target_public_web_action"] = public_web_action
@@ -8442,7 +8399,11 @@ def run_hosted_smoke_case(
                         {"batch_id": target_public_web_action_batch_id, "limit": 1000},
                     )
                     target_candidate_public_web_batches = _public_web_batches_for_smoke_window(
-                        [dict(item) for item in list(public_web_payload.get("batches") or []) if isinstance(item, dict)],
+                        [
+                            dict(item)
+                            for item in list(public_web_payload.get("batches") or [])
+                            if isinstance(item, dict)
+                        ],
                         started_at=case_wall_started_at,
                     )
                 except Exception:
@@ -8466,18 +8427,15 @@ def run_hosted_smoke_case(
                 if isinstance(item, dict)
             ]
         if (
-            (drive_remote_provider_duplicate_events or drive_remote_provider_watcher_first_events)
-            and remote_provider_event_driver_accepted_workers
-        ):
+            drive_remote_provider_duplicate_events or drive_remote_provider_watcher_first_events
+        ) and remote_provider_event_driver_accepted_workers:
             duplicate_started_at = time.perf_counter()
             late_events = _drive_smoke_remote_provider_late_watcher_duplicates(
                 client,
                 accepted_workers=remote_provider_event_driver_accepted_workers,
                 start_sequence=remote_provider_event_sequence,
                 duplicate_source=(
-                    "provider_webhook"
-                    if drive_remote_provider_watcher_first_events
-                    else "local_provider_event_watcher"
+                    "provider_webhook" if drive_remote_provider_watcher_first_events else "local_provider_event_watcher"
                 ),
             )
             if late_events:
@@ -8487,8 +8445,7 @@ def run_hosted_smoke_case(
                     else "watcher_late_duplicate"
                 )
                 remote_provider_event_driver_runs.extend(
-                    {"tick": len(progress_samples), "phase": late_duplicate_phase, **dict(item)}
-                    for item in late_events
+                    {"tick": len(progress_samples), "phase": late_duplicate_phase, **dict(item)} for item in late_events
                 )
                 timeline.append(
                     {
@@ -8542,7 +8499,9 @@ def run_hosted_smoke_case(
                 for item in list(materialization_payload.get("workflow_commands") or [])
                 if isinstance(item, dict)
             ]
-            workflow_commands.extend(_workflow_commands_from_target_public_web_action(record.get("target_public_web_action")))
+            workflow_commands.extend(
+                _workflow_commands_from_target_public_web_action(record.get("target_public_web_action"))
+            )
             board_visible_patches = [
                 dict(item)
                 for item in list(materialization_payload.get("job_board_visible_patches") or [])
@@ -8624,12 +8583,16 @@ def run_hosted_smoke_case(
             )
             refreshed_job_record = dict(refreshed_job_payload.get("job") or refreshed_job_payload or {})
             refreshed_results_job = dict(refreshed_results.get("job") or {})
-            refreshed_job_status = str(
-                refreshed_job_record.get("status")
-                or refreshed_results_job.get("status")
-                or final_progress_payload.get("status")
-                or ""
-            ).strip().lower()
+            refreshed_job_status = (
+                str(
+                    refreshed_job_record.get("status")
+                    or refreshed_results_job.get("status")
+                    or final_progress_payload.get("status")
+                    or ""
+                )
+                .strip()
+                .lower()
+            )
             if refreshed_job_status in TERMINAL_WORKFLOW_STATUSES:
                 refreshed_results_job.update(
                     {
@@ -8895,7 +8858,9 @@ def run_hosted_smoke_matrix(
         case_name = str(item.get("case") or "").strip()
         payload = dict(item.get("payload") or {})
         expectations = dict(item.get("expectations") or {}) if isinstance(item.get("expectations"), dict) else {}
-        review_decision = dict(item.get("review_decision") or {}) if isinstance(item.get("review_decision"), dict) else {}
+        review_decision = (
+            dict(item.get("review_decision") or {}) if isinstance(item.get("review_decision"), dict) else {}
+        )
         target_public_web_action = (
             dict(item.get("target_public_web_action") or {})
             if isinstance(item.get("target_public_web_action"), dict)
@@ -8906,11 +8871,7 @@ def run_hosted_smoke_matrix(
             if isinstance(item.get("company_public_web_action"), dict)
             else {}
         )
-        coverage_tags = [
-            str(tag).strip()
-            for tag in list(item.get("coverage_tags") or [])
-            if str(tag).strip()
-        ]
+        coverage_tags = [str(tag).strip() for tag in list(item.get("coverage_tags") or []) if str(tag).strip()]
         scripted_scenario = str(item.get("scripted_scenario") or "").strip()
         if not case_name or not payload:
             continue
@@ -9433,7 +9394,9 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
                     value = local_apply_backlog.get(key)
                     if isinstance(value, (int, float)) and float(value) >= 0.0:
                         values.append(float(value))
-                _extend_summary_values(service_local_apply_backlog_age_ms, dict(local_apply_backlog.get("age_ms") or {}))
+                _extend_summary_values(
+                    service_local_apply_backlog_age_ms, dict(local_apply_backlog.get("age_ms") or {})
+                )
                 if bool(local_apply_backlog.get("stale_applied_not_ingested_present")):
                     service_local_apply_backlog_stale_case_count += 1
                 if bool(local_apply_backlog.get("closure_retry_backlog_present")):
@@ -9494,20 +9457,18 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
                 _extend_summary_values(
                     service_post_profile_file_to_patch_values,
                     dict(
-                        dict(
-                            post_profile_completion.get("profile_file_visible_to_board_patch_visible")
-                            or {}
-                        ).get("elapsed_ms")
+                        dict(post_profile_completion.get("profile_file_visible_to_board_patch_visible") or {}).get(
+                            "elapsed_ms"
+                        )
                         or {}
                     ),
                 )
                 _extend_summary_values(
                     service_post_profile_all_profiles_to_cards_values,
                     dict(
-                        dict(
-                            post_profile_completion.get("all_profiles_fetched_to_all_cards_visible")
-                            or {}
-                        ).get("elapsed_ms")
+                        dict(post_profile_completion.get("all_profiles_fetched_to_all_cards_visible") or {}).get(
+                            "elapsed_ms"
+                        )
                         or {}
                     ),
                 )
@@ -9551,9 +9512,7 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
                 )
                 if bool(recovery_phase_metrics.get("slo_violation_detected")):
                     service_recovery_phase_violation_case_count += 1
-            snapshot_full_materialization_queue = dict(
-                service_metrics.get("snapshot_full_materialization_queue") or {}
-            )
+            snapshot_full_materialization_queue = dict(service_metrics.get("snapshot_full_materialization_queue") or {})
             if bool(snapshot_full_materialization_queue.get("report_available")):
                 service_snapshot_full_materialization_queue_report_count += 1
                 for values, key in (
@@ -9987,9 +9946,7 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
             "global_next_worker_start_gap_ms": _numeric_summary(service_global_handoff_gap_ms),
             "slow_worker_count": _numeric_summary(service_slow_worker_counts),
             "slow_gap_count": _numeric_summary(service_slow_gap_counts),
-            "out_of_order_profile_completion_count": _numeric_summary(
-                service_out_of_order_profile_completion_values
-            ),
+            "out_of_order_profile_completion_count": _numeric_summary(service_out_of_order_profile_completion_values),
             "local_apply_backlog": {
                 "report_count": service_local_apply_backlog_report_count,
                 "applied_not_ingested_count": _numeric_summary(service_local_apply_backlog_values),
@@ -10019,9 +9976,7 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "patch_log_count": _numeric_summary(service_board_visible_patch_count_values),
                 "fetched_to_board_visible_lag_count": _numeric_summary(service_board_visible_fetched_lag_values),
                 "patch_log_lag_count": _numeric_summary(service_board_visible_patch_lag_values),
-                "patch_consumable_card_nonzero_count": _numeric_summary(
-                    service_board_visible_consumable_patch_values
-                ),
+                "patch_consumable_card_nonzero_count": _numeric_summary(service_board_visible_consumable_patch_values),
                 "patch_consumable_card_distinct_count": _numeric_summary(
                     service_board_visible_consumable_progression_values
                 ),
@@ -10049,15 +10004,9 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "failed_phase_count": _numeric_summary(service_recovery_phase_failed_values),
                 "slow_phase_count": _numeric_summary(service_recovery_phase_slow_values),
                 "unexpected_enabled_phase_count": _numeric_summary(service_recovery_phase_unexpected_values),
-                "recovery_tick_budget_exhausted_count": _numeric_summary(
-                    service_recovery_tick_budget_exhausted_values
-                ),
-                "cooperative_budget_yield_count": _numeric_summary(
-                    service_recovery_cooperative_budget_yield_values
-                ),
-                "budget_yield_attention_count": _numeric_summary(
-                    service_recovery_budget_yield_attention_values
-                ),
+                "recovery_tick_budget_exhausted_count": _numeric_summary(service_recovery_tick_budget_exhausted_values),
+                "cooperative_budget_yield_count": _numeric_summary(service_recovery_cooperative_budget_yield_values),
+                "budget_yield_attention_count": _numeric_summary(service_recovery_budget_yield_attention_values),
                 "elapsed_ms": _numeric_summary(service_recovery_phase_elapsed_values),
                 "total_elapsed_ms": _numeric_summary(service_recovery_phase_total_elapsed_values),
                 "phase_candidate_count": _numeric_summary(service_recovery_phase_candidate_values),
@@ -10079,9 +10028,7 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
             "search_seed_discovery_queue": {
                 "report_count": service_search_seed_discovery_queue_report_count,
                 "item_count": _numeric_summary(service_search_seed_discovery_queue_item_values),
-                "provider_owned_count": _numeric_summary(
-                    service_search_seed_discovery_queue_provider_owned_values
-                ),
+                "provider_owned_count": _numeric_summary(service_search_seed_discovery_queue_provider_owned_values),
                 "retry_wait_count": _numeric_summary(service_search_seed_discovery_queue_retry_wait_values),
                 "ready_retry_count": _numeric_summary(service_search_seed_discovery_queue_ready_retry_values),
                 "exhausted_count": _numeric_summary(service_search_seed_discovery_queue_exhausted_values),
@@ -10089,9 +10036,7 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
                     service_search_seed_discovery_queue_stale_provider_values
                 ),
                 "owner_missing_count": _numeric_summary(service_search_seed_discovery_queue_owner_missing_values),
-                "worker_without_item_count": _numeric_summary(
-                    service_search_seed_discovery_worker_without_item_values
-                ),
+                "worker_without_item_count": _numeric_summary(service_search_seed_discovery_worker_without_item_values),
                 "worker_without_local_apply_count": _numeric_summary(
                     service_search_seed_discovery_worker_without_local_apply_values
                 ),
@@ -10113,9 +10058,7 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "report_count": service_provider_search_retry_queue_report_count,
                 "backlog_count": _numeric_summary(service_provider_search_retry_queue_backlog_values),
                 "retryable_count": _numeric_summary(service_provider_search_retry_queue_retryable_values),
-                "terminal_failed_count": _numeric_summary(
-                    service_provider_search_retry_queue_terminal_failed_values
-                ),
+                "terminal_failed_count": _numeric_summary(service_provider_search_retry_queue_terminal_failed_values),
                 "stale_running_count": _numeric_summary(service_provider_search_retry_queue_stale_running_values),
                 "retry_backlog_case_count": service_provider_search_retry_queue_retry_backlog_case_count,
                 "terminal_failure_case_count": service_provider_search_retry_queue_terminal_failure_case_count,
@@ -10125,9 +10068,7 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "report_count": service_remote_provider_event_report_count,
                 "event_count": _numeric_summary(service_remote_provider_event_count_values),
                 "late_duplicate_count": _numeric_summary(service_remote_provider_event_late_duplicate_values),
-                "in_flight_duplicate_count": _numeric_summary(
-                    service_remote_provider_event_in_flight_duplicate_values
-                ),
+                "in_flight_duplicate_count": _numeric_summary(service_remote_provider_event_in_flight_duplicate_values),
                 "remote_to_local_event_lag_ms": _numeric_summary(service_remote_provider_event_lag_values),
                 "actionable_remote_to_local_event_lag_ms": _numeric_summary(
                     service_remote_provider_event_actionable_lag_values
@@ -10159,9 +10100,7 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "batch_count": _numeric_summary(service_target_public_web_batch_values),
                 "run_count": _numeric_summary(service_target_public_web_run_values),
                 "metric_run_count": _numeric_summary(service_target_public_web_metric_run_values),
-                "remote_search_pending_run_count": _numeric_summary(
-                    service_target_public_web_remote_pending_values
-                ),
+                "remote_search_pending_run_count": _numeric_summary(service_target_public_web_remote_pending_values),
                 "partial_failure_count": _numeric_summary(service_target_public_web_partial_failure_values),
                 "unmaterialized_signal_gap_count": _numeric_summary(
                     service_target_public_web_unmaterialized_signal_gap_values
@@ -10170,19 +10109,11 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
                     service_target_public_web_completed_without_materialized_values
                 ),
                 "missing_phase_metric_count": _numeric_summary(service_target_public_web_missing_metric_values),
-                "provider_or_fetch_failure_count": _numeric_summary(
-                    service_target_public_web_provider_failure_values
-                ),
+                "provider_or_fetch_failure_count": _numeric_summary(service_target_public_web_provider_failure_values),
                 "local_processing_error_count": _numeric_summary(service_target_public_web_local_error_values),
-                "crm_storage_owner_batch_count": _numeric_summary(
-                    service_target_public_web_crm_owner_values
-                ),
-                "legacy_storage_owner_batch_count": _numeric_summary(
-                    service_target_public_web_legacy_owner_values
-                ),
-                "execution_backend_bridge_count": _numeric_summary(
-                    service_target_public_web_execution_bridge_values
-                ),
+                "crm_storage_owner_batch_count": _numeric_summary(service_target_public_web_crm_owner_values),
+                "legacy_storage_owner_batch_count": _numeric_summary(service_target_public_web_legacy_owner_values),
+                "execution_backend_bridge_count": _numeric_summary(service_target_public_web_execution_bridge_values),
                 "queue_batch_command_count": _numeric_summary(service_target_public_web_queue_command_values),
                 "queue_batch_command_succeeded_count": _numeric_summary(
                     service_target_public_web_queue_command_succeeded_values
@@ -10210,9 +10141,7 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
                     sorted(service_target_public_web_queue_command_owner_counts.items())
                 ),
                 "storage_owner_counts": dict(sorted(service_target_public_web_storage_owner_counts.items())),
-                "execution_backend_counts": dict(
-                    sorted(service_target_public_web_execution_backend_counts.items())
-                ),
+                "execution_backend_counts": dict(sorted(service_target_public_web_execution_backend_counts.items())),
                 "duration_by_phase_ms_max": {
                     key: _numeric_summary(values)
                     for key, values in sorted(service_target_public_web_phase_duration_values.items())
@@ -10231,17 +10160,13 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
             "board_overlay_writes": {
                 "report_count": service_board_overlay_write_report_count,
                 "full_rebuild_count": _numeric_summary(service_board_overlay_write_full_rebuild_values),
-                "incremental_partial_overlay_count": _numeric_summary(
-                    service_board_overlay_write_incremental_values
-                ),
+                "incremental_partial_overlay_count": _numeric_summary(service_board_overlay_write_incremental_values),
                 "fast_path_eligible_count": _numeric_summary(service_board_overlay_write_fast_path_eligible_values),
                 "fast_path_used_count": _numeric_summary(service_board_overlay_write_fast_path_used_values),
                 "eligible_full_rebuild_fallback_count": _numeric_summary(
                     service_board_overlay_write_eligible_fallback_values
                 ),
-                "eligible_full_rebuild_fallback_case_count": (
-                    service_board_overlay_write_eligible_fallback_case_count
-                ),
+                "eligible_full_rebuild_fallback_case_count": (service_board_overlay_write_eligible_fallback_case_count),
             },
             "finalization_overlay": {
                 "report_count": service_finalization_overlay_report_count,
@@ -10250,28 +10175,20 @@ def summarize_smoke_timings(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "eligible_full_rewrite_count": _numeric_summary(
                     service_finalization_overlay_eligible_full_rewrite_values
                 ),
-                "eligible_full_rewrite_case_count": (
-                    service_finalization_overlay_eligible_full_rewrite_case_count
-                ),
+                "eligible_full_rewrite_case_count": (service_finalization_overlay_eligible_full_rewrite_case_count),
             },
             "legacy_materialization_write_contract": {
                 "report_count": service_legacy_materialization_write_contract_report_count,
                 "item_count": _numeric_summary(service_legacy_materialization_item_values),
-                "normal_path_write_count": _numeric_summary(
-                    service_legacy_materialization_normal_write_values
-                ),
+                "normal_path_write_count": _numeric_summary(service_legacy_materialization_normal_write_values),
                 "migration_adapter_write_count": _numeric_summary(
                     service_legacy_materialization_migration_adapter_values
                 ),
-                "missing_contract_count": _numeric_summary(
-                    service_legacy_materialization_missing_contract_values
-                ),
+                "missing_contract_count": _numeric_summary(service_legacy_materialization_missing_contract_values),
                 "normal_path_write_case_count": service_legacy_materialization_normal_write_case_count,
                 "missing_contract_case_count": service_legacy_materialization_missing_contract_case_count,
                 "item_kind_counts": dict(sorted(service_legacy_materialization_item_kind_counts.items())),
-                "normal_path_kind_counts": dict(
-                    sorted(service_legacy_materialization_normal_kind_counts.items())
-                ),
+                "normal_path_kind_counts": dict(sorted(service_legacy_materialization_normal_kind_counts.items())),
                 "migration_adapter_kind_counts": dict(
                     sorted(service_legacy_materialization_migration_kind_counts.items())
                 ),

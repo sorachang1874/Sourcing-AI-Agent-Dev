@@ -20,6 +20,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .durable_runtime import CRM_PUBLIC_WEB_SEARCH_SUBMIT_COMMAND_TYPE
+from .legacy_public_web_storage import list_legacy_target_public_web_runs
 from .public_web_search import (
     DEFAULT_TARGET_CANDIDATE_SOURCE_FAMILIES,
     CandidateSearchOutcome,
@@ -45,8 +46,10 @@ from .public_web_search import (
     record_candidate_search_response,
     write_search_execution_artifacts,
 )
-from .public_web_signal_identity import public_web_signal_id_for_identity, public_web_signal_identity_key
-from .legacy_public_web_storage import list_legacy_target_public_web_runs
+from .public_web_signal_identity import (
+    public_web_signal_id_for_identity,
+    public_web_signal_identity_key,  # noqa: F401  (re-exported for downstream modules)
+)
 from .search_provider import BaseSearchProvider
 
 PUBLIC_WEB_JOB_TYPE = "target_candidate_public_web_search"
@@ -466,7 +469,9 @@ def _candidate_metadata_with_projection_context(
     return merged
 
 
-def _public_web_candidate_record_from_run(store: Any, run: dict[str, Any], *, owner: PublicWebRunOwner) -> dict[str, Any] | None:
+def _public_web_candidate_record_from_run(
+    store: Any, run: dict[str, Any], *, owner: PublicWebRunOwner
+) -> dict[str, Any] | None:
     run_payload = dict(run or {})
     record_id = str(run_payload.get("record_id") or run_payload.get("crm_record_id") or "").strip()
     crm_record: dict[str, Any] = {}
@@ -475,7 +480,10 @@ def _public_web_candidate_record_from_run(store: Any, run: dict[str, Any], *, ow
     if owner.storage_owner == TARGET_PUBLIC_WEB_OWNER.storage_owner:
         record = store.get_target_candidate(record_id) if record_id else None
         if record is not None:
-            return {**dict(record), **{key: value for key, value in run_payload.items() if value not in (None, "", [], {})}}
+            return {
+                **dict(record),
+                **{key: value for key, value in run_payload.items() if value not in (None, "", [], {})},
+            }
     if owner.storage_owner == CRM_PUBLIC_WEB_OWNER.storage_owner and record_id:
         crm_record = dict(store.get_crm_record(record_id) or {})
         if not crm_record:
@@ -500,7 +508,9 @@ def _public_web_candidate_record_from_run(store: Any, run: dict[str, Any], *, ow
         or public_summary.get("display_name")
         or ""
     )
-    headline = str(run_payload.get("headline") or crm_record.get("headline_cache") or public_summary.get("headline") or "")
+    headline = str(
+        run_payload.get("headline") or crm_record.get("headline_cache") or public_summary.get("headline") or ""
+    )
     current_company = str(
         run_payload.get("current_company")
         or crm_record.get("primary_company_cache")
@@ -1065,7 +1075,9 @@ def _execute_public_web_run_once(
                 "stage": "analysis",
                 "status": "analyzing",
                 "analysis_started_at": analysis_started_at,
-                "phase_metrics": dict(analysis_checkpoint.get("phase_metrics") or checkpoint.get("phase_metrics") or {}),
+                "phase_metrics": dict(
+                    analysis_checkpoint.get("phase_metrics") or checkpoint.get("phase_metrics") or {}
+                ),
             },
             "artifact_root": str(plan.candidate_dir),
         },
@@ -1084,9 +1096,15 @@ def _execute_public_web_run_once(
         summary={
             "entry_link_count": len(list(adjudication_payload.get("entry_links") or [])),
             "fetchable_entry_link_count": len(
-                [item for item in list(adjudication_payload.get("entry_links") or []) if isinstance(item, dict) and item.get("fetchable")]
+                [
+                    item
+                    for item in list(adjudication_payload.get("entry_links") or [])
+                    if isinstance(item, dict) and item.get("fetchable")
+                ]
             ),
-            "fetched_document_count": len([item for item in list(adjudication_payload.get("fetched_documents") or []) if isinstance(item, dict)]),
+            "fetched_document_count": len(
+                [item for item in list(adjudication_payload.get("fetched_documents") or []) if isinstance(item, dict)]
+            ),
             "email_candidate_count": len(list(adjudication_payload.get("email_candidates") or [])),
         },
         analysis_duration_ms=_elapsed_ms(analysis_started_monotonic),
@@ -1122,14 +1140,22 @@ def _execute_public_web_run_once(
                 "adjudication_completed_at": utc_iso_timestamp(),
                 "adjudication_duration_ms": phase_metrics["analysis_duration_ms"],
                 "adjudication_payload_path": str(plan.candidate_dir / "adjudication_payload.json"),
-                "adjudication_input_payload_path": str(adjudication_payload.get("adjudication_input_payload_path") or ""),
+                "adjudication_input_payload_path": str(
+                    adjudication_payload.get("adjudication_input_payload_path") or ""
+                ),
                 "adjudication_input_contract": dict(adjudication_payload.get("adjudication_input_contract") or {}),
-                "ai_adjudication_status": str(dict(adjudication_payload.get("ai_adjudication") or {}).get("status") or ""),
+                "ai_adjudication_status": str(
+                    dict(adjudication_payload.get("ai_adjudication") or {}).get("status") or ""
+                ),
                 "adjudicated_profile_link_count": len(
                     [item for item in list(adjudication_payload.get("entry_links") or []) if isinstance(item, dict)]
                 ),
                 "adjudicated_email_candidate_count": len(
-                    [item for item in list(adjudication_payload.get("email_candidates") or []) if isinstance(item, dict)]
+                    [
+                        item
+                        for item in list(adjudication_payload.get("email_candidates") or [])
+                        if isinstance(item, dict)
+                    ]
                 ),
                 "phase_metrics": phase_metrics,
             },
@@ -1456,7 +1482,9 @@ def _materialize_public_web_analysis_result(
     summary = dict(run.get("summary") or {})
     artifact_root = str(summary.get("artifact_root") or run.get("artifact_root") or "").strip()
     signals = _load_json_from_path(Path(artifact_root) / "signals.json") if artifact_root else {}
-    phase_metrics = dict(summary.get("phase_metrics") or dict(run.get("analysis_checkpoint") or {}).get("phase_metrics") or {})
+    phase_metrics = dict(
+        summary.get("phase_metrics") or dict(run.get("analysis_checkpoint") or {}).get("phase_metrics") or {}
+    )
     materialization_started_monotonic = time.monotonic()
     materialization_started_at = utc_iso_timestamp()
     run_status = str(summary.get("status") or "completed").strip() or "completed"
@@ -1822,9 +1850,7 @@ def _public_web_phase_metrics(checkpoint: dict[str, Any]) -> dict[str, Any]:
     fetched = _fetched_task_records(checkpoint)
     task_status_counts = _public_web_task_status_counts(checkpoint)
     provider_pending_deferred_count = sum(
-        1
-        for task in pending
-        if bool(dict(task).get("provider_pending_wait_deferred"))
+        1 for task in pending if bool(dict(task).get("provider_pending_wait_deferred"))
     )
     metrics = {
         "stage": str(checkpoint.get("stage") or ""),
@@ -2043,8 +2069,7 @@ def _aggregate_public_web_phase_metrics(runs: list[dict[str, Any]]) -> dict[str,
         "signal_materialization": "signal_materialization_duration_ms",
     }
     duration_by_phase = {
-        phase: float(aggregate.get(f"{field}_max") or 0.0)
-        for phase, field in duration_field_by_phase.items()
+        phase: float(aggregate.get(f"{field}_max") or 0.0) for phase, field in duration_field_by_phase.items()
     }
     aggregate["duration_by_phase_ms"] = {}
     for phase, field in duration_field_by_phase.items():
@@ -2057,7 +2082,9 @@ def _aggregate_public_web_phase_metrics(runs: list[dict[str, Any]]) -> dict[str,
             "max": max(values) if values else 0.0,
         }
     aggregate["duration_by_phase_ms_max"] = duration_by_phase
-    aggregate["slowest_phase"] = max(duration_by_phase, key=duration_by_phase.get) if any(duration_by_phase.values()) else ""
+    aggregate["slowest_phase"] = (
+        max(duration_by_phase, key=duration_by_phase.get) if any(duration_by_phase.values()) else ""
+    )
     aggregate["has_pending_remote_search"] = int(aggregate.get("pending_task_count") or 0) > 0
     required_signals = int(
         aggregate.get("signal_materialization_required_count")
@@ -2066,7 +2093,9 @@ def _aggregate_public_web_phase_metrics(runs: list[dict[str, Any]]) -> dict[str,
     aggregate["has_unmaterialized_signals"] = required_signals > int(aggregate.get("signal_materialized_count") or 0)
     terminal_error_statuses = {"completed_with_errors", "needs_review", "failed"}
     terminal_with_errors_count = sum(int(status_counts.get(status) or 0) for status in terminal_error_statuses)
-    remote_pending_run_count = sum(1 for _status, row in run_metric_rows if _coerce_int_metric(row.get("pending_task_count")) > 0)
+    remote_pending_run_count = sum(
+        1 for _status, row in run_metric_rows if _coerce_int_metric(row.get("pending_task_count")) > 0
+    )
     unmaterialized_signal_gap_count = 0
     completed_without_materialized_signals_count = 0
     runs_with_metric_errors_count = 0
@@ -2192,9 +2221,7 @@ def _submit_public_web_batch_search(
         tasks[task_key] = {
             "task_key": task_key,
             "query_identity_key": task_key,
-            "task_id": str(
-                task_checkpoint.get("task_id") or dict(task.metadata or {}).get("task_id") or ""
-            ),
+            "task_id": str(task_checkpoint.get("task_id") or dict(task.metadata or {}).get("task_id") or ""),
             "query_text": task.query_text,
             "query": dict(original.get("query") or {}),
             "query_index": int(original.get("query_index") or 0),
@@ -2276,14 +2303,12 @@ def _poll_and_fetch_ready_public_web_tasks(
             current["status"] = "ready"
             ready_specs.append(_task_poll_spec(current))
             checkpoint["ready_task_count_last_poll"] = int(checkpoint.get("ready_task_count_last_poll") or 0) + 1
-        elif (
-            remote_wait_exceeded
-            and _task_has_provider_pending_status(current)
-            and not provider_pending_wait_exceeded
-        ):
+        elif remote_wait_exceeded and _task_has_provider_pending_status(current) and not provider_pending_wait_exceeded:
             current["status"] = "waiting"
             current["ready_poll_budget_exhausted"] = True
-            current["ready_poll_budget_exhausted_at"] = current.get("ready_poll_budget_exhausted_at") or utc_iso_timestamp()
+            current["ready_poll_budget_exhausted_at"] = (
+                current.get("ready_poll_budget_exhausted_at") or utc_iso_timestamp()
+            )
             current["provider_pending_wait_deferred"] = True
             current["provider_pending_wait_deferred_at"] = utc_iso_timestamp()
             current["provider_pending_wait_elapsed_seconds"] = round(float(elapsed_seconds or 0.0), 3)
@@ -2647,8 +2672,7 @@ def _reset_waiting_public_web_provider_tasks(
     reset_candidates = [
         dict(task)
         for task in tasks.values()
-        if str(task.get("status") or "") == "waiting"
-        and _should_reset_public_web_provider_task(task, options=options)
+        if str(task.get("status") or "") == "waiting" and _should_reset_public_web_provider_task(task, options=options)
     ]
     if not reset_candidates:
         return
@@ -2659,15 +2683,15 @@ def _reset_waiting_public_web_provider_tasks(
         submission = search_provider.submit_batch_queries(query_specs)
     except Exception as exc:
         checkpoint.setdefault("errors", []).append(f"batch_task_reset_failed:{str(exc)[:200]}")
-        checkpoint["provider_task_reset_error_count"] = int(checkpoint.get("provider_task_reset_error_count") or 0) + len(
-            reset_candidates
-        )
+        checkpoint["provider_task_reset_error_count"] = int(
+            checkpoint.get("provider_task_reset_error_count") or 0
+        ) + len(reset_candidates)
         return
     if submission is None:
         checkpoint.setdefault("errors", []).append("batch_task_reset_failed:provider_returned_none")
-        checkpoint["provider_task_reset_error_count"] = int(checkpoint.get("provider_task_reset_error_count") or 0) + len(
-            reset_candidates
-        )
+        checkpoint["provider_task_reset_error_count"] = int(
+            checkpoint.get("provider_task_reset_error_count") or 0
+        ) + len(reset_candidates)
         return
     reset_index = int(checkpoint.get("provider_task_reset_count") or 0) + 1
     write_search_execution_artifacts(plan.logger, artifacts=submission.artifacts, prefix=f"reset_{reset_index:02d}")
@@ -2683,9 +2707,7 @@ def _reset_waiting_public_web_provider_tasks(
             continue
         previous_task_id = str(current.get("task_id") or dict(current.get("checkpoint") or {}).get("task_id") or "")
         previous_task_ids = [
-            str(item or "").strip()
-            for item in list(current.get("previous_task_ids") or [])
-            if str(item or "").strip()
+            str(item or "").strip() for item in list(current.get("previous_task_ids") or []) if str(item or "").strip()
         ]
         if previous_task_id and previous_task_id not in previous_task_ids:
             previous_task_ids.append(previous_task_id)
@@ -2695,7 +2717,10 @@ def _reset_waiting_public_web_provider_tasks(
         current.update(
             {
                 "task_id": str(
-                    submitted_checkpoint.get("task_id") or submitted_metadata.get("task_id") or current.get("task_id") or ""
+                    submitted_checkpoint.get("task_id")
+                    or submitted_metadata.get("task_id")
+                    or current.get("task_id")
+                    or ""
                 ),
                 "checkpoint": submitted_checkpoint,
                 "metadata": submitted_metadata,
@@ -2714,7 +2739,9 @@ def _reset_waiting_public_web_provider_tasks(
         tasks[task_key] = current
         reset_query_count += 1
     if reset_query_count:
-        checkpoint["provider_task_reset_count"] = int(checkpoint.get("provider_task_reset_count") or 0) + reset_query_count
+        checkpoint["provider_task_reset_count"] = (
+            int(checkpoint.get("provider_task_reset_count") or 0) + reset_query_count
+        )
         checkpoint["provider_task_reset_started_at"] = reset_started_at
         checkpoint["provider_task_reset_completed_at"] = utc_iso_timestamp()
         checkpoint["provider_task_reset_duration_ms"] = _elapsed_ms(reset_started_monotonic)
@@ -2880,11 +2907,7 @@ def build_person_public_web_signal_rows(
             continue
         link_suppression_reason = ""
         if not publishable_profile_link:
-            link_suppression_reason = (
-                "non_publishable_link_type"
-                if clean_profile_link
-                else "non_profile_link_shape"
-            )
+            link_suppression_reason = "non_publishable_link_type" if clean_profile_link else "non_profile_link_shape"
         link_adjudication = dict(link.get("adjudication") or {})
         rows.append(
             {
@@ -3014,9 +3037,7 @@ def _should_materialize_profile_link_signal(
         return _profile_link_has_model_assessment(link) or bool(publishable_profile_link)
     if identity_match_label in {"needs_review", "ambiguous_identity"}:
         return bool(
-            clean_profile_link
-            and _profile_link_has_model_assessment(link)
-            and _profile_link_user_visible_signal(link)
+            clean_profile_link and _profile_link_has_model_assessment(link) and _profile_link_user_visible_signal(link)
         )
     return False
 
@@ -3120,9 +3141,7 @@ def _upsert_canonical_public_web_person_evidence_from_signal_rows(
                 "evidence_id": f"person-evidence-public-web-{short_hash(signal_id)}",
                 "person_identity_key": person_identity_key,
                 "asset_id": canonical_asset_id,
-                "evidence_type": "_".join(
-                    part for part in ("public_web", signal_kind, signal_type) if part
-                ),
+                "evidence_type": "_".join(part for part in ("public_web", signal_kind, signal_type) if part),
                 "value": str(signal.get("value") or "").strip(),
                 "normalized_value": str(signal.get("normalized_value") or signal.get("value") or "").strip(),
                 "source_url": str(signal.get("source_url") or signal.get("url") or "").strip(),

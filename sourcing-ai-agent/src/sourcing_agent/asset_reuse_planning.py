@@ -630,9 +630,7 @@ def build_asset_reuse_baseline_selection_explanation(
         "baseline_multi_snapshot_aggregate_coverage_proven": bool(
             asset_reuse_plan.get("baseline_multi_snapshot_aggregate_coverage_proven")
         ),
-        "baseline_full_company_coverage_proven": bool(
-            asset_reuse_plan.get("baseline_full_company_coverage_proven")
-        ),
+        "baseline_full_company_coverage_proven": bool(asset_reuse_plan.get("baseline_full_company_coverage_proven")),
         "baseline_population_coverage_contract": dict(
             asset_reuse_plan.get("baseline_population_coverage_contract") or {}
         ),
@@ -1115,12 +1113,8 @@ def _population_coverage_payload_from_contract(
         "profile_search_shard_count": _safe_int(contract.get("profile_search_shard_count")),
         "standard_bundle_count": _safe_int(contract.get("standard_bundle_count")),
         "candidate_count": _safe_int(contract.get("candidate_count")),
-        "current_lane_effective_candidate_count": _safe_int(
-            contract.get("current_lane_effective_candidate_count")
-        ),
-        "former_lane_effective_candidate_count": _safe_int(
-            contract.get("former_lane_effective_candidate_count")
-        ),
+        "current_lane_effective_candidate_count": _safe_int(contract.get("current_lane_effective_candidate_count")),
+        "former_lane_effective_candidate_count": _safe_int(contract.get("former_lane_effective_candidate_count")),
         "write_source": _normalize_text(write_source) or "authoritative_registry_write",
         "written_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -3840,9 +3834,7 @@ def _compile_asset_reuse_plan_for_baseline(
         "baseline_multi_snapshot_directional_blocked": bool(
             baseline_population_default_reuse_assessment.get("multi_snapshot_directional_blocked")
         ),
-        "baseline_full_company_coverage_proven": bool(
-            population_coverage_contract.get("full_company_coverage_proven")
-        ),
+        "baseline_full_company_coverage_proven": bool(population_coverage_contract.get("full_company_coverage_proven")),
         "baseline_population_coverage_contract": population_coverage_contract,
         "requested_population_boundary": requested_population_boundary,
         "full_company_filter_from_baseline": full_company_filter_from_baseline,
@@ -3893,11 +3885,7 @@ def _compile_asset_reuse_plan_for_baseline(
         "baseline_resolution_mode": (
             "cached_only"
             if cached_lane_coverage_available
-            else (
-                "repaired_missing_cache"
-                if allow_missing_ledger_rebuild
-                else "cached_missing_no_rebuild"
-            )
+            else ("repaired_missing_cache" if allow_missing_ledger_rebuild else "cached_missing_no_rebuild")
         ),
         "planner_mode": ("delta_from_snapshot" if requires_delta_acquisition else "reuse_snapshot_only"),
     }

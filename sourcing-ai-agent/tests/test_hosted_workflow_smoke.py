@@ -1657,7 +1657,9 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
                     json.dumps(record, ensure_ascii=False, indent=2),
                 )
                 completion_metrics = dict(profile_completion_result.get("result") or {})
-                artifact_summary = dict(dict(profile_completion_result.get("artifact_result") or {}).get("summary") or {})
+                artifact_summary = dict(
+                    dict(profile_completion_result.get("artifact_result") or {}).get("summary") or {}
+                )
                 self.assertGreaterEqual(
                     max(
                         int(completion_metrics.get("fetched_profile_count") or 0),

@@ -438,11 +438,12 @@ def _candidate_profile_url(candidate: dict[str, Any]) -> str:
 
 def _candidate_employment_status(candidate: dict[str, Any]) -> str:
     metadata = dict(candidate.get("metadata") or {})
-    return str(
-        candidate.get("employment_status")
-        or metadata.get("membership_claim_employment_status")
+    return (
+        str(candidate.get("employment_status") or metadata.get("membership_claim_employment_status") or "current")
+        .strip()
+        .lower()
         or "current"
-    ).strip().lower() or "current"
+    )
 
 
 def _candidate_matches_text(candidate: dict[str, Any], term: str) -> bool:
@@ -487,11 +488,7 @@ def _google_large_baseline_exclude_terms() -> list[str]:
     raw_value = str(os.getenv("SOURCING_SEED_GOOGLE_LARGE_BASELINE_EXCLUDE_TERMS") or "").strip()
     if not raw_value:
         return list(_GOOGLE_LARGE_BASELINE_DEFAULT_EXCLUDE_TERMS)
-    return [
-        item.strip().lower()
-        for item in raw_value.replace(";", ",").split(",")
-        if item.strip()
-    ]
+    return [item.strip().lower() for item in raw_value.replace(";", ",").split(",") if item.strip()]
 
 
 def _google_large_baseline_candidates(source_candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
