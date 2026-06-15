@@ -72,7 +72,10 @@ def create_app(orchestrator: SourcingOrchestrator) -> FastAPI:
     app = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
     app.router.routes.extend(_build_routes(orchestrator))
     # Middleware stack (outermost first at runtime): raw-path restore -> two-lane
-    # request concurrency -> CORS headers/OPTIONS short-circuit -> routing.
+    # request concurrency -> CORS headers/OPTIONS short-circuit -> bearer auth ->
+    # routing. add_middleware prepends, so the auth gate (added first) is innermost
+    # and its 401 still picks up CORS headers from the outer CORS middleware.
+    app.add_middleware(_AuthMiddleware, bearer_tokens=_api_bearer_tokens())
     app.add_middleware(_CorsHeaderMiddleware, allowed_origins=allowed_origins)
     app.add_middleware(
         _RequestConcurrencyMiddleware,
@@ -171,6 +174,106 @@ class _RawPathTargetMiddleware:
                 path_bytes = bytes(raw_path).split(b"?", 1)[0]
                 scope = dict(scope)
                 scope["path"] = path_bytes.decode("latin-1") or "/"
+        await self.app(scope, receive, send)
+
+
+# Public routes exempt from bearer auth: liveness/health probes and the provider
+# webhook (which runs its own shared-secret token check in the handler).
+_AUTH_EXEMPT_PATHS = frozenset(
+    {
+        "/health",
+        "/api/providers/health",
+        "/api/runtime/health",
+        "/api/providers/apify/webhook",
+    }
+)
+
+
+def _api_bearer_tokens() -> dict[str, str]:
+    """Parse SOURCING_API_BEARER_TOKENS into a {token: user_id} map.
+
+    Single-org static per-user bearer tokens (no login UI). Returns {} when the
+    env var is unset or malformed, which disables auth enforcement (pre-auth /
+    open mode) so unconfigured deploys and the test lanes are not broken before
+    the frontend ships its bearer (C2.4).
+    """
+    raw = str(os.getenv("SOURCING_API_BEARER_TOKENS") or "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    tokens: dict[str, str] = {}
+    for token, user_id in parsed.items():
+        token_text = str(token or "").strip()
+        user_text = str(user_id or "").strip()
+        if token_text and user_text:
+            tokens[token_text] = user_text
+    return tokens
+
+
+def _bearer_token_from_headers(headers: Headers) -> str:
+    raw = str(headers.get("authorization") or "").strip()
+    if not raw:
+        return ""
+    scheme, _, credential = raw.partition(" ")
+    if scheme.strip().lower() != "bearer":
+        return ""
+    return credential.strip()
+
+
+def _resolve_bearer_identity(headers: Headers, bearer_tokens: dict[str, str]) -> dict[str, str] | None:
+    token = _bearer_token_from_headers(headers)
+    if not token:
+        return None
+    user_id = bearer_tokens.get(token)
+    if not user_id:
+        return None
+    return {"user_id": user_id}
+
+
+class _AuthMiddleware:
+    """Static per-user bearer-token gate (single org, no login UI).
+
+    Enforcement is active only when SOURCING_API_BEARER_TOKENS is configured (a
+    JSON {token: user_id} map, captured at app build time). When active, a
+    missing or unknown ``Authorization: Bearer <token>`` yields 401 for every
+    route except the public exemptions (health + the provider webhook, which has
+    its own token check). On success ``request.state.identity`` is set to
+    ``{"user_id": ...}``. When no tokens are configured, requests pass through
+    with ``identity = None`` (pre-auth / open) so unconfigured deploys and the
+    test/contract lanes keep working before the frontend bearer lands (C2.4).
+
+    Added innermost of the user middleware (runs after CORS has short-circuited
+    preflight, before routing) so its 401 still receives CORS headers from the
+    outer CORS middleware.
+    """
+
+    def __init__(self, app: Any, bearer_tokens: dict[str, str]) -> None:
+        self.app = app
+        self.bearer_tokens = dict(bearer_tokens or {})
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        identity: dict[str, str] | None = None
+        if self.bearer_tokens:
+            method = str(scope.get("method") or "").upper()
+            path = str(scope.get("path") or "/")
+            if method != "OPTIONS" and path not in _AUTH_EXEMPT_PATHS:
+                identity = _resolve_bearer_identity(Headers(scope=scope), self.bearer_tokens)
+                if identity is None:
+                    await _json_response(
+                        HTTPStatus.UNAUTHORIZED,
+                        {"status": "unauthorized", "reason": "bearer_token_required"},
+                    )(scope, receive, send)
+                    return
+        scope = dict(scope)
+        scope["state"] = {**(scope.get("state") or {}), "identity": identity}
         await self.app(scope, receive, send)
 
 
