@@ -481,6 +481,18 @@ const ENV_API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL |
 const HOSTED_API_BASE_URL_LOCKED = !runningLocally && Boolean(ENV_API_BASE_URL);
 const LOOPBACK_FALLBACK_ENABLED = runningLocally;
 
+// C2.4: static per-user bearer (no login UI). When VITE_SOURCING_API_BEARER_TOKEN
+// is set at build time, attach it to every authenticated API request so the
+// backend _AuthMiddleware (C2.1) accepts the call. Empty -> no header, which
+// keeps the demo working against an open-mode (no-token) backend.
+const ENV_API_BEARER_TOKEN = String(import.meta.env.VITE_SOURCING_API_BEARER_TOKEN || "").trim();
+
+function applyApiAuthHeader(requestHeaders: Headers): void {
+  if (ENV_API_BEARER_TOKEN && !requestHeaders.has("Authorization")) {
+    requestHeaders.set("Authorization", `Bearer ${ENV_API_BEARER_TOKEN}`);
+  }
+}
+
 function readApiBaseUrlFromQuery(): string {
   if (typeof window === "undefined") {
     return "";
@@ -700,6 +712,7 @@ async function fetchJson<T>(path: string, options?: RequestInit, timeoutMs = DEF
     if (!requestHeaders.has("Content-Type") && !isFormDataBody(options?.body)) {
       requestHeaders.set("Content-Type", "application/json");
     }
+    applyApiAuthHeader(requestHeaders);
     try {
       const response = await fetch(buildApiRequestUrl(resolvedApiBaseUrl, path), {
         ...options,
@@ -800,6 +813,7 @@ async function fetchBinary(
     if (options?.body && !requestHeaders.has("Content-Type") && !isFormDataBody(options.body)) {
       requestHeaders.set("Content-Type", "application/json");
     }
+    applyApiAuthHeader(requestHeaders);
     try {
       const response = await fetch(buildApiRequestUrl(resolvedApiBaseUrl, path), {
         ...options,

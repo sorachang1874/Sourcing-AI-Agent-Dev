@@ -180,7 +180,10 @@ VITE_DEV_PROXY_TARGET=http://localhost:8765
 VITE_USE_MOCK=false
 VITE_USE_LOCAL_ASSETS=false
 VITE_ENABLE_EXCEL_INTAKE_WORKFLOW=true
+VITE_SOURCING_API_BEARER_TOKEN=
 ```
+
+`VITE_SOURCING_API_BEARER_TOKEN`(C2.4):当后端启用了鉴权(设置了 `SOURCING_API_BEARER_TOKENS`)时,把它设为对应的 per-user token,前端会在每个 API 请求带上 `Authorization: Bearer <token>`;留空则按 open-mode(无 token 后端)工作。
 
 本地 `dev` 与 `preview` 都会把 `/api/*` 代理到 `VITE_DEV_PROXY_TARGET`。如果浏览器环境里 same-origin 意外回落到前端 HTML shell，客户端会自动 fallback 到 `http://127.0.0.1:8765` / `http://localhost:8765`，避免 Excel 上传这类 `FormData` 请求被误判为后端不可达。
 
