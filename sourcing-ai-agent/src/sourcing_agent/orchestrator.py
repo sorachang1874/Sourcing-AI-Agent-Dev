@@ -28003,6 +28003,17 @@ class SourcingOrchestrator:
             return self._crm_public_web_owner._crm_public_web_export_artifact_headers(result)
         return self._projection_export_artifact_headers(result)
 
+    def _export_artifact_replay_allowed(self, command_type: str, command: dict[str, Any]) -> bool:
+        """Whether a succeeded export's artifact may still replay. CRM artifacts may
+        replay only while the stored input watermark still equals the current
+        owner-computed watermark (DURABLE_EXECUTION_RUNTIME_CONTRACT); this is a
+        lightweight contract recheck (no artifact read) so the poll does not advertise
+        a handle for a stale artifact the download would then fail-close. Projection
+        replay is unconditional (idempotent by immutable projection snapshot id)."""
+        if str(command_type or "").strip() == EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE:
+            return not self._crm_public_web_owner._crm_public_web_export_command_contract_failure(dict(command))
+        return True
+
     def _export_task_status_envelope(self, command: dict[str, Any]) -> dict[str, Any]:
         """Project a durable export command into the unified async-task poll body."""
         command_id = str(command.get("command_id") or "")
@@ -28010,7 +28021,7 @@ class SourcingOrchestrator:
         domain_status = str(command.get("status") or "").strip()
         result = dict(command.get("result") or {})
         artifact = None
-        if domain_status == "succeeded":
+        if domain_status == "succeeded" and self._export_artifact_replay_allowed(command_type, command):
             artifact = async_task_artifact(
                 handle=f"/api/exports/{command_id}/artifact",
                 content_type=str(result.get("content_type") or "application/zip"),

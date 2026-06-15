@@ -223,16 +223,25 @@ class ExportAsyncTaskTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         owner = self.orchestrator._crm_public_web_owner
         task_id = self._seed_succeeded_crm_export(owner, workspace_id="ws-stale")
         self.assertTrue(task_id)
-        # Sanity: a fresh (non-stale) download serves the bytes.
+        # Sanity: while fresh, the poll advertises a handle and the download serves bytes.
+        fresh_poll = self.orchestrator.get_export_command_status(task_id)
+        self.assertEqual(fresh_poll.get("status"), "succeeded")
+        self.assertIsNotNone(fresh_poll.get("artifact"))
         fresh = self.orchestrator.get_export_command_artifact(task_id)
         self.assertEqual(fresh.get("status"), "ok")
         self.assertEqual(fresh.get("body"), b"CRM-REAL-ZIP-BYTES")
-        # Now the watermark goes stale -> the contract recheck fails -> fail-closed.
+        # Now the watermark goes stale -> the contract recheck fails.
         with mock.patch.object(
             owner,
             "_crm_public_web_export_command_contract_failure",
             return_value={"reason": "crm_public_web_export_input_watermark_stale"},
         ):
+            # Poll: the command is still 'succeeded' but the stale artifact handle is
+            # NOT advertised (the download would only fail-close).
+            stale_poll = self.orchestrator.get_export_command_status(task_id)
+            self.assertEqual(stale_poll.get("status"), "succeeded")
+            self.assertIsNone(stale_poll.get("artifact"))
+            # Download: fail-closed JSON, never the stale ZIP.
             stale = self.orchestrator.get_export_command_artifact(task_id)
         self.assertNotEqual(stale.get("status"), "ok")
         self.assertFalse(stale.get("body"))  # absent/empty — never the stale ZIP
