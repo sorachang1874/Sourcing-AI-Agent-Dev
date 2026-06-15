@@ -193,6 +193,86 @@ class ExportAsyncTaskTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         )
         self.assertEqual(downloaded.get("headers", {}).get("X-Sourcing-Exported-Signal-Count"), "9")
 
+    def _seed_succeeded_crm_export(self, owner, *, workspace_id: str) -> str:
+        canned = {
+            "status": "ok",
+            "filename": "crm-public-web-export.zip",
+            "content_type": "application/zip",
+            "body": b"CRM-REAL-ZIP-BYTES",
+            "record_count": 1,
+            "exported_record_count": 1,
+            "exported_signal_count": 2,
+            "no_public_web_result_count": 0,
+            "no_exportable_signal_count": 0,
+            "non_terminal_run_count": 0,
+        }
+        with mock.patch.object(owner, "_prepare_crm_public_web_record_ids", return_value=["rec-1"]), \
+                mock.patch.object(owner, "_export_crm_public_web_archive_from_owner", return_value=canned):
+            submitted = self.orchestrator.export_crm_record_public_web_archive(
+                {"workspace_id": workspace_id, "crm_record_ids": ["rec-1"]}
+            )
+            task_id = str(submitted.get("task_id") or "")
+            self.orchestrator._drain_export_crm_public_web_generate_commands({})
+        return task_id
+
+    def test_crm_export_download_fails_closed_on_stale_watermark(self) -> None:
+        """Codex critical fix: the shared CRM download reroutes through the owner's
+        _run, which rechecks the input watermark before serving a succeeded artifact.
+        When the stored watermark no longer matches (underlying CRM data changed), the
+        download fails closed with JSON — it never streams the stale ZIP."""
+        owner = self.orchestrator._crm_public_web_owner
+        task_id = self._seed_succeeded_crm_export(owner, workspace_id="ws-stale")
+        self.assertTrue(task_id)
+        # Sanity: a fresh (non-stale) download serves the bytes.
+        fresh = self.orchestrator.get_export_command_artifact(task_id)
+        self.assertEqual(fresh.get("status"), "ok")
+        self.assertEqual(fresh.get("body"), b"CRM-REAL-ZIP-BYTES")
+        # Now the watermark goes stale -> the contract recheck fails -> fail-closed.
+        with mock.patch.object(
+            owner,
+            "_crm_public_web_export_command_contract_failure",
+            return_value={"reason": "crm_public_web_export_input_watermark_stale"},
+        ):
+            stale = self.orchestrator.get_export_command_artifact(task_id)
+        self.assertNotEqual(stale.get("status"), "ok")
+        self.assertFalse(stale.get("body"))  # absent/empty — never the stale ZIP
+        self.assertTrue(dict(stale.get("read_contract") or {}).get("fail_closed"))
+
+    def test_crm_export_drain_reclaims_expired_claimed_command(self) -> None:
+        """Codex high fix: the CRM owner _run claim passes reclaim_claimed=True so the
+        drain reclaims an expired-lease 'claimed' command (a worker that crashed between
+        claim and mark_running) instead of stranding it (selected by the drain's list
+        but unclaimable). Mirrors the projection expired-claimed regression."""
+        owner = self.orchestrator._crm_public_web_owner
+        canned = {
+            "status": "ok",
+            "filename": "crm-public-web-export.zip",
+            "content_type": "application/zip",
+            "body": b"CRM-REAL-ZIP-BYTES",
+            "record_count": 1,
+        }
+        with mock.patch.object(owner, "_prepare_crm_public_web_record_ids", return_value=["rec-1"]), \
+                mock.patch.object(owner, "_export_crm_public_web_archive_from_owner", return_value=canned):
+            submitted = self.orchestrator.export_crm_record_public_web_archive(
+                {"workspace_id": "ws-reclaim", "crm_record_ids": ["rec-1"]}
+            )
+            task_id = str(submitted.get("task_id") or "")
+            self.assertTrue(task_id)
+            # A worker claims it then dies before mark_running -> stranded 'claimed'.
+            self.store.claim_workflow_command(task_id, lease_owner="dead-worker", lease_seconds=300)
+            self.store._control_plane_postgres.execute_non_query(  # noqa: SLF001
+                "UPDATE workflow_commands SET lease_expires_at = %s WHERE command_id = %s",
+                ("2000-01-01T00:00:00+00:00", task_id),
+            )
+            # The drain reclaims it (the owner _run claim now passes reclaim_claimed=True).
+            drained = self.orchestrator._drain_export_crm_public_web_generate_commands({})
+        self.assertGreaterEqual(int(drained.get("command_count") or 0), 1)
+        self.assertEqual(int(drained.get("completed_count") or 0), 1)
+        self.assertNotEqual(
+            str(self.store.get_workflow_command(task_id).get("lease_owner") or ""),
+            "dead-worker",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

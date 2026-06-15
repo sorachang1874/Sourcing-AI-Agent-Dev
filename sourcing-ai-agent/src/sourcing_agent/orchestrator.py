@@ -28072,9 +28072,12 @@ class SourcingOrchestrator:
                 command=command, artifact_path=artifact_path, filename=filename
             )
         elif command_type == EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE:
-            payload = self._crm_public_web_owner._crm_public_web_export_payload_from_artifact(
-                command=command, artifact_path=artifact_path, filename=filename
-            )
+            # A CRM artifact may replay only while its stored input watermark still
+            # equals the current owner-computed watermark (DURABLE_EXECUTION_RUNTIME_
+            # CONTRACT). The owner's _run succeeded-command path rechecks that contract
+            # before reading the artifact, so route the download through it instead of
+            # reading the (possibly stale) ZIP directly -> fail-closed JSON on staleness.
+            payload = self._crm_public_web_owner._run_crm_public_web_export_generate_command(dict(command))
         else:
             return {"status": "invalid", "reason": "unsupported_export_command_type", "command_type": command_type}
         if str(payload.get("status") or "") == "ok":

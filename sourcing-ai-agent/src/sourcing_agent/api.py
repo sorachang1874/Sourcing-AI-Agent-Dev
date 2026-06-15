@@ -606,7 +606,10 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         if payload_status == "not_ready":
             return _json_response(HTTPStatus.CONFLICT, result)
         if payload_status != "ok":
-            return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, result)
+            # Fail-closed JSON (never binary) — e.g. a CRM artifact whose stored input
+            # watermark no longer matches the owner-computed watermark (stale replay),
+            # or a missing artifact. 409 Conflict: the artifact can no longer be served.
+            return _json_response(HTTPStatus.CONFLICT, result)
         return _bytes_response(
             HTTPStatus.OK,
             bytes(result.get("body") or b""),

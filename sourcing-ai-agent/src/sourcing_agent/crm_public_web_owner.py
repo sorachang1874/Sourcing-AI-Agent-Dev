@@ -3412,7 +3412,11 @@ class CrmPublicWebOwner:
                 filename=str(result_payload.get("filename") or ""),
             )
         lease_owner = f"{EXPORT_CRM_PUBLIC_WEB_GENERATE_OWNER}-{uuid.uuid4().hex[:8]}"
-        claimed = self.store.claim_workflow_command(command_id, lease_owner=lease_owner, lease_seconds=600)
+        # Idempotent CRM export build -> safe to reclaim an expired-lease 'claimed' row
+        # (mirrors the projection export _run + the CRM drain's reclaim_claimed=True).
+        claimed = self.store.claim_workflow_command(
+            command_id, lease_owner=lease_owner, lease_seconds=600, reclaim_claimed=True
+        )
         if not claimed:
             latest = self.store.get_workflow_command(command_id) or command_payload
             if str(latest.get("status") or "").strip() == "succeeded":
