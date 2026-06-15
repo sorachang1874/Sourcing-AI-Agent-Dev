@@ -10,6 +10,23 @@ on:
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
+    # The backend is PG-only: scripted/hosted/pipeline runtimes require a live
+    # Postgres DSN and reject SQLite fallback. Provide a throwaway Postgres; the
+    # PG fixtures create their own per-test schemas in this database.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sourcing
+          POSTGRES_PASSWORD: sourcing
+          POSTGRES_DB: sourcing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sourcing -d sourcing"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     defaults:
       run:
         working-directory: sourcing-ai-agent
@@ -39,8 +56,9 @@ jobs:
       - name: Run Unit Tests
         env:
           # src -> sourcing_agent package; . -> repo subdir so `scripts.*` and `tests.*` packages resolve.
-          # No live Postgres in CI: pg_store_fixture raises unittest.SkipTest (set
-          # SOURCING_REQUIRE_PG_STORE_TESTS=1 to turn those skips into hard failures).
           PYTHONPATH: src:.
+          # PG-only control plane. The service above backs all PG fixtures and the
+          # scripted/hosted/pipeline runtimes (which reject SQLite fallback).
+          SOURCING_CONTROL_PLANE_POSTGRES_DSN: postgresql://sourcing:sourcing@localhost:5432/sourcing
         run: |
           python -m unittest discover -s tests -q
