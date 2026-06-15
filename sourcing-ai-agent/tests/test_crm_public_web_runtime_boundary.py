@@ -860,19 +860,20 @@ def test_crm_public_web_phase_command_summary_uses_fixed_phase_order() -> None:
 
 
 def test_crm_public_web_export_api_never_sends_binary_for_failed_owner_result() -> None:
-    # The FastAPI transport registers a nested handler for the canonical export
-    # route; slice its function body (nested defs are out of reach for the
-    # class-method AST helper).
+    # C1.4: the CRM public-web export is now an async durable task — the submit
+    # handler returns ONLY a JSON async-task envelope (202 enqueue / 200 idempotent
+    # / 409 fail-closed) and NEVER streams binary; the worker drain builds the
+    # archive and the client downloads it later via the shared
+    # GET /api/exports/{id}/artifact endpoint. So a failed owner result can never
+    # leak as a partial/garbage download — the invariant is now structural (no
+    # _bytes_response on the submit path at all), not guard-ordered.
     api_source = (SRC_ROOT / "api.py").read_text(encoding="utf-8")
     handler_start = api_source.index("def post_crm_public_web_export")
     handler_block = api_source[handler_start : api_source.index("\n    def ", handler_start + 1)]
 
-    assert 'result.get("status") != "ok"' in handler_block
+    assert "_bytes_response" not in handler_block
+    assert "HTTPStatus.ACCEPTED" in handler_block
     assert "HTTPStatus.CONFLICT" in handler_block
-    assert 'not result.get("body")' in handler_block
-    # Binary response is only reachable after both guards.
-    assert handler_block.index('result.get("status") != "ok"') < handler_block.index("_bytes_response")
-    assert handler_block.index('not result.get("body")') < handler_block.index("_bytes_response")
 
 
 def test_crm_runtime_imports_physical_public_web_core_not_target_facade() -> None:

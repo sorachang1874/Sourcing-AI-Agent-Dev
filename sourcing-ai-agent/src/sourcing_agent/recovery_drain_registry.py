@@ -31,6 +31,7 @@ from .durable_runtime import (
     COMPANY_ASSET_OWNER,
     COMPANY_PUBLIC_WEB_REFRESH_OWNER,
     CRM_WRITER_OWNER,
+    EXPORT_CRM_PUBLIC_WEB_GENERATE_OWNER,
     EXPORT_PROJECTION_GENERATE_OWNER,
     LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
     LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER,
@@ -196,6 +197,15 @@ DEFAULT_RECOVERY_DRAIN_BINDINGS: tuple[RecoveryDrainBinding, ...] = (
         drain_method="_drain_export_projection_generate_commands",
         max_sync_work="claim and execute ready export.projection.generate workflow_commands only",
         skipped_max_sync_work="no projection export generate command work",
+    ),
+    RecoveryDrainBinding(
+        phase="export_crm_public_web_generate_command_owner",
+        owner=EXPORT_CRM_PUBLIC_WEB_GENERATE_OWNER,
+        payload_flag="export_crm_public_web_generate_command_owner_enabled",
+        disabled_reason="export_crm_public_web_generate_command_owner_disabled_by_payload",
+        drain_method="_drain_export_crm_public_web_generate_commands",
+        max_sync_work="claim and execute ready export.crm_public_web.generate workflow_commands only",
+        skipped_max_sync_work="no CRM Public Web export generate command work",
     ),
     RecoveryDrainBinding(
         phase="crm_writer_command_owner",

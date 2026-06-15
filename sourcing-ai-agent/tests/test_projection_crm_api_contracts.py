@@ -1637,7 +1637,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
                 },
             ],
         )
-        baseline_export = self.orchestrator.export_crm_record_public_web_archive(
+        baseline_export = _drive_crm_export(self.orchestrator, 
             {"workspace_id": "default", "crm_record_ids": [crm_record_id], "mode": "promoted_only"}
         )
         self.assertEqual(baseline_export["status"], "ok")
@@ -1728,7 +1728,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
         self.assertEqual(detail["email_candidates"][0]["promotion_status"], "manually_promoted")
         self.assertEqual(promoted["record_id"], crm_record_id)
 
-        promoted_only_export = self.orchestrator.export_crm_record_public_web_archive(
+        promoted_only_export = _drive_crm_export(self.orchestrator, 
             {"workspace_id": "default", "crm_record_ids": [crm_record_id], "mode": "promoted_only"}
         )
         self.assertEqual(promoted_only_export["status"], "ok")
@@ -1755,7 +1755,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
         self.assertIn("crm.public.web@example.edu", promoted_only_text)
         self.assertIn("CRM owner promotion", promoted_only_text)
 
-        export = self.orchestrator.export_crm_record_public_web_archive(
+        export = _drive_crm_export(self.orchestrator, 
             {"workspace_id": "default", "crm_record_ids": [crm_record_id], "mode": "promoted_and_publishable"}
         )
 
@@ -1838,7 +1838,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
             }
         )
         self.assertEqual(asset_changed["asset_id"], asset["asset_id"])
-        asset_changed_export = self.orchestrator.export_crm_record_public_web_archive(
+        asset_changed_export = _drive_crm_export(self.orchestrator, 
             {"workspace_id": "default", "crm_record_ids": [crm_record_id], "mode": "promoted_and_publishable"}
         )
         self.assertEqual(asset_changed_export["status"], "ok")
@@ -1864,7 +1864,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
             source="crm_public_web_export_watermark_regression",
         )
         self.assertEqual(phase_command["status"], "queued")
-        phase_planned_export = self.orchestrator.export_crm_record_public_web_archive(
+        phase_planned_export = _drive_crm_export(self.orchestrator, 
             {"workspace_id": "default", "crm_record_ids": [crm_record_id], "mode": "promoted_and_publishable"}
         )
         self.assertEqual(phase_planned_export["status"], "ok")
@@ -1876,7 +1876,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
             phase_command["command_id"],
             reason="phase-command-cancelled-v2",
         )
-        phase_changed_export = self.orchestrator.export_crm_record_public_web_archive(
+        phase_changed_export = _drive_crm_export(self.orchestrator, 
             {"workspace_id": "default", "crm_record_ids": [crm_record_id], "mode": "promoted_and_publishable"}
         )
         self.assertEqual(phase_changed_export["status"], "ok")
@@ -1991,7 +1991,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
         self.assertEqual(no_run_detail["reason"], "public_web_search_not_found")
         self.assertFalse(no_run_detail["read_contract"]["fallback_used"])
 
-        export = self.orchestrator.export_crm_record_public_web_archive(
+        export = _drive_crm_export(self.orchestrator, 
             {
                 "workspace_id": "default",
                 "crm_record_ids": [no_run_record["crm_record_id"]],
@@ -2225,7 +2225,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
         )
 
         detail = self.orchestrator.get_crm_record_public_web_search_detail(crm_record_id)
-        export = self.orchestrator.export_crm_record_public_web_archive(
+        export = _drive_crm_export(self.orchestrator, 
             {"workspace_id": "default", "crm_record_ids": [crm_record_id], "mode": "promoted_and_publishable"}
         )
 
@@ -2416,6 +2416,25 @@ def _post_binary(url: str, payload: dict) -> tuple[bytes, dict[str, str]]:
 def _get_binary(url: str) -> tuple[bytes, dict[str, str]]:
     with _urlopen_local_api(url) as response:
         return response.read(), dict(response.headers.items())
+
+
+def _drive_crm_export(orchestrator, payload: dict) -> dict:
+    """C1.4: drive the now-async CRM public-web export end-to-end for tests —
+    submit (202/queued, or idempotent succeeded) -> worker CRM export drain ->
+    read the succeeded artifact result (status ok + body + counts + workflow_command,
+    the same shape the old synchronous export returned). Submit-time failures
+    (validation / fail-closed pre-flight) are returned as-is; a command that fails
+    in the drain is returned as the poll envelope (status 'failed' + error)."""
+    submitted = orchestrator.export_crm_record_public_web_archive(payload)
+    status = str(submitted.get("status") or "").strip()
+    if status not in {"queued", "succeeded"}:
+        return submitted
+    task_id = str(submitted.get("task_id") or "")
+    orchestrator._drain_export_crm_public_web_generate_commands({})
+    poll = orchestrator.get_export_command_status(task_id)
+    if str(poll.get("status") or "") == "succeeded":
+        return orchestrator.get_export_command_artifact(task_id)
+    return poll
 
 
 if __name__ == "__main__":

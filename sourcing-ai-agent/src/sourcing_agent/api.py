@@ -594,8 +594,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/exports/{command_id}", get_export_command)
 
     def get_export_command_artifact(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        # C1.4b: stream a succeeded export task's artifact bytes + the X-Sourcing-*
-        # headers (byte/header parity with the old synchronous export blob).
+        # C1.4b: stream a succeeded export task's artifact bytes + the command-type's
+        # X-Sourcing-* headers (the orchestrator returns a generic 'headers' dict so
+        # this one endpoint serves both projection and CRM exports byte/header-parity).
         result = orchestrator.get_export_command_artifact(_decode_path_param(request.path_params["command_id"]))
         payload_status = str(result.get("status") or "").strip()
         if payload_status == "not_found":
@@ -611,12 +612,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             bytes(result.get("body") or b""),
             content_type=str(result.get("content_type") or "application/octet-stream"),
             filename=str(result.get("filename") or "download.bin"),
-            extra_headers={
-                "X-Sourcing-Projection-Id": str(result.get("projection_id") or ""),
-                "X-Sourcing-Export-Record-Count": str(int(result.get("record_count") or 0)),
-                "X-Sourcing-Exported-Record-Count": str(int(result.get("exported_record_count") or 0)),
-                "X-Sourcing-Skipped-Assertion-Count": str(int(result.get("skipped_assertion_count") or 0)),
-            },
+            extra_headers={str(k): str(v) for k, v in dict(result.get("headers") or {}).items()},
         )
 
     add(["GET"], "/api/exports/{command_id}/artifact", get_export_command_artifact)
@@ -1580,37 +1576,23 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/target-candidates/public-web-export", post_target_public_web_export_gone, read_body=True)
 
     def post_crm_public_web_export(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        # C1.4 (CRM mirror of projection): submit -> 202 + {task_id} (the worker CRM
+        # export drain builds the archive off the request thread); the client polls
+        # GET /api/exports/{task_id} then downloads GET /api/exports/{task_id}/artifact.
+        # An idempotent hit on an already-succeeded export replays 200 + its handle.
         result = orchestrator.export_crm_record_public_web_archive(payload)
-        if result.get("status") == "not_found":
+        status = str(result.get("status") or "").strip()
+        if status == "not_found":
             return _json_response(HTTPStatus.NOT_FOUND, result)
-        if result.get("status") == "invalid":
+        if status == "invalid":
             return _json_response(HTTPStatus.BAD_REQUEST, result)
-        if result.get("status") != "ok":
-            return _json_response(HTTPStatus.CONFLICT, result)
-        if not result.get("body"):
-            return _json_response(
-                HTTPStatus.INTERNAL_SERVER_ERROR,
-                {
-                    **dict(result or {}),
-                    "status": "failed",
-                    "reason": str(result.get("reason") or "crm_public_web_export_body_missing"),
-                },
-            )
-        return _bytes_response(
-            HTTPStatus.OK,
-            bytes(result.get("body") or b""),
-            content_type=str(result.get("content_type") or "application/octet-stream"),
-            filename=str(result.get("filename") or "download.bin"),
-            extra_headers={
-                "X-Sourcing-Export-Record-Count": str(int(result.get("record_count") or 0)),
-                "X-Sourcing-Exported-Record-Count": str(int(result.get("exported_record_count") or 0)),
-                "X-Sourcing-Exported-Signal-Count": str(int(result.get("exported_signal_count") or 0)),
-                "X-Sourcing-No-Public-Web-Result-Count": str(int(result.get("no_public_web_result_count") or 0)),
-                "X-Sourcing-No-Exportable-Signal-Count": str(int(result.get("no_exportable_signal_count") or 0)),
-                "X-Sourcing-Non-Terminal-Run-Count": str(int(result.get("non_terminal_run_count") or 0)),
-                "X-Sourcing-Canonical-Public-Web-Owner": "crm_records",
-            },
-        )
+        if status == "queued":
+            return _json_response(HTTPStatus.ACCEPTED, result)
+        if status == "succeeded":
+            return _json_response(HTTPStatus.OK, result)
+        # Fail-closed owner conditions (stale input watermark, contract failure, enqueue
+        # failure, ...) keep the legacy 409 — the same status the synchronous route used.
+        return _json_response(HTTPStatus.CONFLICT, result)
 
     add(["POST"], "/api/crm/records/public-web-export", post_crm_public_web_export, read_body=True)
 

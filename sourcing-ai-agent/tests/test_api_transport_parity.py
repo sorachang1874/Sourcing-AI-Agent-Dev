@@ -233,29 +233,29 @@ class _StubOrchestrator:
         }
 
     def get_export_command_artifact(self, _command_id):
+        # C1.4: the orchestrator returns a generic command-type-aware 'headers' dict
+        # that the API download handler emits verbatim.
         return {
             "status": "ok",
             "body": b"ZIP-ARCHIVE-BYTES",
             "content_type": "application/zip",
             "filename": "projection-export.zip",
-            "projection_id": "proj-1",
-            "record_count": 3,
-            "exported_record_count": 2,
-            "skipped_assertion_count": 1,
+            "headers": {
+                "X-Sourcing-Projection-Id": "proj-1",
+                "X-Sourcing-Export-Record-Count": "3",
+                "X-Sourcing-Exported-Record-Count": "2",
+                "X-Sourcing-Skipped-Assertion-Count": "1",
+            },
         }
 
     def export_crm_record_public_web_archive(self, _payload):
+        # C1.4: CRM export submit returns a 202 async-task envelope (no inline bytes).
         return {
-            "status": "ok",
-            "body": b"CRM-PUBLIC-WEB-ZIP-BYTES",
-            "content_type": "application/zip",
-            "filename": "crm-public-web-export.zip",
-            "record_count": 5,
-            "exported_record_count": 4,
-            "exported_signal_count": 9,
-            "no_public_web_result_count": 1,
-            "no_exportable_signal_count": 2,
-            "non_terminal_run_count": 0,
+            "task_id": "cmd-crm-export-1",
+            "task_type": "export.crm_public_web.generate",
+            "status": "queued",
+            "domain_status": "queued",
+            "idempotency_key": "export.crm_public_web.generate:abc",
         }
 
 
@@ -531,7 +531,7 @@ class ApiTransportParityTest(unittest.TestCase):
         lands, so every commit's diff is a visible, intentional contract change:
           - POST /api/plan        : DELETED (404) — unified on /api/plan/submit
           - POST /api/jobs        : 201 + run_job artifact passthrough        -> DELETED in C1.3b (run_job demoted to CLI/test)
-          - POST /api/crm/.../public-web-export : 200 + zip bytes + 7 X-Sourcing headers -> async 202+poll+artifact handle (C1.4/C1.5)
+          - POST /api/crm/.../public-web-export : DELETED inline blob -> 202 async task (worker drain builds; poll+download via shared /api/exports/{id})
           - POST /api/target-candidates/export  : 410 GONE retirement payload  (legacy track retired -> pure tombstone)
         The CRM public-web export headers are the byte/header baseline the async
         artifact-download handle (C1.4/C1.5) must replicate exactly.
@@ -561,27 +561,21 @@ class ApiTransportParityTest(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(json.loads(body), {"error": "not found"})
 
-        # POST /api/crm/records/public-web-export -> 200 + zip bytes + 7 X-Sourcing headers.
-        status, headers, body = self._request(
+        # POST /api/crm/records/public-web-export -> 202 + async-task envelope (C1.4:
+        # flipped off the request thread; the worker CRM export drain builds it, then
+        # the client polls + downloads via the shared /api/exports/{id}[/artifact]).
+        status, _headers, body = self._request(
             opener,
             f"{base_url}/api/crm/records/public-web-export",
             method="POST",
             data=json.dumps({}).encode("utf-8"),
             headers=json_headers,
         )
-        self.assertEqual(status, 200)
-        self.assertEqual(body, b"CRM-PUBLIC-WEB-ZIP-BYTES")
-        self.assertEqual(headers.get("Content-Type"), "application/zip")
-        self.assertEqual(
-            headers.get("Content-Disposition"), 'attachment; filename="crm-public-web-export.zip"'
-        )
-        self.assertEqual(headers.get("X-Sourcing-Export-Record-Count"), "5")
-        self.assertEqual(headers.get("X-Sourcing-Exported-Record-Count"), "4")
-        self.assertEqual(headers.get("X-Sourcing-Exported-Signal-Count"), "9")
-        self.assertEqual(headers.get("X-Sourcing-No-Public-Web-Result-Count"), "1")
-        self.assertEqual(headers.get("X-Sourcing-No-Exportable-Signal-Count"), "2")
-        self.assertEqual(headers.get("X-Sourcing-Non-Terminal-Run-Count"), "0")
-        self.assertEqual(headers.get("X-Sourcing-Canonical-Public-Web-Owner"), "crm_records")
+        self.assertEqual(status, 202)
+        crm_envelope = json.loads(body)
+        self.assertEqual(crm_envelope.get("status"), "queued")
+        self.assertEqual(crm_envelope.get("task_type"), "export.crm_public_web.generate")
+        self.assertTrue(crm_envelope.get("task_id"))
 
         # POST /api/target-candidates/export -> 410 GONE (legacy retired by default).
         status, _headers, body = self._request(

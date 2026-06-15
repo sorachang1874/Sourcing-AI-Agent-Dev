@@ -108,6 +108,9 @@ CHARACTERIZED_PHASE_SEQUENCE: tuple[tuple[str, str], ...] = (
     # C1: export.projection.generate moved off the request thread onto the worker
     # drain (additive registry binding before crm_writer).
     ("export_projection_generate_command_owner", "projection_exporter"),
+    # C1.4: export.crm_public_web.generate worker drain (additive binding after the
+    # projection export binding, before crm_writer).
+    ("export_crm_public_web_generate_command_owner", "crm_public_web_exporter"),
     # crm_writer_command_owner is metered here but intentionally absent from the
     # returned summary (the only summary-invisible drain) — pinned below.
     ("crm_writer_command_owner", "crm_writer"),

@@ -27985,7 +27985,7 @@ class SourcingOrchestrator:
             domain_status=domain_status,
         )
 
-    def _export_artifact_headers(self, result: dict[str, Any]) -> dict[str, str]:
+    def _projection_export_artifact_headers(self, result: dict[str, Any]) -> dict[str, str]:
         """The X-Sourcing-* download headers for a projection export artifact —
         byte-for-byte the set the old synchronous /api/projections/export emitted."""
         return {
@@ -27994,6 +27994,14 @@ class SourcingOrchestrator:
             "X-Sourcing-Exported-Record-Count": str(int(result.get("exported_record_count") or 0)),
             "X-Sourcing-Skipped-Assertion-Count": str(int(result.get("skipped_assertion_count") or 0)),
         }
+
+    def _export_command_artifact_headers(self, command_type: str, result: dict[str, Any]) -> dict[str, str]:
+        """Command-type-aware X-Sourcing-* artifact headers so the single generic
+        GET /api/exports/{id}/artifact endpoint serves both export kinds byte-for-byte
+        as their old synchronous routes did. CRM headers live on the CRM owner."""
+        if str(command_type or "").strip() == EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE:
+            return self._crm_public_web_owner._crm_public_web_export_artifact_headers(result)
+        return self._projection_export_artifact_headers(result)
 
     def _export_task_status_envelope(self, command: dict[str, Any]) -> dict[str, Any]:
         """Project a durable export command into the unified async-task poll body."""
@@ -28006,9 +28014,9 @@ class SourcingOrchestrator:
             artifact = async_task_artifact(
                 handle=f"/api/exports/{command_id}/artifact",
                 content_type=str(result.get("content_type") or "application/zip"),
-                filename=str(result.get("filename") or "projection-export.zip"),
+                filename=str(result.get("filename") or "export.zip"),
                 byte_size=int(result.get("byte_size") or 0),
-                headers=self._export_artifact_headers(result),
+                headers=self._export_command_artifact_headers(command_type, result),
             )
         error = None
         if domain_status in {"failed", "failed_terminal"}:
@@ -28016,7 +28024,7 @@ class SourcingOrchestrator:
                 "reason": str(
                     result.get("reason")
                     or dict(command.get("metadata") or {}).get("failure_reason")
-                    or "projection_export_failed"
+                    or "export_failed"
                 )
             }
         return async_task_status(
@@ -28029,7 +28037,7 @@ class SourcingOrchestrator:
         )
 
     def get_export_command_status(self, command_id: str) -> dict[str, Any]:
-        """Poll endpoint backing GET /api/exports/{command_id}."""
+        """Poll endpoint backing GET /api/exports/{command_id} (projection + CRM)."""
         normalized = str(command_id or "").strip()
         if not normalized:
             return {"status": "invalid", "reason": "command_id_required"}
@@ -28040,7 +28048,8 @@ class SourcingOrchestrator:
 
     def get_export_command_artifact(self, command_id: str) -> dict[str, Any]:
         """Download endpoint backing GET /api/exports/{command_id}/artifact —
-        streams the succeeded command's artifact bytes + X-Sourcing-* headers."""
+        streams the succeeded command's artifact bytes + a command-type-aware
+        X-Sourcing-* ``headers`` dict the API emits generically (projection + CRM)."""
         normalized = str(command_id or "").strip()
         if not normalized:
             return {"status": "invalid", "reason": "command_id_required"}
@@ -28055,14 +28064,22 @@ class SourcingOrchestrator:
                 "command_id": normalized,
                 "task_status": normalize_task_status(domain_status),
             }
-        if command_type != EXPORT_PROJECTION_GENERATE_COMMAND_TYPE:
-            return {"status": "invalid", "reason": "unsupported_export_command_type", "command_type": command_type}
         result = dict(command.get("result") or {})
-        return self._projection_export_payload_from_artifact(
-            command=command,
-            artifact_path=str(result.get("artifact_path") or "").strip(),
-            filename=str(result.get("filename") or ""),
-        )
+        artifact_path = str(result.get("artifact_path") or "").strip()
+        filename = str(result.get("filename") or "")
+        if command_type == EXPORT_PROJECTION_GENERATE_COMMAND_TYPE:
+            payload = self._projection_export_payload_from_artifact(
+                command=command, artifact_path=artifact_path, filename=filename
+            )
+        elif command_type == EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE:
+            payload = self._crm_public_web_owner._crm_public_web_export_payload_from_artifact(
+                command=command, artifact_path=artifact_path, filename=filename
+            )
+        else:
+            return {"status": "invalid", "reason": "unsupported_export_command_type", "command_type": command_type}
+        if str(payload.get("status") or "") == "ok":
+            payload["headers"] = self._export_command_artifact_headers(command_type, payload)
+        return payload
 
     def _projection_export_workflow_run_id(self, projection_id: str) -> str:
         normalized_projection_id = str(projection_id or "").strip()
@@ -50064,6 +50081,74 @@ class SourcingOrchestrator:
             "failed_count": failed_count,
             "owner": EXPORT_PROJECTION_GENERATE_OWNER,
             "migration_phase": "W7_projection_export_command_owner",
+            "items": results,
+        }
+
+    def _drain_export_crm_public_web_generate_commands(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Worker-tick drain for ready export.crm_public_web.generate commands.
+
+        C1.4 CRM mirror of _drain_export_projection_generate_commands: the CRM
+        public-web export build moves off the request thread onto the durable
+        worker. Each ready command runs via the CRM owner's existing
+        _run_crm_public_web_export_generate_command (claim -> build -> publish
+        artifact -> mark succeeded, with idempotent disk-replay). CRM export is
+        likewise idempotent, so expired-claimed reclaim is opt-in-safe.
+        """
+        payload = dict(payload or {})
+        if not _env_bool("EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_OWNER_ENABLED", True):
+            return {
+                "status": "skipped",
+                "reason": "export_crm_public_web_generate_command_owner_disabled",
+                "owner": EXPORT_CRM_PUBLIC_WEB_GENERATE_OWNER,
+                "command_count": 0,
+                "executed_command_count": 0,
+                "completed_count": 0,
+                "failed_count": 0,
+                "migration_phase": "W7_crm_public_web_export_command_owner",
+            }
+        workflow_run_id = str(payload.get("workflow_run_id") or "").strip()
+        limit = max(
+            1,
+            _coerce_int(
+                payload.get("command_limit") or payload.get("export_crm_public_web_generate_command_limit"),
+                4,
+            ),
+        )
+        ready_commands = self.store.list_ready_workflow_commands(
+            workflow_run_id=workflow_run_id,
+            owner=EXPORT_CRM_PUBLIC_WEB_GENERATE_OWNER,
+            command_type=EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE,
+            limit=limit,
+            # CRM export build is idempotent (atomic artifact + idempotent disk-replay),
+            # so reclaiming an expired-lease 'claimed' row is safe; see the projection
+            # drain + docs/DURABLE_COMMAND_OWNERSHIP_FENCING.md.
+            reclaim_claimed=True,
+        )
+        results: list[dict[str, Any]] = []
+        completed_count = 0
+        failed_count = 0
+        for command in ready_commands:
+            result = self._crm_public_web_owner._run_crm_public_web_export_generate_command(dict(command))
+            results.append(result)
+            status = str(result.get("status") or "")
+            if status in {"ok", "succeeded", "completed"}:
+                completed_count += 1
+            elif status == "failed":
+                failed_count += 1
+        return {
+            "status": "active" if ready_commands else "idle",
+            "reason": (
+                "export_crm_public_web_generate_command_owner"
+                if ready_commands
+                else "no_ready_export_crm_public_web_generate_commands"
+            ),
+            "workflow_run_id": workflow_run_id,
+            "command_count": len(ready_commands),
+            "executed_command_count": len(results),
+            "completed_count": completed_count,
+            "failed_count": failed_count,
+            "owner": EXPORT_CRM_PUBLIC_WEB_GENERATE_OWNER,
+            "migration_phase": "W7_crm_public_web_export_command_owner",
             "items": results,
         }
 

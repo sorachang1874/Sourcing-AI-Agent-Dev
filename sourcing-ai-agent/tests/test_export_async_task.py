@@ -142,6 +142,57 @@ class ExportAsyncTaskTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             "not_found",
         )
 
+    def test_crm_public_web_export_submit_drain_poll_download(self) -> None:
+        """C1.4 CRM mirror: the CRM export rides the SAME generic async-task endpoints
+        (submit -> 202, GET /api/exports/{id} poll, GET .../artifact download) but
+        carries the CRM 7-header set, proving the command-type header decoupling. The
+        record-id validation + the archive build are mocked; the orchestration
+        (enqueue -> CRM drain -> owner _run -> poll -> disk-backed download) is real."""
+        owner = self.orchestrator._crm_public_web_owner
+        canned_crm_archive = {
+            "status": "ok",
+            "filename": "crm-public-web-export.zip",
+            "content_type": "application/zip",
+            "body": b"CRM-REAL-ZIP-BYTES",
+            "record_count": 5,
+            "exported_record_count": 4,
+            "exported_signal_count": 9,
+            "no_public_web_result_count": 1,
+            "no_exportable_signal_count": 2,
+            "non_terminal_run_count": 0,
+        }
+        with mock.patch.object(owner, "_prepare_crm_public_web_record_ids", return_value=["rec-1"]), \
+                mock.patch.object(owner, "_export_crm_public_web_archive_from_owner", return_value=canned_crm_archive):
+            submitted = self.orchestrator.export_crm_record_public_web_archive(
+                {"workspace_id": "ws-1", "crm_record_ids": ["rec-1"]}
+            )
+            self.assertEqual(submitted.get("status"), "queued")
+            self.assertEqual(submitted.get("task_type"), "export.crm_public_web.generate")
+            task_id = str(submitted.get("task_id") or "")
+            self.assertTrue(task_id)
+            drained = self.orchestrator._drain_export_crm_public_web_generate_commands({})
+            self.assertGreaterEqual(int(drained.get("command_count") or 0), 1)
+            self.assertEqual(int(drained.get("completed_count") or 0), 1)
+
+        # Poll via the SHARED endpoint -> succeeded + CRM-specific headers.
+        polled = self.orchestrator.get_export_command_status(task_id)
+        self.assertEqual(polled.get("status"), "succeeded")
+        crm_headers = (polled.get("artifact") or {}).get("headers", {})
+        self.assertEqual(crm_headers.get("X-Sourcing-Exported-Signal-Count"), "9")
+        self.assertEqual(crm_headers.get("X-Sourcing-No-Public-Web-Result-Count"), "1")
+        self.assertEqual(crm_headers.get("X-Sourcing-Canonical-Public-Web-Owner"), "crm_records")
+        # No projection-only header leaks into the CRM artifact handle.
+        self.assertNotIn("X-Sourcing-Projection-Id", crm_headers)
+
+        # Download via the SHARED endpoint -> CRM bytes + CRM headers dict.
+        downloaded = self.orchestrator.get_export_command_artifact(task_id)
+        self.assertEqual(downloaded.get("status"), "ok")
+        self.assertEqual(downloaded.get("body"), b"CRM-REAL-ZIP-BYTES")
+        self.assertEqual(
+            downloaded.get("headers", {}).get("X-Sourcing-Canonical-Public-Web-Owner"), "crm_records"
+        )
+        self.assertEqual(downloaded.get("headers", {}).get("X-Sourcing-Exported-Signal-Count"), "9")
+
 
 if __name__ == "__main__":
     unittest.main()

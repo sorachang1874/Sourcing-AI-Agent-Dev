@@ -194,6 +194,16 @@ CHARACTERIZED_DRAIN_PHASES: tuple[CharacterizedDrainPhase, ...] = (
         "projection_exporter",
         True,
     ),
+    # C1.4: export.crm_public_web.generate worker drain (additive binding after the
+    # projection export binding, before crm_writer); summary-visible.
+    CharacterizedDrainPhase(
+        "export_crm_public_web_generate_command_owner",
+        "export_crm_public_web_generate_command_owner_enabled",
+        "_drain_export_crm_public_web_generate_commands",
+        "export_crm_public_web_generate_command_owner_disabled_by_payload",
+        "crm_public_web_exporter",
+        True,
+    ),
     # Executed and metered like every other drain, but its result is
     # intentionally absent from the returned recovery summary and from the
     # tick-level phase-budget scan (audited pre-registry behavior).

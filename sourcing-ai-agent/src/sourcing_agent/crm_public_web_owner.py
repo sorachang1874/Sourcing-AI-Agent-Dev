@@ -50,6 +50,11 @@ from .crm_public_web_runtime import (
     start_crm_public_web_batch,
     sync_crm_public_web_batch_summary,
 )
+from .async_task_contract import (
+    async_task_accepted,
+    async_task_artifact,
+    async_task_status,
+)
 from .domain import JobRequest
 from .durable_runtime import (
     CRM_PUBLIC_WEB_DOCUMENTS_FETCH_COMMAND_TYPE,
@@ -2764,8 +2769,65 @@ class CrmPublicWebOwner:
                 },
             }
         else:
-            result = self._run_crm_public_web_export_generate_command(command)
+            # C1.4 (substrate-unify): submit the export as a durable task and return
+            # 202 (the worker CRM export drain builds the archive off the request
+            # thread). _plan already committed durable events, so the recovery worker
+            # is signaled internally. An idempotent hit on an already-succeeded
+            # command replays its artifact handle.
+            command_id = str(command.get("command_id") or "")
+            domain_status = str(command.get("status") or "").strip()
+            if domain_status == "succeeded":
+                result = self._crm_public_web_export_task_status_envelope(command)
+            else:
+                result = async_task_accepted(
+                    task_id=command_id,
+                    task_type=EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE,
+                    idempotency_key=str(command.get("idempotency_key") or ""),
+                    domain_status=domain_status,
+                )
         return self._with_crm_public_web_contract(result, operation="export", read=True)
+
+    def _crm_public_web_export_artifact_headers(self, result: dict[str, Any]) -> dict[str, str]:
+        """The X-Sourcing-* download headers for a CRM public-web export artifact —
+        byte-for-byte the set the old synchronous /api/crm/records/public-web-export
+        emitted (the Canonical-Public-Web-Owner is owner-identity, not a result field)."""
+        return {
+            "X-Sourcing-Export-Record-Count": str(int(result.get("record_count") or 0)),
+            "X-Sourcing-Exported-Record-Count": str(int(result.get("exported_record_count") or 0)),
+            "X-Sourcing-Exported-Signal-Count": str(int(result.get("exported_signal_count") or 0)),
+            "X-Sourcing-No-Public-Web-Result-Count": str(int(result.get("no_public_web_result_count") or 0)),
+            "X-Sourcing-No-Exportable-Signal-Count": str(int(result.get("no_exportable_signal_count") or 0)),
+            "X-Sourcing-Non-Terminal-Run-Count": str(int(result.get("non_terminal_run_count") or 0)),
+            "X-Sourcing-Canonical-Public-Web-Owner": "crm_records",
+        }
+
+    def _crm_public_web_export_task_status_envelope(self, command: dict[str, Any]) -> dict[str, Any]:
+        """Project a durable CRM export command into the unified async-task poll body
+        (used for an idempotent submit replay; the generic poll endpoint on the
+        orchestrator builds the same shape command-type-aware)."""
+        command_id = str(command.get("command_id") or "")
+        domain_status = str(command.get("status") or "").strip()
+        result = dict(command.get("result") or {})
+        artifact = None
+        if domain_status == "succeeded":
+            artifact = async_task_artifact(
+                handle=f"/api/exports/{command_id}/artifact",
+                content_type=str(result.get("content_type") or "application/zip"),
+                filename=str(result.get("filename") or "crm-public-web-export.zip"),
+                byte_size=int(result.get("byte_size") or 0),
+                headers=self._crm_public_web_export_artifact_headers(result),
+            )
+        error = None
+        if domain_status in {"failed", "failed_terminal"}:
+            error = {"reason": str(result.get("reason") or "crm_public_web_export_failed")}
+        return async_task_status(
+            task_id=command_id,
+            task_type=EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE,
+            domain_status=domain_status,
+            error=error,
+            artifact=artifact,
+            idempotency_key=str(command.get("idempotency_key") or ""),
+        )
 
     def _crm_public_web_export_workflow_run_id(
         self,
