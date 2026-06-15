@@ -115,7 +115,8 @@
 - (b) **`run_job` 是否彻底删**：现保留作 CLI/test one-shot。若 owner 要更彻底，可把 CLI `run-job` 也改为「内部 enqueue 同一 workflow tail」从而完全删 `run_job`——但 `run_job` 跳过 acquisition、是 retrieval-over-existing-snapshot，CLI 语义会变（会触发 acquisition）。建议**保留**。请裁定。
 - (c) **artifact handle 最小落地 vs 等 C6**：建议 C1 落最小本地 `artifact_path` 读取 handle（C6 平移为 object_storage 读穿）。确认不把导出下载阻塞到 C6？
 - (d) **refine-compile 是否纳入 C1**：它 genuinely distinct、今无前端，属 additive。若优先级低可推迟到 C4（与 OpenAPI/SSE 一起做异步契约）。请裁定是否留在 C1。
-  - **裁定（2026-06-15）：纳入 C1**（owner「C1 一次做全」）。
+  - 裁定（2026-06-15）：纳入 C1（owner「C1 一次做全」）。
+  - **修正裁定（2026-06-15，实现中深查后 owner 改判）：推迟到 C4**。实现中发现两个 compile 命令虽是快速 leaf compute,但 **Phase 4 cancel/resume 契约要求每个命令类型都有 cancel/resume handler**(`test_command_type_specs` + `test_cancel_resume_dispatch_contract` 共 6 张 pinned handler 表 + golden sha1 重生),叠加完整新命令基设(`_plan`/`_run`/`_drain`×2 + submit/poll + drain bindings + tick/registry oracle + smoke 转换 + 新测试),构成一个远大于导出、且 intricate 的 build——而两个端点**当前零前端消费者**(已核验 `frontend-demo/src/lib/api.ts` 无引用),C1 设计本就标注可推迟。**推迟到 C4**:C4 做 OpenAPI + contracts/ 参考 SDK 重生成时,refine 端点的 reference-SDK 消费者(`frontend_api_adapter.ts` `compilePlanReviewInstruction`/`compileRefinement`,当前 model inline-200)本就要随契约一起改成 202+poll,届时连同 contract 一次性做更连贯。已加的部分(constants/specs/idempotency/golden)已干净回退。**C1 核心交付(删冗余同步轨 + 统一 async-task 契约 + 整个导出面 head-of-line 异步化,后端+前端,经两轮独立评审 GO)视为完成。**
 
 ---
 
