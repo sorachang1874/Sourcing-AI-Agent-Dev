@@ -277,6 +277,80 @@ class _AuthMiddleware:
         await self.app(scope, receive, send)
 
 
+# ---------------------------------------------------------------------------
+# C2.2: server-derived identity. At submit boundaries the authenticated identity
+# (set by _AuthMiddleware on request.state) overrides + strips any client-supplied
+# ownership / attribution field, so a caller can never spoof another user's
+# requester / tenant / workspace / actor. No-op in open mode (identity None) to
+# preserve pre-auth and test-lane behavior until the frontend bearer lands (C2.4).
+# ---------------------------------------------------------------------------
+_IDENTITY_REQUESTER_KEYS = ("requester_id", "user_id", "requester")
+_IDENTITY_TENANT_KEYS = ("tenant_id", "workspace_id", "org_id")
+
+
+def _user_namespace(user_id: str) -> str:
+    """Stable per-user tenant/workspace namespace derived from the user id.
+
+    Prefixed so it never collides with the legacy ``default``/empty workspace and
+    stays human-greppable in the jobs / query_dispatches / crm_records columns.
+    """
+    user = str(user_id or "").strip()
+    return f"user-{user}" if user else ""
+
+
+def _server_identity(request: Request) -> dict[str, str] | None:
+    """Authenticated identity from the auth middleware, or None in open mode."""
+    state = getattr(request, "state", None)
+    identity = getattr(state, "identity", None) if state is not None else None
+    if not isinstance(identity, dict):
+        return None
+    user_id = str(identity.get("user_id") or "").strip()
+    return {"user_id": user_id} if user_id else None
+
+
+def _apply_server_identity(
+    payload: dict[str, Any],
+    request: Request,
+    *,
+    requester: bool = False,
+    tenant: bool = False,
+    workspace: bool = False,
+    actor_fields: tuple[str, ...] = (),
+    owner: bool = False,
+    lock_actor_type: bool = False,
+) -> dict[str, Any]:
+    """Override + strip client-supplied identity fields with server-derived values.
+
+    No-op when the request is unauthenticated (open mode) so pre-auth deploys and
+    the test lanes are unaffected. When authenticated, the server value wins and
+    every client alias for the selected field group is stripped first so no
+    downstream ``.get()`` fallback can resurrect a spoofed value. Mutates and
+    returns ``payload``.
+    """
+    identity = _server_identity(request)
+    if identity is None:
+        return payload
+    user_id = identity["user_id"]
+    namespace = _user_namespace(user_id)
+    if requester:
+        for key in _IDENTITY_REQUESTER_KEYS:
+            payload.pop(key, None)
+        payload["requester_id"] = user_id
+    if tenant:
+        for key in _IDENTITY_TENANT_KEYS:
+            payload.pop(key, None)
+        payload["tenant_id"] = namespace
+    if workspace:
+        payload["workspace_id"] = namespace
+    for field in actor_fields:
+        payload[field] = user_id
+    if owner:
+        payload["owner_user_id"] = user_id
+    if lock_actor_type:
+        payload["actor_type"] = "user"
+    return payload
+
+
 class _RequestConcurrencyMiddleware:
     """Two-lane request concurrency gate (asyncio mirror of the legacy semantics).
 
@@ -1282,6 +1356,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     # literally calls the same orchestrator.plan_workflow. plan_workflow itself
     # is retained as the internal compile function.
     def post_plan_submit(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, requester=True, tenant=True)
         submit_plan = getattr(orchestrator, "submit_plan_workflow", None)
         result = submit_plan(payload) if callable(submit_plan) else orchestrator.plan_workflow(payload)
         status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
@@ -1290,6 +1365,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/plan/submit", post_plan_submit, read_body=True)
 
     def post_workflows_explain(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, requester=True, tenant=True)
         return _json_response(HTTPStatus.OK, orchestrator.explain_workflow(payload))
 
     add(["POST"], "/api/workflows/explain", post_workflows_explain, read_body=True)
@@ -1355,6 +1431,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     # off the serving surface. Heavy retrieval reaches the request tier only via
     # the durable workflow path.
     def post_workflows(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, requester=True, tenant=True)
         payload = normalize_workflow_submission_payload(payload)
         if workflow_runtime_uses_managed_runner(payload.get("runtime_execution_mode")):
             result = orchestrator.start_workflow_runner_managed(payload)
@@ -1365,6 +1442,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/workflows", post_workflows, read_body=True)
 
     def post_continue_stage2(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, requester=True, tenant=True)
         result = orchestrator.continue_workflow_stage2({**payload, "job_id": request.path_params["job_id"]})
         status = HTTPStatus.ACCEPTED
         if result.get("status") in {"not_found"}:
@@ -1413,6 +1491,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/company-assets/supplement", post_company_assets_supplement, read_body=True)
 
     def post_company_public_web(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("requested_by",))
         result = orchestrator.refresh_company_public_web_assets(payload)
         status = HTTPStatus.CREATED if result.get("status") in {"completed", "joined"} else HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
@@ -1420,6 +1499,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/company-assets/public-web", post_company_public_web, read_body=True)
 
     def post_operation_actions(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("actor",))
         result = orchestrator.submit_operation_action(payload)
         status = (
             HTTPStatus.ACCEPTED if result.get("status") in {"queued", "approval_required"} else HTTPStatus.BAD_REQUEST
@@ -1429,6 +1509,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/operations/actions", post_operation_actions, read_body=True)
 
     def post_operation_action_approve(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("actor",))
         result = orchestrator.approve_operation_action_api(
             _decode_path_param(request.path_params["action_id"]),
             payload,
@@ -1441,6 +1522,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/operations/actions/{action_id}/approve", post_operation_action_approve, read_body=True)
 
     def post_operation_action_reject(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("actor",))
         result = orchestrator.reject_operation_action_api(
             _decode_path_param(request.path_params["action_id"]),
             payload,
@@ -1453,6 +1535,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/operations/actions/{action_id}/reject", post_operation_action_reject, read_body=True)
 
     def post_operation_run_cancel(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("actor",))
         result = orchestrator.cancel_operation_run_api(
             _decode_path_param(request.path_params["run_id"]),
             payload,
@@ -1465,6 +1548,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/operations/runs/{run_id}/cancel", post_operation_run_cancel, read_body=True)
 
     def post_operation_run_retry(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("actor",))
         result = orchestrator.retry_operation_run_api(
             _decode_path_param(request.path_params["run_id"]),
             payload,
@@ -1477,6 +1561,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/operations/runs/{run_id}/retry", post_operation_run_retry, read_body=True)
 
     def post_operation_run_resume(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("actor",))
         result = orchestrator.resume_operation_run_api(
             _decode_path_param(request.path_params["run_id"]),
             payload,
@@ -1489,6 +1574,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/operations/runs/{run_id}/resume", post_operation_run_resume, read_body=True)
 
     def post_operation_run_dispatch(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("actor",))
         result = orchestrator.dispatch_operation_run_api(
             _decode_path_param(request.path_params["run_id"]),
             payload,
@@ -1501,6 +1587,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/operations/runs/{run_id}/dispatch", post_operation_run_dispatch, read_body=True)
 
     def post_workflow_command_cancel(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("actor",))
         result = orchestrator.cancel_workflow_command_api(
             _decode_path_param(request.path_params["command_id"]), payload
         )
@@ -1512,6 +1599,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/workflow/commands/{command_id}/cancel", post_workflow_command_cancel, read_body=True)
 
     def post_workflow_command_retry(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("actor",))
         result = orchestrator.retry_workflow_command_api(
             _decode_path_param(request.path_params["command_id"]), payload
         )
@@ -1523,6 +1611,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/workflow/commands/{command_id}/retry", post_workflow_command_retry, read_body=True)
 
     def post_workflow_command_resume(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("actor",))
         result = orchestrator.resume_workflow_command_api(
             _decode_path_param(request.path_params["command_id"]), payload
         )
@@ -1560,6 +1649,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/criteria/feedback", post_criteria_feedback, read_body=True)
 
     def post_plan_review(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("reviewer",))
         result = orchestrator.review_plan_session(payload)
         status = HTTPStatus.OK if result.get("status") != "not_found" else HTTPStatus.NOT_FOUND
         return _json_response(status, result)
@@ -1618,6 +1708,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/criteria/suggestions/review", post_criteria_suggestions_review, read_body=True)
 
     def post_manual_review_review(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("reviewer",))
         result = orchestrator.review_manual_review_item(payload)
         status = HTTPStatus.OK
         if result.get("status") == "not_found":
@@ -1629,6 +1720,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/manual-review/review", post_manual_review_review, read_body=True)
 
     def post_candidate_review_registry(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, owner=True)
         result = orchestrator.upsert_candidate_review_record(payload)
         status = HTTPStatus.CREATED if result.get("status") == "upserted" else HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
@@ -1686,6 +1778,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         # export drain builds the archive off the request thread); the client polls
         # GET /api/exports/{task_id} then downloads GET /api/exports/{task_id}/artifact.
         # An idempotent hit on an already-succeeded export replays 200 + its handle.
+        _apply_server_identity(payload, request, workspace=True)
         result = orchestrator.export_crm_record_public_web_archive(payload)
         status = str(result.get("status") or "").strip()
         if status == "not_found":
@@ -1714,6 +1807,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/target-candidates/import-from-job", post_target_candidates_import_from_job, read_body=True)
 
     def post_crm_records(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("actor_id",), lock_actor_type=True)
         result = orchestrator.add_projection_candidate_to_crm(payload)
         status = HTTPStatus.CREATED if result.get("status") in {"upserted", "idempotent"} else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
@@ -1807,6 +1901,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     def post_persons_backfill_public_web_signals(
         request: Request, query: dict[str, Any], payload: dict[str, Any]
     ) -> Response:
+        # Attribution only: workspace_id here scopes a backfill query (canonical
+        # layer), not ownership, so it is intentionally left to the caller/default.
+        _apply_server_identity(payload, request, actor_fields=("requested_by",))
         result = orchestrator.backfill_public_web_signals_to_person_asset_layer(payload)
         status = HTTPStatus.OK if result.get("status") in {"backfilled", "dry_run"} else HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
@@ -1895,6 +1992,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/projections/export", post_projections_export, read_body=True)
 
     def post_crm_public_web_search(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, workspace=True, actor_fields=("requested_by",), owner=True)
         result = orchestrator.start_crm_record_public_web_search(payload)
         status = HTTPStatus.ACCEPTED if result.get("status") in {"queued", "joined"} else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
@@ -1904,6 +2002,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/crm/records/public-web-search", post_crm_public_web_search, read_body=True)
 
     def post_crm_public_web_search_poll(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, workspace=True)
         result = orchestrator.list_crm_record_public_web_searches(payload)
         status = HTTPStatus.OK if result.get("status") in {"ok", "ready"} else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
@@ -1913,6 +2012,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/crm/records/public-web-search/poll", post_crm_public_web_search_poll, read_body=True)
 
     def post_crm_public_web_search_cancel(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, workspace=True, actor_fields=("operator", "requested_by"))
         result = orchestrator.cancel_crm_record_public_web_search(payload)
         status = HTTPStatus.OK if result.get("status") in {"cancelled", "skipped"} else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
@@ -1922,6 +2022,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/crm/records/public-web-search/cancel", post_crm_public_web_search_cancel, read_body=True)
 
     def post_crm_public_web_search_retry(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, workspace=True, actor_fields=("operator", "requested_by"))
         result = orchestrator.retry_crm_record_public_web_search(payload)
         status = (
             HTTPStatus.ACCEPTED if result.get("status") in {"retried", "queued", "joined"} else HTTPStatus.BAD_REQUEST
@@ -2002,6 +2103,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     )
 
     def post_crm_public_web_promotion(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        # Attribution only: workspace_id is derived server-side from the CRM record
+        # lookup, not the payload, so it is intentionally not forced here.
+        _apply_server_identity(payload, request, actor_fields=("operator", "requested_by"))
         result = orchestrator.promote_crm_record_public_web_signal(
             _decode_path_param(request.path_params["record_id"]),
             payload,
@@ -2034,6 +2138,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     )
 
     def post_target_candidates(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, owner=True)
         result = orchestrator.upsert_target_candidate(payload)
         status = HTTPStatus.CREATED if result.get("status") == "upserted" else HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
@@ -2113,6 +2218,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
 
     # ---------------------------------------------------------------- PATCH
     def patch_crm_record(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        _apply_server_identity(payload, request, actor_fields=("actor_id",), lock_actor_type=True)
         result = orchestrator.update_crm_record_api(
             _decode_path_param(request.path_params["record_id"]),
             payload,
