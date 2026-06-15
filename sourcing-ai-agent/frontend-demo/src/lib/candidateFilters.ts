@@ -1,5 +1,8 @@
 import type { Candidate, DashboardData } from "../types";
 
+export const CURRENT_EXCEL_INTAKE_RECALL_BUCKET_ID = "job_scoped_marker:excel_intake:current_job";
+const CURRENT_EXCEL_INTAKE_RECALL_LABEL = "本次Excel导入";
+
 export interface CandidateFacetOption {
   id: string;
   label: string;
@@ -96,8 +99,57 @@ function candidateMatchesIntentKeyword(candidate: Candidate, keyword: string): b
   });
 }
 
+function candidateMatchesIntentKeywordProvenance(candidate: Candidate, keyword: string): boolean {
+  const corpus = normalizeSearchText(candidate.matchedKeywords.join(" "));
+  if (!corpus) {
+    return false;
+  }
+  return keywordMatchVariants(keyword).some((variant) => {
+    if (!variant) {
+      return false;
+    }
+    if (/[a-z0-9]/i.test(variant)) {
+      return matchesAsciiKeyword(corpus, variant);
+    }
+    return corpus.includes(variant);
+  });
+}
+
+function recallProvenanceKeywordSet(candidates: Candidate[], intentKeywords: string[]): Set<string> {
+  return new Set(
+    intentKeywords.filter((keyword) =>
+      candidates.some((candidate) => candidateMatchesIntentKeywordProvenance(candidate, keyword)),
+    ),
+  );
+}
+
+function candidateMatchesRecallKeyword(
+  candidate: Candidate,
+  keyword: string,
+  provenanceKeywords: Set<string>,
+): boolean {
+  return provenanceKeywords.has(keyword)
+    ? candidateMatchesIntentKeywordProvenance(candidate, keyword)
+    : candidateMatchesIntentKeyword(candidate, keyword);
+}
+
+function candidateMatchesCurrentExcelIntake(candidate: Candidate): boolean {
+  const normalizedLabel = normalizeSearchText(CURRENT_EXCEL_INTAKE_RECALL_LABEL);
+  if (candidate.matchedKeywords.some((keyword) => normalizeSearchText(keyword) === normalizedLabel)) {
+    return true;
+  }
+  return (candidate.sourceMatches || []).some((source) => {
+    const sourceType = normalizeToken(String(source.source_type || source.marker_id || ""));
+    const matchedOn = normalizeSearchText(String(source.matched_on || ""));
+    return (
+      sourceType === "excel_intake:current_job" ||
+      (String(source.field || "") === "job_scoped_candidate_marker" && matchedOn === normalizedLabel)
+    );
+  });
+}
+
 function normalizeEmploymentStatus(value: Candidate["employmentStatus"]): string {
-  return value === "lead" ? "lead" : value;
+  return value === "current" || value === "former" ? value : "lead";
 }
 
 function normalizeLocationText(value: string): string {
@@ -279,7 +331,15 @@ export function summarizeSelectedFacet(
   if (selectedLabels.length === 0) {
     return fallbackLabel;
   }
-  if (selectedLabels.length === options.length && options.length > 1) {
+  const concreteOptions = options.filter((option) => option.id !== "all");
+  const concreteSelectedCount = concreteOptions.filter((option) => selectedIds.includes(option.id)).length;
+  if (
+    selectedLabels.length === options.length && options.length > 1 ||
+    concreteOptions.length > 1 && concreteSelectedCount === concreteOptions.length
+  ) {
+    return fallbackLabel;
+  }
+  if (selectedIds.includes("all")) {
     return fallbackLabel;
   }
   const joined = selectedLabels.join("、");
@@ -317,22 +377,21 @@ export function normalizeFacetSelection(
   options: CandidateFacetOption[],
   fallback: string[],
 ): string[] {
-  const optionById = new Map(options.map((option) => [option.id, option]));
   const validOptionIds = new Set(options.map((option) => option.id));
   const valid = current.filter((item) => validOptionIds.has(item));
-  const hasAnyPositiveOption = options.some((option) => option.count > 0);
-  const selectedHasPositiveOption = valid.some((item) => (optionById.get(item)?.count || 0) > 0);
-  if (valid.length > 0 && (selectedHasPositiveOption || !hasAnyPositiveOption)) {
+  if (valid.length > 0) {
     return valid;
   }
   const normalizedFallback = fallback.filter((item) => validOptionIds.has(item));
   if (normalizedFallback.length > 0) {
     return normalizedFallback;
   }
-  if (valid.length > 0) {
-    return valid;
-  }
   return [];
+}
+
+export function preserveEditedFacetSelection(current: string[], options: CandidateFacetOption[]): string[] {
+  const validOptionIds = new Set(options.map((option) => option.id));
+  return current.filter((item) => validOptionIds.has(item));
 }
 
 export function buildLayerOptions(dashboard: DashboardData): CandidateFacetOption[] {
@@ -340,6 +399,9 @@ export function buildLayerOptions(dashboard: DashboardData): CandidateFacetOptio
 }
 
 export function defaultLayerSelection(options: CandidateFacetOption[]): string[] {
+  if (!options.some((option) => option.count > 0)) {
+    return [];
+  }
   const layerZero = options.find((option) => option.id === "layer_0" && option.count > 0);
   if (layerZero) {
     return ["layer_0"];
@@ -356,7 +418,6 @@ export function buildEmploymentOptions(candidates: Candidate[]): CandidateFacetO
   const ordered: Array<{ id: string; label: string }> = [
     { id: "current", label: "在职" },
     { id: "former", label: "已离职" },
-    { id: "lead", label: "线索" },
   ];
   return ordered
     .filter((item) => counts[item.id] > 0 || item.id === "current" || item.id === "former")
@@ -385,9 +446,7 @@ export function buildLocationOptions(candidates: Candidate[]): CandidateFacetOpt
     { id: "other", label: "其他" },
     { id: "unknown", label: "未提供地区信息" },
   ];
-  return ordered
-    .filter((item) => counts[item.id] > 0 || item.id === "us" || item.id === "other")
-    .map((item) => ({ ...item, count: counts[item.id] || 0 }));
+  return ordered.map((item) => ({ ...item, count: counts[item.id] || 0 }));
 }
 
 export function defaultLocationSelection(options: CandidateFacetOption[]): string[] {
@@ -418,9 +477,7 @@ export function buildFunctionOptions(candidates: Candidate[]): CandidateFacetOpt
     { id: "other", label: "其他" },
     { id: "unknown", label: "未提供职能信息" },
   ];
-  return ordered
-    .filter((item) => item.id !== "unknown" || counts[item.id] > 0)
-    .map((item) => ({ ...item, count: counts[item.id] || 0 }));
+  return ordered.map((item) => ({ ...item, count: counts[item.id] || 0 }));
 }
 
 export function defaultFunctionSelection(options: CandidateFacetOption[]): string[] {
@@ -451,12 +508,23 @@ export function buildRecallBucketOptions(
   const options: CandidateFacetOption[] = [
     { id: "all", label: "全量", count: candidates.length },
   ];
+  const provenanceKeywords = recallProvenanceKeywordSet(candidates, intentKeywords);
   for (const keyword of intentKeywords) {
-    const bucketCount = candidates.filter((candidate) => candidateMatchesIntentKeyword(candidate, keyword)).length;
+    const bucketCount = candidates.filter((candidate) =>
+      candidateMatchesRecallKeyword(candidate, keyword, provenanceKeywords),
+    ).length;
     options.push({
       id: keywordSelectionId(keyword),
       label: keyword,
       count: bucketCount,
+    });
+  }
+  const currentExcelIntakeCount = candidates.filter(candidateMatchesCurrentExcelIntake).length;
+  if (currentExcelIntakeCount > 0) {
+    options.push({
+      id: CURRENT_EXCEL_INTAKE_RECALL_BUCKET_ID,
+      label: CURRENT_EXCEL_INTAKE_RECALL_LABEL,
+      count: currentExcelIntakeCount,
     });
   }
   return options;
@@ -466,20 +534,32 @@ export function defaultRecallSelection(options: CandidateFacetOption[]): string[
   return options.some((option) => option.id === "all") ? ["all"] : options.slice(0, 1).map((option) => option.id);
 }
 
-function matchesRecallSelection(candidate: Candidate, recallSelections: string[], intentKeywords: string[]): boolean {
+function matchesRecallSelection(
+  candidate: Candidate,
+  recallSelections: string[],
+  intentKeywords: string[],
+  provenanceKeywords: Set<string>,
+): boolean {
   if (recallSelections.length === 0 || recallSelections.includes("all")) {
     return true;
   }
   const selectedKeywords = intentKeywords.filter((keyword) => recallSelections.includes(keywordSelectionId(keyword)));
-  if (selectedKeywords.length === 0) {
+  const currentExcelIntakeSelected = recallSelections.includes(CURRENT_EXCEL_INTAKE_RECALL_BUCKET_ID);
+  if (selectedKeywords.length === 0 && !currentExcelIntakeSelected) {
     return true;
   }
-  return selectedKeywords.some((keyword) => candidateMatchesIntentKeyword(candidate, keyword));
+  return (
+    (currentExcelIntakeSelected && candidateMatchesCurrentExcelIntake(candidate)) ||
+    selectedKeywords.some((keyword) => candidateMatchesRecallKeyword(candidate, keyword, provenanceKeywords))
+  );
 }
 
 function matchesLayerSelection(candidate: Candidate, selectedLayers: string[]): boolean {
   if (selectedLayers.length === 0) {
     return true;
+  }
+  if (typeof candidate.outreachLayer !== "number" || !Number.isFinite(candidate.outreachLayer)) {
+    return selectedLayers.includes("layer_0");
   }
   return selectedLayers.includes(`layer_${candidate.outreachLayer}`);
 }
@@ -488,7 +568,11 @@ function matchesEmploymentSelection(candidate: Candidate, selectedEmploymentStat
   if (selectedEmploymentStatuses.length === 0) {
     return true;
   }
-  return selectedEmploymentStatuses.includes(normalizeEmploymentStatus(candidate.employmentStatus));
+  const normalizedStatus = normalizeEmploymentStatus(candidate.employmentStatus);
+  if (normalizedStatus === "lead") {
+    return selectedEmploymentStatuses.includes("current") && selectedEmploymentStatuses.includes("former");
+  }
+  return selectedEmploymentStatuses.includes(normalizedStatus);
 }
 
 function matchesLocationSelection(candidate: Candidate, selectedLocations: string[]): boolean {
@@ -532,10 +616,11 @@ export function filterCandidatesByFacets(
   selection: CandidateFacetSelection,
   intentKeywords: string[],
 ): Candidate[] {
+  const provenanceKeywords = recallProvenanceKeywordSet(candidates, intentKeywords);
   return candidates.filter((candidate) => {
     return (
       matchesLayerSelection(candidate, selection.layers) &&
-      matchesRecallSelection(candidate, selection.recallBuckets, intentKeywords) &&
+      matchesRecallSelection(candidate, selection.recallBuckets, intentKeywords, provenanceKeywords) &&
       matchesEmploymentSelection(candidate, selection.employmentStatuses) &&
       matchesLocationSelection(candidate, selection.locations) &&
       matchesFunctionSelection(candidate, selection.functionBuckets) &&

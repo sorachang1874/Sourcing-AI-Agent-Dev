@@ -234,6 +234,14 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-daemon-status
 PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
 ```
 
+本地手测如果只需要打开页面和 API，不希望后台恢复自动抢跑 scheduled materialization / recovery backlog，应使用：
+
+```bash
+bash ./scripts/dev_backend.sh --no-daemon
+```
+
+当前脚本契约中，`--no-daemon` 同时关闭外置 worker daemon 和 serve 内置 runtime watchdog。只有明确要测试 serve 内置 watchdog、但不启动外置 daemon 时，才额外传 `--enable-runtime-watchdog`。
+
 ### 7. Start worker daemon
 
 ```bash
@@ -281,7 +289,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli write-worker-daemon-systemd-unit \
 
 直接重跑相同命令即可。默认 resume 会跳过已完成对象，只补剩余缺口。
 
-### SQLite state is suspicious
+### SQLite state needs attention
 
 优先：
 

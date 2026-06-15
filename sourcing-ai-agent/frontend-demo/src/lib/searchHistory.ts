@@ -39,22 +39,6 @@ function writeSearchHistory(items: SearchHistoryItem[]): SearchHistoryItem[] {
   return nextItems;
 }
 
-function mergeSearchHistoryItems(
-  preferredItems: SearchHistoryItem[],
-  fallbackItems: SearchHistoryItem[],
-): SearchHistoryItem[] {
-  const merged = new Map<string, SearchHistoryItem>();
-  for (const item of [...preferredItems, ...fallbackItems]) {
-    if (!item?.id || merged.has(item.id)) {
-      continue;
-    }
-    merged.set(item.id, item);
-  }
-  return Array.from(merged.values())
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-    .slice(0, HISTORY_LIMIT);
-}
-
 export function readSearchHistory(): SearchHistoryItem[] {
   if (!canUseStorage()) {
     return [];
@@ -90,7 +74,7 @@ export function deleteSearchHistoryItem(historyId: string): SearchHistoryItem[] 
 
 export async function syncSearchHistoryFromBackend(limit = HISTORY_LIMIT): Promise<SearchHistoryItem[]> {
   const remoteItems = (await listFrontendHistory(limit)).map(historyItemFromRecoveryEnvelope);
-  return writeSearchHistory(mergeSearchHistoryItems(remoteItems, readSearchHistory()));
+  return writeSearchHistory(remoteItems);
 }
 
 export async function deleteSearchHistoryItemShared(historyId: string): Promise<SearchHistoryItem[]> {

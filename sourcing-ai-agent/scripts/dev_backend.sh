@@ -20,6 +20,7 @@ DEV_API_PORT="${DEV_API_PORT:-8765}"
 DEV_DAEMON_POLL_SECONDS="${DEV_DAEMON_POLL_SECONDS:-5}"
 DEV_FRONTEND_PORTS_DEFAULT="${DEV_FRONTEND_PORTS:-4173,4174}"
 START_DAEMON=1
+DISABLE_RUNTIME_WATCHDOG=0
 PRINT_CONFIG=0
 DEV_BACKEND_SKIP_POSTGRES_AUTO_SOURCE=0
 declare -a FRONTEND_PORTS=()
@@ -48,7 +49,9 @@ Options:
   --frontend-port <port>         Allow localhost/127.0.0.1 frontend origin for this port. Repeatable.
   --allow-origin <origin>        Add extra explicit origin. Repeatable.
   --daemon-poll-seconds <sec>    Worker daemon poll interval. Default: 5
-  --no-daemon                    Start only serve, do not start worker daemon.
+  --no-daemon                    Start only serve; also disables the server-side runtime watchdog.
+  --disable-runtime-watchdog     Pass --disable-runtime-watchdog to the API serve process.
+  --enable-runtime-watchdog      Re-enable the server-side runtime watchdog after --no-daemon.
   --print-config                 Print resolved config and exit.
   --help                         Show this help.
 EOF
@@ -180,6 +183,31 @@ EOF
   unset LOCAL_PG_ROOT LOCAL_PG_EXTRACT LOCAL_PG_DATA LOCAL_PG_RUN LOCAL_PG_PORT LOCAL_PG_USER LOCAL_PG_DB
 }
 
+_dev_backend_apply_provider_isolation_contract() {
+  local mode="${SOURCING_EXTERNAL_PROVIDER_MODE:-live}"
+  mode="${mode,,}"
+  case "$mode" in
+    simulate|scripted|replay)
+      export SOURCING_LIVE_PROVIDER_ACCESS_DISABLED=1
+      export SOURCING_PROVIDER_WEBHOOK_USE_APIFY_API_TOKEN=0
+      export APIFY_API_TOKEN=""
+      export APIFY_TOKEN=""
+      export APIFY_WEBHOOK_TOKEN=""
+      export HARVEST_API_TOKEN=""
+      export HARVEST_PROFILE_API_TOKEN=""
+      export HARVEST_PROFILE_SEARCH_API_TOKEN=""
+      export HARVEST_COMPANY_EMPLOYEES_API_TOKEN=""
+      export DATAFORSEO_LOGIN=""
+      export DATAFORSEO_PASSWORD=""
+      export SERPER_API_KEY=""
+      if [[ "$mode" == "scripted" ]]; then
+        export SOURCING_SCRIPTED_PROVIDER_WEBHOOK_TOKEN="${SOURCING_SCRIPTED_PROVIDER_WEBHOOK_TOKEN:-local-scripted-provider-webhook-token}"
+        export SOURCING_PROVIDER_WEBHOOK_TOKEN="${SOURCING_PROVIDER_WEBHOOK_TOKEN:-${SOURCING_SCRIPTED_PROVIDER_WEBHOOK_TOKEN}}"
+      fi
+      ;;
+  esac
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --host)
@@ -212,6 +240,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-daemon)
       START_DAEMON=0
+      DISABLE_RUNTIME_WATCHDOG=1
+      shift
+      ;;
+    --disable-runtime-watchdog)
+      DISABLE_RUNTIME_WATCHDOG=1
+      shift
+      ;;
+    --enable-runtime-watchdog)
+      DISABLE_RUNTIME_WATCHDOG=0
       shift
       ;;
     --print-config)
@@ -238,6 +275,7 @@ fi
 export SOURCING_RUNTIME_DIR="${DEV_RUNTIME_DIR}"
 export SOURCING_RUNTIME_ENVIRONMENT="$(_dev_backend_infer_runtime_environment)"
 _dev_backend_prepare_isolated_runtime_env
+_dev_backend_apply_provider_isolation_contract
 
 if [[ -f "${SCRIPT_DIR}/dev_postgres_env.sh" && ${DEV_BACKEND_SKIP_POSTGRES_AUTO_SOURCE} -ne 1 ]]; then
   if "${DEV_PYTHON_BIN}" -c "import psycopg" >/dev/null 2>&1; then
@@ -280,10 +318,13 @@ if [[ $PRINT_CONFIG -eq 1 ]]; then
   printf 'api_host=%s\n' "$DEV_API_HOST"
   printf 'api_port=%s\n' "$DEV_API_PORT"
   printf 'start_daemon=%s\n' "$START_DAEMON"
+  printf 'disable_runtime_watchdog=%s\n' "$DISABLE_RUNTIME_WATCHDOG"
   printf 'daemon_poll_seconds=%s\n' "$DEV_DAEMON_POLL_SECONDS"
   printf 'frontend_ports=%s\n' "$(IFS=,; printf '%s' "${FRONTEND_PORTS[*]}")"
   printf 'SOURCING_API_ALLOWED_ORIGINS=%s\n' "${SOURCING_API_ALLOWED_ORIGINS}"
   printf 'SOURCING_RUNTIME_ENVIRONMENT=%s\n' "${SOURCING_RUNTIME_ENVIRONMENT}"
+  printf 'SOURCING_EXTERNAL_PROVIDER_MODE=%s\n' "${SOURCING_EXTERNAL_PROVIDER_MODE-}"
+  printf 'SOURCING_LIVE_PROVIDER_ACCESS_DISABLED=%s\n' "${SOURCING_LIVE_PROVIDER_ACCESS_DISABLED-}"
   printf 'SOURCING_LOCAL_POSTGRES_ENV_FILE=%s\n' "${SOURCING_LOCAL_POSTGRES_ENV_FILE-}"
   printf 'SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=%s\n' "${SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE-}"
   printf 'SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA=%s\n' "${SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA-}"
@@ -354,4 +395,8 @@ if [[ -n "${daemon_pid}" ]]; then
 fi
 
 cd "${PROJECT_ROOT}"
-PYTHONPATH=src "${DEV_PYTHON_BIN}" -m sourcing_agent.cli serve --host "${DEV_API_HOST}" --port "${DEV_API_PORT}"
+serve_args=(serve --host "${DEV_API_HOST}" --port "${DEV_API_PORT}")
+if [[ $DISABLE_RUNTIME_WATCHDOG -eq 1 ]]; then
+  serve_args+=(--disable-runtime-watchdog)
+fi
+PYTHONPATH=src "${DEV_PYTHON_BIN}" -m sourcing_agent.cli "${serve_args[@]}"

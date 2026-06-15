@@ -1,14 +1,32 @@
 import type {
+  AcquisitionDiscoveryLaneDetailResponse,
+  AcquisitionDiscoveryLaneListResponse,
+  AcquisitionDiscoveryLaneRecord,
   InstructionCompiler,
   IntentBrief,
   IntentRewritePolicyCatalogEntry,
   IntentRewriteEntry,
   IntentRewritePayload,
   JsonObject,
+  JsonValue,
   JobProgressResponse,
   JobResultsResponse,
   JobRuntimeHealth,
   MatchResult,
+  OperationActionDetailResponse,
+  OperationActionDisplayContract,
+  OperationActionListResponse,
+  OperationActionRecord,
+  OperationActionRegistryEntry,
+  OperationActionRegistryResponse,
+  OperationEventRecord,
+  OperationRunControlResponse,
+  OperationRunDetailResponse,
+  OperationRunListResponse,
+  OperationRunProvenanceResponse,
+  OperationRunControlState,
+  OperationRunRecord,
+  OperationRunStatusSummary,
   PlanResponse,
   PlanReviewGate,
   ProgressMetrics,
@@ -45,6 +63,27 @@ import type {
   TargetCandidatePublicWebStartResponse,
   TargetCandidatePublicWebStatus,
   WorkflowExplainResponse,
+  WorkflowActivityAttemptDetailResponse,
+  WorkflowActivityAttemptListResponse,
+  WorkflowActivityAttemptRecord,
+  WorkflowActivityControlTarget,
+  WorkflowActivityDetailResponse,
+  WorkflowActivityListResponse,
+  WorkflowActivityRecord,
+  WorkflowCommandActivitySpinePolicy,
+  WorkflowCommandContract,
+  WorkflowCommandControlResponse,
+  WorkflowCommandControlPolicy,
+  WorkflowCommandControlState,
+  WorkflowCommandDetailResponse,
+  WorkflowCommandDisplayContract,
+  WorkflowCommandExecutionSummary,
+  WorkflowCommandListResponse,
+  WorkflowCommandRecord,
+  WorkflowCommandRegistryResponse,
+  WorkflowEntityDeltaDetailResponse,
+  WorkflowEntityDeltaListResponse,
+  WorkflowEntityDeltaRecord,
   WorkflowStartResponse,
   WorkflowStageSummariesPayload,
   WorkflowStageSummaryItem,
@@ -153,12 +192,175 @@ export class SourcingAgentApiClient {
     return this.get(`/api/query-dispatches${query}`, mapQueryDispatchListResponse);
   }
 
+  async getOperationActionRegistry(): Promise<OperationActionRegistryResponse> {
+    return this.get("/api/operations/action-registry", mapOperationActionRegistryResponse);
+  }
+
+  async listOperationActions(filters: JsonObject = {}): Promise<OperationActionListResponse> {
+    const query = buildQueryString(filters);
+    return this.get(`/api/operations/actions${query}`, mapOperationActionListResponse);
+  }
+
+  async submitOperationAction(payload: JsonObject): Promise<OperationActionDetailResponse> {
+    return this.post("/api/operations/actions", payload, mapOperationActionDetailResponse);
+  }
+
+  async getOperationAction(actionId: string): Promise<OperationActionDetailResponse> {
+    return this.get(`/api/operations/actions/${encodeURIComponent(actionId)}`, mapOperationActionDetailResponse);
+  }
+
+  async approveOperationAction(actionId: string, payload: JsonObject = {}): Promise<OperationActionDetailResponse> {
+    return this.post(
+      `/api/operations/actions/${encodeURIComponent(actionId)}/approve`,
+      payload,
+      mapOperationActionDetailResponse,
+    );
+  }
+
+  async rejectOperationAction(actionId: string, payload: JsonObject = {}): Promise<OperationActionDetailResponse> {
+    return this.post(
+      `/api/operations/actions/${encodeURIComponent(actionId)}/reject`,
+      payload,
+      mapOperationActionDetailResponse,
+    );
+  }
+
+  async listOperationRuns(filters: JsonObject = {}): Promise<OperationRunListResponse> {
+    const query = buildQueryString(filters);
+    return this.get(`/api/operations/runs${query}`, mapOperationRunListResponse);
+  }
+
+  async getOperationRun(operationRunId: string): Promise<OperationRunDetailResponse> {
+    return this.get(`/api/operations/runs/${encodeURIComponent(operationRunId)}`, mapOperationRunDetailResponse);
+  }
+
+  async getOperationRunProvenance(operationRunId: string): Promise<OperationRunProvenanceResponse> {
+    return this.get(
+      `/api/operations/runs/${encodeURIComponent(operationRunId)}/provenance`,
+      mapOperationRunProvenanceResponse,
+    );
+  }
+
+  async cancelOperationRun(operationRunId: string, payload: JsonObject = {}): Promise<OperationRunControlResponse> {
+    return this.post(
+      `/api/operations/runs/${encodeURIComponent(operationRunId)}/cancel`,
+      payload,
+      mapOperationRunControlResponse,
+    );
+  }
+
+  async retryOperationRun(operationRunId: string, payload: JsonObject = {}): Promise<OperationRunControlResponse> {
+    return this.post(
+      `/api/operations/runs/${encodeURIComponent(operationRunId)}/retry`,
+      payload,
+      mapOperationRunControlResponse,
+    );
+  }
+
+  async resumeOperationRun(operationRunId: string, payload: JsonObject = {}): Promise<OperationRunControlResponse> {
+    return this.post(
+      `/api/operations/runs/${encodeURIComponent(operationRunId)}/resume`,
+      payload,
+      mapOperationRunControlResponse,
+    );
+  }
+
+  async dispatchOperationRun(operationRunId: string, payload: JsonObject = {}): Promise<OperationRunControlResponse> {
+    return this.post(
+      `/api/operations/runs/${encodeURIComponent(operationRunId)}/dispatch`,
+      payload,
+      mapOperationRunControlResponse,
+    );
+  }
+
+  async getWorkflowCommandRegistry(): Promise<WorkflowCommandRegistryResponse> {
+    return this.get("/api/workflow/command-registry", mapWorkflowCommandRegistryResponse);
+  }
+
+  async listWorkflowCommands(filters: JsonObject = {}): Promise<WorkflowCommandListResponse> {
+    const query = buildQueryString(filters);
+    return this.get(`/api/workflow/commands${query}`, mapWorkflowCommandListResponse);
+  }
+
+  async getWorkflowCommand(commandId: string): Promise<WorkflowCommandDetailResponse> {
+    return this.get(`/api/workflow/commands/${encodeURIComponent(commandId)}`, mapWorkflowCommandDetailResponse);
+  }
+
+  async cancelWorkflowCommand(commandId: string, payload: JsonObject = {}): Promise<WorkflowCommandControlResponse> {
+    return this.post(
+      `/api/workflow/commands/${encodeURIComponent(commandId)}/cancel`,
+      payload,
+      mapWorkflowCommandControlResponse,
+    );
+  }
+
+  async retryWorkflowCommand(commandId: string, payload: JsonObject = {}): Promise<WorkflowCommandControlResponse> {
+    return this.post(
+      `/api/workflow/commands/${encodeURIComponent(commandId)}/retry`,
+      payload,
+      mapWorkflowCommandControlResponse,
+    );
+  }
+
+  async resumeWorkflowCommand(commandId: string, payload: JsonObject = {}): Promise<WorkflowCommandControlResponse> {
+    return this.post(
+      `/api/workflow/commands/${encodeURIComponent(commandId)}/resume`,
+      payload,
+      mapWorkflowCommandControlResponse,
+    );
+  }
+
+  async listWorkflowActivities(filters: JsonObject = {}): Promise<WorkflowActivityListResponse> {
+    const query = buildQueryString(filters);
+    return this.get(`/api/workflow/activities${query}`, mapWorkflowActivityListResponse);
+  }
+
+  async getWorkflowActivity(activityRunId: string): Promise<WorkflowActivityDetailResponse> {
+    return this.get(`/api/workflow/activities/${encodeURIComponent(activityRunId)}`, mapWorkflowActivityDetailResponse);
+  }
+
+  async listWorkflowActivityAttempts(filters: JsonObject = {}): Promise<WorkflowActivityAttemptListResponse> {
+    const query = buildQueryString(filters);
+    return this.get(`/api/workflow/activity-attempts${query}`, mapWorkflowActivityAttemptListResponse);
+  }
+
+  async getWorkflowActivityAttempt(attemptId: string): Promise<WorkflowActivityAttemptDetailResponse> {
+    return this.get(
+      `/api/workflow/activity-attempts/${encodeURIComponent(attemptId)}`,
+      mapWorkflowActivityAttemptDetailResponse,
+    );
+  }
+
+  async listWorkflowEntityDeltas(filters: JsonObject = {}): Promise<WorkflowEntityDeltaListResponse> {
+    const query = buildQueryString(filters);
+    return this.get(`/api/workflow/entity-deltas${query}`, mapWorkflowEntityDeltaListResponse);
+  }
+
+  async getWorkflowEntityDelta(deltaId: string): Promise<WorkflowEntityDeltaDetailResponse> {
+    return this.get(
+      `/api/workflow/entity-deltas/${encodeURIComponent(deltaId)}`,
+      mapWorkflowEntityDeltaDetailResponse,
+    );
+  }
+
+  async listAcquisitionDiscoveryLanes(filters: JsonObject = {}): Promise<AcquisitionDiscoveryLaneListResponse> {
+    const query = buildQueryString(filters);
+    return this.get(`/api/workflow/discovery-lanes${query}`, mapAcquisitionDiscoveryLaneListResponse);
+  }
+
+  async getAcquisitionDiscoveryLane(laneId: string): Promise<AcquisitionDiscoveryLaneDetailResponse> {
+    return this.get(
+      `/api/workflow/discovery-lanes/${encodeURIComponent(laneId)}`,
+      mapAcquisitionDiscoveryLaneDetailResponse,
+    );
+  }
+
   async listTargetCandidatePublicWebSearches(
     filters: JsonObject = {},
   ): Promise<TargetCandidatePublicWebSearchState> {
-    const query = buildQueryString(filters);
-    return this.get(
-      `/api/target-candidates/public-web-search${query}`,
+    return this.post(
+      "/api/crm/records/public-web-search/poll",
+      normalizeCrmPublicWebFilters(filters),
       mapTargetCandidatePublicWebSearchState,
     );
   }
@@ -167,7 +369,7 @@ export class SourcingAgentApiClient {
     recordId: string,
   ): Promise<TargetCandidatePublicWebDetailResponse> {
     return this.get(
-      `/api/target-candidates/${encodeURIComponent(recordId)}/public-web-search`,
+      `/api/crm/records/${encodeURIComponent(recordId)}/public-web-search`,
       mapTargetCandidatePublicWebDetailResponse,
     );
   }
@@ -177,7 +379,7 @@ export class SourcingAgentApiClient {
     payload: JsonObject,
   ): Promise<TargetCandidatePublicWebPromotionResponse> {
     return this.post(
-      `/api/target-candidates/${encodeURIComponent(recordId)}/public-web-promotions`,
+      `/api/crm/records/${encodeURIComponent(recordId)}/public-web-promotions`,
       payload,
       mapTargetCandidatePublicWebPromotionResponse,
     );
@@ -187,8 +389,8 @@ export class SourcingAgentApiClient {
     payload: JsonObject,
   ): Promise<TargetCandidatePublicWebStartResponse> {
     return this.post(
-      "/api/target-candidates/public-web-search",
-      payload,
+      "/api/crm/records/public-web-search",
+      normalizeCrmPublicWebStartPayload(payload),
       mapTargetCandidatePublicWebStartResponse,
     );
   }
@@ -241,7 +443,7 @@ export function mapReviewInstructionCompileResponse(payload: unknown): ReviewIns
   const source = asObject(payload, "ReviewInstructionCompileResponse");
   return {
     ...(source as JsonObject),
-    status: asString(source.status),
+    status: normalizeReviewInstructionCompileStatus(source.status),
     review_id: asOptionalNumber(source.review_id),
     reason: asOptionalString(source.reason),
     review_payload: source.review_payload ? asJsonObject(source.review_payload) : undefined,
@@ -250,6 +452,14 @@ export function mapReviewInstructionCompileResponse(payload: unknown): ReviewIns
       : undefined,
     intent_rewrite: source.intent_rewrite ? mapIntentRewritePayload(source.intent_rewrite) : undefined,
   };
+}
+
+function normalizeReviewInstructionCompileStatus(value: unknown): ReviewInstructionCompileResponse["status"] {
+  const normalized = String(value || "").trim();
+  if (normalized === "compiled" || normalized === "invalid" || normalized === "not_found") {
+    return normalized;
+  }
+  return "invalid";
 }
 
 export function mapReviewPlanApplyResponse(payload: unknown): ReviewPlanApplyResponse {
@@ -406,6 +616,675 @@ export function mapTargetCandidatePublicWebPromotionResponse(
   };
 }
 
+export function mapWorkflowCommandControlPolicy(payload: unknown): WorkflowCommandControlPolicy {
+  const source = asObject(payload ?? {}, "WorkflowCommandControlPolicy");
+  return {
+    ...(source as JsonObject),
+    schema_version: asOptionalString(source.schema_version),
+    command_type: asOptionalString(source.command_type),
+    owner: asOptionalString(source.owner),
+    running_control_category: asOptionalString(source.running_control_category),
+    running_control_categories: asOptionalStringArray(source.running_control_categories),
+    running_control_maturity: asOptionalString(source.running_control_maturity),
+    running_control_gap_status: asOptionalString(source.running_control_gap_status),
+    running_control_surface: asOptionalString(source.running_control_surface),
+    generic_cancel_statuses: asOptionalStringArray(source.generic_cancel_statuses),
+    generic_retry_statuses: asOptionalStringArray(source.generic_retry_statuses),
+    generic_resume_statuses: asOptionalStringArray(source.generic_resume_statuses),
+    running_cancel_supported: asOptionalBoolean(source.running_cancel_supported),
+    running_cancel_statuses: asOptionalStringArray(source.running_cancel_statuses),
+    running_cancel_owner: asOptionalString(source.running_cancel_owner),
+    running_cancel_delegate: asOptionalString(source.running_cancel_delegate),
+    running_cancel_prerequisites: asOptionalStringArray(source.running_cancel_prerequisites),
+    running_cancel_blocked_reason: asOptionalString(source.running_cancel_blocked_reason),
+    running_cancel_upgrade_requirements: asOptionalStringArray(source.running_cancel_upgrade_requirements),
+    running_cancel_contract: asOptionalString(source.running_cancel_contract),
+    unsupported_running_cancel_reason: asOptionalString(source.unsupported_running_cancel_reason),
+    module_state_mutated_on_running_cancel: asOptionalBoolean(source.module_state_mutated_on_running_cancel),
+    running_resume_supported: asOptionalBoolean(source.running_resume_supported),
+    running_resume_statuses: asOptionalStringArray(source.running_resume_statuses),
+    running_resume_owner: asOptionalString(source.running_resume_owner),
+    running_resume_delegate: asOptionalString(source.running_resume_delegate),
+    running_resume_prerequisites: asOptionalStringArray(source.running_resume_prerequisites),
+    running_resume_blocked_reason: asOptionalString(source.running_resume_blocked_reason),
+    running_resume_upgrade_requirements: asOptionalStringArray(source.running_resume_upgrade_requirements),
+    running_resume_contract: asOptionalString(source.running_resume_contract),
+    unsupported_running_resume_reason: asOptionalString(source.unsupported_running_resume_reason),
+    module_state_mutated_on_running_resume: asOptionalBoolean(source.module_state_mutated_on_running_resume),
+    control_source_of_truth: asOptionalString(source.control_source_of_truth),
+    agent_callable_surface: asOptionalString(source.agent_callable_surface),
+    fallback_status: asOptionalString(source.fallback_status),
+  };
+}
+
+export function mapWorkflowCommandControlState(payload: unknown): WorkflowCommandControlState {
+  const source = asObject(payload ?? {}, "WorkflowCommandControlState");
+  return {
+    ...(source as JsonObject),
+    schema_version: asOptionalString(source.schema_version),
+    command_type: asOptionalString(source.command_type),
+    owner: asOptionalString(source.owner),
+    command_status: asOptionalString(source.command_status),
+    can_cancel: asOptionalBoolean(source.can_cancel),
+    can_retry: asOptionalBoolean(source.can_retry),
+    can_resume: asOptionalBoolean(source.can_resume),
+    cancel_mode: asOptionalString(source.cancel_mode),
+    retry_mode: asOptionalString(source.retry_mode),
+    resume_mode: asOptionalString(source.resume_mode),
+    allowed_actions: asOptionalStringArray(source.allowed_actions),
+    disabled_reasons: source.disabled_reasons ? asJsonObject(source.disabled_reasons) : undefined,
+    running_cancel_supported: asOptionalBoolean(source.running_cancel_supported),
+    running_cancel_delegate: asOptionalString(source.running_cancel_delegate),
+    running_cancel_prerequisites: asOptionalStringArray(source.running_cancel_prerequisites),
+    running_resume_supported: asOptionalBoolean(source.running_resume_supported),
+    running_resume_delegate: asOptionalString(source.running_resume_delegate),
+    running_resume_prerequisites: asOptionalStringArray(source.running_resume_prerequisites),
+    module_state_mutated_on_cancel: asOptionalBoolean(source.module_state_mutated_on_cancel),
+    module_state_mutated_on_resume: asOptionalBoolean(source.module_state_mutated_on_resume),
+    control_source_of_truth: asOptionalString(source.control_source_of_truth),
+    policy_source_of_truth: asOptionalString(source.policy_source_of_truth),
+    fallback_status: asOptionalString(source.fallback_status),
+  };
+}
+
+export function mapWorkflowCommandActivitySpinePolicy(payload: unknown): WorkflowCommandActivitySpinePolicy {
+  const source = asObject(payload ?? {}, "WorkflowCommandActivitySpinePolicy");
+  return {
+    ...(source as JsonObject),
+    schema_version: asOptionalString(source.schema_version),
+    command_type: asOptionalString(source.command_type),
+    owner: asOptionalString(source.owner),
+    requirement: asOptionalString(source.requirement),
+    must_write_activity_run: asOptionalBoolean(source.must_write_activity_run),
+    must_write_activity_attempt: asOptionalBoolean(source.must_write_activity_attempt),
+    must_write_entity_delta: asOptionalBoolean(source.must_write_entity_delta),
+    downstream_activity_required: asOptionalBoolean(source.downstream_activity_required),
+    agent_callable: asOptionalBoolean(source.agent_callable),
+    fallback_status: asOptionalString(source.fallback_status),
+    migration_status: asOptionalString(source.migration_status),
+    deletion_condition: asOptionalString(source.deletion_condition),
+  };
+}
+
+export function mapWorkflowCommandDisplayContract(payload: unknown): WorkflowCommandDisplayContract {
+  const source = asObject(payload ?? {}, "WorkflowCommandDisplayContract");
+  return {
+    ...(source as JsonObject),
+    schema_version: asOptionalString(source.schema_version),
+    command_type: asOptionalString(source.command_type),
+    owner: asOptionalString(source.owner),
+    display_label: asOptionalString(source.display_label),
+    display_category: asOptionalString(source.display_category),
+    description: asOptionalString(source.description),
+    source_of_truth: asOptionalString(source.source_of_truth),
+    fallback_status: asOptionalString(source.fallback_status),
+  };
+}
+
+export function mapOperationActionDisplayContract(payload: unknown): OperationActionDisplayContract {
+  const source = asObject(payload ?? {}, "OperationActionDisplayContract");
+  return {
+    ...(source as JsonObject),
+    schema_version: asOptionalString(source.schema_version),
+    action_type: asOptionalString(source.action_type),
+    owner_module: asOptionalString(source.owner_module),
+    operation_type: asOptionalString(source.operation_type),
+    display_label: asOptionalString(source.display_label),
+    display_category: asOptionalString(source.display_category),
+    description: asOptionalString(source.description),
+    source_of_truth: asOptionalString(source.source_of_truth),
+    fallback_status: asOptionalString(source.fallback_status),
+  };
+}
+
+export function mapWorkflowCommandContract(payload: unknown): WorkflowCommandContract {
+  const source = asObject(payload, "WorkflowCommandContract");
+  return {
+    ...(source as JsonObject),
+    command_type: asString(source.command_type),
+    owner: asOptionalString(source.owner),
+    agent_exposure_status: asOptionalString(source.agent_exposure_status),
+    agent_exposure_gate: asOptionalString(source.agent_exposure_gate),
+    stage_id: asOptionalString(source.stage_id),
+    readiness_effect: asOptionalString(source.readiness_effect),
+    display_contract: source.display_contract
+      ? mapWorkflowCommandDisplayContract(source.display_contract)
+      : undefined,
+    control_policy: source.control_policy ? mapWorkflowCommandControlPolicy(source.control_policy) : undefined,
+    control_state: source.control_state ? mapWorkflowCommandControlState(source.control_state) : undefined,
+    activity_spine_policy: source.activity_spine_policy
+      ? mapWorkflowCommandActivitySpinePolicy(source.activity_spine_policy)
+      : undefined,
+  };
+}
+
+export function mapOperationActionRegistryEntry(payload: unknown): OperationActionRegistryEntry {
+  const source = asObject(payload, "OperationActionRegistryEntry");
+  return {
+    ...(source as JsonObject),
+    owner_module: asOptionalString(source.owner_module),
+    operation_type: asOptionalString(source.operation_type),
+    approval_policy: asOptionalString(source.approval_policy),
+    budget_required: asOptionalBoolean(source.budget_required),
+    description: asOptionalString(source.description),
+    display_contract: source.display_contract
+      ? mapOperationActionDisplayContract(source.display_contract)
+      : undefined,
+    allowed_workflow_command_types: asOptionalStringArray(source.allowed_workflow_command_types),
+    default_workflow_command_type: asOptionalString(source.default_workflow_command_type),
+    workflow_command_exposure_gate: asOptionalString(source.workflow_command_exposure_gate),
+    workflow_command_exposure_status: asOptionalString(source.workflow_command_exposure_status),
+    allowed_workflow_command_contracts: asArray(source.allowed_workflow_command_contracts).map(mapWorkflowCommandContract),
+    workflow_command_control_summary: source.workflow_command_control_summary
+      ? (asObject(source.workflow_command_control_summary, "WorkflowCommandControlSummary") as WorkflowCommandControlSummary)
+      : undefined,
+    default_workflow_command_contract: source.default_workflow_command_contract
+      ? mapWorkflowCommandContract(source.default_workflow_command_contract)
+      : undefined,
+  };
+}
+
+export function mapOperationActionRegistryResponse(payload: unknown): OperationActionRegistryResponse {
+  const source = asObject(payload, "OperationActionRegistryResponse");
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    contract: asOptionalString(source.contract),
+    action_registry: asRecordOfMappedObject(source.action_registry, mapOperationActionRegistryEntry),
+  };
+}
+
+export function mapOperationEventRecord(payload: unknown): OperationEventRecord {
+  const source = asObject(payload, "OperationEventRecord");
+  return {
+    ...(source as JsonObject),
+    event_id: asOptionalString(source.event_id),
+    workspace_id: asOptionalString(source.workspace_id),
+    event_stream_id: asOptionalString(source.event_stream_id),
+    operation_run_id: asOptionalString(source.operation_run_id),
+    action_id: asOptionalString(source.action_id),
+    event_family: asOptionalString(source.event_family),
+    event_type: asOptionalString(source.event_type),
+    sequence_number: asOptionalNumber(source.sequence_number),
+    actor: asOptionalString(source.actor),
+    source: asOptionalString(source.source),
+    payload: source.payload ? asJsonObject(source.payload) : undefined,
+    occurred_at: asOptionalString(source.occurred_at),
+    recorded_at: asOptionalString(source.recorded_at),
+  };
+}
+
+export function mapOperationActionRecord(payload: unknown): OperationActionRecord {
+  const source = asObject(payload, "OperationActionRecord");
+  return {
+    ...(source as JsonObject),
+    action_id: asOptionalString(source.action_id),
+    workspace_id: asOptionalString(source.workspace_id),
+    conversation_id: asOptionalString(source.conversation_id),
+    action_type: asOptionalString(source.action_type),
+    owner_module: asOptionalString(source.owner_module),
+    operation_type: asOptionalString(source.operation_type),
+    display_contract: source.display_contract
+      ? mapOperationActionDisplayContract(source.display_contract)
+      : undefined,
+    target_ref: source.target_ref ? asJsonObject(source.target_ref) : undefined,
+    input: source.input ? asJsonObject(source.input) : undefined,
+    approval_status: asOptionalString(source.approval_status),
+    approval_policy: asOptionalString(source.approval_policy),
+    budget: source.budget ? asJsonObject(source.budget) : undefined,
+    status: asOptionalString(source.status),
+    result_ref: source.result_ref ? asJsonObject(source.result_ref) : undefined,
+    metadata: source.metadata ? asJsonObject(source.metadata) : undefined,
+    created_at: asOptionalString(source.created_at),
+    updated_at: asOptionalString(source.updated_at),
+  };
+}
+
+export function mapOperationRunRecord(payload: unknown): OperationRunRecord {
+  const source = asObject(payload, "OperationRunRecord");
+  return {
+    ...(source as JsonObject),
+    operation_run_id: asOptionalString(source.operation_run_id),
+    workspace_id: asOptionalString(source.workspace_id),
+    action_id: asOptionalString(source.action_id),
+    owner_module: asOptionalString(source.owner_module),
+    operation_type: asOptionalString(source.operation_type),
+    display_contract: source.display_contract
+      ? mapOperationActionDisplayContract(source.display_contract)
+      : undefined,
+    status: asOptionalString(source.status),
+    progress: source.progress ? asJsonObject(source.progress) : undefined,
+    workflow_ref: source.workflow_ref ? asJsonObject(source.workflow_ref) : undefined,
+    cost_budget: source.cost_budget ? asJsonObject(source.cost_budget) : undefined,
+    result_ref: source.result_ref ? asJsonObject(source.result_ref) : undefined,
+    metadata: source.metadata ? asJsonObject(source.metadata) : undefined,
+    control_state: source.control_state ? mapOperationRunControlState(source.control_state) : undefined,
+    status_summary: source.status_summary ? mapOperationRunStatusSummary(source.status_summary) : undefined,
+    started_at: asOptionalString(source.started_at),
+    completed_at: asOptionalString(source.completed_at),
+    created_at: asOptionalString(source.created_at),
+    updated_at: asOptionalString(source.updated_at),
+  };
+}
+
+export function mapOperationRunControlState(payload: unknown): OperationRunControlState {
+  const source = asObject(payload ?? {}, "OperationRunControlState");
+  return {
+    ...(source as JsonObject),
+    operation_status: asOptionalString(source.operation_status),
+    action_status: asOptionalString(source.action_status),
+    operation_phase: asOptionalString(source.operation_phase),
+    can_dispatch: asOptionalBoolean(source.can_dispatch),
+    can_cancel: asOptionalBoolean(source.can_cancel),
+    can_retry: asOptionalBoolean(source.can_retry),
+    can_resume: asOptionalBoolean(source.can_resume),
+    allowed_actions: asOptionalStringArray(source.allowed_actions),
+    disabled_reasons: source.disabled_reasons ? asJsonObject(source.disabled_reasons) : undefined,
+    control_source_of_truth: asOptionalString(source.control_source_of_truth),
+    fallback_status: asOptionalString(source.fallback_status),
+    module_state_mutated_on_control: asOptionalBoolean(source.module_state_mutated_on_control),
+    schema_version: asOptionalString(source.schema_version),
+  };
+}
+
+export function mapOperationRunStatusSummary(payload: unknown): OperationRunStatusSummary {
+  const source = asObject(payload ?? {}, "OperationRunStatusSummary");
+  return {
+    ...(source as JsonObject),
+    source: asOptionalString(source.source),
+    fallback_status: asOptionalString(source.fallback_status),
+    fallback_used: asOptionalBoolean(source.fallback_used),
+    module_state_mutated: asOptionalBoolean(source.module_state_mutated),
+    operation_status: asOptionalString(source.operation_status),
+    operation_phase: asOptionalString(source.operation_phase),
+    workflow_command_count: asOptionalNumber(source.workflow_command_count),
+    operation_event_count: asOptionalNumber(source.operation_event_count),
+    command_status_counts: asRecordOfNumber(source.command_status_counts),
+    latest_event_type: asOptionalString(source.latest_event_type),
+    latest_event: source.latest_event ? mapOperationEventRecord(source.latest_event) : undefined,
+    latest_workflow_command: source.latest_workflow_command
+      ? mapWorkflowCommandRecord(source.latest_workflow_command)
+      : undefined,
+  };
+}
+
+export function mapOperationActionListResponse(payload: unknown): OperationActionListResponse {
+  const source = asObject(payload, "OperationActionListResponse");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status),
+    contract: asOptionalString(source.contract),
+    actions: asArray(source.actions).map(mapOperationActionRecord),
+  };
+}
+
+export function mapOperationActionDetailResponse(payload: unknown): OperationActionDetailResponse {
+  const source = asObject(payload, "OperationActionDetailResponse");
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    contract: asOptionalString(source.contract),
+    action: source.action ? mapOperationActionRecord(source.action) : undefined,
+    operation_run: source.operation_run ? mapOperationRunRecord(source.operation_run) : undefined,
+    events: asArray(source.events).map(mapOperationEventRecord),
+  };
+}
+
+export function mapOperationRunListResponse(payload: unknown): OperationRunListResponse {
+  const source = asObject(payload, "OperationRunListResponse");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status),
+    contract: asOptionalString(source.contract),
+    operation_runs: asArray(source.operation_runs).map(mapOperationRunRecord),
+  };
+}
+
+export function mapOperationRunDetailResponse(payload: unknown): OperationRunDetailResponse {
+  const source = asObject(payload, "OperationRunDetailResponse");
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    contract: asOptionalString(source.contract),
+    operation_run: source.operation_run ? mapOperationRunRecord(source.operation_run) : undefined,
+    events: asArray(source.events).map(mapOperationEventRecord),
+  };
+}
+
+export function mapOperationRunProvenanceResponse(payload: unknown): OperationRunProvenanceResponse {
+  const source = asObject(payload, "OperationRunProvenanceResponse");
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    contract: asOptionalString(source.contract),
+    action: source.action ? mapOperationActionRecord(source.action) : undefined,
+    operation_run: source.operation_run ? mapOperationRunRecord(source.operation_run) : undefined,
+    action_events: asArray(source.action_events).map(mapOperationEventRecord),
+    operation_events: asArray(source.operation_events).map(mapOperationEventRecord),
+    event_timeline: asArray(source.event_timeline).map(mapOperationEventRecord),
+    workflow_commands: asArray(source.workflow_commands).map(mapWorkflowCommandRecord),
+    module_state_mutated: asOptionalBoolean(source.module_state_mutated),
+  };
+}
+
+export function mapOperationRunControlResponse(payload: unknown): OperationRunControlResponse {
+  const source = asObject(payload, "OperationRunControlResponse");
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    reason: asOptionalString(source.reason),
+    contract: asOptionalString(source.contract),
+    action: source.action ? mapOperationActionRecord(source.action) : undefined,
+    operation_run: source.operation_run ? mapOperationRunRecord(source.operation_run) : undefined,
+    parent_operation_run: source.parent_operation_run
+      ? mapOperationRunRecord(source.parent_operation_run)
+      : undefined,
+    display_contract: source.display_contract
+      ? mapOperationActionDisplayContract(source.display_contract)
+      : undefined,
+    control_state: source.control_state ? mapOperationRunControlState(source.control_state) : undefined,
+    workflow_command: source.workflow_command ? mapWorkflowCommandRecord(source.workflow_command) : undefined,
+    events: asArray(source.events).map(mapOperationEventRecord),
+    module_state_mutated: asOptionalBoolean(source.module_state_mutated),
+  };
+}
+
+export function mapWorkflowCommandRegistryResponse(payload: unknown): WorkflowCommandRegistryResponse {
+  const source = asObject(payload, "WorkflowCommandRegistryResponse");
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    contract: asOptionalString(source.contract),
+    command_registry: asRecordOfMappedObject(source.command_registry, mapWorkflowCommandContract),
+    module_state_mutated: asOptionalBoolean(source.module_state_mutated),
+  };
+}
+
+export function mapWorkflowCommandExecutionSummary(payload: unknown): WorkflowCommandExecutionSummary {
+  const source = asObject(payload ?? {}, "WorkflowCommandExecutionSummary");
+  return {
+    ...(source as JsonObject),
+    source: asOptionalString(source.source),
+    fallback_status: asOptionalString(source.fallback_status),
+    fallback_used: asOptionalBoolean(source.fallback_used),
+    module_state_mutated: asOptionalBoolean(source.module_state_mutated),
+    activity_count: asOptionalNumber(source.activity_count),
+    attempt_count: asOptionalNumber(source.attempt_count),
+    entity_delta_count: asOptionalNumber(source.entity_delta_count),
+    activity_status_counts: asRecordOfNumber(source.activity_status_counts),
+    attempt_status_counts: asRecordOfNumber(source.attempt_status_counts),
+    entity_delta_status_counts: asRecordOfNumber(source.entity_delta_status_counts),
+    entity_delta_kind_counts: asRecordOfNumber(source.entity_delta_kind_counts),
+    latest_effect_status: asOptionalString(source.latest_effect_status),
+    latest_activity: source.latest_activity ? mapWorkflowActivityRecord(source.latest_activity) : undefined,
+    latest_attempt: source.latest_attempt ? mapWorkflowActivityAttemptRecord(source.latest_attempt) : undefined,
+    latest_entity_delta: source.latest_entity_delta ? mapWorkflowEntityDeltaRecord(source.latest_entity_delta) : undefined,
+    sample_limit: asOptionalNumber(source.sample_limit),
+    sample_truncated: asOptionalBoolean(source.sample_truncated),
+  };
+}
+
+export function mapWorkflowCommandRecord(payload: unknown): WorkflowCommandRecord {
+  const source = asObject(payload, "WorkflowCommandRecord");
+  return {
+    ...(source as JsonObject),
+    command_id: asOptionalString(source.command_id),
+    workflow_run_id: asOptionalString(source.workflow_run_id),
+    operation_id: asOptionalString(source.operation_id),
+    command_type: asOptionalString(source.command_type),
+    owner: asOptionalString(source.owner),
+    agent_exposure_status: asOptionalString(source.agent_exposure_status),
+    agent_exposure_gate: asOptionalString(source.agent_exposure_gate),
+    status: asOptionalString(source.status),
+    stage_id: asOptionalString(source.stage_id),
+    readiness_effect: asOptionalString(source.readiness_effect),
+    display_contract: source.display_contract
+      ? mapWorkflowCommandDisplayContract(source.display_contract)
+      : undefined,
+    control_policy: source.control_policy ? mapWorkflowCommandControlPolicy(source.control_policy) : undefined,
+    control_state: source.control_state ? mapWorkflowCommandControlState(source.control_state) : undefined,
+    activity_spine_policy: source.activity_spine_policy
+      ? mapWorkflowCommandActivitySpinePolicy(source.activity_spine_policy)
+      : undefined,
+    execution_summary: source.execution_summary
+      ? mapWorkflowCommandExecutionSummary(source.execution_summary)
+      : undefined,
+  };
+}
+
+export function mapWorkflowCommandListResponse(payload: unknown): WorkflowCommandListResponse {
+  const source = asObject(payload, "WorkflowCommandListResponse");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status),
+    contract: asOptionalString(source.contract),
+    workflow_commands: asArray(source.workflow_commands).map(mapWorkflowCommandRecord),
+  };
+}
+
+export function mapWorkflowCommandDetailResponse(payload: unknown): WorkflowCommandDetailResponse {
+  const source = asObject(payload, "WorkflowCommandDetailResponse");
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    contract: asOptionalString(source.contract),
+    workflow_command: source.workflow_command ? mapWorkflowCommandRecord(source.workflow_command) : undefined,
+  };
+}
+
+export function mapWorkflowCommandControlResponse(payload: unknown): WorkflowCommandControlResponse {
+  const source = asObject(payload, "WorkflowCommandControlResponse");
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    reason: asOptionalString(source.reason),
+    command_status: asOptionalString(source.command_status),
+    workflow_command: source.workflow_command ? mapWorkflowCommandRecord(source.workflow_command) : undefined,
+    operation_sync: source.operation_sync ? asJsonObject(source.operation_sync) : undefined,
+    display_contract: source.display_contract
+      ? mapWorkflowCommandDisplayContract(source.display_contract)
+      : undefined,
+    control_policy: source.control_policy ? mapWorkflowCommandControlPolicy(source.control_policy) : undefined,
+    control_state: source.control_state ? mapWorkflowCommandControlState(source.control_state) : undefined,
+    activity_spine_policy: source.activity_spine_policy
+      ? mapWorkflowCommandActivitySpinePolicy(source.activity_spine_policy)
+      : undefined,
+    module_state_mutated: asOptionalBoolean(source.module_state_mutated),
+    owner_specific_control: asOptionalBoolean(source.owner_specific_control),
+    contract: asOptionalString(source.contract),
+  };
+}
+
+export function mapWorkflowActivityControlTarget(payload: unknown): WorkflowActivityControlTarget {
+  const source = asObject(payload ?? {}, "WorkflowActivityControlTarget");
+  return {
+    ...(source as JsonObject),
+    target_type: asOptionalString(source.target_type),
+    command_id: asOptionalString(source.command_id),
+    command_type: asOptionalString(source.command_type),
+    owner: asOptionalString(source.owner),
+    display_contract: source.display_contract
+      ? mapWorkflowCommandDisplayContract(source.display_contract)
+      : undefined,
+    control_policy: source.control_policy ? mapWorkflowCommandControlPolicy(source.control_policy) : undefined,
+    control_state: source.control_state ? mapWorkflowCommandControlState(source.control_state) : undefined,
+    activity_spine_policy: source.activity_spine_policy
+      ? mapWorkflowCommandActivitySpinePolicy(source.activity_spine_policy)
+      : undefined,
+    fallback_status: asOptionalString(source.fallback_status),
+  };
+}
+
+export function mapWorkflowActivityRecord(payload: unknown): WorkflowActivityRecord {
+  const source = asObject(payload, "WorkflowActivityRecord");
+  return {
+    ...(source as JsonObject),
+    activity_run_id: asOptionalString(source.activity_run_id),
+    workflow_run_id: asOptionalString(source.workflow_run_id),
+    operation_run_id: asOptionalString(source.operation_run_id),
+    acquisition_run_id: asOptionalString(source.acquisition_run_id),
+    command_id: asOptionalString(source.command_id),
+    activity_type: asOptionalString(source.activity_type),
+    owner: asOptionalString(source.owner),
+    status: asOptionalString(source.status),
+    phase: asOptionalString(source.phase),
+    mutation_contract: asOptionalString(source.mutation_contract),
+    module_state_mutated: asOptionalBoolean(source.module_state_mutated),
+    control_target: source.control_target ? mapWorkflowActivityControlTarget(source.control_target) : undefined,
+  };
+}
+
+export function mapWorkflowActivityAttemptRecord(payload: unknown): WorkflowActivityAttemptRecord {
+  const source = asObject(payload, "WorkflowActivityAttemptRecord");
+  return {
+    ...(source as JsonObject),
+    attempt_id: asOptionalString(source.attempt_id),
+    activity_run_id: asOptionalString(source.activity_run_id),
+    workflow_run_id: asOptionalString(source.workflow_run_id),
+    command_id: asOptionalString(source.command_id),
+    activity_type: asOptionalString(source.activity_type),
+    owner: asOptionalString(source.owner),
+    status: asOptionalString(source.status),
+    provider: asOptionalString(source.provider),
+    mutation_contract: asOptionalString(source.mutation_contract),
+    module_state_mutated: asOptionalBoolean(source.module_state_mutated),
+    control_target: source.control_target ? mapWorkflowActivityControlTarget(source.control_target) : undefined,
+  };
+}
+
+export function mapWorkflowEntityDeltaRecord(payload: unknown): WorkflowEntityDeltaRecord {
+  const source = asObject(payload, "WorkflowEntityDeltaRecord");
+  return {
+    ...(source as JsonObject),
+    delta_id: asOptionalString(source.delta_id),
+    workflow_run_id: asOptionalString(source.workflow_run_id),
+    operation_run_id: asOptionalString(source.operation_run_id),
+    command_id: asOptionalString(source.command_id),
+    activity_run_id: asOptionalString(source.activity_run_id),
+    attempt_id: asOptionalString(source.attempt_id),
+    entity_type: asOptionalString(source.entity_type),
+    entity_key: asOptionalString(source.entity_key),
+    delta_kind: asOptionalString(source.delta_kind),
+    status: asOptionalString(source.status),
+    reason: asOptionalString(source.reason),
+    mutation_contract: asOptionalString(source.mutation_contract),
+    module_state_mutated: asOptionalBoolean(source.module_state_mutated),
+    control_target: source.control_target ? mapWorkflowActivityControlTarget(source.control_target) : undefined,
+  };
+}
+
+export function mapWorkflowActivityListResponse(payload: unknown): WorkflowActivityListResponse {
+  const source = asObject(payload, "WorkflowActivityListResponse");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status),
+    contract: asOptionalString(source.contract),
+    workflow_activities: asArray(source.workflow_activities).map(mapWorkflowActivityRecord),
+  };
+}
+
+export function mapWorkflowActivityDetailResponse(payload: unknown): WorkflowActivityDetailResponse {
+  const source = asObject(payload, "WorkflowActivityDetailResponse");
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    contract: asOptionalString(source.contract),
+    workflow_activity: source.workflow_activity ? mapWorkflowActivityRecord(source.workflow_activity) : undefined,
+    activity_attempts: asArray(source.activity_attempts).map(mapWorkflowActivityAttemptRecord),
+  };
+}
+
+export function mapWorkflowActivityAttemptListResponse(payload: unknown): WorkflowActivityAttemptListResponse {
+  const source = asObject(payload, "WorkflowActivityAttemptListResponse");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status),
+    contract: asOptionalString(source.contract),
+    workflow_activity_attempts: asArray(source.workflow_activity_attempts).map(mapWorkflowActivityAttemptRecord),
+  };
+}
+
+export function mapWorkflowActivityAttemptDetailResponse(payload: unknown): WorkflowActivityAttemptDetailResponse {
+  const source = asObject(payload, "WorkflowActivityAttemptDetailResponse");
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    contract: asOptionalString(source.contract),
+    workflow_activity_attempt: source.workflow_activity_attempt
+      ? mapWorkflowActivityAttemptRecord(source.workflow_activity_attempt)
+      : undefined,
+  };
+}
+
+export function mapWorkflowEntityDeltaListResponse(payload: unknown): WorkflowEntityDeltaListResponse {
+  const source = asObject(payload, "WorkflowEntityDeltaListResponse");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status),
+    contract: asOptionalString(source.contract),
+    workflow_entity_deltas: asArray(source.workflow_entity_deltas).map(mapWorkflowEntityDeltaRecord),
+  };
+}
+
+export function mapWorkflowEntityDeltaDetailResponse(payload: unknown): WorkflowEntityDeltaDetailResponse {
+  const source = asObject(payload, "WorkflowEntityDeltaDetailResponse");
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    contract: asOptionalString(source.contract),
+    workflow_entity_delta: source.workflow_entity_delta
+      ? mapWorkflowEntityDeltaRecord(source.workflow_entity_delta)
+      : undefined,
+  };
+}
+
+export function mapAcquisitionDiscoveryLaneRecord(payload: unknown): AcquisitionDiscoveryLaneRecord {
+  const source = asObject(payload, "AcquisitionDiscoveryLaneRecord");
+  return {
+    ...(source as JsonObject),
+    lane_id: asOptionalString(source.lane_id),
+    workspace_id: asOptionalString(source.workspace_id),
+    acquisition_run_id: asOptionalString(source.acquisition_run_id),
+    workflow_run_id: asOptionalString(source.workflow_run_id),
+    operation_run_id: asOptionalString(source.operation_run_id),
+    source_command_id: asOptionalString(source.source_command_id),
+    activity_run_id: asOptionalString(source.activity_run_id),
+    target_company: asOptionalString(source.target_company),
+    query: asOptionalString(source.query),
+    provider: asOptionalString(source.provider),
+    status: asOptionalString(source.status),
+    phase: asOptionalString(source.phase),
+    read_model_role: asOptionalString(source.read_model_role),
+    mutation_contract: asOptionalString(source.mutation_contract),
+    module_state_mutated: asOptionalBoolean(source.module_state_mutated),
+    control_target: source.control_target ? mapWorkflowActivityControlTarget(source.control_target) : undefined,
+  };
+}
+
+export function mapAcquisitionDiscoveryLaneListResponse(payload: unknown): AcquisitionDiscoveryLaneListResponse {
+  const source = asObject(payload, "AcquisitionDiscoveryLaneListResponse");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status),
+    contract: asOptionalString(source.contract),
+    acquisition_discovery_lanes: asArray(source.acquisition_discovery_lanes).map(
+      mapAcquisitionDiscoveryLaneRecord,
+    ),
+  };
+}
+
+export function mapAcquisitionDiscoveryLaneDetailResponse(payload: unknown): AcquisitionDiscoveryLaneDetailResponse {
+  const source = asObject(payload, "AcquisitionDiscoveryLaneDetailResponse");
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    contract: asOptionalString(source.contract),
+    acquisition_discovery_lane: source.acquisition_discovery_lane
+      ? mapAcquisitionDiscoveryLaneRecord(source.acquisition_discovery_lane)
+      : undefined,
+  };
+}
+
 export function mapTargetCandidatePublicWebSignal(payload: unknown): TargetCandidatePublicWebSignal {
   const source = asObject(payload, "TargetCandidatePublicWebSignal");
   return {
@@ -440,6 +1319,9 @@ export function mapTargetCandidatePublicWebSignal(payload: unknown): TargetCandi
     promoted_by: asOptionalString(source.promoted_by),
     promoted_at: asOptionalString(source.promoted_at),
     promotion_note: asOptionalString(source.promotion_note),
+    promotion_override_reason: asOptionalString(source.promotion_override_reason),
+    promotion_override_validation_reason: asOptionalString(source.promotion_override_validation_reason),
+    promotion_requires_manual_override: asOptionalBoolean(source.promotion_requires_manual_override),
     suppression_reason: asOptionalString(source.suppression_reason),
     evidence_excerpt: asOptionalString(source.evidence_excerpt),
     artifact_refs: source.artifact_refs ? asJsonObject(source.artifact_refs) : undefined,
@@ -474,6 +1356,9 @@ export function mapTargetCandidatePublicWebPromotion(payload: unknown): TargetCa
     promotion_status: asOptionalString(source.promotion_status),
     operator: asOptionalString(source.operator),
     note: asOptionalString(source.note),
+    override_reason: asOptionalString(source.override_reason),
+    override_validation_reason: asOptionalString(source.override_validation_reason),
+    requires_manual_override: asOptionalBoolean(source.requires_manual_override),
     created_at: asOptionalString(source.created_at),
     updated_at: asOptionalString(source.updated_at),
   };
@@ -502,6 +1387,7 @@ export function mapTargetCandidatePublicWebBatch(payload: unknown): TargetCandid
   return {
     ...(source as JsonObject),
     batch_id: asOptionalString(source.batch_id),
+    workspace_id: asOptionalString(source.workspace_id),
     status: normalizeTargetCandidatePublicWebStatus(source.status),
     requested_record_ids: asOptionalStringArray(source.requested_record_ids),
     run_ids: asOptionalStringArray(source.run_ids),
@@ -517,6 +1403,7 @@ export function mapTargetCandidatePublicWebRun(payload: unknown): TargetCandidat
   return {
     ...(source as JsonObject),
     run_id: asOptionalString(source.run_id),
+    workspace_id: asOptionalString(source.workspace_id),
     batch_id: asOptionalString(source.batch_id),
     record_id: asOptionalString(source.record_id),
     candidate_id: asOptionalString(source.candidate_id),
@@ -530,8 +1417,13 @@ export function mapTargetCandidatePublicWebRun(payload: unknown): TargetCandidat
     query_manifest: asObjectArray(source.query_manifest),
     search_checkpoint: source.search_checkpoint ? asJsonObject(source.search_checkpoint) : {},
     analysis_checkpoint: source.analysis_checkpoint ? asJsonObject(source.analysis_checkpoint) : {},
+    phase_commands: source.phase_commands ? asJsonObject(source.phase_commands) : {},
+    phase_command_display_line: asOptionalString(source.phase_command_display_line),
+    run_control_state: source.run_control_state ? asJsonObject(source.run_control_state) : {},
+    run_display_contract: source.run_display_contract ? asJsonObject(source.run_display_contract) : {},
     artifact_root: asOptionalString(source.artifact_root),
     last_error: asOptionalString(source.last_error),
+    created_at: asOptionalString(source.created_at),
     started_at: asOptionalString(source.started_at),
     completed_at: asOptionalString(source.completed_at),
     updated_at: asOptionalString(source.updated_at),
@@ -546,7 +1438,10 @@ export function normalizeTargetCandidatePublicWebStatus(value: unknown): TargetC
     normalized === "searching" ||
     normalized === "entry_links_ready" ||
     normalized === "fetching" ||
+    normalized === "documents_fetched" ||
     normalized === "analyzing" ||
+    normalized === "adjudication_completed" ||
+    normalized === "analysis_completed" ||
     normalized === "completed" ||
     normalized === "completed_with_errors" ||
     normalized === "needs_review" ||
@@ -696,6 +1591,9 @@ export function mapRuntimeMetricsResponse(payload: unknown): RuntimeMetricsRespo
     observed_at: asOptionalString(source.observed_at),
     metrics: source.metrics ? asJsonObject(source.metrics) : {},
     refresh_metrics: source.refresh_metrics ? mapRuntimeRefreshMetricsSummary(source.refresh_metrics) : undefined,
+    event_level_efficiency: source.event_level_efficiency
+      ? asJsonObject(source.event_level_efficiency)
+      : undefined,
     services: source.services ? mapRuntimeServicesSummary(source.services) : undefined,
   };
 }
@@ -1172,7 +2070,9 @@ export function mapMatchResult(payload: unknown): MatchResult {
     confidence_score: asOptionalNumber(source.confidence_score),
     confidence_reason: asOptionalString(source.confidence_reason),
     rank: asOptionalNumber(source.rank),
+    matched_keywords: asOptionalStringArray(source.matched_keywords),
     matched_fields: source.matched_fields ? asObjectArray(source.matched_fields) : undefined,
+    source_matches: source.source_matches ? asObjectArray(source.source_matches) : undefined,
     explanation: asOptionalString(source.explanation),
     evidence: source.evidence ? asObjectArray(source.evidence) : undefined,
   };
@@ -1257,6 +2157,54 @@ function buildQueryString(params: JsonObject): string {
   }
   const encoded = searchParams.toString();
   return encoded ? `?${encoded}` : "";
+}
+
+function normalizeCrmPublicWebFilters(filters: JsonObject): JsonObject {
+  const recordIds = normalizeStringList(filters.crm_record_ids ?? filters.record_ids ?? filters.recordIds);
+  const workspaceId = requireCrmPublicWebWorkspaceId(filters.workspace_id ?? filters.workspaceId);
+  return {
+    ...filters,
+    crm_record_ids: recordIds,
+    workspace_id: workspaceId,
+    batch_id: filters.batch_id ?? filters.batchId ?? "",
+    status: filters.status ?? "",
+    limit: filters.limit ?? 1000,
+  };
+}
+
+function normalizeCrmPublicWebStartPayload(payload: JsonObject): JsonObject {
+  const recordIds = normalizeStringList(payload.crm_record_ids ?? payload.record_ids ?? payload.recordIds);
+  const workspaceId = requireCrmPublicWebWorkspaceId(payload.workspace_id ?? payload.workspaceId);
+  return {
+    ...payload,
+    crm_record_ids: recordIds,
+    workspace_id: workspaceId,
+    options: payload.options && typeof payload.options === "object" && !Array.isArray(payload.options)
+      ? payload.options
+      : {},
+    force_refresh: payload.force_refresh ?? payload.forceRefresh ?? false,
+    requested_by: payload.requested_by ?? payload.requestedBy ?? "",
+  };
+}
+
+function requireCrmPublicWebWorkspaceId(value: JsonValue | undefined): string {
+  const workspaceId = asOptionalString(value)?.trim() ?? "";
+  if (!workspaceId) {
+    throw new Error("CRM Public Web body-style requests require workspace_id.");
+  }
+  return workspaceId;
+}
+
+function normalizeStringList(value: JsonValue | undefined): string[] {
+  const source = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+  return Array.from(
+    new Set(
+      source
+        .filter((item): item is string | number | boolean => isQueryParamPrimitive(item))
+        .map((item) => String(item).trim())
+        .filter(Boolean),
+    ),
+  );
 }
 
 function isQueryParamPrimitive(value: unknown): value is string | number | boolean {

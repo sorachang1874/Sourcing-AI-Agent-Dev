@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ExecutionTimeline } from "./ExecutionTimeline";
 import { ManualReviewQueuePanel } from "./ManualReviewQueuePanel";
 import { PlanCard } from "./PlanCard";
@@ -6,6 +6,11 @@ import { ResultsBoardPanel } from "./ResultsBoardPanel";
 import { SearchComposer } from "./SearchComposer";
 import { TargetCandidatesPanel } from "./TargetCandidatesPanel";
 import { useCandidateReviewState } from "../hooks/useCandidateReviewState";
+import {
+  dashboardCandidateBoardBootstrapping,
+  dashboardExpectedCandidateCount,
+  dashboardHasRenderableCandidates,
+} from "../lib/dashboardHydration";
 import type {
   CandidateReviewStatus,
   DashboardData,
@@ -59,14 +64,12 @@ interface SearchFlowProps {
 
 function defaultActiveStep(
   phase: WorkflowPhase,
-  hasDashboard: boolean,
-  previewReady: boolean,
-  isLoadingResults: boolean,
+  hasRenderableDashboard: boolean,
 ): SearchFlowStep {
   if (phase === "results") {
-    return "results";
+    return hasRenderableDashboard ? "results" : "timeline";
   }
-  if (phase === "running" && (hasDashboard || previewReady || isLoadingResults)) {
+  if (phase === "running" && hasRenderableDashboard) {
     return "results";
   }
   if (phase === "running") {
@@ -134,63 +137,95 @@ export function SearchFlow({
   onSelectedCandidateChange,
   onRefreshDashboard,
 }: SearchFlowProps) {
-  const hasDashboard = Boolean(dashboard && Math.max(dashboard.totalCandidates || 0, dashboard.candidates.length) > 0);
-  const stage1PreviewReady = Boolean(
-    runStatus?.timeline.some((step) => step.stage === "stage_1_preview" && step.status === "completed"),
-  );
+  const hasRenderableDashboard = dashboardHasRenderableCandidates(dashboard);
   const [activeStep, setActiveStep] = useState<SearchFlowStep>(() =>
-    defaultActiveStep(phase, hasDashboard, stage1PreviewReady, isLoadingResults),
+    defaultActiveStep(phase, hasRenderableDashboard),
   );
   const [reviewFocusCandidateId, setReviewFocusCandidateId] = useState("");
-  const candidateBoardBootstrapping = Boolean(
-    dashboard && dashboard.totalCandidates > 0 && dashboard.candidates.length === 0 && !candidateHydrationError,
-  );
+  const [resultPanelContextWithUserState, setResultPanelContextWithUserState] = useState("");
+  const resultsTabAutoOpenedRef = useRef(false);
+  const hasRenderableDashboardRef = useRef(hasRenderableDashboard);
+  const candidateBoardBootstrapping = dashboardCandidateBoardBootstrapping(dashboard, candidateHydrationError);
   const {
     effectiveReviewCount,
     reviewStatusMap,
     refresh: refreshReviewState,
   } = useCandidateReviewState(jobId, dashboard?.candidates || []);
-  const timelineCandidateCountOverride =
-    hasDashboard && typeof dashboard?.totalCandidates === "number" && dashboard.totalCandidates > 0
-      ? dashboard.totalCandidates
-      : undefined;
-  const timelineManualReviewCountOverride =
-    hasDashboard
-      ? (
-          effectiveReviewCount > 0
-            ? effectiveReviewCount
-            : typeof dashboard?.manualReviewCount === "number"
-              ? dashboard.manualReviewCount
-              : undefined
-        )
-      : undefined;
+  const timelineCandidateCount = dashboardExpectedCandidateCount(dashboard);
+  const timelineCandidateCountOverride = timelineCandidateCount > 0 ? timelineCandidateCount : undefined;
+  const timelineManualReviewCountOverride = timelineCandidateCount > 0 ? (
+    effectiveReviewCount > 0
+      ? effectiveReviewCount
+      : typeof dashboard?.manualReviewCount === "number"
+        ? dashboard.manualReviewCount
+        : undefined
+  ) : undefined;
 
-  const resetKey = useMemo(
+  const workflowKey = useMemo(
     () =>
       [
         historyId || "no-history",
         plan?.planId || "no-plan",
         jobId || "no-job",
-        dashboard?.snapshotId || "no-snapshot",
-        phase,
       ].join(":"),
-    [dashboard?.snapshotId, historyId, jobId, phase, plan?.planId],
+    [historyId, jobId, plan?.planId],
   );
   const panelContextKey = useMemo(
-    () => [historyId || "no-history", jobId || "no-job", dashboard?.snapshotId || "no-snapshot", phase].join(":"),
-    [dashboard?.snapshotId, historyId, jobId, phase],
+    () => [historyId || "no-history", jobId || "no-job"].join(":"),
+    [historyId, jobId],
+  );
+  const shouldRenderResultsPanel = Boolean(dashboard) && (
+    !candidateBoardBootstrapping ||
+    resultPanelContextWithUserState === panelContextKey
   );
 
   useEffect(() => {
-    setActiveStep(defaultActiveStep(phase, hasDashboard, stage1PreviewReady, isLoadingResults));
-    setReviewFocusCandidateId(selectedCandidateId || "");
-  }, [hasDashboard, isLoadingResults, resetKey, phase, selectedCandidateId, stage1PreviewReady]);
+    hasRenderableDashboardRef.current = hasRenderableDashboard;
+  }, [hasRenderableDashboard]);
 
   useEffect(() => {
-    if (!reviewFocusCandidateId && selectedCandidateId) {
-      setReviewFocusCandidateId(selectedCandidateId);
+    setActiveStep(defaultActiveStep(phase, hasRenderableDashboardRef.current));
+  }, [workflowKey]);
+
+  // Keep the auto-open memory workflow-scoped. Phase flips within the same
+  // job should not re-arm the results tab.
+  useEffect(() => {
+    resultsTabAutoOpenedRef.current = false;
+  }, [workflowKey]);
+
+  useEffect(() => {
+    setReviewFocusCandidateId(selectedCandidateId || "");
+  }, [selectedCandidateId]);
+
+  useEffect(() => {
+    if (hasRenderableDashboard) {
+      setResultPanelContextWithUserState(panelContextKey);
     }
-  }, [reviewFocusCandidateId, selectedCandidateId]);
+  }, [hasRenderableDashboard, panelContextKey]);
+
+  useEffect(() => {
+    if (!dashboard) {
+      setResultPanelContextWithUserState("");
+    }
+  }, [dashboard]);
+
+  useEffect(() => {
+    if (phase === "running" && awaitingUserAction === "continue_stage2") {
+      if (activeStep !== "timeline") {
+        setActiveStep("timeline");
+      }
+      return;
+    }
+
+    const shouldAutoOpenResults = hasRenderableDashboard && (phase === "results" || phase === "running");
+    if (!shouldAutoOpenResults || resultsTabAutoOpenedRef.current) {
+      return;
+    }
+    resultsTabAutoOpenedRef.current = true;
+    if (activeStep !== "results") {
+      setActiveStep("results");
+    }
+  }, [activeStep, awaitingUserAction, hasRenderableDashboard, phase]);
 
   if (phase === "idle") {
     return (
@@ -304,13 +339,13 @@ export function SearchFlow({
 
           {activeStep === "timeline" ? (
             <>
-              {phase === "running" && runStatus ? (
+              {runStatus ? (
                 <section className="conversation-card run-status-card">
                   <div className="section-heading">
                     <h3>{runStatus.currentStage || "Workflow"}</h3>
                   </div>
                   {currentMessage ? <p className="muted run-status-copy">{currentMessage}</p> : null}
-                  <div className="run-status-metrics">
+                  <div className="run-status-metrics" data-testid="run-status-metrics">
                     {runStatus.metrics.map((metric) => (
                       <div key={metric.label} className="run-status-metric-card">
                         <span className="field-label">{metric.label}</span>
@@ -318,17 +353,6 @@ export function SearchFlow({
                       </div>
                     ))}
                   </div>
-                  {runStatus.workers.length > 0 ? (
-                    <div className="run-status-workers">
-                      {runStatus.workers.map((worker) => (
-                        <div key={worker.id} className="run-status-worker-pill">
-                          <strong>{worker.lane}</strong>
-                          <span>{worker.status}</span>
-                          <span>{worker.budget}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
                 </section>
               ) : null}
 
@@ -367,7 +391,7 @@ export function SearchFlow({
           ) : null}
 
           {activeStep === "results" ? (
-            dashboard && !candidateBoardBootstrapping ? (
+            shouldRenderResultsPanel && dashboard ? (
               <ResultsBoardPanel
                 key={`results:${panelContextKey}`}
                 dashboard={dashboard}
@@ -376,7 +400,6 @@ export function SearchFlow({
                 initialCandidateId={selectedCandidateId}
                 isHydratingCandidates={isHydratingCandidates}
                 candidateHydrationError={candidateHydrationError}
-                totalCandidateCount={dashboard.totalCandidates}
                 reviewStatusMap={reviewStatusMap || emptyReviewMap}
                 onSelectedCandidateChange={onSelectedCandidateChange}
                 onOpenManualReview={(candidateId) => {

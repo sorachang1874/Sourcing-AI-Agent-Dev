@@ -90,6 +90,30 @@ export function SearchHistorySidebar({ collapsed, onToggleCollapse }: SearchHist
         <span>{collapsed ? "+" : "新建搜索"}</span>
       </button>
 
+      <button
+        type="button"
+        className={`ghost-button sidebar-action${collapsed ? " icon-only" : ""}`}
+        aria-label="本地资产"
+        title="本地资产"
+        onClick={() => {
+          navigate("/collections");
+        }}
+      >
+        <span>{collapsed ? "A" : "本地资产"}</span>
+      </button>
+
+      <button
+        type="button"
+        className={`ghost-button sidebar-action${collapsed ? " icon-only" : ""}`}
+        aria-label="操作队列"
+        title="操作队列"
+        onClick={() => {
+          navigate("/operations");
+        }}
+      >
+        <span>{collapsed ? "Q" : "操作队列"}</span>
+      </button>
+
       {collapsed ? (
         <div className="sidebar-collapsed-state">
           <span className="collapsed-count">{groupedItems.length}</span>

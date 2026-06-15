@@ -9,12 +9,10 @@ import {
   buildLocationOptions,
   buildRecallBucketOptions,
   computeCandidateIntentKeywordHits,
-  defaultEmploymentSelection,
-  defaultFunctionSelection,
-  defaultLocationSelection,
   defaultRecallSelection,
   filterCandidatesByFacets,
   normalizeFacetSelection,
+  preserveEditedFacetSelection,
   summarizeSelectedFacet,
   toggleFacetSelection,
 } from "../lib/candidateFilters";
@@ -32,10 +30,27 @@ import {
 import { addCandidateToReviewRegistry } from "../lib/reviewRegistry";
 import { addTargetCandidate, readTargetCandidates, targetCandidatesUpdatedEventName } from "../lib/targetCandidatesStore";
 import { getFormattedEducationExperience, getFormattedWorkExperience } from "../lib/profileFormatting";
-import { triggerJobCandidateProfileCompletion } from "../lib/api";
+import {
+  dashboardCandidatePageFilterSignature,
+  exportProjectionCandidatesArchive,
+  getCandidateDetailsBatch,
+  getDashboardCandidatePage,
+  getProjectionCandidatePage,
+  triggerJobCandidateProfileCompletion,
+  type DashboardCandidatePage,
+  type DashboardCandidatePageFilter,
+} from "../lib/api";
+import { buildCandidateSyncSummary } from "../lib/candidateSyncSummary";
+import {
+  dashboardCandidateHydrationBannerVisible,
+  dashboardExpectedCandidateCount,
+  dashboardLoadedCandidateRowCount,
+  dashboardRowHydrationTargetCount,
+} from "../lib/dashboardHydration";
 import { buildWorkflowRoute } from "../lib/workflowContext";
 import type {
   Candidate,
+  CandidateDetail,
   CandidateReviewStatus,
   DashboardData,
 } from "../types";
@@ -44,10 +59,11 @@ interface ResultsBoardPanelProps {
   dashboard: DashboardData;
   historyId?: string;
   jobId?: string;
+  projectionId?: string;
+  collectionId?: string;
   initialCandidateId?: string;
   isHydratingCandidates?: boolean;
   candidateHydrationError?: string;
-  totalCandidateCount?: number;
   reviewStatusMap?: Record<string, CandidateReviewStatus>;
   onSelectedCandidateChange?: (candidateId: string) => void;
   onOpenManualReview?: (candidateId: string) => void;
@@ -68,8 +84,74 @@ const AUDIT_STATUS_OPTIONS: Array<{ id: CandidateReviewStatus; label: string }> 
   { id: "verified_exclude", label: "已核实可排除候选人" },
 ];
 
-function layerLabel(layer: number): string {
-  return `Layer ${layer}`;
+function downloadBlobFile(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+interface ResultsBoardFacetSessionState {
+  keyword: string;
+  selectedLayerStates: Record<string, LayerSelectionState>;
+  selectedRecallBuckets: string[];
+  selectedEmploymentStatuses: string[];
+  selectedLocations: string[];
+  selectedFunctionBuckets: string[];
+  selectedAuditStatuses: string[];
+  userEditedFacets: {
+    recall: boolean;
+    employment: boolean;
+    locations: boolean;
+    functions: boolean;
+    audit: boolean;
+  };
+}
+
+const resultsBoardFacetSessionState = new Map<string, ResultsBoardFacetSessionState>();
+
+function cloneLayerSelectionStates(value: Record<string, LayerSelectionState>): Record<string, LayerSelectionState> {
+  return { ...value };
+}
+
+function cloneUserEditedFacetState(value: ResultsBoardFacetSessionState["userEditedFacets"]) {
+  return { ...value };
+}
+
+function cloneResultsBoardFacetSessionState(
+  value: ResultsBoardFacetSessionState,
+): ResultsBoardFacetSessionState {
+  return {
+    keyword: value.keyword,
+    selectedLayerStates: cloneLayerSelectionStates(value.selectedLayerStates),
+    selectedRecallBuckets: [...value.selectedRecallBuckets],
+    selectedEmploymentStatuses: [...value.selectedEmploymentStatuses],
+    selectedLocations: [...value.selectedLocations],
+    selectedFunctionBuckets: [...value.selectedFunctionBuckets],
+    selectedAuditStatuses: [...value.selectedAuditStatuses],
+    userEditedFacets: cloneUserEditedFacetState(value.userEditedFacets),
+  };
+}
+
+function readResultsBoardFacetSessionState(contextKey: string): ResultsBoardFacetSessionState | null {
+  const value = resultsBoardFacetSessionState.get(contextKey);
+  return value ? cloneResultsBoardFacetSessionState(value) : null;
+}
+
+function writeResultsBoardFacetSessionState(contextKey: string, value: ResultsBoardFacetSessionState): void {
+  resultsBoardFacetSessionState.set(contextKey, cloneResultsBoardFacetSessionState(value));
+}
+
+function hasOutreachLayer(candidate: Candidate): candidate is Candidate & { outreachLayer: number } {
+  return typeof candidate.outreachLayer === "number" && Number.isFinite(candidate.outreachLayer);
+}
+
+function layerLabel(layer: number | null): string {
+  return typeof layer === "number" && Number.isFinite(layer) ? `Layer ${layer}` : "未分层";
 }
 
 function pickCandidateKeywords(candidate: Candidate, intentKeywords: string[]): string[] {
@@ -78,15 +160,127 @@ function pickCandidateKeywords(candidate: Candidate, intentKeywords: string[]): 
 
 function buildLayerOptionsFromCandidates(candidates: Candidate[]): CandidateFacetOption[] {
   const counts = candidates.reduce<Record<string, number>>((accumulator, candidate) => {
+    if (!hasOutreachLayer(candidate)) {
+      return accumulator;
+    }
     const key = `layer_${candidate.outreachLayer}`;
     accumulator[key] = (accumulator[key] || 0) + 1;
     return accumulator;
   }, {});
+  const hasLayerMetadata = candidates.some(hasOutreachLayer);
   return LAYER_DEFINITIONS.map((item) => ({
     id: item.id,
     label: item.label,
-    count: item.id === "layer_0" ? candidates.length : counts[item.id] || 0,
+    count: item.id === "layer_0" ? (hasLayerMetadata ? candidates.length : 0) : counts[item.id] || 0,
   }));
+}
+
+function canonicalBoardFacetOptions(
+  hasCanonicalSummary: boolean,
+  options: CandidateFacetOption[] | undefined,
+  fallback: CandidateFacetOption[],
+  hasBoardRuntimeState: boolean,
+): CandidateFacetOption[] {
+  if (hasCanonicalSummary) {
+    return options && options.length > 0 ? options : [];
+  }
+  // For canonical backend paging, partial rows are not a valid global count
+  // source. Legacy/no-board pages may still use local fallback options.
+  return hasBoardRuntimeState ? [] : fallback;
+}
+
+function defaultOpenSelection(options: CandidateFacetOption[]): string[] {
+  return options.map((option) => option.id);
+}
+
+function selectedBackendFacetFilterIds(
+  selectedIds: string[],
+  options: CandidateFacetOption[],
+  allIds: string[] = options.map((option) => option.id),
+): string[] {
+  const normalizedSelected = Array.from(new Set(selectedIds.map((item) => item.trim()).filter(Boolean))).sort();
+  const normalizedAll = Array.from(new Set(allIds.map((item) => item.trim()).filter(Boolean))).sort();
+  if (normalizedSelected.length === 0) {
+    return [];
+  }
+  if (
+    normalizedAll.length > 0 &&
+    normalizedSelected.length === normalizedAll.length &&
+    normalizedSelected.every((item, index) => item === normalizedAll[index])
+  ) {
+    return [];
+  }
+  return normalizedSelected;
+}
+
+function hasCanonicalFacetSummaryForServedPopulation(
+  dashboard: DashboardData,
+  expectedCandidateCount: number,
+): boolean {
+  const summary = dashboard.candidateFacetSummary;
+  const facetSummaryScope =
+    dashboard.candidateFacetSummaryScope ||
+    dashboard.boardRuntimeState?.facetSummaryScope ||
+    dashboard.boardRuntimeState?.filterContract?.facetCountScope ||
+    "";
+  const canonicalScope =
+    facetSummaryScope === "global_full_population" || facetSummaryScope === "exact_projection";
+  const summaryCandidateCount = Math.max(0, Number(summary?.candidateCount || 0));
+  const layerZeroCount = Math.max(
+    0,
+    Number((summary?.layers || []).find((option) => option.id === "layer_0")?.count || 0),
+  );
+  const summaryMatchesExpected = Boolean(
+    canonicalScope &&
+      summaryCandidateCount >= expectedCandidateCount &&
+      (
+        facetSummaryScope === "exact_projection" ||
+        (summary?.layers || []).length === 0 ||
+        layerZeroCount === expectedCandidateCount
+      ),
+  );
+  if (dashboard.boardRuntimeState) {
+    return (
+      summaryMatchesExpected &&
+      dashboard.boardRuntimeState.facetSummaryStatus === "complete" &&
+      (
+        dashboard.boardRuntimeState.facetSummaryScope === "global_full_population" ||
+        dashboard.boardRuntimeState.facetSummaryScope === "exact_projection"
+      ) &&
+      dashboard.boardRuntimeState.facetSummaryCandidateCount >= expectedCandidateCount
+    );
+  }
+  if (
+    !summaryMatchesExpected ||
+    !summary?.candidateCount
+  ) {
+    return false;
+  }
+  const lifecycle = dashboard.resultViewLifecycle;
+  if (!lifecycle) {
+    return true;
+  }
+  const terminalServingState =
+    lifecycle.state === "current_snapshot_serving" ||
+    lifecycle.state === "post_result_layering";
+  const boardVisibleServingState =
+    lifecycle.state === "partial_board_visible" ||
+    lifecycle.state === "delta_applying" ||
+    lifecycle.state === "current_snapshot_materializing" ||
+    lifecycle.servingProjectionPhase === "partial_delta_overlay" ||
+    lifecycle.servingProjectionPhase === "partial_delta_board_visible_overlay";
+  const servedCount = Math.max(0, Number(lifecycle.servedCandidateCount || 0));
+  const expectedCount = Math.max(0, Number(lifecycle.expectedCandidateCount || 0), expectedCandidateCount);
+  const requiredDelta = Math.max(0, Number(lifecycle.deltaProfileRequiredCount || 0));
+  const materializedDelta = Math.max(
+    0,
+    Number(lifecycle.deltaProfileBoardVisibleCount ?? lifecycle.deltaProfileMaterializedCount ?? 0),
+  );
+  return (
+    (terminalServingState || boardVisibleServingState) &&
+    servedCount >= expectedCount &&
+    (!lifecycle.deltaProfileProgressApplicable || requiredDelta === 0 || materializedDelta >= requiredDelta)
+  );
 }
 
 function defaultLayerSelectionStates(): Record<string, LayerSelectionState> {
@@ -148,18 +342,18 @@ function updateLayerSelection(
 }
 
 function matchesLayerSelection(candidate: Candidate, selection: Record<string, LayerSelectionState>): boolean {
-  const exactLayerId = `layer_${candidate.outreachLayer}`;
+  const exactLayerId = hasOutreachLayer(candidate) ? `layer_${candidate.outreachLayer}` : "";
   const excluded = Object.entries(selection)
     .filter(([, state]) => state === "exclude")
     .map(([id]) => id);
-  if (excluded.includes(exactLayerId)) {
+  if (exactLayerId && excluded.includes(exactLayerId)) {
     return false;
   }
   const includedExactLayers = Object.entries(selection)
     .filter(([id, state]) => id !== "layer_0" && state === "include")
     .map(([id]) => id);
   if (includedExactLayers.length > 0) {
-    return includedExactLayers.includes(exactLayerId);
+    return exactLayerId ? includedExactLayers.includes(exactLayerId) : false;
   }
   if (selection.layer_0 === "include") {
     return true;
@@ -175,7 +369,7 @@ function buildAuditStatusOptions(
   reviewStatusMap: Record<string, CandidateReviewStatus>,
 ): CandidateFacetOption[] {
   const counts = candidates.reduce<Record<string, number>>((accumulator, candidate) => {
-    const key = reviewStatusMap[candidate.id] || "no_review_needed";
+    const key = reviewStatusMap[candidate.id] || candidateAutoReviewStatus(candidate) || "no_review_needed";
     accumulator[key] = (accumulator[key] || 0) + 1;
     return accumulator;
   }, {});
@@ -197,6 +391,8 @@ function sameStringArray(left: string[], right: string[]): boolean {
 }
 
 function defaultAuditStatusSelection(): string[] {
+  // Keep the main board visible by default. Open-review rows stay surfaced
+  // alongside card-ready rows and can still be narrowed via the audit filter.
   return AUDIT_STATUS_OPTIONS.map((item) => item.id);
 }
 
@@ -209,7 +405,7 @@ function filterByAuditStatus(
     return candidates;
   }
   return candidates.filter((candidate) =>
-    selectedAuditStatuses.includes(reviewStatusMap[candidate.id] || "no_review_needed"),
+    selectedAuditStatuses.includes(reviewStatusMap[candidate.id] || candidateAutoReviewStatus(candidate) || "no_review_needed"),
   );
 }
 
@@ -220,7 +416,7 @@ function groupCandidatesByAuditStatus(
   const labelsByStatus = new Map(AUDIT_STATUS_OPTIONS.map((option) => [option.id, option.label] as const));
   const groups = new Map<CandidateReviewStatus, { status: CandidateReviewStatus; label: string; candidates: Candidate[] }>();
   candidates.forEach((candidate) => {
-    const status = reviewStatusMap[candidate.id] || "no_review_needed";
+    const status = reviewStatusMap[candidate.id] || candidateAutoReviewStatus(candidate) || "no_review_needed";
     const existing = groups.get(status);
     if (existing) {
       existing.candidates.push(candidate);
@@ -239,10 +435,14 @@ function LayerTriStateFilter({
   options,
   selection,
   onToggle,
+  disabled = false,
+  disabledLabel = "分层未生成",
 }: {
   options: CandidateFacetOption[];
   selection: Record<string, LayerSelectionState>;
   onToggle: (optionId: string) => void;
+  disabled?: boolean;
+  disabledLabel?: string;
 }) {
   return (
     <details className="facet-dropdown facet-dropdown-wide">
@@ -258,9 +458,10 @@ function LayerTriStateFilter({
             </span>
           </span>
         </div>
-        <strong>{summarizeLayerSelection(selection, options)}</strong>
+        <strong>{disabled ? disabledLabel : summarizeLayerSelection(selection, options)}</strong>
       </summary>
       <div className="facet-dropdown-menu">
+        {disabled ? <p className="muted">当前结果尚未提供可筛选的华人线索分层，Layer 0 不代表已完成分层。</p> : null}
         {options.map((option) => {
           const state = selection[option.id] || "neutral";
           return (
@@ -268,6 +469,7 @@ function LayerTriStateFilter({
               key={option.id}
               type="button"
               className={`layer-tristate-option state-${state}`}
+              disabled={disabled}
               onClick={() => onToggle(option.id)}
             >
               <span className="layer-tristate-indicator" aria-hidden="true">
@@ -290,10 +492,11 @@ export function ResultsBoardPanel({
   dashboard,
   historyId = "",
   jobId = "",
+  projectionId = "",
+  collectionId = "",
   initialCandidateId = "",
   isHydratingCandidates = false,
   candidateHydrationError = "",
-  totalCandidateCount = 0,
   reviewStatusMap = {},
   onSelectedCandidateChange,
   onOpenManualReview,
@@ -313,23 +516,121 @@ export function ResultsBoardPanel({
   const [currentPage, setCurrentPage] = useState(1);
   const [targetCandidateIds, setTargetCandidateIds] = useState<string[]>([]);
   const [selectedCandidates, setSelectedCandidates] = useState<Record<string, Candidate>>({});
-  const [batchActionBusy, setBatchActionBusy] = useState<"" | "review" | "profile_completion" | "target">("");
+  const [batchActionBusy, setBatchActionBusy] = useState<"" | "review" | "profile_completion" | "target" | "export">("");
   const [batchActionMessage, setBatchActionMessage] = useState("");
+  const [targetActionCompleted, setTargetActionCompleted] = useState(false);
   const [singleTargetActionCandidateId, setSingleTargetActionCandidateId] = useState("");
+  const [candidateDetailsById, setCandidateDetailsById] = useState<Record<string, CandidateDetail | null>>({});
+  const [candidateDetailLoadingIds, setCandidateDetailLoadingIds] = useState<string[]>([]);
+  const [backendCandidatePage, setBackendCandidatePage] = useState<DashboardCandidatePage | null>(null);
+  const [backendCandidatePageRequestSignature, setBackendCandidatePageRequestSignature] = useState("");
+  const [backendCandidatePageLoading, setBackendCandidatePageLoading] = useState(false);
+  const [backendCandidatePageError, setBackendCandidatePageError] = useState("");
+  // Preserve last-known filtered count so pagination does not collapse to
+  // page 1 while a backend page request is pending. Cleared on filter change.
+  const [lastKnownFilteredCandidateCount, setLastKnownFilteredCandidateCount] = useState(0);
   const appliedContextCandidateRef = useRef("");
+  const pendingDefaultFacetContextRef = useRef("");
+  const userEditedFacetRefs = useRef({
+    recall: false,
+    employment: false,
+    locations: false,
+    functions: false,
+    audit: false,
+  });
   const resultsContextKey = useMemo(
-    () => [historyId || "no-history", jobId || "no-job", dashboard.snapshotId || "no-snapshot"].join(":"),
-    [dashboard.snapshotId, historyId, jobId],
+    () => [historyId || "no-history", jobId || "no-job", projectionId || "no-projection"].join(":"),
+    [historyId, jobId, projectionId],
   );
+  const projectionOnlyReadOnly = Boolean(projectionId && !jobId);
+  const projectionOnlyReadOnlyMessage =
+    "当前从本地公司资产打开，可浏览候选人并加入目标候选人；人工审核和资料补全需要从具体任务进入。";
+  const targetCandidatesRoute = collectionId.trim()
+    ? `/targets?collection=${encodeURIComponent(collectionId.trim())}`
+    : "/targets";
+  const skipNextFacetSessionSaveRef = useRef(false);
 
-  const layerOptions = useMemo(() => buildLayerOptionsFromCandidates(dashboard.candidates), [dashboard.candidates]);
+  const candidateFacetSummary = dashboard.candidateFacetSummary;
+  const expectedCandidateCount = dashboardExpectedCandidateCount(dashboard);
+  const profileDetailCandidateCount = Math.max(
+    0,
+    Number(dashboard.boardRuntimeState?.profileDetailCandidateCount || 0),
+  );
+  const profileDetailsIncomplete = Boolean(
+    projectionId && expectedCandidateCount > 0 && profileDetailCandidateCount < expectedCandidateCount,
+  );
+  const hasGlobalFacetSummary = hasCanonicalFacetSummaryForServedPopulation(dashboard, expectedCandidateCount);
+  const hasBoardRuntimeState = Boolean(dashboard.boardRuntimeState);
+  const canonicalFacetUnavailable = hasBoardRuntimeState && !hasGlobalFacetSummary;
+  const canonicalFacetUnavailableMessage =
+    "筛选索引还在准备中。当前可以分页浏览候选人，但暂不启用结果内搜索、分层、地区和职能筛选。";
+  const filterControlsAvailable = !canonicalFacetUnavailable;
+  const disabledFilterSummary = "索引准备中";
+  const facetSummaryLabel = (options: CandidateFacetOption[], selectedIds: string[], fallbackLabel: string) =>
+    options.length > 0 ? summarizeSelectedFacet(selectedIds, options, fallbackLabel) : "统计未生成";
+  const layerOptions = useMemo(
+    () =>
+      canonicalBoardFacetOptions(
+        hasGlobalFacetSummary,
+        candidateFacetSummary?.layers,
+        buildLayerOptionsFromCandidates(dashboard.candidates),
+        hasBoardRuntimeState,
+      ),
+    [candidateFacetSummary?.layers, dashboard.candidates, hasBoardRuntimeState, hasGlobalFacetSummary],
+  );
+  const layerOptionCount = useMemo(
+    () => layerOptions.reduce((sum, option) => sum + Math.max(0, Number(option.count || 0)), 0),
+    [layerOptions],
+  );
+  const hasLayerMetadata = layerOptionCount > 0;
+  const outreachLayeringStatus = (
+    dashboard.boardRuntimeState?.layeringStatus ||
+    (!dashboard.boardRuntimeState ? dashboard.resultViewLifecycle?.outreachLayeringStatus : "") ||
+    ""
+  ).toLowerCase();
+  const outreachLayeringInProgress = ["scheduled", "running", "deferred"].includes(outreachLayeringStatus);
+  const layerDisabledLabel = outreachLayeringInProgress ? "分层生成中" : "分层未生成";
   const recallOptions = useMemo(
-    () => buildRecallBucketOptions(dashboard.candidates, dashboard.intentKeywords),
-    [dashboard.candidates, dashboard.intentKeywords],
+    () =>
+      canonicalBoardFacetOptions(
+        hasGlobalFacetSummary,
+        candidateFacetSummary?.recall,
+        buildRecallBucketOptions(dashboard.candidates, dashboard.intentKeywords),
+        hasBoardRuntimeState,
+      ),
+    [candidateFacetSummary?.recall, dashboard.candidates, dashboard.intentKeywords, hasBoardRuntimeState, hasGlobalFacetSummary],
   );
   const employmentOptions = useMemo(() => buildEmploymentOptions(dashboard.candidates), [dashboard.candidates]);
-  const locationOptions = useMemo(() => buildLocationOptions(dashboard.candidates), [dashboard.candidates]);
-  const functionOptions = useMemo(() => buildFunctionOptions(dashboard.candidates), [dashboard.candidates]);
+  const employmentFacetOptions = useMemo(
+    () =>
+      canonicalBoardFacetOptions(
+        hasGlobalFacetSummary,
+        candidateFacetSummary?.employment,
+        employmentOptions,
+        hasBoardRuntimeState,
+      ),
+    [candidateFacetSummary?.employment, employmentOptions, hasBoardRuntimeState, hasGlobalFacetSummary],
+  );
+  const locationOptions = useMemo(
+    () =>
+      canonicalBoardFacetOptions(
+        hasGlobalFacetSummary,
+        candidateFacetSummary?.locations,
+        buildLocationOptions(dashboard.candidates),
+        hasBoardRuntimeState,
+      ),
+    [candidateFacetSummary?.locations, dashboard.candidates, hasBoardRuntimeState, hasGlobalFacetSummary],
+  );
+  const functionOptions = useMemo(
+    () =>
+      canonicalBoardFacetOptions(
+        hasGlobalFacetSummary,
+        candidateFacetSummary?.functions,
+        buildFunctionOptions(dashboard.candidates),
+        hasBoardRuntimeState,
+      ),
+    [candidateFacetSummary?.functions, dashboard.candidates, hasBoardRuntimeState, hasGlobalFacetSummary],
+  );
   const auditStatusOptions = useMemo(
     () => buildAuditStatusOptions(dashboard.candidates, reviewStatusMap),
     [dashboard.candidates, reviewStatusMap],
@@ -337,64 +638,204 @@ export function ResultsBoardPanel({
 
   useEffect(() => {
     appliedContextCandidateRef.current = "";
-    setKeyword("");
+    skipNextFacetSessionSaveRef.current = true;
+    const cachedFacetState = readResultsBoardFacetSessionState(resultsContextKey);
+    if (cachedFacetState) {
+      pendingDefaultFacetContextRef.current = "";
+      userEditedFacetRefs.current = cloneUserEditedFacetState(cachedFacetState.userEditedFacets);
+      setKeyword(cachedFacetState.keyword);
+      setSelectedLayerStates(cloneLayerSelectionStates(cachedFacetState.selectedLayerStates));
+      setSelectedRecallBuckets([...cachedFacetState.selectedRecallBuckets]);
+      setSelectedEmploymentStatuses([...cachedFacetState.selectedEmploymentStatuses]);
+      setSelectedLocations([...cachedFacetState.selectedLocations]);
+      setSelectedFunctionBuckets([...cachedFacetState.selectedFunctionBuckets]);
+      setSelectedAuditStatuses([...cachedFacetState.selectedAuditStatuses]);
+    } else {
+      pendingDefaultFacetContextRef.current = resultsContextKey;
+      userEditedFacetRefs.current = {
+        recall: false,
+        employment: false,
+        locations: false,
+        functions: false,
+        audit: false,
+      };
+      setKeyword("");
+      setSelectedLayerStates(defaultLayerSelectionStates());
+      setSelectedRecallBuckets([]);
+      setSelectedEmploymentStatuses([]);
+      setSelectedLocations([]);
+      setSelectedFunctionBuckets([]);
+      setSelectedAuditStatuses(defaultAuditStatusSelection());
+    }
     setFocusedCandidateId("");
-    setSelectedLayerStates(defaultLayerSelectionStates());
-    setSelectedRecallBuckets(defaultRecallSelection(recallOptions));
-    setSelectedEmploymentStatuses(defaultEmploymentSelection(employmentOptions));
-    setSelectedLocations(defaultLocationSelection(locationOptions));
-    setSelectedFunctionBuckets(defaultFunctionSelection(functionOptions));
-    setSelectedAuditStatuses(defaultAuditStatusSelection());
     setCurrentPage(1);
     setSelectedCandidates({});
     setBatchActionMessage("");
+    setTargetActionCompleted(false);
     setSingleTargetActionCandidateId("");
+    setCandidateDetailsById({});
+    setCandidateDetailLoadingIds([]);
+    setBackendCandidatePage(null);
+    setBackendCandidatePageRequestSignature("");
+    setBackendCandidatePageError("");
   }, [resultsContextKey]);
 
   useEffect(() => {
+    if (pendingDefaultFacetContextRef.current !== resultsContextKey || dashboard.candidates.length === 0) {
+      return;
+    }
+    pendingDefaultFacetContextRef.current = "";
+    skipNextFacetSessionSaveRef.current = true;
+    setSelectedLayerStates(defaultLayerSelectionStates());
+    setSelectedRecallBuckets(defaultRecallSelection(recallOptions));
+    setSelectedEmploymentStatuses(defaultOpenSelection(employmentFacetOptions));
+    setSelectedLocations(defaultOpenSelection(locationOptions));
+    setSelectedFunctionBuckets(defaultOpenSelection(functionOptions));
+    setSelectedAuditStatuses(defaultAuditStatusSelection());
+    setCurrentPage(1);
+  }, [
+    dashboard.candidates.length,
+    employmentFacetOptions,
+    functionOptions,
+    locationOptions,
+    recallOptions,
+    resultsContextKey,
+  ]);
+
+  useEffect(() => {
+    if (pendingDefaultFacetContextRef.current === resultsContextKey) {
+      return;
+    }
+    if (skipNextFacetSessionSaveRef.current) {
+      skipNextFacetSessionSaveRef.current = false;
+      return;
+    }
+    writeResultsBoardFacetSessionState(resultsContextKey, {
+      keyword,
+      selectedLayerStates,
+      selectedRecallBuckets,
+      selectedEmploymentStatuses,
+      selectedLocations,
+      selectedFunctionBuckets,
+      selectedAuditStatuses,
+      userEditedFacets: cloneUserEditedFacetState(userEditedFacetRefs.current),
+    });
+  }, [
+    functionOptions,
+    keyword,
+    locationOptions,
+    recallOptions,
+    resultsContextKey,
+    selectedAuditStatuses,
+    selectedEmploymentStatuses,
+    selectedFunctionBuckets,
+    selectedLayerStates,
+    selectedLocations,
+    selectedRecallBuckets,
+  ]);
+
+  useEffect(() => {
+    if (pendingDefaultFacetContextRef.current === resultsContextKey) {
+      return;
+    }
+    if (userEditedFacetRefs.current.recall) {
+      setSelectedRecallBuckets((current) => {
+        const preserved = preserveEditedFacetSelection(current, recallOptions);
+        return sameStringArray(current, preserved) ? current : preserved;
+      });
+      return;
+    }
     setSelectedRecallBuckets((current) => {
       const normalized = normalizeFacetSelection(current, recallOptions, defaultRecallSelection(recallOptions));
       return sameStringArray(current, normalized) ? current : normalized;
     });
-  }, [recallOptions]);
+  }, [recallOptions, resultsContextKey]);
 
   useEffect(() => {
+    if (pendingDefaultFacetContextRef.current === resultsContextKey) {
+      return;
+    }
+    if (userEditedFacetRefs.current.employment) {
+      setSelectedEmploymentStatuses((current) => {
+        const preserved = preserveEditedFacetSelection(current, employmentFacetOptions);
+        return sameStringArray(current, preserved) ? current : preserved;
+      });
+      return;
+    }
     setSelectedEmploymentStatuses((current) => {
       const normalized = normalizeFacetSelection(
         current,
-        employmentOptions,
-        defaultEmploymentSelection(employmentOptions),
+        employmentFacetOptions,
+        defaultOpenSelection(employmentFacetOptions),
       );
       return sameStringArray(current, normalized) ? current : normalized;
     });
-  }, [employmentOptions]);
+  }, [employmentFacetOptions, resultsContextKey]);
 
   useEffect(() => {
+    if (pendingDefaultFacetContextRef.current === resultsContextKey) {
+      return;
+    }
+    if (userEditedFacetRefs.current.locations) {
+      setSelectedLocations((current) => {
+        const preserved = preserveEditedFacetSelection(current, locationOptions);
+        return sameStringArray(current, preserved) ? current : preserved;
+      });
+      return;
+    }
     setSelectedLocations((current) => {
-      const normalized = normalizeFacetSelection(current, locationOptions, defaultLocationSelection(locationOptions));
+      const normalized = normalizeFacetSelection(current, locationOptions, defaultOpenSelection(locationOptions));
       return sameStringArray(current, normalized) ? current : normalized;
     });
-  }, [locationOptions]);
+  }, [locationOptions, resultsContextKey]);
 
   useEffect(() => {
+    if (pendingDefaultFacetContextRef.current === resultsContextKey) {
+      return;
+    }
+    if (userEditedFacetRefs.current.functions) {
+      setSelectedFunctionBuckets((current) => {
+        const preserved = preserveEditedFacetSelection(current, functionOptions);
+        return sameStringArray(current, preserved) ? current : preserved;
+      });
+      return;
+    }
     setSelectedFunctionBuckets((current) => {
-      const normalized = normalizeFacetSelection(current, functionOptions, defaultFunctionSelection(functionOptions));
+      const normalized = normalizeFacetSelection(current, functionOptions, defaultOpenSelection(functionOptions));
       return sameStringArray(current, normalized) ? current : normalized;
     });
-  }, [functionOptions]);
+  }, [functionOptions, resultsContextKey]);
 
   useEffect(() => {
+    if (pendingDefaultFacetContextRef.current === resultsContextKey) {
+      return;
+    }
+    if (userEditedFacetRefs.current.audit) {
+      setSelectedAuditStatuses((current) => {
+        const preserved = preserveEditedFacetSelection(current, auditStatusOptions);
+        return sameStringArray(current, preserved) ? current : preserved;
+      });
+      return;
+    }
     setSelectedAuditStatuses((current) => {
       const normalized = normalizeFacetSelection(current, auditStatusOptions, defaultAuditStatusSelection());
       return sameStringArray(current, normalized) ? current : normalized;
     });
-  }, [auditStatusOptions]);
+  }, [auditStatusOptions, resultsContextKey]);
 
   useEffect(() => {
     const syncTargets = () => {
       void readTargetCandidates()
         .then((records) => {
-          setTargetCandidateIds(records.map((record) => record.candidateId));
+          setTargetCandidateIds(
+            Array.from(
+              new Set(
+                records.flatMap((record) =>
+                  [record.candidateId, record.candidateIdentityKey, record.personIdentityKey].filter(Boolean) as string[],
+                ),
+              ),
+            ),
+          );
         })
         .catch(() => {
           setTargetCandidateIds([]);
@@ -409,23 +850,24 @@ export function ResultsBoardPanel({
     };
   }, []);
 
-  const baseVisibleCandidates = useMemo(
+  const fallbackBaseVisibleCandidates = useMemo(
     () =>
       filterCandidatesByFacets(
         dashboard.candidates,
         {
           layers: [],
-          recallBuckets: selectedRecallBuckets,
-          employmentStatuses: selectedEmploymentStatuses,
-          locations: selectedLocations,
-          functionBuckets: selectedFunctionBuckets,
-          searchKeyword: keyword,
+          recallBuckets: filterControlsAvailable ? selectedRecallBuckets : [],
+          employmentStatuses: filterControlsAvailable ? selectedEmploymentStatuses : [],
+          locations: filterControlsAvailable ? selectedLocations : [],
+          functionBuckets: filterControlsAvailable ? selectedFunctionBuckets : [],
+          searchKeyword: filterControlsAvailable ? keyword : "",
         },
         dashboard.intentKeywords,
       ),
     [
       dashboard.candidates,
       dashboard.intentKeywords,
+      filterControlsAvailable,
       keyword,
       selectedFunctionBuckets,
       selectedEmploymentStatuses,
@@ -434,22 +876,148 @@ export function ResultsBoardPanel({
     ],
   );
 
-  const visibleCandidates = useMemo(() => {
-    const afterAudit = filterByAuditStatus(baseVisibleCandidates, selectedAuditStatuses, reviewStatusMap);
-    return afterAudit.filter((candidate) => matchesLayerSelection(candidate, selectedLayerStates));
-  }, [baseVisibleCandidates, reviewStatusMap, selectedAuditStatuses, selectedLayerStates]);
+  const fallbackVisibleCandidates = useMemo(() => {
+    const afterAudit = filterControlsAvailable
+      ? filterByAuditStatus(fallbackBaseVisibleCandidates, selectedAuditStatuses, reviewStatusMap)
+      : fallbackBaseVisibleCandidates;
+    return filterControlsAvailable
+      ? afterAudit.filter((candidate) => matchesLayerSelection(candidate, selectedLayerStates))
+      : afterAudit;
+  }, [fallbackBaseVisibleCandidates, filterControlsAvailable, reviewStatusMap, selectedAuditStatuses, selectedLayerStates]);
 
-  const totalPages = Math.max(1, Math.ceil(visibleCandidates.length / RESULTS_PAGE_SIZE));
+  const includedLayerIds = useMemo(
+    () =>
+      Object.entries(selectedLayerStates)
+        .filter(([, state]) => state === "include")
+        .map(([id]) => id),
+    [selectedLayerStates],
+  );
+  const excludedLayerIds = useMemo(
+    () =>
+      Object.entries(selectedLayerStates)
+        .filter(([, state]) => state === "exclude")
+        .map(([id]) => id),
+    [selectedLayerStates],
+  );
+  const backendPageFilter = useMemo<DashboardCandidatePageFilter>(
+    () =>
+      filterControlsAvailable
+        ? {
+            searchKeyword: keyword,
+            recallBuckets: selectedBackendFacetFilterIds(selectedRecallBuckets, recallOptions, ["all"]),
+            employmentStatuses: selectedBackendFacetFilterIds(selectedEmploymentStatuses, employmentFacetOptions),
+            locations: selectedBackendFacetFilterIds(selectedLocations, locationOptions),
+            functionBuckets: selectedBackendFacetFilterIds(selectedFunctionBuckets, functionOptions),
+            layerIncludes: includedLayerIds,
+            layerExcludes: excludedLayerIds,
+            auditStatuses: selectedBackendFacetFilterIds(
+              selectedAuditStatuses,
+              auditStatusOptions,
+              AUDIT_STATUS_OPTIONS.map((item) => item.id),
+            ),
+          }
+        : {
+            searchKeyword: "",
+            recallBuckets: [],
+            employmentStatuses: [],
+            locations: [],
+            functionBuckets: [],
+            layerIncludes: [],
+            layerExcludes: [],
+            auditStatuses: [],
+          },
+    [
+      auditStatusOptions,
+      employmentFacetOptions,
+      excludedLayerIds,
+      filterControlsAvailable,
+      functionOptions,
+      includedLayerIds,
+      keyword,
+      locationOptions,
+      recallOptions,
+      selectedAuditStatuses,
+      selectedEmploymentStatuses,
+      selectedFunctionBuckets,
+      selectedLocations,
+      selectedRecallBuckets,
+    ],
+  );
+  const backendFilterSignature = useMemo(
+    () => dashboardCandidatePageFilterSignature(backendPageFilter),
+    [backendPageFilter],
+  );
+  const backendFilteredPagingSupported = Boolean(
+    dashboard.boardRuntimeState?.filterContract?.backendFilteredPagingSupported,
+  );
+  const backendPageOffset = Math.max(0, (currentPage - 1) * RESULTS_PAGE_SIZE);
+  const backendPageReady = Boolean(
+    backendFilteredPagingSupported &&
+      backendCandidatePage &&
+      backendCandidatePageRequestSignature === backendFilterSignature &&
+      backendCandidatePage.offset === backendPageOffset &&
+      backendCandidatePage.limit <= RESULTS_PAGE_SIZE,
+  );
+  const waitingForBackendPage = backendFilteredPagingSupported && !backendPageReady;
+  const freshFilteredCandidateCount = backendPageReady
+    ? Math.max(0, backendCandidatePage?.filteredCandidateCount || 0)
+    : 0;
+  const visibleCandidateCount = backendPageReady
+    ? freshFilteredCandidateCount
+    : waitingForBackendPage
+      ? lastKnownFilteredCandidateCount > 0
+        ? lastKnownFilteredCandidateCount
+        : fallbackVisibleCandidates.length
+    : fallbackVisibleCandidates.length;
+  const totalPages = Math.max(1, Math.ceil(visibleCandidateCount / RESULTS_PAGE_SIZE));
+  const visibleCandidates = backendPageReady
+    ? backendCandidatePage?.candidates || []
+    : fallbackVisibleCandidates;
   const pagedCandidates = useMemo(() => {
+    if (backendPageReady) {
+      return backendCandidatePage?.candidates || [];
+    }
     const start = Math.max(0, (currentPage - 1) * RESULTS_PAGE_SIZE);
-    return visibleCandidates.slice(start, start + RESULTS_PAGE_SIZE);
-  }, [currentPage, visibleCandidates]);
+    return fallbackVisibleCandidates.slice(start, start + RESULTS_PAGE_SIZE);
+  }, [backendCandidatePage, backendPageReady, currentPage, fallbackVisibleCandidates, waitingForBackendPage]);
+  const pagedDisplayCandidates = useMemo(
+    () =>
+      pagedCandidates.map((candidate) => ({
+        ...candidate,
+        ...(candidateDetailsById[candidate.id] || {}),
+        id: candidate.id,
+      })),
+    [candidateDetailsById, pagedCandidates],
+  );
   const pagedCandidateGroups = useMemo(
-    () => groupCandidatesByAuditStatus(pagedCandidates, reviewStatusMap),
-    [pagedCandidates, reviewStatusMap],
+    () => groupCandidatesByAuditStatus(pagedDisplayCandidates, reviewStatusMap),
+    [pagedDisplayCandidates, reviewStatusMap],
+  );
+  const currentPageDetailLoading = candidateDetailLoadingIds.some((candidateId) =>
+    pagedCandidates.some((candidate) => candidate.id === candidateId),
   );
   const selectedCandidateIds = useMemo(() => Object.keys(selectedCandidates), [selectedCandidates]);
-  const expectedCandidateCount = Math.max(totalCandidateCount, dashboard.totalCandidates, dashboard.candidates.length);
+  const loadedCandidateRowCount = dashboardLoadedCandidateRowCount(dashboard);
+  const hydrationBannerVisible = dashboardCandidateHydrationBannerVisible(dashboard, Boolean(isHydratingCandidates));
+  const resultViewLifecycle = dashboard.resultViewLifecycle;
+  const linkedinStage1Progress = dashboard.linkedinStage1Progress;
+  const candidateSyncSummary = buildCandidateSyncSummary({
+    loadedCandidateCount: loadedCandidateRowCount,
+    expectedCandidateCount,
+    resultViewLifecycle,
+    boardRuntimeState: dashboard.boardRuntimeState,
+    linkedinStage1Progress,
+    effectiveExecutionSemantics: dashboard.effectiveExecutionSemantics,
+    recallOptions,
+  });
+  const rowHydrationTargetCount = dashboard.boardRuntimeState ? dashboardRowHydrationTargetCount(dashboard) : 0;
+  const localRowWindowComplete = rowHydrationTargetCount > 0 && loadedCandidateRowCount >= rowHydrationTargetCount;
+  const visibleCandidateHitLabel =
+    backendFilteredPagingSupported || localRowWindowComplete ? "当前筛选命中" : "已加载窗口筛选命中";
+  const loadedRowWindowText =
+    !backendPageReady && rowHydrationTargetCount > 0 && loadedCandidateRowCount < rowHydrationTargetCount
+      ? `，已加载候选行 ${loadedCandidateRowCount}/${rowHydrationTargetCount}`
+      : "";
   const selectedProfileCompletionCandidates = useMemo(
     () =>
       Object.values(selectedCandidates).filter((candidate) => {
@@ -461,18 +1029,35 @@ export function ResultsBoardPanel({
       }),
     [reviewStatusMap, selectedCandidates],
   );
-  const allPagedSelected = pagedCandidates.length > 0 && pagedCandidates.every((candidate) => selectedCandidates[candidate.id]);
+  const allPagedSelected =
+    pagedDisplayCandidates.length > 0 &&
+    pagedDisplayCandidates.every((candidate) => selectedCandidates[candidate.id]);
   const deferredCurrentPage = useDeferredValue(currentPage);
 
   useEffect(() => {
+    if (backendPageReady) {
+      setLastKnownFilteredCandidateCount(freshFilteredCandidateCount);
+    }
+  }, [backendPageReady, freshFilteredCandidateCount]);
+
+  useEffect(() => {
+    // Do not collapse to a smaller page while a backend page request is
+    // pending — last-known totals keep the user's pagination position stable.
+    if (waitingForBackendPage) {
+      return;
+    }
     if (currentPage > totalPages) {
       setCurrentPage(totalPages);
     }
-  }, [currentPage, totalPages]);
+  }, [currentPage, totalPages, waitingForBackendPage]);
 
   useEffect(() => {
     setCurrentPage(1);
+    // Filter changed: clear last-known totals so the new filter doesn't
+    // inherit stale pagination width.
+    setLastKnownFilteredCandidateCount(0);
   }, [
+    filterControlsAvailable,
     keyword,
     selectedRecallBuckets,
     selectedEmploymentStatuses,
@@ -480,6 +1065,62 @@ export function ResultsBoardPanel({
     selectedFunctionBuckets,
     selectedAuditStatuses,
     selectedLayerStates,
+  ]);
+
+  useEffect(() => {
+    if ((!jobId && !projectionId) || !backendFilteredPagingSupported) {
+      setBackendCandidatePage(null);
+      setBackendCandidatePageRequestSignature("");
+      setBackendCandidatePageLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setBackendCandidatePageLoading(true);
+    setBackendCandidatePageError("");
+    const pageRequest = projectionId
+      ? getProjectionCandidatePage(projectionId, {
+          offset: backendPageOffset,
+          limit: RESULTS_PAGE_SIZE,
+          forceRefresh: true,
+          filter: backendPageFilter,
+        })
+      : getDashboardCandidatePage(jobId, {
+          offset: backendPageOffset,
+          limit: RESULTS_PAGE_SIZE,
+          lightweight: true,
+          forceRefresh: true,
+          filter: backendPageFilter,
+        });
+    void pageRequest
+      .then((page) => {
+        if (cancelled) {
+          return;
+        }
+        setBackendCandidatePage(page);
+        setBackendCandidatePageRequestSignature(backendFilterSignature);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        setBackendCandidatePageError(error instanceof Error ? error.message : "候选人筛选分页加载失败。");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBackendCandidatePageLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    backendFilteredPagingSupported,
+    backendFilterSignature,
+    backendPageFilter,
+    backendPageOffset,
+    dashboard.boardRuntimeState?.rowPublicationWatermark,
+    jobId,
+    projectionId,
   ]);
 
   useEffect(() => {
@@ -510,6 +1151,56 @@ export function ResultsBoardPanel({
     });
   }, [deferredCurrentPage, expectedCandidateCount, onHydrationWindowChange]);
 
+  useEffect(() => {
+    if (!jobId || projectionId || pagedCandidates.length === 0) {
+      setCandidateDetailLoadingIds([]);
+      return;
+    }
+    const candidateIds = pagedCandidates.map((candidate) => candidate.id).filter(Boolean);
+    const missingCandidateIds = candidateIds.filter((candidateId) => !(candidateId in candidateDetailsById));
+    if (missingCandidateIds.length === 0) {
+      setCandidateDetailLoadingIds([]);
+      return;
+    }
+    let cancelled = false;
+    setCandidateDetailLoadingIds(missingCandidateIds);
+    void getCandidateDetailsBatch(missingCandidateIds, jobId)
+      .then((details) => {
+        if (cancelled) {
+          return;
+        }
+        setCandidateDetailsById((current) => ({
+          ...current,
+          ...details,
+        }));
+        setSelectedCandidates((current) => {
+          let changed = false;
+          const next = { ...current };
+          Object.entries(details).forEach(([candidateId, detail]) => {
+            if (!detail || !next[candidateId]) {
+              return;
+            }
+            next[candidateId] = {
+              ...next[candidateId],
+              ...detail,
+              id: candidateId,
+            };
+            changed = true;
+          });
+          return changed ? next : current;
+        });
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) {
+          setCandidateDetailLoadingIds([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [candidateDetailsById, jobId, pagedCandidates, projectionId, resultsContextKey]);
+
   const toggleCandidateSelection = (candidate: Candidate) => {
     setSelectedCandidates((current) => {
       if (current[candidate.id]) {
@@ -527,13 +1218,13 @@ export function ResultsBoardPanel({
   const toggleCurrentPageSelection = () => {
     setSelectedCandidates((current) => {
       const next = { ...current };
-      if (pagedCandidates.every((candidate) => next[candidate.id])) {
-        pagedCandidates.forEach((candidate) => {
+      if (pagedDisplayCandidates.every((candidate) => next[candidate.id])) {
+        pagedDisplayCandidates.forEach((candidate) => {
           delete next[candidate.id];
         });
         return next;
       }
-      pagedCandidates.forEach((candidate) => {
+      pagedDisplayCandidates.forEach((candidate) => {
         next[candidate.id] = candidate;
       });
       return next;
@@ -542,10 +1233,16 @@ export function ResultsBoardPanel({
 
   const addSelectedToReview = async () => {
     const candidates = Object.values(selectedCandidates);
+    if (projectionOnlyReadOnly) {
+      setBatchActionMessage(projectionOnlyReadOnlyMessage);
+      setTargetActionCompleted(false);
+      return;
+    }
     if (candidates.length === 0 || batchActionBusy) {
       return;
     }
     setBatchActionMessage("");
+    setTargetActionCompleted(false);
     setBatchActionBusy("review");
     try {
       await Promise.all(
@@ -567,25 +1264,34 @@ export function ResultsBoardPanel({
       return;
     }
     setBatchActionMessage("");
+    setTargetActionCompleted(false);
     setBatchActionBusy("target");
     try {
       await Promise.all(
-        candidates.map((candidate) => addTargetCandidate(candidate, { historyId, jobId })),
+        candidates.map((candidate) => addTargetCandidate(candidate, { historyId, jobId, projectionId })),
       );
       setSelectedCandidates({});
       setBatchActionMessage(`已将 ${candidates.length} 位候选人加入目标候选人。`);
+      setTargetActionCompleted(true);
     } catch (error) {
       setBatchActionMessage(error instanceof Error ? error.message : "批量加入目标候选人失败。");
+      setTargetActionCompleted(false);
     } finally {
       setBatchActionBusy("");
     }
   };
 
   const completeSelectedProfiles = async () => {
+    if (projectionOnlyReadOnly) {
+      setBatchActionMessage(projectionOnlyReadOnlyMessage);
+      setTargetActionCompleted(false);
+      return;
+    }
     if (!jobId || selectedProfileCompletionCandidates.length === 0 || batchActionBusy) {
       return;
     }
     setBatchActionMessage("");
+    setTargetActionCompleted(false);
     setBatchActionBusy("profile_completion");
     try {
       await triggerJobCandidateProfileCompletion({
@@ -603,19 +1309,44 @@ export function ResultsBoardPanel({
     }
   };
 
-  const addSingleCandidateToTargets = async (candidate: Candidate) => {
-    if (singleTargetActionCandidateId || targetCandidateIds.includes(candidate.id)) {
+  const exportProjectionArchive = async () => {
+    if (!projectionId || batchActionBusy) {
       return;
     }
     setBatchActionMessage("");
+    setTargetActionCompleted(false);
+    setBatchActionBusy("export");
+    try {
+      const download = await exportProjectionCandidatesArchive({ projectionId });
+      downloadBlobFile(download.filename || "projection-candidates.zip", download.blob);
+      const stats = download.exportStats;
+      setBatchActionMessage(
+        `Projection 导出完成：${stats.exportedRecordCount}/${stats.recordCount} 位候选人，跳过 ${stats.skippedAssertionCount} 条未默认导出的 assertion。`,
+      );
+    } catch (error) {
+      setBatchActionMessage(error instanceof Error ? error.message : "Projection 导出失败。");
+    } finally {
+      setBatchActionBusy("");
+    }
+  };
+
+  const addSingleCandidateToTargets = async (candidate: Candidate) => {
+    const identityKeys = [candidate.id, candidate.candidateIdentityKey || "", candidate.personIdentityKey || ""].filter(Boolean);
+    if (singleTargetActionCandidateId || identityKeys.some((key) => targetCandidateIds.includes(key))) {
+      return;
+    }
+    setBatchActionMessage("");
+    setTargetActionCompleted(false);
     setSingleTargetActionCandidateId(candidate.id);
     setTargetCandidateIds((current) => (current.includes(candidate.id) ? current : [...current, candidate.id]));
     try {
-      await addTargetCandidate(candidate, { historyId, jobId });
+      await addTargetCandidate(candidate, { historyId, jobId, projectionId });
       setBatchActionMessage(`已将 ${candidate.name} 加入目标候选人。`);
+      setTargetActionCompleted(true);
     } catch (error) {
       setTargetCandidateIds((current) => current.filter((item) => item !== candidate.id));
       setBatchActionMessage(error instanceof Error ? error.message : "加入目标候选人失败。");
+      setTargetActionCompleted(false);
     } finally {
       setSingleTargetActionCandidateId("");
     }
@@ -633,93 +1364,148 @@ export function ResultsBoardPanel({
               id="results-keyword"
               className="text-input"
               value={keyword}
+              disabled={!filterControlsAvailable}
               onChange={(event) => setKeyword(event.target.value)}
-              placeholder="按姓名、方向、团队、工作经历或教育经历筛选"
+              placeholder={filterControlsAvailable ? "按姓名、方向、团队、工作经历或教育经历筛选" : "筛选索引准备中"}
             />
           </div>
-          <div className="metric-card metric-card-compact">
-            <span className="muted">候选人同步</span>
-            <strong data-testid="results-visible-count">
-              {dashboard.candidates.length}/{expectedCandidateCount}
-            </strong>
+          <div className="metric-card metric-card-compact candidate-sync-card">
+            <span className="candidate-sync-headline">
+              <span className="muted">候选人同步</span>
+              <strong data-testid="results-visible-count">
+                {candidateSyncSummary.syncedCandidateCount}/{candidateSyncSummary.expectedCandidateCount}
+              </strong>
+            </span>
+            {candidateSyncSummary.noteText ? (
+              <span className="metric-card-note">{candidateSyncSummary.noteText}</span>
+            ) : null}
           </div>
         </div>
-        {isHydratingCandidates ? (
-          <p className="muted">正在分块同步候选人，筛选和分页会随已加载数据继续扩展。</p>
+        {hydrationBannerVisible ? (
+          <p className="muted">
+            正在装载已发布候选人行；业务同步状态以后端 board runtime 为准。
+          </p>
         ) : null}
         {candidateHydrationError ? <p className="muted">{candidateHydrationError}</p> : null}
+        {projectionOnlyReadOnly ? <p className="muted">{projectionOnlyReadOnlyMessage}</p> : null}
+        {canonicalFacetUnavailable ? (
+          <div className="asset-readiness-notice">
+            <strong>筛选索引准备中</strong>
+            <span>{canonicalFacetUnavailableMessage}</span>
+          </div>
+        ) : null}
+        {profileDetailsIncomplete ? (
+          <div className="asset-readiness-notice">
+            <strong>候选人详情待补齐</strong>
+            <span>
+              当前资产有 {profileDetailCandidateCount}/{expectedCandidateCount} 位候选人具备完整 Profile；
+              未补齐前，部分卡片只会显示姓名、职位、教育或 LinkedIn 摘要。
+            </span>
+          </div>
+        ) : null}
+        {currentPageDetailLoading ? (
+          <p className="muted">
+            正在加载当前页候选人的完整卡片信息；筛选、计数与分页继续使用已物化的 canonical 看板行。
+          </p>
+        ) : null}
 
         <div className="facet-dropdown-row facet-dropdown-row-wide">
           <LayerTriStateFilter
             options={layerOptions}
             selection={selectedLayerStates}
+            disabled={!filterControlsAvailable || !hasLayerMetadata}
+            disabledLabel={!filterControlsAvailable ? disabledFilterSummary : layerDisabledLabel}
             onToggle={(optionId) => setSelectedLayerStates((current) => updateLayerSelection(current, optionId))}
           />
           <FacetMultiSelect
             label="召回排序"
-            summary={summarizeSelectedFacet(selectedRecallBuckets, recallOptions, "全量")}
+            summary={facetSummaryLabel(recallOptions, selectedRecallBuckets, "全量")}
             options={recallOptions}
             selectedIds={selectedRecallBuckets}
-            onToggle={(optionId) =>
+            disabled={!filterControlsAvailable}
+            disabledSummary={disabledFilterSummary}
+            showCounts={hasGlobalFacetSummary}
+            emptyMessage={canonicalFacetUnavailable ? canonicalFacetUnavailableMessage : "当前没有召回排序筛选项。"}
+            onToggle={(optionId) => {
+              userEditedFacetRefs.current.recall = true;
               setSelectedRecallBuckets((current) =>
                 toggleFacetSelection(current, optionId, {
                   allId: "all",
                   fallback: defaultRecallSelection(recallOptions),
                 }),
-              )
-            }
+              );
+            }}
           />
           <FacetMultiSelect
             label="在职状态"
-            summary={summarizeSelectedFacet(selectedEmploymentStatuses, employmentOptions, "在职、已离职")}
-            options={employmentOptions}
+            summary={facetSummaryLabel(employmentFacetOptions, selectedEmploymentStatuses, "在职、已离职")}
+            options={employmentFacetOptions}
             selectedIds={selectedEmploymentStatuses}
-            onToggle={(optionId) =>
+            disabled={!filterControlsAvailable}
+            disabledSummary={disabledFilterSummary}
+            showCounts={hasGlobalFacetSummary}
+            emptyMessage={canonicalFacetUnavailable ? canonicalFacetUnavailableMessage : "当前没有在职状态筛选项。"}
+            onToggle={(optionId) => {
+              userEditedFacetRefs.current.employment = true;
               setSelectedEmploymentStatuses((current) =>
                 toggleFacetSelection(current, optionId, {
-                  fallback: defaultEmploymentSelection(employmentOptions),
+                  fallback: defaultOpenSelection(employmentFacetOptions),
                 }),
-              )
-            }
+              );
+            }}
           />
           <FacetMultiSelect
             label="地区"
-            summary={summarizeSelectedFacet(selectedLocations, locationOptions, "美国")}
+            summary={facetSummaryLabel(locationOptions, selectedLocations, "全量")}
             options={locationOptions}
             selectedIds={selectedLocations}
-            onToggle={(optionId) =>
+            disabled={!filterControlsAvailable}
+            disabledSummary={disabledFilterSummary}
+            showCounts={hasGlobalFacetSummary}
+            emptyMessage={canonicalFacetUnavailable ? canonicalFacetUnavailableMessage : "当前没有地区筛选项。"}
+            onToggle={(optionId) => {
+              userEditedFacetRefs.current.locations = true;
               setSelectedLocations((current) =>
                 toggleFacetSelection(current, optionId, {
-                  fallback: defaultLocationSelection(locationOptions),
+                  fallback: defaultOpenSelection(locationOptions),
                 }),
-              )
-            }
+              );
+            }}
           />
           <FacetMultiSelect
             label="职能"
-            summary={summarizeSelectedFacet(selectedFunctionBuckets, functionOptions, "Researcher、Engineer")}
+            summary={facetSummaryLabel(functionOptions, selectedFunctionBuckets, "全量")}
             options={functionOptions}
             selectedIds={selectedFunctionBuckets}
-            onToggle={(optionId) =>
+            disabled={!filterControlsAvailable}
+            disabledSummary={disabledFilterSummary}
+            showCounts={hasGlobalFacetSummary}
+            emptyMessage={canonicalFacetUnavailable ? canonicalFacetUnavailableMessage : "当前没有职能筛选项。"}
+            onToggle={(optionId) => {
+              userEditedFacetRefs.current.functions = true;
               setSelectedFunctionBuckets((current) =>
                 toggleFacetSelection(current, optionId, {
-                  fallback: defaultFunctionSelection(functionOptions),
+                  fallback: defaultOpenSelection(functionOptions),
                 }),
-              )
-            }
+              );
+            }}
           />
           <FacetMultiSelect
             label="审核状态"
             summary={summarizeSelectedFacet(selectedAuditStatuses, auditStatusOptions, "全部")}
             options={auditStatusOptions}
             selectedIds={selectedAuditStatuses}
-            onToggle={(optionId) =>
+            disabled={!filterControlsAvailable}
+            disabledSummary={disabledFilterSummary}
+            emptyMessage="当前没有审核状态筛选项。"
+            onToggle={(optionId) => {
+              userEditedFacetRefs.current.audit = true;
               setSelectedAuditStatuses((current) =>
                 toggleFacetSelection(current, optionId, {
                   fallback: defaultAuditStatusSelection(),
                 }),
-              )
-            }
+              );
+            }}
           />
         </div>
       </section>
@@ -729,10 +1515,11 @@ export function ResultsBoardPanel({
           <div>
             <h3>候选人看板</h3>
             <p className="muted">
-              已加载 {dashboard.candidates.length} / {expectedCandidateCount} 位候选人
-              {visibleCandidates.length > 0
-                ? `，当前筛选命中 ${visibleCandidates.length} 位，本页显示 ${(currentPage - 1) * RESULTS_PAGE_SIZE + 1}-${Math.min(currentPage * RESULTS_PAGE_SIZE, visibleCandidates.length)} 位`
+              看板同步 {candidateSyncSummary.syncedCandidateCount} / {candidateSyncSummary.expectedCandidateCount} 位候选人
+              {visibleCandidateCount > 0
+                ? `，${visibleCandidateHitLabel} ${visibleCandidateCount} 位，本页显示 ${backendPageOffset + 1}-${Math.min(backendPageOffset + pagedCandidates.length, visibleCandidateCount)} 位`
                 : ""}
+              {loadedRowWindowText}
             </p>
           </div>
           <div className="results-batch-toolbar">
@@ -754,7 +1541,7 @@ export function ResultsBoardPanel({
               onClick={() => {
                 void completeSelectedProfiles();
               }}
-              disabled={selectedProfileCompletionCandidates.length === 0 || batchActionBusy !== ""}
+              disabled={projectionOnlyReadOnly || selectedProfileCompletionCandidates.length === 0 || batchActionBusy !== ""}
             >
               {batchActionBusy === "profile_completion"
                 ? "Web Search补全中..."
@@ -766,7 +1553,7 @@ export function ResultsBoardPanel({
               onClick={() => {
                 void addSelectedToReview();
               }}
-              disabled={selectedCandidateIds.length === 0 || batchActionBusy !== ""}
+              disabled={projectionOnlyReadOnly || selectedCandidateIds.length === 0 || batchActionBusy !== ""}
             >
               {batchActionBusy === "review" ? "加入审核视图中..." : "批量加入审核视图"}
             </button>
@@ -780,11 +1567,36 @@ export function ResultsBoardPanel({
             >
               {batchActionBusy === "target" ? "加入目标候选人中..." : "批量加入目标候选人"}
             </button>
+            {projectionId ? (
+              <button
+                type="button"
+                className="ghost-button small-button"
+                onClick={() => {
+                  void exportProjectionArchive();
+                }}
+                disabled={batchActionBusy !== ""}
+              >
+                {batchActionBusy === "export" ? "正在导出..." : "导出 Projection"}
+              </button>
+            ) : null}
           </div>
         </div>
-        {batchActionMessage ? <p className="muted">{batchActionMessage}</p> : null}
+        {batchActionMessage ? (
+          <p className="muted results-batch-message">
+            <span>{batchActionMessage}</span>
+            {targetActionCompleted ? (
+              <Link className="link-chip small-button" to={targetCandidatesRoute}>
+                查看目标候选人
+              </Link>
+            ) : null}
+          </p>
+        ) : null}
+        {backendCandidatePageLoading && backendFilteredPagingSupported && pagedDisplayCandidates.length === 0 ? (
+          <p className="muted">正在按后端 canonical 筛选条件装载当前页。</p>
+        ) : null}
+        {backendCandidatePageError ? <p className="form-error">{backendCandidatePageError}</p> : null}
 
-        {visibleCandidates.length > 0 ? (
+        {pagedDisplayCandidates.length > 0 ? (
           <>
             <div className="results-group-stack">
               {pagedCandidateGroups.map((group) => (
@@ -792,13 +1604,14 @@ export function ResultsBoardPanel({
                   <div className="results-status-group-header">
                     <h4>{group.label}</h4>
                     <span className="muted">
-                      当前页 {group.candidates.length} 位，筛选结果共{" "}
-                      {
+                      当前页 {group.candidates.length} 位
+                      {backendPageReady ? "" : `，筛选结果共 ${
                         visibleCandidates.filter(
-                          (candidate) => (reviewStatusMap[candidate.id] || "no_review_needed") === group.status,
+                          (candidate) =>
+                            (reviewStatusMap[candidate.id] || candidateAutoReviewStatus(candidate) || "no_review_needed") ===
+                            group.status,
                         ).length
-                      }{" "}
-                      位
+                      } 位`}
                     </span>
                   </div>
                   <div className="candidate-board-grid results-candidate-grid">
@@ -816,8 +1629,11 @@ export function ResultsBoardPanel({
                       const emailMetadata = candidate.primaryEmailMetadata;
                       const linkedinUrl = resolveCandidateLinkedinUrl(candidate);
                       const isFocused = focusedCandidateId === candidate.id;
-                      const isTargetCandidate = targetCandidateIds.includes(candidate.id);
+                      const isTargetCandidate = [candidate.id, candidate.candidateIdentityKey || "", candidate.personIdentityKey || ""]
+                        .filter(Boolean)
+                        .some((key) => targetCandidateIds.includes(key));
                       const isSelected = Boolean(selectedCandidates[candidate.id]);
+                      const detailLoading = candidateDetailLoadingIds.includes(candidate.id);
 
                       return (
                         <article
@@ -846,7 +1662,9 @@ export function ResultsBoardPanel({
                                 <div className="candidate-title-row">
                                   <div>
                                     <h4>{candidate.name}</h4>
-                                    <p className="candidate-meta-line">{pickCandidateRoleLine(candidate)}</p>
+                                    <p className="candidate-meta-line candidate-headline-scroll">
+                                      {pickCandidateRoleLine(candidate)}
+                                    </p>
                                     {email ? (
                                       <div className="candidate-email-line candidate-email-line-with-help">
                                         <span>{email}</span>
@@ -905,6 +1723,8 @@ export function ResultsBoardPanel({
                                         <li key={`${candidate.id}-work-${line}`}>{sanitizeCandidateText(line)}</li>
                                       ))}
                                     </ul>
+                                  ) : detailLoading ? (
+                                    <p>正在加载当前页完整工作经历。</p>
                                   ) : (
                                     <p>暂无可结构化提取的工作经历。</p>
                                   )}
@@ -919,6 +1739,8 @@ export function ResultsBoardPanel({
                                         <li key={`${candidate.id}-edu-${line}`}>{sanitizeCandidateText(line)}</li>
                                       ))}
                                     </ul>
+                                  ) : detailLoading ? (
+                                    <p>正在加载当前页完整教育经历。</p>
                                   ) : (
                                     <p>暂无可结构化提取的教育经历。</p>
                                   )}
@@ -944,8 +1766,13 @@ export function ResultsBoardPanel({
                               <button
                                 type="button"
                                 className="ghost-button candidate-action-button"
+                                disabled={projectionOnlyReadOnly}
                                 onClick={(event) => {
                                   event.stopPropagation();
+                                  if (projectionOnlyReadOnly) {
+                                    setBatchActionMessage(projectionOnlyReadOnlyMessage);
+                                    return;
+                                  }
                                   void addCandidateToReviewRegistry(jobId, historyId, candidate)
                                     .then(() => {
                                       onReviewStateChanged?.();
@@ -953,6 +1780,18 @@ export function ResultsBoardPanel({
                                       onOpenManualReview(candidate.id);
                                     })
                                     .catch(() => undefined);
+                                }}
+                              >
+                                加入审核视图
+                              </button>
+                            ) : projectionOnlyReadOnly ? (
+                              <button
+                                type="button"
+                                className="ghost-button candidate-action-button"
+                                disabled
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setBatchActionMessage(projectionOnlyReadOnlyMessage);
                                 }}
                               >
                                 加入审核视图
@@ -976,7 +1815,7 @@ export function ResultsBoardPanel({
                                 event.stopPropagation();
                                 void addSingleCandidateToTargets(candidate);
                               }}
-                              disabled={singleTargetActionCandidateId === candidate.id}
+                              disabled={isTargetCandidate || singleTargetActionCandidateId === candidate.id}
                             >
                               {isTargetCandidate
                                 ? "已加入目标候选人"
@@ -1019,8 +1858,20 @@ export function ResultsBoardPanel({
           </>
         ) : (
           <div className="empty-state">
-            <p>{isHydratingCandidates ? "当前已加载片段中还没有命中候选人。" : "当前筛选条件下没有候选人。"}</p>
-            <span>{isHydratingCandidates ? "系统正在继续同步剩余候选人，可以稍后再看。" : "可以放宽筛选条件后重试。"}</span>
+            <p>
+              {waitingForBackendPage
+                ? "正在装载当前筛选条件下的候选人。"
+                : hydrationBannerVisible
+                  ? "已加载候选片段中暂时没有筛选命中。"
+                  : "当前筛选条件下没有候选人。"}
+            </p>
+            <span>
+              {waitingForBackendPage
+                ? "筛选与分页由后端 canonical 候选人集合计算。"
+                : hydrationBannerVisible
+                  ? "系统正在继续装载剩余候选人；这不是最终空结果。"
+                  : "可以放宽筛选条件后重试。"}
+            </span>
           </div>
         )}
       </section>

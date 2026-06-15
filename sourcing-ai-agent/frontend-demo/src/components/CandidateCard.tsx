@@ -52,7 +52,7 @@ export function CandidateCard({ candidate, onOpenOnePage }: CandidateCardProps) 
         <Avatar name={candidate.name} src={candidate.avatarUrl} size="small" />
         <div className="candidate-card-copy">
           <h4>{candidate.name}</h4>
-          <p>{candidate.headline}</p>
+          <p className="candidate-headline-scroll">{candidate.headline}</p>
           <span>{candidate.currentCompany || "当前公司待确认"}</span>
         </div>
       </div>

@@ -31,6 +31,7 @@ These are core lanes, not optional enhancements:
   - former lane: `harvest_profile_search`
 - `former_employee_search`
   - primary lane: `harvest_profile_search`
+  - empty Harvest query / `__past_company_only__`: allowed only for explicit broad former-roster policy (`former_broad_past_company_only`), not as a fallback when scoped/directional query text normalizes to the target company
 
 These contracts must be reflected consistently in:
 
@@ -91,7 +92,7 @@ If a compatibility path is still present, docs and tests must say so explicitly.
 
 Profile hydration must follow a bounded-window policy:
 
-- no unbounded fan-out that risks provider `429 code_22`
+- no unbounded fan-out that causes provider `429 code_22`
 - no accidental serial waterfall where each next batch waits for the previous batch to fully finish and ingest before submit
 - batch sizing and concurrency limits must be explicit and testable
 
@@ -107,6 +108,7 @@ User-visible stage/timeline semantics must reflect real execution:
 - counts shown in progress must come from the same authoritative state used by results
 - hidden post-stage work must not make `Final Results` appear complete while results are still unavailable
 - preview-ready runs must not regress to `0/0` or stale counts after refresh/recovery
+- published result-view source artifacts are authoritative. If `job_result_view.source_path` is missing or corrupt, readers must report `manifest_invalid` instead of silently substituting another same-snapshot artifact path
 
 If the backend defers background work, the frontend must show that as deferred/background work, not as completed finalization.
 

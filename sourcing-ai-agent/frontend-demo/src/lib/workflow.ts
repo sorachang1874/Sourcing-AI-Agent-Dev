@@ -147,23 +147,23 @@ function sourceTagsForStep(item: RunStatusData["timeline"][number], runStatus: R
   }
   if (item.title.toLowerCase().includes("retriev")) {
     return runStatus.metrics
-      .filter((metric) => ["Candidates", "Evidence"].includes(metric.label))
+      .filter((metric) => ["总候选人数量", "Candidates"].includes(metric.label))
       .map((metric) => ({ label: metric.label, count: Number(metric.value) || undefined }));
   }
   return [];
 }
 
-function metricValue(runStatus: RunStatusData, label: string): number {
-  const matched = runStatus.metrics.find((metric) => metric.label.toLowerCase() === label.toLowerCase());
+function metricValue(runStatus: RunStatusData, labels: string | string[]): number {
+  const normalizedLabels = (Array.isArray(labels) ? labels : [labels]).map((label) => label.toLowerCase());
+  const matched = runStatus.metrics.find((metric) => normalizedLabels.includes(metric.label.toLowerCase()));
   return Number(matched?.value || 0) || 0;
 }
 
 function humanizeTimelineDetail(item: RunStatusData["timeline"][number], runStatus: RunStatusData): string {
   const detail = (item.detail || "").trim();
   const lowerTitle = (item.title || item.stage || "").toLowerCase();
-  const candidateCount = metricValue(runStatus, "Candidates");
-  const evidenceCount = metricValue(runStatus, "Evidence");
-  const manualReviewCount = metricValue(runStatus, "Manual Review");
+  const candidateCount = metricValue(runStatus, ["总候选人数量", "Candidates"]);
+  const manualReviewCount = metricValue(runStatus, ["需人工审核候选人", "Manual Review"]);
 
   if (!detail) {
     return lowerTitle.includes("result")
@@ -172,7 +172,7 @@ function humanizeTimelineDetail(item: RunStatusData["timeline"][number], runStat
   }
 
   if (/score\s+\d+(\.\d+)?/i.test(detail) || /top match is/i.test(detail)) {
-    return `当前返回 ${candidateCount} 位候选人，已整理 ${evidenceCount} 条相关证据，其中 ${manualReviewCount} 位需要人工审核。`;
+    return `当前返回 ${candidateCount} 位候选人，其中 ${manualReviewCount} 位需要人工审核。`;
   }
   if (/found\s+\d+\s+matches/i.test(detail) || /rank(ed|ing)|rerank|weight/i.test(detail)) {
     return `当前返回 ${candidateCount} 位候选人，系统已根据关键词命中与公开资料完成初步筛选。`;
@@ -327,11 +327,19 @@ export function buildReusedCompletedTimelineSteps(options: {
   updatedAt?: string;
   candidateCount?: number;
   manualReviewCount?: number;
+  workflowKind?: string;
 }): SearchTimelineStep[] {
   const createdAt = options.createdAt || options.updatedAt || "";
   const completedAt = options.updatedAt || options.createdAt || "";
   const candidateCount = Math.max(Number(options.candidateCount || 0), 0);
   const manualReviewCount = Math.max(Number(options.manualReviewCount || 0), 0);
+  const workflowKind = String(options.workflowKind || "").trim().toLowerCase();
+  const localAssetStage =
+    workflowKind === "excel_intake" || workflowKind === "excel_intake_batch";
+  const archivedStageTitle = localAssetStage ? "公司资产归档" : "Public Web Stage 2";
+  const archivedStageDetail = localAssetStage
+    ? "本次请求复用已完成的 Excel 导入结果，公司资产归档阶段没有执行公开网页补充。"
+    : "本次请求没有重新执行公开网页补充，继续沿用历史结果。";
   const finalDetail =
     candidateCount > 0
       ? `本次请求直接复用已完成结果，当前返回 ${candidateCount} 位候选人，其中 ${manualReviewCount} 位需要人工审核。`
@@ -357,8 +365,8 @@ export function buildReusedCompletedTimelineSteps(options: {
     },
     {
       id: "public_web_stage_2",
-      title: "Public Web Stage 2",
-      detail: "本次请求没有重新执行公开网页补充，继续沿用历史结果。",
+      title: archivedStageTitle,
+      detail: archivedStageDetail,
       timestamp: formatClock(completedAt || createdAt),
       status: "completed",
       duration: "<1s",

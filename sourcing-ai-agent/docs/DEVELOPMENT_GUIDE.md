@@ -55,7 +55,8 @@
 
 - 本地开发默认是 `Postgres-first`，不是磁盘 SQLite-first
 - 如果仓库或其父目录存在 `.local-postgres/`，系统会自动发现并推导本地 DSN
-- 默认 shadow db 是 `runtime/control_plane.shadow.db`
+- 默认 `runtime/control_plane.shadow.db` 只作为 compatibility shadow seed path
+- 在 `postgres_only` 下，真正连接目标应看 `show-control-plane-runtime` 里的 `compatibility_shadow_connect_target`
 - `runtime/sourcing_agent.db` 不应再被视为 live authoritative store
 - 判断当前会话到底解析到了哪套 control-plane 资源，统一运行：
   - `bash ./scripts/dev_doctor.sh`

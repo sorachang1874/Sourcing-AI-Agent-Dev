@@ -1,10 +1,18 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { LocalAssetTabs } from "../components/LocalAssetTabs";
 import { ResultsBoardPanel } from "../components/ResultsBoardPanel";
 import { useDashboardCandidateHydration } from "../hooks/useDashboardCandidateHydration";
 import { useCandidateReviewState } from "../hooks/useCandidateReviewState";
-import { dashboardHasRenderableCandidates, getDashboard, peekDashboardCache } from "../lib/api";
+import {
+  dashboardHasRenderableCandidates,
+  getDashboard,
+  getProjectionDashboard,
+  getRunProjectionId,
+  peekProjectionDashboardCache,
+} from "../lib/api";
 import { writeDemoSession } from "../lib/demoSession";
+import { collectionDisplayName } from "../lib/localAssetPresentation";
 import { resolveWorkflowPageContext } from "../lib/workflowContext";
 import type { DashboardData } from "../types";
 
@@ -33,15 +41,22 @@ const emptyDashboard: DashboardData = {
 
 export function ResultsPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const routeParams = useParams();
   const context = resolveWorkflowPageContext(searchParams);
-  const [dashboard, setDashboard] = useState<DashboardData>(() => peekDashboardCache(context.jobId) || emptyDashboard);
+  const collectionId = (searchParams.get("collection") || "").trim();
+  const routeProjectionId = (routeParams.projectionId || "").trim();
+  const effectiveProjectionId = routeProjectionId || context.projectionId;
+  const [dashboard, setDashboard] = useState<DashboardData>(
+    () => peekProjectionDashboardCache(effectiveProjectionId) || emptyDashboard,
+  );
   const { reviewStatusMap, refresh } = useCandidateReviewState(context.jobId, dashboard.candidates);
   const [candidateHydrationWindow, setCandidateHydrationWindow] = useState({
     requiredCandidateCount: 96,
     backgroundCandidateCount: 168,
   });
   const [isLoading, setIsLoading] = useState(
-    () => !dashboardHasRenderableCandidates(peekDashboardCache(context.jobId)),
+    () => !dashboardHasRenderableCandidates(peekProjectionDashboardCache(effectiveProjectionId)),
   );
   const [errorMessage, setErrorMessage] = useState("");
   const {
@@ -49,23 +64,27 @@ export function ResultsPage() {
     candidateHydrationError,
   } = useDashboardCandidateHydration({
     jobId: context.jobId,
-    dashboard: context.jobId ? dashboard : null,
+    projectionId: effectiveProjectionId,
+    dashboard: context.jobId || effectiveProjectionId ? dashboard : null,
     onDashboardChange: setDashboard,
     requiredCandidateCount: candidateHydrationWindow.requiredCandidateCount,
     backgroundCandidateCount: candidateHydrationWindow.backgroundCandidateCount,
   });
+  const displayCompanyName = collectionId
+    ? collectionDisplayName({ collectionId, displayName: dashboard.targetCompany })
+    : dashboard.targetCompany;
 
   useEffect(() => {
     let isMounted = true;
-    if (!context.jobId) {
+    if (!context.jobId && !effectiveProjectionId) {
       setDashboard(emptyDashboard);
-      setErrorMessage("当前没有可恢复的 workflow job，请先在搜索页完成一次真实执行。");
+      setErrorMessage("当前没有可恢复的 projection，请先从执行页或本地资产入口进入结果页。");
       setIsLoading(false);
       return () => {
         isMounted = false;
       };
     }
-    const cachedDashboard = peekDashboardCache(context.jobId);
+    const cachedDashboard = peekProjectionDashboardCache(effectiveProjectionId);
     if (cachedDashboard) {
       setDashboard(cachedDashboard);
       setIsLoading(!dashboardHasRenderableCandidates(cachedDashboard));
@@ -73,9 +92,34 @@ export function ResultsPage() {
       setIsLoading(true);
     }
     setErrorMessage("");
-    void getDashboard(context.jobId, {
-      forceRefresh: !dashboardHasRenderableCandidates(cachedDashboard),
-    })
+    const loadDashboard = async () => {
+      const projectionId = effectiveProjectionId || await getRunProjectionId(context.jobId);
+      if (!effectiveProjectionId) {
+        const params = new URLSearchParams();
+        if (context.historyId) {
+          params.set("history", context.historyId);
+        }
+        if (context.jobId) {
+          params.set("job", context.jobId);
+        }
+        if (context.candidateId) {
+          params.set("candidate", context.candidateId);
+        }
+        navigate(`/projections/${encodeURIComponent(projectionId)}${params.toString() ? `?${params.toString()}` : ""}`, {
+          replace: true,
+        });
+      }
+      return effectiveProjectionId
+        ? getProjectionDashboard(projectionId, {
+            forceRefresh: !dashboardHasRenderableCandidates(cachedDashboard),
+            runId: context.jobId,
+          })
+        : getProjectionDashboard(projectionId, {
+            forceRefresh: true,
+            runId: context.jobId,
+          });
+    };
+    void loadDashboard()
       .then((payload) => {
         if (!isMounted) {
           return;
@@ -98,17 +142,18 @@ export function ResultsPage() {
     return () => {
       isMounted = false;
     };
-  }, [context.jobId]);
+  }, [context.candidateId, context.historyId, context.jobId, effectiveProjectionId, navigate]);
 
   if (isLoading) {
     return (
       <section className="page">
-        <header className="page-header split-header">
-          <div>
-            <p className="eyebrow">候选人看板</p>
-            <h2>候选人结果看板</h2>
-          </div>
-        </header>
+      <header className="page-header split-header">
+        <div>
+          <p className="eyebrow">候选人看板</p>
+          <h2>候选人结果看板</h2>
+        </div>
+      </header>
+      {collectionId ? <LocalAssetTabs active="board" collectionId={collectionId} projectionId={effectiveProjectionId} /> : null}
         <section className="panel">
           <div className="results-skeleton">
             <div className="skeleton-line short" />
@@ -125,9 +170,20 @@ export function ResultsPage() {
       <header className="page-header split-header">
         <div>
           <p className="eyebrow">候选人看板</p>
-          <h2>{dashboard.targetCompany ? `${dashboard.targetCompany} 候选人看板` : "候选人结果看板"}</h2>
+          <h2>{displayCompanyName ? `${displayCompanyName} 候选人看板` : "候选人结果看板"}</h2>
         </div>
       </header>
+      {collectionId ? (
+        <LocalAssetTabs
+          active="board"
+          collectionId={collectionId}
+          companyName={displayCompanyName}
+          projectionId={effectiveProjectionId || dashboard.projectionId || ""}
+          jobId={context.jobId}
+          historyId={context.historyId}
+          candidateId={context.candidateId}
+        />
+      ) : null}
 
       {errorMessage ? (
         <section className="warning-card error-card">
@@ -137,14 +193,15 @@ export function ResultsPage() {
       ) : null}
 
       <ResultsBoardPanel
-        key={[context.historyId || "no-history", context.jobId || "no-job", dashboard.snapshotId || "no-snapshot"].join(":")}
+        key={[context.historyId || "no-history", context.jobId || "no-job", effectiveProjectionId || "no-projection"].join(":")}
         dashboard={dashboard}
         historyId={context.historyId}
         jobId={context.jobId}
+        projectionId={effectiveProjectionId || dashboard.projectionId || ""}
+        collectionId={collectionId}
         initialCandidateId={context.candidateId}
         isHydratingCandidates={isHydratingCandidates}
         candidateHydrationError={candidateHydrationError}
-        totalCandidateCount={dashboard.totalCandidates}
         reviewStatusMap={reviewStatusMap}
         onHydrationWindowChange={setCandidateHydrationWindow}
         onReviewStateChanged={() => {

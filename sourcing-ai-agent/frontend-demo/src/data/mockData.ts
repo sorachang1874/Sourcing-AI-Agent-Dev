@@ -149,9 +149,8 @@ export const mockRunStatus: RunStatusData = {
   currentStage: "Enrichment",
   startedAt: "2026-04-07 16:30",
   metrics: [
-    { label: "Candidates", value: "55" },
-    { label: "Evidence", value: "75" },
-    { label: "Manual Review", value: "2" },
+    { label: "总候选人数量", value: "55" },
+    { label: "需人工审核候选人", value: "2" },
     { label: "Profile Backlog", value: "25" },
   ],
   timeline: [

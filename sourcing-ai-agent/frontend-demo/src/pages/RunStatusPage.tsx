@@ -130,24 +130,6 @@ export function RunStatusPage() {
             ))}
           </div>
         </section>
-
-        <section className="panel">
-          <div className="panel-header">
-            <h3>Workers / Lanes</h3>
-          </div>
-          <div className="stack">
-            {status.workers.map((worker) => (
-              <div key={worker.id} className="worker-card">
-                <div className="timeline-row">
-                  <strong>{worker.lane}</strong>
-                  <StatusBadge label={worker.status} />
-                </div>
-                <p className="muted">{worker.id}</p>
-                <p className="muted">{worker.budget}</p>
-              </div>
-            ))}
-          </div>
-        </section>
       </div>
     </section>
   );

@@ -4,7 +4,14 @@ import { ExcelWorkflowIntakePanel } from "../components/ExcelWorkflowIntakePanel
 import { SearchFlow } from "../components/SearchFlow";
 import { useDashboardCandidateHydration } from "../hooks/useDashboardCandidateHydration";
 import { readDemoSession, writeDemoSession } from "../lib/demoSession";
-import { getDashboard, peekDashboardCache } from "../lib/api";
+import {
+  getDashboard,
+  getDashboardBoardPatches,
+  mergeDashboardBoardPatchRuntime,
+  mergeDashboardRuntimeProgress,
+  peekDashboardCache,
+  storeDashboardCache,
+} from "../lib/api";
 import {
   buildReusedCompletedFlow,
   cloneReviewDecision,
@@ -19,6 +26,12 @@ import {
   startNewSearchEventName,
   upsertSearchHistoryItem,
 } from "../lib/searchHistory";
+import {
+  dashboardBoardRuntimePublicationComplete,
+  dashboardExpectedCandidateCount,
+  dashboardHasRenderableCandidates,
+  dashboardRowHydrationTargetCount,
+} from "../lib/dashboardHydration";
 import { sourcingBackendClient } from "../lib/sourcingBackend";
 import {
   buildReusedCompletedTimelineSteps,
@@ -29,6 +42,7 @@ import {
 import type {
   DashboardData,
   DemoPlan,
+  ExcelIntakeProgress,
   RunStatusData,
   SearchHistoryItem,
   SearchTimelineStep,
@@ -53,6 +67,7 @@ interface ExcelBatchLaunchGroupView {
   sourceCompanies: string[];
   status: string;
   currentMessage: string;
+  excelIntakeProgress?: ExcelIntakeProgress;
 }
 
 interface ExcelBatchLaunchView {
@@ -103,6 +118,7 @@ export function SearchPage() {
   const flowRef = useRef<SearchHistoryItem>(emptyFlow);
   const [queryText, setQueryText] = useState("");
   const [dashboard, setDashboard] = useState<DashboardData | null>(() => peekDashboardCache(routeJobId));
+  const dashboardRef = useRef<DashboardData | null>(dashboard);
   const [runStatus, setRunStatus] = useState<RunStatusData | null>(null);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [isApplyingRevision, setIsApplyingRevision] = useState(false);
@@ -115,6 +131,12 @@ export function SearchPage() {
   const planHydrationTimerRef = useRef<number | null>(null);
   const requestEpochRef = useRef(0);
   const dashboardWarmupAttemptedJobIdsRef = useRef<Set<string>>(new Set());
+  const boardPatchPublishedAtByJobRef = useRef<Record<string, string>>({});
+  const boardPatchSequenceByJobRef = useRef<Record<string, number>>({});
+  const boardPatchRefreshInFlightJobIdsRef = useRef<Set<string>>(new Set());
+  // Tracks the last layering status we acted on per job, so the auto-refresh
+  // when layering flips to `completed` only fires once per transition.
+  const layeringCompletedRefreshFiredJobIdsRef = useRef<Set<string>>(new Set());
   const {
     isHydratingCandidates,
     candidateHydrationError,
@@ -211,11 +233,33 @@ export function SearchPage() {
 
   const isRequestEpochActive = (requestEpoch: number) => requestEpochRef.current === requestEpoch;
 
-  const hasRenderableDashboard = (nextDashboard: DashboardData | null | undefined): boolean =>
-    Boolean(nextDashboard && Math.max(nextDashboard.totalCandidates || 0, nextDashboard.candidates.length) > 0);
+  const hasRenderableDashboard = dashboardHasRenderableCandidates;
+
+  useEffect(() => {
+    dashboardRef.current = dashboard;
+  }, [dashboard]);
+
+  const latestRenderableDashboardForJob = (jobId: string): DashboardData | null => {
+    const currentDashboard = dashboardRef.current;
+    const currentFlowJobId = flowRef.current.jobId || routeJobId;
+    if (currentFlowJobId === jobId && hasRenderableDashboard(currentDashboard)) {
+      return currentDashboard;
+    }
+    const cachedDashboard = peekDashboardCache(jobId);
+    return hasRenderableDashboard(cachedDashboard) ? cachedDashboard : null;
+  };
 
   const isStage1PreviewReady = (nextRunStatus: RunStatusData): boolean =>
     nextRunStatus.timeline.some((step) => step.stage === "stage_1_preview" && step.status === "completed");
+
+  const hasBoardRuntimeDisplayReadyCards = (nextRunStatus: RunStatusData): boolean =>
+    Boolean(nextRunStatus.boardRuntimeState && nextRunStatus.boardRuntimeState.displayReadyCandidateCount > 0);
+
+  const hasLegacyStage1PreviewOnly = (nextRunStatus: RunStatusData): boolean =>
+    isStage1PreviewReady(nextRunStatus) && !nextRunStatus.boardRuntimeState;
+
+  const planExpectsDeltaBaselineStreaming = (nextPlan: DemoPlan | null | undefined): boolean =>
+    Boolean(nextPlan?.requiresDeltaAcquisition && nextPlan.baselineSnapshotId?.trim());
 
   const waitForRenderableDashboard = async (
     jobId: string,
@@ -223,18 +267,25 @@ export function SearchPage() {
     options?: {
       maxAttempts?: number;
       delayMs?: number;
+      forceRefreshFirst?: boolean;
+      requireCompleteBoard?: boolean;
     },
   ): Promise<DashboardData | null> => {
     const maxAttempts = Math.max(options?.maxAttempts || 30, 1);
     const delayMs = Math.max(options?.delayMs || 1500, 250);
     let lastDashboard: DashboardData | null = null;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const nextDashboard = await getDashboard(jobId, { forceRefresh: attempt > 0 });
+      const nextDashboard = await getDashboard(jobId, {
+        forceRefresh: options?.forceRefreshFirst === true || attempt > 0,
+      });
       lastDashboard = nextDashboard;
       if (!isRequestEpochActive(requestEpoch)) {
         return nextDashboard;
       }
-      if (hasRenderableDashboard(nextDashboard)) {
+      if (
+        hasRenderableDashboard(nextDashboard) &&
+        (!options?.requireCompleteBoard || dashboardBoardRuntimePublicationComplete(nextDashboard))
+      ) {
         return nextDashboard;
       }
       if (attempt + 1 >= maxAttempts) {
@@ -247,6 +298,70 @@ export function SearchPage() {
     return lastDashboard;
   };
 
+  const refreshDashboardFromBoardPatchLog = (jobId: string, requestEpoch: number) => {
+    if (!jobId || boardPatchRefreshInFlightJobIdsRef.current.has(jobId)) {
+      return;
+    }
+    boardPatchRefreshInFlightJobIdsRef.current.add(jobId);
+    const afterPublishedAt = boardPatchPublishedAtByJobRef.current[jobId] || "";
+    const afterSequence = boardPatchSequenceByJobRef.current[jobId] || 0;
+    void getDashboardBoardPatches(jobId, { afterPublishedAt, afterSequence, limit: 50 })
+      .then(async (patchLog) => {
+        if (!isRequestEpochActive(requestEpoch)) {
+          return;
+        }
+        if (patchLog.latestPublishedAt) {
+          boardPatchPublishedAtByJobRef.current[jobId] = patchLog.latestPublishedAt;
+        }
+        if (patchLog.latestSequenceIndex > 0) {
+          boardPatchSequenceByJobRef.current[jobId] = patchLog.latestSequenceIndex;
+        }
+        // Any newly returned patch batch is enough to refresh the dashboard;
+        // renderability thresholds belong in boardRuntimeState, not here.
+        if (patchLog.returnedCount <= 0) {
+          return;
+        }
+        setDashboard((currentDashboard) => {
+          const baseDashboard = currentDashboard || peekDashboardCache(jobId);
+          if (!baseDashboard || !hasRenderableDashboard(baseDashboard)) {
+            return currentDashboard;
+          }
+          const mergedDashboard = mergeDashboardBoardPatchRuntime(baseDashboard, patchLog);
+          if (mergedDashboard !== baseDashboard) {
+            storeDashboardCache(jobId, mergedDashboard);
+          }
+          return mergedDashboard;
+        });
+        const nextDashboard = await getDashboard(jobId, { forceRefresh: true });
+        const mergedNextDashboard = mergeDashboardBoardPatchRuntime(nextDashboard, patchLog);
+        if (!isRequestEpochActive(requestEpoch) || !hasRenderableDashboard(mergedNextDashboard)) {
+          return;
+        }
+        dashboardWarmupAttemptedJobIdsRef.current.delete(jobId);
+        storeDashboardCache(jobId, mergedNextDashboard);
+        setDashboard(mergedNextDashboard);
+        setIsLoadingResults(false);
+        const currentFlow = flowRef.current;
+        if ((currentFlow.jobId || "") !== jobId || currentFlow.phase !== "running") {
+          return;
+        }
+        persistFlow(
+          {
+            ...currentFlow,
+            selectedCandidateId: currentFlow.selectedCandidateId || mergedNextDashboard.candidates[0]?.id || "",
+          },
+          mergedNextDashboard,
+        );
+      })
+      .catch(() => {
+        // Patch-log polling is an incremental board refresh path. Progress polling
+        // remains the primary control loop if this light endpoint is temporarily unavailable.
+      })
+      .finally(() => {
+        boardPatchRefreshInFlightJobIdsRef.current.delete(jobId);
+      });
+  };
+
   const warmDashboardForPreviewReadyJob = (
     jobId: string,
     nextRunStatus: RunStatusData,
@@ -255,14 +370,17 @@ export function SearchPage() {
     if (!jobId) {
       return;
     }
-    const stage1PreviewReady = isStage1PreviewReady(nextRunStatus);
-    if (!stage1PreviewReady) {
+    const dashboardWarmupReady =
+      hasBoardRuntimeDisplayReadyCards(nextRunStatus) || hasLegacyStage1PreviewOnly(nextRunStatus);
+    if (!dashboardWarmupReady) {
       return;
     }
     const cachedDashboard = peekDashboardCache(jobId);
     if (cachedDashboard) {
       if (hasRenderableDashboard(cachedDashboard)) {
-        setDashboard(cachedDashboard);
+        const mergedDashboard = mergeDashboardRuntimeProgress(cachedDashboard, nextRunStatus);
+        storeDashboardCache(jobId, mergedDashboard);
+        setDashboard(mergedDashboard);
         return;
       }
     }
@@ -275,9 +393,16 @@ export function SearchPage() {
         if (!isRequestEpochActive(requestEpoch)) {
           return;
         }
-        const renderable = hasRenderableDashboard(nextDashboard);
+        const mergedNextDashboard = mergeDashboardRuntimeProgress(nextDashboard, nextRunStatus);
+        const renderable = hasRenderableDashboard(mergedNextDashboard);
+        if (!renderable) {
+          dashboardWarmupAttemptedJobIdsRef.current.delete(jobId);
+          setIsLoadingResults(true);
+          return;
+        }
         if (renderable) {
-          setDashboard(nextDashboard);
+          storeDashboardCache(jobId, mergedNextDashboard);
+          setDashboard(mergedNextDashboard);
         }
         setIsLoadingResults(!renderable);
         const currentFlow = flowRef.current;
@@ -287,11 +412,14 @@ export function SearchPage() {
         persistFlow(
           {
             ...currentFlow,
-            selectedCandidateId: currentFlow.selectedCandidateId || nextDashboard.candidates[0]?.id || "",
+            selectedCandidateId: currentFlow.selectedCandidateId || mergedNextDashboard.candidates[0]?.id || "",
           },
-          nextDashboard,
+          mergedNextDashboard,
         );
-        if (Math.max(nextDashboard.totalCandidates || 0, nextDashboard.candidates.length) <= 0) {
+        if (
+          dashboardExpectedCandidateCount(mergedNextDashboard) <= 0 &&
+          dashboardRowHydrationTargetCount(mergedNextDashboard) <= 0
+        ) {
           dashboardWarmupAttemptedJobIdsRef.current.delete(jobId);
         }
       })
@@ -301,6 +429,38 @@ export function SearchPage() {
         }
         setIsLoadingResults(true);
         dashboardWarmupAttemptedJobIdsRef.current.delete(jobId);
+      });
+  };
+
+  const warmDeltaBaselineDashboard = (jobId: string, requestEpoch: number) => {
+    if (!jobId) {
+      return;
+    }
+    setIsLoadingResults(true);
+    void waitForRenderableDashboard(jobId, requestEpoch, { maxAttempts: 20, delayMs: 500 })
+      .then((nextDashboard) => {
+        if (!isRequestEpochActive(requestEpoch) || !nextDashboard || !hasRenderableDashboard(nextDashboard)) {
+          return;
+        }
+        const currentFlow = flowRef.current;
+        if ((currentFlow.jobId || "") !== jobId || currentFlow.phase !== "running") {
+          return;
+        }
+        setDashboard(nextDashboard);
+        setIsLoadingResults(false);
+        persistFlow(
+          {
+            ...currentFlow,
+            selectedCandidateId: currentFlow.selectedCandidateId || nextDashboard.candidates[0]?.id || "",
+          },
+          nextDashboard,
+        );
+      })
+      .catch(() => {
+        if (!isRequestEpochActive(requestEpoch)) {
+          return;
+        }
+        setIsLoadingResults(true);
       });
   };
 
@@ -317,10 +477,24 @@ export function SearchPage() {
           return;
         }
         setRunStatus(nextRunStatus);
-        if (isStage1PreviewReady(nextRunStatus) && !peekDashboardCache(jobId)) {
+        setDashboard((currentDashboard) => {
+          const baseDashboard = currentDashboard || peekDashboardCache(jobId);
+          if (!baseDashboard || !hasRenderableDashboard(baseDashboard)) {
+            return currentDashboard;
+          }
+          const mergedDashboard = mergeDashboardRuntimeProgress(baseDashboard, nextRunStatus);
+          if (mergedDashboard !== baseDashboard) {
+            storeDashboardCache(jobId, mergedDashboard);
+          }
+          return mergedDashboard;
+        });
+        if ((hasBoardRuntimeDisplayReadyCards(nextRunStatus) || hasLegacyStage1PreviewOnly(nextRunStatus)) && !peekDashboardCache(jobId)) {
           setIsLoadingResults(true);
         }
         warmDashboardForPreviewReadyJob(jobId, nextRunStatus, requestEpoch);
+        if (nextRunStatus.boardRuntimeState) {
+          refreshDashboardFromBoardPatchLog(jobId, requestEpoch);
+        }
         const nextSteps = buildTimelineSteps(nextRunStatus, activeFlow.queryText, activeFlow.plan || flowRef.current.plan);
         const nextError =
           nextRunStatus.status === "failed"
@@ -329,20 +503,22 @@ export function SearchPage() {
 
         if (nextRunStatus.status === "completed") {
           stopTimelineAnimation();
-          const cachedDashboard = peekDashboardCache(jobId);
-          if (cachedDashboard && hasRenderableDashboard(cachedDashboard)) {
-            setDashboard(cachedDashboard);
-          }
-          const readyCachedDashboard = hasRenderableDashboard(cachedDashboard);
           setIsLoadingResults(true);
           try {
-            const nextDashboard = readyCachedDashboard
-              ? await sourcingBackendClient.getWorkflowResults(jobId)
-              : await waitForRenderableDashboard(jobId, requestEpoch);
+            const nextDashboard = await waitForRenderableDashboard(jobId, requestEpoch, {
+              maxAttempts: 90,
+              delayMs: 1000,
+              forceRefreshFirst: true,
+              requireCompleteBoard: true,
+            });
             if (!isRequestEpochActive(requestEpoch)) {
               return;
             }
-            if (!nextDashboard || !hasRenderableDashboard(nextDashboard)) {
+            if (
+              !nextDashboard ||
+              !hasRenderableDashboard(nextDashboard) ||
+              !dashboardBoardRuntimePublicationComplete(nextDashboard)
+            ) {
               const message = "候选人看板仍在准备中，请稍后刷新。";
               setErrorMessage(message);
               setDashboard(null);
@@ -360,7 +536,9 @@ export function SearchPage() {
               );
               return;
             }
-            setDashboard(nextDashboard);
+            const mergedNextDashboard = mergeDashboardRuntimeProgress(nextDashboard, nextRunStatus);
+            storeDashboardCache(jobId, mergedNextDashboard);
+            setDashboard(mergedNextDashboard);
             setErrorMessage("");
             setIsLoadingResults(false);
             persistFlow(
@@ -369,9 +547,9 @@ export function SearchPage() {
                 phase: "results",
                 updatedAt: new Date().toISOString(),
                 timelineSteps: nextSteps,
-                selectedCandidateId: nextDashboard.candidates[0]?.id || "",
+                selectedCandidateId: mergedNextDashboard.candidates[0]?.id || "",
               },
-              nextDashboard,
+              mergedNextDashboard,
             );
           } catch (error) {
             if (!isRequestEpochActive(requestEpoch)) {
@@ -545,6 +723,7 @@ export function SearchPage() {
     const cachedDashboard = peekDashboardCache(recoveredItem.jobId);
     const timelinePlan = recoveredItem.plan || flowRef.current.plan;
     let refreshedTimelineSteps = recoveredItem.timelineSteps;
+    let restoredWorkflowPhase: WorkflowPhase = recoveredItem.phase;
     const reusedCompletedHistory = shouldUseReusedCompletedFlow(recoveredItem);
     if (reusedCompletedHistory && timelinePlan) {
       refreshedTimelineSteps = buildReusedCompletedTimelineSteps({
@@ -554,6 +733,7 @@ export function SearchPage() {
         updatedAt: recoveredItem.updatedAt || recoveredItem.createdAt,
         candidateCount: cachedDashboard?.totalCandidates,
         manualReviewCount: cachedDashboard?.manualReviewCount,
+        workflowKind: String(recoveredItem.historyMetadata?.workflow_kind || ""),
       });
       persistFlow(
         {
@@ -581,11 +761,15 @@ export function SearchPage() {
             recoveredItem.queryText,
             timelinePlan,
           );
+          restoredWorkflowPhase =
+            restoredRunStatus.status === "completed" || restoredRunStatus.status === "failed"
+              ? "results"
+              : "running";
           if (refreshedTimelineSteps.length > 0 || restoredRunStatus.status === "failed") {
             persistFlow(
               {
                 ...recoveredItem,
-                phase: restoredRunStatus.status === "failed" ? "results" : recoveredItem.phase,
+                phase: restoredWorkflowPhase,
                 errorMessage: restoredError,
                 timelineSteps: refreshedTimelineSteps,
               },
@@ -614,6 +798,7 @@ export function SearchPage() {
       }
       const hydrated = {
         ...hydrateHistoryWithResult(recoveredItem, restoredDashboard),
+        phase: restoredWorkflowPhase,
         timelineSteps: refreshedTimelineSteps,
       };
       persistFlow(hydrated, restoredDashboard);
@@ -745,6 +930,52 @@ export function SearchPage() {
     stopTimelineAnimation();
     stopPlanHydrationPolling();
   }, []);
+
+  // Auto-refresh dashboard once when layering transitions to `completed`
+  // after results are already rendered. Without this, the left rail can
+  // stay on `分层未生成` until the user manually reloads.
+  useEffect(() => {
+    const jobId = (flow.jobId || "").trim();
+    if (!jobId || flow.phase !== "results" || !dashboard) {
+      return;
+    }
+    const layeringStatus = (
+      dashboard.boardRuntimeState?.layeringStatus
+        || dashboard.resultViewLifecycle?.outreachLayeringStatus
+        || ""
+    ).toLowerCase();
+    if (layeringStatus !== "completed") {
+      return;
+    }
+    if (layeringCompletedRefreshFiredJobIdsRef.current.has(jobId)) {
+      return;
+    }
+    layeringCompletedRefreshFiredJobIdsRef.current.add(jobId);
+    const requestEpoch = requestEpochRef.current;
+    void getDashboard(jobId, { forceRefresh: true })
+      .then((nextDashboard) => {
+        if (!isRequestEpochActive(requestEpoch)) {
+          return;
+        }
+        const merged = runStatus
+          ? mergeDashboardRuntimeProgress(nextDashboard, runStatus)
+          : nextDashboard;
+        if (hasRenderableDashboard(merged)) {
+          storeDashboardCache(jobId, merged);
+          setDashboard(merged);
+        }
+      })
+      .catch(() => {
+        // Best-effort refresh; the next poll tick or manual refresh
+        // recovers if the network call fails.
+        layeringCompletedRefreshFiredJobIdsRef.current.delete(jobId);
+      });
+  }, [
+    flow.jobId,
+    flow.phase,
+    dashboard?.boardRuntimeState?.layeringStatus,
+    dashboard?.resultViewLifecycle?.outreachLayeringStatus,
+  ]);
 
   useEffect(() => {
     const handleStartNewSearch = () => resetComposer();
@@ -894,6 +1125,7 @@ export function SearchPage() {
           sourceCompanies: group.sourceCompanies,
           status,
           currentMessage,
+          excelIntakeProgress: group.runStatus?.excelIntakeProgress,
         };
       });
       return {
@@ -1073,6 +1305,20 @@ export function SearchPage() {
               return;
             }
             const message = error instanceof Error ? error.message : "结果看板加载失败。";
+            const fallbackDashboard = latestRenderableDashboardForJob(jobId);
+            if (fallbackDashboard) {
+              setErrorMessage(message);
+              setDashboard(fallbackDashboard);
+              setIsLoadingResults(false);
+              persistFlow(
+                {
+                  ...reusedFlow,
+                  errorMessage: message,
+                },
+                fallbackDashboard,
+              );
+              return;
+            }
             setErrorMessage(message);
             setDashboard(null);
             setIsLoadingResults(false);
@@ -1102,6 +1348,9 @@ export function SearchPage() {
       setDashboard(null);
       persistFlow(nextFlow, null);
       syncSearchRoute(nextFlow.id, nextFlow.jobId, true);
+      if (planExpectsDeltaBaselineStreaming(currentFlow.plan)) {
+        warmDeltaBaselineDashboard(jobId, requestEpoch);
+      }
       startProgressPolling(jobId, nextFlow, requestEpoch);
     } catch (error) {
       if (!isRequestEpochActive(requestEpoch)) {
@@ -1201,6 +1450,7 @@ export function SearchPage() {
     return {
       status: String(nextRunStatus.status || ""),
       currentMessage: String(nextRunStatus.currentMessage || ""),
+      excelIntakeProgress: nextRunStatus.excelIntakeProgress,
     };
   };
 

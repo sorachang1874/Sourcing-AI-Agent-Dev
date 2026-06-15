@@ -1,0 +1,86 @@
+{
+  "matrix_version": 1,
+  "description": "Read-only authoritative reuse planning parity matrix for ECS/local migration checks.",
+  "cases": [
+    {
+      "case_id": "openai_agent_scoped_directional",
+      "company": "OpenAI",
+      "query": "帮我找OpenAI做Agent方向的人",
+      "expectations": {
+        "requested_population_boundary": "scoped_directional",
+        "strategy_type": "scoped_search_roster"
+      },
+      "notes": "Should use exact Agent shard coverage when migrated; otherwise report delta gaps without widening to full-company reuse."
+    },
+    {
+      "case_id": "openai_health_scoped_directional",
+      "company": "OpenAI",
+      "query": "我想要OpenAI在health组的人",
+      "expectations": {
+        "requested_population_boundary": "scoped_directional",
+        "strategy_type": "scoped_search_roster"
+      },
+      "notes": "If this reports baseline_generation_lags_same_snapshot_shard_materialization, repair or republish the authoritative serving generation before expecting reuse_snapshot_only."
+    },
+    {
+      "case_id": "openai_chatgpt_scoped_directional",
+      "company": "OpenAI",
+      "query": "帮我找OpenAI做ChatGPT方向的人",
+      "expectations": {
+        "requested_population_boundary": "scoped_directional",
+        "strategy_type": "scoped_search_roster"
+      }
+    },
+    {
+      "case_id": "meta_agent_scoped_directional",
+      "company": "Meta",
+      "query": "帮我找Meta做Agent方向的人",
+      "expectations": {
+        "requested_population_boundary": "scoped_directional",
+        "strategy_type": "scoped_search_roster"
+      }
+    },
+    {
+      "case_id": "google_gemini_scoped_directional",
+      "company": "Google",
+      "query": "帮我找Google做Gemini方向的人",
+      "expectations": {
+        "requested_population_boundary": "scoped_directional"
+      }
+    },
+    {
+      "case_id": "google_veo_scoped_directional",
+      "company": "Google",
+      "query": "帮我找Google做Veo方向的人",
+      "expectations": {
+        "requested_population_boundary": "scoped_directional"
+      }
+    },
+    {
+      "case_id": "google_nano_banana_scoped_directional",
+      "company": "Google",
+      "query": "帮我找Google做Nano Banana方向的人",
+      "expectations": {
+        "requested_population_boundary": "scoped_directional"
+      }
+    },
+    {
+      "case_id": "xai_coding_all_members_full_company_filter",
+      "company": "xAI",
+      "query": "我要 xAI 做 Coding 方向的全部成员",
+      "expectations": {
+        "requested_population_boundary": "scoped_directional"
+      },
+      "notes": "When xAI full-company coverage proof exists, this should report full_company_filter_from_baseline=true."
+    },
+    {
+      "case_id": "small_company_all_members_guardrail",
+      "company": "Skild AI",
+      "query": "帮我找Skild AI所有人",
+      "expectations": {
+        "requested_population_boundary": "full_company_roster"
+      },
+      "notes": "If the target environment only has scoped coverage for this company, the audit should warn and avoid full_local_asset_reuse; if full-company coverage exists, local reuse is acceptable."
+    }
+  ]
+}

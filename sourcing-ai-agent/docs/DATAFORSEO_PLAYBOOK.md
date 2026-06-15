@@ -98,7 +98,8 @@
 
 ### 3. Worker runtime queue lane
 
-- `search_seed_discovery` 与 `exploratory_enrichment` 的 worker 模式下，当前默认会优先走：
+- DataForSEO 不属于默认 `LinkedIn Stage 1` fallback。`search_seed_discovery` 只有在显式设置 `allow_stage1_web_seed_fallback=true` / `allow_public_web_seed_fallback=true`，或进入明确的 Public Web / exploratory 路径时，才允许创建 DataForSEO worker。
+- 在显式启用的 `search_seed_discovery` 与 `exploratory_enrichment` worker 模式下，queue lane 会走：
   - `task_post`
   - `tasks_ready`
   - `task_get/regular`

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import { LocalAssetTabs } from "../components/LocalAssetTabs";
 import { ManualReviewQueuePanel } from "../components/ManualReviewQueuePanel";
 import { SupplementIntakePanel } from "../components/SupplementIntakePanel";
 import { writeDemoSession } from "../lib/demoSession";
@@ -8,6 +9,7 @@ import { resolveWorkflowPageContext } from "../lib/workflowContext";
 export function ManualReviewPage() {
   const [searchParams] = useSearchParams();
   const context = resolveWorkflowPageContext(searchParams);
+  const collectionId = (searchParams.get("collection") || "").trim();
 
   useEffect(() => {
     writeDemoSession({ lastVisitedStage: "manual-review" });
@@ -21,6 +23,15 @@ export function ManualReviewPage() {
           <h2>待确认与待补充候选人</h2>
         </div>
       </header>
+      {collectionId ? (
+        <LocalAssetTabs
+          active="review"
+          collectionId={collectionId}
+          jobId={context.jobId}
+          historyId={context.historyId}
+          candidateId={context.candidateId}
+        />
+      ) : null}
 
       <SupplementIntakePanel />
 

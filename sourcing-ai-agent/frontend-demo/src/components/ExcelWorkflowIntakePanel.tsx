@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
+import type { ExcelIntakeProgress } from "../types";
 
 interface ExcelWorkflowBatchGroup {
   company: string;
@@ -9,6 +10,7 @@ interface ExcelWorkflowBatchGroup {
   sourceCompanies: string[];
   status: string;
   currentMessage: string;
+  excelIntakeProgress?: ExcelIntakeProgress;
 }
 
 interface ExcelWorkflowBatchLaunch {
@@ -36,6 +38,7 @@ interface ExcelWorkflowIntakePanelProps {
   onPollGroupProgress: (jobId: string) => Promise<{
     status: string;
     currentMessage: string;
+    excelIntakeProgress?: ExcelIntakeProgress;
   }>;
   onOpenHistory: (historyId: string, jobId: string) => void;
   onImportTargetCandidates: (jobId: string, historyId: string) => Promise<number>;
@@ -61,6 +64,30 @@ function batchStatusSummary(groups: ExcelWorkflowBatchGroup[]): string {
   return `已完成 ${completedCount} / ${groups.length} 个子工作流。`;
 }
 
+function excelCompletionMessage(group: ExcelWorkflowBatchGroup): string {
+  if (!isCompletedStatus(group.status)) {
+    return group.currentMessage || "子工作流已创建，等待执行。";
+  }
+  const progress = group.excelIntakeProgress;
+  if (!progress) {
+    return group.currentMessage || "Excel 导入完成。";
+  }
+  const unresolvedCount = progress.unresolvedRowCount + progress.invalidRowCount;
+  const unresolvedLabel = progress.invalidRowCount > 0 ? "未解析/无效" : "未解析";
+  return `Excel 导入完成：共 ${progress.totalRowCount} 行，已匹配 ${progress.matchedRowCount} 行，需人工审核 ${progress.manualReviewRowCount} 行，${unresolvedLabel} ${unresolvedCount} 行。`;
+}
+
+function ExcelHelpBadge({ label, children }: { label: string; children: string }) {
+  return (
+    <span className="help-badge excel-workflow-help" tabIndex={0} role="button" aria-label={label}>
+      ?
+      <span className="help-tooltip">
+        <span>{children}</span>
+      </span>
+    </span>
+  );
+}
+
 export function ExcelWorkflowIntakePanel({
   isSubmitting,
   onLaunch,
@@ -75,14 +102,15 @@ export function ExcelWorkflowIntakePanel({
   const [batchLaunch, setBatchLaunch] = useState<ExcelWorkflowBatchLaunch | null>(null);
   const [groupActionMessageByJobId, setGroupActionMessageByJobId] = useState<Record<string, string>>({});
   const [runningGroupActionByJobId, setRunningGroupActionByJobId] = useState<Record<string, boolean>>({});
+  const fileInputId = useId();
 
   const handleLaunch = async () => {
     if (!selectedFile) {
       setErrorMessage("请先上传 Excel 文件。");
       return;
     }
-      setErrorMessage("");
-      try {
+    setErrorMessage("");
+    try {
       const launched = await onLaunch({
         file: selectedFile,
         filename: selectedFile.name,
@@ -163,6 +191,7 @@ export function ExcelWorkflowIntakePanel({
             jobId: group.jobId,
             status: String(nextProgress?.status || group.status || ""),
             currentMessage: String(nextProgress?.currentMessage || group.currentMessage || ""),
+            excelIntakeProgress: nextProgress?.excelIntakeProgress || group.excelIntakeProgress,
           };
         }),
       ).then((updates) => {
@@ -183,6 +212,7 @@ export function ExcelWorkflowIntakePanel({
                     ...group,
                     status: next.status,
                     currentMessage: next.currentMessage,
+                    excelIntakeProgress: next.excelIntakeProgress,
                   }
                 : group;
             }),
@@ -204,16 +234,29 @@ export function ExcelWorkflowIntakePanel({
   return (
     <section className="excel-workflow-launcher" data-testid="excel-intake-panel">
       <div className="excel-workflow-launcher__header">
-        <p className="eyebrow">Excel Intake</p>
-        <h3>从 Excel 批量导入候选人</h3>
-        <p>系统会先解析 Excel，再按 company 自动拆成多个工作流，并持续回填每个公司的导入进度。</p>
+        <div>
+          <p className="eyebrow">Excel Intake</p>
+          <h3>从 Excel 批量导入候选人</h3>
+        </div>
+        <ExcelHelpBadge label="查看 Excel Intake 说明">
+          系统会先解析 Excel，再按 company 自动拆成多个工作流，并持续回填每个公司的导入进度。
+        </ExcelHelpBadge>
       </div>
 
       <div className="excel-workflow-launcher__controls">
         <div className="excel-workflow-launcher__upload">
-          <p className="field-label">上传 Excel</p>
+          <div className="excel-workflow-launcher__card-head">
+            <strong>上传 Excel</strong>
+            <ExcelHelpBadge label="查看 Excel 上传说明">
+              支持按 company 列自动拆分多公司多 job。
+            </ExcelHelpBadge>
+          </div>
+          <label className="primary-button excel-workflow-launcher__file-button" htmlFor={fileInputId}>
+            {selectedFileMessage || "选择并上传Excel文件"}
+          </label>
           <input
-            className="supplement-file-input"
+            className="excel-workflow-launcher__file-input"
+            id={fileInputId}
             data-testid="excel-intake-file-input"
             type="file"
             accept=".xlsx,.xls,.csv"
@@ -225,12 +268,15 @@ export function ExcelWorkflowIntakePanel({
               setBatchLaunch(null);
             }}
           />
-          <p className="excel-workflow-launcher__hint">
-            {selectedFileMessage || "支持按 company 列自动拆分多公司多 job。"}
-          </p>
         </div>
 
         <div className="excel-workflow-launcher__cta">
+          <div className="excel-workflow-launcher__card-head">
+            <strong>候选人信息拉取</strong>
+            <ExcelHelpBadge label="查看批量拉取说明">
+              导入后会为每个公司创建独立 history / workflow，检索方案页默认不适用。
+            </ExcelHelpBadge>
+          </div>
           <button
             type="button"
             className="primary-button excel-workflow-launcher__submit"
@@ -242,9 +288,6 @@ export function ExcelWorkflowIntakePanel({
           >
             {isSubmitting ? "拆分中..." : "批量拉取候选人信息"}
           </button>
-          <p className="excel-workflow-launcher__hint">
-            导入后会为每个公司创建独立 history / workflow，检索方案页默认不适用。
-          </p>
         </div>
       </div>
 
@@ -280,7 +323,7 @@ export function ExcelWorkflowIntakePanel({
                     {group.rowCount} 行
                     {group.sourceCompanies.length > 0 ? ` · 来源: ${group.sourceCompanies.join(" / ")}` : ""}
                   </p>
-                  <p>{group.currentMessage || "子工作流已创建，等待执行。"}</p>
+                  <p data-testid="excel-row-manifest-summary">{excelCompletionMessage(group)}</p>
                 </div>
                 <div className="excel-workflow-launcher__group-actions">
                   <span className={`phase-pill phase-${group.status.trim().toLowerCase() || "idle"}`}>
@@ -296,6 +339,7 @@ export function ExcelWorkflowIntakePanel({
                   <button
                     type="button"
                     className="ghost-button"
+                    data-testid="excel-target-import-button"
                     disabled={!isCompletedStatus(group.status) || Boolean(runningGroupActionByJobId[group.jobId])}
                     onClick={() => {
                       void handleImportTargets(group);
@@ -306,6 +350,7 @@ export function ExcelWorkflowIntakePanel({
                   <button
                     type="button"
                     className="ghost-button"
+                    data-testid="excel-target-export-button"
                     disabled={!isCompletedStatus(group.status) || Boolean(runningGroupActionByJobId[group.jobId])}
                     onClick={() => {
                       void handleExportTargets(group);
@@ -314,7 +359,9 @@ export function ExcelWorkflowIntakePanel({
                     导出候选人包
                   </button>
                   {groupActionMessageByJobId[group.jobId] ? (
-                    <p className="excel-workflow-launcher__hint">{groupActionMessageByJobId[group.jobId]}</p>
+                    <p className="excel-workflow-launcher__hint" data-testid="excel-target-action-message">
+                      {groupActionMessageByJobId[group.jobId]}
+                    </p>
                   ) : null}
                 </div>
               </div>

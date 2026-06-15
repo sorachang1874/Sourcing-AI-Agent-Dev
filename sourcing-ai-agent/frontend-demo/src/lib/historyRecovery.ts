@@ -118,12 +118,17 @@ export function recoverInterruptedPlan(
 }
 
 export function shouldRecoverHistoryFromBackend(item: SearchHistoryItem): boolean {
+  const metadata = normalizeHistoryMetadata(item.historyMetadata);
+  if (!item.id || item.errorMessage || metadata.frontend_history_recovery_source === "backend") {
+    return false;
+  }
+  if (isPlanHydrationPending(item)) {
+    return false;
+  }
   return (
-    Boolean(item.id) &&
-    item.phase === "results" &&
-    Boolean(item.jobId) &&
-    !item.errorMessage &&
-    Object.keys(normalizeHistoryMetadata(item.historyMetadata)).length === 0
+    (item.phase === "results" && Boolean(item.jobId)) ||
+    (item.phase === "running" && Boolean(item.jobId)) ||
+    (item.phase === "plan" && Boolean(item.plan) && Boolean(item.reviewId))
   );
 }
 
@@ -194,7 +199,10 @@ export function historyItemFromRecoveryEnvelope(
     requiresReview: Boolean(recoveredPlan?.reviewRequired),
     timelineSteps: [],
     selectedCandidateId: "",
-    historyMetadata: normalizeHistoryMetadata(recovery.metadata),
+    historyMetadata: {
+      ...normalizeHistoryMetadata(recovery.metadata),
+      frontend_history_recovery_source: "backend",
+    },
   });
 }
 
@@ -214,6 +222,7 @@ export function buildReusedCompletedFlow(
           updatedAt: activeFlow.updatedAt || new Date().toISOString(),
           candidateCount: nextDashboard?.totalCandidates,
           manualReviewCount: nextDashboard?.manualReviewCount,
+          workflowKind: String(activeFlow.historyMetadata?.workflow_kind || ""),
         })
       : activeFlow.timelineSteps,
     selectedCandidateId:

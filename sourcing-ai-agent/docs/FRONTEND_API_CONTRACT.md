@@ -17,6 +17,18 @@
 - `request` 表示当前后端准备真正执行的 execution-aligned request，而不只是最初的归一化输入
 - `request_preview` 应被视为 `request` 的可解释展示层，两者在 `keywords / organization_keywords / employment_statuses / intent_axes` 上应保持同一语义
 - 如果 planning / acquisition strategy 扩展了执行关键词，例如把用户 query 补成 `Pre-train`、`Vision-language` 这类真实 shard / provider keyword，前端应直接信任返回的 `request` / `request_preview`，而不是自己从原始 query 再做一轮猜测
+- `search_seed_queries` 不是通用的“真实 HarvestAPI search keyword”字段。它只在 scoped/directional profile-search、former keyword-only、large-org keyword probe、或显式 Stage 1 web seed fallback 中可以代表 provider-facing query。普通 `full_company_roster` 的 LinkedIn Stage 1 当前员工 lane 由 company-employees/company filters 驱动；former broad lane 由 `pastCompanies` + blank query 驱动。
+- 计划页展示“检索关键词 / provider 参数”时，必须优先消费 `plan.acquisition_strategy.provider_execution_manifest.lanes[]`：
+  - `provider_facing_query=true` 且 `query_texts` 非空，才可作为真实 provider keyword 展示
+  - `provider=harvest_company_employees` 且 `query_texts=[]` 表示公司 roster API 无 search keyword
+  - `provider=harvest_profile_search` 且 `past_companies` 非空、`query_texts=[]` 表示 broad former recall 由 past-company filter 驱动
+  - 不得把历史 `Lovable Employee` / `Lovable LinkedIn Employee` 这类泛化 seed label 展示成真实调用参数
+- `provider_execution_manifest` 是 Stage 1 实际 provider 参数的 canonical contract，不只属于计划页：
+  - history recovery metadata、`/progress`、`/dashboard`、`/results`、`/candidates` 都应透传或投影同一个 manifest
+  - 前端恢复历史、运行态调试、执行过程解释和结果页不得从 `search_seed_queries`、策略文案、历史缓存 label 重新推断 provider 参数
+  - 如果只有 metadata 中存在 manifest，前端仍应消费它；如果 manifest 不存在，才允许展示“后端未返回实际 provider 参数”，而不是猜测
+  - 普通用户计划页不展示完整 provider manifest；它只属于 Advanced Mode / developer diagnostic context，放在 Baseline snapshot 附近用于排障
+  - 普通用户可见的策略解释应使用 `检索关键词`、`检索策略`、`目标公司`、`目标人群` 等产品语义字段，不应暴露 `current_companies/past_companies/searchQuery` 这类 provider 参数
 - 前端接 hosted 后端时，默认不应再把 `force_fresh_run=true` 作为通用默认值
   - 当组织级 baseline 已经 `effective_ready`，这会直接绕开本地资产复用，重新触发高成本 provider
 - `POST /api/workflows/explain` 应作为前端的 dry-run / operator explain 入口
@@ -25,36 +37,96 @@
 - `GET /api/runtime/progress` 应作为运维面板的聚合入口
   - 它现在会返回 `cloud_asset_operations` 和按公司过滤的 `company_asset`
   - 不需要前端自己再拼 runtime 文件或 registry
+- Agent/Operation 调试面板必须消费后端的 typed operation/runtime contract，而不是从 command 名称猜测能力
+  - `GET /api/operations/action-registry` 返回 `display_contract`、`allowed_workflow_command_contracts` / `default_workflow_command_contract`
+  - `operation_action.display_contract` / `operation_run.display_contract` 由 `operation_runtime.ActionRegistry.display_contract_for` 生成，是 action/run 产品文案、类别和说明的唯一真源。Operation UI 可以展示 technical `action_type` / `operation_type` 作为 debug id，但标题/类别不得从 action type 字符串、operation type、owner module 或本地映射重新推导
+  - `workflow_command_exposure_gate` / `workflow_command_exposure_status` 和 command-level `agent_exposure_gate` / `agent_exposure_status` 由 `operation_runtime.ActionRegistry.allowed_workflow_command_types` 生成，是 Agent/Operation UI 判断命令是否可由 action 规划的唯一 normal-path contract。Frontend 不得把 durable owner registry 或 `activity_spine_policy.agent_callable` 当作产品暴露列表
+  - `workflow_command_control_summary` 由同一个 ActionRegistry 从 `allowed_workflow_command_contracts` 汇总，是 action-level running-control maturity/gap/category 的唯一摘要。Frontend/Agent UI 可以用它显示“可规划但运行中不可中断”的 gap，但不得重新遍历 command type 字符串或 owner 名称推断可取消性
+  - `/operations` 对缺失的 display contract 必须 fail closed：显示 `Display contract missing` / `display_contract_missing`，并由 W10 preflight 捕获；不得 fallback 到 owner module、owner、operation type、action type 或 command type 来生成产品标题/类别
+  - `GET /api/operations/actions`、`GET /api/operations/runs`、`GET /api/operations/runs/{operation_run_id}/provenance`、`POST /api/operations/actions/{action_id}/approve|reject`、`POST /api/operations/runs/{operation_run_id}/cancel|retry|resume|dispatch` 是 action queue / operation queue 的正常前端 API；前端不得直接写 `workflow_commands`、CRM、projection、Public Web、Excel 或 export 表来模拟状态变化
+  - `/operations` 前端页面是任务审批与执行工作台。它可以列出待确认操作、确认/拒绝操作、列出执行任务、读取审计记录，并对 run 发起 dispatch/resume/retry/cancel；它不得调用 CRM、projection、Public Web、Excel、export 等 domain API 来补状态或模拟执行。默认产品文案应使用“待确认操作 / 执行队列 / 执行详情 / 执行证据”，不能把 `Operation Queue`、read model、owner module、command type 等内部合同词作为主页面说明。技术标识只能放在展开调试区。
+  - `frontend-demo/src/lib/api.ts` 中供 `/operations` 使用的 Operation helper 也必须只调用 `/api/operations/...`。Activity/Attempt/Delta 详情只能通过只读 `/api/workflow/activities`、`/api/workflow/activity-attempts`、`/api/workflow/entity-deltas` runtime API 加载；这些 API 只做 provenance drill-down，不参与 run/command control，也不得调用 domain API
+  - `GET /api/operations/runs/{operation_run_id}` 默认返回 `operation_run.status_summary`；`GET /api/operations/runs?include_status_summary=true` 可在列表中请求同一摘要。该摘要只从 `operation_runs`、`operation_events`、`workflow_commands` 汇总，命令详情继续通过 command `execution_summary` 引用 Activity spine，不从 domain 表补状态
+  - Operation run 记录必须返回 `operation_run.control_state`，`POST /api/operations/runs/{operation_run_id}/cancel|retry|resume|dispatch` 响应顶层也必须返回同一 `control_state` 和 `display_contract`。`control_state` 由 `operation_runtime.operation_run_control_state` 生成，是 dispatch/resume/retry/cancel 按钮可用性的唯一真源。前端不得用本地 terminal status 集合或 status string heuristic 推导 OperationRun 控制能力；`retry` 返回 child OperationRun 时，UI 应选择返回的 child run 而不是继续停留在 terminal parent run
+  - `GET /api/workflow/command-registry`、`GET /api/workflow/commands`、`GET /api/workflow/commands/{command_id}` 返回同一套 `display_contract`、`control_policy` 和 `activity_spine_policy`；command row/detail 还必须返回 status-specific `control_state`
+  - `GET /api/workflow/command-registry` 是 durable owner/control registry，不是 Agent action allowlist。每个 command entry 以及 `GET /api/workflow/commands` / `GET /api/workflow/commands/{command_id}` 返回的每条 command row 都必须暴露 `agent_exposure_gate` / `agent_exposure_status`；`not_action_registry_allowlisted` 表示只能通过内部 owner/recovery 或显式 action adapter 使用，前端不得把它显示为可由 Agent 直接规划的 action command
+  - `display_contract` 由 `durable_runtime.workflow_command_display_contract` 生成，是 command 产品文案、类别和说明的唯一真源。Operation UI 可以展示 technical `command_type` 作为 debug id，但标题/类别不得从 command type 字符串、owner 名、stage id 或本地映射重新推导
+  - `GET /api/workflow/commands/{command_id}` 默认返回 `workflow_command.execution_summary`；`GET /api/workflow/commands?include_execution_summary=true` 可在列表中请求同一摘要。该摘要只从 `workflow_activity_runs`、`workflow_activity_attempts`、`workflow_entity_deltas` 读取，`fallback_status=fail_closed`，不修复、不执行、不读取 domain 表补语义
+  - `/operations` 对每个 command 的状态文案必须使用 `workflow_command.execution_summary.activity_status_counts` / `attempt_status_counts` / `entity_delta_status_counts` / `entity_delta_kind_counts`、`latest_effect_status`、`latest_activity`、`latest_attempt`、`latest_entity_delta` 和 `sample_truncated`。页面不得从 command type 字符串、时间戳顺序、CRM/Public Web/projection/export/Excel domain rows 重新推导 command 是否成功、失败、无效果或可继续
+  - `POST /api/workflow/commands/{command_id}/cancel|retry|resume` 是唯一正常命令控制入口；按钮可用性必须来自 command row / 响应顶层 `control_state.allowed_actions` / `can_cancel` / `can_retry` / `can_resume`，Activity evidence 要求必须来自响应顶层 `activity_spine_policy`；响应中的 `workflow_command` 也携带同一套 policy/state 供详情展示
+  - `/operations` command-level `取消步骤` / `继续步骤` / `重试步骤` 按钮必须调用 `/api/workflow/commands/{command_id}/cancel|resume|retry`，并且只根据 `workflow_command.control_state.allowed_actions` 和 `disabled_reasons` 渲染可用性。前端不得用 command status string、本地 terminal set、owner 名称或 Activity rows 自己推断 command control 能力
+  - `继续步骤` 不是通用修复按钮。当前 generic resume 只适用于 `retry_wait`；`claimed` / `running` resume 必须由后端 `control_policy.running_resume_*` 明确支持，否则前端必须展示 `running_command_requires_owner_specific_resume` / `running_resume_blocked_reason`，不得自行重排队或写入 owner 表
+  - command control 响应若返回 `invalid` / `not_found` / 非预期 status，前端必须展示后端 `reason` / `command_status`，不得把失败当作成功刷新吞掉
+  - `control_policy.running_cancel_upgrade_requirements` 是 running command 尚不能取消时的 owner 升级条件；前端不得把该字段当成可执行步骤，也不得在字段非空时显示 running cancel 为可用
+  - `display_contract` 是命令展示文案的唯一真源；`control_policy` 是 cancel/retry/resume 能力规则的唯一真源，且必须暴露 `running_control_category` / `running_control_categories`、`running_control_maturity`、`running_control_gap_status` 和 `running_control_surface`，前端不得从 command type 或 blocked reason 反推 provider/domain/orchestration 分类或 running-control 成熟度；`control_state` 由 `durable_runtime.workflow_command_control_state` 生成，是当前 status 下按钮可用性的唯一真源；`activity_spine_policy` 是命令是否必须写 `workflow_activity_runs` / `workflow_activity_attempts` / `workflow_entity_deltas` 的唯一真源
+  - 正常 command registry 不应出现 `activity_spine_policy.requirement="legacy_internal_pending_activity_spine"`；若迁移错误重新引入，前端不得展示或执行该 command 作为正常 Agent action
+  - `GET /api/workflow/activities`、`/activity-attempts`、`/entity-deltas`、`/discovery-lanes` 是只读 provenance/debug surface；每条 activity、attempt、entity-delta、lane row 都必须暴露 `module_state_mutated=false` 和只读 `mutation_contract`，行内 `control_target` 指回所属 command，并携带 command-owned `display_contract`、`control_policy`、`control_state`、`activity_spine_policy` 和 `fallback_status=fail_closed`；前端所有 retry/cancel/resume 都必须打 command API，不得从 activity、attempt、delta、lane 字段推导展示文案或控制能力，也不得修改 activity、attempt、delta、lane、registry、projection、CRM 或 Public Web 表
+- `GET /api/jobs/{job_id}/trace`、`GET /api/jobs/{job_id}/workers` 和 `GET /api/jobs/{job_id}/scheduler` 只作为诊断入口
+  - 公共读路径必须以持久化 worker 记录为真源，不能因为 live runtime 连接失效就把页面打成 500
+  - 如果 live runtime 不可用，接口仍应返回已持久化的 worker/scheduler 视图，而不是要求浏览器重试 worker DB
 - 本地前端直连 hosted backend 时，默认使用 `http://127.0.0.1:4173 -> http://127.0.0.1:8765`
   - 后端会为 `127.0.0.1:4173` / `localhost:4173` 返回 CORS 响应头
   - 若前端运行在其他域名或端口，运维应设置 `SOURCING_API_ALLOWED_ORIGINS`
 - 前端的“人工审核状态”和“目标候选人 CRM”现在已经切到后端 API + Postgres-backed control plane
   - 不再以浏览器 `localStorage` 作为真相源
   - 同一个 `job_id` 的审核状态，应通过 `GET/POST /api/candidate-review-registry` 读写
-  - 跨 workflow 的目标候选人池，应通过 `GET/POST /api/target-candidates` 读写
-  - 将某个已完成 workflow 的候选人批量导入目标池，应通过 `POST /api/target-candidates/import-from-job`
-  - 导出目标候选人 CSV/profile bundle，应通过 `POST /api/target-candidates/export`
-  - 目标候选人 Public Web Search 应通过 `POST /api/target-candidates/public-web-search` 触发，通过 `GET /api/target-candidates/public-web-search` 查询 batch/run 状态
+  - 跨 workflow 的目标候选人池，应通过 `GET/POST/PATCH /api/crm/records` 读写
+  - 从本地资产公司页进入目标候选人时，前端必须把 `collection` 上下文作为 `source_collection_id` 传给 `GET /api/crm/records`；CRM API 是 collection-scoped 列表的 owner，前端不得拉取全局 CRM 列表后自己按公司推断。
+  - 从 projection 添加目标候选人时，前端必须传 `projection_id + candidate_identity_key` 到 `POST /api/crm/records`，由 `CRMWriter` 去重和记录 provenance
+  - CRM follow-up task 只读列表应通过 `GET /api/crm/tasks` 或 `GET /api/crm/records/{crm_record_id}/tasks` 获取；前端不得从 `crm_events` payload 自行拼任务状态。响应必须标记 `read_contract.source=crm_tasks`、`read_contract.audit_source=crm_events`、`fallback_used=false`。
+  - 将某个已完成 workflow 的候选人批量导入目标池仍属于 legacy/migration/import surface；正常 projection 页面应通过 CRM add-from-projection，而不是 job-bound target write
+  - 导出普通候选人 CSV/profile bundle，应通过 `POST /api/projections/export`，并传入 `projection_id`；目标候选人页面只能在记录带有 `source_projection_id` / `candidate_identity_key` provenance 时调用该 canonical export。
+  - `POST /api/target-candidates/export` 已退役为 migration/test-only 兼容入口，默认返回 `410`。前端正常路径不得调用它。
+    - 目标候选人 Public Web Search 应通过 `POST /api/crm/records/public-web-search` 触发，通过 `POST /api/crm/records/public-web-search/poll` 查询 batch/run 状态；请求体使用 `crm_record_ids`
     - POST 只做幂等排队，不在请求线程里跑 DataForSEO/fetch/LLM
     - 返回的 per-candidate run 是事实来源；batch 只做多选操作的聚合状态
-    - 前端应按 `record_id` 将最新 run 映射到候选人卡片，稳定消费 `status / phase / summary / query_manifest / search_checkpoint / analysis_checkpoint / updated_at`
-    - `summary.primary_links`、`summary.entry_link_count`、`summary.fetched_document_count`、`summary.email_candidate_count` 和 `summary.promotion_recommended_email_count` 可作为卡片级紧凑展示；完整 grouped signals/detail 必须通过 record detail API 获取，不应从 raw artifacts 反推
-    - 目标候选人 Public Web detail 应通过 `GET /api/target-candidates/{record_id}/public-web-search` 获取，响应包含 `latest_run`、`person_asset`、`signals`、`email_candidates`、`profile_links`、`grouped_signals` 和 `evidence_links`
+    - 前端应按 `record_id` 将最新 run 映射到候选人卡片，稳定消费 `status / phase / summary / query_manifest / search_checkpoint / analysis_checkpoint / created_at / updated_at`。`created_at` / owner planning time 是 current-run 选择语义，`updated_at` 只表示该 run 的进度刷新时间；旧 run 的晚到 progress update 不能让旧 run 重新成为当前 run。
+    - CRM Public Web run 卡片的阶段命令行和运行控制必须由后端 owner 物化：`phase_command_display_line` 是阶段命令展示文案唯一真源，`run_control_state.allowed_actions` 是取消/重试按钮唯一真源，`run_display_contract` 是 run 产品展示合同。`phase_command_display_line` 必须使用产品化阶段名，不得透传 command registry label、command type、`CRM Public Web` 内部 owner 名、`materialize/signals/model_safe` 等实现术语。前端不得从 `phase_commands.current_command.command_type`、command `status`、run terminal status set、本地 command type label map 或本地 retry/cancel status set 推导产品文案或控制能力；字段缺失时必须 fail closed，不展示对应命令行或按钮。
+    - 卡片上的 Public Web progress 文案应来自 `summary.phase_metrics` / batch `summary.phase_metrics`，用于区分 remote search pending、document fetch、AI adjudication、analysis、signal materialization；不要从卡片本地状态猜测阶段
+    - `summary.primary_links`、`summary.entry_link_count` 和 `summary.fetched_document_count` 可作为卡片级紧凑展示；卡片上用户可见的邮箱候选计数必须来自 `summary.phase_metrics.email_signal_materialized_count`，其 owner 是 `crm.public_web.signals.materialize` 成功写入的 latest-run `person_public_web_signals` 行。历史 terminal run 若缺少这些 materialized metrics，后端 `poll` / `detail` 读路径必须从 `person_public_web_signals` 按 `latest_run.run_id + crm_record_id` 补齐 `signal_materialized_count` / `email_signal_materialized_count` / `profile_link_signal_materialized_count`，且不得从 raw summary 字段推导。`summary.email_candidate_count` / `summary.promotion_recommended_email_count` 只作为 raw/adjudication 诊断字段，不表示可审核、可导出、CRM-ready 邮箱，也不得作为卡片主指标或 detail 空状态的兜底。
+    - `completed_with_errors` 不等同于 provider 执行失败。常见含义是 run 已完成并物化了公开信息 signals，但没有达到自动确认 `primary_links` 的质量阈值或需要人工复核；前端文案应偏向“已完成，需复核”，并提示同参数重试通常不会明显增量
+    - 若 terminal run/export 没有可展示信号，前端应展示后端返回的 `export_record_status` / `export_skip_reason` 或 phase guardrail，而不是把空 zip/空字段当作成功结果
+    - `record_id` 是 CRM record id；前端调用 path-style resource API 时必须使用 `encodeURIComponent(record_id)`，后端路由负责解码。`/profile`、`/public-web-search`、`/public-web-promotions` 必须对同一个 encoded `crm_record_id` 返回一致的候选人语义。
+    - 目标候选人 Public Web detail 应通过 `GET /api/crm/records/{crm_record_id}/public-web-search` 获取，响应包含 `latest_run`、`person_asset`、`signals`、`email_candidates`、`profile_links`、`grouped_signals` 和 `evidence_links`。Public Web detail UI 不得通过 `/profile` 嵌套字段作为 detail 读源；`/profile` 只能作为 composed profile display owner。
+    - Path-style CRM Public Web resource API 的 owner scope 由 `crm_record_id -> crm_records.workspace_id` 解析；前端不得假设所有 path reads/promotions 都属于 `workspace_id=default`，后端也不得用 default workspace filter 先过滤 path record。Body-style batch/action API（start/poll/cancel/retry/export）必须显式消费请求体 `workspace_id`，并在 mutation 前校验每个 explicit `run_id` 的 `run.workspace_id` 和所属 CRM record workspace 都与请求 workspace 一致；不一致必须 fail-closed，不能按 `run_id` 直接修改远端/provider-backed run。前端 `TargetCandidateRecord` / Public Web run adapter 必须保留后端 `workspace_id` 为 `workspaceId`，所有 body-style Public Web mutation/export/poll 都必须传该 workspace；跨 workspace 多选必须在前端 fail-closed，不能静默落到 `default`。
+    - Public Web detail cache 必须区分长期人工确认资产和 latest-run 待审核信号。当 retry/force-refresh/cancel 切换 latest run 时，旧 run signal 只能作为审计历史，不能继续渲染为可审核信号；前端必须让本次待审核候选 fail-closed，且只允许确认/导出 `signal.run_id == latest_run.run_id` 的 signal。但前端不得因为 latest run mismatch、expected latest run 为空、latest run 非终态或 latest run 没有新 signal 而清空整个 detail cache，因为这会隐藏 durable manual promotion / PersonAssertion。`latest_run` 的唯一 owner 是 `crm_public_web_runs` 中匹配当前 `crm_record_id` + `workspace_id` 的 run；`person_public_web_asset.latest_run_id` 只能作为资产摘要/provenance，不能在 CRM detail/export 中 fallback 成 record-owned latest run。后端读取 signals 必须同时按 `run_id` 和 `record_id` 过滤。`POST /api/crm/records/{crm_record_id}/public-web-promotions` 必须在 CRM Public Web owner 内执行同一 latest-run guard；promotion owner 必须先确认 signal 所属 run 的 `crm_record_id` 和 `workspace_id` 都匹配当前 CRM record，且当前 record/workspace 存在非空 latest run 并等于 `signal.run_id`。若不满足，后端必须返回 `status=invalid` / `reason=public_web_signal_not_latest_run`，且不得写 promotion、PersonAssertion 或 exportable contact/link state。
     - detail 响应只返回 first-class `person_public_web_signals` 的 model-safe summaries/evidence links；不返回 raw HTML/PDF/search payload、`search_checkpoint` 或 raw document paths
+    - 目标候选人 Public Web detail UI 必须把三类内容分开：`email_candidates` 是可审核联系方式候选，`profile_links` 是可审核公开主页候选，`evidence_links` 是只读证据/审计来源。`evidence_links` 不应渲染 promotion/export 状态控件；用户应在可审核信号区通过统一状态控件选择 `待复核`、`已确认并导出`、`已排除`。v1 不支持把已人工确认/排除的 signal 回退为待复核，因此 `待复核` 只能作为未人工判断信号的当前状态/可选状态；后续若新增 reset，必须通过 CRM Public Web owner 写审计事件、promotion void/reset 记录和 assertion/export 影响。
+    - detail UI 不应重复卡片级运行控制或 provider progress。`entry_link_count`、`fetched_document_count`、provider retry/cancel、LinkedIn 打开入口属于卡片级紧凑运行视图；drawer 只负责审核/解释可导出信号。不要展示没有 owner/公式的“资料完整度”这类合成分数。
+    - 前端触发 provider/model 成本或会切换 latest run 的操作必须有明确确认。首次多选 Public Web Search 与单人 retry 都应提示可能触发真实 provider/model 调用，并说明旧结果保留为审计记录。
+    - detail/export 中的 run summary 和 person asset summary 会经过 model-safe sanitizer；`artifact_root`、`document_fetch_payload_path`、`adjudication_payload_path`、raw path/payload 等内部字段不属于前端合同
     - detail 中的 profile/public link signal 会携带 `link_shape_warnings` 和 `clean_profile_link`
       - `x_link_not_profile`、`substack_link_not_profile_or_publication`、`github_repository_or_deep_link_not_profile`、`scholar_link_not_profile` 必须作为 UI warning 展示
       - 即使 identity label 是 `likely_same_person`，`clean_profile_link=false` 的链接也只能作为 evidence/review signal，不应渲染成 clean profile 或 primary link
-    - Public Web email candidates 可以展示为候选联系方式，但不能直接写入 `target_candidates.primary_email`；提升为 primary email 必须通过 `POST /api/target-candidates/{record_id}/public-web-promotions` 先写 promotion record
-    - Public Web link/email promotion 状态可通过 `GET /api/target-candidates/{record_id}/public-web-promotions` 或 detail 响应中的 `promotions` / `promotion_summary` 读取
-    - Web Search 专用导出应调用 `POST /api/target-candidates/public-web-export`，默认 `mode=promoted_only`，只导出人工确认的 model-safe signals/evidence links/promotions/manifest，不包含 raw HTML/PDF/search payload
+    - Public Web email candidates 可以展示为候选联系方式，但不能直接写入 CRM current-state contact 字段；提升为 primary email 必须通过 `POST /api/crm/records/{crm_record_id}/public-web-promotions` 写 promotion + `PersonAssertion` + CRM event
+    - Public Web link/email promotion 状态可通过 `GET /api/crm/records/{crm_record_id}/public-web-promotions` 或 detail 响应中的 `promotions` / `promotion_summary` 读取
+    - promotion API 默认只允许 `publishable=true` 且 clean URL-shape 的 signal；如果用户明确人工覆盖 non-publishable / dirty URL-shape signal，前端必须传 `allow_unpublishable=true` 和非空 `override_reason`
+      - 无覆盖理由时后端返回 `override_reason_required` 和原始 `validation_reason`
+      - hard validation 仍不可覆盖，例如无效 email candidate 不应写入 promotion
+      - detail/promotions payload 会返回 `promotion_override_reason`、`promotion_override_validation_reason`、`promotion_requires_manual_override`，promotion row 会返回 `override_reason`、`override_validation_reason`、`requires_manual_override`
+    - Web Search 专用导出应调用 `POST /api/crm/records/public-web-export`
+	      - 默认 `mode=promoted_only`，只导出人工确认的 model-safe signals/evidence links/promotions/manifest，不包含 raw HTML/PDF/search payload
+	      - 前端正常导出按钮必须默认 `promoted_only`；`mode=promoted_and_publishable` 只能通过显式导出范围控件选择，并且在导出前提示用户它会额外包含 AI 判定 `publishable=true` 但未人工确认的 signals，在 signal CSV 中标记 `ai_publishable_unpromoted`
+	      - 目标候选人 composed profile 的 `export_readiness.default_public_web_export_mode` 也必须是 `promoted_only`。`export_readiness.ready` / `exportable_signal_count` 只描述默认导出模式下的人工确认 signals 或已确认 primary email；AI 判定可发布但未人工确认的候选只能进入 `ai_publishable_unconfirmed_signal_count`，并且只有用户显式选择 `promoted_and_publishable` 后才可导出。
+	      - CRM Public Web export artifact reuse 必须绑定后端生成的 `export_input_watermark_hash`。水印 owner 是 `crm_public_web_exporter`，source of truth 是当前 export ZIP 会写入的 model-safe input snapshot：CRM record export fields、latest CRM Public Web run detail、run phase-command summary、person Public Web asset summary、export-mode-filtered `person_public_web_signals` / evidence links、`crm_public_web_promotions`、以及对应 `PersonAssertion` 状态；同一 record/mode 在用户 promotion/rejection、latest run、phase command、person asset 或 assertion 状态变化后必须生成新的 command/artifact，不能复用旧 ZIP。owner 在 replay 已成功 artifact 和 claim queued command 后执行 ZIP 副作用前都必须重算校验 watermark；过期 command 必须 fail-closed，不能发布 artifact。ZIP 写入前必须把每个 record 的 export input snapshot materialize 成有序集合；若任何 record 缺 snapshot，owner 必须 fail-closed，ZIP loop 不允许 fallback 重新读取 detail、asset、promotion、assertion 或 phase-command 源。
+      - `POST /api/crm/records/public-web-export` 只有在 owner 返回 `status=ok` 且存在 ZIP body 时才可返回二进制下载；任何 `failed` / stale watermark / missing artifact / owner failure 都必须返回 JSON 非 2xx/409-style 错误，前端不得把空 ZIP 或 `download.bin` 当作成功导出。
     - 目标候选人页的 Public Web export 数字表示当前选择/筛选范围内的 target-candidate 数量，不表示这些候选人都已有确认 Public Web 结果；`promoted_only` 包只会包含已人工确认的 Public Web signals
-    - 如果本地前端提示 Public Web Search 接口不可用并且该 GET 返回 404，优先怀疑后端仍是旧进程；重启当前分支的 backend/worker 后再排查契约
+    - 目标候选人卡片的简介行必须使用固定三行高度的可滚动容器，避免长 headline 使卡片网格错位。Public Web 状态区同样必须拆成固定高度的三行 progress 容器和固定高度的公开主页链接占位容器；长复核建议必须收进邻近的 `?` 帮助说明，不能作为卡片底部独立段落撑高单个候选人卡片。
+    - 目标候选人卡片的跟进状态只属于候选人 CRM 元数据区；Public Web 操作区不应重复渲染 `待沟通` 这类 follow-up chip。卡片操作顺序应保持 `打开 LinkedIn`、取消/重试本次搜索、`查看公开信息详情`。
+	    - `/api/target-candidates/public-web...` 已永久退役并返回 `410` + canonical CRM endpoint pointer；旧 `SOURCING_ALLOW_LEGACY_TARGET_PUBLIC_WEB_ENDPOINTS` env 只保留为历史上下文，不能重新启用。前端正常路径不得调用。`contracts/frontend_api_adapter.ts` 仍保留 target-candidate 命名的兼容方法，但这些方法必须映射到 `/api/crm/records/...` canonical CRM endpoints，并把 `recordIds` / `record_ids` 规范化为 `crm_record_ids`。CRM 响应必须标记 `public_web_storage_owner=crm_public_web_v1` 和 `public_web_execution_backend=crm_public_web_v1`；如果正常 CRM Public Web action 暴露 `target_candidate_public_web_v1` backend，应视为阻断性 Contract 回归。
+	    - CRM Public Web batch/run 是 workspace-owned contract。`batch_id` / `run_id` 不是跨 workspace 全局读写入口；所有 body-style poll/cancel/retry/export/start payload 都必须携带 `workspace_id`，后端 storage/orchestrator/command owner 必须用同一 workspace scope 查询 batch-owned runs。若 batch/run 属于其他 workspace，API 必须返回 `public_web_batch_workspace_mismatch` 或 `public_web_run_workspace_mismatch`，不能返回空列表伪装成“没有候选”，也不能 fallback 到 `default` workspace。
+		    - Public Web current-run / current-batch 选择由 planning/creation time owner，即 `crm_public_web_runs.created_at` / `crm_public_web_batches.created_at`，而不是 `updated_at`。`updated_at` 只表示 worker/progress freshness，不能让旧 run/batch 因补写 summary、promotion 或 artifact 而重新成为 current run/batch。前端缺失 `created_at` 时不得 fallback 到 `started_at` / `completed_at` / `updated_at`，只能 fail-closed 或保持后端返回顺序；当 action/poll 返回 `next` owner state 时，`next` 必须在 client merge 中排在旧缓存前，避免旧 valid-created row 击败当前但缺字段的 owner response。Latest-run reviewable candidates 和 durable confirmed promotions/assertions 是两层 UI 状态：本次重试没有候选时，已确认 Scholar/email/homepage 等资产仍必须可见、可导出、可审计。
+	    - 如果本地前端提示 Public Web Search 接口不可用并且 CRM route 返回 404，优先确认传入的是 `crm_record_id` 而不是旧 target-candidate-only id；之后再检查后端是否为旧进程
   - 前端仍可保留本地事件广播，只用于刷新 UI，不用于持久化
 - 前端历史搜索记录现在也应以后端为准
   - Sidebar 列表统一读 `GET /api/frontend-history?limit=24`
   - 单条恢复仍读 `GET /api/frontend-history/{history_id}`
   - 删除历史统一走 `DELETE /api/frontend-history/{history_id}`
   - 浏览器 `localStorage` 只保留为本地 cache / optimistic UI，不再作为跨设备真相源
+- 执行过程页与候选人看板 tab 的自动切换必须是 workflow-scoped、一次性的交互
+  - 当前 workflow 第一次出现可渲染看板行时，可以自动打开一次候选人看板
+  - 用户之后手动切回执行过程页，后续 running/results phase 变化、progress refresh、dashboard refresh 都不得再次强制跳转
+  - 新 workflow / 新 job 才能重新 armed 这次自动打开
 - Stage 1 之后的 LinkedIn 信息补全不应默认自动执行
   - 缺工作经历 / 教育经历的候选人，可在前端标记为 `needs_profile_completion`
   - 用户手动触发时，前端调用 `POST /api/jobs/{job_id}/profile-completion`
@@ -62,9 +134,51 @@
 - `GET /api/jobs/{job_id}/results` 若同时返回 `results` 和 `asset_population`
   - 前端结果看板默认应优先消费 `asset_population`
   - `results` 仍保留为排序结果与审计参考，不再默认作为用户主列表
+- `boardRuntimeState.expectedCandidateCount` 是看板 canonical total
+  - `publishedCandidateCount` / `rowHydrationTargetCount` 只表示行级水位或加载目标，不得反向抬高总量
+  - 前端在 boardRuntimeState 存在时，不应再用 `publishedCandidateCount` 去修饰 `expectedCandidateCount`
+  - `syncStatusText` 是 `候选人同步 X/Y` 的唯一真源；它表达 row-publication / canonical board progress，不表达 profile/card richness
+  - `displayReadyCandidateCount` 只用于卡片可用性和 renderability 判断；profile/card 文案必须来自 `syncNoteLines` 或专用 status text，不得由前端再推导
+  - `publishedCandidateCount` 是兼容旧 payload 的历史字段，不得再参与 `rowHydrationTargetCount`、分页、freshness 或其它主路径判断；若 canonical 字段缺失，视为后端 contract bug
+- `boardRuntimeState.sync_note_lines` 是候选人同步文案的唯一真源
+  - 前端不得把 intent match、stage summary、profile progress fallback 拼进同一行
+  - 文案必须使用稳定分母形式，例如 `候选人发现 597/597；新增 LinkedIn Profile 已取回 297/297；卡片详情已合入看板 297/297`
+  - `manual_review_count` 只来自 job-level canonical count 或 `progress.counters.manual_review_count`；Stage 1/Stage 2 summary 中的 `manual_review_queue_count` 不得作为运行页“需人工审核候选人”指标
+- 候选人看板 filter/facet contract：
+  - `asset_population.facet_summary_scope="global_full_population"` 是后端声明全局 facet 真值的唯一标志
+  - `facet_summary_scope` 和 `filter_contract.facet_count_scope` 是两个不同字段。前者表示 facet summary 覆盖范围，后者表示 filter count 的计数来源/readiness。前端不得用其中一个推导另一个，也不得在不同 endpoint 返回不一致时自行择优合并；这属于后端 Contract 漂移，应该触发 preflight/烟测失败。
+  - `filter_contract.facet_count_scope="exact_projection"` 表示 filter count 来自 canonical projection/index 的完整投影计数；`unavailable` 表示计数不可展示；`index_partial` 表示索引未追上完整投影。前端只消费这些枚举，不从本地候选行窗口重算全局计数。
+  - 前端只有在 canonical lifecycle 已到 `current_snapshot_serving` / `post_result_layering` 且 served/expected、delta materialized 已收敛时，才把 facet counts 作为全局计数展示
+  - 在候选行仍按 chunk hydration 装载时，前端可以提供筛选控件，但不能把当前 chunk 的局部 counts 当作全局业务真值
+  - 用户一旦手动修改 filter，后续 hydration、facet option 扩展、running->results phase 切换都不能把选择重置为默认值；只能移除已经不存在的 option id
+  - 全部具体选项都被选中时，摘要应显示 `全量` / fallback label，而不是显示第一个选项
+  - 华人线索分层的 public `layer_0` 表示全量候选人，不是 outreach artifact 内部 `final_layer_distribution.layer_0` 的排他桶；Layer 1/2/3 是可筛选子桶，不能与 Layer 0 相加理解
+  - 当 `filter_contract.backend_filtered_paging_supported=true` 时，前端当前页与筛选分页必须走 `/candidates` canonical backend paging；不得为了本地筛选把全量 7k/8k 行后台 hydrate 到浏览器
+  - `GET /api/jobs/{job_id}/dashboard` 的 `asset_population.profile_fetch_progress` 与 `GET /api/jobs/{job_id}/candidates` 的 top-level `profile_fetch_progress`
+  - 表示当前返回候选人集合的 LinkedIn URL hydration 状态，不代表全 job 所有候选人都已完成 profile detail
+  - 字段包括 `total_url_count / fetched_url_count / queued_url_count / failed_retryable_url_count / unrecoverable_url_count / missing_registry_url_count / deferred_url_count / pending_url_count / status_counts`
+  - 前端可以用它解释“候选人同步已完成但 LinkedIn profile materialization 仍在追尾”的状态
+- `linkedin_stage_1_progress.profile_fetch_required_count` 是 Stage 1 profile 需求数的 canonical 字段
+  - `profile_url_total_count` 是旧兼容字段，只能由后端/烟测历史报告消费，不得进入前端主路径或用户可见分母计算
 - 候选人结果对象现在可稳定携带 `avatar_url / photo_url / media_url / primary_email`
-  - 这些字段可能来自候选表、materialized candidate artifact，或 LinkedIn profile raw path 的二次解析
+  - 正常看板/详情路径的真源是 materialized serving page / candidate shard，而不是 request-time LinkedIn raw profile 二次解析
   - 前端应直接消费这些字段，不再自己从原始文本中推断头像或 Email
+  - LinkedIn raw profile timeline resolver 只属于 legacy repair、diagnostic、显式 profile-completion/backfill、或 target-candidate export 打包 raw profile 文件的专用路径；不要把它作为候选人列表或完整 shard 详情的正常依赖
+  - Raw `candidate_documents.json` 也不是 public-read serving fallback。正常 public reads 只能读取已物化 serving manifest/page/shard 或 job board-visible overlay；legacy candidate-doc materialization 必须由显式 repair/backfill/事件期 reconcile 先生成 normalized serving artifact，之后 public reads 才能服务
+- 候选人结果对象现在也会携带 scoped-source provenance：
+  - `matched_keywords` 是轻量筛选/display 字段，表示候选人命中过哪些 query/shard keyword
+  - `source_matches` 是审计字段，允许同一个候选人同时属于多个 query/source shard；前端可把它映射为 `sourceMatches`
+  - recall/filter 应优先消费 `source_matches` / `matched_keywords`；旧 artifact 缺这些字段时才 fallback 到文本搜索
+- Target Candidate / CRM Public Web detail 必须把三类内容分开：
+  - 长期人工确认资产：来自 `public_web_promotions` / `PersonAssertion`，包括已确认邮箱、Scholar、GitHub、X、homepage 等。它们是可导出资产，不属于某一次 latest run 的临时候选信号；重新搜索、provider 超时、AI fail-closed、latest run 没有新增 signal、latest run 仍在 queued/running/retry-wait，都不能让这些资产从 UI 或默认导出中消失。
+  - 本次待审核候选：来自 latest run 且尚未人工确认/排除的 `person_public_web_signals`，必须绑定 `latest_run.run_id`，只允许对当前 latest run 的未决信号进行 promote/reject，避免旧 run 信号被误操作。若 latest-run signal 通过 `signal_id` 或 stable identity 匹配到已有 `manually_promoted` / `manually_rejected` promotion，它应归入已确认/已排除资产或历史状态，不再重复出现在“本次待审核候选”列表。
+  - 只读证据来源：来自 evidence/source links，只解释模型判断与审计，不作为可直接导出的候选项，也不提供 promotion 操作。
+  - Public Web detail cache 可以用旧 detail 显示长期人工确认资产；但本次待审核候选必须按当前 expected latest run id 过滤。expected latest run id 为空时，前端必须重新读取 owner detail 或只展示长期人工确认资产，不得让旧缓存自动通过。latest run id 变化不得删除整个 detail cache，因为这会隐藏 durable manual promotions；stale cache 只能保留 confirmed/rejected promotion 这类长期资产展示，不能重新暴露旧 run signals 为可操作候选。
+  - 前端不得展示 `source projection provenance`、legacy table/backend、migration bridge 等 Contract/实现术语。缺少可打包资料时只能用用户可理解的业务文案。
+  - 单人 `retry` / 重新搜索 API 是幂等用户意图，不是普通随机 force-refresh。前端可以不传 nonce；后端 owner 必须按 source run id、原因、workspace、操作者派生稳定 retry idempotency key 并 join 已存在 child run；PG normal path 也必须对 batch/run 非空 idempotency key 建唯一约束。重复点击、网络重试或丢失响应不得重复创建 provider/model run。
+  - 重新搜索/start/retry 的 HTTP route 只能规划 `crm.public_web.queue_batch` root command；batch/run row 必须由 command owner 创建。前端不得把“已触发请求”理解为已有可见 run，必须以 owner 返回的 batch/run/detail 为准。若 owner disabled 或 command planning 失败，应展示业务错误，不得显示空的新搜索结果。
+- CRM Public Web 阶段进度展示由后端 CRM Public Web owner 消费 `phase_commands.phase_order` 作为产品阶段分母，并物化为产品文案 `phase_command_display_line`。阶段名应类似“提交公开搜索 / 取回搜索结果 / 整理页面内容 / 判断候选信号 / 生成审核候选 / 保存公开信息结果”，不得把 `crm.public_web.*` command type 或 registry display label 直接展示给用户。`command_count` / `materialized_command_count` 是诊断字段，不能被前端用来显示 `1/2 -> 2/3 -> 3/4` 这类随命令物化抖动的阶段总数。DataForSEO remote-search 进度是 query-item 级别：一个 batch request 可以有 10 个 query task，其中 1 个 provider-pending/timeout 不代表整个 batch 失败或应整体重发。`provider_pending_deferred_count>0` 表示 provider 明确仍在处理单个 query，UI 应提示“可稍后刷新/后台等待”，不能把它展示成全批卡死、空结果或已确认信息消失。
+- CRM Public Web 默认导出必须由后端 export owner 合并长期人工确认资产和终态 run 信号。前端不得因为 latest run 仍在执行或 latest run 没有 signal，就隐藏已确认资产或显示“没有可导出公开信息”。非终态 latest-run 信号不能作为导出事实，除非它已经通过 promotion owner 转成 durable manual promotion。
 
 仓库内对应的共享类型资产：
 
@@ -515,6 +629,7 @@ export function SourcingConsole() {
 
 - progress 页直接复用之前缓存的 `intent_rewrite`
 - progress 页直接读取 `workflow_stage_summaries` 渲染阶段卡片/漏斗
+- `status=completed` 只表示主 job 可进入可浏览结果，不一定表示所有 background materialization tail 已完成；若 `progress.worker_summary.by_status` 仍有 `queued/running/waiting_remote_search/waiting_remote_harvest/blocked`，前端应保持 running/post-completion 工作态，并提示结果可浏览但 LinkedIn profile / candidate detail 仍在后台补全
 - 若用户刷新页面且本地状态丢失，可再调用 `GET /api/jobs/{job_id}/results`
 
 当前阶段顺序固定为：
@@ -702,7 +817,89 @@ type WorkflowUiState = {
 - `blocked_task`
 - `current_message`
 - `progress`
+- `linkedin_stage_1_progress`
+- `board_runtime_state`
+- `result_view_lifecycle`
+- `execution_phase_contract`
 - `workflow_stage_summaries`
+
+`linkedin_stage_1_progress` 是执行过程页面的结构化采集指标来源，包含：
+
+- `current_search_returned_count`
+- `former_search_returned_count`
+- `all_search_returned_count`
+- `deduped_candidate_count`
+- `deduped_profile_url_count`
+- `profile_fetch_required_count`
+- `profile_fetched_count`
+- `profile_queued_count`
+- `profile_failed_retryable_count`
+- `profile_pending_count`
+
+这些字段的详细来源和不变量以 [WORKFLOW_PROGRESS_CONTRACT.md](WORKFLOW_PROGRESS_CONTRACT.md) 为准。关键约束是：`profile_fetched_count <= profile_fetch_required_count`，且 `profile_fetch_required_count <= max(deduped_candidate_count, deduped_profile_url_count)`；后端必须合并 search-seed aggregate 与 current/former lane 文件，不能让 partial aggregate 造成 `新取回在职候选人0 / 新取回离职候选人74 / 需补取 LinkedIn Profile174` 这类不可解释状态。
+
+`result_view_lifecycle` 是 Delta asset board streaming 的结果视图状态合同，前端不要从自然语言 timeline 推断这些状态。当前状态值包括：
+
+- `baseline_serving`
+- `delta_applying`
+- `current_snapshot_materializing`
+- `current_snapshot_serving`
+- `post_result_layering`
+
+`board_runtime_state` 是候选人看板的主业务状态合同，前端应该优先把它当作板面显示、同步进度、分层状态和全局 filter 的唯一业务来源。`result_view_lifecycle` 仍保留为结果视图/兼容性合同，用于生命周期与修复语义，但不应再和 `board_runtime_state` 竞争同一层的板面状态。
+
+`execution_phase_contract` 是执行过程页面的阶段语义合同，前端不要只按旧 `stage_2_final` / timeline summary 推断标题。关键字段包括：
+
+- `active_phase_id`
+- `active_stage_id`
+- `active_phase_label`
+- `active_phase_detail`
+- `public_web_stage_applicable`
+- `profile_work_pending`
+- `stage_title_overrides`
+- `stage_detail_overrides`
+
+当 `public_web_stage_applicable=false` 或 `active_phase_id` 是 `linkedin_acquisition` / `local_asset_materialization` / `post_result_layering` 时，前端不应展示默认 `Public Web Stage 2` 文案。对应可见标题应来自 `active_phase_label` 或 `stage_title_overrides`，例如 `LinkedIn Stage 1`、`本地资产物化`、`结果分层刷新`。
+
+候选人看板同步卡应展示 canonical business card-readiness 进度，而不是浏览器当前已经分页加载的候选行数，也不是单纯的 backend row-publication 计数：
+
+- 主计数必须优先来自 `board_runtime_state.sync_status_text` 与 `expected_candidate_count`。`display_ready_candidate_count` 表示 profile 已取回并合入列表卡片，或 provider 已明确尝试但只能生成 `needs_profile_completion` / `low_profile_richness` 的可审计卡片；它不是 `候选人同步` row-publication 分子。
+- `board_runtime_state.published_candidate_count` 是旧 row-publication 水位字段；新主路径的 hydration target 必须用 `board_runtime_state.row_hydration_target_count`。`published_candidate_count` 只能作为诊断/历史报告字段，不能进入分页、freshness、候选人同步或用户可见总量计算。
+- 前端合并 `/progress`、`/dashboard`、`/candidates`、`/board-patches` 的 `board_runtime_state` 时，必须先比较 `row_publication_tier`，再比较同 tier 内的 `row_publication_sequence`。`current_snapshot_serving` 是最终 serving tier，必须压过 `partial_patch`，即使 partial patch 的 sequence 更高；同为 `partial_patch` 时 sequence 才是 patch replay/merge 水位。同一 tier/sequence 下才允许保留已完成 layering/facet 的较完整 payload，避免旧 endpoint 响应把 `completed` 回退成 `running`。
+- 四个 endpoint 必须暴露同一份可比较的 `board_runtime_state` 业务字段。后端 public reader canonical projection v1 从 summary-only serving projection 生成 lifecycle、board-runtime、facet scope、filter contract；`/candidates` 的分页 payload 只能贡献 rows/filter window，不能根据当前 page/overlay 自行把 `facet_summary_scope` 升级为 `global_full_population`。前端 merge 只是处理响应先后和短暂采样差，不是修正后端多源漂移；若 `/progress`、`/dashboard`、`/candidates`、`/board-patches` 在 expected/served/display-ready、profile/card 文案、publication tier/watermark、layering 或 filter contract 上不一致，根因属于后端 contract 失败，scripted smoke 的 `require_board_runtime_state_cross_endpoint_parity` 必须先拦住。
+- 若新合同缺失，旧历史页面才可兼容读取 `result_view_lifecycle.served_candidate_count / expected_candidate_count`；兼容读取不能反向覆盖 `board_runtime_state`。
+- Frontend hydration 只能单独展示为“已加载候选行 loaded/expected”或“本地已缓存候选行”，不能把 `dashboard.candidates.length`、分页缓存长度、已加载片段筛选命中数称为最终同步进度。
+- 全局 facet/filter 选项必须优先消费后端 `facet_summary`（`asset_population.facet_summary` / candidate page top-level `facet_summary`）。`dashboard.candidates` 只是当前已 hydrated 的候选行窗口，不能用于推导全局地区、职能、在职状态或分层计数，除非后端 summary 缺失。
+- `facet_summary_scope` 是后端声明字段。只有当 `/dashboard` 或 `/candidates` 返回 `facet_summary_scope="global_full_population"`，且 summary candidate count 覆盖 canonical expected/served count 时，前端才能把 `facet_summary` 用作全局 filter count。前端不得因为自己有一个 summary 对象就把 scope 补成 global。
+- `facet_summary_scope` 的可见含义必须显式：`global_full_population` 才允许展示全局 counts；`current_served_partial` 只能作为当前已服务局部选项来源并隐藏 counts；`raw_profile_partial` 预留给未来 raw-profile 资产搜索；`unavailable` 表示不可用。前端不得把 partial scope 展示成全局 facet counts。
+- 当用户选中了某个 facet 的全部 concrete options 时，右侧摘要应显示 fallback/all label，例如地区全部选中显示 `全量`，不能显示第一个 option（例如 `美国`）。
+- 地区和职能这类 board-wide narrowing filters 的初始状态应是全量开放选择；除非用户明确切换，前端不得因为 hydration 期间 option/count 变化自动改成 `美国`、`未提供地区信息`、`Researcher` 等单选状态。
+- LinkedIn profile 获取进度和卡片合入进度必须拆开展示。`profile_fetch_status_text` 只报告 `新增 LinkedIn Profile 已取回 fetched/required` 或 `本次 LinkedIn Profile 已取回 fetched/required`；`card_materialization_status_text` 报告 `卡片详情已合入看板 display_ready/required`。`display_ready` 必须来自 backend board runtime/card materialization contract，不能从 fetched count、published rows 或 candidate-page hydration 推导。
+- `serving_projection_phase="current_snapshot_row_shell_overlay"` 表示后端已经发布可分页候选行，但 profile/card enrichment 仍在进行。前端可以渲染这些行和 row-sync 进度，但不能把它当作 `current_snapshot_serving`，也不能用全局 baseline profile 质量计数推导新增 delta 的 profile/card 完成数；profile/card 文案仍只消费 `board_runtime_state.profile_fetch_status_text` 和 `card_materialization_status_text`。
+- row-shell 现在在 Stage 1 / candidate-source terminal 事件发布，而不是等待 Stage 2 final retrieval。前端看到该 phase 时应立即允许列表行浏览，同时继续展示 profile/card enrichment 进度；不要把“可分页候选行已发布”解释成 profile/card 已完成。
+- 当 `board_runtime_state` 存在时，前端必须把 `profile_fetch_status_text` / `card_materialization_status_text` 当作用户可见 profile/card 进度的唯一来源。`linkedin_stage_1_progress` 仍可渲染执行过程页的 Stage 1 采集明细，但不能再二次格式化成另一套 profile/card 同步文案；`result_view_lifecycle` 只做 legacy fallback 和 serving repair 语义。
+- 候选人同步卡的说明行必须优先消费 `board_runtime_state.sync_note_lines`。前端可以保留 `note_text` 作为旧 payload 兼容，但不能把 `当前意图匹配 ...`、hydration 片段或本地 recall option counts 拼入同一 provider/card 业务进度行。
+- 对于已进入 `current_snapshot_serving` 且 `served_snapshot_id == current_snapshot_id`、`served_candidate_count >= expected_candidate_count`、`delta_profile_materialized_count >= delta_profile_required_count` 的 legacy 行，旧 `delta_profile_board_visible_count` patch mirror 不再是用户可见进度真源。前端必须通过共享 lifecycle helper 使用规范化后的 materialized 语义，不能让 stale `board_visible=0` 重新显示为 `卡片详情已合入看板 0/N`。
+- 执行过程页的 `总候选人数量` 应使用 `board_runtime_state.expected_candidate_count`；row-publication / hydration 水位应单独展示，不得和总候选人数量混算。旧 payload 缺失时才兼容 `result_view_lifecycle.expected_candidate_count` / `served_candidate_count`。baseline+delta 本地物化中不能只显示当前 baseline 数量；文案应说明“baseline 已服务，新增 delta 正在合并”。
+- 前端判断 results page 是否可渲染、是否仍在 candidate-page hydration、是否处于 bootstrapping，应统一使用 `dashboardHydration` 合同：`expected_candidate_count` / `served_candidate_count` / `asset_population_count` 提供公开总量；当 `board_runtime_state` 存在时，必须以 `display_ready_candidate_count > 0` 判定主看板是否有可渲染结果，不能因为 `published_candidate_count > 0` 或 `dashboard.candidates.length > 0` 就展示基础名单卡片为最终结果。局部分块筛选命中必须标成“已加载片段”，不能显示成最终空结果。
+- `post_result_layering` 不是 candidate-row serving blocker。若 canonical lifecycle 已经 `served_candidate_count >= expected_candidate_count`，frontend hydration banner 应关闭；outreach/layering 后台刷新可以继续轮询，但不能继续展示“正在分块装载候选人行”作为结果未稳定信号。
+- `current_snapshot_serving` + complete `global_full_population` facets/layers outranks stale `post_result_layering/running` progress mirrors. Frontend merge/freshness scoring must not let an older `/progress` sample downgrade a complete board runtime contract already obtained from `/dashboard`, `/candidates`, or `/board-patches`.
+- 用户手动选择的 facet/filter 在 hydration 期间必须保留。选项 count 暂时为 0 只代表当前已加载片段不含该类别，不能自动重置到默认筛选。
+- 候选人看板分页 API 的默认用户路径应请求 `lightweight=1`，但这里的 lightweight 语义是“读取已物化 serving card projection”，不是“返回缺字段预览”。Serving page 必须已经包含头像、headline/summary、经历、教育、地区、状态、facets/source matches 等列表卡片字段；如果这些字段缺失，根因在物化/复用/source selection，不应靠 public-read raw timeline resolver 补。
+- 大规模历史结果应采用两阶段加载：先用 canonical lifecycle/facet summary + materialized lightweight serving rows 完成全局看板和筛选稳定，再通过 `/api/jobs/{job_id}/candidates/{candidate_id}` 或 `/candidates/batch` 读取 candidate shard/detail。详情接口优先消费 materialized shard；正常 public read 不应为了补字段解析 raw profile timeline。单候选详情只有显式诊断参数 `hydrate_legacy_timeline=1` 才允许进入 legacy resolver；后端内部 `get_job_candidate_detail(...)` 默认也必须保持 no-hydration，避免内部调用绕过 public API 合同。
+- `GET /api/jobs/{job_id}/results?include_candidates=1` 也只应返回 materialized asset-population rows，不应触发 raw profile timeline hydration；ranked results 在 public `/results` API 中同样是 materialized/summary-only。前端主看板应继续使用 `/dashboard` + `/candidates?lightweight=1`。
+- `GET /api/jobs/{job_id}/board-patches` 是候选人看板的轻量增量观测接口。前端轮询必须传递并保存 `latest_sequence_index`，并附带 `latest_published_at` 作为兼容上下文，因为同一发布时间内可能存在多个 sequence patch。只要接口返回了新的 `returned_count > 0` 记录，就应触发 dashboard/candidate refresh；`display_ready` 只是主看板渲染阈值，不是 refresh 阈值。该接口不直接承载候选人行。
+- 候选人看板 header/filter 不得从 `dashboard.candidates.length` 或本地缓存行数推断 canonical business count。当前只加载了部分 offset window 时，应显示“已加载窗口筛选命中”；只有 backend-filtered paging 或本地窗口覆盖后端声明的 hydration target 时，才可显示“当前筛选命中”。
+- `GET /api/jobs/{job_id}/candidates` 是候选人看板筛选/分页的 canonical row endpoint。前端应把 `search`、`recall_buckets`、`employment_statuses`、`locations`、`function_buckets`、`layer_includes`、`layer_excludes`、`audit_statuses` 传给后端；后端必须先按完整 served population 过滤，再按 `offset/limit` 分页，并返回 `filtered_candidate_count` / `filter_contract.row_filter_scope="backend_filtered_served_population"`。当该 contract 可用时，前端不得回退到 `dashboard.candidates` 的已加载窗口做最终筛选或空结果判断。
+- Job-scoped baseline+delta overlay 是 serving projection，不是新的 profile 字段真源。若 overlay row 是旧式稀疏名单记录，后端 public read 必须优先用当前/基线 snapshot 的 materialized serving shard 补齐卡片字段；如果 materialized shard 也不存在，才暴露不完整状态并等待明确 repair/backfill。
+- Completed-workflow result-view repair 不能把 serving source repoint 到 raw `candidate_documents.json`。若旧 result view 只能从 candidate-doc 输入恢复，后端必须在事件期先生成 materialized serving artifact，再发布 manifest/materialized source；public read 不负责这一步。
+- 前端可以有短暂 API/UI 采样延迟，但如果后端已经暴露 `expected_candidate_count > baseline_candidate_count` 且 profile work pending，可见卡片不应长期停留在 `baseline/baseline`。当前 browser gate 使用 2.5s stale-complete budget 捕获这类回归。
+
+目标候选人 Public Web Search 的阶段展示应区分 remote provider wait 和 local processing：
+
+- `searching` / `search_submitted` 可以跨 worker/daemon tick 等待外部搜索 provider ready。
+- 一旦 remote search tasks 已取回，document fetch、AI adjudication、model-safe artifact finalization、signal materialization 都是本地连续阶段，不应靠 recovery tick 间隔逐步推进。
+- `updated_at` 等运行时间字段在前端展示时必须通过统一 workflow time formatter 转为 Asia/Shanghai，而不是直接渲染 UTC/naive backend timestamp。
 
 ### `GET /api/jobs/{job_id}/results`
 

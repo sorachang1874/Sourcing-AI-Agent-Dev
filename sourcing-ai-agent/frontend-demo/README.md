@@ -208,7 +208,7 @@ source ./scripts/local_dev_proxy_guard.sh
 ./scripts/local_dev_proxy_guard.sh curl http://127.0.0.1:8765/health
 ```
 
-这样只会把本地回环地址加入 `NO_PROXY`，不会把整台机器的所有请求都绕过代理。
+这样只会把本地回环地址加入 `NO_PROXY`，不会让整台机器的所有请求都跳过代理设置。
 
 ## 本地端口调用说明
 

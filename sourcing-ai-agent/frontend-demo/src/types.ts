@@ -73,6 +73,18 @@ export interface TargetCompanyIdentityPreview {
   localAssetAvailable?: boolean;
 }
 
+export interface ProviderExecutionLanePreview {
+  laneId: string;
+  employmentStatus: string;
+  provider: string;
+  operation: string;
+  queryTexts: string[];
+  companyFilters: Record<string, string[]>;
+  providerFacingQuery: boolean;
+  displayLabel: string;
+  reason: string;
+}
+
 export interface DemoPlan {
   planId: string;
   rawUserRequest: string;
@@ -95,6 +107,7 @@ export interface DemoPlan {
   requiresDeltaAcquisition?: boolean;
   executionNotes?: string[];
   targetCompanyIdentity?: TargetCompanyIdentityPreview;
+  providerExecutionLanes?: ProviderExecutionLanePreview[];
   reviewGate?: PlanReviewGate;
   reviewDecisionDefaults?: PlanReviewDecision;
 }
@@ -134,8 +147,20 @@ export interface CandidateEmailMetadata {
   foundInLinkedInProfile?: boolean;
 }
 
+export interface CandidateSourceMatch {
+  field?: string;
+  matched_on?: string;
+  source_type?: string;
+  source_query?: string;
+  matched_keywords?: string[];
+  [key: string]: unknown;
+}
+
 export interface Candidate {
   id: string;
+  candidateIdentityKey?: string;
+  personIdentityKey?: string;
+  profileUrlKey?: string;
   name: string;
   headline: string;
   avatarUrl: string;
@@ -145,9 +170,10 @@ export interface Candidate {
   summary: string;
   rank?: number;
   score?: number;
-  outreachLayer: number;
+  outreachLayer: number | null;
   outreachLayerKey?: string;
   matchedKeywords: string[];
+  sourceMatches?: CandidateSourceMatch[];
   currentCompany?: string;
   location?: string;
   roleBucket?: string;
@@ -186,7 +212,23 @@ export interface FunnelLayer {
   count: number;
 }
 
+export interface CandidateFacetSummary {
+  schemaVersion?: number;
+  candidateCount?: number;
+  layers?: FunnelLayer[];
+  recall?: FunnelLayer[];
+  employment?: FunnelLayer[];
+  locations?: FunnelLayer[];
+  functions?: FunnelLayer[];
+}
+
+export interface BoardRuntimeSyncNoteLine {
+  id: string;
+  text: string;
+}
+
 export interface DashboardData {
+  projectionId?: string;
   title: string;
   snapshotId: string;
   queryLabel: string;
@@ -202,6 +244,149 @@ export interface DashboardData {
   layers: FunnelLayer[];
   groups: string[];
   candidates: Candidate[];
+  profileFetchProgress?: ProfileFetchProgress;
+  linkedinStage1Progress?: LinkedinStage1Progress;
+  resultViewLifecycle?: ResultViewLifecycle;
+  boardRuntimeState?: BoardRuntimeState;
+  executionPhaseContract?: ExecutionPhaseContract;
+  effectiveExecutionSemantics?: EffectiveExecutionSemantics;
+  candidateFacetSummary?: CandidateFacetSummary;
+  candidateFacetSummaryScope?: string;
+}
+
+export interface EffectiveExecutionSemantics {
+  effectiveAcquisitionMode: string;
+  defaultResultsMode: string;
+  executionStrategyLabel: string;
+  fullLocalAssetReuse: boolean;
+  requiresDeltaAcquisition: boolean;
+  assetPopulationSupported: boolean;
+}
+
+export interface ProfileFetchProgress {
+  totalUrlCount: number;
+  fetchedUrlCount: number;
+  queuedUrlCount: number;
+  failedRetryableUrlCount: number;
+  unrecoverableUrlCount: number;
+  missingRegistryUrlCount: number;
+  deferredUrlCount: number;
+  pendingUrlCount: number;
+  statusCounts: Record<string, number>;
+}
+
+export interface LinkedinStage1Progress {
+  currentSearchReturnedCount: number;
+  formerSearchReturnedCount: number;
+  allSearchReturnedCount: number;
+  dedupedCandidateCount: number;
+  dedupedProfileUrlCount: number;
+  profileFetchRequiredCount: number;
+  profileFetchedCount: number;
+  profileQueuedCount: number;
+  profileFailedRetryableCount: number;
+  profileUnrecoverableCount: number;
+  profilePendingCount: number;
+  statusCounts: Record<string, number>;
+}
+
+export interface ResultViewLifecycle {
+  state: string;
+  baselineSnapshotId: string;
+  currentSnapshotId: string;
+  servedSnapshotId: string;
+  baselineCandidateCount: number;
+  servedCandidateCount: number;
+  expectedCandidateCount: number;
+  deltaProfileProgressApplicable: boolean;
+  deltaProfileProgressReason: string;
+  deltaProfileRequiredCount: number;
+  deltaProfileFetchedCount: number;
+  deltaProfileMaterializedCount?: number;
+  deltaProfileBoardVisibleCount?: number;
+  deltaProfilePendingCount: number;
+  deltaProfileQueuedCount: number;
+  deltaProfileRetryableCount: number;
+  servingProjectionId?: string;
+  servingProjectionPhase?: string;
+  backgroundSnapshotMaterializationStatus: string;
+  outreachLayeringStatus: string;
+}
+
+export interface BoardRuntimeState {
+  schemaVersion: number;
+  jobId: string;
+  resultMode: "ranked_results" | "asset_population";
+  phase: string;
+  publicationStatus: "unavailable" | "pending" | "partial" | "complete" | string;
+  expectedCandidateCount: number;
+  servedCandidateCount: number;
+  publishedCandidateCount: number;
+  displayReadyCandidateCount: number;
+  previewCandidateCount: number;
+  profileDetailCandidateCount: number;
+  explicitProfileCaptureCandidateCount: number;
+  needsProfileCompletionCandidateCount: number;
+  lowProfileRichnessCandidateCount: number;
+  cardMaterializationQualityFieldsAvailable: boolean;
+  rowHydrationTargetCount: number;
+  candidateDiscoveryCount?: number;
+  profileFetchRequiredCount?: number;
+  profileFetchedCount?: number;
+  baselineCandidateCount: number;
+  deltaProfileRequiredCount: number;
+  deltaProfileFetchedCount: number;
+  deltaProfileMaterializedCount: number;
+  deltaProfileBoardVisibleCount: number;
+  deltaProfileDenominatorPromoted?: boolean;
+  rowPublicationSequence: number;
+  rowPublicationTier?: string;
+  rowPublicationWatermark: string;
+  rowPublicationUpdatedAt: string;
+  facetSummaryStatus: string;
+  facetSummaryScope: string;
+  facetSummaryCandidateCount: number;
+  layeringStatus: string;
+  filterContract?: {
+    source: string;
+    facetCountScope: string;
+    rowFilterScope: string;
+    backendFilteredPagingSupported: boolean;
+  };
+  syncStatusText: string;
+  syncNoteLines?: BoardRuntimeSyncNoteLine[];
+  candidateDiscoveryStatusText?: string;
+  profileFetchStatusText: string;
+  cardMaterializationStatusText: string;
+  noteText: string;
+}
+
+export interface ExecutionPhaseContract {
+  activePhaseId: string;
+  activeStageId: string;
+  activePhaseLabel: string;
+  activePhaseDetail: string;
+  publicWebStageApplicable: boolean;
+  localAssetMaterializationApplicable: boolean;
+  profileWorkPending: boolean;
+  stageTitleOverrides: Record<string, string>;
+  stageDetailOverrides: Record<string, string>;
+}
+
+export interface ExcelIntakeProgress {
+  workflowKind: string;
+  targetCompany: string;
+  inputFilename: string;
+  totalRowCount: number;
+  matchedRowCount: number;
+  targetCandidateCount: number;
+  manualReviewRowCount: number;
+  unresolvedRowCount: number;
+  invalidRowCount: number;
+  reviewRowCount: number;
+  statusCounts: Record<string, number>;
+  rowManifestAvailable: boolean;
+  rowManifestTruncated: boolean;
 }
 
 export interface RunMetric {
@@ -235,6 +420,11 @@ export interface RunStatusData {
   currentMessage?: string;
   awaitingUserAction?: string;
   metrics: RunMetric[];
+  linkedinStage1Progress?: LinkedinStage1Progress;
+  resultViewLifecycle?: ResultViewLifecycle;
+  boardRuntimeState?: BoardRuntimeState;
+  executionPhaseContract?: ExecutionPhaseContract;
+  excelIntakeProgress?: ExcelIntakeProgress;
   timeline: RunEvent[];
   workers: RunWorker[];
 }
@@ -369,7 +559,13 @@ export interface CandidateReviewRecord {
 
 export interface TargetCandidateRecord {
   id: string;
+  workspaceId: string;
   candidateId: string;
+  candidateIdentityKey?: string;
+  personIdentityKey?: string;
+  sourceProjectionId?: string;
+  sourceRunId?: string;
+  sourceCollectionId?: string;
   historyId?: string;
   jobId?: string;
   candidateName: string;
@@ -392,7 +588,10 @@ export type TargetCandidatePublicWebStatus =
   | "searching"
   | "entry_links_ready"
   | "fetching"
+  | "documents_fetched"
   | "analyzing"
+  | "adjudication_completed"
+  | "analysis_completed"
   | "completed"
   | "completed_with_errors"
   | "needs_review"
@@ -402,6 +601,7 @@ export type TargetCandidatePublicWebStatus =
 
 export interface TargetCandidatePublicWebBatch {
   batchId: string;
+  workspaceId: string;
   status: TargetCandidatePublicWebStatus;
   requestedRecordIds: string[];
   runIds: string[];
@@ -413,6 +613,7 @@ export interface TargetCandidatePublicWebBatch {
 
 export interface TargetCandidatePublicWebRun {
   runId: string;
+  workspaceId: string;
   batchId: string;
   recordId: string;
   candidateId: string;
@@ -426,8 +627,13 @@ export interface TargetCandidatePublicWebRun {
   queryManifest: Record<string, unknown>[];
   searchCheckpoint: Record<string, unknown>;
   analysisCheckpoint: Record<string, unknown>;
+  phaseCommands: Record<string, unknown>;
+  phaseCommandDisplayLine: string;
+  runControlState: Record<string, unknown>;
+  runDisplayContract: Record<string, unknown>;
   artifactRoot: string;
   lastError: string;
+  createdAt: string;
   startedAt: string;
   completedAt: string;
   updatedAt: string;
@@ -460,6 +666,9 @@ export interface TargetCandidatePublicWebSignal {
   promotedBy?: string;
   promotedAt?: string;
   promotionNote?: string;
+  promotionOverrideReason?: string;
+  promotionOverrideValidationReason?: string;
+  promotionRequiresManualOverride?: boolean;
   suppressionReason: string;
   evidenceExcerpt: string;
   linkShapeWarnings: string[];
@@ -490,16 +699,31 @@ export interface TargetCandidatePublicWebPromotion {
   signalKind: string;
   signalType: string;
   emailType: string;
+  value: string;
+  normalizedValue: string;
+  url: string;
   newValue: string;
   previousValue: string;
   sourceUrl: string;
   sourceDomain: string;
+  sourceFamily: string;
+  sourceTitle: string;
   confidenceLabel: string;
+  confidenceScore: number | null;
   identityMatchLabel: string;
+  identityMatchScore: number | null;
+  publishable: boolean;
+  cleanProfileLink: boolean;
+  linkShapeWarnings: string[];
   action: string;
   promotionStatus: string;
   operator: string;
   note: string;
+  overrideReason: string;
+  overrideValidationReason: string;
+  requiresManualOverride: boolean;
+  evidenceExcerpt: string;
+  metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
@@ -509,6 +733,7 @@ export interface TargetCandidatePublicWebDetail {
   recordId: string;
   targetCandidate: Record<string, unknown> | null;
   latestRun: Record<string, unknown> | null;
+  phaseCommands: Record<string, unknown>;
   personAsset: Record<string, unknown> | null;
   signals: TargetCandidatePublicWebSignal[];
   emailCandidates: TargetCandidatePublicWebSignal[];
@@ -520,10 +745,64 @@ export interface TargetCandidatePublicWebDetail {
   rawAssetPolicy: Record<string, unknown>;
 }
 
+export interface TargetCandidateComposedProfile {
+  schemaVersion: number;
+  identity: Record<string, unknown>;
+  contact: {
+    primary_email?: string;
+    selected_email?: string;
+    selected_email_source?: string;
+    method_count?: number;
+    methods?: Record<string, unknown>[];
+  };
+  public_web: {
+    status?: string;
+    latest_run_id?: string;
+    email_candidate_count?: number;
+    profile_link_count?: number;
+    clean_profile_link_count?: number;
+    evidence_link_count?: number;
+    promotion_count?: number;
+    promoted_signal_count?: number;
+  };
+  review: {
+    follow_up_status?: string;
+    quality_score?: number | null;
+    comment?: string;
+    flags?: string[];
+    needs_review?: boolean;
+  };
+  export_readiness: {
+    ready?: boolean;
+    exportable_signal_count?: number;
+    promoted_exportable_signal_count?: number;
+    ai_publishable_unconfirmed_signal_count?: number;
+    reason?: string;
+    default_public_web_export_mode?: string;
+    expanded_public_web_export_mode?: string;
+  };
+  completeness: {
+    score?: number;
+    reasons?: string[];
+  };
+  evidence_sources: TargetCandidatePublicWebEvidenceLink[];
+  raw_asset_policy: Record<string, unknown>;
+}
+
+export interface TargetCandidateProfileDetail {
+  status: string;
+  recordId: string;
+  targetCandidate: Record<string, unknown> | null;
+  profile: TargetCandidateComposedProfile | null;
+  publicWebDetail: TargetCandidatePublicWebDetail | null;
+  rawAssetPolicy: Record<string, unknown>;
+}
+
 export interface TargetCandidatePublicWebSearchState {
   status: string;
   batches: TargetCandidatePublicWebBatch[];
   runs: TargetCandidatePublicWebRun[];
+  phaseCommandsByRunId: Record<string, unknown>;
 }
 
 export interface TargetCandidatePublicWebStartResult extends TargetCandidatePublicWebSearchState {
@@ -531,4 +810,12 @@ export interface TargetCandidatePublicWebStartResult extends TargetCandidatePubl
   summary: Record<string, unknown>;
   workerSummary: Record<string, unknown>;
   job: Record<string, unknown>;
+}
+
+export interface TargetCandidatePublicWebActionResult extends TargetCandidatePublicWebSearchState {
+  batch: TargetCandidatePublicWebBatch | null;
+  summary: Record<string, unknown>;
+  workerSummary: Record<string, unknown>;
+  job: Record<string, unknown>;
+  reason: string;
 }

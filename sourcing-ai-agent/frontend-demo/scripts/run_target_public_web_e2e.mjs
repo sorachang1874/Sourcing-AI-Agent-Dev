@@ -65,6 +65,20 @@ async function main() {
     viewport: { width: 1440, height: 1100 },
   });
   const page = await context.newPage();
+  let targetCandidateUpdatePostCount = 0;
+  page.on("request", (request) => {
+    if (request.method() !== "POST") {
+      return;
+    }
+    try {
+      const url = new URL(request.url());
+      if (url.pathname === "/api/target-candidates") {
+        targetCandidateUpdatePostCount += 1;
+      }
+    } catch {
+      // Ignore non-standard request URLs from dev tooling.
+    }
+  });
   try {
     await page.goto(`${options.frontendUrl.replace(/\/$/, "")}/targets`, {
       waitUntil: "domcontentloaded",
@@ -73,6 +87,22 @@ async function main() {
     const checkboxes = page.getByTestId("target-candidate-select-checkbox");
     await checkboxes.first().waitFor({ state: "visible", timeout: options.timeoutMs });
     const initialCandidateCount = await checkboxes.count();
+
+    const commentInput = page.getByTestId("target-candidate-comment").first();
+    await commentInput.fill("Needs staff follow-up after public-web enrichment.");
+    await page.getByTestId("target-candidate-edit-dirty").first().waitFor({
+      state: "visible",
+      timeout: options.timeoutMs,
+    });
+    const updatePostsBeforeExplicitSave = targetCandidateUpdatePostCount;
+    const saveButton = page.getByTestId("target-candidate-edit-save").first();
+    await saveButton.click();
+    await page.getByTestId("target-candidate-edit-saved").first().waitFor({
+      state: "visible",
+      timeout: options.timeoutMs,
+    });
+    const updatePostsAfterExplicitSave = targetCandidateUpdatePostCount;
+
     await checkboxes.first().check();
 
     const startButton = page.getByTestId("target-candidates-public-web-start");
@@ -83,11 +113,27 @@ async function main() {
     });
     await page.getByTestId("target-candidates-public-web-refresh").click();
     await page.waitForTimeout(500);
+    await page.getByTestId("target-candidate-public-web-detail-open").first().click();
+    await page.getByRole("dialog", { name: /Alice Public Web|Public Web/ }).waitFor({
+      state: "visible",
+      timeout: options.timeoutMs,
+    });
 
     const statusTexts = await page.getByTestId("target-candidate-public-web-status").evaluateAll((nodes) =>
       nodes.map((node) => String(node.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean),
     );
+    const batchPhaseMetricText = await page
+      .getByTestId("target-candidates-public-web-phase-metrics")
+      .first()
+      .textContent()
+      .catch(() => "");
+    const batchGuardrailText = await page
+      .getByTestId("target-candidates-public-web-guardrails")
+      .first()
+      .textContent()
+      .catch(() => "");
     const exportButtonText = await page.getByTestId("target-candidates-public-web-export").textContent().catch(() => "");
+    const detailDrawerVisible = await page.getByRole("dialog").first().isVisible().catch(() => false);
     await page.screenshot({ path: options.screenshotPath, fullPage: true });
 
     process.stdout.write(
@@ -95,7 +141,14 @@ async function main() {
         {
           status: "ok",
           initialCandidateCount,
+          updatePostsBeforeExplicitSave,
+          updatePostsAfterExplicitSave,
+          explicitSaveCreatedSingleTargetUpdate:
+            updatePostsBeforeExplicitSave === 0 && updatePostsAfterExplicitSave === 1,
+          detailDrawerVisible,
           statusTexts,
+          batchPhaseMetricText: String(batchPhaseMetricText || "").trim(),
+          batchGuardrailText: String(batchGuardrailText || "").trim(),
           sawQueuedOrRunningStatus: statusTexts.some((text) =>
             /已排队|已提交搜索|搜索中|入口链接已就绪|抓取中|分析中|已完成|需人工复核/.test(text),
           ),

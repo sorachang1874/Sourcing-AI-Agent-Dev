@@ -15,6 +15,157 @@
         "type": "string"
       }
     },
+    "ProfileFetchProgress": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "total_url_count": { "type": "integer" },
+        "fetched_url_count": { "type": "integer" },
+        "queued_url_count": { "type": "integer" },
+        "failed_retryable_url_count": { "type": "integer" },
+        "unrecoverable_url_count": { "type": "integer" },
+        "missing_registry_url_count": { "type": "integer" },
+        "deferred_url_count": { "type": "integer" },
+        "pending_url_count": { "type": "integer" },
+        "status_counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        }
+      }
+    },
+    "LinkedinStage1Progress": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "current_search_returned_count": { "type": "integer" },
+        "former_search_returned_count": { "type": "integer" },
+        "all_search_returned_count": { "type": "integer" },
+        "deduped_candidate_count": { "type": "integer" },
+        "deduped_profile_url_count": { "type": "integer" },
+        "profile_fetch_required_count": { "type": "integer" },
+        "profile_fetched_count": { "type": "integer" },
+        "profile_queued_count": { "type": "integer" },
+        "profile_failed_retryable_count": { "type": "integer" },
+        "profile_unrecoverable_count": { "type": "integer" },
+        "profile_pending_count": { "type": "integer" },
+        "status_counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        }
+      }
+    },
+    "BoardRuntimeState": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schema_version": { "type": "integer" },
+        "job_id": { "type": "string" },
+        "result_mode": { "type": "string" },
+        "phase": { "type": "string" },
+        "publication_status": { "type": "string" },
+        "expected_candidate_count": { "type": "integer" },
+        "served_candidate_count": { "type": "integer" },
+        "published_candidate_count": { "type": "integer" },
+        "display_ready_candidate_count": { "type": "integer" },
+        "preview_candidate_count": { "type": "integer" },
+        "profile_detail_candidate_count": { "type": "integer" },
+        "explicit_profile_capture_candidate_count": { "type": "integer" },
+        "needs_profile_completion_candidate_count": { "type": "integer" },
+        "low_profile_richness_candidate_count": { "type": "integer" },
+        "card_materialization_quality_fields_available": { "type": "boolean" },
+        "row_hydration_target_count": { "type": "integer" },
+        "candidate_discovery_count": { "type": "integer" },
+        "profile_fetch_required_count": { "type": "integer" },
+        "profile_fetched_count": { "type": "integer" },
+        "baseline_candidate_count": { "type": "integer" },
+        "delta_profile_required_count": { "type": "integer" },
+        "delta_profile_fetched_count": { "type": "integer" },
+        "delta_profile_materialized_count": { "type": "integer" },
+        "delta_profile_board_visible_count": { "type": "integer" },
+        "delta_profile_denominator_promoted": { "type": "boolean" },
+        "row_publication_sequence": { "type": "integer" },
+        "row_publication_tier": { "type": "string" },
+        "row_publication_watermark": { "type": "string" },
+        "row_publication_updated_at": { "type": "string" },
+        "facet_summary_status": { "type": "string" },
+        "facet_summary_scope": { "type": "string" },
+        "facet_summary_candidate_count": { "type": "integer" },
+        "layering_status": { "type": "string" },
+        "filter_contract": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "source": { "type": "string" },
+            "facet_count_scope": { "type": "string" },
+            "row_filter_scope": { "type": "string" },
+            "backend_filtered_paging_supported": { "type": "boolean" }
+          }
+        },
+        "sync_status_text": { "type": "string" },
+        "sync_note_lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" }
+            }
+          }
+        },
+        "candidate_discovery_status_text": { "type": "string" },
+        "profile_fetch_status_text": { "type": "string" },
+        "card_materialization_status_text": { "type": "string" },
+        "profile_fetch_status_detail": { "type": "string" },
+        "card_materialization_status_detail": { "type": "string" },
+        "note_text": { "type": "string" }
+      }
+    },
+    "ResultViewLifecycle": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "state": { "type": "string" },
+        "baseline_snapshot_id": { "type": "string" },
+        "current_snapshot_id": { "type": "string" },
+        "served_snapshot_id": { "type": "string" },
+        "baseline_candidate_count": { "type": "integer" },
+        "served_candidate_count": { "type": "integer" },
+        "expected_candidate_count": { "type": "integer" },
+        "delta_profile_required_count": { "type": "integer" },
+        "delta_profile_fetched_count": { "type": "integer" },
+        "delta_profile_materialized_count": { "type": "integer" },
+        "delta_profile_board_visible_count": { "type": "integer" },
+        "delta_profile_pending_count": { "type": "integer" },
+        "delta_profile_queued_count": { "type": "integer" },
+        "delta_profile_retryable_count": { "type": "integer" },
+        "serving_projection_id": { "type": "string" },
+        "serving_projection_phase": { "type": "string" },
+        "background_snapshot_materialization_status": { "type": "string" },
+        "outreach_layering_status": { "type": "string" }
+      }
+    },
+    "ExecutionPhaseContract": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "active_phase_id": { "type": "string" },
+        "active_stage_id": { "type": "string" },
+        "active_phase_label": { "type": "string" },
+        "active_phase_detail": { "type": "string" },
+        "public_web_stage_applicable": { "type": "boolean" },
+        "local_asset_materialization_applicable": { "type": "boolean" },
+        "profile_work_pending": { "type": "boolean" },
+        "stage_title_overrides": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "stage_detail_overrides": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
     "IntentRewriteRule": {
       "type": "object",
       "additionalProperties": true,
@@ -52,7 +203,7 @@
     },
     "IntentRewriteEntry": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
       "required": ["matched", "summary", "rewrite"],
       "properties": {
         "matched": { "type": "boolean" },
@@ -70,7 +221,7 @@
     },
     "IntentRewritePayload": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
       "required": ["request"],
       "properties": {
         "request": { "$ref": "#/$defs/IntentRewriteEntry" },
@@ -332,6 +483,10 @@
         "latest_event": { "$ref": "#/$defs/JsonObject" },
         "worker_summary": { "$ref": "#/$defs/WorkerSummary" },
         "latest_metrics": { "$ref": "#/$defs/JsonObject" },
+        "linkedin_stage_1_progress": { "$ref": "#/$defs/LinkedinStage1Progress" },
+        "board_runtime_state": { "$ref": "#/$defs/BoardRuntimeState" },
+        "result_view_lifecycle": { "$ref": "#/$defs/ResultViewLifecycle" },
+        "execution_phase_contract": { "$ref": "#/$defs/ExecutionPhaseContract" },
         "counters": {
           "type": "object",
           "additionalProperties": { "type": "integer" }
@@ -374,6 +529,10 @@
         "blocked_task": { "type": "string" },
         "current_message": { "type": "string" },
         "progress": { "$ref": "#/$defs/ProgressPayload" },
+        "linkedin_stage_1_progress": { "$ref": "#/$defs/LinkedinStage1Progress" },
+        "board_runtime_state": { "$ref": "#/$defs/BoardRuntimeState" },
+        "result_view_lifecycle": { "$ref": "#/$defs/ResultViewLifecycle" },
+        "execution_phase_contract": { "$ref": "#/$defs/ExecutionPhaseContract" },
         "workflow_stage_summaries": { "$ref": "#/$defs/WorkflowStageSummariesPayload" }
       }
     },
@@ -404,7 +563,12 @@
         "confidence_score": { "type": "number" },
         "confidence_reason": { "type": "string" },
         "rank": { "type": "integer" },
+        "matched_keywords": { "$ref": "#/$defs/StringArray" },
         "matched_fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/JsonObject" }
+        },
+        "source_matches": {
           "type": "array",
           "items": { "$ref": "#/$defs/JsonObject" }
         },
@@ -438,6 +602,17 @@
           "type": "array",
           "items": { "$ref": "#/$defs/JsonObject" }
         },
+        "asset_population": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "profile_fetch_progress": { "$ref": "#/$defs/ProfileFetchProgress" }
+          }
+        },
+        "profile_fetch_progress": { "$ref": "#/$defs/ProfileFetchProgress" },
+        "linkedin_stage_1_progress": { "$ref": "#/$defs/LinkedinStage1Progress" },
+        "result_view_lifecycle": { "$ref": "#/$defs/ResultViewLifecycle" },
+        "execution_phase_contract": { "$ref": "#/$defs/ExecutionPhaseContract" },
         "manual_review_items": {
           "type": "array",
           "items": { "$ref": "#/$defs/JsonObject" }
@@ -453,6 +628,7 @@
         },
         "intent_rewrite": { "$ref": "#/$defs/IntentRewritePayload" },
         "request_preview": { "$ref": "#/$defs/JsonObject" },
+        "board_runtime_state": { "$ref": "#/$defs/BoardRuntimeState" },
         "workflow_stage_summaries": { "$ref": "#/$defs/WorkflowStageSummariesPayload" }
       }
     },
@@ -512,7 +688,10 @@
         "searching",
         "entry_links_ready",
         "fetching",
+        "documents_fetched",
         "analyzing",
+        "adjudication_completed",
+        "analysis_completed",
         "completed",
         "completed_with_errors",
         "needs_review",
@@ -533,6 +712,7 @@
       ],
       "properties": {
         "batch_id": { "type": "string" },
+        "workspace_id": { "type": "string" },
         "status": { "$ref": "#/$defs/TargetCandidatePublicWebStatus" },
         "requested_record_ids": { "$ref": "#/$defs/StringArray" },
         "run_ids": { "$ref": "#/$defs/StringArray" },
@@ -555,6 +735,7 @@
       ],
       "properties": {
         "run_id": { "type": "string" },
+        "workspace_id": { "type": "string" },
         "batch_id": { "type": "string" },
         "record_id": { "type": "string" },
         "candidate_id": { "type": "string" },
@@ -571,8 +752,13 @@
         },
         "search_checkpoint": { "$ref": "#/$defs/JsonObject" },
         "analysis_checkpoint": { "$ref": "#/$defs/JsonObject" },
+        "phase_commands": { "$ref": "#/$defs/JsonObject" },
+        "phase_command_display_line": { "type": "string" },
+        "run_control_state": { "$ref": "#/$defs/JsonObject" },
+        "run_display_contract": { "$ref": "#/$defs/JsonObject" },
         "artifact_root": { "type": "string" },
         "last_error": { "type": "string" },
+        "created_at": { "type": "string" },
         "started_at": { "type": "string" },
         "completed_at": { "type": "string" },
         "updated_at": { "type": "string" }
@@ -650,6 +836,9 @@
         "promoted_by": { "type": "string" },
         "promoted_at": { "type": "string" },
         "promotion_note": { "type": "string" },
+        "promotion_override_reason": { "type": "string" },
+        "promotion_override_validation_reason": { "type": "string" },
+        "promotion_requires_manual_override": { "type": "boolean" },
         "suppression_reason": { "type": "string" },
         "evidence_excerpt": { "type": "string" },
         "artifact_refs": { "$ref": "#/$defs/JsonObject" },
@@ -683,6 +872,9 @@
         "promotion_status": { "type": "string" },
         "operator": { "type": "string" },
         "note": { "type": "string" },
+        "override_reason": { "type": "string" },
+        "override_validation_reason": { "type": "string" },
+        "requires_manual_override": { "type": "boolean" },
         "created_at": { "type": "string" },
         "updated_at": { "type": "string" }
       }
@@ -768,6 +960,702 @@
           "oneOf": [{ "$ref": "#/$defs/TargetCandidatePublicWebDetailResponse" }, { "type": "null" }]
         },
         "reason": { "type": "string" }
+      }
+    },
+    "WorkflowCommandControlPolicy": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schema_version": { "type": "string" },
+        "command_type": { "type": "string" },
+        "owner": { "type": "string" },
+        "running_control_category": { "type": "string" },
+        "running_control_categories": { "$ref": "#/$defs/StringArray" },
+        "running_control_maturity": { "type": "string" },
+        "running_control_gap_status": { "type": "string" },
+        "running_control_surface": { "type": "string" },
+        "generic_cancel_statuses": { "$ref": "#/$defs/StringArray" },
+        "generic_retry_statuses": { "$ref": "#/$defs/StringArray" },
+        "generic_resume_statuses": { "$ref": "#/$defs/StringArray" },
+        "running_cancel_supported": { "type": "boolean" },
+        "running_cancel_statuses": { "$ref": "#/$defs/StringArray" },
+        "running_cancel_owner": { "type": "string" },
+        "running_cancel_delegate": { "type": "string" },
+        "running_cancel_prerequisites": { "$ref": "#/$defs/StringArray" },
+        "running_cancel_blocked_reason": { "type": "string" },
+        "running_cancel_upgrade_requirements": { "$ref": "#/$defs/StringArray" },
+        "running_cancel_contract": { "type": "string" },
+        "unsupported_running_cancel_reason": { "type": "string" },
+        "module_state_mutated_on_running_cancel": { "type": "boolean" },
+        "running_resume_supported": { "type": "boolean" },
+        "running_resume_statuses": { "$ref": "#/$defs/StringArray" },
+        "running_resume_owner": { "type": "string" },
+        "running_resume_delegate": { "type": "string" },
+        "running_resume_prerequisites": { "$ref": "#/$defs/StringArray" },
+        "running_resume_blocked_reason": { "type": "string" },
+        "running_resume_upgrade_requirements": { "$ref": "#/$defs/StringArray" },
+        "running_resume_contract": { "type": "string" },
+        "unsupported_running_resume_reason": { "type": "string" },
+        "module_state_mutated_on_running_resume": { "type": "boolean" },
+        "control_source_of_truth": { "type": "string" },
+        "agent_callable_surface": { "type": "string" },
+        "fallback_status": { "type": "string" }
+      }
+    },
+    "WorkflowCommandControlState": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schema_version": { "type": "string" },
+        "command_type": { "type": "string" },
+        "owner": { "type": "string" },
+        "command_status": { "type": "string" },
+        "can_cancel": { "type": "boolean" },
+        "can_retry": { "type": "boolean" },
+        "can_resume": { "type": "boolean" },
+        "cancel_mode": { "type": "string" },
+        "retry_mode": { "type": "string" },
+        "resume_mode": { "type": "string" },
+        "allowed_actions": { "$ref": "#/$defs/StringArray" },
+        "disabled_reasons": { "$ref": "#/$defs/JsonObject" },
+        "running_cancel_supported": { "type": "boolean" },
+        "running_cancel_delegate": { "type": "string" },
+        "running_cancel_prerequisites": { "$ref": "#/$defs/StringArray" },
+        "running_resume_supported": { "type": "boolean" },
+        "running_resume_delegate": { "type": "string" },
+        "running_resume_prerequisites": { "$ref": "#/$defs/StringArray" },
+        "module_state_mutated_on_cancel": { "type": "boolean" },
+        "module_state_mutated_on_resume": { "type": "boolean" },
+        "control_source_of_truth": { "type": "string" },
+        "policy_source_of_truth": { "type": "string" },
+        "fallback_status": { "type": "string" }
+      }
+    },
+    "WorkflowCommandActivitySpinePolicy": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schema_version": { "type": "string" },
+        "command_type": { "type": "string" },
+        "owner": { "type": "string" },
+        "requirement": { "type": "string" },
+        "must_write_activity_run": { "type": "boolean" },
+        "must_write_activity_attempt": { "type": "boolean" },
+        "must_write_entity_delta": { "type": "boolean" },
+        "downstream_activity_required": { "type": "boolean" },
+        "agent_callable": { "type": "boolean" },
+        "activity_table": { "type": "string" },
+        "attempt_table": { "type": "string" },
+        "entity_delta_table": { "type": "string" },
+        "source_of_truth": { "type": "string" },
+        "agent_callable_surface": { "type": "string" },
+        "fallback_status": { "type": "string" },
+        "migration_status": { "type": "string" },
+        "deletion_condition": { "type": "string" }
+      }
+    },
+    "WorkflowCommandDisplayContract": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schema_version": { "type": "string" },
+        "command_type": { "type": "string" },
+        "owner": { "type": "string" },
+        "display_label": { "type": "string" },
+        "display_category": { "type": "string" },
+        "description": { "type": "string" },
+        "source_of_truth": { "type": "string" },
+        "fallback_status": { "type": "string" }
+      }
+    },
+    "OperationActionDisplayContract": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schema_version": { "type": "string" },
+        "action_type": { "type": "string" },
+        "owner_module": { "type": "string" },
+        "operation_type": { "type": "string" },
+        "display_label": { "type": "string" },
+        "display_category": { "type": "string" },
+        "description": { "type": "string" },
+        "source_of_truth": { "type": "string" },
+        "fallback_status": { "type": "string" }
+      }
+    },
+    "WorkflowCommandContract": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["command_type"],
+      "properties": {
+        "command_type": { "type": "string" },
+        "owner": { "type": "string" },
+        "agent_exposure_status": { "type": "string" },
+        "agent_exposure_gate": { "type": "string" },
+        "stage_id": { "type": "string" },
+        "readiness_effect": { "type": "string" },
+        "display_contract": { "$ref": "#/$defs/WorkflowCommandDisplayContract" },
+        "control_policy": { "$ref": "#/$defs/WorkflowCommandControlPolicy" },
+        "activity_spine_policy": { "$ref": "#/$defs/WorkflowCommandActivitySpinePolicy" }
+      }
+    },
+    "OperationActionRegistryEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "owner_module": { "type": "string" },
+        "operation_type": { "type": "string" },
+        "approval_policy": { "type": "string" },
+        "budget_required": { "type": "boolean" },
+        "description": { "type": "string" },
+        "display_contract": { "$ref": "#/$defs/OperationActionDisplayContract" },
+        "allowed_workflow_command_types": { "$ref": "#/$defs/StringArray" },
+        "default_workflow_command_type": { "type": "string" },
+        "workflow_command_exposure_gate": { "type": "string" },
+        "workflow_command_exposure_status": { "type": "string" },
+        "allowed_workflow_command_contracts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WorkflowCommandContract" }
+        },
+        "workflow_command_control_summary": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "source_of_truth": { "type": "string" },
+            "fallback_status": { "type": "string" },
+            "command_count": { "type": "number" },
+            "running_control_maturity_counts": {
+              "type": "object",
+              "additionalProperties": { "type": "number" }
+            },
+            "running_control_gap_status_counts": {
+              "type": "object",
+              "additionalProperties": { "type": "number" }
+            },
+            "running_control_category_counts": {
+              "type": "object",
+              "additionalProperties": { "type": "number" }
+            },
+            "has_fail_closed_running_controls": { "type": "boolean" },
+            "has_owner_specific_running_controls": { "type": "boolean" },
+            "default_workflow_command_type": { "type": "string" },
+            "default_running_control_maturity": { "type": "string" },
+            "default_running_control_gap_status": { "type": "string" },
+            "agent_ui_guidance": { "type": "string" }
+          }
+        },
+        "default_workflow_command_contract": { "$ref": "#/$defs/WorkflowCommandContract" }
+      }
+    },
+    "OperationActionRegistryResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status", "action_registry"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "action_registry": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/OperationActionRegistryEntry" }
+        }
+      }
+    },
+    "OperationEventRecord": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "event_id": { "type": "string" },
+        "workspace_id": { "type": "string" },
+        "event_stream_id": { "type": "string" },
+        "operation_run_id": { "type": "string" },
+        "action_id": { "type": "string" },
+        "event_family": { "type": "string" },
+        "event_type": { "type": "string" },
+        "sequence_number": { "type": "number" },
+        "actor": { "type": "string" },
+        "source": { "type": "string" },
+        "payload": { "$ref": "#/$defs/JsonObject" },
+        "occurred_at": { "type": "string" },
+        "recorded_at": { "type": "string" }
+      }
+    },
+    "OperationActionRecord": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "action_id": { "type": "string" },
+        "workspace_id": { "type": "string" },
+        "conversation_id": { "type": "string" },
+        "action_type": { "type": "string" },
+        "owner_module": { "type": "string" },
+        "operation_type": { "type": "string" },
+        "display_contract": { "$ref": "#/$defs/OperationActionDisplayContract" },
+        "target_ref": { "$ref": "#/$defs/JsonObject" },
+        "input": { "$ref": "#/$defs/JsonObject" },
+        "approval_status": { "type": "string" },
+        "approval_policy": { "type": "string" },
+        "budget": { "$ref": "#/$defs/JsonObject" },
+        "status": { "type": "string" },
+        "result_ref": { "$ref": "#/$defs/JsonObject" },
+        "metadata": { "$ref": "#/$defs/JsonObject" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      }
+    },
+    "OperationRunRecord": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "operation_run_id": { "type": "string" },
+        "workspace_id": { "type": "string" },
+        "action_id": { "type": "string" },
+        "owner_module": { "type": "string" },
+        "operation_type": { "type": "string" },
+        "display_contract": { "$ref": "#/$defs/OperationActionDisplayContract" },
+        "status": { "type": "string" },
+        "progress": { "$ref": "#/$defs/JsonObject" },
+        "workflow_ref": { "$ref": "#/$defs/JsonObject" },
+        "cost_budget": { "$ref": "#/$defs/JsonObject" },
+        "result_ref": { "$ref": "#/$defs/JsonObject" },
+        "metadata": { "$ref": "#/$defs/JsonObject" },
+        "control_state": { "$ref": "#/$defs/OperationRunControlState" },
+        "status_summary": { "$ref": "#/$defs/OperationRunStatusSummary" },
+        "started_at": { "type": "string" },
+        "completed_at": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      }
+    },
+    "OperationRunControlState": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "operation_status": { "type": "string" },
+        "action_status": { "type": "string" },
+        "operation_phase": { "type": "string" },
+        "can_dispatch": { "type": "boolean" },
+        "can_cancel": { "type": "boolean" },
+        "can_retry": { "type": "boolean" },
+        "can_resume": { "type": "boolean" },
+        "allowed_actions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "disabled_reasons": { "$ref": "#/$defs/JsonObject" },
+        "control_source_of_truth": { "type": "string" },
+        "fallback_status": { "type": "string" },
+        "module_state_mutated_on_control": { "type": "boolean" },
+        "schema_version": { "type": "string" }
+      }
+    },
+    "OperationRunStatusSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "source": { "type": "string" },
+        "fallback_status": { "type": "string" },
+        "fallback_used": { "type": "boolean" },
+        "module_state_mutated": { "type": "boolean" },
+        "operation_status": { "type": "string" },
+        "operation_phase": { "type": "string" },
+        "workflow_command_count": { "type": "number" },
+        "operation_event_count": { "type": "number" },
+        "command_status_counts": { "$ref": "#/$defs/JsonObject" },
+        "latest_event_type": { "type": "string" },
+        "latest_event": { "$ref": "#/$defs/OperationEventRecord" },
+        "latest_workflow_command": { "$ref": "#/$defs/WorkflowCommandRecord" }
+      }
+    },
+    "OperationActionListResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["actions"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "actions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/OperationActionRecord" }
+        }
+      }
+    },
+    "OperationActionDetailResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "action": { "$ref": "#/$defs/OperationActionRecord" },
+        "operation_run": { "$ref": "#/$defs/OperationRunRecord" },
+        "events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/OperationEventRecord" }
+        }
+      }
+    },
+    "OperationRunListResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["operation_runs"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "operation_runs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/OperationRunRecord" }
+        }
+      }
+    },
+    "OperationRunDetailResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "operation_run": { "$ref": "#/$defs/OperationRunRecord" },
+        "events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/OperationEventRecord" }
+        }
+      }
+    },
+    "OperationRunProvenanceResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "action": { "$ref": "#/$defs/OperationActionRecord" },
+        "operation_run": { "$ref": "#/$defs/OperationRunRecord" },
+        "action_events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/OperationEventRecord" }
+        },
+        "operation_events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/OperationEventRecord" }
+        },
+        "event_timeline": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/OperationEventRecord" }
+        },
+        "workflow_commands": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WorkflowCommandRecord" }
+        },
+        "module_state_mutated": { "type": "boolean" }
+      }
+    },
+    "OperationRunControlResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string" },
+        "reason": { "type": "string" },
+        "contract": { "type": "string" },
+        "action": { "$ref": "#/$defs/OperationActionRecord" },
+        "operation_run": { "$ref": "#/$defs/OperationRunRecord" },
+        "parent_operation_run": { "$ref": "#/$defs/OperationRunRecord" },
+        "display_contract": { "$ref": "#/$defs/OperationActionDisplayContract" },
+        "control_state": { "$ref": "#/$defs/OperationRunControlState" },
+        "workflow_command": { "$ref": "#/$defs/WorkflowCommandRecord" },
+        "events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/OperationEventRecord" }
+        },
+        "module_state_mutated": { "type": "boolean" }
+      }
+    },
+    "WorkflowCommandRegistryResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status", "command_registry"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "command_registry": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/WorkflowCommandContract" }
+        },
+        "module_state_mutated": { "type": "boolean" }
+      }
+    },
+    "WorkflowCommandExecutionSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "source": { "type": "string" },
+        "fallback_status": { "type": "string" },
+        "fallback_used": { "type": "boolean" },
+        "module_state_mutated": { "type": "boolean" },
+        "activity_count": { "type": "number" },
+        "attempt_count": { "type": "number" },
+        "entity_delta_count": { "type": "number" },
+        "activity_status_counts": { "$ref": "#/$defs/JsonObject" },
+        "attempt_status_counts": { "$ref": "#/$defs/JsonObject" },
+        "entity_delta_status_counts": { "$ref": "#/$defs/JsonObject" },
+        "entity_delta_kind_counts": { "$ref": "#/$defs/JsonObject" },
+        "latest_effect_status": { "type": "string" },
+        "latest_activity": { "$ref": "#/$defs/WorkflowActivityRecord" },
+        "latest_attempt": { "$ref": "#/$defs/WorkflowActivityAttemptRecord" },
+        "latest_entity_delta": { "$ref": "#/$defs/WorkflowEntityDeltaRecord" },
+        "sample_limit": { "type": "number" },
+        "sample_truncated": { "type": "boolean" }
+      }
+    },
+    "WorkflowCommandRecord": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "command_id": { "type": "string" },
+        "workflow_run_id": { "type": "string" },
+        "operation_id": { "type": "string" },
+        "command_type": { "type": "string" },
+        "owner": { "type": "string" },
+        "agent_exposure_status": { "type": "string" },
+        "agent_exposure_gate": { "type": "string" },
+        "status": { "type": "string" },
+        "stage_id": { "type": "string" },
+        "readiness_effect": { "type": "string" },
+        "display_contract": { "$ref": "#/$defs/WorkflowCommandDisplayContract" },
+        "control_policy": { "$ref": "#/$defs/WorkflowCommandControlPolicy" },
+        "control_state": { "$ref": "#/$defs/WorkflowCommandControlState" },
+        "activity_spine_policy": { "$ref": "#/$defs/WorkflowCommandActivitySpinePolicy" },
+        "execution_summary": { "$ref": "#/$defs/WorkflowCommandExecutionSummary" }
+      }
+    },
+    "WorkflowCommandListResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["workflow_commands"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "workflow_commands": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WorkflowCommandRecord" }
+        }
+      }
+    },
+    "WorkflowCommandDetailResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "workflow_command": { "$ref": "#/$defs/WorkflowCommandRecord" }
+      }
+    },
+    "WorkflowCommandControlResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string" },
+        "reason": { "type": "string" },
+        "command_status": { "type": "string" },
+        "workflow_command": { "$ref": "#/$defs/WorkflowCommandRecord" },
+        "operation_sync": { "$ref": "#/$defs/JsonObject" },
+        "display_contract": { "$ref": "#/$defs/WorkflowCommandDisplayContract" },
+        "control_policy": { "$ref": "#/$defs/WorkflowCommandControlPolicy" },
+        "control_state": { "$ref": "#/$defs/WorkflowCommandControlState" },
+        "activity_spine_policy": { "$ref": "#/$defs/WorkflowCommandActivitySpinePolicy" },
+        "module_state_mutated": { "type": "boolean" },
+        "owner_specific_control": { "type": "boolean" },
+        "contract": { "type": "string" }
+      }
+    },
+    "WorkflowActivityControlTarget": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "target_type": { "type": "string" },
+        "command_id": { "type": "string" },
+        "command_type": { "type": "string" },
+        "owner": { "type": "string" },
+        "display_contract": { "$ref": "#/$defs/WorkflowCommandDisplayContract" },
+        "control_policy": { "$ref": "#/$defs/WorkflowCommandControlPolicy" },
+        "control_state": { "$ref": "#/$defs/WorkflowCommandControlState" },
+        "activity_spine_policy": { "$ref": "#/$defs/WorkflowCommandActivitySpinePolicy" },
+        "fallback_status": { "type": "string" }
+      }
+    },
+    "WorkflowActivityRecord": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "activity_run_id": { "type": "string" },
+        "workflow_run_id": { "type": "string" },
+        "operation_run_id": { "type": "string" },
+        "acquisition_run_id": { "type": "string" },
+        "command_id": { "type": "string" },
+        "activity_type": { "type": "string" },
+        "owner": { "type": "string" },
+        "status": { "type": "string" },
+        "phase": { "type": "string" },
+        "mutation_contract": { "type": "string" },
+        "module_state_mutated": { "type": "boolean" },
+        "control_target": { "$ref": "#/$defs/WorkflowActivityControlTarget" }
+      }
+    },
+    "WorkflowActivityAttemptRecord": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "attempt_id": { "type": "string" },
+        "activity_run_id": { "type": "string" },
+        "workflow_run_id": { "type": "string" },
+        "command_id": { "type": "string" },
+        "activity_type": { "type": "string" },
+        "owner": { "type": "string" },
+        "status": { "type": "string" },
+        "provider": { "type": "string" },
+        "mutation_contract": { "type": "string" },
+        "module_state_mutated": { "type": "boolean" },
+        "control_target": { "$ref": "#/$defs/WorkflowActivityControlTarget" }
+      }
+    },
+    "WorkflowEntityDeltaRecord": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "delta_id": { "type": "string" },
+        "workflow_run_id": { "type": "string" },
+        "operation_run_id": { "type": "string" },
+        "command_id": { "type": "string" },
+        "activity_run_id": { "type": "string" },
+        "attempt_id": { "type": "string" },
+        "entity_type": { "type": "string" },
+        "entity_key": { "type": "string" },
+        "delta_kind": { "type": "string" },
+        "status": { "type": "string" },
+        "reason": { "type": "string" },
+        "mutation_contract": { "type": "string" },
+        "module_state_mutated": { "type": "boolean" },
+        "control_target": { "$ref": "#/$defs/WorkflowActivityControlTarget" }
+      }
+    },
+    "AcquisitionDiscoveryLaneRecord": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "lane_id": { "type": "string" },
+        "workspace_id": { "type": "string" },
+        "acquisition_run_id": { "type": "string" },
+        "workflow_run_id": { "type": "string" },
+        "operation_run_id": { "type": "string" },
+        "source_command_id": { "type": "string" },
+        "activity_run_id": { "type": "string" },
+        "target_company": { "type": "string" },
+        "query": { "type": "string" },
+        "provider": { "type": "string" },
+        "status": { "type": "string" },
+        "phase": { "type": "string" },
+        "read_model_role": { "type": "string" },
+        "mutation_contract": { "type": "string" },
+        "module_state_mutated": { "type": "boolean" },
+        "control_target": { "$ref": "#/$defs/WorkflowActivityControlTarget" }
+      }
+    },
+    "WorkflowActivityListResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["workflow_activities"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "workflow_activities": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WorkflowActivityRecord" }
+        }
+      }
+    },
+    "WorkflowActivityDetailResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "workflow_activity": { "$ref": "#/$defs/WorkflowActivityRecord" },
+        "activity_attempts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WorkflowActivityAttemptRecord" }
+        }
+      }
+    },
+    "WorkflowActivityAttemptListResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["workflow_activity_attempts"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "workflow_activity_attempts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WorkflowActivityAttemptRecord" }
+        }
+      }
+    },
+    "WorkflowActivityAttemptDetailResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "workflow_activity_attempt": { "$ref": "#/$defs/WorkflowActivityAttemptRecord" }
+      }
+    },
+    "WorkflowEntityDeltaListResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["workflow_entity_deltas"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "workflow_entity_deltas": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WorkflowEntityDeltaRecord" }
+        }
+      }
+    },
+    "WorkflowEntityDeltaDetailResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "workflow_entity_delta": { "$ref": "#/$defs/WorkflowEntityDeltaRecord" }
+      }
+    },
+    "AcquisitionDiscoveryLaneListResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["acquisition_discovery_lanes"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "acquisition_discovery_lanes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/AcquisitionDiscoveryLaneRecord" }
+        }
+      }
+    },
+    "AcquisitionDiscoveryLaneDetailResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string" },
+        "contract": { "type": "string" },
+        "acquisition_discovery_lane": { "$ref": "#/$defs/AcquisitionDiscoveryLaneRecord" }
       }
     },
     "RefinementCompileResponse": {

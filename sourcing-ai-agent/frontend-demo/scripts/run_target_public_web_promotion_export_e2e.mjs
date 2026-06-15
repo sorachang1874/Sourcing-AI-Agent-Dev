@@ -94,26 +94,38 @@ async function main() {
       state: "visible",
       timeout: options.timeoutMs,
     });
-    await page.getByRole("button", { name: /确认并设为 primary email/ }).first().click();
-    await page.getByRole("button", { name: /已确认邮箱/ }).first().waitFor({
-      state: "visible",
-      timeout: options.timeoutMs,
-    });
-    await page.getByRole("button", { name: /确认导出链接/ }).first().click();
-    await page.getByRole("button", { name: /已确认链接/ }).first().waitFor({
-      state: "visible",
-      timeout: options.timeoutMs,
-    });
+    await page
+      .getByTestId("public-web-email-review-section")
+      .locator('[data-testid="public-web-signal-review-select"]')
+      .first()
+      .selectOption("confirmed");
     await page.getByText(/Public Web signal 已人工确认/).first().waitFor({
       state: "visible",
       timeout: options.timeoutMs,
     });
-
+    await page
+      .getByTestId("public-web-profile-review-section")
+      .locator('[data-testid="public-web-signal-review-select"]')
+      .first()
+      .selectOption("confirmed");
+    await page.getByText(/Public Web signal 已人工确认/).first().waitFor({
+      state: "visible",
+      timeout: options.timeoutMs,
+    });
+    await page.getByTestId("target-candidates-public-web-export-mode").selectOption("promoted_and_publishable");
+    page.once("dialog", async (dialog) => {
+      await dialog.accept();
+    });
     const downloadPromise = page.waitForEvent("download", { timeout: options.timeoutMs });
     await page.getByTestId("target-candidates-public-web-export").click();
     const download = await downloadPromise;
     await download.saveAs(options.downloadPath);
     const downloadedStat = await fs.stat(options.downloadPath);
+    const batchGuardrailText = await page
+      .getByTestId("target-candidates-public-web-guardrails")
+      .first()
+      .textContent()
+      .catch(() => "");
     await page.screenshot({ path: options.screenshotPath, fullPage: true });
 
     process.stdout.write(
@@ -122,9 +134,15 @@ async function main() {
           status: "ok",
           initialCandidateCount,
           promotedEmailVisible: await page.getByText(options.expectedEmail).first().isVisible(),
-          promotedLinkVisible: await page.getByRole("button", { name: /已确认链接/ }).first().isVisible(),
+          promotedLinkVisible: await page
+            .getByTestId("public-web-profile-review-section")
+            .locator('[data-testid="public-web-signal-review-select"]')
+            .first()
+            .evaluate((element) => element.value === "confirmed"),
+          exportMode: "promoted_and_publishable",
           suggestedFilename: download.suggestedFilename(),
           downloadedSize: downloadedStat.size,
+          batchGuardrailText: String(batchGuardrailText || "").trim(),
           screenshotPath: options.screenshotPath,
           downloadPath: options.downloadPath,
         },

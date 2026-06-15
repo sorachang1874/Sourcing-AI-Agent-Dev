@@ -1,8 +1,20 @@
 import type { Candidate, TargetCandidateFollowUpStatus, TargetCandidateRecord } from "../types";
-import { getTargetCandidates, upsertTargetCandidate as upsertTargetCandidateApi } from "./api";
-import { extractPrimaryEmail } from "./candidatePresentation";
+import {
+  addProjectionCandidateToCrm,
+  getTargetCandidates,
+  upsertTargetCandidate as upsertTargetCandidateApi,
+} from "./api";
 
 const UPDATED_EVENT = "redmatch-target-candidates-updated";
+
+export interface TargetCandidateReadOptions {
+  jobId?: string;
+  historyId?: string;
+  candidateId?: string;
+  followUpStatus?: TargetCandidateFollowUpStatus;
+  sourceProjectionId?: string;
+  sourceCollectionId?: string;
+}
 
 function emitUpdated(): void {
   if (typeof window !== "undefined") {
@@ -14,8 +26,8 @@ export function targetCandidatesUpdatedEventName(): string {
   return UPDATED_EVENT;
 }
 
-export async function readTargetCandidates(): Promise<TargetCandidateRecord[]> {
-  return getTargetCandidates();
+export async function readTargetCandidates(options?: TargetCandidateReadOptions): Promise<TargetCandidateRecord[]> {
+  return getTargetCandidates(options);
 }
 
 export async function upsertTargetCandidate(
@@ -27,6 +39,7 @@ export async function upsertTargetCandidate(
 ): Promise<TargetCandidateRecord> {
   const record = await upsertTargetCandidateApi({
     id: patch.id,
+    workspaceId: patch.workspaceId || "default",
     candidateId: patch.candidateId,
     historyId: patch.historyId,
     jobId: patch.jobId,
@@ -49,25 +62,23 @@ export async function addTargetCandidate(
   options?: {
     jobId?: string;
     historyId?: string;
+    projectionId?: string;
   },
 ): Promise<TargetCandidateRecord> {
-  return upsertTargetCandidate({
-    candidateId: candidate.id,
-    historyId: options?.historyId || "",
-    jobId: options?.jobId || "",
-    candidateName: candidate.name,
-    headline: candidate.headline,
-    currentCompany: candidate.currentCompany,
-    avatarUrl: candidate.avatarUrl,
-    linkedinUrl: candidate.linkedinUrl,
-    primaryEmail: extractPrimaryEmail(candidate),
-    metadata: candidate.primaryEmailMetadata
-      ? { primary_email_metadata: candidate.primaryEmailMetadata }
-      : {},
-    followUpStatus: "pending_outreach",
-    qualityScore: null,
-    comment: "",
+  const projectionId = (options?.projectionId || "").trim();
+  const candidateIdentityKey = (candidate.candidateIdentityKey || candidate.personIdentityKey || "").trim();
+  if (!projectionId || !candidateIdentityKey) {
+    throw new Error("加入目标候选人需要 canonical projection_id 和 candidate_identity_key。");
+  }
+  const record = await addProjectionCandidateToCrm({
+    projectionId,
+    candidateIdentityKey,
+    stage: "outreach_ready",
+    sourceReason: "operator_selected_from_projection",
+    idempotencyKey: `crm:add-target:${projectionId}:${candidateIdentityKey}`,
   });
+  emitUpdated();
+  return record;
 }
 
 export async function updateTargetCandidate(
@@ -88,8 +99,9 @@ export async function updateTargetCandidate(
   > & {
     metadata?: Record<string, unknown>;
   },
+  options?: TargetCandidateReadOptions,
 ): Promise<TargetCandidateRecord | null> {
-  const current = await readTargetCandidates();
+  const current = await readTargetCandidates(options);
   const matched = current.find((item) => item.id === candidateId || item.candidateId === candidateId);
   if (!matched) {
     return null;

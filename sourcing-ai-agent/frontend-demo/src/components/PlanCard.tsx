@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { DemoPlan, PlanReviewDecision, PlanReviewEditableField } from "../types";
+import type { DemoPlan, PlanReviewDecision, PlanReviewEditableField, ProviderExecutionLanePreview } from "../types";
 
 interface PlanCardProps {
   plan: DemoPlan;
@@ -70,7 +70,54 @@ function AdvancedField({
 }
 
 function renderPlanKeywords(keywords: string[]): string {
-  return keywords.length > 0 ? keywords.join("、") : "待补充";
+  return keywords.length > 0 ? keywords.join("、") : "无定向关键词";
+}
+
+function translateProviderLaneEmploymentStatus(value: string): string {
+  switch ((value || "").trim().toLowerCase()) {
+    case "current":
+      return "在职";
+    case "former":
+      return "已离职";
+    default:
+      return value?.trim() || "全部";
+  }
+}
+
+function renderProviderLaneFilters(lane: ProviderExecutionLanePreview): string {
+  const filters = Object.entries(lane.companyFilters || {})
+    .filter(([, values]) => values.length > 0)
+    .map(([key, values]) => `${key}=${values.slice(0, 3).join(", ")}${values.length > 3 ? "..." : ""}`);
+  if (filters.length === 0) {
+    return "无额外 filter";
+  }
+  return filters.join(" · ");
+}
+
+function renderProviderLaneQuery(lane: ProviderExecutionLanePreview): string {
+  if (lane.queryTexts.length > 0) {
+    return lane.queryTexts.join("、");
+  }
+  if (lane.provider === "harvest_company_employees") {
+    return "无 search keyword，使用 company-employees 公司过滤";
+  }
+  if (lane.provider === "harvest_profile_search" && lane.companyFilters.past_companies?.length) {
+    return "无 search keyword，使用 pastCompanies 过滤";
+  }
+  return "无 search keyword";
+}
+
+function renderProviderExecutionLanes(lanes: ProviderExecutionLanePreview[]): string {
+  if (lanes.length === 0) {
+    return "后端未返回实际 provider 参数";
+  }
+  return lanes
+    .map((lane) => {
+      const laneLabel = translateProviderLaneEmploymentStatus(lane.employmentStatus);
+      const provider = lane.displayLabel || lane.provider || lane.operation || "provider";
+      return `${laneLabel}: ${provider}; ${renderProviderLaneQuery(lane)}; ${renderProviderLaneFilters(lane)}`;
+    })
+    .join(" / ");
 }
 
 function translateCompanyIdentityResolver(value?: string): string {
@@ -134,6 +181,14 @@ export function PlanCard({
   const reviewGate = plan.reviewGate;
   const scopeHints = reviewGate?.scopeHints || [];
   const baselineSnapshot = referenceBaselineSnapshot(plan);
+  const showProjectScope = Boolean(
+    plan.projectScope?.trim() && plan.projectScope.trim() !== "目标公司全量范围",
+  );
+  const hasAdvancedContent = Boolean(
+    baselineSnapshot ||
+      plan.providerExecutionLanes?.length ||
+      reviewGate?.editableFields.length,
+  );
 
   return (
     <section
@@ -161,10 +216,12 @@ export function PlanCard({
           <dt>目标人群</dt>
           <dd>{plan.targetPopulation}</dd>
         </div>
-        <div>
-          <dt>项目范围</dt>
-          <dd>{plan.projectScope}</dd>
-        </div>
+        {showProjectScope ? (
+          <div>
+            <dt>项目范围</dt>
+            <dd>{plan.projectScope}</dd>
+          </div>
+        ) : null}
         <div>
           <dt>检索关键词</dt>
           <dd>{renderPlanKeywords(plan.keywords)}</dd>
@@ -232,7 +289,7 @@ export function PlanCard({
           />
         </div>
 
-        {reviewGate?.editableFields.length ? (
+        {hasAdvancedContent ? (
           <details className="advanced-review-panel">
             <summary className="advanced-review-summary">
               <div className="advanced-review-summary-copy">
@@ -247,6 +304,15 @@ export function PlanCard({
                 title="Baseline snapshot"
                 description="参考信息，仅用于说明当前默认复用的 baseline。"
                 value={baselineSnapshot}
+                subtle
+              />
+            ) : null}
+
+            {plan.providerExecutionLanes?.length ? (
+              <AdvancedField
+                title="实际 Provider 参数"
+                description="开发/排障参考；用户可见策略以检索关键词与检索策略为准。"
+                value={renderProviderExecutionLanes(plan.providerExecutionLanes)}
                 subtle
               />
             ) : null}

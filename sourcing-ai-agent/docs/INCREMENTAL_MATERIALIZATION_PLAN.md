@@ -292,7 +292,7 @@ Public Web Stage 2 和 profile completion 现在仍偏“阶段式”。
 
 - sparse provider payload
 - target-company mismatch
-- suspicious membership
+- uncertain membership
 - profile preview vs true detail
 
 模型输出应该被缓存为 adjudication artifact，而不是每次重跑。

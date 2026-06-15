@@ -70,8 +70,8 @@ Harvest profile email 现在默认改为 no-email 模式：
 
 - profile scraper 默认使用 `Profile details no email ($4 per 1k)`
 - planner / settings 默认 `collect_email=false`
-- 若历史 raw payload 里仍有 Harvest email，只接受非 `risky` 且 `qualityScore >= 80` 的条目
-- risky / 低分邮件会在 timeline/materialization/results API 这整条链路上被 scrub，不再继续透传到前端
+- 若历史 raw payload 里仍有 Harvest email，只接受非 `low_confidence` 且 `qualityScore >= 80` 的条目
+- `low_confidence` / 低分邮件会在 timeline/materialization/results API 这整条链路上被 scrub，不再继续透传到前端
 
 如果当前目标是低 IO 地批量重写现有 company assets，而不是顺便重刷 registry，可用 rewrite-only 方式：
 
@@ -270,12 +270,25 @@ PYTHONPATH=src python3 -m sourcing_agent.cli continue-excel-intake --file <revie
 
 这条 CLI 链路适合单次排查“上传 Excel -> 返回本地命中 / 待复核 / 新抓取结果”。
 
+恢复说明：
+
+- queued/running 的 Excel intake 子 job 会把 `prepared_contact_batch.json` 写入 `runtime/excel_intake_batches/{batch_id}/{job_id}/`
+- worker recovery 会优先从 `execution_bundle.excel_intake.prepared_contact_batch_path` 恢复 stale job，而不是重新解析上传文件
+- 如果 job 已经进入后续阶段或已经写入 `intake_id`，应走后续的 materialization/admin repair，而不是重复 replay intake
+
 前端产品入口走 `/api/intake/excel/workflow`：
 
 - 浏览器上传真实 Excel 文件，不要求用户提供服务器本地路径
 - 后端先解析 workbook，再按 company hint 自动拆成多个 history/job
 - 每个子 job 的检索方案页显示“不适用”，直接进入执行过程与候选人看板
 - 本地 dev / preview 都应通过 same-origin `/api/*` proxy 或 loopback fallback 连接 `127.0.0.1:8765`
+
+Excel intake matching contract：
+
+- 第一优先级是 normalized/sanity LinkedIn URL identity。只要 Excel 行提供 LinkedIn URL，就先全局查 `linkedin_profile_registry` 的 fetched raw profile cache；cache 命中时不先扫全量 candidate inventory，也不受 Excel 公司字段约束。
+- LinkedIn URL cache 未命中时，才进入本地 candidate inventory：URL/slug 精确匹配仍是全局 identity match，不用公司字段否决；公司只用于后续 route/membership 判断。
+- 公司+姓名、邮箱、near match 只作为 URL 缺失或 URL identity 未命中的 fallback，并且按当前 route company 匹配。`OpenAI & Meta`、`Meta/OpenAI` 这类 compound cell 会拆成 OpenAI 和 Meta 两个 group/job，各 route 都会单独尝试匹配。
+- Excel 里的公司字段可能错误或过时；它不能覆盖 LinkedIn URL identity，只能影响候选人被 attach 到哪个 route/snapshot，以及 profile experience 判定为 current/former/none。
 
 ## 3. 进度追踪与交互
 

@@ -38,9 +38,6 @@ export function formatWorkflowTimestamp(value: string): string {
     return "--";
   }
   const normalized = value.replace("T", " ").trim();
-  if (isNaiveWorkflowTimestamp(normalized)) {
-    return normalized;
-  }
   const date = parseWorkflowTimestamp(value);
   if (Number.isNaN(date.getTime())) {
     return normalized || value;
@@ -70,11 +67,6 @@ export function formatWorkflowShortTimestamp(value: string): string {
     return "--";
   }
   const normalized = value.replace("T", " ").trim();
-  const naiveMatch = normalized.match(NAIVE_TIMESTAMP_PATTERN);
-  if (naiveMatch) {
-    const [, , month, day, hour, minute] = naiveMatch;
-    return `${month}/${day} ${hour}:${minute}`;
-  }
   const date = parseWorkflowTimestamp(value);
   if (Number.isNaN(date.getTime())) {
     return normalized || value;

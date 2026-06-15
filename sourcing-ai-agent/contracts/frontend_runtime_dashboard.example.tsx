@@ -63,6 +63,8 @@ export function RuntimeDashboardExample(props: RuntimeDashboardExampleProps) {
   const recentTransfers = (systemProgress.data?.object_sync?.recent_transfers ?? []).slice(0, maxTransferRows);
   const sharedRecovery =
     runtimeHealth.data?.services?.shared_recovery ?? runtimeMetrics.data?.services?.shared_recovery;
+  const eventLevelEfficiency = runtimeMetrics.data?.event_level_efficiency;
+  const materializationIo = asJsonObjectOrUndefined(eventLevelEfficiency?.materialization_io);
   const trackedJobRecoveryCount =
     runtimeMetrics.data?.services?.tracked_job_recovery_count ??
     runtimeHealth.data?.services?.job_recoveries?.length ??
@@ -199,6 +201,68 @@ export function RuntimeDashboardExample(props: RuntimeDashboardExampleProps) {
           />
         </section>
       </div>
+
+      <section style={styles.panel}>
+        <SectionHeader
+          title="Event-Level Efficiency"
+          detail={`${stringifyValue(eventLevelEfficiency?.report_count)} reports | violation ${stringifyValue(
+            eventLevelEfficiency?.violation_detected,
+          )}`}
+        />
+        <div style={styles.metricGrid}>
+          <KeyValueRow
+            label="Remote event lag max"
+            value={formatMsStat(eventLevelEfficiency?.remote_to_local_event_lag_ms)}
+          />
+          <KeyValueRow
+            label="Remote to local marker max"
+            value={formatMsStat(eventLevelEfficiency?.remote_to_local_marker_lag_ms)}
+          />
+          <KeyValueRow
+            label="Local to next submit max"
+            value={formatMsStat(
+              eventLevelEfficiency?.local_completion_to_next_submit_start_ms ??
+                eventLevelEfficiency?.local_to_next_submit_start_ms,
+            )}
+          />
+          <KeyValueRow
+            label="Writer lock wait max"
+            value={formatMsStat(eventLevelEfficiency?.writer_lock_wait_ms)}
+          />
+          <KeyValueRow
+            label="Remote wait age max"
+            value={formatMsStat(eventLevelEfficiency?.remote_wait_age_ms)}
+          />
+          <KeyValueRow
+            label="Provider lease age max"
+            value={formatMsStat(eventLevelEfficiency?.provider_lease_age_ms)}
+          />
+          <KeyValueRow
+            label="Materialize calls"
+            value={stringifyValue(eventLevelEfficiency?.materialize_call_count)}
+          />
+          <KeyValueRow
+            label="Materialize repeat starts"
+            value={stringifyValue(eventLevelEfficiency?.materialize_started_repeat_count)}
+          />
+          <KeyValueRow
+            label="Marker backfill repeats"
+            value={stringifyValue(eventLevelEfficiency?.marker_backfill_repeat_count)}
+          />
+          <KeyValueRow
+            label="Pre-submit provider workers"
+            value={stringifyValue(eventLevelEfficiency?.max_pre_submit_provider_worker_count)}
+          />
+          <KeyValueRow
+            label="Artifact build max"
+            value={formatMsStat(materializationIo?.candidate_artifact_build_ms)}
+          />
+          <KeyValueRow
+            label="Delta PG replace max"
+            value={formatMsStat(materializationIo?.candidate_delta_control_plane_replace_ms)}
+          />
+        </div>
+      </section>
 
       <div style={styles.twoColumnGrid}>
         <section style={styles.panel}>
@@ -420,6 +484,17 @@ function formatPercent(value?: number | null): string {
   return `${Math.round(value * 100)}%`;
 }
 
+function formatMsStat(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "n/a";
+  }
+  const max = (value as { max?: unknown }).max;
+  if (typeof max !== "number" || Number.isNaN(max)) {
+    return "n/a";
+  }
+  return `${Math.round(max)} ms`;
+}
+
 function compactTimestamp(value?: string | number): string {
   if (!value && value !== 0) {
     return "n/a";
@@ -449,6 +524,13 @@ function stringifyValue(value: unknown): string {
     return String(value);
   }
   return "n/a";
+}
+
+function asJsonObjectOrUndefined(value: unknown): JsonObject | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as JsonObject;
 }
 
 function objectEntries(value: unknown): Array<[string, unknown]> {
@@ -588,6 +670,11 @@ const styles: Record<string, CSSProperties> = {
     gap: "12px",
     padding: "8px 0",
     borderBottom: "1px solid #eef2f7",
+  },
+  metricGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: "0 18px",
   },
   keyLabel: {
     color: "#516074",

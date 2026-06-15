@@ -101,6 +101,7 @@ required_modules = (
     "pytest",
     "requests",
     "psycopg",
+    "testcontainers.postgres",
     "ruff",
     "mypy",
     "sourcing_agent",

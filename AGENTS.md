@@ -86,6 +86,64 @@ For meaningful changes, explicitly consider:
 5. Whether docs and operational guidance need to move with the code.
 6. Whether a new field is actually the right abstraction, or whether an existing canonical contract should be extended instead.
 
+## Agent Network And GitHub Access
+
+GitHub, `gh`, Codex, Claude Code, and model-backend transport are developer-environment prerequisites, not application runtime behavior.
+
+Required rule:
+1. If a repository provides an Agent/GitHub network preflight, run that read-only preflight before GitHub operations, branch pushes, `gh` commands, or further Codex/Claude Code backend calls after a network error.
+2. In `sourcing-ai-agent`, the canonical command is `make agent-network-preflight` from the repository root.
+3. Treat network preflight as diagnostics only. It may inspect shell proxy env, git proxy config, DNS, Clash/Mihomo runtime state, HTTPS reachability, `gh auth status`, and `git ls-remote`; it must not mutate environment, git config, Clash config, selected nodes, TUN, DNS, system proxy, or macOS network settings.
+4. Agents must not set `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, or git proxy config as an automatic workaround for GitHub/Codex failures.
+5. Agents must not toggle Clash mode, TUN mode, DNS mode, system proxy, or the selected `GLOBAL` node. They also must not hot-reload or restart Clash/Mihomo, including controller socket mutation calls such as `PUT /configs`.
+6. If GitHub or model-backend domains resolve to a fake-ip range such as `198.18.x.x`, report that fake-ip filtering needs user attention. If `GLOBAL` is `DIRECT`, report that the user should choose a non-DIRECT node. If `gh auth status` fails, ask the user to refresh/login with `gh`; do not alter proxy settings or reload VPN state to force it.
+
+## Contract Field Ownership
+Shared fields are production contracts, not convenient response keys.
+
+Before adding or changing a field that can affect user-visible counts, readiness, filters, status text, routing, export, billing/cost behavior, workflow recovery, or permission decisions:
+1. Define the field owner, source of truth, allowed values, derivation rule, consumers, fallback status, migration status, and deletion condition for any old source.
+2. Add or update a fast contract preflight that compares all normal public endpoints or workers that expose the field.
+3. Do not let an expensive Nightly/W6-style pressure run be the first place a basic field semantic drift is detected.
+4. Do not derive one contract field from another unless that derivation is explicitly documented. Similar names can still represent different semantics.
+5. If a temporary migration bridge is unavoidable, make it report-visible, block it in normal-path signoff, and record the removal condition in the TODO/contract docs.
+6. If a field is not in the owner matrix for its module, it is not yet a normal-path contract field.
+
+## Production-Grade Design Review
+For every code review, planning review, or implementation slice, evaluate the work as a service-level product, not a local patch.
+
+Required review dimensions:
+1. Engineering efficiency: does the design reduce repeated infra churn, amortize fixed provider/runtime costs, and avoid avoidable manual operations?
+2. Architecture quality: does it move the system toward a clear canonical source of truth rather than adding another fallback ladder?
+3. Business semantics: are user intent, planner strategy, data coverage, lifecycle phase, and frontend wording unambiguous and represented by explicit contracts?
+4. Downstream closure: does the change update all affected readers, writers, APIs, workers, CLIs, docs, tests, and operational flows?
+5. Risk coverage: does the plan identify race conditions, stale snapshots, partial failures, retries, migration/backfill needs, and hosted/local environment drift?
+6. User interaction quality: does the resulting UX remain coherent during in-flight work, not only after final completion?
+7. Test quality: do tests include business-level and service-level metrics such as latency, state coherence, batch efficiency, board visibility, and cross-endpoint consistency, not just unit assertions?
+8. Root-cause depth: when fixing a bug, does the work explain and remove the failure mechanism instead of only masking the observed symptom?
+9. Forward compatibility: is the design extensible to the next company, provider, workflow stage, asset type, and migration path without special-case rewrites?
+
+Before accepting a design, ask whether one more bounded step can retire an old heuristic, derived source, manual repair, or ambiguous contract. Prefer doing that step when it materially lowers future regression risk.
+
+## Independent Review Gate
+Contract-heavy changes and milestone closeouts require a non-author, adversarial review before live provider validation, W6/nightly, founder/manual signoff, or product handoff. If a repository defines a project-specific review command, use that command and store the artifact in the project’s review location.
+
+Required review triggers:
+1. Contract docs, schemas, owner/source-of-truth matrices, readiness/filter/export/status/projection/permission fields, or deletion conditions for old sources.
+2. Frontend/backend public API semantics, user-visible state wording, promotion/export controls, retry/cancel/resume actions, or schema adapters.
+3. Durable runtime, workflow event/command/activity/recovery/idempotency/outbox/causality, provider/model behavior, cost/circuit/retry/fallback policy, or live-provider gates.
+4. Migration bridges, legacy endpoint retirement, storage cutovers, hidden fallback removal, or new compatibility paths.
+5. Any implementation slice claimed as a complete feature, phase, or milestone.
+
+Review rules:
+1. The reviewer must not be the implementation author. Author summaries, green tests, and long smoke runs do not count as independent review.
+2. Run targeted tests and fast contract preflight first; then run the independent review; only then run expensive live/W6/manual signoff.
+3. A `NO-GO` finding blocks progress until fixed or explicitly accepted by the user/founder and recorded in the review artifact/TODO.
+4. Provider-costing live gates and milestone signoff must require a valid `GO` review artifact that matches the current gate scope, not just a path that exists. `NO-GO`, timeout, no-output, invalid, missing-metadata, prompt-file, or unrelated artifacts fail closed.
+5. If unsure whether a change affects shared semantics, run the gate.
+6. Independent review is scoped review, not a full development-session resume. The reviewer should inspect the listed diff scope and targeted Contract sections, not full progress trackers or long Contract documents, unless the review scope explicitly requires that full context.
+7. For Codex-based reviews, the default reviewer configuration is GPT-5.5 with `model_reasoning_effort="xhigh"` and fast mode via `service_tier="fast"`; prefer a project-specific runner when present so those values are recorded in the review artifact.
+
 ## Definition of Done
 Work is only done when:
 1. The implementation addresses the root cause or a clearly bounded architectural decision.

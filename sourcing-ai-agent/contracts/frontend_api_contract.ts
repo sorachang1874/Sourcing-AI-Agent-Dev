@@ -42,12 +42,14 @@ export interface IntentRewriteEntry {
   matched: boolean;
   summary: string;
   rewrite: IntentRewriteRule | Record<string, never>;
+  [key: string]: JsonValue | undefined;
 }
 
 export interface IntentRewritePayload {
   request: IntentRewriteEntry;
   instruction?: IntentRewriteEntry;
   policy_catalog?: IntentRewritePolicyCatalogEntry[];
+  [key: string]: JsonValue | undefined;
 }
 
 export interface IntentBrief {
@@ -55,6 +57,7 @@ export interface IntentBrief {
   target_output: string[];
   default_execution_strategy: string[];
   review_focus: string[];
+  [key: string]: JsonValue | undefined;
 }
 
 export interface PlanReviewGate {
@@ -323,6 +326,7 @@ export interface RuntimeMetricsResponse {
   observed_at?: string;
   metrics: JsonObject;
   refresh_metrics?: RuntimeRefreshMetricsSummary;
+  event_level_efficiency?: JsonObject;
   services?: RuntimeServicesSummary;
   [key: string]: JsonValue | undefined;
 }
@@ -368,6 +372,10 @@ export interface ProgressPayload {
   latest_event?: JsonObject;
   worker_summary: WorkerSummary;
   latest_metrics?: ProgressMetrics;
+  linkedin_stage_1_progress?: LinkedinStage1Progress;
+  board_runtime_state?: BoardRuntimeState;
+  result_view_lifecycle?: ResultViewLifecycle;
+  execution_phase_contract?: ExecutionPhaseContract;
   counters: Record<string, number>;
   [key: string]: JsonValue | undefined;
 }
@@ -396,6 +404,10 @@ export interface JobProgressResponse {
   blocked_task?: string;
   current_message?: string;
   progress: ProgressPayload;
+  linkedin_stage_1_progress?: LinkedinStage1Progress;
+  board_runtime_state?: BoardRuntimeState;
+  result_view_lifecycle?: ResultViewLifecycle;
+  execution_phase_contract?: ExecutionPhaseContract;
   workflow_stage_summaries?: WorkflowStageSummariesPayload;
   [key: string]: JsonValue | undefined;
 }
@@ -510,9 +522,129 @@ export interface MatchResult {
   confidence_score?: number;
   confidence_reason?: string;
   rank?: number;
+  matched_keywords?: string[];
   matched_fields?: JsonObject[];
+  source_matches?: JsonObject[];
   explanation?: string;
   evidence?: JsonObject[];
+  [key: string]: JsonValue | undefined;
+}
+
+export interface ProfileFetchProgress {
+  total_url_count?: number;
+  fetched_url_count?: number;
+  queued_url_count?: number;
+  failed_retryable_url_count?: number;
+  unrecoverable_url_count?: number;
+  missing_registry_url_count?: number;
+  deferred_url_count?: number;
+  pending_url_count?: number;
+  status_counts?: Record<string, number>;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface LinkedinStage1Progress {
+  current_search_returned_count?: number;
+  former_search_returned_count?: number;
+  all_search_returned_count?: number;
+  deduped_candidate_count?: number;
+  deduped_profile_url_count?: number;
+  profile_fetch_required_count?: number;
+  profile_fetched_count?: number;
+  profile_queued_count?: number;
+  profile_failed_retryable_count?: number;
+  profile_unrecoverable_count?: number;
+  profile_pending_count?: number;
+  status_counts?: Record<string, number>;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface BoardRuntimeState {
+  schema_version?: number;
+  job_id?: string;
+  result_mode?: string;
+  phase?: string;
+  publication_status?: string;
+  expected_candidate_count?: number;
+  served_candidate_count?: number;
+  published_candidate_count?: number;
+  display_ready_candidate_count?: number;
+  preview_candidate_count?: number;
+  profile_detail_candidate_count?: number;
+  explicit_profile_capture_candidate_count?: number;
+  needs_profile_completion_candidate_count?: number;
+  low_profile_richness_candidate_count?: number;
+  card_materialization_quality_fields_available?: boolean;
+  row_hydration_target_count?: number;
+  candidate_discovery_count?: number;
+  profile_fetch_required_count?: number;
+  profile_fetched_count?: number;
+  baseline_candidate_count?: number;
+  delta_profile_required_count?: number;
+  delta_profile_fetched_count?: number;
+  delta_profile_materialized_count?: number;
+  delta_profile_board_visible_count?: number;
+  delta_profile_denominator_promoted?: boolean;
+  row_publication_sequence?: number;
+  row_publication_tier?: string;
+  row_publication_watermark?: string;
+  row_publication_updated_at?: string;
+  facet_summary_status?: string;
+  facet_summary_scope?: string;
+  facet_summary_candidate_count?: number;
+  layering_status?: string;
+  filter_contract?: {
+    source?: string;
+    facet_count_scope?: string;
+    row_filter_scope?: string;
+    backend_filtered_paging_supported?: boolean;
+  };
+  sync_status_text?: string;
+  sync_note_lines?: Array<{
+    id?: string;
+    text?: string;
+  }>;
+  candidate_discovery_status_text?: string;
+  profile_fetch_status_text?: string;
+  card_materialization_status_text?: string;
+  profile_fetch_status_detail?: string;
+  card_materialization_status_detail?: string;
+  note_text?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface ResultViewLifecycle {
+  state?: string;
+  baseline_snapshot_id?: string;
+  current_snapshot_id?: string;
+  served_snapshot_id?: string;
+  baseline_candidate_count?: number;
+  served_candidate_count?: number;
+  expected_candidate_count?: number;
+  delta_profile_required_count?: number;
+  delta_profile_fetched_count?: number;
+  delta_profile_materialized_count?: number;
+  delta_profile_board_visible_count?: number;
+  delta_profile_pending_count?: number;
+  delta_profile_queued_count?: number;
+  delta_profile_retryable_count?: number;
+  serving_projection_id?: string;
+  serving_projection_phase?: string;
+  background_snapshot_materialization_status?: string;
+  outreach_layering_status?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface ExecutionPhaseContract {
+  active_phase_id?: string;
+  active_stage_id?: string;
+  active_phase_label?: string;
+  active_phase_detail?: string;
+  public_web_stage_applicable?: boolean;
+  local_asset_materialization_applicable?: boolean;
+  profile_work_pending?: boolean;
+  stage_title_overrides?: Record<string, string>;
+  stage_detail_overrides?: Record<string, string>;
   [key: string]: JsonValue | undefined;
 }
 
@@ -520,6 +652,13 @@ export interface JobResultsResponse {
   job: JsonObject;
   events: JsonObject[];
   results: JsonObject[];
+  asset_population?: JsonObject & {
+    profile_fetch_progress?: ProfileFetchProgress;
+  };
+  profile_fetch_progress?: ProfileFetchProgress;
+  linkedin_stage_1_progress?: LinkedinStage1Progress;
+  result_view_lifecycle?: ResultViewLifecycle;
+  execution_phase_contract?: ExecutionPhaseContract;
   manual_review_items: JsonObject[];
   agent_runtime_session: JsonObject;
   agent_trace_spans: JsonObject[];
@@ -527,6 +666,7 @@ export interface JobResultsResponse {
   intent_rewrite: IntentRewritePayload;
   request_preview?: JsonObject;
   workflow_stage_summaries?: WorkflowStageSummariesPayload;
+  board_runtime_state?: BoardRuntimeState;
   [key: string]: JsonValue | undefined;
 }
 
@@ -580,7 +720,10 @@ export type TargetCandidatePublicWebStatus =
   | "searching"
   | "entry_links_ready"
   | "fetching"
+  | "documents_fetched"
   | "analyzing"
+  | "adjudication_completed"
+  | "analysis_completed"
   | "completed"
   | "completed_with_errors"
   | "needs_review"
@@ -590,6 +733,7 @@ export type TargetCandidatePublicWebStatus =
 
 export interface TargetCandidatePublicWebBatch {
   batch_id?: string;
+  workspace_id?: string;
   status: TargetCandidatePublicWebStatus;
   requested_record_ids: string[];
   run_ids: string[];
@@ -602,6 +746,7 @@ export interface TargetCandidatePublicWebBatch {
 
 export interface TargetCandidatePublicWebRun {
   run_id?: string;
+  workspace_id?: string;
   batch_id?: string;
   record_id?: string;
   candidate_id?: string;
@@ -615,8 +760,13 @@ export interface TargetCandidatePublicWebRun {
   query_manifest: JsonObject[];
   search_checkpoint: JsonObject;
   analysis_checkpoint: JsonObject;
+  phase_commands?: JsonObject;
+  phase_command_display_line?: string;
+  run_control_state?: JsonObject;
+  run_display_contract?: JsonObject;
   artifact_root?: string;
   last_error?: string;
+  created_at?: string;
   started_at?: string;
   completed_at?: string;
   updated_at?: string;
@@ -668,6 +818,9 @@ export interface TargetCandidatePublicWebSignal {
   promoted_by?: string;
   promoted_at?: string;
   promotion_note?: string;
+  promotion_override_reason?: string;
+  promotion_override_validation_reason?: string;
+  promotion_requires_manual_override?: boolean;
   suppression_reason?: string;
   evidence_excerpt?: string;
   artifact_refs?: JsonObject;
@@ -699,6 +852,9 @@ export interface TargetCandidatePublicWebPromotion {
   promotion_status?: string;
   operator?: string;
   note?: string;
+  override_reason?: string;
+  override_validation_reason?: string;
+  requires_manual_override?: boolean;
   created_at?: string;
   updated_at?: string;
   [key: string]: JsonValue | undefined;
@@ -743,6 +899,527 @@ export interface TargetCandidatePublicWebPromotionResponse {
   detail?: TargetCandidatePublicWebDetailResponse | null;
   reason?: string;
   [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowCommandControlPolicy {
+  schema_version?: string;
+  command_type?: string;
+  owner?: string;
+  generic_control_contract?: string;
+  running_control_category?: string;
+  running_control_categories?: string[];
+  running_control_maturity?: string;
+  running_control_gap_status?: string;
+  running_control_surface?: string;
+  generic_cancel_statuses?: string[];
+  generic_retry_statuses?: string[];
+  generic_resume_statuses?: string[];
+  running_cancel_supported?: boolean;
+  running_cancel_statuses?: string[];
+  running_cancel_owner?: string;
+  running_cancel_delegate?: string;
+  running_cancel_prerequisites?: string[];
+  running_cancel_blocked_reason?: string;
+  running_cancel_upgrade_requirements?: string[];
+  running_cancel_contract?: string;
+  unsupported_running_cancel_reason?: string;
+  module_state_mutated_on_running_cancel?: boolean;
+  running_resume_supported?: boolean;
+  running_resume_statuses?: string[];
+  running_resume_owner?: string;
+  running_resume_delegate?: string;
+  running_resume_prerequisites?: string[];
+  running_resume_blocked_reason?: string;
+  running_resume_upgrade_requirements?: string[];
+  running_resume_contract?: string;
+  unsupported_running_resume_reason?: string;
+  module_state_mutated_on_running_resume?: boolean;
+  control_source_of_truth?: string;
+  agent_callable_surface?: string;
+  fallback_status?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowCommandControlState {
+  schema_version?: string;
+  command_type?: string;
+  owner?: string;
+  command_status?: string;
+  can_cancel?: boolean;
+  can_retry?: boolean;
+  can_resume?: boolean;
+  cancel_mode?: string;
+  retry_mode?: string;
+  resume_mode?: string;
+  allowed_actions?: string[];
+  disabled_reasons?: JsonObject;
+  running_cancel_supported?: boolean;
+  running_cancel_delegate?: string;
+  running_cancel_prerequisites?: string[];
+  running_resume_supported?: boolean;
+  running_resume_delegate?: string;
+  running_resume_prerequisites?: string[];
+  module_state_mutated_on_cancel?: boolean;
+  module_state_mutated_on_resume?: boolean;
+  control_source_of_truth?: string;
+  policy_source_of_truth?: string;
+  fallback_status?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowCommandActivitySpinePolicy {
+  schema_version?: string;
+  command_type?: string;
+  owner?: string;
+  requirement?: string;
+  must_write_activity_run?: boolean;
+  must_write_activity_attempt?: boolean;
+  must_write_entity_delta?: boolean;
+  downstream_activity_required?: boolean;
+  agent_callable?: boolean;
+  activity_table?: string;
+  attempt_table?: string;
+  entity_delta_table?: string;
+  source_of_truth?: string;
+  agent_callable_surface?: string;
+  fallback_status?: string;
+  migration_status?: string;
+  deletion_condition?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowCommandDisplayContract {
+  schema_version?: string;
+  command_type?: string;
+  owner?: string;
+  display_label?: string;
+  display_category?: string;
+  description?: string;
+  source_of_truth?: string;
+  fallback_status?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface OperationActionDisplayContract {
+  schema_version?: string;
+  action_type?: string;
+  owner_module?: string;
+  operation_type?: string;
+  display_label?: string;
+  display_category?: string;
+  description?: string;
+  source_of_truth?: string;
+  fallback_status?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowCommandContract {
+  command_type: string;
+  owner?: string;
+  agent_exposure_status?: string;
+  agent_exposure_gate?: string;
+  stage_id?: string;
+  readiness_effect?: string;
+  display_contract?: WorkflowCommandDisplayContract;
+  control_policy?: WorkflowCommandControlPolicy;
+  activity_spine_policy?: WorkflowCommandActivitySpinePolicy;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowCommandControlSummary {
+  source_of_truth?: string;
+  fallback_status?: string;
+  command_count?: number;
+  running_control_maturity_counts?: Record<string, number>;
+  running_control_gap_status_counts?: Record<string, number>;
+  running_control_category_counts?: Record<string, number>;
+  has_fail_closed_running_controls?: boolean;
+  has_owner_specific_running_controls?: boolean;
+  default_workflow_command_type?: string;
+  default_running_control_maturity?: string;
+  default_running_control_gap_status?: string;
+  agent_ui_guidance?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface OperationActionRegistryEntry {
+  owner_module?: string;
+  operation_type?: string;
+  approval_policy?: string;
+  budget_required?: boolean;
+  description?: string;
+  display_contract?: OperationActionDisplayContract;
+  allowed_workflow_command_types?: string[];
+  default_workflow_command_type?: string;
+  workflow_command_exposure_gate?: string;
+  workflow_command_exposure_status?: string;
+  allowed_workflow_command_contracts?: WorkflowCommandContract[];
+  workflow_command_control_summary?: WorkflowCommandControlSummary;
+  default_workflow_command_contract?: WorkflowCommandContract;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface OperationActionRegistryResponse {
+  status: string;
+  contract?: string;
+  action_registry: Record<string, OperationActionRegistryEntry>;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface OperationEventRecord extends JsonObject {
+  event_id?: string;
+  workspace_id?: string;
+  event_stream_id?: string;
+  operation_run_id?: string;
+  action_id?: string;
+  event_family?: string;
+  event_type?: string;
+  sequence_number?: number;
+  actor?: string;
+  source?: string;
+  payload?: JsonObject;
+  occurred_at?: string;
+  recorded_at?: string;
+}
+
+export interface OperationActionRecord extends JsonObject {
+  action_id?: string;
+  workspace_id?: string;
+  conversation_id?: string;
+  action_type?: string;
+  owner_module?: string;
+  operation_type?: string;
+  display_contract?: OperationActionDisplayContract;
+  target_ref?: JsonObject;
+  input?: JsonObject;
+  approval_status?: string;
+  approval_policy?: string;
+  budget?: JsonObject;
+  status?: string;
+  result_ref?: JsonObject;
+  metadata?: JsonObject;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface OperationRunRecord extends JsonObject {
+  operation_run_id?: string;
+  workspace_id?: string;
+  action_id?: string;
+  owner_module?: string;
+  operation_type?: string;
+  display_contract?: OperationActionDisplayContract;
+  status?: string;
+  progress?: JsonObject;
+  workflow_ref?: JsonObject;
+  cost_budget?: JsonObject;
+  result_ref?: JsonObject;
+  metadata?: JsonObject;
+  control_state?: OperationRunControlState;
+  status_summary?: OperationRunStatusSummary;
+  started_at?: string;
+  completed_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface OperationRunControlState extends JsonObject {
+  operation_status?: string;
+  action_status?: string;
+  operation_phase?: string;
+  can_dispatch?: boolean;
+  can_cancel?: boolean;
+  can_retry?: boolean;
+  can_resume?: boolean;
+  allowed_actions?: string[];
+  disabled_reasons?: JsonObject;
+  control_source_of_truth?: string;
+  fallback_status?: string;
+  module_state_mutated_on_control?: boolean;
+  schema_version?: string;
+}
+
+export interface OperationRunStatusSummary extends JsonObject {
+  source?: string;
+  fallback_status?: string;
+  fallback_used?: boolean;
+  module_state_mutated?: boolean;
+  operation_status?: string;
+  operation_phase?: string;
+  workflow_command_count?: number;
+  operation_event_count?: number;
+  command_status_counts?: JsonObject;
+  latest_event_type?: string;
+  latest_event?: OperationEventRecord;
+  latest_workflow_command?: WorkflowCommandRecord;
+}
+
+export interface OperationActionListResponse {
+  status?: string;
+  contract?: string;
+  actions: OperationActionRecord[];
+  [key: string]: JsonValue | undefined;
+}
+
+export interface OperationActionDetailResponse {
+  status: string;
+  contract?: string;
+  action?: OperationActionRecord;
+  operation_run?: OperationRunRecord;
+  events?: OperationEventRecord[];
+  [key: string]: JsonValue | undefined;
+}
+
+export interface OperationRunListResponse {
+  status?: string;
+  contract?: string;
+  operation_runs: OperationRunRecord[];
+  [key: string]: JsonValue | undefined;
+}
+
+export interface OperationRunDetailResponse {
+  status: string;
+  contract?: string;
+  operation_run?: OperationRunRecord;
+  events?: OperationEventRecord[];
+  [key: string]: JsonValue | undefined;
+}
+
+export interface OperationRunProvenanceResponse {
+  status: string;
+  contract?: string;
+  action?: OperationActionRecord;
+  operation_run?: OperationRunRecord;
+  action_events?: OperationEventRecord[];
+  operation_events?: OperationEventRecord[];
+  event_timeline?: OperationEventRecord[];
+  workflow_commands?: WorkflowCommandRecord[];
+  module_state_mutated?: boolean;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface OperationRunControlResponse {
+  status: string;
+  reason?: string;
+  contract?: string;
+  action?: OperationActionRecord;
+  operation_run?: OperationRunRecord;
+  parent_operation_run?: OperationRunRecord;
+  display_contract?: OperationActionDisplayContract;
+  control_state?: OperationRunControlState;
+  workflow_command?: WorkflowCommandRecord;
+  events?: OperationEventRecord[];
+  module_state_mutated?: boolean;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowCommandRegistryResponse {
+  status: string;
+  contract?: string;
+  command_registry: Record<string, WorkflowCommandContract>;
+  module_state_mutated?: boolean;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowCommandRecord extends JsonObject {
+  command_id?: string;
+  workflow_run_id?: string;
+  operation_id?: string;
+  command_type?: string;
+  owner?: string;
+  agent_exposure_status?: string;
+  agent_exposure_gate?: string;
+  status?: string;
+  stage_id?: string;
+  readiness_effect?: string;
+  display_contract?: WorkflowCommandDisplayContract;
+  control_policy?: WorkflowCommandControlPolicy;
+  control_state?: WorkflowCommandControlState;
+  activity_spine_policy?: WorkflowCommandActivitySpinePolicy;
+  execution_summary?: WorkflowCommandExecutionSummary;
+}
+
+export interface WorkflowCommandExecutionSummary extends JsonObject {
+  source?: string;
+  fallback_status?: string;
+  fallback_used?: boolean;
+  module_state_mutated?: boolean;
+  activity_count?: number;
+  attempt_count?: number;
+  entity_delta_count?: number;
+  activity_status_counts?: JsonObject;
+  attempt_status_counts?: JsonObject;
+  entity_delta_status_counts?: JsonObject;
+  entity_delta_kind_counts?: JsonObject;
+  latest_effect_status?: string;
+  latest_activity?: WorkflowActivityRecord;
+  latest_attempt?: WorkflowActivityAttemptRecord;
+  latest_entity_delta?: WorkflowEntityDeltaRecord;
+  sample_limit?: number;
+  sample_truncated?: boolean;
+}
+
+export interface WorkflowCommandListResponse {
+  status?: string;
+  contract?: string;
+  workflow_commands: WorkflowCommandRecord[];
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowCommandDetailResponse {
+  status: string;
+  contract?: string;
+  workflow_command?: WorkflowCommandRecord;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowCommandControlResponse {
+  status: string;
+  reason?: string;
+  command_status?: string;
+  workflow_command?: WorkflowCommandRecord;
+  operation_sync?: JsonObject;
+  display_contract?: WorkflowCommandDisplayContract;
+  control_policy?: WorkflowCommandControlPolicy;
+  control_state?: WorkflowCommandControlState;
+  activity_spine_policy?: WorkflowCommandActivitySpinePolicy;
+  module_state_mutated?: boolean;
+  owner_specific_control?: boolean;
+  contract?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowActivityControlTarget {
+  target_type?: string;
+  command_id?: string;
+  command_type?: string;
+  owner?: string;
+  display_contract?: WorkflowCommandDisplayContract;
+  control_policy?: WorkflowCommandControlPolicy;
+  control_state?: WorkflowCommandControlState;
+  activity_spine_policy?: WorkflowCommandActivitySpinePolicy;
+  fallback_status?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowActivityRecord extends JsonObject {
+  activity_run_id?: string;
+  workflow_run_id?: string;
+  operation_run_id?: string;
+  acquisition_run_id?: string;
+  command_id?: string;
+  activity_type?: string;
+  owner?: string;
+  status?: string;
+  phase?: string;
+  mutation_contract?: string;
+  module_state_mutated?: boolean;
+  control_target?: WorkflowActivityControlTarget;
+}
+
+export interface WorkflowActivityAttemptRecord extends JsonObject {
+  attempt_id?: string;
+  activity_run_id?: string;
+  workflow_run_id?: string;
+  command_id?: string;
+  activity_type?: string;
+  owner?: string;
+  status?: string;
+  provider?: string;
+  mutation_contract?: string;
+  module_state_mutated?: boolean;
+  control_target?: WorkflowActivityControlTarget;
+}
+
+export interface WorkflowEntityDeltaRecord extends JsonObject {
+  delta_id?: string;
+  workflow_run_id?: string;
+  operation_run_id?: string;
+  command_id?: string;
+  activity_run_id?: string;
+  attempt_id?: string;
+  entity_type?: string;
+  entity_key?: string;
+  delta_kind?: string;
+  status?: string;
+  reason?: string;
+  mutation_contract?: string;
+  module_state_mutated?: boolean;
+  control_target?: WorkflowActivityControlTarget;
+}
+
+export interface AcquisitionDiscoveryLaneRecord {
+  lane_id?: string;
+  workspace_id?: string;
+  acquisition_run_id?: string;
+  workflow_run_id?: string;
+  operation_run_id?: string;
+  source_command_id?: string;
+  activity_run_id?: string;
+  target_company?: string;
+  query?: string;
+  provider?: string;
+  status?: string;
+  phase?: string;
+  read_model_role?: string;
+  mutation_contract?: string;
+  module_state_mutated?: boolean;
+  control_target?: WorkflowActivityControlTarget;
+}
+
+export interface WorkflowActivityListResponse {
+  status?: string;
+  contract?: string;
+  workflow_activities: WorkflowActivityRecord[];
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowActivityDetailResponse {
+  status: string;
+  contract?: string;
+  workflow_activity?: WorkflowActivityRecord;
+  activity_attempts?: WorkflowActivityAttemptRecord[];
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowActivityAttemptListResponse {
+  status?: string;
+  contract?: string;
+  workflow_activity_attempts: WorkflowActivityAttemptRecord[];
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowActivityAttemptDetailResponse {
+  status: string;
+  contract?: string;
+  workflow_activity_attempt?: WorkflowActivityAttemptRecord;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowEntityDeltaListResponse {
+  status?: string;
+  contract?: string;
+  workflow_entity_deltas: WorkflowEntityDeltaRecord[];
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowEntityDeltaDetailResponse {
+  status: string;
+  contract?: string;
+  workflow_entity_delta?: WorkflowEntityDeltaRecord;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface AcquisitionDiscoveryLaneListResponse {
+  status?: string;
+  contract?: string;
+  acquisition_discovery_lanes: AcquisitionDiscoveryLaneRecord[];
+}
+
+export interface AcquisitionDiscoveryLaneDetailResponse {
+  status: string;
+  contract?: string;
+  acquisition_discovery_lane?: AcquisitionDiscoveryLaneRecord;
 }
 
 export interface RefinementCompileResponse {

@@ -526,7 +526,7 @@ export function ManualReviewQueuePanel({
                     <div className="candidate-title-row">
                       <div>
                         <h4>{group.candidateName}</h4>
-                        <p className="candidate-meta-line">
+                        <p className="candidate-meta-line candidate-headline-scroll">
                           {effectiveCandidate
                             ? pickCandidateRoleLine(effectiveCandidate)
                             : group.localRecord?.headline || "待补充候选资料"}
@@ -633,11 +633,11 @@ export function ManualReviewQueuePanel({
                   {rawProfileUrl ? (
                     rawProfileUrl.startsWith("http") ? (
                       <a className="ghost-button candidate-action-button" href={rawProfileUrl} target="_blank" rel="noreferrer">
-                        查看原始资料
+                        打开LinkedIn
                       </a>
                     ) : (
                       <Link className="ghost-button candidate-action-button" to={rawProfileUrl}>
-                        查看原始资料
+                        打开LinkedIn
                       </Link>
                     )
                   ) : null}

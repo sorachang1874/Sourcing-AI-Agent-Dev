@@ -1,16 +1,15 @@
 import {
   approvePlanReview,
-  dashboardHasRenderableCandidates,
   type FrontendHistoryRecoveryEnvelope,
   continueWorkflowStage2,
-  exportTargetCandidatesArchive,
+  exportProjectionCandidatesArchive,
   startExcelIntakeWorkflow,
   getFrontendHistoryRecovery,
   getDashboard,
+  getRunProjectionId,
   submitPlanEnvelope,
   getRunStatus,
   importTargetCandidatesFromJob,
-  peekDashboardCache,
   startWorkflowRun,
 } from "./api";
 import type { DashboardData, DemoPlan, PlanReviewDecision, RunStatusData } from "../types";
@@ -58,6 +57,44 @@ export interface ExcelWorkflowLaunchResult {
 
 export type RecoveredHistoryResult = FrontendHistoryRecoveryEnvelope;
 
+function buildLaunchRunStatus(jobId: string, raw: unknown): RunStatusData {
+  const payload =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  const rawStatus = String(payload.status || "queued").toLowerCase();
+  const status: RunStatusData["status"] =
+    rawStatus === "completed" || rawStatus === "blocked" || rawStatus === "failed" || rawStatus === "running"
+      ? rawStatus
+      : "queued";
+  const stage = String(payload.stage || "planning");
+  return {
+    jobId,
+    status,
+    currentStage: stage === "planning" ? "Workflow" : stage,
+    startedAt: "unknown",
+    currentMessage: status === "queued" ? "Workflow queued" : "Workflow started",
+    awaitingUserAction: "",
+    metrics: [
+      { label: "总候选人数量", value: "0" },
+      { label: "需人工审核候选人", value: "0" },
+    ],
+    timeline: [
+      {
+        id: "workflow_launch",
+        stage: "planning",
+        title: "Workflow queued",
+        detail: "Workflow has been queued and progress polling is starting.",
+        status: status === "queued" ? "queued" : "running",
+        startedAt: "",
+        completedAt: "",
+        sourceTags: [],
+      },
+    ],
+    workers: [],
+  };
+}
+
 export class SourcingBackendClient {
   async planNaturalLanguageSearch(queryText: string, historyId = ""): Promise<NaturalLanguagePlanResult> {
     const trimmed = queryText.trim();
@@ -73,10 +110,9 @@ export class SourcingBackendClient {
 
   async startWorkflowFromReviewedPlan(reviewId: string, historyId = ""): Promise<WorkflowLaunchResult> {
     const { jobId, raw } = await startWorkflowRun(reviewId, historyId);
-    const runStatus = await getRunStatus(jobId);
     return {
       jobId,
-      runStatus,
+      runStatus: buildLaunchRunStatus(jobId, raw),
       raw,
     };
   }
@@ -144,9 +180,10 @@ export class SourcingBackendClient {
   }
 
   async exportTargetCandidatesForJob(jobId: string, historyId = ""): Promise<{ blob: Blob; filename: string }> {
-    const result = await exportTargetCandidatesArchive({
-      jobId,
-      historyId,
+    void historyId;
+    const projectionId = await getRunProjectionId(jobId);
+    const result = await exportProjectionCandidatesArchive({
+      projectionId,
     });
     return {
       blob: result.blob,
@@ -155,9 +192,8 @@ export class SourcingBackendClient {
   }
 
   async getWorkflowResults(jobId: string): Promise<DashboardData> {
-    const cachedDashboard = peekDashboardCache(jobId);
     return getDashboard(jobId, {
-      forceRefresh: !dashboardHasRenderableCandidates(cachedDashboard),
+      forceRefresh: true,
     });
   }
 }

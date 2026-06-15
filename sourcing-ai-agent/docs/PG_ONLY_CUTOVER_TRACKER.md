@@ -55,6 +55,10 @@ As of `2026-04-23`, the main remaining hosted leak identified in this round was:
     - SQLite shadow backend is disk-backed instead of `shared_memory`
   - production runtime now requires PG even if the startup script forgot `SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1`
   - this kept PG-only as a code-level runtime contract, not only a shell-script convention
+- `2026-06-06` CRM/Public Web read-path hardening:
+  - PG-only generic control-plane reads no longer call `ensure_bootstrapped()` before `select_many` / `count_rows`; missing PG tables return empty results without repairing from SQLite.
+  - CRM/Public Web latest-run batch reads and detail-style generic reads now fail closed on authoritative PG exceptions instead of swallowing them into empty results or falling back to SQLite.
+  - Fast regression coverage pins both paths so poll/detail drift cannot be masked by a compatibility shadow.
 - `2026-04-25` storage-surface closeout:
   - production no longer accepts `SOURCING_ALLOW_PRODUCTION_SQLITE_CONTROL_PLANE=1`
   - `postgres_only` mode rejects `SOURCING_PG_ONLY_SQLITE_BACKEND=disk`
@@ -70,6 +74,7 @@ As of `2026-04-23`, the main remaining hosted leak identified in this round was:
   - `show-control-plane-runtime` now emits `control_plane_storage_banner`
   - non-`postgres_only` runtime is marked as an error with migration exit instructions
   - `postgres_only + shared_memory` is marked as the expected live contract
+  - summary fields now distinguish `default_db_path/settings_db_path` seed paths from the real `compatibility_shadow_connect_target`
 
 ## ECS Verification Completed
 
@@ -78,7 +83,7 @@ As of `2026-04-23`, the main remaining hosted leak identified in this round was:
   - installed system Postgres on ECS
   - created local `sourcing_agent` database + `sourcing` user
   - rewrote remote `.local-postgres.env` to an ECS-valid DSN
-  - synced live `runtime/control_plane.shadow.db` into Postgres with validation
+  - synced the then-live disk-backed `runtime/control_plane.shadow.db` into Postgres with validation
   - replaced the old `sourcing-ai-agent.service` env with:
     - `SOURCING_CONTROL_PLANE_POSTGRES_DSN`
     - `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only`
@@ -110,5 +115,8 @@ As of `2026-04-23`, the main remaining hosted leak identified in this round was:
 - After hosted redeploy, verify the same guardrails on ECS with a real job launch
 - The old disk SQLite files under `runtime/` are still retained as backup artifacts, but are no longer the live authoritative path.
 - Legacy SQLite-specific export / restore paths are retired; keep any remaining SQLite code migration-only or ephemeral-shadow-only.
+- Runtime/operator guidance should describe the current contract as:
+  - disk-backed live SQLite is retired
+  - ephemeral compatibility shadow remains
 - Normalize remaining docs / runbooks that still show raw `python -m sourcing_agent.cli serve` examples without PG-only env context.
 - If any production process is discovered using disk SQLite control-plane state, treat it as an incident and migrate the resulting state back into PG before normal traffic resumes.
