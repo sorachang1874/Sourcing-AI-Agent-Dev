@@ -93,6 +93,7 @@ jobs:
           python -m pytest -q \
             tests/test_api_auth.py \
             tests/test_api_server_identity.py \
+            tests/test_user_private_reads.py \
             tests/test_pre_agent_contract_review.py \
             tests/test_operation_runtime.py \
             tests/test_crm_public_web_runtime_boundary.py \

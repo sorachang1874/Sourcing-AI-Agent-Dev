@@ -351,6 +351,41 @@ def _apply_server_identity(
     return payload
 
 
+# ---------------------------------------------------------------------------
+# C2.3: tighten user-private reads. A user-private GET serves its normal payload
+# when (a) open mode [identity None], (b) the stored owner is a legacy/pre-auth
+# sentinel ('' / 'default'), or (c) the stored owner matches the caller. Otherwise
+# 404 (never 403 — denies existence to prevent id-enumeration). Shared-canonical
+# reads are NOT gated. These are handler-boundary checks (no orchestrator churn):
+# the handler pre-fetches the owning row's owner field and gates before serving.
+# ---------------------------------------------------------------------------
+_LEGACY_OWNER_SENTINELS = ("", "default")
+
+
+def _read_allowed_for_expected(request: Request, owner_value: str | None, expected: str) -> bool:
+    """True => serve; False => 404. ``expected`` is the caller's derived owner."""
+    if _server_identity(request) is None:
+        return True
+    stored = str(owner_value or "").strip()
+    if stored in _LEGACY_OWNER_SENTINELS:
+        return True
+    return stored == expected
+
+
+def _read_allowed_requester(request: Request, owner_value: str | None) -> bool:
+    """owner_field kind: requester_id / owner_user_id (stored = bare user_id)."""
+    identity = _server_identity(request)
+    expected = identity["user_id"] if identity else ""
+    return _read_allowed_for_expected(request, owner_value, expected)
+
+
+def _read_allowed_namespace(request: Request, owner_value: str | None) -> bool:
+    """owner_field kind: workspace_id / tenant_id (stored = 'user-<id>')."""
+    identity = _server_identity(request)
+    expected = _user_namespace(identity["user_id"]) if identity else ""
+    return _read_allowed_for_expected(request, owner_value, expected)
+
+
 class _RequestConcurrencyMiddleware:
     """Two-lane request concurrency gate (asyncio mirror of the legacy semantics).
 
@@ -551,6 +586,36 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
 
     def add(methods: list[str], path: str, handler: _RouteHandler, *, read_body: bool = False) -> None:
         routes.append(Route(path, _make_endpoint(handler, read_body=read_body), methods=methods))
+
+    def _gate_job_owner(request: Request, job_id: str) -> Response | None:
+        """C2.3: 404 when the caller is not the job's owner. None => proceed.
+
+        Pre-fetches the job row (a single indexed PK read the downstream getter
+        repeats anyway) and gates on jobs.requester_id. Gates only when the row
+        exists, so a genuinely-missing job keeps its route's normal not-found.
+        Open mode is a true no-op (no pre-fetch).
+        """
+        if _server_identity(request) is None:
+            return None
+        job_row = orchestrator.store.get_job(job_id)
+        if job_row is not None and not _read_allowed_requester(request, job_row.get("requester_id")):
+            return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        return None
+
+    def _gate_crm_record_owner(request: Request, record_id: str) -> Response | None:
+        """C2.3: 404 when the caller is not the CRM record's workspace owner.
+
+        Gates the record-by-id subresource reads (profile / public-web detail /
+        promotions) on crm_records.workspace_id (set to 'user-<id>' by C2.2).
+        Gates only when the record exists, so a missing record keeps its route's
+        normal not-found. Open mode is a true no-op (no pre-fetch).
+        """
+        if _server_identity(request) is None:
+            return None
+        crm_record = orchestrator.store.get_crm_record(record_id)
+        if crm_record is not None and not _read_allowed_namespace(request, crm_record.get("workspace_id")):
+            return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "record_id": record_id})
+        return None
 
     # ------------------------------------------------------------------ GET
     def get_health(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
@@ -860,7 +925,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/target-candidates/public-web-search", get_target_public_web_search_gone)
 
     def get_crm_record_profile(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.get_crm_record_profile(_decode_path_param(request.path_params["record_id"]))
+        record_id = _decode_path_param(request.path_params["record_id"])
+        denied = _gate_crm_record_owner(request, record_id)
+        if denied is not None:
+            return denied
+        result = orchestrator.get_crm_record_profile(record_id)
         status = HTTPStatus.OK
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -871,9 +940,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/crm/records/{record_id}/profile", get_crm_record_profile)
 
     def get_crm_public_web_detail(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.get_crm_record_public_web_search_detail(
-            _decode_path_param(request.path_params["record_id"])
-        )
+        record_id = _decode_path_param(request.path_params["record_id"])
+        denied = _gate_crm_record_owner(request, record_id)
+        if denied is not None:
+            return denied
+        result = orchestrator.get_crm_record_public_web_search_detail(record_id)
         status = HTTPStatus.OK
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -884,9 +955,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/crm/records/{record_id}/public-web-search", get_crm_public_web_detail)
 
     def get_crm_public_web_promotions(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.list_crm_record_public_web_promotions(
-            _decode_path_param(request.path_params["record_id"])
-        )
+        record_id = _decode_path_param(request.path_params["record_id"])
+        denied = _gate_crm_record_owner(request, record_id)
+        if denied is not None:
+            return denied
+        result = orchestrator.list_crm_record_public_web_promotions(record_id)
         status = HTTPStatus.OK
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -1173,7 +1246,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/persons/{person_key}", get_person_summary)
 
     def get_job_progress(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        progress_payload = orchestrator.get_job_progress(request.path_params["job_id"])
+        job_id = request.path_params["job_id"]
+        denied = _gate_job_owner(request, job_id)
+        if denied is not None:
+            return denied
+        progress_payload = orchestrator.get_job_progress(job_id)
         if progress_payload is None:
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
         return _json_response(HTTPStatus.OK, progress_payload)
@@ -1181,8 +1258,12 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/jobs/{job_id:sourcing_ident}/progress", get_job_progress)
 
     def get_job_board_patches(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        job_id = request.path_params["job_id"]
+        denied = _gate_job_owner(request, job_id)
+        if denied is not None:
+            return denied
         patch_payload = orchestrator.get_job_board_visible_patch_log(
-            request.path_params["job_id"],
+            job_id,
             after_published_at=str(query.get("after_published_at") or ""),
             after_sequence=_env_int_from_payload(query, "after_sequence", 0),
             limit=_env_int_from_payload(query, "limit", 50),
@@ -1204,6 +1285,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
                     legacy_endpoint="/api/jobs/{job_id}/dashboard",
                 ),
             )
+        denied = _gate_job_owner(request, job_id)
+        if denied is not None:
+            return denied
         dashboard_payload = orchestrator.get_job_dashboard(
             job_id,
             include_asset_population_preview=_env_bool_from_payload(query, "include_candidates", True),
@@ -1225,6 +1309,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
                     legacy_endpoint="/api/jobs/{job_id}/candidates",
                 ),
             )
+        denied = _gate_job_owner(request, job_id)
+        if denied is not None:
+            return denied
         candidate_page_payload = orchestrator.get_job_candidate_page(
             job_id,
             offset=_env_int_from_payload(query, "offset", 0),
@@ -1249,6 +1336,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
                     legacy_endpoint="/api/jobs/{job_id}/results",
                 ),
             )
+        denied = _gate_job_owner(request, job_id)
+        if denied is not None:
+            return denied
         results_payload = orchestrator.get_job_results_api(
             job_id,
             include_candidates=_env_bool_from_payload(query, "include_candidates", False),
@@ -1273,6 +1363,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
                     candidate_identity_key=_decode_path_param(candidate_id),
                 ),
             )
+        denied = _gate_job_owner(request, job_id)
+        if denied is not None:
+            return denied
         candidate_detail_payload = orchestrator.get_job_candidate_detail(
             job_id,
             candidate_id,
@@ -1289,7 +1382,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/jobs/{job_id:sourcing_ident}/candidates/{candidate_id}", get_job_candidate_detail)
 
     def get_job_trace(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        trace_payload = orchestrator.get_job_trace(request.path_params["job_id"])
+        job_id = request.path_params["job_id"]
+        denied = _gate_job_owner(request, job_id)
+        if denied is not None:
+            return denied
+        trace_payload = orchestrator.get_job_trace(job_id)
         if trace_payload is None:
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
         return _json_response(HTTPStatus.OK, trace_payload)
@@ -1297,7 +1394,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/jobs/{job_id:sourcing_ident}/trace", get_job_trace)
 
     def get_job_workers(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        worker_payload = orchestrator.get_job_workers(request.path_params["job_id"])
+        job_id = request.path_params["job_id"]
+        denied = _gate_job_owner(request, job_id)
+        if denied is not None:
+            return denied
+        worker_payload = orchestrator.get_job_workers(job_id)
         if worker_payload is None:
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
         return _json_response(HTTPStatus.OK, worker_payload)
@@ -1305,7 +1406,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/jobs/{job_id:sourcing_ident}/workers", get_job_workers)
 
     def get_job_materialization_items(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        materialization_payload = orchestrator.get_job_materialization_items(request.path_params["job_id"])
+        job_id = request.path_params["job_id"]
+        denied = _gate_job_owner(request, job_id)
+        if denied is not None:
+            return denied
+        materialization_payload = orchestrator.get_job_materialization_items(job_id)
         if materialization_payload is None:
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
         return _json_response(HTTPStatus.OK, materialization_payload)
@@ -1313,7 +1418,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/jobs/{job_id:sourcing_ident}/materialization-items", get_job_materialization_items)
 
     def get_job_scheduler(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        scheduler_payload = orchestrator.get_job_scheduler(request.path_params["job_id"])
+        job_id = request.path_params["job_id"]
+        denied = _gate_job_owner(request, job_id)
+        if denied is not None:
+            return denied
+        scheduler_payload = orchestrator.get_job_scheduler(job_id)
         if scheduler_payload is None:
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
         return _json_response(HTTPStatus.OK, scheduler_payload)
@@ -1321,8 +1430,12 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/jobs/{job_id:sourcing_ident}/scheduler", get_job_scheduler)
 
     def get_job(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        job_id = request.path_params["job_id"]
+        denied = _gate_job_owner(request, job_id)
+        if denied is not None:
+            return denied
         job_payload = orchestrator.get_job_api(
-            request.path_params["job_id"],
+            job_id,
             include_details=_env_bool_from_payload(query, "include_details", False),
         )
         if job_payload is None:
