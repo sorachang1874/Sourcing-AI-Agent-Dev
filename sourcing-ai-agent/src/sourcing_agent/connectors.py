@@ -1,18 +1,26 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from hashlib import sha1
 import json
-from pathlib import Path
 import re
 import time
+from dataclasses import asdict, dataclass, field
+from hashlib import sha1
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib import error, parse, request
 
 from .asset_logger import AssetLogger
 from .company_registry import builtin_company_identity, normalize_company_key, resolve_company_alias_key
-from .domain import Candidate, EvidenceRecord, format_display_name, make_evidence_id, normalize_candidate, normalize_name_token
+from .domain import (
+    Candidate,
+    EvidenceRecord,
+    format_display_name,
+    make_evidence_id,
+    normalize_candidate,
+    normalize_name_token,
+)
 from .execution_preferences import extract_target_company_linkedin_override
+from .runtime_environment import assert_live_provider_access_allowed
 
 if TYPE_CHECKING:
     from .model_provider import ModelClient
@@ -706,6 +714,11 @@ class LinkedInCompanyRosterConnector:
 
             base_url = account.base_url.rstrip("/")
             url = f"{base_url}/api/company/people?{parse.urlencode({'username': linkedin_slug, 'page': page, 'limit': page_limit})}"
+            assert_live_provider_access_allowed(
+                provider_name="rapidapi_linkedin",
+                operation="company_people",
+                payload={"linkedin_slug": linkedin_slug, "page": page, "limit": page_limit, "host": account.host},
+            )
             request_headers = {
                 "x-rapidapi-host": account.host,
                 "x-rapidapi-key": account.api_key,
@@ -759,6 +772,7 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
         linkedin_url = str(row.get("linkedin_url", "")).strip()
         team = _infer_team_from_headline(headline)
         source_shard_filters = dict(row.get("source_shard_filters") or {})
+        public_identifier = str(row.get("public_identifier") or row.get("member_id") or "").strip()
         include_function_ids = [
             str(item).strip()
             for item in list(row.get("function_ids") or [])
@@ -797,6 +811,8 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
                 "member_id": row.get("member_id", ""),
                 "urn": row.get("urn", ""),
                 "profile_url": linkedin_url,
+                "linkedin_url": linkedin_url,
+                "public_identifier": public_identifier,
                 "location": location,
                 "page": row.get("page"),
                 "source_account_id": row.get("source_account_id", ""),

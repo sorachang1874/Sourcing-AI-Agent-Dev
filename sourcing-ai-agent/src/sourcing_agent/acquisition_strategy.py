@@ -42,6 +42,8 @@ FULL_COMPANY_TECHNICAL_ROSTER_FUNCTION_IDS = ["8", "24"]
 
 KEYWORD_CANONICAL_ALIASES = {
     "coding": "Coding",
+    "agent": "Agent",
+    "agentic": "Agent",
     "math": "Math",
     "text": "Text",
     "audio": "Audio",
@@ -87,15 +89,7 @@ KEYWORD_CANONICAL_ALIASES = {
     "基础设施": "Infra",
 }
 
-ACQUISITION_KEYWORD_EXCLUSION_KEYS = {
-    "greater china experience",
-    "chinese bilingual outreach",
-    "greater_china_region_experience",
-    "mainland_china_experience_or_chinese_language",
-    "mainland or chinese language",
-}
-
-KEYWORD_PRIORITY_SKIP_KEYS = {
+GENERIC_ROLE_QUERY_KEYS = {
     "research",
     "researcher",
     "employee",
@@ -103,6 +97,17 @@ KEYWORD_PRIORITY_SKIP_KEYS = {
     "engineering",
     "engineer",
 }
+
+ACQUISITION_KEYWORD_EXCLUSION_KEYS = {
+    "greater china experience",
+    "chinese bilingual outreach",
+    "greater_china_region_experience",
+    "mainland_china_experience_or_chinese_language",
+    "mainland or chinese language",
+    *GENERIC_ROLE_QUERY_KEYS,
+}
+
+KEYWORD_PRIORITY_SKIP_KEYS = GENERIC_ROLE_QUERY_KEYS
 
 _DIRECTIONAL_SCOPE_HINT_TERMS = (
     "方向",
@@ -239,12 +244,15 @@ def compile_acquisition_strategy(
             categories=effective_categories,
             keyword_hints=effective_keywords + effective_must_have_keywords,
         )
+    # Provider-facing seed queries should only use explicit acquisition keywords.
+    # Hard serving facets stay on the intent/retrieval contract; otherwise a
+    # precise shard such as Vision-language can be widened into an extra
+    # Multimodal provider run just because the semantic layer added a facet.
     keyword_hints = _infer_keyword_hints(
         text,
         _acquisition_keyword_candidates(
             effective_keywords
             + effective_must_have_keywords
-            + effective_must_have_facets
             + _keyword_like_organization_terms(
                 effective_organization_keywords,
                 target_company=effective_target_company,
@@ -262,14 +270,18 @@ def compile_acquisition_strategy(
         company_scope=company_scope,
         keyword_hints=keyword_hints,
     )
-    search_seed_queries = _build_search_seed_queries(
-        effective_target_company,
-        company_scope,
-        role_hints,
-        function_target_groups,
-        keyword_hints,
-        effective_employment_statuses,
-        keyword_priority_only=bool(cost_policy.get("keyword_priority_only")),
+    search_seed_queries = (
+        _build_search_seed_queries(
+            effective_target_company,
+            company_scope,
+            role_hints,
+            function_target_groups,
+            keyword_hints,
+            effective_employment_statuses,
+            keyword_priority_only=bool(cost_policy.get("keyword_priority_only")),
+        )
+        if _stage1_search_seed_queries_enabled(strategy_type=strategy_type, cost_policy=cost_policy)
+        else []
     )
     filter_hints = _build_filter_hints(
         effective_target_company,
@@ -530,7 +542,7 @@ def _is_directional_company_query(
     must_have_facets: list[str],
     role_buckets: list[str],
 ) -> bool:
-    if len(scope_hints) >= 2:
+    if scope_hints:
         return True
     if organization_keywords or keywords or must_have_keywords or must_have_facets or role_buckets:
         return True
@@ -607,6 +619,11 @@ def _determine_strategy_decision(
     normalized_categories = {str(item).strip().lower() for item in categories if str(item).strip()}
     normalized_statuses = {str(item).strip().lower() for item in employment_statuses if str(item).strip()}
     scope_semantics = dict(dict(semantic_brief or {}).get("scope") or {})
+    requested_population_boundary = dict(
+        dict(semantic_brief or {}).get("requested_population_boundary")
+        or dict(dict(semantic_brief or {}).get("population") or {}).get("requested_population_boundary")
+        or {}
+    )
     thematic_focus = dict(dict(semantic_brief or {}).get("thematic_focus") or {})
     directional_query = bool(
         scope_semantics.get("directional_query")
@@ -668,9 +685,34 @@ def _determine_strategy_decision(
             "decision_source": "population",
             "reason_codes": ["former_only_population"],
             "directional_query": directional_query,
+            "requested_population_boundary": requested_population_boundary,
             "organization_execution_profile": normalized_profile,
         }
-    if bool(scope_semantics.get("explicit_full_roster_intent")) or _is_explicit_full_roster_intent(
+    boundary_type = str(requested_population_boundary.get("boundary_type") or "").strip().lower()
+    profile_full_company_coverage_proven = bool(
+        normalized_profile.get("full_company_coverage_proven")
+        or normalized_profile.get("coverage_baseline_reuse_ready")
+        or dict(normalized_profile.get("population_coverage_contract") or {}).get("full_company_coverage_proven")
+        or dict(dict(normalized_profile.get("summary") or {}).get("population_coverage_contract") or {}).get(
+            "full_company_coverage_proven"
+        )
+    )
+    profile_population_contract = dict(
+        normalized_profile.get("population_coverage_contract")
+        or dict(normalized_profile.get("summary") or {}).get("population_coverage_contract")
+        or {}
+    )
+    profile_scoped_only_coverage = bool(
+        profile_population_contract.get("scoped_shard_only")
+        or profile_population_contract.get("exact_scoped_coverage_available")
+        and not profile_full_company_coverage_proven
+        or "authoritative_asset_has_scoped_coverage_only" in set(normalized_profile.get("reason_codes") or [])
+    )
+    explicit_full_roster_boundary = bool(
+        requested_population_boundary.get("explicit_full_roster_intent")
+        or scope_semantics.get("explicit_full_roster_intent")
+    )
+    if explicit_full_roster_boundary or _is_explicit_full_roster_intent(
         text,
         thematic_or_role_constrained=thematic_or_role_constrained_query,
     ):
@@ -679,6 +721,40 @@ def _determine_strategy_decision(
             "decision_source": "request_semantics",
             "reason_codes": ["explicit_full_roster_intent"],
             "directional_query": directional_query,
+            "requested_population_boundary": requested_population_boundary,
+            "organization_execution_profile": normalized_profile,
+        }
+    if boundary_type == "scoped_directional" and (
+        bool(requested_population_boundary.get("full_company_filter_allowed")) or profile_scoped_only_coverage
+    ):
+        if bool(requested_population_boundary.get("full_company_filter_allowed")) and profile_full_company_coverage_proven:
+            return {
+                "strategy_type": "full_company_roster",
+                "decision_source": "request_population_boundary",
+                "reason_codes": [
+                    "requested_population_boundary_scoped_directional",
+                    "full_company_filter_allowed",
+                    "full_company_coverage_proven",
+                ],
+                "directional_query": directional_query,
+                "requested_population_boundary": requested_population_boundary,
+                "organization_execution_profile": normalized_profile,
+            }
+        reason_codes = ["requested_population_boundary_scoped_directional"]
+        if bool(requested_population_boundary.get("full_company_filter_allowed")):
+            reason_codes.append("full_company_filter_requires_coverage_proof")
+        if profile_scoped_only_coverage:
+            reason_codes.append("profile_scoped_only_coverage")
+        if not bool(requested_population_boundary.get("full_company_filter_allowed")):
+            reason_codes.append("directional_boundary_stays_scoped")
+        if normalized_profile:
+            reason_codes.append("org_profile_consulted_after_request_boundary")
+        return {
+            "strategy_type": "scoped_search_roster",
+            "decision_source": "request_population_boundary",
+            "reason_codes": reason_codes,
+            "directional_query": directional_query,
+            "requested_population_boundary": requested_population_boundary,
             "organization_execution_profile": normalized_profile,
         }
     default_mode = str(normalized_profile.get("default_acquisition_mode") or "").strip().lower()
@@ -688,6 +764,7 @@ def _determine_strategy_decision(
             "decision_source": "organization_execution_profile",
             "reason_codes": ["org_profile_default_scoped_search"],
             "directional_query": directional_query,
+            "requested_population_boundary": requested_population_boundary,
             "organization_execution_profile": normalized_profile,
         }
     if default_mode == "hybrid":
@@ -699,6 +776,7 @@ def _determine_strategy_decision(
                 "hybrid_directional_query" if directional_query else "hybrid_broad_query",
             ],
             "directional_query": directional_query,
+            "requested_population_boundary": requested_population_boundary,
             "organization_execution_profile": normalized_profile,
         }
     if default_mode == "full_company_roster":
@@ -707,6 +785,7 @@ def _determine_strategy_decision(
             "decision_source": "organization_execution_profile",
             "reason_codes": ["org_profile_default_full_roster"],
             "directional_query": directional_query,
+            "requested_population_boundary": requested_population_boundary,
             "organization_execution_profile": normalized_profile,
         }
     fallback_strategy_type = _infer_strategy_type(
@@ -721,6 +800,7 @@ def _determine_strategy_decision(
         "decision_source": "fallback_rules",
         "reason_codes": ["fallback_rule_strategy"],
         "directional_query": directional_query,
+        "requested_population_boundary": requested_population_boundary,
         "organization_execution_profile": normalized_profile,
     }
 
@@ -838,7 +918,8 @@ def _infer_keyword_hints(
         ("alignment", "Alignment"),
         ("infrastructure", "Infrastructure"),
         ("infra", "Infra"),
-        ("agentic", "Agentic"),
+        ("agent", "Agent"),
+        ("agentic", "Agent"),
         ("agents", "Agents"),
         ("tool use", "Tool use"),
         ("training", "Training"),
@@ -850,6 +931,8 @@ def _infer_keyword_hints(
             continue
         candidate = _canonical_keyword_label(label)
         dedupe_key = _canonical_keyword_key(candidate)
+        if dedupe_key in ACQUISITION_KEYWORD_EXCLUSION_KEYS:
+            continue
         if dedupe_key in seen_keys:
             continue
         seen_keys.add(dedupe_key)
@@ -1009,6 +1092,20 @@ def _build_search_seed_queries(
         seen.add(signature)
         deduped.append(normalized)
     return deduped[:6]
+
+
+def _stage1_search_seed_queries_enabled(
+    *,
+    strategy_type: str,
+    cost_policy: dict[str, object],
+) -> bool:
+    normalized_strategy = str(strategy_type or "").strip().lower()
+    if normalized_strategy == "full_company_roster":
+        # A normal full-roster lane is driven by company-employees/provider filters,
+        # not generic "Company Employee" seed text. Keep keyword seed queries only
+        # for explicit large-org probe shards where they are provider-facing.
+        return bool(cost_policy.get("large_org_keyword_probe_mode"))
+    return True
 
 
 def _build_filter_hints(
@@ -1294,11 +1391,13 @@ def _build_cost_policy(
         "provider_people_search_query_strategy": "all_queries_union",
         "provider_people_search_min_expected_results": 10,
         "provider_people_search_max_queries": 8,
+        "provider_people_search_accept_zero_results": strategy_type in {"scoped_search_roster", "former_employee_search"},
         "company_employees_min_batch_size": 50,
         "company_employees_start_cost_usd": 0.02,
         "profile_search_page_cost_usd": 0.10,
         "profile_scraper_cost_per_profile_usd": 0.01,
-        "prefer_low_cost_web_search": True,
+        "prefer_low_cost_web_search": False,
+        "allow_stage1_web_seed_fallback": bool(execution_preferences.get("allow_stage1_web_seed_fallback")),
         "allow_cached_roster_fallback": True,
         "allow_historical_profile_inheritance": True,
         "allow_shared_provider_cache": True,
@@ -1315,7 +1414,10 @@ def _build_cost_policy(
         "large_org_keyword_probe_mode": large_org_keyword_probe_mode,
         "keyword_priority_only": large_org_keyword_probe_mode or (strategy_type == "scoped_search_roster" and bool(keyword_hints)),
         "former_keyword_queries_only": large_org_keyword_probe_mode,
-        "former_broad_past_company_only": strategy_type == "full_company_roster" and not large_org_keyword_probe_mode,
+        "former_broad_past_company_only": (
+            (strategy_type == "full_company_roster" and not large_org_keyword_probe_mode)
+            or (strategy_type == "former_employee_search" and not keyword_hints)
+        ),
     }
     if strategy_type == "former_employee_search":
         policy["provider_people_search_min_expected_results"] = 50
@@ -1337,6 +1439,12 @@ def _build_cost_policy(
         policy["keyword_priority_only"] = bool(execution_preferences.get("keyword_priority_only"))
     if "former_keyword_queries_only" in execution_preferences:
         policy["former_keyword_queries_only"] = bool(execution_preferences.get("former_keyword_queries_only"))
+    if "former_broad_past_company_only" in execution_preferences:
+        policy["former_broad_past_company_only"] = bool(
+            execution_preferences.get("former_broad_past_company_only")
+        )
+    if bool(policy.get("former_keyword_queries_only")):
+        policy["former_broad_past_company_only"] = False
     if "provider_people_search_query_strategy" in execution_preferences:
         query_strategy = str(execution_preferences.get("provider_people_search_query_strategy") or "").strip().lower()
         if query_strategy in {"all_queries_union", "first_hit"}:
@@ -1346,6 +1454,23 @@ def _build_cost_policy(
             policy["provider_people_search_max_queries"] = max(1, int(execution_preferences.get("provider_people_search_max_queries") or 1))
         except (TypeError, ValueError):
             pass
+    if "provider_people_search_pages" in execution_preferences:
+        try:
+            policy["provider_people_search_pages"] = max(1, min(100, int(execution_preferences.get("provider_people_search_pages") or 1)))
+        except (TypeError, ValueError):
+            pass
+    if "provider_people_search_scale_chunk_pages" in execution_preferences:
+        try:
+            policy["provider_people_search_scale_chunk_pages"] = max(
+                1,
+                min(10, int(execution_preferences.get("provider_people_search_scale_chunk_pages") or 1)),
+            )
+        except (TypeError, ValueError):
+            pass
+    if "provider_people_search_accept_zero_results" in execution_preferences:
+        policy["provider_people_search_accept_zero_results"] = bool(
+            execution_preferences.get("provider_people_search_accept_zero_results")
+        )
     _apply_scoped_search_provider_policy(
         policy,
         strategy_type=strategy_type,

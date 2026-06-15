@@ -205,6 +205,8 @@ def worker_has_completed_background_search_output(worker: dict[str, Any]) -> boo
         return False
     if str(worker.get("status") or "") != "completed":
         return False
+    if worker_has_inline_incremental_ingest_output(worker):
+        return False
     output = dict(worker.get("output") or {})
     if dict(output.get("summary") or {}):
         return True
@@ -240,6 +242,10 @@ def resolve_reconcile_snapshot_id(
     *,
     job_result_view: dict[str, Any] | None = None,
 ) -> str:
+    for worker in workers:
+        for snapshot_dir in _worker_snapshot_dir_candidates(worker):
+            if snapshot_dir.exists() and snapshot_dir.name:
+                return snapshot_dir.name
     result_view = dict(job_result_view or {})
     snapshot_id = str(result_view.get("snapshot_id") or "").strip()
     if snapshot_id:

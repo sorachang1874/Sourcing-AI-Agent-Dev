@@ -6,32 +6,44 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.parse import urlparse
 
 from sourcing_agent.asset_logger import AssetLogger
 from sourcing_agent.document_extraction import extract_page_signals
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.public_web_search import (
+    CandidateSearchOutcome,
+    CandidateSearchPlan,
     ClassifiedEntryLink,
     PublicWebCandidateContext,
     PublicWebExperimentOptions,
+    PublicWebQuerySpec,
     _primary_links,
     adjudicate_public_web_candidate_evidence,
     adjudicate_public_web_signals,
     apply_email_adjudication,
     apply_link_adjudication,
     build_candidate_adjudication_context,
+    build_public_web_candidate_adjudication_input,
     build_diversified_fetch_queue,
     candidate_context_from_target_candidate,
+    canonicalize_profile_link_type_from_url,
     classify_entry_links_from_document_signals,
     classify_public_web_url,
+    execute_candidate_search_plans_batch,
     extract_email_candidate_signals,
     fetch_candidate_public_web_documents,
     is_clean_profile_link,
+    is_publishable_profile_link,
     load_target_candidates_from_json,
     normalize_model_link_signal_type,
+    normalize_ai_entry_link_limit,
+    normalize_ai_evidence_document_limit,
     plan_candidate_public_web_queries,
     public_web_link_shape_warnings,
+    public_web_query_identity_key,
     rank_entry_links,
+    run_public_web_candidate_adjudication,
     run_target_candidate_public_web_experiment,
     sanitize_public_web_adjudication_for_payload,
     select_entry_links_for_adjudication,
@@ -106,12 +118,14 @@ class _GitHubOnlySearchProvider(BaseSearchProvider):
 class _BatchFakeSearchProvider(BaseSearchProvider):
     provider_name = "fake_batch_search"
 
-    def __init__(self, *, fail_record_id: str = "") -> None:
+    def __init__(self, *, fail_record_id: str = "", fail_submit_record_id: str = "") -> None:
         self.fail_record_id = fail_record_id
+        self.fail_submit_record_id = fail_submit_record_id
         self.search_calls = 0
         self.submit_calls = 0
         self.poll_calls = 0
         self.fetch_calls = 0
+        self.submitted_specs: list[dict] = []
 
     def search(self, query_text: str, *, max_results: int = 10, timeout: int | None = None) -> SearchResponse:
         del query_text, max_results, timeout
@@ -120,16 +134,38 @@ class _BatchFakeSearchProvider(BaseSearchProvider):
 
     def submit_batch_queries(self, query_specs: list[dict]) -> SearchBatchSubmissionResult | None:
         self.submit_calls += 1
-        tasks = [
-            SearchBatchSubmissionTask(
-                task_key=str(spec.get("task_key") or ""),
-                query_text=str(spec.get("query_text") or ""),
-                checkpoint={"status": "submitted", "task_id": f"task-{index:02d}"},
-                metadata=dict(spec.get("metadata") or {}),
+        self.submitted_specs = [dict(spec) for spec in query_specs]
+        tasks = []
+        for index, spec in enumerate(query_specs, start=1):
+            task_key = str(spec.get("task_key") or "")
+            if not task_key.strip():
+                continue
+            metadata = dict(spec.get("metadata") or {})
+            if metadata.get("record_id") == self.fail_submit_record_id:
+                tasks.append(
+                    SearchBatchSubmissionTask(
+                        task_key=task_key,
+                        query_text=str(spec.get("query_text") or ""),
+                        checkpoint={
+                            "status": "submit_failed_retryable",
+                            "task_id": "",
+                            "error": "scripted submit failure for one query",
+                            "retryable": True,
+                            "retry_unit": "search_query",
+                            "retry_strategy": "dataforseo_batch_failed_query_retry_only",
+                        },
+                        metadata={**metadata, "failed": True, "retryable": True},
+                    )
+                )
+                continue
+            tasks.append(
+                SearchBatchSubmissionTask(
+                    task_key=task_key,
+                    query_text=str(spec.get("query_text") or ""),
+                    checkpoint={"status": "submitted", "task_id": f"task-{index:02d}"},
+                    metadata=metadata,
+                )
             )
-            for index, spec in enumerate(query_specs, start=1)
-            if str(spec.get("task_key") or "").strip()
-        ]
         return SearchBatchSubmissionResult(provider_name=self.provider_name, tasks=tasks)
 
     def poll_ready_batch(self, query_specs: list[dict]) -> SearchBatchReadyResult | None:
@@ -215,6 +251,21 @@ class _CountingPublicWebModelClient:
         }
 
 
+class _VersionedPublicWebModelClient(_CountingPublicWebModelClient):
+    def __init__(self, *, model: str, fallback_used: bool = False) -> None:
+        super().__init__()
+        self.settings = SimpleNamespace(model=model)
+        self.fallback_used = fallback_used
+
+    def provider_name(self) -> str:
+        return "qwen"
+
+    def analyze_public_web_candidate_signals(self, payload: dict) -> dict:
+        result = super().analyze_public_web_candidate_signals(payload)
+        result["fallback_used"] = self.fallback_used
+        return result
+
+
 class PublicWebSearchTest(unittest.TestCase):
     def test_query_planning_uses_target_candidate_source_families(self) -> None:
         candidate = PublicWebCandidateContext(
@@ -235,7 +286,7 @@ class PublicWebSearchTest(unittest.TestCase):
         self.assertEqual(queries[4].source_family, "technical_presence")
         self.assertEqual(queries[7].source_family, "social_presence")
         self.assertIn('"Example AI" site:github.com', queries[4].query_text)
-        self.assertIn('site:github.com', queries[5].query_text)
+        self.assertIn("site:github.com", queries[5].query_text)
         self.assertFalse(any(query.source_family == "resume_and_documents" for query in queries))
         self.assertTrue(any("site:scholar.google.com/citations" in query.query_text for query in queries))
         self.assertTrue(any("site:github.com" in query.query_text for query in queries))
@@ -423,7 +474,9 @@ class PublicWebSearchTest(unittest.TestCase):
             )
 
         with tempfile.TemporaryDirectory() as tempdir:
-            with patch("sourcing_agent.public_web_search.analyze_remote_document", side_effect=fake_analyze_remote_document):
+            with patch(
+                "sourcing_agent.public_web_search.analyze_remote_document", side_effect=fake_analyze_remote_document
+            ):
                 result = fetch_candidate_public_web_documents(
                     ranked_links=links,
                     candidate=candidate,
@@ -439,6 +492,71 @@ class PublicWebSearchTest(unittest.TestCase):
 
         self.assertEqual(len(result["fetched_documents"]), 3)
         self.assertEqual(max_active, 2)
+
+    def test_fetch_documents_marks_pending_document_timeout_without_blocking_batch(self) -> None:
+        candidate = PublicWebCandidateContext(
+            record_id="target-1",
+            candidate_id="cand-1",
+            candidate_name="Ada Lovelace",
+            current_company="Example AI",
+        )
+        links = [
+            ClassifiedEntryLink(
+                url="https://ada.example.edu/slow.pdf",
+                normalized_url="https://ada.example.edu/slow.pdf",
+                title="Ada Lovelace slow CV",
+                snippet="Example AI CV.",
+                source_domain="ada.example.edu",
+                entry_type="resume_url",
+                source_family="resume_and_documents",
+                score=10,
+                fetchable=True,
+            )
+        ]
+
+        def fake_fetch_candidate_public_web_document(**kwargs):
+            time.sleep(0.3)
+            link = kwargs["link"]
+            return SimpleNamespace(
+                fetch_index=kwargs["fetch_index"],
+                link=link,
+                document_record={
+                    "source_url": link.normalized_url,
+                    "entry_type": link.entry_type,
+                    "source_family": link.source_family,
+                    "status": "completed_late",
+                },
+                error="",
+                signals={"descriptions": []},
+                email_candidates=[],
+                discovered_entry_links=[],
+            )
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with patch(
+                "sourcing_agent.public_web_search.fetch_candidate_public_web_document",
+                side_effect=fake_fetch_candidate_public_web_document,
+            ):
+                started = time.monotonic()
+                result = fetch_candidate_public_web_documents(
+                    ranked_links=links,
+                    candidate=candidate,
+                    candidate_dir=Path(tempdir),
+                    logger=AssetLogger(Path(tempdir)),
+                    model_client=None,
+                    options=PublicWebExperimentOptions(
+                        max_fetches_per_candidate=1,
+                        max_concurrent_fetches_per_candidate=1,
+                        document_fetch_total_timeout_seconds=0.05,
+                        extract_contact_signals=False,
+                    ),
+                )
+                elapsed = time.monotonic() - started
+
+        self.assertLess(elapsed, 0.2)
+        self.assertTrue(result["document_fetch_timed_out"])
+        self.assertEqual(result["fetched_documents"][0]["status"], "timeout")
+        self.assertIn("fetch_timeout:https://ada.example.edu/slow.pdf", "\n".join(result["errors"]))
 
     def test_fetch_queue_prefers_one_per_available_media_type_before_duplicates(self) -> None:
         candidate = PublicWebCandidateContext(
@@ -521,6 +639,48 @@ class PublicWebSearchTest(unittest.TestCase):
                 "https://scholar.google.com/citations?view_op=view_citation&citation_for_view=abc:def",
             ),
         )
+        self.assertIn(
+            "publication_evidence_only_not_profile",
+            public_web_link_shape_warnings("publication_url", "https://www.researchgate.net/publication/123"),
+        )
+        self.assertIn(
+            "personal_homepage_deep_content_or_video_not_profile_root",
+            public_web_link_shape_warnings("personal_homepage", "https://www.youtube.com/watch?v=P3_kE7uK8ko"),
+        )
+
+    def test_partial_person_name_suppresses_unconstrained_fallback_queries(self) -> None:
+        candidate = PublicWebCandidateContext(
+            record_id="target-1",
+            candidate_id="cand-1",
+            candidate_name="Brian E.",
+            current_company="Anthropic",
+        )
+
+        queries = plan_candidate_public_web_queries(candidate, max_queries=12)
+        query_texts = [query.query_text for query in queries]
+
+        self.assertTrue(query_texts)
+        self.assertFalse(any('site:scholar.google.com/citations' in query and '"Anthropic"' not in query for query in query_texts))
+        self.assertFalse(any('(site:x.com OR site:twitter.com)' in query and '"Anthropic"' not in query for query in query_texts))
+        self.assertFalse(any('site:substack.com' in query and '"Anthropic"' not in query for query in query_texts))
+
+    def test_company_match_requires_company_entity_not_lowercase_adjective(self) -> None:
+        candidate = PublicWebCandidateContext(
+            record_id="target-1",
+            candidate_id="cand-1",
+            candidate_name="Yuwei Qin",
+            current_company="Anthropic",
+        )
+
+        link = classify_public_web_url(
+            url="https://www.researchgate.net/publication/378674038_Models_of_geochemical_speciation",
+            title="Models of geochemical speciation",
+            snippet="Models for anthropic activities and environmental chemistry.",
+            candidate=candidate,
+        )
+
+        self.assertIsNotNone(link)
+        self.assertNotIn("company_match", link.reasons)
 
     def test_link_adjudication_keeps_identity_label_but_marks_dirty_url_shape(self) -> None:
         link = ClassifiedEntryLink(
@@ -586,6 +746,70 @@ class PublicWebSearchTest(unittest.TestCase):
         self.assertFalse(is_clean_profile_link(dirty_x_post.entry_type, dirty_x_post.normalized_url))
         self.assertEqual(primary["x_url"], "https://x.com/ada_ai")
 
+    def test_publishable_profile_link_excludes_other_and_publication_evidence(self) -> None:
+        self.assertTrue(is_publishable_profile_link("scholar_url", "https://scholar.google.com/citations?user=abc"))
+        self.assertTrue(is_publishable_profile_link("github_url", "https://github.com/example-user"))
+        self.assertFalse(is_publishable_profile_link("other", "https://www.databricks.com/dataaisummit/speaker/jackie-bow"))
+        self.assertFalse(is_publishable_profile_link("publication_url", "https://researchgate.net/publication/123"))
+        self.assertFalse(is_publishable_profile_link("company_page", "https://example.com/blog/person-interview"))
+
+    def test_model_other_signal_type_is_canonicalized_for_clean_profile_url(self) -> None:
+        self.assertEqual(canonicalize_profile_link_type_from_url("other", "https://github.com/vontell"), "github_url")
+        self.assertEqual(
+            canonicalize_profile_link_type_from_url("other", "https://scholar.google.com/citations?user=abc"),
+            "scholar_url",
+        )
+        self.assertEqual(canonicalize_profile_link_type_from_url("other", "https://x.com/jbowocky"), "x_url")
+        self.assertEqual(
+            canonicalize_profile_link_type_from_url("other", "https://github.com/orgs/CodeForPhilly/followers"),
+            "github_url",
+        )
+        self.assertFalse(
+            is_publishable_profile_link("github_url", "https://github.com/orgs/CodeForPhilly/followers")
+        )
+
+    def test_adjudication_selection_prefers_owned_x_profile_over_third_party_mention(self) -> None:
+        candidate = PublicWebCandidateContext(
+            record_id="crmrec_jackie",
+            candidate_id="crmrec_jackie",
+            candidate_name="Jackie Bow",
+            current_company="Anthropic",
+        )
+        third_party_profile = ClassifiedEntryLink(
+            url="https://x.com/staceywueste",
+            normalized_url="https://x.com/staceywueste",
+            title="Stacey Wueste (@staceywueste) / X",
+            snippet='* Jackie Bow (Anthropic) — "Catch & Kill: Agents on the Loose"',
+            source_domain="x.com",
+            entry_type="x_url",
+            source_family="social_presence",
+            score=98,
+            query_text='"Jackie Bow" "Anthropic" (site:x.com OR site:twitter.com)',
+            result_rank=1,
+            fetchable=True,
+        )
+        owned_profile = ClassifiedEntryLink(
+            url="https://x.com/jbowocky",
+            normalized_url="https://x.com/jbowocky",
+            title="Jackie Bow (@jbowocky) / X",
+            snippet="Jackie Bow (@jbowocky) - endlessly curious.",
+            source_domain="x.com",
+            entry_type="x_url",
+            source_family="social_presence",
+            score=80,
+            query_text='"Jackie Bow" (site:x.com OR site:twitter.com)',
+            result_rank=4,
+            fetchable=True,
+        )
+
+        [selected] = select_entry_links_for_adjudication(
+            [third_party_profile, owned_profile],
+            limit=1,
+            candidate=candidate,
+        )
+
+        self.assertEqual(selected.normalized_url, "https://x.com/jbowocky")
+
     def test_public_web_adjudication_sanitizer_drops_model_invented_email_and_normalizes_links(self) -> None:
         payload = {
             "email_candidates": [],
@@ -611,11 +835,14 @@ class PublicWebSearchTest(unittest.TestCase):
                     "url": "https://scholar.google.com/citations?user=abc",
                     "signal_type": "scholar_profile",
                     "identity_match_label": "likely_same_person",
+                    "user_visible_signal": True,
+                    "review_queue_reason": "Confirmed Scholar profile.",
                 },
                 {
                     "url": "https://github.com/unrelated",
                     "signal_type": "github_profile",
                     "identity_match_label": "confirmed",
+                    "user_visible_signal": True,
                 },
             ],
         }
@@ -625,6 +852,8 @@ class PublicWebSearchTest(unittest.TestCase):
         self.assertEqual(sanitized["email_assessments"], [])
         self.assertEqual(len(sanitized["link_assessments"]), 1)
         self.assertEqual(sanitized["link_assessments"][0]["signal_type"], "scholar_url")
+        self.assertTrue(sanitized["link_assessments"][0]["user_visible_signal"])
+        self.assertEqual(sanitized["link_assessments"][0]["review_queue_reason"], "Confirmed Scholar profile.")
 
     def test_discovered_homepage_links_are_only_prioritized_from_scholar(self) -> None:
         candidate = PublicWebCandidateContext(
@@ -709,7 +938,9 @@ class PublicWebSearchTest(unittest.TestCase):
                     snippet="Ada Lovelace Example AI public profile.",
                     source_domain=url.split("/")[2],
                     entry_type=entry_type,
-                    source_family="social_presence" if entry_type in {"x_url", "substack_url"} else "profile_web_presence",
+                    source_family="social_presence"
+                    if entry_type in {"x_url", "substack_url"}
+                    else "profile_web_presence",
                     score=20,
                     provider_name="dataforseo_google_organic",
                     result_rank=50,
@@ -726,6 +957,103 @@ class PublicWebSearchTest(unittest.TestCase):
         self.assertIn("scholar_url", selected_types)
         self.assertIn("personal_homepage", selected_types)
         self.assertLess(sum(1 for link in selected if link.entry_type == "github_url"), len(selected))
+
+    def test_jackie_bow_x_adjudication_input_prefers_owned_profile_over_third_party_mention(self) -> None:
+        candidate = PublicWebCandidateContext(
+            record_id="target-1",
+            candidate_id="cand-1",
+            candidate_name="Jackie Bow",
+            current_company="Anthropic",
+        )
+        third_party = ClassifiedEntryLink(
+            url="https://x.com/staceywueste",
+            normalized_url="https://x.com/staceywueste",
+            title="Stacey Wueste (@staceywueste) / Posts / X",
+            snippet='* Jackie Bow (Anthropic) — "Catch & Kill: Agents on the Loose"',
+            source_domain="x.com",
+            entry_type="x_url",
+            source_family="social_presence",
+            score=104,
+            query_text='"Jackie Bow" "Anthropic" (site:x.com OR site:twitter.com)',
+            result_rank=2,
+            fetchable=True,
+        )
+        owned_profile = ClassifiedEntryLink(
+            url="https://x.com/jbowocky",
+            normalized_url="https://x.com/jbowocky",
+            title="Jackie Bow (@jbowocky) / Posts / X",
+            snippet="Detection as Code.",
+            source_domain="x.com",
+            entry_type="x_url",
+            source_family="social_presence",
+            score=97,
+            query_text='"Jackie Bow" (site:x.com OR site:twitter.com)',
+            result_rank=1,
+            fetchable=True,
+        )
+        wrong_scholar = ClassifiedEntryLink(
+            url="https://scholar.google.com/citations?user=hnhLmh4AAAAJ&hl=en",
+            normalized_url="https://scholar.google.com/citations?user=hnhLmh4AAAAJ&hl=en",
+            title="Jayshree Mamtora",
+            snippet="Manager, Scholarly Communications, James Cook University.",
+            source_domain="scholar.google.com",
+            entry_type="scholar_url",
+            source_family="scholar_profile_discovery",
+            score=102,
+            query_text='"Jackie Bow" site:scholar.google.com/citations',
+            result_rank=1,
+            fetchable=True,
+        )
+        payload = build_public_web_candidate_adjudication_input(
+            candidate=candidate,
+            email_candidates=[],
+            entry_links=[third_party, owned_profile, wrong_scholar],
+            fetched_documents=[{"evidence_slice": {"source_url": "https://example.com", "selected_text": "Jackie Bow"}}],
+        )
+
+        selected_urls = [item["url"] for item in payload["entry_links"]]
+        self.assertIn("https://x.com/jbowocky", selected_urls)
+        self.assertNotIn("https://x.com/staceywueste", selected_urls)
+        self.assertNotIn("https://scholar.google.com/citations?user=hnhLmh4AAAAJ&hl=en", selected_urls)
+        self.assertEqual(payload["input_contract"]["entry_link_selection_owner"], "public_web_search.select_entry_links_for_adjudication")
+
+    def test_adjudication_result_exposes_model_input_snapshot_for_audit(self) -> None:
+        candidate = PublicWebCandidateContext(
+            record_id="target-1",
+            candidate_id="cand-1",
+            candidate_name="Ada Lovelace",
+            current_company="Example AI",
+        )
+        model = _CountingPublicWebModelClient()
+        link = ClassifiedEntryLink(
+            url="https://x.com/ada_lovelace",
+            normalized_url="https://x.com/ada_lovelace",
+            title="Ada Lovelace (@ada_lovelace) / X",
+            snippet="Example AI research engineer.",
+            source_domain="x.com",
+            entry_type="x_url",
+            source_family="social_presence",
+            score=90,
+            result_rank=1,
+            fetchable=True,
+        )
+        _adjudication, result = run_public_web_candidate_adjudication(
+            candidate=candidate,
+            email_candidates=[],
+            entry_links=[link],
+            fetched_documents=[{"evidence_slice": {"source_url": "https://example.com", "selected_text": "Ada Lovelace"}}],
+            model_client=model,
+            ai_extraction="on",
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(model.payloads[0], result["input_snapshot"])
+        self.assertEqual(result["input_snapshot"]["entry_links"][0]["url"], "https://x.com/ada_lovelace")
+        self.assertEqual(result["input_snapshot"]["input_contract"]["contract"], "public_web_candidate_adjudication_input_v1")
+        self.assertEqual(
+            result["input_snapshot"]["input_contract"]["expected_output_contract"],
+            "public_web_signal_adjudication_output_v2_user_visible_signal",
+        )
 
     def test_x_search_pages_are_not_candidate_social_links(self) -> None:
         candidate = PublicWebCandidateContext(
@@ -811,6 +1139,40 @@ class PublicWebSearchTest(unittest.TestCase):
         self.assertIsNotNone(contact_page)
         self.assertNotEqual(contact_page.entry_type, "personal_homepage")
         self.assertFalse(contact_page.fetchable)
+
+    def test_third_party_speaker_pages_are_evidence_not_publishable_homepages(self) -> None:
+        candidate = PublicWebCandidateContext(
+            record_id="target-1",
+            candidate_id="cand-1",
+            candidate_name="Jackie Bow",
+            current_company="Anthropic",
+        )
+        speaker_page = classify_public_web_url(
+            url="https://www.databricks.com/dataaisummit/speaker/jackie-bow",
+            title="Jackie Bow",
+            snippet="Jackie Bow / Anthropic speaker page.",
+            candidate=candidate,
+            result_rank=1,
+        )
+        owned_homepage = classify_public_web_url(
+            url="https://jackiebow.com/",
+            title="Jackie Bow",
+            snippet="Personal website.",
+            candidate=candidate,
+            result_rank=2,
+        )
+
+        self.assertIsNotNone(speaker_page)
+        self.assertNotEqual(speaker_page.entry_type, "personal_homepage")
+        self.assertFalse(
+            is_publishable_profile_link(
+                "personal_homepage",
+                "https://www.databricks.com/dataaisummit/speaker/jackie-bow",
+            )
+        )
+        self.assertIsNotNone(owned_homepage)
+        self.assertEqual(owned_homepage.entry_type, "personal_homepage")
+        self.assertTrue(is_publishable_profile_link(owned_homepage.entry_type, owned_homepage.normalized_url))
 
     def test_third_party_company_mentions_are_not_company_pages(self) -> None:
         candidate = PublicWebCandidateContext(
@@ -1024,6 +1386,73 @@ class PublicWebSearchTest(unittest.TestCase):
         self.assertFalse(by_email["adarob@google.com"].publishable)
         self.assertEqual(by_email["craffel@gmail.com"].suppression_reason, "coauthor_email_needs_ai_review")
 
+    def test_email_extraction_requires_full_name_for_publishable_academic_collision(self) -> None:
+        candidate = PublicWebCandidateContext(
+            record_id="target-1",
+            candidate_id="cand-1",
+            candidate_name="Yuwei Qin",
+            current_company="Anthropic",
+        )
+
+        [signal] = extract_email_candidate_signals(
+            text="Yuwei Xu 徐玉炜 is Associate Professor. Contact yuwei.xu@nottingham.ac.uk.",
+            source_url="https://www.nottingham.ac.uk/education/people/yuwei.xu",
+            source_family="profile_web_presence",
+            source_title="Yuwei Xu - University of Nottingham",
+            candidate=candidate,
+        )
+
+        self.assertEqual(signal.normalized_value, "yuwei.xu@nottingham.ac.uk")
+        self.assertFalse(signal.publishable)
+        self.assertEqual(signal.promotion_status, "not_promoted")
+        self.assertEqual(signal.suppression_reason, "candidate_full_name_not_matched")
+
+    def test_deterministic_public_web_adjudication_is_fail_closed(self) -> None:
+        candidate = PublicWebCandidateContext(
+            record_id="target-1",
+            candidate_id="cand-1",
+            candidate_name="Ada Lovelace",
+            current_company="Example AI",
+        )
+        [email] = extract_email_candidate_signals(
+            text="Ada Lovelace can be reached at ada@example.edu.",
+            source_url="https://ada.example.edu/",
+            source_family="profile_web_presence",
+            source_title="Ada Lovelace",
+            candidate=candidate,
+        )
+        link = classify_public_web_url(
+            url="https://github.com/ada-lovelace",
+            title="Ada Lovelace",
+            snippet="Example AI projects.",
+            candidate=candidate,
+        )
+        self.assertIsNotNone(link)
+
+        emails, links, result = adjudicate_public_web_candidate_evidence(
+            candidate=candidate,
+            email_candidates=[email],
+            entry_links=[link],
+            fetched_documents=[
+                {
+                    "source_url": "https://github.com/ada-lovelace",
+                    "final_url": "https://github.com/ada-lovelace",
+                    "entry_type": "github_url",
+                    "source_family": "technical_presence",
+                    "document_type": "social_profile",
+                    "title": "Ada Lovelace GitHub",
+                    "evidence_slice": {"selected_text": "Ada Lovelace Example AI projects"},
+                }
+            ],
+            model_client=DeterministicModelClient(),
+            ai_extraction="on",
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertFalse(emails[0].publishable)
+        self.assertEqual(emails[0].promotion_status, "not_promoted")
+        self.assertNotEqual(links[0].identity_match_label, "likely_same_person")
+
     def test_ai_adjudication_can_mark_weak_identity_email_ambiguous(self) -> None:
         candidate = PublicWebCandidateContext(
             record_id="target-1",
@@ -1082,7 +1511,7 @@ class PublicWebSearchTest(unittest.TestCase):
         self.assertFalse(adjudicated[0].publishable)
         self.assertEqual(adjudicated[0].promotion_status, "not_promoted")
 
-    def test_ai_adjudication_marks_weak_identity_social_link_ambiguous(self) -> None:
+    def test_ai_adjudication_excludes_weak_identity_social_link_from_model_input(self) -> None:
         candidate = PublicWebCandidateContext(
             record_id="target-1",
             candidate_id="cand-1",
@@ -1108,8 +1537,10 @@ class PublicWebSearchTest(unittest.TestCase):
         )
 
         self.assertEqual(result["status"], "completed")
-        self.assertEqual(links[0].identity_match_label, "ambiguous_identity")
+        self.assertEqual(result["input_counts"]["entry_links"], 0)
+        self.assertEqual(links[0].identity_match_label, "needs_review")
         self.assertLess(links[0].identity_match_score, 0.35)
+        self.assertEqual(links[0].adjudication["reason"], "model_no_assessment")
 
     def test_ai_adjudication_returns_academic_summary_from_scholar_evidence(self) -> None:
         candidate = PublicWebCandidateContext(
@@ -1148,7 +1579,9 @@ class PublicWebSearchTest(unittest.TestCase):
                         "selected_text": "Noam Shazeer Google Verified email at google.com Homepage Deep Learning Natural Language Processing Attention Is All You Need",
                         "structured_signals": {
                             "research_interests": ["Deep Learning", "Natural Language Processing"],
-                            "affiliation_signals": [{"organization": "Google", "relation": "scholar_profile_affiliation"}],
+                            "affiliation_signals": [
+                                {"organization": "Google", "relation": "scholar_profile_affiliation"}
+                            ],
                             "scholar_publications": [
                                 {
                                     "title": "Attention Is All You Need",
@@ -1201,6 +1634,102 @@ class PublicWebSearchTest(unittest.TestCase):
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "auto_mode_entry_link_only")
         self.assertEqual(links[0].identity_match_label, "unreviewed")
+
+    def test_ai_adjudication_records_provider_model_and_fallback_flag(self) -> None:
+        candidate = PublicWebCandidateContext(
+            record_id="target-1",
+            candidate_id="cand-1",
+            candidate_name="Ada Lovelace",
+            current_company="Example AI",
+        )
+        link = classify_public_web_url(
+            url="https://github.com/ada-lovelace",
+            title="Ada Lovelace",
+            snippet="Example AI projects.",
+            candidate=candidate,
+            result_rank=1,
+        )
+        self.assertIsNotNone(link)
+
+        _emails, _links, result = adjudicate_public_web_candidate_evidence(
+            candidate=candidate,
+            email_candidates=[],
+            entry_links=[link],
+            fetched_documents=[
+                {
+                    "source_url": "https://github.com/ada-lovelace",
+                    "final_url": "https://github.com/ada-lovelace",
+                    "entry_type": "github_url",
+                    "source_family": "technical_presence",
+                    "document_type": "social_profile",
+                    "title": "Ada Lovelace GitHub",
+                    "evidence_slice": {"selected_text": "Ada Lovelace Example AI projects"},
+                }
+            ],
+            model_client=_VersionedPublicWebModelClient(model="qwen3.5-plus-2026-04-20"),
+            ai_extraction="on",
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["provider"], "qwen")
+        self.assertEqual(result["model"], "qwen3.5-plus-2026-04-20")
+        self.assertEqual(result["model_version"], "qwen3.5-plus-2026-04-20")
+        self.assertFalse(result["fallback_used"])
+        self.assertEqual(result["result"]["provider"], "qwen")
+        self.assertEqual(result["result"]["model"], "qwen3.5-plus-2026-04-20")
+        self.assertFalse(result["result"]["fallback_used"])
+
+    def test_ai_adjudication_records_model_fallback_diagnostics(self) -> None:
+        class _FallbackPublicWebModelClient(_VersionedPublicWebModelClient):
+            def analyze_public_web_candidate_signals(self, payload: dict) -> dict:  # noqa: ARG002
+                return {
+                    "summary": "fallback",
+                    "email_assessments": [],
+                    "link_assessments": [],
+                    "fallback_used": True,
+                    "fallback_reason": "model_call_failed",
+                    "model_error": "OpenAI-compatible HTTP 401: auth_unavailable",
+                }
+
+        candidate = PublicWebCandidateContext(
+            record_id="target-1",
+            candidate_id="cand-1",
+            candidate_name="Ada Lovelace",
+            current_company="Example AI",
+        )
+        link = classify_public_web_url(
+            url="https://github.com/ada-lovelace",
+            title="Ada Lovelace",
+            snippet="Example AI projects.",
+            candidate=candidate,
+            result_rank=1,
+        )
+        self.assertIsNotNone(link)
+
+        _emails, _links, result = adjudicate_public_web_candidate_evidence(
+            candidate=candidate,
+            email_candidates=[],
+            entry_links=[link],
+            fetched_documents=[
+                {
+                    "source_url": "https://github.com/ada-lovelace",
+                    "final_url": "https://github.com/ada-lovelace",
+                    "entry_type": "github_url",
+                    "source_family": "technical_presence",
+                    "document_type": "social_profile",
+                    "title": "Ada Lovelace GitHub",
+                    "evidence_slice": {"selected_text": "Ada Lovelace Example AI projects"},
+                }
+            ],
+            model_client=_FallbackPublicWebModelClient(model="gpt-5.5", fallback_used=True),
+            ai_extraction="on",
+        )
+
+        self.assertTrue(result["fallback_used"])
+        self.assertEqual(result["fallback_reason"], "model_call_failed")
+        self.assertIn("401", result["model_error"])
+        self.assertEqual(result["model"], "gpt-5.5")
+        self.assertEqual(result["result"]["fallback_reason"], "model_call_failed")
 
     def test_runner_discovers_entry_links_and_writes_artifacts_without_fetch(self) -> None:
         records = [
@@ -1278,6 +1807,105 @@ class PublicWebSearchTest(unittest.TestCase):
             self.assertTrue((root / "candidates" / "02_target-2" / "candidate_status.json").exists())
             self.assertTrue(all(item["search_mode"] == "batch" for item in summary["candidate_summaries"]))
             self.assertTrue(all(item["primary_links"] == {} for item in summary["candidate_summaries"]))
+
+    def test_public_web_batch_query_identity_is_candidate_query_scoped_not_order_scoped(self) -> None:
+        candidate = PublicWebCandidateContext(
+            record_id="target-1",
+            candidate_id="cand-1",
+            candidate_name="Ada Lovelace",
+            current_company="Example AI",
+        )
+        query = PublicWebQuerySpec(
+            query_id="homepage",
+            source_family="profile_web_presence",
+            query_text="Ada Lovelace Example AI homepage",
+            objective="Find profile-owned web presence.",
+        )
+        expected_key = public_web_query_identity_key(
+            candidate_record_id=candidate.record_id,
+            query_id=query.query_id,
+            query_text=query.query_text,
+        )
+
+        def _submitted_spec_for_ordinal(ordinal: int, root: Path) -> dict:
+            provider = _BatchFakeSearchProvider()
+            logger = AssetLogger(root)
+            plan = CandidateSearchPlan(
+                ordinal=ordinal,
+                candidate=candidate,
+                candidate_dir=root / f"{ordinal:02d}_target-1",
+                logger=logger,
+                queries=[query],
+                started_monotonic=time.monotonic(),
+            )
+            execute_candidate_search_plans_batch(
+                plans=[plan],
+                search_provider=provider,
+                root_logger=logger,
+                options=PublicWebExperimentOptions(
+                    max_queries_per_candidate=1,
+                    max_results_per_query=1,
+                    max_fetches_per_candidate=0,
+                    fetch_content=False,
+                    use_batch_search=True,
+                    batch_ready_poll_interval_seconds=0,
+                    max_batch_ready_polls=1,
+                ),
+                outcomes={candidate.record_id: CandidateSearchOutcome()},
+            )
+            self.assertEqual(len(provider.submitted_specs), 1)
+            return provider.submitted_specs[0]
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            first = _submitted_spec_for_ordinal(1, Path(tempdir) / "first")
+            reordered = _submitted_spec_for_ordinal(9, Path(tempdir) / "reordered")
+
+        self.assertEqual(first["task_key"], expected_key)
+        self.assertEqual(reordered["task_key"], expected_key)
+        self.assertEqual(first["query_identity_key"], expected_key)
+        self.assertEqual(first["metadata"]["query_identity_key"], expected_key)
+        self.assertNotIn("01:homepage", expected_key)
+
+    def test_batch_queue_submit_failure_is_query_level_not_whole_batch(self) -> None:
+        records = [
+            {
+                "id": "target-1",
+                "candidate_id": "cand-1",
+                "candidate_name": "Ada Lovelace",
+                "current_company": "Example AI",
+            },
+            {
+                "id": "target-2",
+                "candidate_id": "cand-2",
+                "candidate_name": "Grace Hopper",
+                "current_company": "Example AI",
+            },
+        ]
+        provider = _BatchFakeSearchProvider(fail_submit_record_id="target-2")
+        with tempfile.TemporaryDirectory() as tempdir:
+            summary = run_target_candidate_public_web_experiment(
+                target_candidates=records,
+                search_provider=provider,
+                output_dir=tempdir,
+                options=PublicWebExperimentOptions(
+                    max_queries_per_candidate=1,
+                    max_results_per_query=1,
+                    max_fetches_per_candidate=0,
+                    fetch_content=False,
+                    use_batch_search=True,
+                    batch_ready_poll_interval_seconds=0,
+                    max_batch_ready_polls=1,
+                ),
+                run_id="batch-submit-partial-failure",
+            )
+
+        self.assertEqual(summary["status"], "completed")
+        self.assertEqual(provider.submit_calls, 1)
+        self.assertEqual(provider.poll_calls, 1)
+        self.assertEqual(provider.fetch_calls, 1)
+        by_id = {item["record_id"]: item for item in summary["candidate_summaries"]}
+        self.assertGreater(by_id["target-1"]["entry_link_count"], 0)
+        self.assertEqual(by_id["target-2"]["entry_link_count"], 0)
 
     def test_fetch_run_uses_evidence_slices_and_single_candidate_adjudication(self) -> None:
         records = [
@@ -1385,6 +2013,135 @@ class PublicWebSearchTest(unittest.TestCase):
         self.assertEqual(len(model.payloads[0]["evidence_slices"]), 2)
         self.assertEqual(len(model.payloads[0]["fetched_documents"]), 2)
         self.assertEqual(result["input_counts"]["max_ai_evidence_documents"], 2)
+        self.assertEqual(
+            model.payloads[0]["input_contract"]["evidence_document_selection_owner"],
+            "public_web_search.build_public_web_candidate_adjudication_input",
+        )
+
+    def test_ai_evidence_document_budget_respects_larger_live_validation_window(self) -> None:
+        candidate = PublicWebCandidateContext(
+            record_id="target-1",
+            candidate_id="cand-1",
+            candidate_name="Noah Yonack",
+            current_company="Perplexity",
+        )
+        link = classify_public_web_url(
+            url="https://github.com/noahyonack",
+            title="Noah Yonack",
+            snippet="Data Scientist. Harvard '17.",
+            candidate=candidate,
+            provider_name="test",
+        )
+        self.assertIsNotNone(link)
+        fetched_documents = [
+            {
+                "source_url": f"https://example.edu/{index}",
+                "evidence_slice": {
+                    "source_url": f"https://example.edu/{index}",
+                    "source_type": "academic_profile",
+                    "title": f"Evidence {index}",
+                    "selected_text": f"candidate evidence slice {index}",
+                },
+            }
+            for index in range(12)
+        ]
+        model = _CountingPublicWebModelClient()
+
+        _, _, result = adjudicate_public_web_candidate_evidence(
+            candidate=candidate,
+            email_candidates=[],
+            entry_links=[link],
+            fetched_documents=fetched_documents,
+            model_client=model,
+            ai_extraction="auto",
+            max_ai_evidence_documents=10,
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(model.candidate_calls, 1)
+        self.assertEqual(len(model.payloads[0]["evidence_slices"]), 10)
+        self.assertEqual(len(model.payloads[0]["fetched_documents"]), 10)
+        self.assertEqual(model.payloads[0]["input_contract"]["max_ai_evidence_documents"], 10)
+        self.assertEqual(model.payloads[0]["input_contract"]["max_ai_evidence_documents_requested"], 10)
+        self.assertEqual(result["input_counts"]["max_ai_evidence_documents"], 10)
+
+    def test_ai_evidence_document_budget_is_bounded_for_direct_callers(self) -> None:
+        self.assertEqual(normalize_ai_evidence_document_limit(0), 1)
+        self.assertEqual(normalize_ai_evidence_document_limit("not-a-number"), 8)
+        self.assertEqual(normalize_ai_evidence_document_limit(999), 20)
+
+    def test_ai_entry_link_budget_respects_larger_live_validation_window(self) -> None:
+        candidate = PublicWebCandidateContext(
+            record_id="target-1",
+            candidate_id="cand-1",
+            candidate_name="Noah Yonack",
+            current_company="Perplexity",
+        )
+
+        def link(url: str, entry_type: str, rank: int) -> ClassifiedEntryLink:
+            parsed = urlparse(url)
+            return ClassifiedEntryLink(
+                url=url,
+                normalized_url=url,
+                title="Noah Yonack",
+                snippet="Noah Yonack public web evidence.",
+                source_domain=parsed.netloc,
+                entry_type=entry_type,
+                source_family="test",
+                score=100 - rank,
+                result_rank=rank,
+                fetchable=True,
+            )
+
+        entry_links = [
+            link("https://noahyonack.com/", "personal_homepage", 1),
+            link("https://scholar.google.com/citations?user=noah", "scholar_url", 2),
+            link("https://github.com/noahyonack", "github_url", 3),
+            link("https://x.com/noahyonack", "x_url", 4),
+            link("https://noahyonack.substack.com/", "substack_url", 5),
+            link("https://noahyonack.com/cv.pdf", "resume_url", 6),
+            link("https://example.edu/noah-yonack", "academic_profile", 7),
+            link("https://arxiv.org/abs/2401.00001", "publication_url", 8),
+            link("https://www.linkedin.com/in/noah-yonack/", "linkedin_url", 9),
+            link("https://www.perplexity.ai/team/noah-yonack", "company_page", 10),
+            link("https://example.com/noah-yonack-interview", "other", 11),
+        ]
+
+        payload = build_public_web_candidate_adjudication_input(
+            candidate=candidate,
+            email_candidates=[],
+            entry_links=entry_links,
+            fetched_documents=[],
+            max_ai_entry_links=10,
+        )
+
+        self.assertEqual(len(payload["entry_links"]), 10)
+        self.assertEqual(payload["input_contract"]["entry_link_limit"], 10)
+        self.assertEqual(payload["input_contract"]["max_ai_entry_links_requested"], 10)
+        self.assertEqual(
+            payload["input_contract"]["entry_link_selection_policy"],
+            "source_type_balanced_with_strict_identity_filter",
+        )
+
+    def test_ai_entry_link_budget_is_bounded_for_direct_callers(self) -> None:
+        self.assertEqual(normalize_ai_entry_link_limit(0), 1)
+        self.assertEqual(normalize_ai_entry_link_limit("not-a-number"), 8)
+        self.assertEqual(normalize_ai_entry_link_limit(999), 20)
+
+    def test_public_web_product_options_expose_ai_entry_link_budget(self) -> None:
+        from sourcing_agent.public_web_runtime_core import normalize_public_web_product_options
+
+        options = normalize_public_web_product_options(
+            {
+                "options": {
+                    "max_ai_entry_links": 10,
+                    "max_ai_evidence_documents": 10,
+                }
+            }
+        )
+
+        self.assertEqual(options.max_ai_entry_links, 10)
+        self.assertEqual(options.max_ai_evidence_documents, 10)
 
     def test_batch_fetch_failure_does_not_block_other_candidates(self) -> None:
         records = [

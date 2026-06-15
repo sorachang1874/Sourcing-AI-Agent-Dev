@@ -148,6 +148,16 @@ def compile_semantic_brief(
         normalized_text,
         thematic_or_role_constrained=thematic_or_role_constrained,
     )
+    full_roster_language_present = _has_full_roster_language(normalized_text)
+    requested_population_boundary = _resolve_requested_population_boundary(
+        target_scope=target_scope,
+        employment_statuses=normalized_employment_statuses,
+        categories=normalized_categories,
+        directional_query=directional_query,
+        thematic_or_role_constrained=thematic_or_role_constrained,
+        explicit_full_roster_intent=explicit_full_roster_intent,
+        full_roster_language_present=full_roster_language_present,
+    )
 
     return {
         "target_company": normalized_target_company,
@@ -164,6 +174,7 @@ def compile_semantic_brief(
             "categories": normalized_categories,
             "employment_statuses": normalized_employment_statuses,
             "technical_population": technical_population,
+            "requested_population_boundary": requested_population_boundary,
         },
         "scope": {
             "organization_keywords": normalized_organization_keywords,
@@ -171,7 +182,9 @@ def compile_semantic_brief(
             "scope_disambiguation": dict(scope_disambiguation or {}),
             "directional_query": directional_query,
             "explicit_full_roster_intent": explicit_full_roster_intent,
+            "full_roster_language_present": full_roster_language_present,
         },
+        "requested_population_boundary": requested_population_boundary,
         "thematic_focus": {
             "keywords": normalized_keywords,
             "must_have_keywords": normalized_must_have_keywords,
@@ -335,7 +348,7 @@ def _is_directional_query(
     thematic_constraints: bool,
     resolved_role_buckets: list[str],
 ) -> bool:
-    if len(scope_hints) >= 2:
+    if scope_hints:
         return True
     if organization_keywords or thematic_constraints or resolved_role_buckets:
         return True
@@ -350,6 +363,93 @@ def _is_explicit_full_roster_intent(text: str, *, thematic_or_role_constrained: 
     if thematic_or_role_constrained:
         return False
     return any(term in text for term in _WEAK_FULL_ROSTER_TERMS)
+
+
+def _has_full_roster_language(text: str) -> bool:
+    if not text:
+        return False
+    return any(term in text for term in [*_STRONG_FULL_ROSTER_TERMS, *_WEAK_FULL_ROSTER_TERMS])
+
+
+def _resolve_requested_population_boundary(
+    *,
+    target_scope: str,
+    employment_statuses: list[str],
+    categories: list[str],
+    directional_query: bool,
+    thematic_or_role_constrained: bool,
+    explicit_full_roster_intent: bool,
+    full_roster_language_present: bool,
+) -> dict[str, Any]:
+    """Canonical user-intent boundary consumed by strategy and reuse planning.
+
+    `target_scope=full_company_asset` is the serving domain, not proof that the
+    user explicitly requested a complete company population. This contract makes
+    the user-facing population boundary explicit before registry or asset state
+    can influence strategy selection.
+    """
+
+    normalized_target_scope = _normalize_text(target_scope).lower() or "full_company_asset"
+    normalized_statuses = {
+        _normalize_text(item).lower()
+        for item in list(employment_statuses or [])
+        if _normalize_text(item)
+    }
+    normalized_categories = {
+        _normalize_text(item).lower()
+        for item in list(categories or [])
+        if _normalize_text(item)
+    }
+    former_only = bool(
+        normalized_statuses == {"former"}
+        or (normalized_categories and normalized_categories.issubset({"former_employee"}))
+    )
+    reason_codes: list[str] = []
+    if former_only:
+        boundary_type = "former_only"
+        source = "population_status"
+        reason_codes.append("former_only_population")
+    elif directional_query:
+        boundary_type = "scoped_directional"
+        source = "request_semantics"
+        reason_codes.append("directional_or_thematic_constraint")
+        if full_roster_language_present:
+            reason_codes.append("full_roster_language_with_directional_filter")
+    elif explicit_full_roster_intent or normalized_target_scope == "full_company_asset":
+        boundary_type = "full_company_roster"
+        source = "request_semantics" if explicit_full_roster_intent else "target_scope_default"
+        reason_codes.append("explicit_full_roster_intent" if explicit_full_roster_intent else "full_company_asset_default")
+    else:
+        boundary_type = "scoped_search"
+        source = "target_scope"
+        reason_codes.append("scoped_target_scope")
+
+    full_company_filter_allowed = bool(
+        boundary_type == "scoped_directional"
+        and full_roster_language_present
+        and thematic_or_role_constrained
+    )
+    return {
+        "contract_version": 1,
+        "boundary_type": boundary_type,
+        "source": source,
+        "target_scope": normalized_target_scope,
+        "explicit_full_roster_intent": bool(explicit_full_roster_intent),
+        "full_roster_language_present": bool(full_roster_language_present),
+        "directional_query": bool(directional_query),
+        "thematic_or_role_constrained": bool(thematic_or_role_constrained),
+        "full_company_filter_allowed": full_company_filter_allowed,
+        "full_company_filter_requires_coverage_proof": full_company_filter_allowed,
+        "strategy_when_full_company_coverage_proven": (
+            "full_company_roster"
+            if boundary_type == "full_company_roster" or full_company_filter_allowed
+            else "scoped_search_roster"
+        ),
+        "strategy_without_full_company_coverage": (
+            "scoped_search_roster" if boundary_type == "scoped_directional" else boundary_type
+        ),
+        "reason_codes": reason_codes,
+    }
 
 
 def _is_technical_population(

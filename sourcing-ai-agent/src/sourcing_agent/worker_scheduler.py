@@ -9,7 +9,6 @@ from .runtime_tuning import (
     resolved_parallel_search_workers,
 )
 
-
 LANE_PRIORITY = {
     "public_media_specialist": 90,
     "search_planner": 80,
@@ -30,6 +29,7 @@ RESUME_PRIORITY = {
 }
 
 REMOTE_WAIT_STAGES = {"waiting_remote_search", "waiting_remote_harvest"}
+TERMINAL_WORKER_STATUSES = {"completed", "failed", "interrupted", "cancelled", "canceled", "skipped", "superseded"}
 
 
 def _plan_runtime_tuning_context(plan_payload: dict[str, Any]) -> dict[str, Any]:
@@ -216,6 +216,9 @@ def infer_resume_mode(worker: dict[str, Any] | None) -> str:
 
 
 def wait_stage(worker: dict[str, Any] | None) -> str:
+    status = str((worker or {}).get("status") or "").strip().lower()
+    if status in TERMINAL_WORKER_STATUSES:
+        return ""
     checkpoint = dict((worker or {}).get("checkpoint") or {})
     stage = str(checkpoint.get("stage") or "").strip()
     if stage in REMOTE_WAIT_STAGES:
@@ -230,9 +233,12 @@ def is_remote_waiting_worker(worker: dict[str, Any] | None) -> bool:
 def effective_worker_status(worker: dict[str, Any] | None) -> str:
     if not worker:
         return "unknown"
+    status = str(worker.get("status") or "unknown")
+    if status.strip().lower() in TERMINAL_WORKER_STATUSES:
+        return status
     if is_remote_waiting_worker(worker):
         return wait_stage(worker)
-    return str(worker.get("status") or "unknown")
+    return status
 
 
 def _priority_score(lane_id: str, resume_mode: str, ordinal: int) -> int:

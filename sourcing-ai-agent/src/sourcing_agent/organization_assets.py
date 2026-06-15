@@ -1542,7 +1542,10 @@ def ensure_organization_completeness_ledger(
     )
     sync_status: dict[str, Any] = {}
     try:
-        from .asset_reuse_planning import build_organization_asset_registry_record
+        from .asset_reuse_planning import (
+            build_organization_asset_registry_record,
+            ensure_explicit_population_coverage_for_registry_record,
+        )
         from .organization_execution_profile import ensure_organization_execution_profile
 
         organization_asset_raw = ledger_payload.get("organization_asset")
@@ -1597,6 +1600,12 @@ def ensure_organization_completeness_ledger(
             source_path=str(org_row.get("source_path") or ledger_path),
             source_job_id=str(org_row.get("source_job_id") or ""),
             authoritative=bool(org_row.get("authoritative")),
+        )
+        registry_record = ensure_explicit_population_coverage_for_registry_record(
+            store=store,
+            candidate_record=registry_record,
+            ledger_summary=ledger_payload,
+            write_source="organization_completeness_ledger_refresh",
         )
         sync_status["organization_asset_registry_refresh"] = _run_sync_step(
             lambda: store.upsert_organization_asset_registry(

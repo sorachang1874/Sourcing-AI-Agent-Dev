@@ -53,6 +53,16 @@ def _resolve_optional_package_root(path: Path, *, prefer_inner_dir: bool = False
     return _resolve_package_root(path, prefer_inner_dir=prefer_inner_dir)
 
 
+def _resolve_optional_skill_file(project_root: Path, dev_root: Path, package_name: str) -> Path:
+    try:
+        package_root = _resolve_optional_package_root(dev_root / package_name, prefer_inner_dir=True)
+    except FileNotFoundError:
+        package_root = None
+    if package_root is None:
+        return project_root / "local_asset_packages" / "optional_skills" / package_name / "SKILL.md"
+    return package_root / "SKILL.md"
+
+
 def _natural_key(value: str) -> tuple:
     parts = re.split(r"(\d+)", value)
     normalized = []
@@ -104,9 +114,6 @@ class AssetCatalog:
                 f"{project_root / 'local_asset_packages' / 'anthropic'} or {dev_root / 'Anthropic华人专项'}"
             )
 
-        employee_skill_root = _resolve_package_root(dev_root / "anthropic-employee-scan", prefer_inner_dir=True)
-        investor_skill_root = _resolve_package_root(dev_root / "investor-chinese-scan", prefer_inner_dir=True)
-        onepager_skill_root = _resolve_package_root(dev_root / "biz-visit-onepager", prefer_inner_dir=True)
         return cls(
             project_root=project_root,
             dev_root=dev_root,
@@ -119,9 +126,9 @@ class AssetCatalog:
             anthropic_publications=anthropic_root / "data" / "publications_unified.json",
             scholar_scan_results=anthropic_root / "data" / "scholar_scan_results.json",
             investor_members_json=anthropic_root / "investor_chinese_members_final.json",
-            employee_scan_skill=employee_skill_root / "SKILL.md",
-            investor_scan_skill=investor_skill_root / "SKILL.md",
-            onepager_skill=onepager_skill_root / "SKILL.md",
+            employee_scan_skill=_resolve_optional_skill_file(project_root, dev_root, "anthropic-employee-scan"),
+            investor_scan_skill=_resolve_optional_skill_file(project_root, dev_root, "investor-chinese-scan"),
+            onepager_skill=_resolve_optional_skill_file(project_root, dev_root, "biz-visit-onepager"),
             anthropic_asset_source=anthropic_asset_source,
             anthropic_project_root=project_anthropic_root,
             anthropic_external_root=external_anthropic_root,

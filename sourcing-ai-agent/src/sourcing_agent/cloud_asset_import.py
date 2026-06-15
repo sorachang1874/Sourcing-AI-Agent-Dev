@@ -8,6 +8,7 @@ from hashlib import sha1
 from pathlib import Path
 from typing import Any
 
+from .artifact_cache import run_hot_cache_governance_cycle
 from .asset_registration import sync_company_asset_registration
 from .asset_sync import AssetBundleError, AssetBundleManager
 from .candidate_artifacts import repair_missing_company_candidate_artifacts
@@ -19,7 +20,6 @@ from .control_plane_postgres import (
 from .local_postgres import resolve_control_plane_postgres_dsn, resolve_default_control_plane_db_path
 from .profile_registry_backfill import backfill_linkedin_profile_registry
 from .storage import ControlPlaneStore
-
 
 _RETIRED_SQLITE_BUNDLE_KIND = "sqlite_snapshot"
 
@@ -45,6 +45,23 @@ def _normalize_string_list(values: list[Any] | tuple[Any, ...] | set[Any] | None
         seen.add(lowered)
         normalized.append(text)
     return normalized
+
+
+def _post_generation_hydrate_hot_cache_governance(
+    *,
+    runtime_dir: str | Path,
+    store: ControlPlaneStore | None,
+    enabled: bool,
+    force: bool,
+) -> dict[str, Any]:
+    if not enabled:
+        return {"status": "skipped_by_flag"}
+    return run_hot_cache_governance_cycle(
+        runtime_dir=runtime_dir,
+        store=store,
+        min_interval_seconds=0.0,
+        force=bool(force),
+    )
 
 
 def _sync_restored_control_plane_snapshot(runtime_dir: Path) -> dict[str, Any]:
@@ -358,9 +375,7 @@ def _run_post_import_refresh_background(
             "asset_view": asset_view,
             "started_at": started_at,
             "organization_warmup": {"status": "running" if run_org_warmup else "skipped_by_flag"},
-            "profile_registry_backfill": {
-                "status": "running" if run_profile_registry_backfill else "skipped_by_flag"
-            },
+            "profile_registry_backfill": {"status": "running" if run_profile_registry_backfill else "skipped_by_flag"},
         },
     )
     try:
@@ -628,6 +643,8 @@ def _import_candidate_generation(
     run_profile_registry_backfill: bool = True,
     profile_registry_resume: bool = True,
     profile_progress_interval: int = 200,
+    run_hot_cache_governance: bool = True,
+    force_hot_cache_governance: bool = True,
 ) -> dict[str, Any]:
     effective_runtime_dir = Path(target_runtime_dir) if target_runtime_dir else bundle_manager.runtime_dir
     effective_db_path = (
@@ -682,9 +699,13 @@ def _import_candidate_generation(
         profile_registry_resume=profile_registry_resume,
         profile_progress_interval=profile_progress_interval,
     )
-    effective_store_target = str(
-        getattr(store, "sqlite_shadow_connect_target", lambda: str(effective_db_path))()
-    ).strip() or str(effective_db_path)
+    hot_cache_governance = _post_generation_hydrate_hot_cache_governance(
+        runtime_dir=effective_runtime_dir,
+        store=store,
+        enabled=run_hot_cache_governance,
+        force=force_hot_cache_governance,
+    )
+    effective_store_target = str(store.compatibility_shadow_connect_target()).strip() or str(effective_db_path)
     resolved_manifest_path = str(
         hydrate_summary.get("generation_manifest_path") or generation_manifest_path or ""
     ).strip()
@@ -708,6 +729,7 @@ def _import_candidate_generation(
         "artifact_repair": repair_summary,
         "organization_warmup": warmup_summary,
         "profile_registry_backfill": profile_registry_summary,
+        "hot_cache_governance": hot_cache_governance,
     }
     sync_run = effective_bundle_manager._record_sync_run(
         action="import_generation",
@@ -724,6 +746,7 @@ def _import_candidate_generation(
             "artifact_repair_status": str(repair_summary.get("status") or ""),
             "organization_warmup_status": str(warmup_summary.get("status") or ""),
             "profile_registry_backfill_status": str(profile_registry_summary.get("status") or ""),
+            "hot_cache_governance_status": str(hot_cache_governance.get("status") or ""),
         },
         extra={
             "generation_manifest_path": resolved_manifest_path,
@@ -784,6 +807,8 @@ def import_cloud_assets(
     run_profile_registry_backfill: bool = True,
     profile_registry_resume: bool = True,
     profile_progress_interval: int = 200,
+    run_hot_cache_governance: bool = True,
+    force_hot_cache_governance: bool = True,
 ) -> dict[str, Any]:
     effective_runtime_dir = Path(target_runtime_dir) if target_runtime_dir else bundle_manager.runtime_dir
     effective_db_path = (
@@ -841,6 +866,8 @@ def import_cloud_assets(
                 run_profile_registry_backfill=run_profile_registry_backfill,
                 profile_registry_resume=profile_registry_resume,
                 profile_progress_interval=profile_progress_interval,
+                run_hot_cache_governance=run_hot_cache_governance,
+                force_hot_cache_governance=force_hot_cache_governance,
             )
         if prefer_generation and storage_client is not None:
             generation_hint = _generation_import_hint_from_manifest(
@@ -901,6 +928,8 @@ def import_cloud_assets(
                         run_profile_registry_backfill=run_profile_registry_backfill,
                         profile_registry_resume=profile_registry_resume,
                         profile_progress_interval=profile_progress_interval,
+                        run_hot_cache_governance=run_hot_cache_governance,
+                        force_hot_cache_governance=force_hot_cache_governance,
                     )
                     return _annotate_generation_first_import(
                         summary,
@@ -959,6 +988,8 @@ def import_cloud_assets(
                 run_profile_registry_backfill=run_profile_registry_backfill,
                 profile_registry_resume=profile_registry_resume,
                 profile_progress_interval=profile_progress_interval,
+                run_hot_cache_governance=run_hot_cache_governance,
+                force_hot_cache_governance=force_hot_cache_governance,
             )
         generation_first_attempt = {
             "status": "skipped",
@@ -972,8 +1003,7 @@ def import_cloud_assets(
             and storage_client is not None
             and (
                 not normalized_bundle_kind
-                or normalized_bundle_kind
-                in {"company_snapshot", "company_handoff", "control_plane_snapshot"}
+                or normalized_bundle_kind in {"company_snapshot", "company_handoff", "control_plane_snapshot"}
             )
         ):
             generation_hint = _direct_generation_import_hint(
@@ -1015,6 +1045,8 @@ def import_cloud_assets(
                     run_profile_registry_backfill=run_profile_registry_backfill,
                     profile_registry_resume=profile_registry_resume,
                     profile_progress_interval=profile_progress_interval,
+                    run_hot_cache_governance=run_hot_cache_governance,
+                    force_hot_cache_governance=force_hot_cache_governance,
                 )
                 return _annotate_generation_first_import(
                     summary,
@@ -1055,7 +1087,9 @@ def import_cloud_assets(
     if not allow_legacy_bundle_fallback:
         raise AssetBundleError("No matching candidate generation resolved and legacy bundle fallback is disabled.")
 
-    if resolved_bundle_kind == "control_plane_snapshot" and not resolve_control_plane_postgres_dsn(effective_runtime_dir):
+    if resolved_bundle_kind == "control_plane_snapshot" and not resolve_control_plane_postgres_dsn(
+        effective_runtime_dir
+    ):
         raise AssetBundleError("control_plane_snapshot restore requires a Postgres control-plane DSN.")
 
     restore_summary = bundle_manager.restore_bundle(
@@ -1068,7 +1102,10 @@ def import_cloud_assets(
     )
     restore_summary["legacy_bundle_restore_used"] = False
     control_plane_snapshot_sync = _sync_restored_control_plane_snapshot(effective_runtime_dir)
-    if resolved_bundle_kind == "control_plane_snapshot" and str(control_plane_snapshot_sync.get("status") or "") != "completed":
+    if (
+        resolved_bundle_kind == "control_plane_snapshot"
+        and str(control_plane_snapshot_sync.get("status") or "") != "completed"
+    ):
         raise AssetBundleError(
             "control_plane_snapshot restore requires Postgres sync to complete; "
             f"status={control_plane_snapshot_sync.get('status')}"
@@ -1095,9 +1132,7 @@ def import_cloud_assets(
         profile_registry_resume=profile_registry_resume,
         profile_progress_interval=profile_progress_interval,
     )
-    effective_store_target = str(
-        getattr(store, "sqlite_shadow_connect_target", lambda: str(effective_db_path))()
-    ).strip() or str(effective_db_path)
+    effective_store_target = str(store.compatibility_shadow_connect_target()).strip() or str(effective_db_path)
 
     summary = {
         "status": "completed",
@@ -1185,6 +1220,8 @@ def hydrate_cloud_generation(
     resume: bool = True,
     prefer_local_link: bool = True,
     target_db_path: str | Path | None = None,
+    run_hot_cache_governance: bool = True,
+    force_hot_cache_governance: bool = True,
 ) -> dict[str, Any]:
     result = bundle_manager.hydrate_published_generation(
         generation_manifest_path=generation_manifest_path,
@@ -1220,7 +1257,14 @@ def hydrate_cloud_generation(
             "prefer_local_link": bool(prefer_local_link),
         },
     )
+    hot_cache_governance = _post_generation_hydrate_hot_cache_governance(
+        runtime_dir=bundle_manager.runtime_dir,
+        store=store,
+        enabled=run_hot_cache_governance,
+        force=force_hot_cache_governance,
+    )
     return {
         **result,
         "ledger": ledger_entry,
+        "hot_cache_governance": hot_cache_governance,
     }

@@ -5,8 +5,17 @@ from pathlib import Path
 from typing import Any
 
 from .asset_logger import AssetLogger
-from .domain import normalize_name_token
-from .seed_discovery import SearchSeedSnapshot, normalize_search_seed_employment_scope
+from .connectors import CompanyIdentity
+from .domain import Candidate, EvidenceRecord, normalize_candidate, normalize_name_token
+from .seed_discovery import (
+    SearchSeedSnapshot,
+    build_candidates_from_seed_snapshot,
+    normalize_search_seed_employment_scope,
+)
+from .snapshot_state import company_identity_from_record as _company_identity_from_record
+from .snapshot_state import load_candidate_document_state as _load_candidate_document_state
+from .snapshot_state import read_json_dict as _read_json_dict
+from .snapshot_state import read_json_list as _read_json_list
 
 
 def dedupe_search_seed_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -257,7 +266,7 @@ def persist_search_seed_snapshot(snapshot: SearchSeedSnapshot) -> SearchSeedSnap
         is_raw_asset=False,
         model_safe=True,
     )
-    return SearchSeedSnapshot(
+    persisted_snapshot = SearchSeedSnapshot(
         snapshot_id=snapshot.snapshot_id,
         target_company=snapshot.target_company,
         company_identity=snapshot.company_identity,
@@ -273,6 +282,137 @@ def persist_search_seed_snapshot(snapshot: SearchSeedSnapshot) -> SearchSeedSnap
         lane_payloads=normalized_lane_payloads,
         lane_entries=normalized_lane_entries,
     )
+    project_search_seed_snapshot_to_candidate_documents(
+        persisted_snapshot,
+        source_kind="search_seed_discovery:snapshot_persisted",
+        reason="search_seed_snapshot_persisted",
+    )
+    return persisted_snapshot
+
+
+def project_search_seed_snapshot_to_candidate_documents(
+    snapshot: SearchSeedSnapshot,
+    *,
+    source_kind: str = "search_seed_discovery:candidate_documents_projection",
+    reason: str = "search_seed_snapshot_projection",
+) -> dict[str, Any]:
+    """Materialize the lightweight candidate-document projection for a search-seed snapshot.
+
+    This is the prerequisite writer contract for streaming search-seed lanes:
+    once durable search-seed entries exist, `candidate_documents.json` must
+    also exist so downstream profile local-apply workers have a stable merge
+    target. Existing richer candidate documents are preserved and only missing
+    shell fields are filled from search-seed entries.
+    """
+
+    if not isinstance(snapshot, SearchSeedSnapshot):
+        return {"status": "skipped", "reason": "search_seed_snapshot_missing"}
+    search_candidates, search_evidence = build_candidates_from_seed_snapshot(snapshot)
+    if not search_candidates and not search_evidence:
+        return {
+            "status": "skipped",
+            "reason": "search_seed_snapshot_empty",
+            "snapshot_id": snapshot.snapshot_id,
+        }
+    candidate_doc_path = snapshot.snapshot_dir / "candidate_documents.json"
+    existing_payload = _read_json_dict(candidate_doc_path)
+    existing_state = _load_candidate_document_state(candidate_doc_path) if candidate_doc_path.exists() else {}
+    merged_candidates = {
+        candidate.candidate_id: candidate
+        for candidate in list(existing_state.get("candidates") or [])
+        if isinstance(candidate, Candidate)
+    }
+    added_candidate_count = 0
+    updated_candidate_count = 0
+    for candidate in search_candidates:
+        existing_candidate = merged_candidates.get(candidate.candidate_id)
+        if existing_candidate is None:
+            merged_candidates[candidate.candidate_id] = normalize_candidate(candidate)
+            added_candidate_count += 1
+        else:
+            merged_candidates[candidate.candidate_id] = _merge_search_seed_projection_candidate(
+                existing_candidate,
+                candidate,
+            )
+            updated_candidate_count += 1
+    merged_evidence = {
+        evidence.evidence_id: evidence
+        for evidence in list(existing_state.get("evidence") or [])
+        if isinstance(evidence, EvidenceRecord)
+    }
+    added_evidence_count = 0
+    for evidence in search_evidence:
+        if evidence.evidence_id not in merged_evidence:
+            added_evidence_count += 1
+        merged_evidence.setdefault(evidence.evidence_id, evidence)
+    merged_candidate_list = sorted(list(merged_candidates.values()), key=lambda item: item.display_name)
+    merged_evidence_list = list(merged_evidence.values())
+    acquisition_sources = dict(existing_payload.get("acquisition_sources") or {})
+    acquisition_sources["search_seed_snapshot"] = snapshot.to_record()
+    payload = {
+        **existing_payload,
+        "snapshot": existing_payload.get("snapshot") or snapshot.to_record(),
+        "acquisition_sources": acquisition_sources,
+        "candidates": [candidate.to_record() for candidate in merged_candidate_list],
+        "evidence": [evidence.to_record() for evidence in merged_evidence_list],
+        "candidate_count": len(merged_candidate_list),
+        "evidence_count": len(merged_evidence_list),
+        "search_seed_candidate_documents_projection": {
+            "status": "completed",
+            "reason": str(reason or "").strip() or "search_seed_snapshot_projection",
+            "snapshot_id": snapshot.snapshot_id,
+            "source_summary_path": str(snapshot.summary_path),
+            "source_entries_path": str(snapshot.entries_path or ""),
+            "search_seed_entry_count": len(list(snapshot.entries or [])),
+            "search_seed_candidate_count": len(search_candidates),
+            "search_seed_evidence_count": len(search_evidence),
+            "added_candidate_count": added_candidate_count,
+            "updated_candidate_count": updated_candidate_count,
+            "added_evidence_count": added_evidence_count,
+        },
+    }
+    AssetLogger(snapshot.snapshot_dir).write_json(
+        candidate_doc_path,
+        payload,
+        asset_type="candidate_documents",
+        source_kind=str(source_kind or "search_seed_discovery:candidate_documents_projection").strip(),
+        is_raw_asset=False,
+        model_safe=True,
+    )
+    return {
+        "status": "completed",
+        "snapshot_id": snapshot.snapshot_id,
+        "candidate_doc_path": str(candidate_doc_path),
+        "candidate_count": len(merged_candidate_list),
+        "evidence_count": len(merged_evidence_list),
+        "added_candidate_count": added_candidate_count,
+        "updated_candidate_count": updated_candidate_count,
+        "added_evidence_count": added_evidence_count,
+    }
+
+
+def _merge_search_seed_projection_candidate(existing: Candidate, incoming: Candidate) -> Candidate:
+    record = existing.to_record()
+    incoming_record = incoming.to_record()
+    for key, value in incoming_record.items():
+        if key in {"candidate_id", "metadata"}:
+            continue
+        if not _has_candidate_projection_value(record.get(key)) and _has_candidate_projection_value(value):
+            record[key] = value
+    existing_metadata = dict(existing.metadata or {})
+    incoming_metadata = dict(incoming.metadata or {})
+    merged_metadata = dict(incoming_metadata)
+    merged_metadata.update(existing_metadata)
+    record["metadata"] = merged_metadata
+    return normalize_candidate(Candidate(**record))
+
+
+def _has_candidate_projection_value(value: Any) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict, tuple, set)):
+        return bool(value)
+    return value is not None
 
 
 def merge_search_seed_snapshots(
@@ -347,6 +487,135 @@ def merge_search_seed_snapshots(
         },
     )
     return persist_search_seed_snapshot(merged)
+
+
+def load_search_seed_snapshot_from_snapshot_dir(
+    snapshot_dir: Path,
+    *,
+    identity: CompanyIdentity | None = None,
+    auto_backfill_lanes: bool = True,
+) -> SearchSeedSnapshot | None:
+    discovery_dir = snapshot_dir / "search_seed_discovery"
+    if not discovery_dir.exists():
+        return None
+    if auto_backfill_lanes:
+        backfill_search_seed_lane_assets(snapshot_dir)
+
+    summary_path = discovery_dir / "summary.json"
+    entries_path = discovery_dir / "entries.json"
+    summary_payload = _read_json_dict(summary_path)
+    aggregate_entries = _read_json_list(entries_path)
+
+    lane_payloads: dict[str, dict[str, Any]] = {}
+    lane_entries: dict[str, list[dict[str, Any]]] = {}
+    for lane_summary_path in sorted(discovery_dir.glob("*/summary.json")):
+        if lane_summary_path.parent == discovery_dir:
+            continue
+        lane_payload = _read_json_dict(lane_summary_path)
+        if not lane_payload:
+            continue
+        lane_key = normalize_search_seed_employment_scope(
+            lane_payload.get("employment_scope") or lane_payload.get("employment_status") or lane_summary_path.parent.name
+        )
+        lane_entries_path = _resolve_search_seed_entries_path(
+            lane_payload.get("entries_path"),
+            default_path=lane_summary_path.parent / "entries.json",
+        )
+        lane_payloads[lane_key] = {
+            **lane_payload,
+            "summary_path": str(lane_summary_path),
+            "entries_path": str(lane_entries_path),
+        }
+        lane_entries[lane_key] = _read_json_list(lane_entries_path)
+
+    if lane_entries:
+        aggregate_entries = dedupe_search_seed_entries(
+            [
+                *aggregate_entries,
+                *[entry for entries in lane_entries.values() for entry in list(entries or [])],
+            ]
+        )
+    if not summary_payload and not aggregate_entries and not lane_payloads:
+        return None
+
+    resolved_identity = identity or _company_identity_from_record(dict(summary_payload.get("company_identity") or {}))
+    if resolved_identity is None:
+        for lane_payload in lane_payloads.values():
+            resolved_identity = _company_identity_from_record(dict(lane_payload.get("company_identity") or {}))
+            if resolved_identity is not None:
+                break
+    if resolved_identity is None:
+        return None
+
+    query_summaries = dedupe_search_seed_records(
+        [
+            *[dict(item) for item in list(summary_payload.get("query_summaries") or []) if isinstance(item, dict)],
+            *[
+                dict(item)
+                for lane_payload in lane_payloads.values()
+                for item in list(lane_payload.get("query_summaries") or [])
+                if isinstance(item, dict)
+            ],
+        ]
+    )
+    accounts_used = list(
+        dict.fromkeys(
+            [
+                str(item or "").strip()
+                for item in [
+                    *list(summary_payload.get("accounts_used") or []),
+                    *[
+                        account
+                        for lane_payload in lane_payloads.values()
+                        for account in list(lane_payload.get("accounts_used") or [])
+                    ],
+                ]
+                if str(item or "").strip()
+            ]
+        )
+    )
+    errors = list(
+        dict.fromkeys(
+            [
+                str(item or "").strip()
+                for item in [
+                    *list(summary_payload.get("errors") or []),
+                    *[
+                        error
+                        for lane_payload in lane_payloads.values()
+                        for error in list(lane_payload.get("errors") or [])
+                    ],
+                ]
+                if str(item or "").strip()
+            ]
+        )
+    )
+    return SearchSeedSnapshot(
+        snapshot_id=str(summary_payload.get("snapshot_id") or snapshot_dir.name),
+        target_company=str(summary_payload.get("target_company") or resolved_identity.canonical_name),
+        company_identity=resolved_identity,
+        snapshot_dir=snapshot_dir,
+        entries=aggregate_entries,
+        query_summaries=query_summaries,
+        accounts_used=accounts_used,
+        errors=errors,
+        stop_reason=str(summary_payload.get("stop_reason") or "restored_snapshot_search_seed"),
+        summary_path=summary_path,
+        entries_path=entries_path,
+        summary_payload=summary_payload,
+        lane_payloads=lane_payloads,
+        lane_entries=lane_entries,
+    )
+
+
+def _resolve_search_seed_entries_path(value: Any, *, default_path: Path) -> Path:
+    path_text = str(value or "").strip()
+    if not path_text:
+        return default_path
+    path = Path(path_text).expanduser()
+    if path.is_absolute():
+        return path
+    return default_path.parent / path
 
 
 def load_search_seed_lane_summaries(

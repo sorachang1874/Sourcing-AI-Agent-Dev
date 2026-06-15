@@ -3,14 +3,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .execution_preferences import (
-    infer_execution_preferences_from_text,
-    normalize_execution_preferences,
-)
+from .execution_preferences import infer_execution_preferences_from_text, normalize_execution_preferences
 from .model_provider import ModelClient
 from .query_intent_rewrite import interpret_query_intent_rewrite
 from .request_normalization import materialize_request_payload
-
 
 _SOURCE_FAMILY_ALIASES: dict[str, str] = {
     "openreview": "OpenReview",
@@ -37,6 +33,8 @@ _ALLOWED_DECISION_FIELDS = {
     "former_keyword_queries_only",
     "provider_people_search_query_strategy",
     "provider_people_search_max_queries",
+    "provider_people_search_pages",
+    "provider_people_search_scale_chunk_pages",
     "large_org_keyword_probe_mode",
     "force_fresh_run",
     "reuse_existing_roster",
@@ -57,6 +55,10 @@ _DECISION_FIELD_ALIASES = {
     "provider_people_query_strategy": "provider_people_search_query_strategy",
     "people_search_max_queries": "provider_people_search_max_queries",
     "provider_people_query_max": "provider_people_search_max_queries",
+    "people_search_pages": "provider_people_search_pages",
+    "provider_people_query_pages": "provider_people_search_pages",
+    "people_search_scale_chunk_pages": "provider_people_search_scale_chunk_pages",
+    "provider_people_query_scale_chunk_pages": "provider_people_search_scale_chunk_pages",
     "large_org_keyword_probe": "large_org_keyword_probe_mode",
     "require_fresh_snapshot": "force_fresh_run",
     "disable_cached_roster_fallback": "force_fresh_run",

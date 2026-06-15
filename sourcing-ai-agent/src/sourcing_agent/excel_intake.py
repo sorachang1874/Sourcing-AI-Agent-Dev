@@ -7,12 +7,12 @@ from dataclasses import fields
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .asset_logger import AssetLogger
 from .asset_paths import extract_company_snapshot_ref, iter_company_asset_files, iter_company_asset_snapshot_dirs
 from .candidate_artifacts import load_snapshot_candidate_artifact_payload
-from .company_asset_completion import CompanyAssetCompletionManager
+from .company_asset_completion import CompanyAssetCompletionManager, _load_harvest_profile_from_raw_path
 from .company_asset_supplement import CompanyAssetSupplementManager
 from .company_registry import normalize_company_key
 from .connectors import resolve_company_identity
@@ -29,6 +29,7 @@ from .domain import (
 )
 from .enrichment import _format_education, _format_experience, _format_profile_languages, _format_profile_skills
 from .harvest_connectors import HarvestProfileSearchConnector, harvest_connector_available
+from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .model_provider import ModelClient
 from .profile_timeline import (
     timeline_has_complete_profile_detail,
@@ -57,18 +58,14 @@ def build_excel_intake_throughput_plan(
 ) -> dict[str, Any]:
     normalized_contacts = [dict(item) for item in list(contacts or []) if isinstance(item, dict)]
     total_rows = len(normalized_contacts)
-    direct_linkedin_count = len(
-        [
-            item
-            for item in normalized_contacts
-            if str(item.get("linkedin_url") or "").strip()
-        ]
-    )
+    direct_linkedin_count = len([item for item in normalized_contacts if str(item.get("linkedin_url") or "").strip()])
     search_required_count = max(0, total_rows - direct_linkedin_count)
     company_grouping = group_contacts_by_company_hints(normalized_contacts)
     profile_fetch_batch_size = _recommended_excel_profile_fetch_batch_size(direct_linkedin_count)
     profile_fetch_batch_count = (
-        0 if direct_linkedin_count <= 0 else max(1, (direct_linkedin_count + profile_fetch_batch_size - 1) // profile_fetch_batch_size)
+        0
+        if direct_linkedin_count <= 0
+        else max(1, (direct_linkedin_count + profile_fetch_batch_size - 1) // profile_fetch_batch_size)
     )
     profile_fetch_workers = resolved_harvest_prefetch_submit_workers(
         runtime_context,
@@ -77,7 +74,9 @@ def build_excel_intake_throughput_plan(
     )
     search_batch_size = 10
     search_batch_count = (
-        0 if search_required_count <= 0 else max(1, (search_required_count + search_batch_size - 1) // search_batch_size)
+        0
+        if search_required_count <= 0
+        else max(1, (search_required_count + search_batch_size - 1) // search_batch_size)
     )
     return {
         "total_rows": total_rows,
@@ -193,20 +192,12 @@ class ExcelIntakeService:
         if isinstance(prepared_batch.get("contacts"), list):
             workbook_summary = dict(prepared_batch.get("workbook") or {})
             normalized_schema = dict(prepared_batch.get("schema_inference") or {})
-            contacts = [
-                dict(item)
-                for item in list(prepared_batch.get("contacts") or [])
-                if isinstance(item, dict)
-            ]
+            contacts = [dict(item) for item in list(prepared_batch.get("contacts") or []) if isinstance(item, dict)]
         else:
             prepared_batch = self.prepare_contacts(payload, intake_dir=intake_dir)
             workbook_summary = dict(prepared_batch.get("workbook") or {})
             normalized_schema = dict(prepared_batch.get("schema_inference") or {})
-            contacts = [
-                dict(item)
-                for item in list(prepared_batch.get("contacts") or [])
-                if isinstance(item, dict)
-            ]
+            contacts = [dict(item) for item in list(prepared_batch.get("contacts") or []) if isinstance(item, dict)]
         workbook_path = Path(str(workbook_summary.get("source_path") or (intake_dir / "uploaded.xlsx")))
         sheet_names = [
             str(item or "").strip()
@@ -220,7 +211,19 @@ class ExcelIntakeService:
             export_enabled=bool(payload.get("export_enabled")),
         )
 
-        inventory = _build_local_candidate_inventory(self.runtime_dir, self.store)
+        direct_profile_payloads = _load_registry_cached_profile_payloads_for_contacts(self.store, contacts)
+        inventory_holder: dict[str, dict[str, Any]] = {}
+
+        def _load_inventory() -> dict[str, Any]:
+            if "inventory" not in inventory_holder:
+                inventory_holder["inventory"] = _build_local_candidate_inventory(
+                    self.runtime_dir,
+                    self.store,
+                    target_company=str(attachment_request.get("target_company") or payload.get("target_company") or ""),
+                    contacts=contacts,
+                )
+            return inventory_holder["inventory"]
+
         processed_rows: list[dict[str, Any]] = []
         persisted_candidate_count = 0
         persisted_evidence_count = 0
@@ -232,14 +235,15 @@ class ExcelIntakeService:
                 intake_dir=intake_dir,
                 logger=logger,
                 contact=contact,
-                inventory=inventory,
+                inventory_loader=_load_inventory,
+                direct_profile_payloads=direct_profile_payloads,
             )
             processed_rows.append(row_result["result"])
             persisted_candidate_count += int(row_result.get("persisted_candidate_count") or 0)
             persisted_evidence_count += int(row_result.get("persisted_evidence_count") or 0)
             persisted_candidate = row_result.get("persisted_candidate")
-            if isinstance(persisted_candidate, Candidate):
-                _update_inventory_with_candidate(inventory, persisted_candidate)
+            if isinstance(persisted_candidate, Candidate) and "inventory" in inventory_holder:
+                _update_inventory_with_candidate(inventory_holder["inventory"], persisted_candidate)
             _collect_snapshot_attachment_records(
                 row_result,
                 candidates=attachment_candidates,
@@ -274,9 +278,12 @@ class ExcelIntakeService:
             },
             "schema_inference": normalized_schema,
             "inventory": {
-                "candidate_count": int(inventory.get("candidate_count") or 0),
-                "linkedin_index_count": int(inventory.get("linkedin_index_count") or 0),
-                "name_index_count": int(inventory.get("name_index_count") or 0),
+                "candidate_count": int(dict(inventory_holder.get("inventory") or {}).get("candidate_count") or 0),
+                "linkedin_index_count": int(
+                    dict(inventory_holder.get("inventory") or {}).get("linkedin_index_count") or 0
+                ),
+                "name_index_count": int(dict(inventory_holder.get("inventory") or {}).get("name_index_count") or 0),
+                "registry_cached_profile_count": len(direct_profile_payloads),
             },
             "summary": {
                 "total_rows": len(processed_rows),
@@ -369,7 +376,12 @@ class ExcelIntakeService:
             if isinstance(item, dict) and str(item.get("row_key") or "").strip()
         }
 
-        inventory = _build_local_candidate_inventory(self.runtime_dir, self.store)
+        inventory = _build_local_candidate_inventory(
+            self.runtime_dir,
+            self.store,
+            target_company=str(attachment_request.get("target_company") or payload.get("target_company") or ""),
+            contacts=list(contacts_by_row_key.values()),
+        )
         decision_results: list[dict[str, Any]] = []
         persisted_candidate_count = 0
         persisted_evidence_count = 0
@@ -517,10 +529,44 @@ class ExcelIntakeService:
         intake_dir: Path,
         logger: AssetLogger,
         contact: dict[str, Any],
-        inventory: dict[str, Any],
+        inventory: dict[str, Any] | None = None,
+        inventory_loader: Callable[[], dict[str, Any]] | None = None,
+        direct_profile_payloads: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
+        def _inventory() -> dict[str, Any]:
+            if inventory is not None:
+                return inventory
+            if inventory_loader is not None:
+                return inventory_loader()
+            return {}
+
         profile_url = str(contact.get("linkedin_url") or "").strip()
-        exact_candidate = _find_exact_local_linkedin_match(contact, inventory) if profile_url else None
+        cached_profile_payload = _profile_payload_for_url(profile_url, direct_profile_payloads or {})
+        if cached_profile_payload is not None:
+            seed_candidate = self.store.find_candidate_by_linkedin_url(profile_url)
+            candidate, evidence = self._persist_contact_profile(
+                contact=contact,
+                fetched_payload=cached_profile_payload,
+                seed_candidate=seed_candidate,
+            )
+            return {
+                "result": {
+                    **contact,
+                    "status": "fetched_direct_linkedin",
+                    "matched_candidate": candidate.to_record(),
+                    "fetched_profile": _compact_profile_payload(cached_profile_payload),
+                    "fetch_errors": [],
+                    "match_reason": "linkedin_url_registry_cache",
+                    "profile_cache_hit": True,
+                },
+                "persisted_candidate_count": 1,
+                "persisted_evidence_count": len(evidence),
+                "persisted_candidate": candidate,
+                "attachment_candidates": [candidate],
+                "attachment_evidence": evidence,
+            }
+
+        exact_candidate = _find_exact_local_linkedin_match(contact, _inventory()) if profile_url else None
         if exact_candidate is not None:
             return self._resolve_local_exact_hit(
                 intake_dir=intake_dir,
@@ -530,7 +576,7 @@ class ExcelIntakeService:
                 match_reason="linkedin_url",
             )
 
-        exact_candidate = _find_exact_local_structured_match(contact, inventory)
+        exact_candidate = _find_exact_local_structured_match(contact, _inventory())
         if exact_candidate is not None:
             exact_match_reason = _exact_match_reason(contact, exact_candidate)
             return self._resolve_local_exact_hit(
@@ -566,7 +612,7 @@ class ExcelIntakeService:
                     "attachment_evidence": evidence,
                 }
 
-        local_near_matches = _find_local_near_matches(contact, inventory)
+        local_near_matches = _find_local_near_matches(contact, _inventory())
         if local_near_matches:
             result = {
                 **contact,
@@ -970,7 +1016,9 @@ class ExcelIntakeService:
         profile = dict(fetched_payload.get("parsed") or {})
         raw_path = Path(str(fetched_payload.get("raw_path") or ""))
         uploaded_company = str(contact.get("uploaded_company") or contact.get("company") or "").strip()
-        requested_company = str(contact.get("company") or "").strip() or str(profile.get("current_company") or "").strip()
+        requested_company = (
+            str(contact.get("company") or "").strip() or str(profile.get("current_company") or "").strip()
+        )
         identity = resolve_company_identity(requested_company)
         target_company = str(identity.canonical_name or requested_company).strip() or requested_company
         base_name = str(contact.get("name") or profile.get("full_name") or "").strip()
@@ -984,7 +1032,6 @@ class ExcelIntakeService:
             current_identity=current_identity,
             experience_items=experience_items,
         )
-        company_match = route_membership == "current"
         organization = current_company or requested_company or target_company
         seed_patch = normalize_candidate(
             Candidate(
@@ -1275,7 +1322,7 @@ def _extract_contacts_from_workbook(
     return contacts
 
 
-_COMPANY_HINT_SPLIT_PATTERN = re.compile(r"\s+(?:&|/|\+|,|;|\||and|or)\s+|[、，；]+", flags=re.IGNORECASE)
+_COMPANY_HINT_SPLIT_PATTERN = re.compile(r"\s*(?:&|/|\+|,|;|\||\band\b|\bor\b)\s*|[、，；]+", flags=re.IGNORECASE)
 
 
 def split_contact_company_hints(raw_company: str) -> list[str]:
@@ -1354,13 +1401,162 @@ def group_contacts_by_company_hints(contacts: list[dict[str, Any]]) -> dict[str,
     }
 
 
-def _build_local_candidate_inventory(runtime_dir: Path, store: ControlPlaneStore) -> dict[str, Any]:
+def _load_registry_cached_profile_payloads_for_contacts(
+    store: ControlPlaneStore,
+    contacts: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    urls_by_key: dict[str, str] = {}
+    source_shards_by_key: dict[str, list[str]] = {}
+    for contact in list(contacts or []):
+        if not isinstance(contact, dict):
+            continue
+        profile_url = str(contact.get("linkedin_url") or "").strip()
+        normalized_key = normalize_linkedin_profile_url_key(profile_url)
+        if not normalized_key:
+            continue
+        urls_by_key.setdefault(normalized_key, profile_url)
+        row_key = str(contact.get("row_key") or "").strip()
+        if row_key:
+            source_shards_by_key.setdefault(normalized_key, []).append(f"excel_intake:{row_key}")
+    if not urls_by_key:
+        return {}
+    registry_entries = store.get_linkedin_profile_registry_bulk(list(urls_by_key.values()))
+    cached_payloads: dict[str, dict[str, Any]] = {}
+    for normalized_key, profile_url in urls_by_key.items():
+        registry_entry = dict(registry_entries.get(normalized_key) or {})
+        if str(registry_entry.get("status") or "").strip().lower() != "fetched":
+            continue
+        cached_payload = _load_harvest_profile_from_raw_path(str(registry_entry.get("last_raw_path") or ""))
+        if cached_payload is None:
+            continue
+        cached_payloads[normalized_key] = cached_payload
+        alias_metadata = dict(cached_payload.get("profile_registry_aliases") or {})
+        store.upsert_linkedin_profile_registry_sources(
+            profile_url,
+            source_shards=list(source_shards_by_key.get(normalized_key) or []),
+            alias_urls=list(alias_metadata.get("alias_urls") or []),
+            raw_linkedin_url=str(alias_metadata.get("raw_linkedin_url") or ""),
+            sanity_linkedin_url=str(alias_metadata.get("sanity_linkedin_url") or ""),
+        )
+    return cached_payloads
+
+
+def _profile_payload_for_url(
+    profile_url: str, profile_payloads_by_key: dict[str, dict[str, Any]]
+) -> dict[str, Any] | None:
+    normalized_key = normalize_linkedin_profile_url_key(profile_url)
+    if not normalized_key:
+        return None
+    payload = profile_payloads_by_key.get(normalized_key)
+    return dict(payload) if isinstance(payload, dict) else None
+
+
+def _company_scope_names_and_keys(values: list[Any]) -> tuple[set[str], set[str]]:
+    names: set[str] = set()
+    keys: set[str] = set()
+
+    def _add(value: Any) -> None:
+        raw = str(value or "").strip()
+        if not raw:
+            return
+        for part in re.split(r"\s*(?:&|/|,|\+|\band\b)\s*", raw, flags=re.IGNORECASE):
+            name = str(part or "").strip()
+            if not name:
+                continue
+            names.add(name)
+            normalized_key = normalize_company_key(name)
+            if normalized_key:
+                keys.add(normalized_key)
+            try:
+                identity = resolve_company_identity(name)
+            except Exception:
+                identity = None
+            if identity is not None:
+                canonical_name = str(getattr(identity, "canonical_name", "") or "").strip()
+                linkedin_slug = str(getattr(identity, "linkedin_slug", "") or "").strip()
+                if canonical_name:
+                    names.add(canonical_name)
+                    canonical_key = normalize_company_key(canonical_name)
+                    if canonical_key:
+                        keys.add(canonical_key)
+                if linkedin_slug:
+                    slug_key = normalize_company_key(linkedin_slug)
+                    if slug_key:
+                        keys.add(slug_key)
+
+    for item in values:
+        if isinstance(item, (list, tuple, set)):
+            for nested in item:
+                _add(nested)
+        else:
+            _add(item)
+    return names, keys
+
+
+def _excel_inventory_scope_from_contacts(
+    *,
+    target_company: str = "",
+    contacts: list[dict[str, Any]] | None = None,
+) -> tuple[set[str], set[str]]:
+    values: list[Any] = [target_company]
+    for contact in list(contacts or []):
+        if not isinstance(contact, dict):
+            continue
+        values.extend(
+            [
+                contact.get("company"),
+                contact.get("uploaded_company"),
+                contact.get("route_target_company"),
+                contact.get("target_company"),
+                contact.get("organization"),
+                contact.get("current_company"),
+                contact.get("company_hints"),
+            ]
+        )
+    return _company_scope_names_and_keys(values)
+
+
+def _candidate_matches_inventory_scope(candidate: Candidate, scope_keys: set[str]) -> bool:
+    if not scope_keys:
+        return True
+    values: list[Any] = [
+        candidate.target_company,
+        candidate.organization,
+        candidate.current_destination,
+    ]
+    metadata = dict(candidate.metadata or {})
+    values.extend(
+        [
+            metadata.get("excel_uploaded_company"),
+            metadata.get("excel_route_company"),
+            metadata.get("source_current_company"),
+            metadata.get("profile_current_company"),
+            metadata.get("company"),
+            metadata.get("organization"),
+            metadata.get("source_experience_companies"),
+        ]
+    )
+    _, candidate_keys = _company_scope_names_and_keys(values)
+    return bool(candidate_keys & scope_keys)
+
+
+def _build_local_candidate_inventory(
+    runtime_dir: Path,
+    store: ControlPlaneStore,
+    *,
+    target_company: str = "",
+    contacts: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     candidates_by_key: dict[str, Candidate] = {}
-    candidate_documents_fallback_enabled = bool(
-        getattr(store, "candidate_documents_fallback_enabled", lambda: False)()
+    candidate_documents_fallback_enabled = bool(getattr(store, "candidate_documents_fallback_enabled", lambda: False)())
+    scoped_company_names, scoped_company_keys = _excel_inventory_scope_from_contacts(
+        target_company=target_company,
+        contacts=contacts,
     )
 
     def _ingest(candidate: Candidate) -> None:
+        if not _candidate_matches_inventory_scope(candidate, scoped_company_keys):
+            return
         key = _inventory_candidate_key(candidate)
         existing = candidates_by_key.get(key)
         if existing is None or _candidate_richness_score(candidate) > _candidate_richness_score(existing):
@@ -1372,6 +1568,8 @@ def _build_local_candidate_inventory(runtime_dir: Path, store: ControlPlaneStore
         prefer_hot_cache=True,
         existing_only=True,
     ):
+        if scoped_company_keys and normalize_company_key(snapshot_dir.parent.name) not in scoped_company_keys:
+            continue
         snapshot_ref = extract_company_snapshot_ref(snapshot_dir)
         if snapshot_ref is not None:
             materialized_snapshot_refs.add(snapshot_ref)
@@ -1399,6 +1597,13 @@ def _build_local_candidate_inventory(runtime_dir: Path, store: ControlPlaneStore
     ):
         if payload_path.parent.name == "normalized_artifacts":
             continue
+        if scoped_company_keys:
+            snapshot_ref_for_scope = extract_company_snapshot_ref(payload_path)
+            if (
+                snapshot_ref_for_scope is not None
+                and normalize_company_key(snapshot_ref_for_scope[0]) not in scoped_company_keys
+            ):
+                continue
         snapshot_ref = extract_company_snapshot_ref(payload_path)
         if snapshot_ref is not None and snapshot_ref in materialized_snapshot_refs:
             continue
@@ -1411,9 +1616,20 @@ def _build_local_candidate_inventory(runtime_dir: Path, store: ControlPlaneStore
             if candidate is not None:
                 _ingest(candidate)
 
-    # Snapshot artifacts are the authoritative inventory source; SQLite stays as supplement-only fallback.
-    for candidate in store.list_candidates():
-        _ingest(candidate)
+    # Snapshot artifacts are the authoritative inventory source; SQLite/PG stays as supplement-only fallback.
+    if scoped_company_names:
+        seen_candidate_ids: set[str] = set()
+        for company_name in sorted(scoped_company_names):
+            for candidate in store.list_candidates_for_company(company_name):
+                candidate_id = str(candidate.candidate_id or "").strip()
+                if candidate_id and candidate_id in seen_candidate_ids:
+                    continue
+                if candidate_id:
+                    seen_candidate_ids.add(candidate_id)
+                _ingest(candidate)
+    else:
+        for candidate in store.list_candidates():
+            _ingest(candidate)
 
     candidates = list(candidates_by_key.values())
     linkedin_index: dict[str, Candidate] = {}
@@ -1513,11 +1729,9 @@ def _build_local_candidate_inventory_from_candidates(
 
 
 def _find_exact_local_match(contact: dict[str, Any], inventory: dict[str, Any]) -> Candidate | None:
-    linkedin_key = _normalize_linkedin_lookup_key(contact.get("linkedin_url"))
-    if linkedin_key:
-        exact_by_linkedin = dict(inventory.get("linkedin_index") or {}).get(linkedin_key)
-        if exact_by_linkedin is not None and _candidate_matches_contact_company(exact_by_linkedin, contact):
-            return exact_by_linkedin
+    exact_by_linkedin = _find_exact_local_linkedin_match(contact, inventory)
+    if exact_by_linkedin is not None:
+        return exact_by_linkedin
     return _find_exact_local_structured_match(contact, inventory)
 
 
@@ -1525,8 +1739,12 @@ def _find_exact_local_linkedin_match(contact: dict[str, Any], inventory: dict[st
     linkedin_key = _normalize_linkedin_lookup_key(contact.get("linkedin_url"))
     if linkedin_key:
         exact_by_linkedin = dict(inventory.get("linkedin_index") or {}).get(linkedin_key)
-        if exact_by_linkedin is not None and _candidate_matches_contact_company(exact_by_linkedin, contact):
+        if exact_by_linkedin is not None:
             return exact_by_linkedin
+    for slug_key in _contact_linkedin_slugs(contact):
+        exact_by_slug = dict(inventory.get("linkedin_slug_index") or {}).get(slug_key)
+        if exact_by_slug is not None:
+            return exact_by_slug
     return None
 
 
@@ -1765,11 +1983,15 @@ def _classify_profile_company_membership(
     current_identity: Any,
     experience_items: list[dict[str, Any]],
 ) -> str:
-    if requested_company and current_company and _company_identity_matches(
-        requested_company=requested_company,
-        requested_identity=requested_identity,
-        current_company=current_company,
-        current_identity=current_identity,
+    if (
+        requested_company
+        and current_company
+        and _company_identity_matches(
+            requested_company=requested_company,
+            requested_identity=requested_identity,
+            current_company=current_company,
+            current_identity=current_identity,
+        )
     ):
         return "current"
     for company_name in _profile_experience_company_names(experience_items):
@@ -1976,12 +2198,21 @@ def _candidate_richness_score(candidate: Candidate) -> int:
 
 
 def _candidate_company_keys(candidate: Candidate) -> set[str]:
-    keys = {
-        normalize_company_key(candidate.target_company),
-        normalize_company_key(candidate.organization),
-        normalize_company_key(str(dict(candidate.metadata or {}).get("excel_uploaded_company") or "")),
-    }
-    return {item for item in keys if item}
+    metadata = dict(candidate.metadata or {})
+    values: list[Any] = [
+        candidate.target_company,
+        candidate.organization,
+        candidate.current_destination,
+        metadata.get("excel_uploaded_company"),
+        metadata.get("excel_route_company"),
+        metadata.get("source_current_company"),
+        metadata.get("profile_current_company"),
+        metadata.get("company"),
+        metadata.get("organization"),
+        metadata.get("source_experience_companies"),
+    ]
+    _, keys = _company_scope_names_and_keys(values)
+    return keys
 
 
 def _candidate_email_keys(candidate: Candidate) -> set[str]:
@@ -2003,13 +2234,24 @@ def _candidate_linkedin_slugs(candidate: Candidate) -> set[str]:
 
 
 def _contact_company_keys(contact: dict[str, Any]) -> set[str]:
+    route_company = str(contact.get("route_target_company") or "").strip()
     company = str(contact.get("company") or "").strip()
-    identity = resolve_company_identity(company) if company else None
-    keys = {
-        normalize_company_key(company),
-        normalize_company_key(str(getattr(identity, "canonical_name", "") or "")),
-    }
-    return {item for item in keys if item}
+    uploaded_company = str(contact.get("uploaded_company") or "").strip()
+    if route_company:
+        values: list[Any] = [route_company]
+    elif uploaded_company and company and normalize_company_key(company) != normalize_company_key(uploaded_company):
+        values = [company]
+    else:
+        values = [
+            company,
+            uploaded_company,
+            contact.get("target_company"),
+            contact.get("organization"),
+            contact.get("current_company"),
+            contact.get("company_hints"),
+        ]
+    _, keys = _company_scope_names_and_keys(values)
+    return keys
 
 
 def _contact_linkedin_slugs(contact: dict[str, Any]) -> set[str]:

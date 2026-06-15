@@ -10,43 +10,48 @@ from .domain import Candidate, make_evidence_id, merge_candidate, normalize_cand
 from .profile_timeline import normalized_primary_email_metadata, normalized_text_lines
 
 LARGE_ORG_HISTORY_SNAPSHOT_MIN_CANDIDATES = 1000
+LARGE_ORG_CURRENT_SNAPSHOT_ONLY_SELECTION_ENABLED = False
+
+
+def load_company_candidate_snapshot(snapshot_dir: Path, target_company: str) -> dict[str, Any] | None:
+    candidate_doc_path = snapshot_dir / "candidate_documents.json"
+    if not candidate_doc_path.exists():
+        return None
+    try:
+        payload = json.loads(candidate_doc_path.read_text())
+    except json.JSONDecodeError:
+        return None
+    candidates: list[Candidate] = []
+    for item in list(payload.get("candidates") or []):
+        candidate = candidate_from_payload(item)
+        if candidate is None:
+            continue
+        if normalize_key(candidate.target_company) != normalize_key(target_company):
+            continue
+        candidates.append(candidate)
+    if not candidates:
+        return None
+    evidence: list[dict[str, Any]] = []
+    for item in list(payload.get("evidence") or []):
+        evidence_item = evidence_payload_from_item(item)
+        if evidence_item is not None:
+            evidence.append(evidence_item)
+    return {
+        "snapshot_id": snapshot_dir.name,
+        "source_path": str(candidate_doc_path),
+        "candidate_count": len(candidates),
+        "evidence_count": len(evidence),
+        "candidates": candidates,
+        "evidence": evidence,
+    }
 
 
 def load_company_history_snapshots(company_dir: Path, target_company: str) -> list[dict[str, Any]]:
     snapshots: list[dict[str, Any]] = []
     for snapshot_dir in sorted(path for path in company_dir.iterdir() if path.is_dir()):
-        candidate_doc_path = snapshot_dir / "candidate_documents.json"
-        if not candidate_doc_path.exists():
-            continue
-        try:
-            payload = json.loads(candidate_doc_path.read_text())
-        except json.JSONDecodeError:
-            continue
-        candidates: list[Candidate] = []
-        for item in list(payload.get("candidates") or []):
-            candidate = candidate_from_payload(item)
-            if candidate is None:
-                continue
-            if normalize_key(candidate.target_company) != normalize_key(target_company):
-                continue
-            candidates.append(candidate)
-        if not candidates:
-            continue
-        evidence: list[dict[str, Any]] = []
-        for item in list(payload.get("evidence") or []):
-            evidence_item = evidence_payload_from_item(item)
-            if evidence_item is not None:
-                evidence.append(evidence_item)
-        snapshots.append(
-            {
-                "snapshot_id": snapshot_dir.name,
-                "source_path": str(candidate_doc_path),
-                "candidate_count": len(candidates),
-                "evidence_count": len(evidence),
-                "candidates": candidates,
-                "evidence": evidence,
-            }
-        )
+        snapshot_payload = load_company_candidate_snapshot(snapshot_dir, target_company)
+        if snapshot_payload is not None:
+            snapshots.append(snapshot_payload)
     return snapshots
 
 
@@ -105,7 +110,15 @@ def select_source_snapshots_for_materialization(
             return [source_index[snapshot_ref] for snapshot_ref in selected_ids], selection
 
     current_candidate_count = int(current_snapshot.get("candidate_count") or 0)
-    if current_candidate_count < LARGE_ORG_HISTORY_SNAPSHOT_MIN_CANDIDATES:
+    if (
+        not LARGE_ORG_CURRENT_SNAPSHOT_ONLY_SELECTION_ENABLED
+        or current_candidate_count < LARGE_ORG_HISTORY_SNAPSHOT_MIN_CANDIDATES
+    ):
+        if current_candidate_count >= LARGE_ORG_HISTORY_SNAPSHOT_MIN_CANDIDATES:
+            selection["reason"] = (
+                "current_snapshot_only_large_org_disabled; use explicit preferred source snapshots "
+                "or asset-governance cleanup instead of silently dropping historical shard sources."
+            )
         return source_snapshots, selection
 
     selection.update(
@@ -372,20 +385,46 @@ def build_asset_population_overlay(
                 merged[evidence_key(remapped)] = remapped
         return list(merged.values())
 
-    baseline_by_key: dict[str, Candidate] = {}
-    baseline_order: list[str] = []
-    evidence_by_key: dict[str, list[dict[str, Any]]] = {}
+    overlay_slots: list[dict[str, Any]] = []
+    key_to_slot_indices: dict[str, list[int]] = defaultdict(list)
     for candidate in list(baseline_candidates or []):
         member_key = _member_key(candidate)
-        if not member_key or member_key in baseline_by_key:
+        if not member_key:
             continue
-        baseline_by_key[member_key] = candidate
-        baseline_order.append(member_key)
-        evidence_by_key[member_key] = list(
-            baseline_evidence_lookup.get(str(candidate.candidate_id or "").strip(), [])
+        candidate_id = str(candidate.candidate_id or "").strip()
+        candidate_evidence = list(baseline_evidence_lookup.get(candidate_id, []))
+        existing_indices = [
+            index
+            for index in list(key_to_slot_indices.get(member_key) or [])
+            if 0 <= index < len(overlay_slots) and bool(overlay_slots[index].get("active"))
+        ]
+        if existing_indices:
+            existing_index = existing_indices[0]
+            existing_candidate = overlay_slots[existing_index]["candidate"]
+            if not isinstance(existing_candidate, Candidate):
+                continue
+            merged_candidate = merge_candidates(existing_candidate, candidate, prefer_incoming=False)
+            merged_candidate_id = str(merged_candidate.candidate_id or existing_candidate.candidate_id or candidate_id).strip()
+            overlay_slots[existing_index]["candidate"] = merged_candidate
+            overlay_slots[existing_index]["evidence"] = _dedupe_evidence_records(
+                list(overlay_slots[existing_index].get("evidence") or []),
+                candidate_evidence,
+                candidate_id=merged_candidate_id,
+            )
+            for duplicate_index in existing_indices[1:]:
+                overlay_slots[duplicate_index]["active"] = False
+            continue
+        slot_index = len(overlay_slots)
+        overlay_slots.append(
+            {
+                "member_key": member_key,
+                "candidate": candidate,
+                "evidence": candidate_evidence,
+                "active": True,
+            }
         )
+        key_to_slot_indices[member_key].append(slot_index)
 
-    overlay_by_key = dict(baseline_by_key)
     touched_keys: list[str] = []
     touched_candidates: list[Candidate] = []
     added_member_keys: list[str] = []
@@ -396,27 +435,47 @@ def build_asset_population_overlay(
         member_key = _member_key(delta_candidate)
         if not member_key:
             continue
-        existing_candidate = overlay_by_key.get(member_key)
+        existing_indices = [
+            index
+            for index in list(key_to_slot_indices.get(member_key) or [])
+            if 0 <= index < len(overlay_slots) and bool(overlay_slots[index].get("active"))
+        ]
+        existing_index = existing_indices[0] if existing_indices else None
+        existing_candidate = (
+            overlay_slots[existing_index]["candidate"] if existing_index is not None else None
+        )
         if _candidate_is_explicit_non_member(delta_candidate):
-            if existing_candidate is not None:
-                overlay_by_key.pop(member_key, None)
-                evidence_by_key.pop(member_key, None)
+            if existing_indices:
+                for slot_index in existing_indices:
+                    overlay_slots[slot_index]["active"] = False
                 removed_member_keys.append(member_key)
                 if member_key not in touched_keys:
                     touched_keys.append(member_key)
             continue
 
-        baseline_evidence = evidence_by_key.get(member_key, [])
+        baseline_evidence = (
+            list(overlay_slots[existing_index].get("evidence") or []) if existing_index is not None else []
+        )
         delta_evidence = list(delta_evidence_lookup.get(str(delta_candidate.candidate_id or "").strip(), []))
         if existing_candidate is None:
             merged_candidate = delta_candidate
             added_member_keys.append(member_key)
+            existing_index = len(overlay_slots)
+            overlay_slots.append(
+                {
+                    "member_key": member_key,
+                    "candidate": merged_candidate,
+                    "evidence": [],
+                    "active": True,
+                }
+            )
+            key_to_slot_indices[member_key].append(existing_index)
         else:
             merged_candidate = merge_candidates(existing_candidate, delta_candidate, prefer_incoming=True)
             if merged_candidate.to_record() != existing_candidate.to_record():
                 updated_member_keys.append(member_key)
-        overlay_by_key[member_key] = merged_candidate
-        evidence_by_key[member_key] = _dedupe_evidence_records(
+        overlay_slots[existing_index]["candidate"] = merged_candidate
+        overlay_slots[existing_index]["evidence"] = _dedupe_evidence_records(
             baseline_evidence,
             delta_evidence,
             candidate_id=str(merged_candidate.candidate_id or "").strip(),
@@ -429,25 +488,18 @@ def build_asset_population_overlay(
             if 0 <= touched_index < len(touched_candidates):
                 touched_candidates[touched_index] = merged_candidate
 
-    overlay_order = [
-        *touched_keys,
-        *[member_key for member_key in baseline_order if member_key not in set(touched_keys)],
-        *[
-            member_key
-            for member_key in overlay_by_key
-            if member_key not in set(touched_keys) and member_key not in set(baseline_order)
-        ],
-    ]
     final_candidates: list[Candidate] = []
     final_evidence_lookup: dict[str, list[dict[str, Any]]] = {}
-    for member_key in overlay_order:
-        candidate = overlay_by_key.get(member_key)
-        if candidate is None:
+    for slot in overlay_slots:
+        if not bool(slot.get("active")):
+            continue
+        candidate = slot.get("candidate")
+        if not isinstance(candidate, Candidate):
             continue
         final_candidates.append(candidate)
         candidate_id = str(candidate.candidate_id or "").strip()
         if candidate_id:
-            final_evidence_lookup[candidate_id] = list(evidence_by_key.get(member_key, []))
+            final_evidence_lookup[candidate_id] = list(slot.get("evidence") or [])
 
     return {
         "candidates": final_candidates,

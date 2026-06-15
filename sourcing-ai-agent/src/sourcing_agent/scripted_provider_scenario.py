@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import json
+import os
+import threading
+import time
 from datetime import datetime, timezone
 from functools import lru_cache
 from hashlib import sha1
-import json
-import os
 from pathlib import Path
-import threading
-import time
 from typing import Any
 
+from .runtime_environment import normalize_provider_mode
 
 _SCRIPTED_SCENARIO_ENV = "SOURCING_SCRIPTED_PROVIDER_SCENARIO"
 _SCRIPTED_PROVIDER_INVOCATION_LOG = "scripted_provider_invocations.jsonl"
@@ -39,11 +40,96 @@ def load_scripted_provider_scenario() -> dict[str, Any]:
 @lru_cache(maxsize=8)
 def _load_scripted_provider_scenario_cached(path: str, mtime_ns: int) -> dict[str, Any]:
     del mtime_ns
+    scenario_path = Path(path)
+    return _load_scripted_provider_scenario_file(scenario_path, seen=set())
+
+
+def _load_scripted_provider_scenario_file(path: Path, *, seen: set[Path]) -> dict[str, Any]:
+    resolved_path = path.expanduser().resolve()
+    if resolved_path in seen:
+        return {}
+    seen.add(resolved_path)
     try:
-        payload = json.loads(Path(path).read_text())
+        payload = json.loads(resolved_path.read_text())
     except (OSError, json.JSONDecodeError):
         return {}
-    return payload if isinstance(payload, dict) else {}
+    if not isinstance(payload, dict):
+        return {}
+    return _resolve_scripted_provider_scenario_includes(payload, base_path=resolved_path.parent, seen=seen)
+
+
+def _resolve_scripted_provider_scenario_includes(
+    payload: dict[str, Any],
+    *,
+    base_path: Path,
+    seen: set[Path],
+) -> dict[str, Any]:
+    include_paths = [
+        str(item or "").strip()
+        for item in list(payload.get("includes") or payload.get("extends") or [])
+        if str(item or "").strip()
+    ]
+    if not include_paths:
+        return dict(payload)
+    merged: dict[str, Any] = {}
+    for include_path in include_paths:
+        include_file = Path(include_path).expanduser()
+        if not include_file.is_absolute():
+            include_file = base_path / include_file
+        included_payload = _load_scripted_provider_scenario_file(include_file, seen=seen)
+        merged = _merge_scripted_provider_scenarios(merged, included_payload)
+    current_payload = dict(payload)
+    current_payload.pop("includes", None)
+    current_payload.pop("extends", None)
+    return _merge_scripted_provider_scenarios(merged, current_payload)
+
+
+def _merge_scripted_provider_scenarios(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    if not base:
+        base = {}
+    if not overlay:
+        return dict(base)
+    merged = {key: value for key, value in dict(base).items()}
+    for key, value in dict(overlay).items():
+        if key in {"search", "harvest"} and isinstance(value, dict):
+            base_section = dict(merged.get(key) or {})
+            overlay_section = dict(value or {})
+            base_rules = list(base_section.get("rules") or [])
+            overlay_rules = list(overlay_section.get("rules") or [])
+            section = {**base_section, **overlay_section}
+            if base_rules or overlay_rules:
+                section["rules"] = _merge_scripted_provider_rules_by_name(base_rules, overlay_rules)
+            merged[key] = section
+        elif key == "meta" and isinstance(value, dict):
+            merged[key] = {**dict(merged.get(key) or {}), **dict(value or {})}
+        else:
+            merged[key] = value
+    return merged
+
+
+def _merge_scripted_provider_rules_by_name(
+    base_rules: list[Any],
+    overlay_rules: list[Any],
+) -> list[Any]:
+    merged_rules = [dict(rule) if isinstance(rule, dict) else rule for rule in base_rules]
+    rule_index_by_name = {
+        str(rule.get("name") or "").strip(): index
+        for index, rule in enumerate(merged_rules)
+        if isinstance(rule, dict) and str(rule.get("name") or "").strip()
+    }
+    for overlay_rule in overlay_rules:
+        if not isinstance(overlay_rule, dict):
+            merged_rules.append(overlay_rule)
+            continue
+        rule_name = str(overlay_rule.get("name") or "").strip()
+        if rule_name and rule_name in rule_index_by_name and isinstance(merged_rules[rule_index_by_name[rule_name]], dict):
+            index = rule_index_by_name[rule_name]
+            merged_rules[index] = {**dict(merged_rules[index]), **dict(overlay_rule)}
+            continue
+        if rule_name:
+            rule_index_by_name[rule_name] = len(merged_rules)
+        merged_rules.append(dict(overlay_rule))
+    return merged_rules
 
 
 def summarize_scripted_provider_scenario(payload: dict[str, Any] | None) -> dict[str, Any]:
@@ -63,8 +149,8 @@ def summarize_scripted_provider_scenario(payload: dict[str, Any] | None) -> dict
                 "provider": provider_name,
                 "name": str(rule.get("name") or rule.get("_rule_name") or ""),
                 "categories": sorted(rule_categories),
-                "has_body": isinstance(rule.get("body"), list),
-                "result_count": len(list(rule.get("results") or [])) if isinstance(rule.get("results"), list) else 0,
+                "has_body": isinstance(rule.get("body"), list) or isinstance(rule.get("generated_body"), dict),
+                "result_count": _scripted_rule_result_count(rule),
             }
         )
     missing_categories = [key for key, count in categories.items() if int(count or 0) <= 0]
@@ -137,11 +223,43 @@ def _scripted_rule_categories(rule: dict[str, Any]) -> set[str]:
         expected = _safe_positive_int(rule.get("expected_total_count") or rule.get("estimated_total_count"))
         if expected is not None and len(list(rule.get("body") or [])) < expected:
             categories.add("partial_result")
+    if isinstance(rule.get("generated_body"), dict):
+        generated = dict(rule.get("generated_body") or {})
+        expected = _safe_positive_int(
+            generated.get("expected_total_count")
+            or generated.get("estimated_total_count")
+            or generated.get("total_count")
+            or rule.get("expected_total_count")
+            or rule.get("estimated_total_count")
+        )
+        result_count = _scripted_rule_generated_result_count(generated)
+        if expected is not None and result_count is not None and result_count < expected:
+            categories.add("partial_result")
     if isinstance(rule.get("results"), list):
         expected = _safe_positive_int(rule.get("expected_total_count") or rule.get("estimated_total_count"))
         if expected is not None and len(list(rule.get("results") or [])) < expected:
             categories.add("partial_result")
     return categories
+
+
+def _scripted_rule_result_count(rule: dict[str, Any]) -> int:
+    if isinstance(rule.get("results"), list):
+        return len(list(rule.get("results") or []))
+    if isinstance(rule.get("body"), list):
+        return len(list(rule.get("body") or []))
+    if isinstance(rule.get("generated_body"), dict):
+        generated_count = _scripted_rule_generated_result_count(dict(rule.get("generated_body") or {}))
+        if generated_count is not None:
+            return generated_count
+    return 0
+
+
+def _scripted_rule_generated_result_count(generated: dict[str, Any]) -> int | None:
+    for key in ("returned_count", "count", "max_profiles"):
+        coerced = _safe_positive_int(generated.get(key))
+        if coerced is not None:
+            return coerced
+    return _safe_positive_int(generated.get("estimated_total_count") or generated.get("total_count"))
 
 
 def _safe_positive_int(value: Any) -> int | None:
@@ -157,6 +275,18 @@ def scripted_provider_invocation_log_path() -> Path | None:
     if not runtime_dir:
         return None
     return Path(runtime_dir).expanduser().resolve() / _SCRIPTED_PROVIDER_INVOCATION_LOG
+
+
+def _semantic_invocation_signature_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    raw_metadata = dict(metadata or {})
+    request_context = dict(raw_metadata.get("request_context") or {})
+    semantic_context: dict[str, Any] = {}
+    for key in ("zero_result_retry_attempt",):
+        if key in request_context:
+            semantic_context[key] = request_context.get(key)
+    if not semantic_context:
+        return {}
+    return {"request_context": semantic_context}
 
 
 def record_scripted_provider_invocation(
@@ -181,10 +311,14 @@ def record_scripted_provider_invocation(
         "task_key": " ".join(str(task_key or "").split()).strip(),
         "payload": normalized_payload,
     }
+    semantic_metadata = _semantic_invocation_signature_metadata(metadata)
+    if semantic_metadata:
+        signature_payload["metadata"] = semantic_metadata
     signature_text = json.dumps(signature_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     recorded_at = datetime.now(timezone.utc).isoformat()
     event = {
         "recorded_at": recorded_at,
+        "provider_mode": normalize_provider_mode(),
         "provider_name": str(provider_name or "").strip(),
         "dispatch_kind": str(dispatch_kind or "").strip(),
         "logical_name": str(logical_name or "").strip(),
@@ -242,6 +376,16 @@ def load_scripted_provider_invocations(
 
 def find_scripted_rule(section: str, *, context: dict[str, Any]) -> dict[str, Any]:
     scenario = load_scripted_provider_scenario()
+    return find_scripted_rule_in_scenario(scenario, section, context=context)
+
+
+def find_scripted_rule_in_scenario(
+    scenario: dict[str, Any] | None,
+    section: str,
+    *,
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    scenario = dict(scenario or {})
     section_payload = dict(scenario.get(section) or {})
     rules = list(section_payload.get("rules") or [])
     if isinstance(section_payload.get("default"), dict):
@@ -302,6 +446,17 @@ def scripted_sleep(
     phase: str,
     seconds_cap: float | None = None,
 ) -> None:
+    seconds = scripted_sleep_seconds(rule, phase=phase, seconds_cap=seconds_cap)
+    if seconds > 0:
+        time.sleep(seconds)
+
+
+def scripted_sleep_seconds(
+    rule: dict[str, Any],
+    *,
+    phase: str,
+    seconds_cap: float | None = None,
+) -> float:
     for key in (f"{phase}_sleep_seconds", "sleep_seconds"):
         raw = rule.get(key)
         if raw in (None, "", 0, 0.0):
@@ -313,8 +468,8 @@ def scripted_sleep(
         if seconds_cap is not None:
             seconds = min(seconds, max(0.0, float(seconds_cap)))
         if seconds > 0:
-            time.sleep(seconds)
-            return
+            return seconds
+    return 0.0
 
 
 def scripted_phase_error(rule: dict[str, Any], *, phase: str, round_number: int) -> dict[str, Any]:
@@ -340,6 +495,16 @@ def scripted_context_text(context: dict[str, Any]) -> str:
         return str(context).lower()
 
 
+def scripted_payload_text(context: dict[str, Any]) -> str:
+    """Serialize only the provider request payload for payload_* rule matching."""
+
+    payload = dict(context or {}).get("payload")
+    try:
+        return json.dumps(payload, ensure_ascii=False, sort_keys=True).lower()
+    except TypeError:
+        return str(payload).lower()
+
+
 def scripted_rule_artifacts(rule: dict[str, Any], *, phase: str) -> list[dict[str, Any]]:
     artifacts: list[dict[str, Any]] = []
     for item in list(rule.get("artifacts") or []):
@@ -360,6 +525,7 @@ def _scripted_rule_matches(rule: dict[str, Any], context: dict[str, Any]) -> boo
     task_key = str(context.get("task_key") or "").strip().lower()
     logical_name = str(context.get("logical_name") or "").strip().lower()
     provider_name = str(context.get("provider_name") or "").strip().lower()
+    payload_text = scripted_payload_text(context)
     context_text = scripted_context_text(context)
 
     if str(match.get("logical_name") or "").strip().lower():
@@ -378,11 +544,64 @@ def _scripted_rule_matches(rule: dict[str, Any], context: dict[str, Any]) -> boo
         return False
     if not _all_terms_in_text(match.get("task_key_contains"), task_key):
         return False
-    if not _all_terms_in_text(match.get("payload_contains"), context_text):
+    if not _all_terms_in_text(match.get("payload_contains"), payload_text):
         return False
     if not _all_terms_in_text(match.get("context_contains"), context_text):
         return False
+    if not _mapping_contains_expected(context.get("payload"), match.get("payload_equals") or match.get("payload_match")):
+        return False
+    if not _mapping_contains_expected(context, match.get("context_equals") or match.get("context_match")):
+        return False
+    if _any_terms_in_text(match.get("query_not_contains") or match.get("query_excludes"), query_text):
+        return False
+    if _any_terms_in_text(match.get("task_key_not_contains") or match.get("task_key_excludes"), task_key):
+        return False
+    if _any_terms_in_text(match.get("payload_not_contains") or match.get("payload_excludes"), payload_text):
+        return False
+    if _any_terms_in_text(match.get("context_not_contains") or match.get("context_excludes"), context_text):
+        return False
     return True
+
+
+def _mapping_contains_expected(actual: Any, expected: Any) -> bool:
+    if expected in (None, "", [], (), set()):
+        return True
+    if not isinstance(expected, dict):
+        return _scripted_values_equal(actual, expected)
+    if not isinstance(actual, dict):
+        return False
+    for key, expected_value in expected.items():
+        if key not in actual:
+            return False
+        actual_value = actual.get(key)
+        if isinstance(expected_value, dict):
+            if not _mapping_contains_expected(actual_value, expected_value):
+                return False
+            continue
+        if isinstance(expected_value, list):
+            actual_list = actual_value if isinstance(actual_value, list) else [actual_value]
+            for item in expected_value:
+                if not any(_scripted_values_equal(candidate, item) for candidate in actual_list):
+                    return False
+            continue
+        if not _scripted_values_equal(actual_value, expected_value):
+            return False
+    return True
+
+
+def _scripted_values_equal(actual: Any, expected: Any) -> bool:
+    if actual == expected:
+        return True
+    if isinstance(expected, bool):
+        if isinstance(actual, bool):
+            return actual is expected
+        return str(actual).strip().lower() in ({"true", "1", "yes"} if expected else {"false", "0", "no"})
+    if isinstance(expected, int | float) and not isinstance(expected, bool):
+        try:
+            return float(actual) == float(expected)
+        except (TypeError, ValueError):
+            return False
+    return str(actual or "").strip().lower() == str(expected or "").strip().lower()
 
 
 def _all_terms_in_text(values: Any, haystack: str) -> bool:
@@ -397,6 +616,20 @@ def _all_terms_in_text(values: Any, haystack: str) -> bool:
         if needle and needle not in haystack:
             return False
     return True
+
+
+def _any_terms_in_text(values: Any, haystack: str) -> bool:
+    if values in (None, "", [], (), set()):
+        return False
+    if isinstance(values, str):
+        candidates = [values]
+    else:
+        candidates = list(values or [])
+    for item in candidates:
+        needle = " ".join(str(item or "").split()).strip().lower()
+        if needle and needle in haystack:
+            return True
+    return False
 
 
 def _normalized_invocation_payload(payload: Any) -> Any:

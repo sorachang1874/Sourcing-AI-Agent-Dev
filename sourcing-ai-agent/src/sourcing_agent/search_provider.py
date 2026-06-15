@@ -1,47 +1,50 @@
 from __future__ import annotations
 
 import base64
+import json
+import os
+import re
+import shutil
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from html import unescape
 from html.parser import HTMLParser
-import json
-import os
 from pathlib import Path
-import re
-import shutil
-import subprocess
 from typing import Any
 from urllib import parse
 
 import requests
 
 from .dataforseo_client import (
-    DataForSeoGoogleOrganicClient,
+    DATAFORSEO_OK_TASK_STATUS_CODES,
+    DATAFORSEO_PENDING_TASK_STATUS_CODES,
     MAX_TASK_POST_BATCH_SIZE,
+    DataForSeoGoogleOrganicClient,
+    build_google_organic_task,
+    dataforseo_task_error,
     extract_google_organic_ready_task_ids,
     extract_google_organic_result_block,
-    extract_google_organic_submitted_tasks,
     extract_google_organic_task_ids,
-    build_google_organic_task,
 )
-from .scripted_provider_scenario import (
-    advance_scripted_phase_round,
-    find_scripted_rule,
-    record_scripted_provider_invocation,
-    scripted_phase_error,
-    scripted_pending_rounds,
-    scripted_rule_artifacts,
-    scripted_sleep,
-)
+from .runtime_environment import assert_live_provider_access_allowed, external_provider_mode
 from .runtime_tuning import (
     apply_runtime_timing_overrides_to_search_state,
     resolved_lane_fetch_cooldown_seconds,
     resolved_lane_ready_cooldown_seconds,
     resolved_task_get_batch_workers,
 )
-from .runtime_environment import external_provider_mode
+from .scripted_provider_scenario import (
+    advance_scripted_phase_round,
+    find_scripted_rule_in_scenario,
+    load_scripted_provider_scenario,
+    record_scripted_provider_invocation,
+    scripted_pending_rounds,
+    scripted_phase_error,
+    scripted_rule_artifacts,
+    scripted_sleep,
+)
 from .settings import SearchProviderSettings
 from .web_fetch import DEFAULT_HEADERS, fetch_search_results_html
 
@@ -49,6 +52,7 @@ _SHARED_LIBRARY_PACKAGE_HINTS = {
     "libnspr4.so": "libnspr4",
     "libnss3.so": "libnss3",
 }
+MODEL_NATIVE_SEARCH_PROVIDER_NAME = "model_native_search"
 def _env_int(name: str, default: int) -> int:
     raw = str(os.getenv(name) or "").strip()
     if not raw:
@@ -72,6 +76,41 @@ def _default_lane_fetch_cooldown_seconds() -> int:
 
 def _default_dataforseo_task_get_batch_workers() -> int:
     return max(1, _env_int("DATAFORSEO_TASK_GET_BATCH_WORKERS", 8))
+
+
+def _dataforseo_batch_item_retry_count() -> int:
+    return max(0, _env_int("DATAFORSEO_BATCH_ITEM_RETRY_COUNT", 1))
+
+
+def _dataforseo_error_message_retryable(message: str) -> bool:
+    normalized = str(message or "").lower()
+    if any(token in normalized for token in ("status_code=40800", "status_code=42900")):
+        return True
+    match = re.search(r"status_code=(\d+)", normalized)
+    if match:
+        try:
+            return int(match.group(1)) >= 50000
+        except ValueError:
+            return False
+    return any(token in normalized for token in ("timeout", "temporar", "rate limit", "connection"))
+
+
+def _dataforseo_status_code_from_error(message: str) -> int:
+    match = re.search(r"status_code=(\d+)", str(message or ""))
+    if not match:
+        return 0
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return 0
+
+
+def _dataforseo_status_message_from_error(message: str) -> str:
+    text = str(message or "").strip()
+    marker = ":"
+    if marker not in text:
+        return text
+    return text.rsplit(marker, 1)[-1].strip()
 
 
 def _external_provider_mode() -> str:
@@ -183,6 +222,21 @@ class SearchProviderError(RuntimeError):
         self.attempts = attempts or []
 
 
+def _require_batch_task_key(spec: dict[str, Any], *, provider_name: str, operation: str) -> str:
+    task_key = str((spec or {}).get("task_key") or "").strip()
+    if task_key:
+        return task_key
+    raise SearchProviderError(
+        f"{provider_name}.{operation} requires stable task_key/query_identity_key; "
+        "batch query identity must be assigned by the caller and must not fall back to request order, query text, or task_id."
+    )
+
+
+def _require_batch_task_keys(query_specs: list[dict[str, Any]], *, provider_name: str, operation: str) -> None:
+    for spec in list(query_specs or []):
+        _require_batch_task_key(dict(spec or {}), provider_name=provider_name, operation=operation)
+
+
 class BaseSearchProvider:
     provider_name: str = "base"
 
@@ -283,7 +337,7 @@ class OfflineSearchProvider(BaseSearchProvider):
             query_text = " ".join(str((spec or {}).get("query_text") or "").split()).strip()
             if not query_text:
                 continue
-            task_key = str((spec or {}).get("task_key") or query_text).strip() or query_text
+            task_key = _require_batch_task_key(spec, provider_name=self.provider_name, operation="submit_batch_queries")
             checkpoint = apply_runtime_timing_overrides_to_search_state(
                 {
                     "provider_name": self.provider_name,
@@ -325,10 +379,8 @@ class OfflineSearchProvider(BaseSearchProvider):
         for spec in list(query_specs or []):
             checkpoint = dict((spec or {}).get("checkpoint") or {})
             query_text = str((spec or {}).get("query_text") or checkpoint.get("query_text") or "").strip()
-            task_key = str((spec or {}).get("task_key") or query_text or checkpoint.get("task_id") or "").strip()
+            task_key = _require_batch_task_key(spec, provider_name=self.provider_name, operation="poll_ready_batch")
             task_id = str((spec or {}).get("task_id") or checkpoint.get("task_id") or "").strip()
-            if not task_key:
-                continue
             tasks.append(
                 SearchBatchReadyTask(
                     task_key=task_key,
@@ -363,10 +415,8 @@ class OfflineSearchProvider(BaseSearchProvider):
         for spec in list(query_specs or []):
             checkpoint = dict((spec or {}).get("checkpoint") or {})
             query_text = str((spec or {}).get("query_text") or checkpoint.get("query_text") or "").strip()
-            task_key = str((spec or {}).get("task_key") or query_text or checkpoint.get("task_id") or "").strip()
+            task_key = _require_batch_task_key(spec, provider_name=self.provider_name, operation="fetch_ready_batch")
             task_id = str((spec or {}).get("task_id") or checkpoint.get("task_id") or "").strip()
-            if not task_key:
-                continue
             tasks.append(
                 SearchBatchFetchTask(
                     task_key=task_key,
@@ -401,14 +451,16 @@ class OfflineSearchProvider(BaseSearchProvider):
 class ScriptedSearchProvider(BaseSearchProvider):
     provider_name = "scripted_search"
 
-    def __init__(self) -> None:
+    def __init__(self, scenario: dict[str, Any] | None = None) -> None:
         self.mode = "scripted"
+        self.scenario = dict(load_scripted_provider_scenario() if scenario is None else scenario)
 
     def _rule_for(self, *, query_text: str = "", task_key: str = "", phase: str = "", checkpoint: dict[str, Any] | None = None) -> dict[str, Any]:
         checkpoint = dict(checkpoint or {})
         rule_name = str(checkpoint.get("scripted_rule_name") or "").strip()
         if rule_name:
-            rule = find_scripted_rule(
+            rule = find_scripted_rule_in_scenario(
+                self.scenario,
                 "search",
                 context={
                     "query_text": query_text,
@@ -422,7 +474,8 @@ class ScriptedSearchProvider(BaseSearchProvider):
             )
             if rule:
                 return rule
-        return find_scripted_rule(
+        return find_scripted_rule_in_scenario(
+            self.scenario,
             "search",
             context={
                 "query_text": query_text,
@@ -435,7 +488,10 @@ class ScriptedSearchProvider(BaseSearchProvider):
 
     def _build_response(self, query_text: str, *, rule: dict[str, Any] | None = None) -> SearchResponse:
         rule = dict(rule or {})
-        results_payload = list(rule.get("results") or [])
+        results_payload = [
+            *_scripted_search_result_templates(query_text, list(rule.get("result_templates") or [])),
+            *list(rule.get("results") or []),
+        ]
         results: list[SearchResultItem] = []
         for item in results_payload:
             if not isinstance(item, dict):
@@ -570,7 +626,7 @@ class ScriptedSearchProvider(BaseSearchProvider):
             query_text = " ".join(str((spec or {}).get("query_text") or "").split()).strip()
             if not query_text:
                 continue
-            task_key = str((spec or {}).get("task_key") or query_text).strip() or query_text
+            task_key = _require_batch_task_key(spec, provider_name=self.provider_name, operation="submit_batch_queries")
             rule = self._rule_for(query_text=query_text, task_key=task_key, phase="submit")
             record_scripted_provider_invocation(
                 provider_name=self.provider_name,
@@ -634,10 +690,8 @@ class ScriptedSearchProvider(BaseSearchProvider):
         for spec in list(query_specs or []):
             checkpoint = dict((spec or {}).get("checkpoint") or {})
             query_text = str((spec or {}).get("query_text") or checkpoint.get("query_text") or "").strip()
-            task_key = str((spec or {}).get("task_key") or query_text or checkpoint.get("task_id") or "").strip()
+            task_key = _require_batch_task_key(spec, provider_name=self.provider_name, operation="poll_ready_batch")
             task_id = str((spec or {}).get("task_id") or checkpoint.get("task_id") or "").strip()
-            if not task_key:
-                continue
             rule = self._rule_for(query_text=query_text, task_key=task_key, phase="poll", checkpoint=checkpoint)
             scripted_sleep(rule, phase="poll")
             updated_checkpoint, round_number = advance_scripted_phase_round(checkpoint, phase="poll")
@@ -696,10 +750,8 @@ class ScriptedSearchProvider(BaseSearchProvider):
         for spec in list(query_specs or []):
             checkpoint = dict((spec or {}).get("checkpoint") or {})
             query_text = str((spec or {}).get("query_text") or checkpoint.get("query_text") or "").strip()
-            task_key = str((spec or {}).get("task_key") or query_text or checkpoint.get("task_id") or "").strip()
+            task_key = _require_batch_task_key(spec, provider_name=self.provider_name, operation="fetch_ready_batch")
             task_id = str((spec or {}).get("task_id") or checkpoint.get("task_id") or "").strip()
-            if not task_key:
-                continue
             rule = self._rule_for(query_text=query_text, task_key=task_key, phase="fetch", checkpoint=checkpoint)
             scripted_sleep(rule, phase="fetch")
             error_spec = scripted_phase_error(rule, phase="fetch", round_number=1)
@@ -749,6 +801,81 @@ class ScriptedSearchProvider(BaseSearchProvider):
         )
 
 
+def _scripted_search_result_templates(query_text: str, templates: list[Any]) -> list[dict[str, Any]]:
+    if not templates:
+        return []
+    query_values = _scripted_search_query_values(query_text)
+    rendered: list[dict[str, Any]] = []
+    for template in templates:
+        if not isinstance(template, dict):
+            continue
+        rendered_item: dict[str, Any] = {}
+        for key in ("title", "url", "snippet"):
+            rendered_item[key] = _render_scripted_search_template_value(template.get(key), query_values)
+        metadata = template.get("metadata")
+        if isinstance(metadata, dict):
+            rendered_item["metadata"] = {
+                str(key): _render_scripted_search_template_value(value, query_values)
+                for key, value in metadata.items()
+            }
+        rendered.append(rendered_item)
+    return rendered
+
+
+def _scripted_search_query_values(query_text: str) -> dict[str, str]:
+    normalized_query = " ".join(str(query_text or "").split()).strip()
+    quoted_terms = [item.strip() for item in re.findall(r'"([^"]+)"', normalized_query) if item.strip()]
+    candidate_name = quoted_terms[0] if quoted_terms else _scripted_search_query_name_guess(normalized_query)
+    company = quoted_terms[1] if len(quoted_terms) > 1 else _scripted_search_query_company_guess(normalized_query)
+    name_slug = _scripted_search_slug(candidate_name or "candidate")
+    company_slug = _scripted_search_slug(company or "company")
+    return {
+        "query_text": normalized_query,
+        "candidate_name": candidate_name or "Candidate",
+        "candidate_slug": name_slug,
+        "company": company or "Company",
+        "company_slug": company_slug,
+    }
+
+
+def _scripted_search_query_name_guess(query_text: str) -> str:
+    normalized = re.sub(r"\s+", " ", str(query_text or "")).strip()
+    if not normalized:
+        return "Candidate"
+    cleaned = re.sub(
+        r"\b(site|homepage|personal website|personal site|github|scholar|citations|arxiv|email|contact)\b.*$",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    ).strip()
+    tokens = [token for token in re.findall(r"[A-Za-z][A-Za-z'.-]*", cleaned) if token.lower() not in {"or", "and"}]
+    if len(tokens) >= 2:
+        return " ".join(tokens[:2])
+    return " ".join(tokens) or "Candidate"
+
+
+def _scripted_search_query_company_guess(query_text: str) -> str:
+    quoted_terms = [item.strip() for item in re.findall(r'"([^"]+)"', str(query_text or "")) if item.strip()]
+    if len(quoted_terms) >= 2:
+        return quoted_terms[1]
+    return "Company"
+
+
+def _scripted_search_slug(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", str(value or "").lower()).strip("-")
+    return slug or "scripted"
+
+
+def _render_scripted_search_template_value(value: Any, query_values: dict[str, str]) -> str:
+    raw = str(value or "")
+    if not raw:
+        return ""
+    try:
+        return raw.format(**query_values)
+    except (KeyError, ValueError):
+        return raw
+
+
 class DuckDuckGoHtmlSearchProvider(BaseSearchProvider):
     provider_name = "duckduckgo_html"
 
@@ -756,6 +883,11 @@ class DuckDuckGoHtmlSearchProvider(BaseSearchProvider):
         self.timeout_seconds = timeout_seconds
 
     def search(self, query_text: str, *, max_results: int = 10, timeout: int | None = None) -> SearchResponse:
+        assert_live_provider_access_allowed(
+            provider_name=self.provider_name,
+            operation="search",
+            payload={"query": query_text},
+        )
         fetched = fetch_search_results_html(query_text, timeout=timeout or self.timeout_seconds)
         results = parse_duckduckgo_html_results(fetched.text)[:max_results]
         return SearchResponse(
@@ -777,6 +909,11 @@ class BingHtmlSearchProvider(BaseSearchProvider):
         self.timeout_seconds = timeout_seconds
 
     def search(self, query_text: str, *, max_results: int = 10, timeout: int | None = None) -> SearchResponse:
+        assert_live_provider_access_allowed(
+            provider_name=self.provider_name,
+            operation="search",
+            payload={"query": query_text},
+        )
         response = requests.get(
             "https://www.bing.com/search",
             headers={"User-Agent": "Mozilla/5.0"},
@@ -810,6 +947,11 @@ class SerperGoogleSearchProvider(BaseSearchProvider):
         self.timeout_seconds = timeout_seconds
 
     def search(self, query_text: str, *, max_results: int = 10, timeout: int | None = None) -> SearchResponse:
+        assert_live_provider_access_allowed(
+            provider_name=self.provider_name,
+            operation="search",
+            payload={"query": query_text},
+        )
         if not self.api_key:
             raise SearchProviderError("Serper API key is not configured.")
         response = requests.post(
@@ -950,7 +1092,7 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
             if not query_text:
                 continue
             max_results = max(1, int((spec or {}).get("max_results") or 10))
-            task_key = str((spec or {}).get("task_key") or query_text).strip() or query_text
+            task_key = _require_batch_task_key(spec, provider_name=self.provider_name, operation="submit_batch_queries")
             depth = max(self.depth, max_results)
             normalized_specs.append(
                 {
@@ -973,12 +1115,154 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
         if not normalized_specs:
             return None
 
+        task_order = {
+            str(spec["task_key"]): index
+            for index, spec in enumerate(normalized_specs)
+        }
         submitted_tasks: list[SearchBatchSubmissionTask] = []
         artifacts: list[SearchExecutionArtifact] = []
+        max_item_retries = _dataforseo_batch_item_retry_count()
+
+        def _submission_task(
+            *,
+            spec: dict[str, Any],
+            task_payload: dict[str, Any],
+            echoed: dict[str, str],
+            artifact_label: str,
+            batch_index: int,
+            retry_attempt: int = 0,
+            error_override: str = "",
+            response_mapping_source: str = "",
+        ) -> SearchBatchSubmissionTask:
+            task_id = str(echoed.get("task_id") or task_payload.get("id") or "").strip()
+            error = dataforseo_task_error(task_payload) if task_payload else {
+                "status_code": 0,
+                "status_message": "DataForSEO task response missing from batch payload.",
+                "retryable": True,
+            }
+            if error_override:
+                error = {
+                    "status_code": int(error.get("status_code") or 0),
+                    "status_message": error_override,
+                    "retryable": bool(error.get("retryable")) or _dataforseo_error_message_retryable(error_override),
+                }
+            submitted = bool(task_id) and not error
+            status = "submitted" if submitted else (
+                "submit_failed_retryable" if bool(error.get("retryable")) else "submit_failed_terminal"
+            )
+            checkpoint = self._build_queue_checkpoint(
+                query_text=str(spec["query_text"]),
+                depth=int(spec["depth"]),
+                task_id=task_id,
+                status=status,
+                runtime_timing_overrides=dict(spec.get("runtime_timing_overrides") or {}),
+            )
+            if error:
+                checkpoint.update(
+                    {
+                        "error": str(error.get("status_message") or "DataForSEO task submit failed.").strip(),
+                        "status_code": int(error.get("status_code") or 0),
+                        "retryable": bool(error.get("retryable")),
+                        "retry_unit": "search_query",
+                        "retry_strategy": "dataforseo_batch_failed_query_retry_only",
+                        "batch_item_retry_attempt": int(retry_attempt),
+                    }
+                )
+            return SearchBatchSubmissionTask(
+                task_key=str(spec["task_key"]),
+                query_text=str(spec["query_text"]),
+                checkpoint=checkpoint,
+                metadata={
+                    "artifact_label": artifact_label,
+                    "batch_index": batch_index,
+                    "query_identity_key": str(spec["task_key"]),
+                    "response_mapping_source": str(response_mapping_source or ""),
+                    "task_id": task_id,
+                    "submitted": submitted,
+                    "failed": not submitted,
+                    "retryable": bool(error.get("retryable")) if error else False,
+                    "retry_unit": "search_query",
+                    "retry_strategy": "dataforseo_batch_failed_query_retry_only",
+                    "batch_item_retry_attempt": int(retry_attempt),
+                    "error": str(error.get("status_message") or "").strip() if error else "",
+                    "status_code": int(error.get("status_code") or 0) if error else 0,
+                },
+            )
+
+        def _append_submission_tasks_from_payload(
+            *,
+            batch_specs: list[dict[str, Any]],
+            payload: dict[str, Any],
+            artifact_label: str,
+            batch_index: int,
+            retry_attempt: int = 0,
+            collect_retryable_failures: bool = False,
+        ) -> list[dict[str, Any]]:
+            retryable_failures: list[dict[str, Any]] = []
+            payload_tasks = list(payload.get("tasks") or [])
+            payload_by_task_key: dict[str, tuple[dict[str, Any], dict[str, str], str]] = {}
+            payload_by_keyword: dict[str, tuple[dict[str, Any], dict[str, str], str]] = {}
+            for raw_task_payload in payload_tasks:
+                task_payload = dict(raw_task_payload or {})
+                data = dict(task_payload.get("data") or {})
+                # Do not use request-order fallback for identity. DataForSEO
+                # batch ordering is a transport detail; semantic joins must use
+                # the provider-echoed tag/keyword or fail closed to item retry.
+                echoed = {
+                    "task_id": str(task_payload.get("id") or "").strip(),
+                    "keyword": " ".join(str(data.get("keyword") or "").split()).strip(),
+                    "tag": str(data.get("tag") or "").strip(),
+                }
+                tag = str(echoed.get("tag") or "").strip()
+                keyword = str(echoed.get("keyword") or "").strip()
+                if tag:
+                    payload_by_task_key[tag] = (task_payload, echoed, "provider_data_tag")
+                if keyword and keyword not in payload_by_keyword:
+                    payload_by_keyword[keyword] = (task_payload, echoed, "provider_data_keyword")
+            for spec in batch_specs:
+                task_key = str(spec.get("task_key") or "").strip()
+                query_text = " ".join(str(spec.get("query_text") or "").split()).strip()
+                mapped = payload_by_task_key.get(task_key) or payload_by_keyword.get(query_text)
+                if mapped is not None:
+                    task_payload, echoed, mapping_source = mapped
+                else:
+                    task_payload = {}
+                    echoed = {}
+                    mapping_source = "missing_provider_identity"
+                task_error = dataforseo_task_error(task_payload) if task_payload else {
+                    "status_message": "DataForSEO task response missing provider-echoed query identity.",
+                    "retryable": True,
+                }
+                if (
+                    collect_retryable_failures
+                    and bool(task_error)
+                    and bool(task_error.get("retryable"))
+                    and int(retry_attempt) < max_item_retries
+                ):
+                    retryable_failures.append(spec)
+                    continue
+                submitted_tasks.append(
+                    _submission_task(
+                        spec=spec,
+                        task_payload=task_payload,
+                        echoed=echoed,
+                        artifact_label=artifact_label,
+                        batch_index=batch_index,
+                        retry_attempt=retry_attempt,
+                        error_override=(
+                            "DataForSEO task response missing provider-echoed query identity."
+                            if mapping_source == "missing_provider_identity"
+                            else ""
+                        ),
+                        response_mapping_source=mapping_source,
+                    )
+                )
+            return retryable_failures
+
         for batch_index, start in enumerate(range(0, len(normalized_specs), MAX_TASK_POST_BATCH_SIZE), start=1):
             batch_specs = normalized_specs[start : start + MAX_TASK_POST_BATCH_SIZE]
             batch_tasks = [dict(item["task"]) for item in batch_specs]
-            payload = self.client.task_post_many(batch_tasks)
+            payload = self.client.task_post_many(batch_tasks, allow_partial_task_errors=True)
             artifact_label = f"task_post_batch_{batch_index:02d}"
             artifacts.append(
                 SearchExecutionArtifact(
@@ -991,34 +1275,72 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
                     },
                 )
             )
-            submitted = extract_google_organic_submitted_tasks(payload, fallback_tasks=batch_tasks)
-            for offset, spec in enumerate(batch_specs):
-                echoed = submitted[offset] if offset < len(submitted) else {}
-                task_id = str(echoed.get("task_id") or "").strip()
-                submitted_tasks.append(
-                    SearchBatchSubmissionTask(
-                        task_key=str(spec["task_key"]),
-                        query_text=str(spec["query_text"]),
-                        checkpoint=self._build_queue_checkpoint(
-                            query_text=str(spec["query_text"]),
-                            depth=int(spec["depth"]),
-                            task_id=task_id,
-                            status="submitted",
-                            runtime_timing_overrides=dict(spec.get("runtime_timing_overrides") or {}),
-                        ),
+            retryable_specs = _append_submission_tasks_from_payload(
+                batch_specs=batch_specs,
+                payload=payload,
+                artifact_label=artifact_label,
+                batch_index=batch_index,
+                collect_retryable_failures=True,
+            )
+            if retryable_specs:
+                retry_tasks = [dict(item["task"]) for item in retryable_specs]
+                retry_artifact_label = f"{artifact_label}_retry_01"
+                try:
+                    retry_payload = self.client.task_post_many(
+                        retry_tasks,
+                        allow_partial_task_errors=True,
+                    )
+                except Exception as exc:
+                    retry_payload = {
+                        "status_code": 0,
+                        "status_message": str(exc),
+                        "tasks": [],
+                    }
+                    for retry_spec in retryable_specs:
+                        submitted_tasks.append(
+                            _submission_task(
+                                spec=retry_spec,
+                                task_payload={},
+                                echoed={},
+                                artifact_label=retry_artifact_label,
+                                batch_index=batch_index,
+                                retry_attempt=1,
+                                error_override=str(exc),
+                                response_mapping_source="retry_exception",
+                            )
+                        )
+                else:
+                    _append_submission_tasks_from_payload(
+                        batch_specs=retryable_specs,
+                        payload=retry_payload,
+                        artifact_label=retry_artifact_label,
+                        batch_index=batch_index,
+                        retry_attempt=1,
+                    )
+                artifacts.append(
+                    SearchExecutionArtifact(
+                        label=retry_artifact_label,
+                        payload=retry_payload,
                         metadata={
-                            "artifact_label": artifact_label,
                             "batch_index": batch_index,
-                            "task_id": task_id,
+                            "task_count": len(retryable_specs),
+                            "provider_name": self.provider_name,
+                            "retry_unit": "search_query",
+                            "retry_strategy": "dataforseo_batch_failed_query_retry_only",
+                            "retry_attempt": 1,
                         },
                     )
                 )
+        ordered_submitted_tasks = sorted(
+            submitted_tasks,
+            key=lambda task: task_order.get(str(task.task_key), len(task_order)),
+        )
         return SearchBatchSubmissionResult(
             provider_name=self.provider_name,
-            tasks=submitted_tasks,
+            tasks=ordered_submitted_tasks,
             artifacts=artifacts,
             message=(
-                f"Submitted {len(submitted_tasks)} DataForSEO Standard Queue tasks "
+                f"Submitted {len(ordered_submitted_tasks)} DataForSEO Standard Queue tasks "
                 f"across {len(artifacts)} batch request(s)."
             ),
         )
@@ -1031,7 +1353,7 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
             if not task_id:
                 continue
             query_text = str((spec or {}).get("query_text") or checkpoint.get("query_text") or "").strip()
-            task_key = str((spec or {}).get("task_key") or query_text or task_id).strip() or task_id
+            task_key = _require_batch_task_key(spec, provider_name=self.provider_name, operation="poll_ready_batch")
             depth = max(self.depth, max(1, int(checkpoint.get("depth") or (spec or {}).get("max_results") or 10)))
             normalized_specs.append(
                 {
@@ -1047,9 +1369,111 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
 
         payload = self.client.tasks_ready()
         ready_ids = set(extract_google_organic_ready_task_ids(payload))
+        direct_probe_artifacts: list[SearchExecutionArtifact] = []
+        direct_probe_metadata_by_task_id: dict[str, dict[str, Any]] = {}
+        direct_probe_specs = [
+            (index, spec)
+            for index, spec in enumerate(normalized_specs, start=1)
+            if str(spec["task_id"]) not in ready_ids
+        ]
+
+        def _direct_ready_probe(index: int, spec: dict[str, Any]) -> tuple[int, dict[str, Any], dict[str, Any] | None, str]:
+            task_id = str(spec["task_id"])
+            try:
+                return index, spec, self.client.task_get_regular(task_id), ""
+            except Exception as exc:
+                return index, spec, None, str(exc)
+
+        direct_probe_results: list[tuple[int, dict[str, Any], dict[str, Any] | None, str]] = []
+        if direct_probe_specs:
+            max_probe_workers = max(
+                1,
+                min(
+                    len(direct_probe_specs),
+                    resolved_task_get_batch_workers(
+                        [dict(spec.get("checkpoint") or {}) for _index, spec in direct_probe_specs],
+                        default=_default_dataforseo_task_get_batch_workers(),
+                    ),
+                ),
+            )
+            with ThreadPoolExecutor(max_workers=max_probe_workers) as pool:
+                futures = [pool.submit(_direct_ready_probe, index, spec) for index, spec in direct_probe_specs]
+                for future in as_completed(futures):
+                    direct_probe_results.append(future.result())
+
+        for index, spec, direct_payload, error_text in sorted(direct_probe_results, key=lambda item: item[0]):
+            task_id = str(spec["task_id"])
+            if direct_payload is None:
+                provider_status_code = _dataforseo_status_code_from_error(error_text)
+                provider_status_message = _dataforseo_status_message_from_error(error_text)
+                wait_state = (
+                    "provider_pending"
+                    if provider_status_code in DATAFORSEO_PENDING_TASK_STATUS_CODES
+                    else "provider_probe_error"
+                )
+                direct_probe_metadata_by_task_id[task_id] = {
+                    "ready": False,
+                    "provider_status_code": provider_status_code,
+                    "provider_status_message": provider_status_message,
+                    "provider_wait_state": wait_state,
+                    "readiness_strategy": "dataforseo_task_get_direct_probe",
+                }
+                direct_probe_artifacts.append(
+                    SearchExecutionArtifact(
+                        label=f"task_get_ready_probe_{index:02d}_waiting",
+                        payload={
+                            "provider_name": self.provider_name,
+                            "task_key": str(spec["task_key"]),
+                            "task_id": task_id,
+                            "status": "waiting",
+                            "error": error_text,
+                            "provider_status_code": provider_status_code,
+                            "provider_status_message": provider_status_message,
+                            "provider_wait_state": wait_state,
+                            "readiness_strategy": "dataforseo_task_get_direct_probe",
+                        },
+                        metadata={
+                            "provider_name": self.provider_name,
+                            "task_key": str(spec["task_key"]),
+                            "task_id": task_id,
+                            "ready": False,
+                            "provider_status_code": provider_status_code,
+                            "provider_status_message": provider_status_message,
+                            "provider_wait_state": wait_state,
+                            "readiness_strategy": "dataforseo_task_get_direct_probe",
+                        },
+                    )
+                )
+                continue
+            direct_tasks = list(direct_payload.get("tasks") or [])
+            direct_task = dict(direct_tasks[0] or {}) if direct_tasks else {}
+            direct_ready = int(direct_task.get("status_code") or 0) in DATAFORSEO_OK_TASK_STATUS_CODES
+            if direct_ready:
+                ready_ids.add(task_id)
+            direct_probe_metadata_by_task_id[task_id] = {
+                "ready": direct_ready,
+                "provider_status_code": int(direct_task.get("status_code") or 0),
+                "provider_status_message": str(direct_task.get("status_message") or "").strip(),
+                "provider_wait_state": "" if direct_ready else "provider_not_ready",
+                "readiness_strategy": "dataforseo_task_get_direct_probe",
+            }
+            direct_probe_artifacts.append(
+                SearchExecutionArtifact(
+                    label=f"task_get_ready_probe_{index:02d}",
+                    payload=direct_payload,
+                    metadata={
+                        "provider_name": self.provider_name,
+                        "task_key": str(spec["task_key"]),
+                        "task_id": task_id,
+                        "ready": direct_ready,
+                        "readiness_strategy": "dataforseo_task_get_direct_probe",
+                    },
+                )
+            )
         tasks: list[SearchBatchReadyTask] = []
         for spec in normalized_specs:
             is_ready = str(spec["task_id"]) in ready_ids
+            direct_metadata = dict(direct_probe_metadata_by_task_id.get(str(spec["task_id"])) or {})
             checkpoint = self._build_queue_checkpoint(
                 query_text=str(spec["query_text"]),
                 depth=int(spec["depth"]),
@@ -1063,7 +1487,7 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
                     task_id=str(spec["task_id"]),
                     query_text=str(spec["query_text"]),
                     checkpoint=checkpoint,
-                    metadata={"ready": is_ready},
+                    metadata={"ready": is_ready, **direct_metadata},
                 )
             )
         return SearchBatchReadyResult(
@@ -1079,7 +1503,8 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
                         "ready_count": len([item for item in tasks if item.metadata.get("ready")]),
                     },
                 )
-            ],
+            ]
+            + direct_probe_artifacts,
             message=f"{len([item for item in tasks if item.metadata.get('ready')])}/{len(tasks)} tasks ready.",
         )
 
@@ -1091,7 +1516,7 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
             if not task_id:
                 continue
             query_text = str((spec or {}).get("query_text") or checkpoint.get("query_text") or "").strip()
-            task_key = str((spec or {}).get("task_key") or query_text or task_id).strip() or task_id
+            task_key = _require_batch_task_key(spec, provider_name=self.provider_name, operation="fetch_ready_batch")
             depth = max(self.depth, max(1, int(checkpoint.get("depth") or (spec or {}).get("max_results") or 10)))
             normalized_specs.append(
                 {
@@ -1108,11 +1533,21 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
         tasks: list[SearchBatchFetchTask] = []
         artifacts: list[SearchExecutionArtifact] = []
 
-        def _fetch_task(index: int, spec: dict[str, Any]) -> tuple[int, dict[str, Any], dict[str, Any]]:
-            payload = self.client.task_get_regular(str(spec["task_id"]))
-            return index, spec, payload
+        def _fetch_task(index: int, spec: dict[str, Any]) -> tuple[int, dict[str, Any], dict[str, Any] | None, str]:
+            attempts = 0
+            last_error = ""
+            while attempts <= _dataforseo_batch_item_retry_count():
+                attempts += 1
+                try:
+                    payload = self.client.task_get_regular(str(spec["task_id"]))
+                    return index, spec, payload, ""
+                except Exception as exc:
+                    last_error = str(exc)
+                    if not _dataforseo_error_message_retryable(last_error):
+                        break
+            return index, spec, None, last_error
 
-        fetched_payloads: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
+        fetched_payloads: list[tuple[int, dict[str, Any], dict[str, Any] | None, str]] = []
         max_workers = max(
             1,
             min(
@@ -1131,7 +1566,62 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
             for future in as_completed(futures):
                 fetched_payloads.append(future.result())
 
-        for index, spec, payload in sorted(fetched_payloads, key=lambda item: item[0]):
+        for index, spec, payload, error_text in sorted(fetched_payloads, key=lambda item: item[0]):
+            if payload is None:
+                retryable = _dataforseo_error_message_retryable(error_text)
+                checkpoint = self._build_queue_checkpoint(
+                    query_text=str(spec["query_text"]),
+                    depth=int(spec["depth"]),
+                    task_id=str(spec["task_id"]),
+                    status="fetch_failed_retryable" if retryable else "fetch_failed_terminal",
+                    reference=dict(spec.get("checkpoint") or {}),
+                )
+                checkpoint.update(
+                    {
+                        "error": str(error_text or "DataForSEO task_get failed."),
+                        "retryable": retryable,
+                        "retry_unit": "dataforseo_task_id",
+                        "retry_strategy": "dataforseo_task_get_failed_task_retry_only",
+                    }
+                )
+                tasks.append(
+                    SearchBatchFetchTask(
+                        task_key=str(spec["task_key"]),
+                        task_id=str(spec["task_id"]),
+                        query_text=str(spec["query_text"]),
+                        response=None,
+                        checkpoint=checkpoint,
+                        metadata={
+                            "fetched": False,
+                            "failed": True,
+                            "retryable": retryable,
+                            "error": str(error_text or ""),
+                            "retry_unit": "dataforseo_task_id",
+                            "retry_strategy": "dataforseo_task_get_failed_task_retry_only",
+                        },
+                    )
+                )
+                artifacts.append(
+                    SearchExecutionArtifact(
+                        label=f"task_get_batch_{index:02d}_error",
+                        payload={
+                            "provider_name": self.provider_name,
+                            "task_key": str(spec["task_key"]),
+                            "task_id": str(spec["task_id"]),
+                            "status": "failed",
+                            "error": str(error_text or ""),
+                            "retryable": retryable,
+                        },
+                        metadata={
+                            "provider_name": self.provider_name,
+                            "task_key": str(spec["task_key"]),
+                            "task_id": str(spec["task_id"]),
+                            "failed": True,
+                            "retryable": retryable,
+                        },
+                    )
+                )
+                continue
             artifacts.append(
                 SearchExecutionArtifact(
                     label=f"task_get_batch_{index:02d}",
@@ -1412,6 +1902,11 @@ class BrowserGoogleSearchProvider(BaseSearchProvider):
         self.timeout_seconds = timeout_seconds
 
     def search(self, query_text: str, *, max_results: int = 10, timeout: int | None = None) -> SearchResponse:
+        assert_live_provider_access_allowed(
+            provider_name=self.provider_name,
+            operation="search",
+            payload={"query": query_text},
+        )
         if not self.script_path:
             raise SearchProviderError("Browser Google search script is not configured.")
         if shutil.which("node") is None:
@@ -1552,6 +2047,11 @@ class SearchProviderChain(BaseSearchProvider):
         raise SearchProviderError(str(last_error), attempts=attempts)
 
     def submit_batch_queries(self, query_specs: list[dict[str, Any]]) -> SearchBatchSubmissionResult | None:
+        _require_batch_task_keys(
+            query_specs,
+            provider_name=self.provider_name,
+            operation="submit_batch_queries",
+        )
         for provider in self.providers:
             try:
                 result = provider.submit_batch_queries(query_specs)
@@ -1562,6 +2062,11 @@ class SearchProviderChain(BaseSearchProvider):
         return None
 
     def poll_ready_batch(self, query_specs: list[dict[str, Any]]) -> SearchBatchReadyResult | None:
+        _require_batch_task_keys(
+            query_specs,
+            provider_name=self.provider_name,
+            operation="poll_ready_batch",
+        )
         provider_name = str((query_specs[0] or {}).get("provider_name") or dict((query_specs[0] or {}).get("checkpoint") or {}).get("provider_name") or "").strip() if query_specs else ""
         if provider_name:
             pinned = next((provider for provider in self.providers if provider.provider_name == provider_name), None)
@@ -1574,6 +2079,11 @@ class SearchProviderChain(BaseSearchProvider):
         return None
 
     def fetch_ready_batch(self, query_specs: list[dict[str, Any]]) -> SearchBatchFetchResult | None:
+        _require_batch_task_keys(
+            query_specs,
+            provider_name=self.provider_name,
+            operation="fetch_ready_batch",
+        )
         provider_name = str((query_specs[0] or {}).get("provider_name") or dict((query_specs[0] or {}).get("checkpoint") or {}).get("provider_name") or "").strip() if query_specs else ""
         if provider_name:
             pinned = next((provider for provider in self.providers if provider.provider_name == provider_name), None)
@@ -1594,6 +2104,24 @@ def build_search_provider(settings: SearchProviderSettings) -> BaseSearchProvide
         return SearchProviderChain([OfflineSearchProvider(mode=external_mode)])
     providers: list[BaseSearchProvider] = []
     provider_order = [str(item or "").strip().lower() for item in settings.provider_order if str(item or "").strip()]
+    if MODEL_NATIVE_SEARCH_PROVIDER_NAME in provider_order:
+        if not settings.enable_model_native_search:
+            raise SearchProviderError(
+                "model_native_search is present in SEARCH_PROVIDER_ORDER but SEARCH_PROVIDER_ENABLE_MODEL_NATIVE_SEARCH "
+                "is not enabled. Model-native search must be introduced as an explicit experimental evidence source; "
+                "it must not silently fall back to DataForSEO, browser search, or DuckDuckGo."
+            )
+        if str(settings.model_native_search_mode or "").strip().lower() != "experimental_evidence_only":
+            raise SearchProviderError(
+                "model_native_search requires SEARCH_PROVIDER_MODEL_NATIVE_SEARCH_MODE=experimental_evidence_only. "
+                "The model may only collect supplemental evidence with provenance; it cannot replace DataForSEO or "
+                "materialize promotion/export signals directly."
+            )
+        raise SearchProviderError(
+            "model_native_search is configured, but no registered provider implementation and owner contract exist yet. "
+            "Add a typed provider/command contract with cost budget, provenance, retry/circuit-breaker, export/audit "
+            "treatment, and fast preflight before enabling this source in normal runtime."
+        )
     if settings.enable_bing_html and "bing_html" not in provider_order:
         if "duckduckgo_html" in provider_order:
             provider_order.insert(provider_order.index("duckduckgo_html"), "bing_html")

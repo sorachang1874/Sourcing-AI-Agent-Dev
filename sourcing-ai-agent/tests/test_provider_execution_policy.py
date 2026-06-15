@@ -9,12 +9,16 @@ class ProviderExecutionPolicyTest(unittest.TestCase):
             strategy_type="former_employee_search",
             employment_statuses=["former"],
             search_channel_order=["web_search"],
-            cost_policy={"provider_people_search_mode": "fallback_only"},
+            cost_policy={
+                "provider_people_search_mode": "fallback_only",
+                "former_broad_past_company_only": True,
+            },
             min_expected_results=50,
         )
 
         self.assertEqual(contract["cost_policy"]["provider_people_search_mode"], "primary_only")
         self.assertEqual(contract["cost_policy"]["provider_people_search_min_expected_results"], 50)
+        self.assertTrue(contract["cost_policy"]["former_broad_past_company_only"])
         self.assertEqual(contract["search_channel_order"], ["harvest_profile_search"])
         self.assertTrue(contract["provider_search_only"])
 

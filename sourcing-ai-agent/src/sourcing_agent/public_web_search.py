@@ -46,6 +46,29 @@ ENTRY_LINK_TYPES: tuple[str, ...] = (
     "linkedin_url",
     "other",
 )
+PUBLISHABLE_PROFILE_LINK_TYPES: frozenset[str] = frozenset(
+    {
+        "personal_homepage",
+        "resume_url",
+        "github_url",
+        "x_url",
+        "substack_url",
+        "scholar_url",
+        "academic_profile",
+        "linkedin_url",
+    }
+)
+ADJUDICATION_CANDIDATE_PROFILE_LINK_TYPES: frozenset[str] = frozenset(
+    {
+        "academic_profile",
+        "github_url",
+        "linkedin_url",
+        "resume_url",
+        "scholar_url",
+        "substack_url",
+        "x_url",
+    }
+)
 
 MODEL_LINK_TYPE_ALIASES = {
     "scholar_profile": "scholar_url",
@@ -98,19 +121,23 @@ FETCH_QUEUE_ENTRY_TYPE_CAPS = {
     "publication_url": 1,
 }
 HIGH_PRIORITY_DISCOVERED_FETCH_TYPES = {"resume_url"}
-ADJUDICATION_ENTRY_LINK_LIMIT = 50
+DEFAULT_ADJUDICATION_ENTRY_LINK_LIMIT = 8
+MAX_ADJUDICATION_ENTRY_LINK_LIMIT = 20
+ADJUDICATION_ENTRY_LINK_LIMIT = DEFAULT_ADJUDICATION_ENTRY_LINK_LIMIT
+DEFAULT_AI_EVIDENCE_DOCUMENT_LIMIT = 8
+MAX_AI_EVIDENCE_DOCUMENT_LIMIT = 20
 ADJUDICATION_ENTRY_TYPE_CAPS = {
-    "personal_homepage": 6,
-    "scholar_url": 8,
-    "github_url": 8,
-    "x_url": 8,
-    "substack_url": 8,
-    "resume_url": 5,
-    "academic_profile": 4,
-    "publication_url": 5,
-    "linkedin_url": 2,
-    "company_page": 2,
-    "other": 2,
+    "personal_homepage": 1,
+    "scholar_url": 1,
+    "github_url": 1,
+    "x_url": 1,
+    "substack_url": 1,
+    "resume_url": 1,
+    "academic_profile": 1,
+    "publication_url": 1,
+    "linkedin_url": 1,
+    "company_page": 1,
+    "other": 1,
 }
 ADJUDICATION_ENTRY_TYPE_PRIORITY = (
     "personal_homepage",
@@ -172,6 +199,9 @@ LOW_VALUE_FETCH_DOMAINS = {
     "twstalker.com",
     "mobile.twstalker.com",
     "ww.twstalker.com",
+    "youtube.com",
+    "www.youtube.com",
+    "youtu.be",
 }
 
 GENERIC_EMAIL_LOCAL_PARTS = {
@@ -230,6 +260,22 @@ class PublicWebModelClient(Protocol):
     def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
 
+def normalize_ai_evidence_document_limit(value: Any, *, default: int = DEFAULT_AI_EVIDENCE_DOCUMENT_LIMIT) -> int:
+    try:
+        parsed = int(value if value is not None else default)
+    except (TypeError, ValueError):
+        parsed = int(default)
+    return min(max(1, parsed), MAX_AI_EVIDENCE_DOCUMENT_LIMIT)
+
+
+def normalize_ai_entry_link_limit(value: Any, *, default: int = DEFAULT_ADJUDICATION_ENTRY_LINK_LIMIT) -> int:
+    try:
+        parsed = int(value if value is not None else default)
+    except (TypeError, ValueError):
+        parsed = int(default)
+    return min(max(1, parsed), MAX_ADJUDICATION_ENTRY_LINK_LIMIT)
+
+
 @dataclass(frozen=True, slots=True)
 class PublicWebExperimentOptions:
     source_families: tuple[str, ...] = DEFAULT_TARGET_CANDIDATE_SOURCE_FAMILIES
@@ -237,7 +283,8 @@ class PublicWebExperimentOptions:
     max_results_per_query: int = 10
     max_entry_links_per_candidate: int = 40
     max_fetches_per_candidate: int = 5
-    max_ai_evidence_documents: int = 8
+    max_ai_evidence_documents: int = DEFAULT_AI_EVIDENCE_DOCUMENT_LIMIT
+    max_ai_entry_links: int = DEFAULT_ADJUDICATION_ENTRY_LINK_LIMIT
     fetch_content: bool = True
     extract_contact_signals: bool = True
     ai_extraction: str = "auto"
@@ -245,8 +292,12 @@ class PublicWebExperimentOptions:
     use_batch_search: bool = True
     batch_ready_poll_interval_seconds: float = 10.0
     max_batch_ready_polls: int = 18
+    max_remote_search_wait_seconds: int = 1800
+    max_provider_pending_wait_seconds: int = 7200
+    max_provider_task_reset_attempts: int = 1
     max_concurrent_fetches_per_candidate: int = 4
     max_concurrent_candidate_analyses: int = 2
+    document_fetch_total_timeout_seconds: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -336,6 +387,16 @@ class CandidateSearchPlan:
     started_monotonic: float
 
 
+def public_web_query_identity_key(*, candidate_record_id: str, query_id: str, query_text: str) -> str:
+    """Stable provider work-item key for one candidate/query pair.
+
+    Batch order is transport-only. Retry, poll, fetch, and materialization must
+    join on this key rather than on array position or a candidate display ordinal.
+    """
+    query_token = _safe_path_token(query_id)
+    return f"public_web_query:{_short_hash(candidate_record_id)}:{query_token}:{_short_hash(query_text)}"
+
+
 @dataclass(slots=True)
 class CandidateSearchOutcome:
     query_results: list[dict[str, Any]] = field(default_factory=list)
@@ -388,7 +449,9 @@ def candidate_context_from_target_candidate(record: dict[str, Any]) -> PublicWeb
 
 def candidate_from_context(context: PublicWebCandidateContext) -> Candidate:
     return Candidate(
-        candidate_id=context.candidate_id or context.record_id or _short_hash(context.candidate_name, context.current_company),
+        candidate_id=context.candidate_id
+        or context.record_id
+        or _short_hash(context.candidate_name, context.current_company),
         name_en=context.candidate_name,
         display_name=context.candidate_name,
         target_company=context.current_company,
@@ -416,6 +479,7 @@ def plan_candidate_public_web_queries(
         return []
     quoted_name = _quote_search_term(name)
     quoted_company = _quote_search_term(company) if company else ""
+    high_precision_name = _is_high_precision_person_name(name)
     family_order = [family for family in source_families if family in DEFAULT_TARGET_CANDIDATE_SOURCE_FAMILIES]
     planned: list[tuple[str, str, str]] = []
 
@@ -430,14 +494,17 @@ def plan_candidate_public_web_queries(
         f'{base_with_company} (homepage OR "personal website" OR "personal site") {SEARCH_NOISE_NEGATIVE_FILTER}',
         "Find likely personal homepages while avoiding contact directories.",
     )
-    add(
-        "profile_web_presence",
-        f'{quoted_name} (homepage OR "personal website" OR "personal site") {SEARCH_NOISE_NEGATIVE_FILTER}',
-        "Fallback personal homepage discovery without company constraint.",
-    )
+    if high_precision_name:
+        add(
+            "profile_web_presence",
+            f'{quoted_name} (homepage OR "personal website" OR "personal site") {SEARCH_NOISE_NEGATIVE_FILTER}',
+            "Fallback personal homepage discovery without company constraint.",
+        )
     add(
         "scholar_profile_discovery",
-        f"{quoted_name} {quoted_company} site:scholar.google.com/citations" if quoted_company else f"{quoted_name} site:scholar.google.com/citations",
+        f"{quoted_name} {quoted_company} site:scholar.google.com/citations"
+        if quoted_company
+        else f"{quoted_name} site:scholar.google.com/citations",
         "Find company-constrained Google Scholar profile pages.",
     )
     add(
@@ -445,27 +512,33 @@ def plan_candidate_public_web_queries(
         f"{quoted_name} {quoted_company} site:github.com" if quoted_company else f"{quoted_name} site:github.com",
         "Find company-constrained GitHub profile and project presence.",
     )
-    add("technical_presence", f"{quoted_name} site:github.com", "Fallback GitHub profile discovery without company constraint.")
-    add(
-        "scholar_profile_discovery",
-        f"{quoted_name} site:scholar.google.com/citations",
-        "Fallback Google Scholar profile discovery without company constraint.",
-    )
+    if high_precision_name:
+        add(
+            "technical_presence",
+            f"{quoted_name} site:github.com",
+            "Fallback GitHub profile discovery without company constraint.",
+        )
+        add(
+            "scholar_profile_discovery",
+            f"{quoted_name} site:scholar.google.com/citations",
+            "Fallback Google Scholar profile discovery without company constraint.",
+        )
     add(
         "social_presence",
         f"{quoted_name} {quoted_company} (site:x.com OR site:twitter.com)",
         "Find X/Twitter presence.",
     )
-    add(
-        "social_presence",
-        f"{quoted_name} (site:x.com OR site:twitter.com)",
-        "Fallback X/Twitter discovery without company constraint.",
-    )
-    add(
-        "social_presence",
-        f"{quoted_name} site:substack.com",
-        "Find Substack presence.",
-    )
+    if high_precision_name:
+        add(
+            "social_presence",
+            f"{quoted_name} (site:x.com OR site:twitter.com)",
+            "Fallback X/Twitter discovery without company constraint.",
+        )
+        add(
+            "social_presence",
+            f"{quoted_name} site:substack.com",
+            "Find Substack presence.",
+        )
     add(
         "social_presence",
         f"{base_with_company} site:substack.com",
@@ -491,7 +564,8 @@ def plan_candidate_public_web_queries(
         f"{base_with_company} email contact {SEARCH_NOISE_NEGATIVE_FILTER}",
         "Low-priority fallback for public contact evidence while avoiding contact directories.",
     )
-    add("candidate_publication_presence", f"{quoted_name} arXiv", "Find arXiv author or paper pages.")
+    if high_precision_name:
+        add("candidate_publication_presence", f"{quoted_name} arXiv", "Find arXiv author or paper pages.")
 
     deduped: list[PublicWebQuerySpec] = []
     seen: set[str] = set()
@@ -573,7 +647,9 @@ def classify_public_web_url(
         source_family = "resume_and_documents"
         score += 98
         reasons.append("resume_or_cv_indicator")
-    elif domain in PUBLICATION_DOMAINS or any(token in lower_url for token in ["/paper", "/publication", "/abs/", "/pdf/"]):
+    elif domain in PUBLICATION_DOMAINS or any(
+        token in lower_url for token in ["/paper", "/publication", "/abs/", "/pdf/"]
+    ):
         entry_type = "publication_url"
         source_family = "candidate_publication_presence"
         score += 66
@@ -599,7 +675,7 @@ def classify_public_web_url(
         if candidate_name and _name_tokens_match(candidate_name, combined):
             score += 18
             reasons.append("candidate_name_match")
-        if company and company in combined:
+        if company and _company_mention_matches(company, " ".join([title, snippet, normalized_url])):
             score += 8
             reasons.append("company_match")
     if result_rank:
@@ -700,7 +776,9 @@ def build_diversified_fetch_queue(
             break
         add(link, honor_cap=False)
 
-    remaining = [link for link in fetchable_links if normalize_public_web_url_key(link.normalized_url) not in selected_keys]
+    remaining = [
+        link for link in fetchable_links if normalize_public_web_url_key(link.normalized_url) not in selected_keys
+    ]
     return [*selected, *remaining]
 
 
@@ -757,10 +835,23 @@ def extract_email_candidate_signals(
             confidence_score -= 0.18
         if candidate and candidate.candidate_name:
             name_tokens = _person_name_tokens(candidate.candidate_name)
+            evidence_for_identity = " ".join(
+                [
+                    source_title,
+                    source_url,
+                    expanded_text,
+                    normalized_email,
+                ]
+            )
+            full_name_matched = _name_tokens_match(candidate.candidate_name, evidence_for_identity)
             if name_tokens and any(token in local_part for token in name_tokens):
                 confidence_score += 0.08
             elif publication_multi_email_context:
                 suppression_reason = suppression_reason or "coauthor_email_needs_ai_review"
+                publishable = False
+                confidence_score = min(confidence_score, 0.55)
+            if len(name_tokens) >= 2 and not full_name_matched:
+                suppression_reason = suppression_reason or "candidate_full_name_not_matched"
                 publishable = False
                 confidence_score = min(confidence_score, 0.55)
         confidence_score = max(0.05, min(confidence_score, 0.95))
@@ -819,7 +910,8 @@ def adjudicate_public_web_candidate_evidence(
     fetched_documents: list[dict[str, Any]],
     model_client: PublicWebModelClient | None,
     ai_extraction: str = "auto",
-    max_ai_evidence_documents: int = 8,
+    max_ai_evidence_documents: int = DEFAULT_AI_EVIDENCE_DOCUMENT_LIMIT,
+    max_ai_entry_links: int = DEFAULT_ADJUDICATION_ENTRY_LINK_LIMIT,
 ) -> tuple[list[EmailCandidateSignal], list[ClassifiedEntryLink], dict[str, Any]]:
     adjudication, result = run_public_web_candidate_adjudication(
         candidate=candidate,
@@ -829,6 +921,7 @@ def adjudicate_public_web_candidate_evidence(
         model_client=model_client,
         ai_extraction=ai_extraction,
         max_ai_evidence_documents=max_ai_evidence_documents,
+        max_ai_entry_links=max_ai_entry_links,
     )
     if result.get("status") != "completed":
         return email_candidates, entry_links, result
@@ -847,7 +940,8 @@ def run_public_web_candidate_adjudication(
     fetched_documents: list[dict[str, Any]],
     model_client: PublicWebModelClient | None,
     ai_extraction: str = "auto",
-    max_ai_evidence_documents: int = 8,
+    max_ai_evidence_documents: int = DEFAULT_AI_EVIDENCE_DOCUMENT_LIMIT,
+    max_ai_entry_links: int = DEFAULT_ADJUDICATION_ENTRY_LINK_LIMIT,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     mode = str(ai_extraction or "auto").strip().lower()
     if mode in {"0", "false", "off", "no", "disabled"}:
@@ -861,7 +955,73 @@ def run_public_web_candidate_adjudication(
     if mode == "auto" and str(model_client.provider_name()).strip() in {"deterministic", "offline_model"}:
         return {}, {"status": "skipped", "reason": "auto_mode_non_live_model"}
 
-    document_limit = max(1, int(max_ai_evidence_documents or 8))
+    payload = build_public_web_candidate_adjudication_input(
+        candidate=candidate,
+        email_candidates=email_candidates,
+        entry_links=entry_links,
+        fetched_documents=fetched_documents,
+        max_ai_evidence_documents=max_ai_evidence_documents,
+        max_ai_entry_links=max_ai_entry_links,
+    )
+    adjudication_entry_links = [
+        _classified_entry_link_from_record(item)
+        for item in list(payload.get("entry_links") or [])
+        if isinstance(item, dict)
+    ]
+    input_contract = dict(payload.get("input_contract") or {})
+    document_limit = int(input_contract.get("max_ai_evidence_documents") or 0)
+    entry_link_limit = int(input_contract.get("entry_link_limit") or 0)
+    try:
+        adjudication = model_client.analyze_public_web_candidate_signals(payload)
+    except Exception as exc:  # pragma: no cover - live model failures are environment dependent
+        return {}, {"status": "failed", "error": str(exc)[:300], "input_snapshot": payload}
+    adjudication = sanitize_public_web_adjudication_for_payload(adjudication, payload)
+    provider_name = model_client.provider_name()
+    model_name = _model_client_configured_model(model_client)
+    if provider_name:
+        adjudication["provider"] = str(adjudication.get("provider") or provider_name).strip()
+    if model_name:
+        adjudication["model"] = str(adjudication.get("model") or model_name).strip()
+        adjudication["model_version"] = str(adjudication.get("model_version") or model_name).strip()
+    adjudication["fallback_used"] = bool(adjudication.get("fallback_used"))
+    fallback_reason = str(adjudication.get("fallback_reason") or "").strip()
+    model_error = str(adjudication.get("model_error") or "").strip()
+    return (
+        adjudication,
+        {
+            "status": "completed",
+            "provider": provider_name,
+            "model": model_name,
+            "model_version": model_name,
+            "fallback_used": bool(adjudication.get("fallback_used")),
+            "fallback_reason": fallback_reason,
+            "model_error": model_error[:500],
+            "input_counts": {
+                "email_candidates": len(payload["email_candidates"]),
+                "entry_links": len(adjudication_entry_links),
+                "search_evidence": len(adjudication_entry_links),
+                "fetched_documents": len(payload["fetched_documents"]),
+                "evidence_slices": len(payload["evidence_slices"]),
+                "max_ai_evidence_documents": document_limit,
+                "max_ai_entry_links": entry_link_limit,
+            },
+            "input_snapshot": payload,
+            "result": adjudication,
+        },
+    )
+
+
+def build_public_web_candidate_adjudication_input(
+    *,
+    candidate: PublicWebCandidateContext,
+    email_candidates: list[EmailCandidateSignal],
+    entry_links: list[ClassifiedEntryLink],
+    fetched_documents: list[dict[str, Any]],
+    max_ai_evidence_documents: int = DEFAULT_AI_EVIDENCE_DOCUMENT_LIMIT,
+    max_ai_entry_links: int = DEFAULT_ADJUDICATION_ENTRY_LINK_LIMIT,
+) -> dict[str, Any]:
+    document_limit = normalize_ai_evidence_document_limit(max_ai_evidence_documents)
+    entry_link_limit = normalize_ai_entry_link_limit(max_ai_entry_links)
     evidence_slices = [
         _compact_evidence_slice_for_adjudication(dict(item.get("evidence_slice") or {}))
         for item in fetched_documents[:document_limit]
@@ -869,12 +1029,16 @@ def run_public_web_candidate_adjudication(
     ]
     adjudication_entry_links = select_entry_links_for_adjudication(
         entry_links,
-        limit=ADJUDICATION_ENTRY_LINK_LIMIT,
+        limit=entry_link_limit,
+        candidate=candidate,
     )
     payload = {
         "candidate": build_candidate_adjudication_context(candidate),
-        "email_candidates": [item.to_record() for item in email_candidates[:20]],
-        "entry_links": [item.to_record() for item in adjudication_entry_links],
+        "email_candidates": [
+            _compact_email_candidate_for_adjudication(item)
+            for item in email_candidates[:8]
+        ],
+        "entry_links": [_compact_entry_link_for_adjudication(item) for item in adjudication_entry_links],
         "search_evidence": [_compact_search_result_for_adjudication(item) for item in adjudication_entry_links],
         "evidence_slices": evidence_slices,
         "fetched_documents": [
@@ -890,64 +1054,50 @@ def run_public_web_candidate_adjudication(
                     "document_type",
                     "content_type",
                     "title",
-                    "signals",
-                    "analysis",
-                    "email_candidates",
                     "evidence_slice_path",
                 }
             }
             for item in fetched_documents[:document_limit]
             if isinstance(item, dict)
         ],
-        "instructions": {
-            "email_policy": (
-                "Assess whether each email likely belongs to this candidate. Personal homepage, CV/resume, "
-                "paper PDFs, and university profile evidence can be high confidence when identity matches. "
-                "Generic inboxes and same-name collisions should be suppressed or marked needs_review. "
-                "Suppress paper-title artifacts such as Learning@Scale.Conference and Control@Scale.Robotics. "
-                "Handle grouped paper emails such as {barryz, lesli}@domain by judging each expanded address separately."
-            ),
-            "link_policy": (
-                "Judge whether each homepage, GitHub, X/Twitter, Substack, Scholar, publication, resume, academic profile, "
-                "company page, or LinkedIn result belongs to the target candidate. Mark ambiguous_identity when the page "
-                "only shares a name or company but lacks ownership evidence. Use search_evidence for DataForSEO title/snippet "
-                "context when a platform page cannot be fetched. URL shape matters: X/Twitter status/search/utility URLs, "
-                "Substack posts/home feed/deep links, GitHub repositories/deep links, and non-citations Scholar URLs can be "
-                "useful evidence but are not clean profile links."
-            ),
-            "evidence_policy": (
-                "Use evidence_slices as the model-safe document evidence. They are source-aware excerpts from fetched pages "
-                "or PDF front matter; raw HTML/PDF artifacts are audit inputs and are not included in this prompt."
-            ),
+        "policy_version": "public_web_candidate_adjudication_v3_ai_visible_signal",
+        "input_contract": {
+            "contract": "public_web_candidate_adjudication_input_v1",
+            "expected_output_contract": "public_web_signal_adjudication_output_v2_user_visible_signal",
+            "entry_link_limit": entry_link_limit,
+            "entry_link_selection_owner": "public_web_search.select_entry_links_for_adjudication",
+            "entry_link_selection_policy": "source_type_balanced_with_strict_identity_filter",
+            "max_ai_entry_links_requested": max_ai_entry_links,
+            "evidence_document_selection_owner": "public_web_search.build_public_web_candidate_adjudication_input",
+            "evidence_document_selection_policy": "preserve_fetch_queue_order_with_configured_budget",
+            "max_ai_evidence_documents_requested": max_ai_evidence_documents,
+            "max_ai_evidence_documents": document_limit,
+            "reviewable_signal_owner": "model_output.link_assessments.user_visible_signal",
+            "fallback_status": "fail_closed_no_unseen_signal_promotion",
         },
     }
-    try:
-        adjudication = model_client.analyze_public_web_candidate_signals(payload)
-    except Exception as exc:  # pragma: no cover - live model failures are environment dependent
-        return {}, {"status": "failed", "error": str(exc)[:300]}
-    adjudication = sanitize_public_web_adjudication_for_payload(adjudication, payload)
-    return (
-        adjudication,
-        {
-            "status": "completed",
-            "provider": model_client.provider_name(),
-            "input_counts": {
-                "email_candidates": len(email_candidates[:20]),
-                "entry_links": len(adjudication_entry_links),
-                "search_evidence": len(adjudication_entry_links),
-                "fetched_documents": len(fetched_documents[:document_limit]),
-                "evidence_slices": len(evidence_slices),
-                "max_ai_evidence_documents": document_limit,
-            },
-            "result": adjudication,
-        },
-    )
+    return payload
+
+
+def _model_client_configured_model(model_client: Any) -> str:
+    settings = getattr(model_client, "settings", None)
+    for value in (
+        getattr(settings, "model", ""),
+        getattr(settings, "model_name", ""),
+        getattr(model_client, "model", ""),
+        getattr(model_client, "model_name", ""),
+    ):
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
 
 
 def select_entry_links_for_adjudication(
     entry_links: list[ClassifiedEntryLink],
     *,
     limit: int = ADJUDICATION_ENTRY_LINK_LIMIT,
+    candidate: PublicWebCandidateContext | None = None,
 ) -> list[ClassifiedEntryLink]:
     front_limit = max(1, int(limit or ADJUDICATION_ENTRY_LINK_LIMIT))
     deduped: list[ClassifiedEntryLink] = []
@@ -981,12 +1131,19 @@ def select_entry_links_for_adjudication(
         entry_type for entry_type in ADJUDICATION_ENTRY_TYPE_PRIORITY if entry_type in available_types
     ] + sorted(available_types.difference(ADJUDICATION_ENTRY_TYPE_PRIORITY))
     for entry_type in ordered_types:
-        match = next((link for link in deduped if link.entry_type == entry_type), None)
+        candidates = [
+            link for link in deduped
+            if link.entry_type == entry_type and _is_adjudication_input_eligible(link, candidate=candidate)
+        ]
+        match = min(
+            candidates,
+            key=lambda link: _adjudication_link_selection_sort_key(link, candidate=candidate),
+        ) if candidates else None
         if match is not None:
             add(match, honor_cap=True)
     for entry_type in ordered_types:
         for link in deduped:
-            if link.entry_type == entry_type:
+            if link.entry_type == entry_type and _is_adjudication_input_eligible(link, candidate=candidate):
                 add(link, honor_cap=True)
             if len(selected) >= front_limit:
                 break
@@ -995,8 +1152,79 @@ def select_entry_links_for_adjudication(
     for link in deduped:
         if len(selected) >= front_limit:
             break
+        if not _is_adjudication_input_eligible(link, candidate=candidate):
+            continue
+        if _should_skip_adjudication_overflow_filler(link, candidate=candidate, selected_type_counts=type_counts):
+            continue
         add(link, honor_cap=False)
     return selected
+
+
+def _is_adjudication_input_eligible(
+    link: ClassifiedEntryLink,
+    *,
+    candidate: PublicWebCandidateContext | None,
+) -> bool:
+    candidate_name = str(getattr(candidate, "candidate_name", "") or "")
+    if not candidate_name:
+        return True
+    title = str(link.title or "")
+    combined_without_query = " ".join([title, str(link.snippet or ""), link.normalized_url])
+    name_in_title = _name_tokens_match(candidate_name, title)
+    name_in_combined = _name_tokens_match(candidate_name, combined_without_query)
+    if link.entry_type in ADJUDICATION_CANDIDATE_PROFILE_LINK_TYPES:
+        if not is_clean_profile_link(link.entry_type, link.normalized_url):
+            return bool(name_in_title)
+        return bool(name_in_title or name_in_combined)
+    if link.entry_type == "personal_homepage":
+        return bool(name_in_title or name_in_combined or is_clean_profile_link(link.entry_type, link.normalized_url))
+    return True
+
+
+def _should_skip_adjudication_overflow_filler(
+    link: ClassifiedEntryLink,
+    *,
+    candidate: PublicWebCandidateContext | None,
+    selected_type_counts: dict[str, int],
+) -> bool:
+    if selected_type_counts.get(link.entry_type, 0) <= 0:
+        return False
+    candidate_name = str(getattr(candidate, "candidate_name", "") or "")
+    if not candidate_name:
+        return False
+    title = str(link.title or "")
+    snippet = str(link.snippet or "")
+    name_in_title = _name_tokens_match(candidate_name, title)
+    name_in_combined = _name_tokens_match(candidate_name, " ".join([title, snippet, link.normalized_url]))
+    return bool(name_in_combined and not name_in_title)
+
+
+def _adjudication_link_selection_sort_key(
+    link: ClassifiedEntryLink,
+    *,
+    candidate: PublicWebCandidateContext | None = None,
+) -> tuple[int, int, int, int, float, int, str]:
+    title = str(link.title or "")
+    snippet = str(link.snippet or "")
+    combined = " ".join([title, snippet, link.normalized_url])
+    candidate_name = str(getattr(candidate, "candidate_name", "") or "")
+    name_in_title = bool(candidate_name and _name_tokens_match(candidate_name, title))
+    name_in_combined = bool(candidate_name and _name_tokens_match(candidate_name, combined))
+    clean_publishable_shape = is_publishable_profile_link(link.entry_type, link.normalized_url)
+    clean_profile_shape = is_clean_profile_link(link.entry_type, link.normalized_url)
+    # A third-party post/profile often mentions the candidate only in the snippet.
+    # It is useful evidence, but should not displace an owned-looking profile URL
+    # in the small model adjudication window.
+    third_party_mention_shape = bool(name_in_combined and not name_in_title)
+    return (
+        0 if name_in_title else 1,
+        0 if clean_publishable_shape else 1,
+        0 if clean_profile_shape else 1,
+        1 if third_party_mention_shape else 0,
+        -float(link.score or 0.0),
+        int(link.result_rank or 999),
+        link.normalized_url,
+    )
 
 
 def sanitize_public_web_adjudication_for_payload(
@@ -1012,7 +1240,8 @@ def sanitize_public_web_adjudication_for_payload(
     normalized["email_assessments"] = [
         item
         for item in list(normalized.get("email_assessments") or [])
-        if isinstance(item, dict) and normalize_email(str(item.get("email") or item.get("value") or "")) in allowed_emails
+        if isinstance(item, dict)
+        and normalize_email(str(item.get("email") or item.get("value") or "")) in allowed_emails
     ]
     allowed_link_keys = {
         normalize_public_web_url_key(str(item.get("normalized_url") or item.get("url") or ""))
@@ -1042,12 +1271,53 @@ def _compact_evidence_slice_for_adjudication(slice_payload: dict[str, Any]) -> d
         "final_url": str(slice_payload.get("final_url") or "").strip(),
         "source_type": str(slice_payload.get("source_type") or "").strip(),
         "document_type": str(slice_payload.get("document_type") or "").strip(),
-        "title": str(slice_payload.get("title") or "").strip(),
-        "description": str(slice_payload.get("description") or "").strip(),
-        "selected_text": str(slice_payload.get("selected_text") or "").strip()[:6000],
-        "email_contexts": list(slice_payload.get("email_contexts") or [])[:8],
-        "links": dict(slice_payload.get("links") or {}),
-        "structured_signals": dict(slice_payload.get("structured_signals") or {}),
+        "title": str(slice_payload.get("title") or "").strip()[:180],
+        "description": str(slice_payload.get("description") or "").strip()[:160],
+        "selected_text": str(slice_payload.get("selected_text") or "").strip()[:260],
+        "email_contexts": list(slice_payload.get("email_contexts") or [])[:1],
+        "links": _compact_links_for_adjudication(dict(slice_payload.get("links") or {})),
+        "structured_signals": _compact_structured_signals_for_adjudication(
+            dict(slice_payload.get("structured_signals") or {})
+        ),
+    }
+
+
+def _compact_entry_link_for_adjudication(link: ClassifiedEntryLink) -> dict[str, Any]:
+    link_shape_warnings = public_web_link_shape_warnings(link.entry_type, link.normalized_url)
+    return {
+        "url": link.normalized_url,
+        "normalized_url": link.normalized_url,
+        "title": link.title[:180],
+        "snippet": link.snippet[:160],
+        "source_domain": link.source_domain,
+        "entry_type": link.entry_type,
+        "source_family": link.source_family,
+        "query_id": link.query_id,
+        "query_text": link.query_text[:120],
+        "result_rank": link.result_rank,
+        "score": link.score,
+        "link_shape_warnings": link_shape_warnings,
+        "clean_profile_link": not link_shape_warnings,
+    }
+
+
+def _compact_email_candidate_for_adjudication(signal: EmailCandidateSignal) -> dict[str, Any]:
+    return {
+        "value": signal.value,
+        "normalized_value": signal.normalized_value,
+        "email_type": signal.email_type,
+        "confidence_label": signal.confidence_label,
+        "confidence_score": round(float(signal.confidence_score or 0.0), 2),
+        "publishable": bool(signal.publishable),
+        "promotion_status": signal.promotion_status,
+        "source_url": signal.source_url,
+        "source_domain": signal.source_domain,
+        "source_family": signal.source_family,
+        "source_title": signal.source_title[:160],
+        "evidence_excerpt": signal.evidence_excerpt[:220],
+        "suppression_reason": signal.suppression_reason,
+        "identity_match_label": signal.identity_match_label,
+        "identity_match_score": round(float(signal.identity_match_score or 0.0), 2),
     }
 
 
@@ -1055,20 +1325,49 @@ def _compact_search_result_for_adjudication(link: ClassifiedEntryLink) -> dict[s
     link_shape_warnings = public_web_link_shape_warnings(link.entry_type, link.normalized_url)
     return {
         "url": link.normalized_url,
-        "title": link.title,
-        "snippet": link.snippet,
+        "title": link.title[:180],
+        "snippet": link.snippet[:160],
         "source_domain": link.source_domain,
         "entry_type": link.entry_type,
         "source_family": link.source_family,
-        "query_text": link.query_text,
+        "query_text": link.query_text[:120],
         "provider_name": link.provider_name,
         "result_rank": link.result_rank,
         "score": link.score,
-        "reasons": list(link.reasons),
+        "reasons": list(link.reasons)[:6],
         "fetchable": link.fetchable,
         "link_shape_warnings": link_shape_warnings,
         "clean_profile_link": not link_shape_warnings,
     }
+
+
+def _compact_links_for_adjudication(links: dict[str, Any]) -> dict[str, list[str]]:
+    compacted: dict[str, list[str]] = {}
+    for key in ("personal_urls", "scholar_urls", "github_urls", "x_urls", "substack_urls", "resume_urls"):
+        values = [str(item or "").strip() for item in list(links.get(key) or []) if str(item or "").strip()]
+        if values:
+            compacted[key] = values[:3]
+    return compacted
+
+
+def _compact_structured_signals_for_adjudication(signals: dict[str, Any]) -> dict[str, Any]:
+    compacted: dict[str, Any] = {}
+    for key in ("research_interests", "education_signals", "work_history_signals", "affiliation_signals"):
+        values = list(signals.get(key) or [])
+        if values:
+            compacted[key] = values[:3]
+    publications = list(signals.get("scholar_publications") or [])
+    if publications:
+        compacted["scholar_publications"] = [
+            {
+                field: str(item.get(field) or "").strip()[:180]
+                for field in ("title", "authors", "venue", "year", "citations")
+                if isinstance(item, dict) and str(item.get(field) or "").strip()
+            }
+            for item in publications[:3]
+            if isinstance(item, dict)
+        ]
+    return compacted
 
 
 def _looks_like_x_profile_url(parsed: Any) -> bool:
@@ -1171,11 +1470,51 @@ def public_web_link_shape_warnings(entry_type: str, url: str) -> list[str]:
         warnings.append("substack_link_not_profile_or_publication")
     if normalized_entry_type == "scholar_url" and not _looks_like_google_scholar_profile_url(parsed):
         warnings.append("scholar_link_not_profile")
+    if normalized_entry_type == "publication_url":
+        warnings.append("publication_evidence_only_not_profile")
+    if normalized_entry_type == "personal_homepage" and (
+        _looks_like_non_homepage_content_url(parsed)
+        or _looks_like_third_party_person_page_not_owned_homepage(parsed)
+    ):
+        warnings.append("personal_homepage_deep_content_or_video_not_profile_root")
     return warnings
 
 
 def is_clean_profile_link(entry_type: str, url: str) -> bool:
     return not public_web_link_shape_warnings(entry_type, url)
+
+
+def is_publishable_profile_link(entry_type: str, url: str) -> bool:
+    normalized_entry_type = str(entry_type or "").strip()
+    return normalized_entry_type in PUBLISHABLE_PROFILE_LINK_TYPES and is_clean_profile_link(
+        normalized_entry_type,
+        url,
+    )
+
+
+def canonicalize_profile_link_type_from_url(entry_type: str, url: str) -> str:
+    normalized_entry_type = normalize_model_link_signal_type(entry_type, fallback="other")
+    normalized_url = normalize_public_web_url(url)
+    if not normalized_url:
+        return normalized_entry_type
+    parsed = parse.urlparse(normalized_url)
+    lower_url = normalized_url.lower()
+    host = parsed.netloc.lower().removeprefix("www.")
+    if "linkedin.com/in/" in lower_url:
+        return "linkedin_url"
+    if _looks_like_google_scholar_profile_url(parsed):
+        return "scholar_url"
+    if _looks_like_github_profile_url(parsed):
+        return "github_url"
+    if _looks_like_x_profile_url(parsed):
+        return "x_url"
+    if _looks_like_substack_profile_url(parsed):
+        return "substack_url"
+    if host == "github.com" and normalized_entry_type == "other":
+        return "github_url"
+    if (host == "scholar.google.com" or "scholar.google." in host) and normalized_entry_type == "other":
+        return "scholar_url"
+    return normalized_entry_type
 
 
 def build_candidate_adjudication_context(candidate: PublicWebCandidateContext) -> dict[str, Any]:
@@ -1218,6 +1557,7 @@ def apply_email_adjudication(
     adjudication: dict[str, Any],
 ) -> list[EmailCandidateSignal]:
     assessments = list(adjudication.get("email_assessments") or [])
+    fallback_used = bool(adjudication.get("fallback_used"))
     by_email: dict[str, dict[str, Any]] = {}
     for item in assessments:
         if not isinstance(item, dict):
@@ -1228,8 +1568,28 @@ def apply_email_adjudication(
     updated: list[EmailCandidateSignal] = []
     for signal in email_candidates:
         assessment = by_email.get(signal.normalized_value)
-        if not assessment:
-            updated.append(signal)
+        if not assessment or fallback_used:
+            reason = "model_fallback_requires_ai_review" if fallback_used else "model_no_assessment"
+            updated.append(
+                EmailCandidateSignal(
+                    value=signal.value,
+                    normalized_value=signal.normalized_value,
+                    email_type=signal.email_type,
+                    confidence_label="low" if fallback_used else signal.confidence_label,
+                    confidence_score=min(signal.confidence_score, 0.35 if fallback_used else signal.confidence_score),
+                    publishable=False,
+                    promotion_status="not_promoted",
+                    source_url=signal.source_url,
+                    source_domain=signal.source_domain,
+                    source_family=signal.source_family,
+                    source_title=signal.source_title,
+                    evidence_excerpt=signal.evidence_excerpt,
+                    suppression_reason=signal.suppression_reason or reason,
+                    identity_match_label="needs_review",
+                    identity_match_score=min(signal.identity_match_score, 0.34),
+                    adjudication={"fallback_used": fallback_used, "reason": reason},
+                )
+            )
             continue
         confidence_label = _coerce_confidence_label(assessment.get("confidence_label"), signal.confidence_label)
         confidence_score = _coerce_confidence_score(assessment.get("confidence_score"), signal.confidence_score)
@@ -1283,6 +1643,7 @@ def apply_link_adjudication(
     adjudication: dict[str, Any],
 ) -> list[ClassifiedEntryLink]:
     assessments = list(adjudication.get("link_assessments") or [])
+    fallback_used = bool(adjudication.get("fallback_used"))
     by_url: dict[str, dict[str, Any]] = {}
     for item in assessments:
         if not isinstance(item, dict):
@@ -1293,16 +1654,43 @@ def apply_link_adjudication(
     updated: list[ClassifiedEntryLink] = []
     for link in entry_links:
         assessment = by_url.get(normalize_public_web_url_key(link.normalized_url))
-        if not assessment:
-            updated.append(link)
+        if not assessment or fallback_used:
+            reason = "model_fallback_requires_ai_review" if fallback_used else "model_no_assessment"
+            link_shape_warnings = public_web_link_shape_warnings(link.entry_type, link.normalized_url)
+            updated.append(
+                ClassifiedEntryLink(
+                    url=link.url,
+                    normalized_url=link.normalized_url,
+                    title=link.title,
+                    snippet=link.snippet,
+                    source_domain=link.source_domain,
+                    entry_type=link.entry_type,
+                    source_family=link.source_family,
+                    score=link.score,
+                    reasons=link.reasons,
+                    query_id=link.query_id,
+                    query_text=link.query_text,
+                    provider_name=link.provider_name,
+                    result_rank=link.result_rank,
+                    fetchable=link.fetchable,
+                    identity_match_label="needs_review",
+                    identity_match_score=min(link.identity_match_score, 0.34),
+                    confidence_label="low" if fallback_used else link.confidence_label,
+                    adjudication={
+                        "fallback_used": fallback_used,
+                        "reason": reason,
+                        "link_shape_warnings": link_shape_warnings,
+                        "clean_profile_link": not link_shape_warnings,
+                    },
+                )
+            )
             continue
-        entry_type = normalize_model_link_signal_type(assessment.get("signal_type"), fallback=link.entry_type)
+        entry_type = canonicalize_profile_link_type_from_url(
+            normalize_model_link_signal_type(assessment.get("signal_type"), fallback=link.entry_type),
+            link.normalized_url,
+        )
         link_shape_warnings = public_web_link_shape_warnings(entry_type, link.normalized_url)
-        assessment_metadata = {
-            key: value
-            for key, value in assessment.items()
-            if key != "url"
-        }
+        assessment_metadata = {key: value for key, value in assessment.items() if key != "url"}
         assessment_metadata["link_shape_warnings"] = link_shape_warnings
         assessment_metadata["clean_profile_link"] = not link_shape_warnings
         updated.append(
@@ -1523,7 +1911,9 @@ def execute_candidate_search_plans(
     options: PublicWebExperimentOptions,
 ) -> dict[str, CandidateSearchOutcome]:
     outcomes = {
-        plan.candidate.record_id: CandidateSearchOutcome(search_mode="batch" if options.use_batch_search else "sequential")
+        plan.candidate.record_id: CandidateSearchOutcome(
+            search_mode="batch" if options.use_batch_search else "sequential"
+        )
         for plan in plans
     }
     for plan in plans:
@@ -1569,16 +1959,22 @@ def execute_candidate_search_plans_batch(
     task_index: dict[str, tuple[CandidateSearchPlan, PublicWebQuerySpec, int]] = {}
     for plan in plans:
         for query_index, query in enumerate(plan.queries, start=1):
-            task_key = f"{plan.ordinal:02d}:{query.query_id}:{_short_hash(plan.candidate.record_id, query.query_text)}"
+            task_key = public_web_query_identity_key(
+                candidate_record_id=plan.candidate.record_id,
+                query_id=query.query_id,
+                query_text=query.query_text,
+            )
             query_specs.append(
                 {
                     "task_key": task_key,
+                    "query_identity_key": task_key,
                     "query_text": query.query_text,
                     "max_results": max(1, int(options.max_results_per_query or 1)),
                     "metadata": {
                         "record_id": plan.candidate.record_id,
                         "candidate_id": plan.candidate.candidate_id,
                         "query_id": query.query_id,
+                        "query_identity_key": task_key,
                         "source_family": query.source_family,
                     },
                 }
@@ -1620,10 +2016,20 @@ def execute_candidate_search_plans_batch(
     )
     pending_specs: dict[str, dict[str, Any]] = {}
     for task in submission.tasks:
+        checkpoint = dict(task.checkpoint or {})
+        checkpoint_status = str(checkpoint.get("status") or "").strip()
+        if checkpoint_status.startswith("submit_failed"):
+            plan_query = task_index.get(task.task_key)
+            if plan_query is not None:
+                plan, query, _query_index = plan_query
+                error_text = str(checkpoint.get("error") or dict(task.metadata or {}).get("error") or "batch submit failed")
+                outcomes[plan.candidate.record_id].errors.append(f"search_failed:{query.query_id}:{error_text[:200]}")
+            continue
         pending_specs[task.task_key] = {
             "task_key": task.task_key,
+            "query_identity_key": task.task_key,
             "query_text": task.query_text,
-            "checkpoint": dict(task.checkpoint or {}),
+            "checkpoint": checkpoint,
             "metadata": dict(task.metadata or {}),
         }
     fetched_count = 0
@@ -1743,7 +2149,11 @@ def fetch_ready_specs_isolated(
     try:
         result = search_provider.fetch_ready_batch(ready_specs)
         if result is None:
-            return [], [], {str(spec.get("task_key") or ""): "provider returned no batch fetch result" for spec in ready_specs}
+            return (
+                [],
+                [],
+                {str(spec.get("task_key") or ""): "provider returned no batch fetch result" for spec in ready_specs},
+            )
         return list(result.tasks or []), list(result.artifacts or []), {}
     except Exception as exc:
         if len(ready_specs) <= 1:
@@ -1774,7 +2184,8 @@ def write_search_execution_artifacts(
 ) -> None:
     for index, artifact in enumerate(list(artifacts or []), start=1):
         logger.write_json(
-            Path("search_batches") / f"{prefix}_{index:03d}_{_safe_path_token(str(getattr(artifact, 'label', 'artifact')))}.json",
+            Path("search_batches")
+            / f"{prefix}_{index:03d}_{_safe_path_token(str(getattr(artifact, 'label', 'artifact')))}.json",
             {
                 "label": getattr(artifact, "label", ""),
                 "payload": getattr(artifact, "payload", None),
@@ -1942,7 +2353,11 @@ def classify_entry_links_from_document_signals(
         ("github_urls", "technical_presence", "GitHub link discovered while fetching public web evidence."),
         ("x_urls", "social_presence", "X/Twitter link discovered while fetching public web evidence."),
         ("linkedin_urls", "profile_web_presence", "LinkedIn link discovered while fetching public web evidence."),
-        ("personal_urls", "profile_web_presence", "Personal/homepage link discovered while fetching public web evidence."),
+        (
+            "personal_urls",
+            "profile_web_presence",
+            "Personal/homepage link discovered while fetching public web evidence.",
+        ),
     ]
     discovered: list[ClassifiedEntryLink] = []
     for signal_key, source_family, objective in specs:
@@ -1970,6 +2385,30 @@ def classify_entry_links_from_document_signals(
     return rank_entry_links(discovered, limit=20)
 
 
+def resolve_document_fetch_total_timeout_seconds(
+    options: PublicWebExperimentOptions,
+    *,
+    max_fetches: int,
+    max_workers: int,
+) -> float:
+    explicit = options.document_fetch_total_timeout_seconds
+    if explicit is not None:
+        try:
+            parsed = float(explicit)
+        except (TypeError, ValueError):
+            parsed = 0.0
+        if parsed > 0:
+            return max(0.01, parsed)
+    per_document_timeout = max(1.0, float(options.timeout_seconds or 30))
+    worker_count = max(1, int(max_workers or 1))
+    fetch_count = max(1, int(max_fetches or 1))
+    expected_batches = max(1, (fetch_count + worker_count - 1) // worker_count)
+    # Document fetch is a bounded activity. Allow each concurrency wave to use
+    # its per-document timeout plus small scheduling overhead, but never let one
+    # candidate monopolize a command owner indefinitely.
+    return min(180.0, max(per_document_timeout + 5.0, expected_batches * per_document_timeout + 5.0))
+
+
 def fetch_candidate_public_web_documents(
     *,
     ranked_links: list[ClassifiedEntryLink],
@@ -1990,9 +2429,7 @@ def fetch_candidate_public_web_documents(
         }
     fetch_queue = build_diversified_fetch_queue(ranked_links, max_fetches=max_fetches)
     fetched_url_keys: set[str] = set()
-    known_entry_link_keys = {
-        key for link in ranked_links if (key := normalize_public_web_url_key(link.normalized_url))
-    }
+    known_entry_link_keys = {key for link in ranked_links if (key := normalize_public_web_url_key(link.normalized_url))}
     fetch_index = 0
     max_workers = min(
         max_fetches,
@@ -2003,8 +2440,15 @@ def fetch_candidate_public_web_documents(
     email_candidates: list[EmailCandidateSignal] = []
     discovered_entry_links: list[ClassifiedEntryLink] = []
     errors: list[str] = []
+    fetch_timed_out = False
+    total_timeout_seconds = resolve_document_fetch_total_timeout_seconds(
+        options,
+        max_fetches=max_fetches,
+        max_workers=max_workers,
+    )
+    deadline_at = time.monotonic() + total_timeout_seconds
 
-    def submit_next(executor: ThreadPoolExecutor, in_flight: dict[Any, PublicWebFetchResult | tuple[int, ClassifiedEntryLink]]) -> None:
+    def submit_next(executor: ThreadPoolExecutor, in_flight: dict[Any, tuple[int, ClassifiedEntryLink]]) -> None:
         nonlocal fetch_index
         while fetch_queue and fetch_index < max_fetches and len(in_flight) < max_workers:
             link = fetch_queue.pop(0)
@@ -2045,11 +2489,43 @@ def fetch_candidate_public_web_documents(
                 else:
                     fetch_queue.append(discovered_link)
 
-    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="public-web-fetch") as executor:
+    def mark_pending_timed_out(in_flight: dict[Any, tuple[int, ClassifiedEntryLink]]) -> None:
+        nonlocal fetch_timed_out
+        if not in_flight:
+            return
+        fetch_timed_out = True
+        reason = f"document_fetch_total_timeout_exceeded:{total_timeout_seconds:.2f}s"
+        for future, (_fetch_index, link) in list(in_flight.items()):
+            future.cancel()
+            errors.append(f"fetch_timeout:{link.normalized_url}:{reason}")
+            fetched_by_index.setdefault(
+                _fetch_index,
+                {
+                    "source_url": link.normalized_url,
+                    "entry_type": link.entry_type,
+                    "source_family": link.source_family,
+                    "status": "timeout",
+                    "error": reason,
+                },
+            )
+        in_flight.clear()
+
+    executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="public-web-fetch")
+    try:
         in_flight: dict[Any, tuple[int, ClassifiedEntryLink]] = {}
         submit_next(executor, in_flight)
         while in_flight:
-            completed, _pending = wait(in_flight.keys(), return_when=FIRST_COMPLETED)
+            remaining_seconds = deadline_at - time.monotonic()
+            if remaining_seconds <= 0:
+                mark_pending_timed_out(in_flight)
+                break
+            completed, _pending = wait(
+                in_flight.keys(),
+                timeout=min(1.0, max(0.01, remaining_seconds)),
+                return_when=FIRST_COMPLETED,
+            )
+            if not completed:
+                continue
             for future in completed:
                 _fetch_index, link = in_flight.pop(future)
                 try:
@@ -2064,6 +2540,11 @@ def fetch_candidate_public_web_documents(
                         "error": str(exc),
                     }
             submit_next(executor, in_flight)
+    finally:
+        # Do not block command owner shutdown on a stuck parser/fetch thread.
+        # Pending futures are recorded above as timeout artifacts; late thread
+        # completion is ignored and must not materialize user-visible signals.
+        executor.shutdown(wait=False, cancel_futures=True)
 
     return {
         "fetched_documents": [fetched_by_index[index] for index in sorted(fetched_by_index)],
@@ -2071,6 +2552,8 @@ def fetch_candidate_public_web_documents(
         "email_candidates": email_candidates,
         "discovered_entry_links": discovered_entry_links,
         "errors": errors,
+        "document_fetch_timed_out": fetch_timed_out,
+        "document_fetch_total_timeout_seconds": total_timeout_seconds,
     }
 
 
@@ -2091,7 +2574,7 @@ def fetch_candidate_public_web_document(
             source_url=link.normalized_url,
             asset_dir=candidate_dir / "documents",
             asset_logger=logger,
-            model_client=model_client,  # type: ignore[arg-type]
+            model_client=model_client,
             source_kind="target_candidate_public_web_search",
             asset_prefix=f"doc_{fetch_index:02d}_{link.entry_type}",
             timeout=options.timeout_seconds,
@@ -2166,6 +2649,28 @@ def finalize_candidate_public_web_experiment(
     model_client: PublicWebModelClient | None,
     options: PublicWebExperimentOptions,
 ) -> dict[str, Any]:
+    document_fetch_payload = fetch_candidate_public_web_experiment_documents(
+        plan=plan,
+        outcome=outcome,
+        model_client=model_client,
+        options=options,
+    )
+    return finalize_candidate_public_web_experiment_from_document_fetch_payload(
+        plan=plan,
+        outcome=outcome,
+        document_fetch_payload=document_fetch_payload,
+        model_client=model_client,
+        options=options,
+    )
+
+
+def fetch_candidate_public_web_experiment_documents(
+    *,
+    plan: CandidateSearchPlan,
+    outcome: CandidateSearchOutcome,
+    model_client: PublicWebModelClient | None,
+    options: PublicWebExperimentOptions,
+) -> dict[str, Any]:
     candidate = plan.candidate
     logger = plan.logger
     candidate_dir = plan.candidate_dir
@@ -2191,6 +2696,8 @@ def finalize_candidate_public_web_experiment(
     gathered_signals = empty_signal_bundle()
     email_candidates: list[EmailCandidateSignal] = []
     discovered_entry_links: list[ClassifiedEntryLink] = []
+    document_fetch_timed_out = False
+    document_fetch_total_timeout_seconds: float | None = None
     if options.fetch_content:
         fetch_result = fetch_candidate_public_web_documents(
             ranked_links=ranked_links,
@@ -2204,9 +2711,10 @@ def finalize_candidate_public_web_experiment(
         gathered_signals = fetch_result["gathered_signals"]
         email_candidates = fetch_result["email_candidates"]
         discovered_entry_links = fetch_result["discovered_entry_links"]
+        document_fetch_timed_out = bool(fetch_result.get("document_fetch_timed_out"))
+        document_fetch_total_timeout_seconds = fetch_result.get("document_fetch_total_timeout_seconds")
         outcome.errors.extend(fetch_result["errors"])
 
-    deduped_email_candidates = _dedupe_email_signals(email_candidates)
     if discovered_entry_links:
         ranked_links = rank_entry_links(
             [*ranked_links, *discovered_entry_links],
@@ -2220,6 +2728,91 @@ def finalize_candidate_public_web_experiment(
             is_raw_asset=False,
             model_safe=True,
         )
+    payload = {
+        "candidate": candidate.to_record(),
+        "ranked_links": [link.to_record() for link in ranked_links],
+        "fetched_documents": fetched_documents,
+        "gathered_signals": gathered_signals,
+        "email_candidates": [item.to_record() for item in email_candidates],
+        "discovered_entry_links": [link.to_record() for link in discovered_entry_links],
+        "query_results": list(outcome.query_results),
+        "raw_links": [link.to_record() for link in outcome.raw_links],
+        "errors": list(outcome.errors),
+        "artifact_root": str(candidate_dir),
+        "document_fetch_timed_out": document_fetch_timed_out,
+        "document_fetch_total_timeout_seconds": document_fetch_total_timeout_seconds,
+        "document_fetch_completed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    logger.write_json(
+        "document_fetch_payload.json",
+        payload,
+        asset_type="public_web_document_fetch_payload",
+        source_kind="target_candidate_public_web_search",
+        is_raw_asset=False,
+        model_safe=True,
+    )
+    return payload
+
+
+def finalize_candidate_public_web_experiment_from_document_fetch_payload(
+    *,
+    plan: CandidateSearchPlan,
+    outcome: CandidateSearchOutcome,
+    document_fetch_payload: dict[str, Any],
+    model_client: PublicWebModelClient | None,
+    options: PublicWebExperimentOptions,
+) -> dict[str, Any]:
+    adjudication_payload = adjudicate_candidate_public_web_experiment_from_document_fetch_payload(
+        plan=plan,
+        outcome=outcome,
+        document_fetch_payload=document_fetch_payload,
+        model_client=model_client,
+        options=options,
+    )
+    return finalize_candidate_public_web_experiment_from_adjudication_payload(
+        plan=plan,
+        outcome=outcome,
+        adjudication_payload=adjudication_payload,
+        options=options,
+    )
+
+
+def adjudicate_candidate_public_web_experiment_from_document_fetch_payload(
+    *,
+    plan: CandidateSearchPlan,
+    outcome: CandidateSearchOutcome,
+    document_fetch_payload: dict[str, Any],
+    model_client: PublicWebModelClient | None,
+    options: PublicWebExperimentOptions,
+) -> dict[str, Any]:
+    candidate = plan.candidate
+    logger = plan.logger
+    candidate_dir = plan.candidate_dir
+    ranked_links = [
+        _classified_entry_link_from_record(item)
+        for item in list(document_fetch_payload.get("ranked_links") or [])
+        if isinstance(item, dict)
+    ]
+    fetched_documents = [
+        dict(item) for item in list(document_fetch_payload.get("fetched_documents") or []) if isinstance(item, dict)
+    ]
+    gathered_signals = dict(document_fetch_payload.get("gathered_signals") or empty_signal_bundle())
+    email_candidates = [
+        _email_candidate_signal_from_record(item)
+        for item in list(document_fetch_payload.get("email_candidates") or [])
+        if isinstance(item, dict)
+    ]
+    if not ranked_links:
+        ranked_links = rank_entry_links(outcome.raw_links, limit=options.max_entry_links_per_candidate)
+    outcome.errors = list(
+        dict.fromkeys(
+            [
+                *[str(item) for item in list(document_fetch_payload.get("errors") or []) if str(item or "").strip()],
+                *list(outcome.errors),
+            ]
+        )
+    )
+    deduped_email_candidates = _dedupe_email_signals(email_candidates)
     adjudicated_email_candidates, adjudicated_links, ai_result = adjudicate_public_web_candidate_evidence(
         candidate=candidate,
         email_candidates=deduped_email_candidates,
@@ -2228,15 +2821,78 @@ def finalize_candidate_public_web_experiment(
         model_client=model_client,
         ai_extraction=options.ai_extraction,
         max_ai_evidence_documents=options.max_ai_evidence_documents,
+        max_ai_entry_links=options.max_ai_entry_links,
     )
-    signals_payload = {
+    adjudication_input_snapshot = dict(ai_result.get("input_snapshot") or {})
+    adjudication_input_payload_path = ""
+    if adjudication_input_snapshot:
+        adjudication_input_payload_path = str(
+            logger.write_json(
+                "adjudication_input_payload.json",
+                adjudication_input_snapshot,
+                asset_type="public_web_adjudication_input_payload",
+                source_kind="target_candidate_public_web_search",
+                is_raw_asset=False,
+                model_safe=True,
+            )
+        )
+    payload = {
         "candidate": candidate.to_record(),
         "entry_links": [link.to_record() for link in adjudicated_links],
         "fetched_documents": fetched_documents,
         "email_candidates": [item.to_record() for item in adjudicated_email_candidates],
         "gathered_signals": gathered_signals,
-        "ai_adjudication": ai_result,
+        "ai_adjudication": {
+            key: value for key, value in ai_result.items() if key != "input_snapshot"
+        },
+        "adjudication_input_contract": dict(adjudication_input_snapshot.get("input_contract") or {}),
+        "adjudication_input_payload_path": adjudication_input_payload_path,
+        "query_results": list(document_fetch_payload.get("query_results") or outcome.query_results),
+        "raw_links": list(document_fetch_payload.get("raw_links") or [link.to_record() for link in outcome.raw_links]),
         "errors": outcome.errors,
+        "artifact_root": str(candidate_dir),
+        "search_mode": outcome.search_mode,
+        "adjudication_completed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    logger.write_json(
+        "adjudication_payload.json",
+        payload,
+        asset_type="public_web_adjudication_payload",
+        source_kind="target_candidate_public_web_search",
+        is_raw_asset=False,
+        model_safe=True,
+    )
+    return payload
+
+
+def finalize_candidate_public_web_experiment_from_adjudication_payload(
+    *,
+    plan: CandidateSearchPlan,
+    outcome: CandidateSearchOutcome,
+    adjudication_payload: dict[str, Any],
+    options: PublicWebExperimentOptions,
+) -> dict[str, Any]:
+    candidate = plan.candidate
+    logger = plan.logger
+    candidate_dir = plan.candidate_dir
+    signals_payload = {
+        "candidate": dict(adjudication_payload.get("candidate") or candidate.to_record()),
+        "entry_links": [
+            dict(item) for item in list(adjudication_payload.get("entry_links") or []) if isinstance(item, dict)
+        ],
+        "fetched_documents": [
+            dict(item) for item in list(adjudication_payload.get("fetched_documents") or []) if isinstance(item, dict)
+        ],
+        "email_candidates": [
+            dict(item) for item in list(adjudication_payload.get("email_candidates") or []) if isinstance(item, dict)
+        ],
+        "gathered_signals": dict(adjudication_payload.get("gathered_signals") or empty_signal_bundle()),
+        "ai_adjudication": dict(adjudication_payload.get("ai_adjudication") or {}),
+        "errors": [
+            str(item)
+            for item in list(adjudication_payload.get("errors") or outcome.errors)
+            if str(item or "").strip()
+        ],
     }
     logger.write_json(
         "signals.json",
@@ -2246,14 +2902,35 @@ def finalize_candidate_public_web_experiment(
         is_raw_asset=False,
         model_safe=True,
     )
+    adjudicated_links = [
+        _classified_entry_link_from_record(item)
+        for item in list(signals_payload.get("entry_links") or [])
+        if isinstance(item, dict)
+    ]
+    adjudicated_email_candidates = [
+        _email_candidate_signal_from_record(item)
+        for item in list(signals_payload.get("email_candidates") or [])
+        if isinstance(item, dict)
+    ]
+    gathered_signals = dict(signals_payload.get("gathered_signals") or empty_signal_bundle())
+    fetched_documents = [
+        dict(item) for item in list(signals_payload.get("fetched_documents") or []) if isinstance(item, dict)
+    ]
+    query_results = [
+        dict(item)
+        for item in list(adjudication_payload.get("query_results") or outcome.query_results)
+        if isinstance(item, dict)
+    ]
+    errors = list(signals_payload.get("errors") or [])
+    run_status = "completed" if not errors else "completed_with_errors"
     summary = {
         "record_id": candidate.record_id,
         "candidate_id": candidate.candidate_id,
         "candidate_name": candidate.candidate_name,
         "current_company": candidate.current_company,
         "linkedin_url_key": candidate.linkedin_url_key,
-        "status": "completed" if not outcome.errors else "completed_with_errors",
-        "search_mode": outcome.search_mode,
+        "status": run_status,
+        "search_mode": str(adjudication_payload.get("search_mode") or outcome.search_mode),
         "query_count": len(plan.queries),
         "entry_link_count": len(adjudicated_links),
         "fetchable_entry_link_count": len([link for link in adjudicated_links if link.fetchable]),
@@ -2268,7 +2945,7 @@ def finalize_candidate_public_web_experiment(
         "primary_links": _primary_links(adjudicated_links, gathered_signals),
         "artifact_root": str(candidate_dir),
         "duration_seconds": round(time.monotonic() - plan.started_monotonic, 3),
-        "errors": outcome.errors,
+        "errors": errors,
     }
     logger.write_json(
         "candidate_summary.json",
@@ -2280,7 +2957,7 @@ def finalize_candidate_public_web_experiment(
     )
     logger.write_json(
         "search_results.json",
-        outcome.query_results,
+        query_results,
         asset_type="public_web_candidate_search_results",
         source_kind="target_candidate_public_web_search",
         is_raw_asset=False,
@@ -2289,13 +2966,59 @@ def finalize_candidate_public_web_experiment(
     write_candidate_status(
         logger,
         candidate=candidate,
-        status=summary["status"],
+        status=run_status,
         phase="completed",
         query_count=len(plan.queries),
         artifact_root=str(candidate_dir),
         summary=summary,
     )
     return summary
+
+
+def _classified_entry_link_from_record(record: dict[str, Any]) -> ClassifiedEntryLink:
+    normalized_url = str(record.get("normalized_url") or record.get("url") or "")
+    entry_type = canonicalize_profile_link_type_from_url(str(record.get("entry_type") or "other"), normalized_url)
+    return ClassifiedEntryLink(
+        url=str(record.get("url") or ""),
+        normalized_url=normalized_url,
+        title=str(record.get("title") or ""),
+        snippet=str(record.get("snippet") or ""),
+        source_domain=str(record.get("source_domain") or ""),
+        entry_type=entry_type,
+        source_family=str(record.get("source_family") or ""),
+        score=float(record.get("score") or 0.0),
+        reasons=tuple(str(item) for item in list(record.get("reasons") or [])),
+        query_id=str(record.get("query_id") or ""),
+        query_text=str(record.get("query_text") or ""),
+        provider_name=str(record.get("provider_name") or ""),
+        result_rank=int(record.get("result_rank") or 0),
+        fetchable=bool(record.get("fetchable")),
+        identity_match_label=str(record.get("identity_match_label") or "unreviewed"),
+        identity_match_score=float(record.get("identity_match_score") or 0.0),
+        confidence_label=str(record.get("confidence_label") or "medium"),
+        adjudication=dict(record.get("adjudication") or {}),
+    )
+
+
+def _email_candidate_signal_from_record(record: dict[str, Any]) -> EmailCandidateSignal:
+    return EmailCandidateSignal(
+        value=str(record.get("value") or record.get("normalized_value") or ""),
+        normalized_value=str(record.get("normalized_value") or record.get("value") or "").lower(),
+        email_type=str(record.get("email_type") or "unknown"),
+        confidence_label=str(record.get("confidence_label") or ""),
+        confidence_score=float(record.get("confidence_score") or 0.0),
+        publishable=bool(record.get("publishable")),
+        promotion_status=str(record.get("promotion_status") or "not_promoted"),
+        source_url=str(record.get("source_url") or ""),
+        source_domain=str(record.get("source_domain") or ""),
+        source_family=str(record.get("source_family") or ""),
+        source_title=str(record.get("source_title") or ""),
+        evidence_excerpt=str(record.get("evidence_excerpt") or ""),
+        suppression_reason=str(record.get("suppression_reason") or ""),
+        identity_match_label=str(record.get("identity_match_label") or "needs_ai_review"),
+        identity_match_score=float(record.get("identity_match_score") or 0.0),
+        adjudication=dict(record.get("adjudication") or {}),
+    )
 
 
 def build_public_web_experiment_summary(
@@ -2313,7 +3036,9 @@ def build_public_web_experiment_summary(
         "completed_at": completed_at,
         "artifact_root": str(experiment_dir),
         "candidate_count": len(candidate_results),
-        "completed_count": len([item for item in candidate_results if str(item.get("status") or "").startswith("completed")]),
+        "completed_count": len(
+            [item for item in candidate_results if str(item.get("status") or "").startswith("completed")]
+        ),
         "completed_with_errors_count": len(
             [item for item in candidate_results if str(item.get("status") or "") == "completed_with_errors"]
         ),
@@ -2475,7 +3200,9 @@ def _looks_like_resume_url(lower_url: str, combined: str) -> bool:
 def _looks_like_academic_profile(domain: str, lower_url: str, combined: str) -> bool:
     academic_domain = ".edu" in domain or ".ac." in domain or domain.endswith(".edu")
     profile_hint = any(token in lower_url for token in ["/people", "/person", "/profile", "/faculty", "/~"])
-    return academic_domain and (profile_hint or any(token in combined for token in ["professor", "student", "university"]))
+    return academic_domain and (
+        profile_hint or any(token in combined for token in ["professor", "student", "university"])
+    )
 
 
 def _looks_like_personal_homepage(
@@ -2488,17 +3215,87 @@ def _looks_like_personal_homepage(
     domain = parsed.netloc.lower().removeprefix("www.")
     if _is_low_value_fetch_domain(domain) or domain in PUBLICATION_DOMAINS:
         return False
+    if _looks_like_non_homepage_content_url(parsed):
+        return False
     path_parts = [part for part in parsed.path.strip("/").split("/") if part]
     if "~" in parsed.path:
         return True
     if candidate and candidate.candidate_name:
         name_tokens = _person_name_tokens(candidate.candidate_name)
         url_text = re.sub(r"[^a-z0-9]+", " ", f"{domain} {parsed.path}".lower())
-        if name_tokens and sum(1 for token in name_tokens[:2] if token in url_text) >= min(2, len(name_tokens)):
+        if (
+            _is_high_precision_person_name(candidate.candidate_name)
+            and name_tokens
+            and sum(1 for token in name_tokens[:2] if token in url_text) >= min(2, len(name_tokens))
+            and _looks_like_individual_domain(domain, candidate)
+        ):
             return True
         title_like_match = _name_tokens_match(candidate.candidate_name.lower(), str(title or "").lower())
         return bool(title_like_match and len(path_parts) <= 1 and _looks_like_individual_domain(domain, candidate))
     return len(path_parts) <= 1 and _looks_like_individual_domain(domain, candidate)
+
+
+def _looks_like_non_homepage_content_url(parsed: Any) -> bool:
+    host = parsed.netloc.lower().removeprefix("www.")
+    path_parts = [part.lower() for part in parsed.path.split("/") if part]
+    if host in {"youtube.com", "youtu.be", "m.youtube.com"}:
+        return True
+    if not path_parts:
+        return False
+    if path_parts[0] in {
+        "article",
+        "articles",
+        "blog",
+        "blogs",
+        "buy",
+        "news",
+        "post",
+        "posts",
+        "product",
+        "products",
+        "shop",
+        "store",
+        "watch",
+        "video",
+        "videos",
+    }:
+        return True
+    if path_parts[0].startswith(("buy-", "product-", "shop-", "store-")):
+        return True
+    if len(path_parts) >= 2 and path_parts[0] in {"p", "publication", "publications", "paper", "papers"}:
+        return True
+    return False
+
+
+def _looks_like_third_party_person_page_not_owned_homepage(parsed: Any) -> bool:
+    host = parsed.netloc.lower().removeprefix("www.")
+    path_parts = [part.lower() for part in parsed.path.split("/") if part]
+    if not path_parts:
+        return False
+    if _is_low_value_fetch_domain(host):
+        return True
+    third_party_profile_segments = {
+        "author",
+        "authors",
+        "event",
+        "events",
+        "profile",
+        "profiles",
+        "speaker",
+        "speakers",
+        "team",
+        "people",
+        "person",
+        "popular",
+    }
+    return bool(
+        len(path_parts) >= 2
+        and any(
+            part in third_party_profile_segments
+            or any(segment in part for segment in ("event", "speaker", "summit"))
+            for part in path_parts[:-1]
+        )
+    )
 
 
 def _looks_like_company_page(domain: str, lower_url: str, combined: str, candidate: PublicWebCandidateContext) -> bool:
@@ -2539,8 +3336,20 @@ def _looks_like_individual_domain(domain: str, candidate: PublicWebCandidateCont
     }
     domain_tokens = [token for token in re.findall(r"[a-z0-9]+", domain) if token not in generic_tokens]
     if candidate:
-        company_tokens = set(_person_name_tokens(candidate.current_company))
+        company_tokens = {token for token in _person_name_tokens(candidate.current_company) if len(token) >= 3}
         if company_tokens and any(token in company_tokens for token in domain_tokens):
+            return False
+        name_tokens = _person_name_tokens(candidate.candidate_name)
+        compact_domain = "".join(domain_tokens)
+        if len(name_tokens) >= 2:
+            first, last = name_tokens[0], name_tokens[1]
+            compact_name = f"{first}{last}"
+            if compact_name and compact_name in compact_domain:
+                return True
+            if len(last) >= 4 and any(last in token or token in last for token in domain_tokens):
+                return True
+            if len(first) >= 4 and any(first in token or token in first for token in domain_tokens):
+                return True
             return False
     return bool(domain_tokens and len(domain_tokens) <= 3)
 
@@ -2568,6 +3377,24 @@ def _name_tokens_match(name: str, text: str) -> bool:
 
 def _person_name_tokens(name: str) -> list[str]:
     return [token for token in re.findall(r"[a-z0-9]+", str(name or "").lower()) if len(token) > 1][:4]
+
+
+def _is_high_precision_person_name(name: str) -> bool:
+    tokens = _person_name_tokens(name)
+    return len(tokens) >= 2 and all(len(token) >= 2 for token in tokens[:2])
+
+
+def _company_mention_matches(company: str, text: str) -> bool:
+    normalized_company = str(company or "").strip()
+    if not normalized_company:
+        return False
+    if normalized_company.lower() == "anthropic":
+        return bool(re.search(r"(?<![A-Za-z0-9])Anthropic(?![A-Za-z0-9])", str(text or "")))
+    company_tokens = [token for token in re.findall(r"[A-Za-z0-9]+", normalized_company) if len(token) > 1]
+    if not company_tokens:
+        return False
+    normalized_text = re.sub(r"[^a-z0-9]+", " ", str(text or "").lower())
+    return all(token.lower() in normalized_text for token in company_tokens[:2])
 
 
 _EMAIL_RE = re.compile(r"\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b", re.IGNORECASE)
@@ -2632,7 +3459,11 @@ def infer_email_type(
         company_tokens = _person_name_tokens(candidate.current_company)
         if company_tokens and any(token in domain.replace("-", "").replace(".", "") for token in company_tokens):
             return "company"
-    if source_domain and domain and (domain == source_domain or source_domain.endswith(domain) or domain.endswith(source_domain)):
+    if (
+        source_domain
+        and domain
+        and (domain == source_domain or source_domain.endswith(domain) or domain.endswith(source_domain))
+    ):
         return "company"
     if domain:
         return "unknown"
@@ -2773,7 +3604,7 @@ def _primary_links(links: list[ClassifiedEntryLink], signals: dict[str, Any]) ->
 
 
 def _is_primary_link_candidate(link: ClassifiedEntryLink) -> bool:
-    return is_clean_profile_link(link.entry_type, link.normalized_url)
+    return is_publishable_profile_link(link.entry_type, link.normalized_url)
 
 
 def build_sample_target_candidate_records(limit: int = 10) -> list[dict[str, Any]]:

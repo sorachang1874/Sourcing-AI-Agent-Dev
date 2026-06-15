@@ -76,11 +76,15 @@ def sync_company_asset_registration(
     selected_snapshot_ids: list[str] | None = None,
     registry_refresh_mode: str = "guarded_upsert",
     refresh_company_identity: bool = True,
+    serving_generation_repair_snapshot_id: str = "",
 ) -> dict[str, Any]:
     from .asset_reuse_planning import (
         backfill_organization_asset_registry_for_company,
         build_organization_asset_registry_record,
+        enforce_reusable_source_snapshot_provenance,
         ensure_acquisition_shard_registry_for_snapshot,
+        ensure_explicit_population_coverage_for_registry_record,
+        inherit_reusable_source_snapshot_coverage,
         upsert_organization_asset_registry_with_guard,
     )
     from .company_registry import refresh_company_identity_registry
@@ -96,8 +100,17 @@ def sync_company_asset_registration(
 
     sync_status: dict[str, Any] = {}
     selected_ids = _normalize_string_list(selected_snapshot_ids or [normalized_snapshot_id])
+    registry_record: dict[str, Any] = {}
+    existing_authoritative: dict[str, Any] = {}
 
     if registry_summary:
+        existing_authoritative = dict(
+            store.get_authoritative_organization_asset_registry(
+                target_company=normalized_target_company,
+                asset_view=normalized_asset_view,
+            )
+            or {}
+        )
         registry_record = build_organization_asset_registry_record(
             target_company=normalized_target_company,
             company_key=normalized_company_key,
@@ -108,25 +121,16 @@ def sync_company_asset_registration(
             source_job_id=str(source_job_id or ""),
             authoritative=bool(authoritative),
         )
+        registry_record = inherit_reusable_source_snapshot_coverage(
+            store=store,
+            candidate_record=registry_record,
+            existing_authoritative=existing_authoritative,
+        )
         selected_ids = _normalize_string_list(
-            selected_ids
-            or registry_record.get("selected_snapshot_ids")
+            registry_record.get("selected_snapshot_ids")
+            or selected_ids
             or [normalized_snapshot_id]
         )
-        if registry_refresh_mode == "force_upsert":
-            sync_status["organization_asset_registry_refresh"] = _run_sync_step(
-                lambda: store.upsert_organization_asset_registry(
-                    registry_record,
-                    authoritative=bool(authoritative),
-                )
-            )
-        else:
-            sync_status["organization_asset_registry_refresh"] = _run_sync_step(
-                lambda: upsert_organization_asset_registry_with_guard(
-                    store=store,
-                    candidate_record=registry_record,
-                )
-            )
     else:
         sync_status["organization_asset_registry_refresh"] = _run_sync_step(
             lambda: backfill_organization_asset_registry_for_company(
@@ -201,6 +205,81 @@ def sync_company_asset_registration(
 
     sync_status["acquisition_shard_registry_refresh"] = _aggregate_snapshot_step(shard_registry_entries)
     sync_status["acquisition_shard_bundle_refresh"] = _aggregate_snapshot_step(shard_bundle_entries)
+
+    if registry_record:
+        registry_record = enforce_reusable_source_snapshot_provenance(
+            store=store,
+            candidate_record=registry_record,
+        )
+        selected_ids = _normalize_string_list(
+            registry_record.get("selected_snapshot_ids")
+            or dict(registry_record.get("source_snapshot_selection") or {}).get("selected_snapshot_ids")
+            or selected_ids
+        )
+        registry_record = ensure_explicit_population_coverage_for_registry_record(
+            store=store,
+            candidate_record=registry_record,
+        )
+        publication_result: dict[str, Any] = {}
+        if authoritative:
+            from .authoritative_serving_repair import repair_authoritative_serving_generation_for_publication
+
+            publication_result = repair_authoritative_serving_generation_for_publication(
+                runtime_dir=runtime_dir,
+                store=store,
+                candidate_record=registry_record,
+                existing_authoritative=existing_authoritative,
+                repair_snapshot_id=serving_generation_repair_snapshot_id,
+                apply=True,
+            )
+            sync_status["authoritative_serving_generation_publication_check"] = {
+                key: value
+                for key, value in publication_result.items()
+                if key
+                not in {
+                    "candidate_record",
+                    "authoritative_after",
+                    "build_result",
+                    "bundle_results",
+                }
+            }
+        if bool(publication_result.get("applied")):
+            registry_record = dict(publication_result.get("candidate_record") or {})
+            selected_ids = _normalize_string_list(
+                registry_record.get("selected_snapshot_ids")
+                or dict(registry_record.get("source_snapshot_selection") or {}).get("selected_snapshot_ids")
+                or selected_ids
+            )
+            normalized_snapshot_id = str(registry_record.get("snapshot_id") or normalized_snapshot_id).strip()
+            sync_status["organization_asset_registry_refresh"] = {
+                "status": "completed",
+                "result": dict(publication_result.get("authoritative_after") or registry_record),
+            }
+        elif publication_result and str(publication_result.get("status") or "") == "blocked":
+            sync_status["organization_asset_registry_refresh"] = {
+                "status": "failed",
+                "error": str(publication_result.get("reason") or "authoritative_publication_blocked"),
+                "result": {
+                    "target_company": normalized_target_company,
+                    "snapshot_id": normalized_snapshot_id,
+                    "asset_view": normalized_asset_view,
+                    "authoritative": False,
+                },
+            }
+        elif registry_refresh_mode == "force_upsert":
+            sync_status["organization_asset_registry_refresh"] = _run_sync_step(
+                lambda: store.upsert_organization_asset_registry(
+                    registry_record,
+                    authoritative=bool(authoritative),
+                )
+            )
+        else:
+            sync_status["organization_asset_registry_refresh"] = _run_sync_step(
+                lambda: upsert_organization_asset_registry_with_guard(
+                    store=store,
+                    candidate_record=registry_record,
+                )
+            )
 
     primary_snapshot_id = normalized_snapshot_id or (selected_ids[0] if selected_ids else "")
     if primary_snapshot_id:

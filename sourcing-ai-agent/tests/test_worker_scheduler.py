@@ -70,6 +70,14 @@ class WorkerSchedulerTest(unittest.TestCase):
             effective_worker_status({"status": "running", "checkpoint": {"stage": "waiting_remote_search"}}),
             "waiting_remote_search",
         )
+        self.assertEqual(
+            effective_worker_status({"status": "completed", "checkpoint": {"stage": "waiting_remote_harvest"}}),
+            "completed",
+        )
+        self.assertEqual(
+            infer_resume_mode({"status": "completed", "checkpoint": {"stage": "waiting_remote_harvest"}}),
+            "reuse_checkpoint",
+        )
 
     def test_lane_limits_from_plan_can_read_runtime_tuning_profile_from_task_intent_view(self) -> None:
         plan = {

@@ -83,6 +83,26 @@ class ProfileTimelinePathMigrationTest(unittest.TestCase):
         self.assertEqual(Path(result["profile_capture_source_path"]).resolve(), self.profile_path.resolve())
         self.assertIn("Acme", result["experience_lines"][0])
 
+    def test_resolve_candidate_profile_timeline_can_prefer_embedded_profile_without_source_reads(self) -> None:
+        with mock.patch(
+            "sourcing_agent.profile_timeline.profile_snapshot_from_source_path",
+            side_effect=AssertionError("foreground-fast embedded profile path should not read raw source files"),
+        ):
+            result = resolve_candidate_profile_timeline(
+                payload={
+                    "display_name": "Alice Example",
+                    "linkedin_url": "https://www.linkedin.com/in/alice-example",
+                    "experience_lines": ["2024~Present, Acme, Embedded Research Engineer"],
+                    "headline": "Embedded profile headline",
+                },
+                source_path=self.legacy_linux_source_path,
+                prefer_embedded_profile=True,
+            )
+
+        self.assertEqual(result["source_kind"], "embedded")
+        self.assertEqual(result["headline"], "Embedded profile headline")
+        self.assertIn("Embedded Research Engineer", result["experience_lines"][0])
+
     def test_profile_snapshot_uses_selector_index_for_multi_item_source_and_invalidates_on_file_change(self) -> None:
         roster_path = self.snapshot_dir / "harvest_company_employees" / "roster.json"
         roster_path.parent.mkdir(parents=True, exist_ok=True)

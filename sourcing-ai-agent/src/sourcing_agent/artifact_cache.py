@@ -24,6 +24,7 @@ _DEFAULT_HOT_CACHE_TARGET_BUDGET_FLOOR_BYTES = 2 * 1024 * 1024 * 1024
 _DEFAULT_HOT_CACHE_TARGET_BUDGET_CAP_BYTES = 32 * 1024 * 1024 * 1024
 _DEFAULT_HOT_CACHE_MAX_COMPANY_SHARE_RATIO = 0.35
 _DEFAULT_HOT_CACHE_MAX_COMPANY_BYTES_FLOOR = 512 * 1024 * 1024
+_HOT_CACHE_HEAT_HALF_LIFE_SECONDS = 7 * 24 * 60 * 60
 
 
 def configured_hot_cache_retention_policy(
@@ -92,16 +93,12 @@ def configured_hot_cache_retention_policy(
     effective_inventory = dict(inventory or collect_hot_cache_inventory(runtime_root))
     hot_cache_total_bytes = int(effective_inventory.get("total_bytes") or 0)
     company_records = [
-        dict(item)
-        for item in list(effective_inventory.get("company_records") or [])
-        if isinstance(item, dict)
+        dict(item) for item in list(effective_inventory.get("company_records") or []) if isinstance(item, dict)
     ]
     if not company_records:
         company_records = _summarize_hot_cache_company_records(
             snapshot_records=[
-                dict(item)
-                for item in list(effective_inventory.get("snapshot_records") or [])
-                if isinstance(item, dict)
+                dict(item) for item in list(effective_inventory.get("snapshot_records") or []) if isinstance(item, dict)
             ],
             generation_records=[
                 dict(item)
@@ -410,13 +407,35 @@ def mark_hot_cache_snapshot_access(
     access_marker = resolved_snapshot_dir / _HOT_CACHE_ACCESS_MARKER
     access_marker.parent.mkdir(parents=True, exist_ok=True)
     access_epoch = float(at_epoch if at_epoch is not None else time.time())
-    access_marker.touch(exist_ok=True)
-    os.utime(access_marker, (access_epoch, access_epoch))
+    previous_state = _read_hot_cache_access_state(resolved_snapshot_dir, fallback_epoch=0.0)
+    previous_count = int(previous_state.get("access_count") or 0)
+    first_access_epoch = float(previous_state.get("first_access_epoch") or 0.0) or access_epoch
+    payload = {
+        "access_count": previous_count + 1,
+        "first_access_epoch": first_access_epoch,
+        "first_access_at": _epoch_to_utc_iso(first_access_epoch),
+        "last_access_epoch": access_epoch,
+        "last_accessed_at": _epoch_to_utc_iso(access_epoch),
+        "updated_at": _epoch_to_utc_iso(access_epoch),
+        "marker_version": "hot_cache_access_v2",
+    }
+    try:
+        access_marker.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.utime(access_marker, (access_epoch, access_epoch))
+    except OSError as exc:
+        return {
+            "status": "write_failed",
+            "snapshot_dir": str(resolved_snapshot_dir),
+            "access_marker_path": str(access_marker),
+            "error": str(exc),
+        }
     return {
         "status": "updated",
         "snapshot_dir": str(resolved_snapshot_dir),
         "access_marker_path": str(access_marker),
         "access_epoch": access_epoch,
+        "access_count": previous_count + 1,
+        "first_access_epoch": first_access_epoch,
     }
 
 
@@ -513,9 +532,10 @@ def collect_hot_cache_inventory(runtime_dir: str | Path) -> dict[str, Any]:
         latest_snapshot_id = str(latest_payload.get("snapshot_id") or "").strip()
         for snapshot_dir in sorted(path for path in company_dir.iterdir() if path.is_dir()):
             snapshot_stats = _path_tree_stats(snapshot_dir)
-            access_mtime_epoch = _hot_cache_access_epoch(
+            access_state = _read_hot_cache_access_state(
                 snapshot_dir, fallback_epoch=float(snapshot_stats.get("latest_mtime_epoch") or 0.0)
             )
+            access_mtime_epoch = float(access_state.get("last_access_epoch") or 0.0)
             identity_payload = load_company_snapshot_identity(snapshot_dir, fallback_payload=latest_payload)
             target_company = (
                 str(identity_payload.get("canonical_name") or "").strip()
@@ -578,6 +598,14 @@ def collect_hot_cache_inventory(runtime_dir: str | Path) -> dict[str, Any]:
                     "latest_mtime_epoch": float(snapshot_stats.get("latest_mtime_epoch") or 0.0),
                     "access_mtime_epoch": access_mtime_epoch,
                     "access_age_seconds": _age_seconds(access_mtime_epoch),
+                    "first_access_epoch": float(access_state.get("first_access_epoch") or 0.0),
+                    "first_access_at": str(access_state.get("first_access_at") or ""),
+                    "last_accessed_at": str(access_state.get("last_accessed_at") or ""),
+                    "access_count": int(access_state.get("access_count") or 0),
+                    "heat_score": _hot_cache_heat_score(
+                        access_count=int(access_state.get("access_count") or 0),
+                        access_age_seconds=_age_seconds(access_mtime_epoch),
+                    ),
                     "age_seconds": _age_seconds(float(snapshot_stats.get("latest_mtime_epoch") or 0.0)),
                     "is_latest_snapshot": bool(latest_snapshot_id and latest_snapshot_id == snapshot_dir.name),
                     "asset_views": [
@@ -991,10 +1019,67 @@ def _hot_cache_access_epoch(snapshot_dir: Path, *, fallback_epoch: float) -> flo
     return max(float(stat_result.st_mtime), fallback_epoch)
 
 
+def _read_hot_cache_access_state(snapshot_dir: Path, *, fallback_epoch: float) -> dict[str, Any]:
+    access_marker = snapshot_dir / _HOT_CACHE_ACCESS_MARKER
+    fallback_access_epoch = _hot_cache_access_epoch(snapshot_dir, fallback_epoch=fallback_epoch)
+    if not access_marker.exists():
+        return {
+            "access_count": 0,
+            "first_access_epoch": 0.0,
+            "first_access_at": "",
+            "last_access_epoch": fallback_access_epoch,
+            "last_accessed_at": _epoch_to_utc_iso(fallback_access_epoch) if fallback_access_epoch > 0 else "",
+            "marker_version": "",
+        }
+    try:
+        payload = json.loads(access_marker.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {
+            "access_count": 1 if fallback_access_epoch > 0 else 0,
+            "first_access_epoch": fallback_access_epoch,
+            "first_access_at": _epoch_to_utc_iso(fallback_access_epoch) if fallback_access_epoch > 0 else "",
+            "last_access_epoch": fallback_access_epoch,
+            "last_accessed_at": _epoch_to_utc_iso(fallback_access_epoch) if fallback_access_epoch > 0 else "",
+            "marker_version": "legacy_mtime_marker",
+        }
+    if not isinstance(payload, dict):
+        return {
+            "access_count": 1 if fallback_access_epoch > 0 else 0,
+            "first_access_epoch": fallback_access_epoch,
+            "first_access_at": _epoch_to_utc_iso(fallback_access_epoch) if fallback_access_epoch > 0 else "",
+            "last_access_epoch": fallback_access_epoch,
+            "last_accessed_at": _epoch_to_utc_iso(fallback_access_epoch) if fallback_access_epoch > 0 else "",
+            "marker_version": "legacy_shape_marker",
+        }
+    last_access_epoch = float(payload.get("last_access_epoch") or fallback_access_epoch or 0.0)
+    first_access_epoch = float(payload.get("first_access_epoch") or last_access_epoch or 0.0)
+    return {
+        "access_count": max(0, int(payload.get("access_count") or 0)),
+        "first_access_epoch": first_access_epoch,
+        "first_access_at": str(payload.get("first_access_at") or _epoch_to_utc_iso(first_access_epoch) or ""),
+        "last_access_epoch": last_access_epoch,
+        "last_accessed_at": str(payload.get("last_accessed_at") or _epoch_to_utc_iso(last_access_epoch) or ""),
+        "marker_version": str(payload.get("marker_version") or ""),
+    }
+
+
+def _hot_cache_heat_score(*, access_count: int, access_age_seconds: float) -> float:
+    if access_count <= 0:
+        return 0.0
+    recency_weight = 1.0 / (1.0 + max(0.0, float(access_age_seconds or 0.0)) / _HOT_CACHE_HEAT_HALF_LIFE_SECONDS)
+    return round(float(access_count) * recency_weight, 4)
+
+
 def _age_seconds(latest_mtime_epoch: float) -> float:
     if latest_mtime_epoch <= 0:
         return 0.0
     return max(0.0, round(time.time() - latest_mtime_epoch, 2))
+
+
+def _epoch_to_utc_iso(epoch: float) -> str:
+    if float(epoch or 0.0) <= 0:
+        return ""
+    return datetime.fromtimestamp(float(epoch), timezone.utc).isoformat(timespec="seconds")
 
 
 def _iter_hot_cache_view_dirs(snapshot_dir: Path) -> list[tuple[str, Path]]:
@@ -1072,6 +1157,8 @@ def _summarize_hot_cache_company_records(
                 "generation_bytes": 0,
                 "latest_access_mtime_epoch": 0.0,
                 "latest_snapshot_mtime_epoch": 0.0,
+                "access_count": 0,
+                "heat_score": 0.0,
             },
         )
         summary["snapshot_count"] = int(summary.get("snapshot_count") or 0) + 1
@@ -1084,6 +1171,11 @@ def _summarize_hot_cache_company_records(
         summary["latest_snapshot_mtime_epoch"] = max(
             float(summary.get("latest_snapshot_mtime_epoch") or 0.0),
             float(record.get("latest_mtime_epoch") or 0.0),
+        )
+        summary["access_count"] = int(summary.get("access_count") or 0) + int(record.get("access_count") or 0)
+        summary["heat_score"] = round(
+            float(summary.get("heat_score") or 0.0) + float(record.get("heat_score") or 0.0),
+            4,
         )
     for record in generation_records:
         company_bucket = _retention_company_bucket(record)
@@ -1101,6 +1193,8 @@ def _summarize_hot_cache_company_records(
                 "generation_bytes": 0,
                 "latest_access_mtime_epoch": 0.0,
                 "latest_snapshot_mtime_epoch": 0.0,
+                "access_count": 0,
+                "heat_score": 0.0,
             },
         )
         summary["generation_count"] = int(summary.get("generation_count") or 0) + 1

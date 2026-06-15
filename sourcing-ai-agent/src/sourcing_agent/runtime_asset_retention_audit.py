@@ -16,6 +16,21 @@ DEFAULT_RETENTION_NAME_MARKERS = (
     "pre_manual",
     "phase12",
 )
+SIGNOFF_OR_PRESSURE_MARKERS = (
+    "w6",
+    "nightly",
+    "pre_manual",
+    "pressure",
+    "signoff",
+    "closeout",
+    "smoke",
+    "review",
+    "rerun",
+    "contract",
+    "board_runtime",
+    "profile_contract",
+    "scripted",
+)
 
 
 def build_runtime_asset_retention_report(
@@ -210,10 +225,10 @@ def _classify_retention_dir(name: str) -> str:
     normalized = _normalize_marker(name)
     if "current" in normalized or "latest" in normalized:
         return "review_current_alias_or_latest_artifact"
-    if "w6" in normalized or "nightly" in normalized or "pre_manual" in normalized:
-        return "review_signoff_or_pressure_run_artifact"
-    if "phase" in normalized:
+    if "phase" in normalized or "milestone" in normalized:
         return "review_phase_milestone_artifact"
+    if any(marker in normalized for marker in SIGNOFF_OR_PRESSURE_MARKERS):
+        return "review_signoff_or_pressure_run_artifact"
     return "review_cold_archive_candidate"
 
 

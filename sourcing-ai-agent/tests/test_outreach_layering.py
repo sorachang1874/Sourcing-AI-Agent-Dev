@@ -118,6 +118,21 @@ class OutreachLayeringTests(unittest.TestCase):
         self.assertEqual(result["layers"]["layer_3_mainland_china_experience_or_chinese_language"]["count"], 1)
         self.assertEqual(result["final_layer_distribution"]["layer_3"], 1)
 
+    def test_nankai_university_signal_raises_layer3(self) -> None:
+        candidate = Candidate(
+            candidate_id="c_nankai",
+            name_en="Jane NK",
+            display_name="Jane NK",
+            target_company="Thinking Machines Lab",
+            organization="Thinking Machines Lab",
+            employment_status="current",
+            role="Researcher",
+            education="Bachelor of Science, Nankai University, Physics",
+        )
+        result = build_outreach_layer_analysis(candidates=[candidate], query="", model_client=None, max_ai_verifications=0)
+        self.assertEqual(result["layers"]["layer_3_mainland_china_experience_or_chinese_language"]["count"], 1)
+        self.assertEqual(result["final_layer_distribution"]["layer_3"], 1)
+
     def test_ai_verification_populates_layer2(self) -> None:
         candidate_supported = Candidate(
             candidate_id="c_supported",

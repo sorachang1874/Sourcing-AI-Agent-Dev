@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from typing import Any
 
@@ -38,6 +39,8 @@ def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str,
         "former_keyword_queries_only",
         "provider_people_search_query_strategy",
         "provider_people_search_max_queries",
+        "provider_people_search_pages",
+        "provider_people_search_scale_chunk_pages",
         "large_org_keyword_probe_mode",
         "force_fresh_run",
         "reuse_existing_roster",
@@ -303,7 +306,12 @@ def apply_plan_review_decision(
     decision_preferences = normalize_execution_preferences(decision, target_company=target_company)
 
     extra_source_families = _normalize_list(decision.get("extra_source_families"))
-    confirmed_scope = _normalize_list(decision.get("confirmed_company_scope"))
+    confirmed_scope_input = _normalize_list(decision.get("confirmed_company_scope"))
+    confirmed_scope = [
+        item
+        for item in confirmed_scope_input
+        if not _scope_item_matches_target_company(item, target_company=target_company)
+    ]
     precision_recall_bias = str(decision_preferences.get("precision_recall_bias") or "").strip().lower()
 
     if extra_source_families:
@@ -337,7 +345,7 @@ def apply_plan_review_decision(
         publication["seed_queries"] = seed_queries
         updated_plan["publication_coverage"] = publication
 
-    if confirmed_scope:
+    if confirmed_scope_input:
         acquisition_strategy = dict(updated_plan.get("acquisition_strategy") or {})
         target_company = str(updated_request.get("target_company") or "").strip()
         new_scope = [target_company] if target_company else []
@@ -346,7 +354,10 @@ def apply_plan_review_decision(
                 new_scope.append(item)
         acquisition_strategy["company_scope"] = new_scope
         filter_hints = dict(acquisition_strategy.get("filter_hints") or {})
-        filter_hints["scope_keywords"] = confirmed_scope
+        if confirmed_scope:
+            filter_hints["scope_keywords"] = confirmed_scope
+        else:
+            filter_hints.pop("scope_keywords", None)
         acquisition_strategy["filter_hints"] = filter_hints
         updated_plan["acquisition_strategy"] = acquisition_strategy
 
@@ -652,6 +663,12 @@ def _apply_acquisition_review_preferences(
         cost_policy["provider_people_search_query_strategy"] = str(preferences.get("provider_people_search_query_strategy") or "").strip()
     if "provider_people_search_max_queries" in preferences:
         cost_policy["provider_people_search_max_queries"] = int(preferences.get("provider_people_search_max_queries") or 0)
+    if "provider_people_search_pages" in preferences:
+        cost_policy["provider_people_search_pages"] = int(preferences.get("provider_people_search_pages") or 0)
+    if "provider_people_search_scale_chunk_pages" in preferences:
+        cost_policy["provider_people_search_scale_chunk_pages"] = int(
+            preferences.get("provider_people_search_scale_chunk_pages") or 0
+        )
     if "large_org_keyword_probe_mode" in preferences:
         cost_policy["large_org_keyword_probe_mode"] = bool(preferences.get("large_org_keyword_probe_mode"))
     strategy_for_provider = str(acquisition_strategy.get("strategy_type") or desired_strategy or current_strategy).strip().lower()
@@ -659,6 +676,8 @@ def _apply_acquisition_review_preferences(
         if "former_keyword_queries_only" not in preferences:
             cost_policy["former_keyword_queries_only"] = True
         cost_policy["provider_people_search_mode"] = "primary_only"
+        if "provider_people_search_accept_zero_results" not in preferences:
+            cost_policy["provider_people_search_accept_zero_results"] = True
         try:
             current_min_expected = int(cost_policy.get("provider_people_search_min_expected_results") or 0)
         except (TypeError, ValueError):
@@ -742,6 +761,22 @@ def _normalize_list(value: Any) -> list[str]:
         seen.add(key)
         results.append(normalized)
     return results
+
+
+def _scope_item_matches_target_company(value: str, *, target_company: str) -> bool:
+    candidate = " ".join(str(value or "").split()).strip()
+    target = " ".join(str(target_company or "").split()).strip()
+    if not candidate or not target:
+        return False
+    candidate_key = normalize_company_key(candidate)
+    target_key = normalize_company_key(target)
+    if candidate_key and target_key and candidate_key == target_key:
+        return True
+    match = re.search(r"linkedin\.com/company/([^/?#]+)", candidate, flags=re.IGNORECASE)
+    if not match:
+        return False
+    slug_key = normalize_company_key(str(match.group(1) or ""))
+    return bool(slug_key and target_key and slug_key == target_key)
 
 
 def _coerce_bool(payload: dict[str, Any], *keys: str) -> bool:

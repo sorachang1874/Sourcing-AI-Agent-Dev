@@ -16,6 +16,7 @@ from .query_signal_knowledge import (
     match_scope_signals,
     match_thematic_signals,
     resolve_target_company_alias,
+    role_bucket_matched_terms,
     role_buckets_from_text,
 )
 from .semantic_intent import compile_semantic_brief
@@ -80,12 +81,16 @@ _STRUCTURED_REQUEST_SIGNAL_FIELDS = {
 _INTENT_AXIS_EXECUTION_PREFERENCE_KEYS = {
     "acquisition_strategy_override",
     "use_company_employees_lane",
+    "allow_stage1_web_seed_fallback",
+    "allow_public_web_seed_fallback",
     "keyword_priority_only",
     "former_keyword_queries_only",
     "large_org_keyword_probe_mode",
     "force_fresh_run",
     "provider_people_search_query_strategy",
     "provider_people_search_max_queries",
+    "provider_people_search_pages",
+    "provider_people_search_scale_chunk_pages",
     "reuse_existing_roster",
     "run_former_search_seed",
     "runtime_tuning_profile",
@@ -116,6 +121,9 @@ _DIRECTIONAL_QUERY_HINT_TERMS = {
 }
 
 _LEXICAL_QUERY_SIGNAL_ALIASES = (
+    ("agent", "Agent"),
+    ("agentic", "Agent"),
+    ("智能体", "Agent"),
     ("多模态", "Multimodal"),
     ("预训练", "Pre-train"),
     ("后训练", "Post-train"),
@@ -151,9 +159,11 @@ _DEFAULT_TECHNICAL_POPULATION_CATEGORIES = ["researcher", "engineer"]
 _GENERIC_EMPLOYMENT_POPULATION_CATEGORIES = {"employee", "former_employee"}
 _RESEARCH_DIRECTION_DEFAULT_THEMATIC_LABELS = {
     "Coding",
+    "Agent",
     "Math",
     "Text",
     "Audio",
+    "Infra",
     "Vision",
     "Multimodal",
     "Reasoning",
@@ -213,6 +223,25 @@ def _ascii_scope_like_terms(text: str) -> list[str]:
         text,
     ):
         normalized = " ".join(str(match.group(0) or "").split()).strip()
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        extracted.append(normalized)
+    return extracted
+
+
+def _ascii_terms_with_explicit_chinese_scope_suffix(text: str) -> list[str]:
+    extracted: list[str] = []
+    seen: set[str] = set()
+    suffix_pattern = r"(?:组|团队|小组|方向|项目|产品|模型)"
+    for match in re.finditer(
+        rf"(?<![A-Za-z0-9])([A-Z][A-Za-z0-9&._/-]{{1,30}}(?:\s+[A-Z][A-Za-z0-9&._/-]{{1,30}}){{0,2}})\s*{suffix_pattern}",
+        text,
+    ):
+        normalized = " ".join(str(match.group(1) or "").split()).strip()
         if not normalized:
             continue
         key = normalized.lower()
@@ -394,6 +423,12 @@ def extract_query_signal_terms(raw_text: str, *, target_company: str) -> dict[st
         for term in _expand_parenthetical_signal_terms(str(match or "")):
             _add_keyword(term)
 
+    for token in _ascii_terms_with_explicit_chinese_scope_suffix(text):
+        if _looks_like_explicit_scope_signal(token):
+            _add_organization(token)
+        else:
+            _add_keyword(token)
+
     for token in re.findall(r"\b[A-Z]{2,8}\b", text):
         _add_keyword(token)
     for token in re.findall(r"\b[A-Z][A-Za-z0-9&._/-]{2,30}(?:\s+[A-Z][A-Za-z0-9&._/-]{2,30})?\b", text):
@@ -510,7 +545,7 @@ def _prefer_hard_facet_keyword_labels(
             if normalize_requested_facet(item)
         ]
         matched_facet = next((item for item in facet_labels if item in active_facets), "")
-        if matched_facet:
+        if matched_facet and " ".join(replacement.lower().split()) == matched_facet:
             replacement = matched_facet
         key = " ".join(replacement.lower().split())
         if not key or key in seen:
@@ -761,7 +796,7 @@ def expand_request_intent_axes_patch(
     if confirmed_company_scope:
         execution_preferences["confirmed_company_scope"] = confirmed_company_scope
 
-    for axis_name in ("acquisition_lane_policy", "fallback_policy"):
+    for axis_name in ("acquisition_lane_policy", "fallback_policy", "execution_preferences"):
         axis_payload = coerce_intent_axis_mapping(axes.get(axis_name))
         for key in _INTENT_AXIS_EXECUTION_PREFERENCE_KEYS:
             if key not in axis_payload:
@@ -878,7 +913,12 @@ def apply_high_confidence_request_inference(
                 target_company=target_company,
             )
 
-    role_buckets = _extract_role_buckets_from_text(raw_text)
+    role_buckets = _drop_infra_systems_role_bucket_for_thematic_infra(
+        raw_text=raw_text,
+        keywords=merge_unique_request_string_values(updated.get("keywords")),
+        must_have_keywords=merge_unique_request_string_values(updated.get("must_have_keywords")),
+        role_buckets=_extract_role_buckets_from_text(raw_text),
+    )
     if role_buckets:
         updated["must_have_primary_role_buckets"] = merge_unique_request_string_values(
             updated.get("must_have_primary_role_buckets"),
@@ -898,6 +938,54 @@ def _matched_scope_signal_rules(normalized_text: str) -> list[dict[str, Any]]:
 
 def _extract_role_buckets_from_text(raw_text: str) -> list[str]:
     return role_buckets_from_text(raw_text)
+
+
+def _infra_theme_should_not_force_role_bucket(
+    *,
+    raw_text: str,
+    keywords: list[str],
+    must_have_keywords: list[str],
+    role_buckets: list[str],
+) -> bool:
+    normalized_role_buckets = {
+        " ".join(str(item or "").lower().replace("-", "_").split()).strip()
+        for item in list(role_buckets or [])
+        if str(item or "").strip()
+    }
+    if "infra_systems" not in normalized_role_buckets:
+        return False
+    keyword_labels = merge_unique_request_string_values(keywords, must_have_keywords)
+    has_infra_theme = any(
+        str(lookup_thematic_signal(item).get("canonical_label") or "").strip() == "Infra"
+        for item in keyword_labels
+    )
+    normalized_text = " ".join(str(raw_text or "").lower().split())
+    has_directional_hint = any(token in normalized_text for token in _DIRECTIONAL_QUERY_HINT_TERMS)
+    if not (has_infra_theme or has_directional_hint):
+        return False
+    return not bool(role_bucket_matched_terms(raw_text, "infra_systems"))
+
+
+def _drop_infra_systems_role_bucket_for_thematic_infra(
+    *,
+    raw_text: str,
+    keywords: list[str],
+    must_have_keywords: list[str],
+    role_buckets: list[str],
+) -> list[str]:
+    normalized_role_buckets = merge_unique_request_string_values(role_buckets)
+    if not _infra_theme_should_not_force_role_bucket(
+        raw_text=raw_text,
+        keywords=keywords,
+        must_have_keywords=must_have_keywords,
+        role_buckets=normalized_role_buckets,
+    ):
+        return normalized_role_buckets
+    return [
+        item
+        for item in normalized_role_buckets
+        if " ".join(str(item or "").lower().replace("-", "_").split()).strip() != "infra_systems"
+    ]
 
 
 def _merge_scope_disambiguation_payloads(
@@ -1040,6 +1128,8 @@ def _normalize_default_technical_population_categories(
         for item in list(categories or [])
         if str(item or "").strip()
     ]
+    if bool(dict(request.execution_preferences or {}).get("disable_default_technical_population_categories")):
+        return categories
     category_set = set(normalized_categories)
     if "investor" in category_set or category_set == {"former_employee"}:
         return categories
@@ -1211,6 +1301,8 @@ def build_request_intent_axes_payload(
         "force_fresh_run": execution_preferences.get("force_fresh_run"),
         "provider_people_search_query_strategy": str(execution_preferences.get("provider_people_search_query_strategy") or "").strip(),
         "provider_people_search_max_queries": execution_preferences.get("provider_people_search_max_queries"),
+        "provider_people_search_pages": execution_preferences.get("provider_people_search_pages"),
+        "provider_people_search_scale_chunk_pages": execution_preferences.get("provider_people_search_scale_chunk_pages"),
         "reuse_existing_roster": execution_preferences.get("reuse_existing_roster"),
         "run_former_search_seed": execution_preferences.get("run_former_search_seed"),
         "runtime_tuning_profile": str(execution_preferences.get("runtime_tuning_profile") or "").strip(),
@@ -1273,6 +1365,12 @@ def resolve_request_intent_view(
         for item in [str(normalized.raw_user_request or "").strip(), str(normalized.query or "").strip()]
         if item
     ).strip()
+    scope_signal_matches = match_scope_signals(raw_signal_text.lower())
+    scope_signal_organization_keywords: list[str] = []
+    scope_signal_keyword_labels: list[str] = []
+    for match in scope_signal_matches:
+        scope_signal_organization_keywords.extend(list(dict(match).get("organization_keywords") or []))
+        scope_signal_keyword_labels.extend(list(dict(match).get("keyword_labels") or []))
     categories = merge_unique_request_string_values(
         population_boundary.get("categories") or fallback_categories or normalized.categories
     )
@@ -1281,10 +1379,12 @@ def resolve_request_intent_view(
     )
     organization_keywords = merge_unique_request_string_values(
         scope_boundary.get("organization_keywords") or normalized.organization_keywords,
+        scope_signal_organization_keywords,
         target_company=target_company,
     )
     keywords = merge_unique_request_string_values(
         thematic_constraints.get("keywords") or normalized.keywords,
+        scope_signal_keyword_labels,
         target_company=target_company,
     )
     canonical_thematic_keywords = _canonical_thematic_request_keywords(
@@ -1317,6 +1417,13 @@ def resolve_request_intent_view(
         thematic_constraints.get("must_have_primary_role_buckets") or normalized.must_have_primary_role_buckets,
         target_company=target_company,
     )
+    if raw_signal_text:
+        must_have_primary_role_buckets = _drop_infra_systems_role_bucket_for_thematic_infra(
+            raw_text=raw_signal_text,
+            keywords=keywords,
+            must_have_keywords=must_have_keywords,
+            role_buckets=must_have_primary_role_buckets,
+        )
     categories = _normalize_default_technical_population_categories(
         request=normalized,
         categories=categories,
@@ -1375,6 +1482,11 @@ def resolve_request_intent_view(
             or {}
         ),
     )
+    requested_population_boundary = dict(
+        semantic_brief.get("requested_population_boundary")
+        or dict(semantic_brief.get("population") or {}).get("requested_population_boundary")
+        or {}
+    )
     return {
         "target_company": target_company,
         "categories": categories,
@@ -1390,6 +1502,7 @@ def resolve_request_intent_view(
         "fallback_policy": fallback_policy,
         "execution_preferences": execution_preferences,
         "semantic_brief": semantic_brief,
+        "requested_population_boundary": requested_population_boundary,
         "intent_axes": axes,
     }
 
@@ -1428,6 +1541,9 @@ def build_effective_request_payload(
     effective_payload["scope_disambiguation"] = dict(resolved_intent_view.get("scope_disambiguation") or {})
     effective_payload["execution_preferences"] = dict(resolved_intent_view.get("execution_preferences") or {})
     effective_payload["semantic_brief"] = dict(resolved_intent_view.get("semantic_brief") or {})
+    effective_payload["requested_population_boundary"] = dict(
+        resolved_intent_view.get("requested_population_boundary") or {}
+    )
     effective_payload["intent_axes"] = dict(resolved_intent_view.get("intent_axes") or {})
     return effective_payload
 

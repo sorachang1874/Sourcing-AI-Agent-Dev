@@ -62,6 +62,9 @@ def normalize_former_member_search_contract(
                 max(1, int(min_expected_results or 1)),
             ),
             "former_member_profile_search_contract": "default_on",
+            "former_broad_past_company_only": bool(
+                normalized_policy.get("former_broad_past_company_only")
+            ),
         },
         "search_channel_order": ["harvest_profile_search"],
         "provider_search_only": True,

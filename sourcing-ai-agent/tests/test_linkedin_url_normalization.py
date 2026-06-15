@@ -6,8 +6,7 @@ from sourcing_agent.linkedin_url_normalization import (
 
 def test_normalize_linkedin_profile_url_key_matches_existing_contract() -> None:
     assert (
-        normalize_linkedin_profile_url_key("linkedin.com/in/ALICE-EXAMPLE//")
-        == "https://linkedin.com/in/alice-example"
+        normalize_linkedin_profile_url_key("linkedin.com/in/ALICE-EXAMPLE//") == "https://linkedin.com/in/alice-example"
     )
     assert (
         normalize_linkedin_profile_url_key("https://www.linkedin.com/in/Alice-Example/?trk=public_profile")

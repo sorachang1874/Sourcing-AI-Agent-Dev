@@ -276,8 +276,7 @@ def _evaluate_link_signal(link: dict[str, Any], *, candidate: dict[str, Any], ar
         identity_match_score=_coerce_float(link.get("identity_match_score")),
         confidence_label=str(link.get("confidence_label") or ""),
         confidence_score=_coerce_float(link.get("score")),
-        publishable=identity_label in TRUSTED_IDENTITY_LABELS
-        and not public_web_link_shape_warnings(entry_type, url),
+        publishable=identity_label in TRUSTED_IDENTITY_LABELS and not public_web_link_shape_warnings(entry_type, url),
         promotion_status="",
         suppression_reason="",
         evidence_present=bool(str(link.get("snippet") or link.get("title") or "").strip()),

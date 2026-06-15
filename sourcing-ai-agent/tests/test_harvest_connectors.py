@@ -1,14 +1,17 @@
+import base64
 import json
 import os
 import tempfile
+import threading
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha1
 from pathlib import Path
 from typing import Any
 from unittest.mock import call, patch
 from urllib import parse as urlparse
 
-from sourcing_agent.settings import HarvestActorSettings
 from sourcing_agent.connectors import (
     CompanyIdentity,
     CompanyRosterSnapshot,
@@ -16,26 +19,41 @@ from sourcing_agent.connectors import (
     build_candidates_from_roster,
 )
 from sourcing_agent.domain import Candidate
-from sourcing_agent.enrichment import _classify_profile_membership, _merge_profile_into_candidate, _names_match, _profile_matches_candidate
+from sourcing_agent.enrichment import (
+    _classify_profile_membership,
+    _merge_profile_into_candidate,
+    _names_match,
+    _profile_matches_candidate,
+)
 from sourcing_agent.harvest_connectors import (
     HarvestCompanyEmployeesConnector,
     HarvestProfileConnector,
     HarvestProfileSearchConnector,
-    _get_harvest_dataset_items,
+    HarvestRetryableRequestError,
     _apply_harvest_search_filters,
+    _get_harvest_actor_run,
+    _get_harvest_dataset_items,
+    _harvest_json_request,
     _load_cached_harvest_payload,
     _persist_shared_harvest_payload,
     _profile_scraper_mode,
+    _recommended_harvest_company_timeout_seconds,
     _recommended_harvest_profile_charge_cap_usd,
     _recommended_harvest_profile_timeout_seconds,
-    _recommended_harvest_company_timeout_seconds,
+    _run_harvest_actor_via_async_dataset,
     _runtime_dir_from_path,
-    parse_harvest_company_employee_run_log,
+    _submit_harvest_actor_run,
     parse_harvest_company_employee_rows,
+    parse_harvest_company_employee_run_log,
     parse_harvest_profile_payload,
     parse_harvest_search_rows,
 )
 from sourcing_agent.model_provider import DeterministicModelClient
+from sourcing_agent.runtime_environment import LiveProviderAccessError
+from sourcing_agent.scripted_provider_scenario import load_scripted_provider_invocations
+from sourcing_agent.settings import HarvestActorSettings
+from tests.fake_apify_provider import FakeApifyProvider
+from tests.fake_provider_http import FakeProviderHTTPServer
 
 
 class _AliasJudgingModelClient(DeterministicModelClient):
@@ -55,6 +73,25 @@ class _AliasJudgingModelClient(DeterministicModelClient):
 
 
 class HarvestConnectorTest(unittest.TestCase):
+    def _openai_agent_streaming_scenario_path(self) -> Path:
+        return (
+            Path(__file__).resolve().parents[1]
+            / "configs"
+            / "scripted"
+            / "openai_agent_scoped_delta_streaming.json"
+        )
+
+    def _openai_chatgpt_streaming_scenario_path(self) -> Path:
+        return (
+            Path(__file__).resolve().parents[1]
+            / "configs"
+            / "scripted"
+            / "openai_chatgpt_scoped_delta_streaming.json"
+        )
+
+    def _lovable_live_roster_scenario_path(self) -> Path:
+        return Path(__file__).resolve().parents[1] / "configs" / "scripted" / "lovable_live_roster.json"
+
     def test_runtime_dir_from_path_prefers_configured_nested_test_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_runtime = Path(tempdir) / "runtime"
@@ -63,7 +100,26 @@ class HarvestConnectorTest(unittest.TestCase):
             snapshot_dir.mkdir(parents=True, exist_ok=True)
 
             with patch.dict("os.environ", {"SOURCING_RUNTIME_DIR": str(isolated_runtime)}):
-                self.assertEqual(_runtime_dir_from_path(snapshot_dir), isolated_runtime.resolve())
+                self.assertEqual(_runtime_dir_from_path(snapshot_dir).resolve(), isolated_runtime.resolve())
+
+    def test_runtime_dir_from_path_prefers_nested_test_runtime_over_outer_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_runtime = Path(tempdir) / "runtime"
+            isolated_runtime = repo_runtime / "test_env" / "scripted_case"
+            snapshot_dir = isolated_runtime / "company_assets" / "openai" / "snap-1"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+            with patch.dict("os.environ", {"SOURCING_RUNTIME_DIR": str(repo_runtime)}):
+                self.assertEqual(_runtime_dir_from_path(snapshot_dir).resolve(), isolated_runtime.resolve())
+
+    def test_runtime_dir_from_path_prefers_nested_test_runtime_without_env(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            isolated_runtime = Path(tempdir) / "runtime" / "test_env" / "scripted_case"
+            snapshot_dir = isolated_runtime / "company_assets" / "openai" / "snap-1"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+            with patch.dict("os.environ", {}, clear=True):
+                self.assertEqual(_runtime_dir_from_path(snapshot_dir).resolve(), isolated_runtime.resolve())
 
     def test_canonical_company_key_for_identity_uses_registry_aliases(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -713,6 +769,12 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(rows[0]["page"], 3)
         self.assertFalse(rows[0]["is_headless"])
 
+        identifier_only_rows = parse_harvest_company_employee_rows(
+            [{"fullName": "Ada Lovelace", "publicIdentifier": "ada-lovelace"}]
+        )
+        self.assertEqual(identifier_only_rows[0]["linkedin_url"], "https://www.linkedin.com/in/ada-lovelace/")
+        self.assertEqual(identifier_only_rows[0]["public_identifier"], "ada-lovelace")
+
     def test_profile_scraper_mode_uses_current_actor_enum(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
         self.assertEqual(_profile_scraper_mode(settings), "Profile details no email ($4 per 1k)")
@@ -834,6 +896,230 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(capture["payload"]["takePages"], 100)
         self.assertEqual(capture["payload"]["maxItems"], 2500)
         self.assertEqual(capture["max_paid_items"], 2500)
+
+    def test_harvest_profile_search_serializes_duplicate_payload_dispatch(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short", max_paid_items=25)
+        connector = HarvestProfileSearchConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            discovery_dir = Path(tempdir)
+            release_first_call = threading.Event()
+            first_call_started = threading.Event()
+
+            def _fake_run(_actor_settings, _payload, **_kwargs):
+                first_call_started.set()
+                release_first_call.wait(timeout=5)
+                return [
+                    {
+                        "firstName": "Alex",
+                        "lastName": "Agent",
+                        "linkedinUrl": "https://www.linkedin.com/in/alex-agent/",
+                        "_meta": {
+                            "pagination": {
+                                "totalElements": 1,
+                                "totalPages": 1,
+                                "pageNumber": 1,
+                                "pageSize": 25,
+                            }
+                        },
+                    }
+                ]
+
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run) as run_mock:
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    first_future = executor.submit(
+                        connector.search_profiles,
+                        query_text="",
+                        filter_hints={"past_companies": ["https://www.linkedin.com/company/lovable/"]},
+                        employment_status="former",
+                        discovery_dir=discovery_dir,
+                        limit=173,
+                        pages=7,
+                        auto_probe=False,
+                        allow_shared_provider_cache=False,
+                    )
+                    self.assertTrue(first_call_started.wait(timeout=5))
+                    second_future = executor.submit(
+                        connector.search_profiles,
+                        query_text="",
+                        filter_hints={"past_companies": ["https://www.linkedin.com/company/lovable/"]},
+                        employment_status="former",
+                        discovery_dir=discovery_dir,
+                        limit=173,
+                        pages=7,
+                        auto_probe=False,
+                        allow_shared_provider_cache=False,
+                    )
+                    release_first_call.set()
+                    first_result = first_future.result(timeout=5)
+                    second_result = second_future.result(timeout=5)
+
+            self.assertEqual(run_mock.call_count, 1)
+            self.assertEqual(first_result["pagination"]["total_elements"], 1)
+            self.assertEqual(second_result["pagination"]["total_elements"], 1)
+            self.assertEqual(first_result["rows"][0]["full_name"], "Alex Agent")
+
+    def test_harvest_profile_search_waits_for_dispatch_lock_raw_cache(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short", max_paid_items=25)
+        connector = HarvestProfileSearchConnector(settings)
+        body = [
+            {
+                "firstName": "Recovered",
+                "lastName": "Agent",
+                "linkedinUrl": "https://www.linkedin.com/in/recovered-agent/",
+                "_meta": {
+                    "pagination": {
+                        "totalElements": 1,
+                        "totalPages": 1,
+                        "pageNumber": 1,
+                        "pageSize": 25,
+                    }
+                },
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tempdir:
+            discovery_dir = Path(tempdir)
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", return_value=body):
+                primed = connector.search_profiles(
+                    query_text="",
+                    filter_hints={"past_companies": ["https://www.linkedin.com/company/openai/"]},
+                    employment_status="former",
+                    discovery_dir=discovery_dir,
+                    limit=78,
+                    pages=4,
+                    auto_probe=False,
+                    allow_shared_provider_cache=False,
+                )
+            raw_path = Path(str(primed["raw_path"]))
+            lock_path = raw_path.with_name(f"{raw_path.stem}.dispatch.lock")
+            raw_path.unlink()
+            lock_path.write_text(
+                json.dumps(
+                    {
+                        "payload_key": raw_path.stem,
+                        "created_epoch_seconds": time.time(),
+                        "pid": 999999,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def _publish_raw_cache() -> None:
+                time.sleep(0.05)
+                raw_path.write_text(json.dumps(body), encoding="utf-8")
+
+            publisher = threading.Thread(target=_publish_raw_cache)
+            publisher.start()
+            try:
+                with patch("sourcing_agent.harvest_connectors._run_harvest_actor") as run_mock:
+                    result = connector.search_profiles(
+                        query_text="",
+                        filter_hints={"past_companies": ["https://www.linkedin.com/company/openai/"]},
+                        employment_status="former",
+                        discovery_dir=discovery_dir,
+                        limit=78,
+                        pages=4,
+                        auto_probe=False,
+                        allow_shared_provider_cache=False,
+                    )
+            finally:
+                publisher.join(timeout=5)
+                lock_path.unlink(missing_ok=True)
+
+        run_mock.assert_not_called()
+        self.assertEqual(result["pagination"]["total_elements"], 1)
+        self.assertEqual(result["rows"][0]["full_name"], "Recovered Agent")
+
+    def test_harvest_profile_search_retries_transient_zero_result(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short", max_paid_items=25)
+        connector = HarvestProfileSearchConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            bodies = [
+                [],
+                [
+                    {
+                        "firstName": "Gemini",
+                        "lastName": "Researcher",
+                        "linkedinUrl": "https://www.linkedin.com/in/gemini-researcher/",
+                        "_meta": {
+                            "pagination": {
+                                "totalElements": 1,
+                                "totalPages": 1,
+                                "pageNumber": 1,
+                                "pageSize": 25,
+                            }
+                        },
+                    }
+                ],
+            ]
+
+            def _fake_run(_actor_settings, _payload, **_kwargs):
+                return bodies.pop(0)
+
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run) as run_mock:
+                result = connector.search_profiles(
+                    query_text="Gemini",
+                    filter_hints={"current_companies": ["https://www.linkedin.com/company/google/"]},
+                    employment_status="current",
+                    discovery_dir=Path(tempdir),
+                    limit=25,
+                    pages=1,
+                    auto_probe=False,
+                    zero_result_retry_attempts=2,
+                )
+
+        self.assertEqual(run_mock.call_count, 2)
+        self.assertEqual(result["rows"][0]["full_name"], "Gemini Researcher")
+        self.assertEqual(result["zero_result_retry"]["retry_count"], 1)
+        self.assertFalse(result["zero_result_retry"]["exhausted"])
+
+    def test_harvest_profile_search_ignores_cached_zero_result_when_retrying_live(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short", max_paid_items=25)
+        connector = HarvestProfileSearchConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            first_body = []
+            second_body = [
+                {
+                    "firstName": "Recovered",
+                    "lastName": "Lead",
+                    "linkedinUrl": "https://www.linkedin.com/in/recovered-lead/",
+                    "_meta": {
+                        "pagination": {
+                            "totalElements": 1,
+                            "totalPages": 1,
+                            "pageNumber": 1,
+                            "pageSize": 25,
+                        }
+                    },
+                }
+            ]
+
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", return_value=first_body):
+                cached_empty = connector.search_profiles(
+                    query_text="Gemini",
+                    filter_hints={"current_companies": ["https://www.linkedin.com/company/google/"]},
+                    employment_status="current",
+                    discovery_dir=Path(tempdir),
+                    limit=25,
+                    pages=1,
+                    auto_probe=False,
+                    zero_result_retry_attempts=0,
+                )
+            self.assertEqual(cached_empty["rows"], [])
+
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", return_value=second_body) as run_mock:
+                recovered = connector.search_profiles(
+                    query_text="Gemini",
+                    filter_hints={"current_companies": ["https://www.linkedin.com/company/google/"]},
+                    employment_status="current",
+                    discovery_dir=Path(tempdir),
+                    limit=25,
+                    pages=1,
+                    auto_probe=False,
+                    zero_result_retry_attempts=1,
+                )
+
+        self.assertEqual(run_mock.call_count, 1)
+        self.assertEqual(recovered["rows"][0]["full_name"], "Recovered Lead")
 
     def test_harvest_profile_search_reuses_matching_live_test_asset_without_token(self) -> None:
         settings = HarvestActorSettings(enabled=False, api_token="", actor_id="actor", default_mode="short", max_paid_items=50)
@@ -1088,6 +1374,46 @@ class HarvestConnectorTest(unittest.TestCase):
                     [6, 5, 1],
                 )
 
+    def test_harvest_profile_connector_mixed_success_retries_only_unresolved_urls(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        requested_urls = [f"https://www.linkedin.com/in/mixed-success-{index}/" for index in range(12)]
+        initially_successful_urls = set(requested_urls[:6])
+        with tempfile.TemporaryDirectory() as tempdir:
+            requests_seen: list[list[str]] = []
+
+            def _profile_payload(url: str) -> dict[str, Any]:
+                slug = url.rstrip("/").rsplit("/", 1)[-1]
+                return {
+                    "fullName": slug.replace("-", " ").title(),
+                    "linkedinUrl": url,
+                    "publicIdentifier": slug,
+                    "originalQuery": {"url": url},
+                }
+
+            def _fake_run(_settings, payload, **kwargs):
+                urls = list(payload.get("urls") or [])
+                requests_seen.append(urls)
+                if len(urls) == len(requested_urls):
+                    return [_profile_payload(url) for url in requested_urls[:6]]
+                return [_profile_payload(url) for url in urls]
+
+            with patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "simulate"}, clear=False), patch(
+                "sourcing_agent.harvest_connectors._run_harvest_actor",
+                side_effect=_fake_run,
+            ):
+                result = connector.fetch_profiles_by_urls(
+                    requested_urls,
+                    Path(tempdir),
+                    use_cache=False,
+                )
+
+        self.assertEqual(set(result), set(requested_urls))
+        self.assertEqual([len(urls) for urls in requests_seen], [12, 5, 1])
+        retried_urls = {url for urls in requests_seen[1:] for url in urls}
+        self.assertFalse(initially_successful_urls & retried_urls)
+        self.assertEqual(retried_urls, set(requested_urls[6:]))
+
     def test_harvest_profile_connector_does_not_fan_out_large_unresolved_batches_into_single_requests(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
         connector = HarvestProfileConnector(settings)
@@ -1277,6 +1603,209 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(snapshot.page_summaries[0]["entry_count"], 1)
         self.assertEqual(snapshot.page_summaries[1]["entry_count"], 1)
 
+    def test_harvest_company_employees_probe_expands_default_budget_for_full_roster(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+            default_mode="short",
+            max_total_charge_usd=0.2,
+            max_paid_items=25,
+        )
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Mistral AI",
+            canonical_name="Mistral AI",
+            company_key="mistralai",
+            linkedin_slug="mistralai",
+            linkedin_company_url="https://www.linkedin.com/company/mistralai/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "mistralai" / "snap-expand"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            capture = {}
+
+            def _fake_run(actor_settings, payload, **kwargs):
+                capture["payload"] = dict(payload)
+                capture["max_paid_items"] = actor_settings.max_paid_items
+                return [
+                    {
+                        "firstName": "Ada",
+                        "lastName": "Example",
+                        "linkedinUrl": "https://www.linkedin.com/in/ada-example/",
+                        "publicIdentifier": "ada-example",
+                    }
+                ]
+
+            with patch("sourcing_agent.harvest_connectors._load_cached_harvest_payload", return_value=(None, None, None)), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                return_value={"data": {"id": "run-probe", "defaultDatasetId": "dataset-probe", "status": "RUNNING"}},
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run",
+                return_value={"data": {"id": "run-probe", "defaultDatasetId": "dataset-probe", "status": "SUCCEEDED"}},
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run_log",
+                return_value=(
+                    '2026-04-26T08:34:12.531Z Found 1055 profiles total for input '
+                    '{"currentCompanies":["https://www.linkedin.com/company/mistralai/"]}\n'
+                ),
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_dataset_items",
+                return_value=[{"firstName": "Probe", "lastName": "Only"}],
+            ), patch(
+                "sourcing_agent.harvest_connectors._run_harvest_actor",
+                side_effect=_fake_run,
+            ), patch(
+                "sourcing_agent.harvest_connectors.time.sleep",
+                return_value=None,
+            ):
+                snapshot = connector.fetch_company_roster(identity, snapshot_dir, max_pages=20, page_limit=25)
+
+            summary = json.loads(
+                (snapshot_dir / "harvest_company_employees" / "harvest_company_employees_summary.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(capture["payload"]["takePages"], 43)
+        self.assertEqual(capture["payload"]["maxItems"], 1055)
+        self.assertGreaterEqual(capture["max_paid_items"], 1055)
+        self.assertEqual(snapshot.stop_reason, "completed")
+        self.assertFalse(summary["partial_result"])
+        self.assertEqual(summary["probe"]["requested_items_before_probe"], 500)
+        self.assertTrue(summary["probe"]["expanded_after_probe"])
+        self.assertTrue(summary["probe"]["requested_limit_would_truncate"])
+        self.assertEqual(summary["effective_item_count"], 1055)
+
+    def test_harvest_company_employees_probe_marks_provider_cap_partial(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+            default_mode="short",
+            max_total_charge_usd=0.2,
+            max_paid_items=25,
+        )
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="LargeCo",
+            canonical_name="LargeCo",
+            company_key="largeco",
+            linkedin_slug="largeco",
+            linkedin_company_url="https://www.linkedin.com/company/largeco/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "largeco" / "snap-cap"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            capture = {}
+
+            def _fake_run(actor_settings, payload, **kwargs):
+                capture["payload"] = dict(payload)
+                return [
+                    {
+                        "firstName": "Cap",
+                        "lastName": "Example",
+                        "linkedinUrl": "https://www.linkedin.com/in/cap-example/",
+                        "publicIdentifier": "cap-example",
+                    }
+                ]
+
+            with patch("sourcing_agent.harvest_connectors._load_cached_harvest_payload", return_value=(None, None, None)), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                return_value={"data": {"id": "run-probe", "defaultDatasetId": "dataset-probe", "status": "RUNNING"}},
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run",
+                return_value={"data": {"id": "run-probe", "defaultDatasetId": "dataset-probe", "status": "SUCCEEDED"}},
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run_log",
+                return_value=(
+                    '2026-04-26T08:34:12.531Z Found 3001 profiles total for input '
+                    '{"currentCompanies":["https://www.linkedin.com/company/largeco/"]}\n'
+                    "2026-04-26T08:34:12.532Z The search results are limited to 2500 items "
+                    "(out of total 3001) because LinkedIn does not allow to scrape more for one query.\n"
+                ),
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_dataset_items",
+                return_value=[{"firstName": "Probe", "lastName": "Only"}],
+            ), patch(
+                "sourcing_agent.harvest_connectors._run_harvest_actor",
+                side_effect=_fake_run,
+            ), patch(
+                "sourcing_agent.harvest_connectors.time.sleep",
+                return_value=None,
+            ):
+                snapshot = connector.fetch_company_roster(identity, snapshot_dir, max_pages=20, page_limit=25)
+
+            summary = json.loads(
+                (snapshot_dir / "harvest_company_employees" / "harvest_company_employees_summary.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(capture["payload"]["takePages"], 100)
+        self.assertEqual(capture["payload"]["maxItems"], 2500)
+        self.assertEqual(snapshot.stop_reason, "provider_cap_reached")
+        self.assertTrue(summary["partial_result"])
+        self.assertTrue(summary["provider_cap_hit"])
+        self.assertEqual(summary["effective_item_count"], 2500)
+
+    def test_harvest_company_checkpoint_probe_expansion_reaches_async_worker_payload(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+            default_mode="short",
+            max_total_charge_usd=0.2,
+            max_paid_items=25,
+        )
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Mistral AI",
+            canonical_name="Mistral AI",
+            company_key="mistralai",
+            linkedin_slug="mistralai",
+            linkedin_company_url="https://www.linkedin.com/company/mistralai/",
+        )
+        submitted_payloads: list[dict[str, object]] = []
+
+        def _submit(_settings, payload, **_kwargs):
+            submitted_payloads.append(dict(payload))
+            if len(submitted_payloads) == 1:
+                return {"data": {"id": "run-probe", "defaultDatasetId": "dataset-probe", "status": "RUNNING"}}
+            return {"data": {"id": "run-full", "defaultDatasetId": "dataset-full", "status": "RUNNING"}}
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "mistralai" / "snap-worker"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with patch("sourcing_agent.harvest_connectors._load_cached_harvest_payload", return_value=(None, None, None)), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                side_effect=_submit,
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run",
+                return_value={"data": {"id": "run-probe", "defaultDatasetId": "dataset-probe", "status": "SUCCEEDED"}},
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run_log",
+                return_value=(
+                    '2026-04-26T08:34:12.531Z Found 1055 profiles total for input '
+                    '{"currentCompanies":["https://www.linkedin.com/company/mistralai/"]}\n'
+                ),
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_dataset_items",
+                return_value=[{"firstName": "Probe", "lastName": "Only"}],
+            ), patch(
+                "sourcing_agent.harvest_connectors.time.sleep",
+                return_value=None,
+            ):
+                result = connector.execute_with_checkpoint(identity, snapshot_dir, max_pages=20, page_limit=25)
+
+        self.assertTrue(result.pending)
+        self.assertEqual(len(submitted_payloads), 2)
+        self.assertEqual(submitted_payloads[1]["takePages"], 43)
+        self.assertEqual(submitted_payloads[1]["maxItems"], 1055)
+        request_context = dict(result.checkpoint.get("request_context") or {})
+        self.assertEqual(request_context["effective_max_items"], 1055)
+        self.assertEqual(request_context["probe"]["requested_items_before_probe"], 500)
+
     def test_harvest_company_employees_applies_company_filters(self) -> None:
         settings = HarvestActorSettings(
             enabled=True,
@@ -1348,12 +1877,15 @@ class HarvestConnectorTest(unittest.TestCase):
 2026-04-08T20:55:49.867Z  [WARNING]
 2026-04-08T20:55:49.868Z The search results are limited to 2500 items (out of total 4845) because LinkedIn does not allow to scrape more for one query.
 2026-04-08T20:55:49.864Z Scraped search page 1. Found 25 profiles on the page.
+2026-04-08T20:55:49.884Z Max items limit reached: 2500
 """.strip()
 
         summary = parse_harvest_company_employee_run_log(log_text)
 
         self.assertEqual(summary["estimated_total_count"], 4845)
         self.assertTrue(summary["provider_result_limited"])
+        self.assertTrue(summary["max_items_limit_reached"])
+        self.assertEqual(summary["max_items_limit"], 2500)
         self.assertEqual(summary["scraped_page_count"], 1)
 
     def test_harvest_company_probe_company_roster_query_records_probe_summary(self) -> None:
@@ -1854,6 +2386,79 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(result.checkpoint["status"], "submitted")
         self.assertEqual(result.artifacts[0].label, "run_post")
 
+    def test_harvest_profile_batch_cache_hit_preserves_remote_identifiers_from_checkpoint(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "xai" / "snap-cache-hit"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with patch(
+                "sourcing_agent.harvest_connectors._load_cached_harvest_payload",
+                return_value=([{"linkedinUrl": "https://www.linkedin.com/in/jane-doe/"}], "shared_cache", snapshot_dir / "cache.json"),
+            ), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                side_effect=AssertionError("cache hit should not submit another actor run"),
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run",
+                side_effect=AssertionError("cache hit should not poll another actor run"),
+            ):
+                result = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                    checkpoint={
+                        "run_id": "run-existing",
+                        "dataset_id": "dataset-existing",
+                        "actor_id": "actor",
+                    },
+                )
+
+        self.assertFalse(result.pending)
+        self.assertEqual(result.checkpoint["status"], "completed")
+        self.assertEqual(result.checkpoint["run_id"], "run-existing")
+        self.assertEqual(result.checkpoint["dataset_id"], "dataset-existing")
+        self.assertEqual(result.artifacts[0].metadata["run_id"], "run-existing")
+        self.assertEqual(result.artifacts[0].metadata["dataset_id"], "dataset-existing")
+
+    def test_harvest_profile_batch_completion_records_provider_io_timings(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "xai" / "snap-provider-io"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with (
+                patch(
+                    "sourcing_agent.harvest_connectors._load_cached_harvest_payload",
+                    return_value=(None, None, None),
+                ),
+                patch(
+                    "sourcing_agent.harvest_connectors._get_harvest_actor_run",
+                    return_value={
+                        "data": {
+                            "id": "run-provider-io",
+                            "defaultDatasetId": "dataset-provider-io",
+                            "status": "SUCCEEDED",
+                            "startedAt": "2026-05-04T10:00:00.000Z",
+                            "finishedAt": "2026-05-04T10:00:09.000Z",
+                        }
+                    },
+                ),
+                patch(
+                    "sourcing_agent.harvest_connectors._get_harvest_dataset_items",
+                    return_value=[{"linkedinUrl": "https://www.linkedin.com/in/jane-doe/"}],
+                ),
+            ):
+                result = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                    checkpoint={"run_id": "run-provider-io", "dataset_id": "dataset-provider-io"},
+                )
+
+        self.assertFalse(result.pending)
+        provider_timings = dict(result.checkpoint.get("provider_timings") or {})
+        self.assertEqual(provider_timings["actor_run_duration_ms"], 9000.0)
+        self.assertIn("dataset_download_duration_ms", provider_timings)
+        self.assertEqual(dict(result.artifacts[-1].metadata.get("provider_timings") or {})["actor_run_duration_ms"], 9000.0)
+
     def test_harvest_profile_batch_execute_with_checkpoint_can_simulate_without_live_request(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
         connector = HarvestProfileConnector(settings)
@@ -1971,6 +2576,7 @@ class HarvestConnectorTest(unittest.TestCase):
             with patch.dict(
                 "os.environ",
                 {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
                     "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
                     "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
                 },
@@ -1984,6 +2590,7 @@ class HarvestConnectorTest(unittest.TestCase):
                     snapshot_dir,
                     checkpoint=first.checkpoint,
                 )
+                invocations = load_scripted_provider_invocations()
 
         self.assertTrue(first.pending)
         self.assertEqual(first.checkpoint["provider_mode"], "scripted")
@@ -1993,6 +2600,1795 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(second.checkpoint["status"], "completed")
         self.assertEqual(len(second.body), 1)
         self.assertEqual(second.body[0]["publicIdentifier"], "jane-doe")
+        self.assertEqual(
+            [item.get("logical_name") for item in invocations],
+            ["harvest_profile_scraper_batch"],
+        )
+
+    def test_harvest_profile_batch_prefers_runtime_scoped_scripted_mode_over_ambient_live_env(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime" / "test_env" / "openai_agent_scripted_case"
+            snapshot_dir = runtime_dir / "company_assets" / "openai" / "snap-scripted"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            (runtime_dir / ".scripted-local-postgres.env").write_text(
+                "\n".join(
+                    [
+                        "SOURCING_CONTROL_PLANE_POSTGRES_DSN=postgresql://isolated@127.0.0.1:55432/isolated_runtime",
+                        "SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only",
+                        "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA=sourcing_scripted_openai_agent_scripted_case",
+                        "SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1",
+                        "SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory",
+                        "SOURCING_RUNTIME_ENVIRONMENT=scripted",
+                        "SOURCING_EXTERNAL_PROVIDER_MODE=scripted",
+                        "SOURCING_LIVE_PROVIDER_ACCESS_DISABLED=1",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            scenario_path = Path(tempdir) / "scripted_harvest.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "profile_batch",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "body": [
+                                        {
+                                            "linkedinUrl": "https://www.linkedin.com/in/jane-doe/",
+                                            "publicIdentifier": "jane-doe",
+                                            "item": {
+                                                "profileUrl": "https://www.linkedin.com/in/jane-doe/",
+                                                "fullName": "Jane Doe",
+                                            },
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                os.environ,
+                {
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+                    "SOURCING_RUNTIME_ENVIRONMENT": "local_dev",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                },
+                clear=True,
+            ), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                side_effect=AssertionError("runtime-scoped scripted mode should not submit live Harvest runs"),
+            ):
+                result = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                )
+
+        self.assertFalse(result.pending)
+        self.assertEqual(result.checkpoint["provider_mode"], "scripted")
+        self.assertEqual(result.checkpoint["status"], "completed")
+        self.assertEqual(len(result.body), 1)
+        self.assertEqual(result.body[0]["publicIdentifier"], "jane-doe")
+
+    def test_scripted_run_status_poll_does_not_call_live_apify(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with (
+            patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "scripted"}, clear=False),
+            patch("sourcing_agent.harvest_connectors._get_harvest_actor_run") as live_status_mock,
+        ):
+            status = connector.get_actor_run_status("scripted_run_harvest_profile_scraper_batch_abc123")
+
+        live_status_mock.assert_not_called()
+        self.assertEqual(status["status"], "SUCCEEDED")
+        self.assertTrue(status["is_terminal"])
+        self.assertEqual(status["raw"]["provider_mode"], "scripted")
+
+    def test_scripted_run_status_poll_respects_remote_ready_time(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        overrides = {
+            "provider_mode": "scripted",
+            "scripted_remote_ready_epoch_ms": 1_010_000,
+            "scripted_remote_wait_seconds": 10,
+        }
+        with (
+            patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "scripted"}, clear=False),
+            patch("sourcing_agent.harvest_connectors._get_harvest_actor_run") as live_status_mock,
+            patch("sourcing_agent.harvest_connectors.time.time", return_value=1_000.0),
+        ):
+            pending = connector.get_actor_run_status(
+                "scripted_run_harvest_profile_scraper_batch_abc123",
+                runtime_timing_overrides=overrides,
+            )
+        with (
+            patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "scripted"}, clear=False),
+            patch("sourcing_agent.harvest_connectors._get_harvest_actor_run") as second_live_status_mock,
+            patch("sourcing_agent.harvest_connectors.time.time", return_value=1_010.0),
+        ):
+            terminal = connector.get_actor_run_status(
+                "scripted_run_harvest_profile_scraper_batch_abc123",
+                runtime_timing_overrides=overrides,
+            )
+
+        live_status_mock.assert_not_called()
+        second_live_status_mock.assert_not_called()
+        self.assertEqual(pending["status"], "RUNNING")
+        self.assertFalse(pending["is_terminal"])
+        self.assertEqual(pending["finished_at"], "")
+        self.assertEqual(terminal["status"], "SUCCEEDED")
+        self.assertTrue(terminal["is_terminal"])
+        self.assertEqual(terminal["started_at"], "1970-01-01T00:16:40.000+00:00")
+        self.assertEqual(terminal["finished_at"], "1970-01-01T00:16:50.000+00:00")
+        self.assertEqual(terminal["remote_completed_at"], terminal["finished_at"])
+        self.assertEqual(terminal["raw"]["finishedAt"], terminal["finished_at"])
+        self.assertEqual(terminal["raw"]["eventCreatedAt"], terminal["finished_at"])
+
+    def test_scripted_terminal_provider_event_bypasses_pending_rounds(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "openai" / "snap-terminal"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            scenario_path = Path(tempdir) / "scripted_harvest.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "terminal_event_profile_batch",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "execute_pending_rounds": 5,
+                                    "execute_sleep_seconds": 10,
+                                    "body": [
+                                        {
+                                            "linkedinUrl": "https://www.linkedin.com/in/jane-doe/",
+                                            "publicIdentifier": "jane-doe",
+                                            "fullName": "Jane Doe",
+                                            "headline": "Agent engineer at OpenAI",
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            checkpoint = {
+                "run_id": "scripted_run_harvest_profile_scraper_batch_terminal",
+                "dataset_id": "scripted_dataset_harvest_profile_scraper_batch_terminal",
+                "status": "submitted",
+                "scripted_execute_round": 1,
+                "remote_provider_terminal_event": {"event_type": "ACTOR.RUN.SUCCEEDED"},
+                "force_scripted_terminal_fetch": True,
+            }
+            with (
+                patch.dict(
+                    "os.environ",
+                    {
+                        "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                        "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                        "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                    },
+                    clear=False,
+                ),
+                patch("sourcing_agent.harvest_connectors.time.sleep") as sleep_mock,
+            ):
+                result = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                    checkpoint=checkpoint,
+                )
+
+        sleep_mock.assert_not_called()
+        self.assertFalse(result.pending)
+        self.assertEqual(result.checkpoint["status"], "completed")
+        self.assertTrue(result.checkpoint["remote_provider_terminal_event_consumed"])
+        self.assertEqual(result.body[0]["publicIdentifier"], "jane-doe")
+
+    def test_scripted_remote_wait_after_submit_returns_pending_without_blocking_submit(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "openai" / "snap-remote-wait"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            scenario_path = Path(tempdir) / "scripted_harvest.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "remote_wait_profile_batch",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "execute_pending_rounds": 5,
+                                    "execute_sleep_seconds": 30,
+                                    "execute_sleep_position": "remote_wait",
+                                    "body": [
+                                        {
+                                            "linkedinUrl": "https://www.linkedin.com/in/jane-doe/",
+                                            "publicIdentifier": "jane-doe",
+                                            "fullName": "Jane Doe",
+                                            "headline": "Agent engineer at OpenAI",
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch.dict(
+                    "os.environ",
+                    {
+                        "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                        "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                        "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                    },
+                    clear=False,
+                ),
+                patch("sourcing_agent.harvest_connectors.time.sleep") as sleep_mock,
+                patch("sourcing_agent.harvest_connectors.time.time", return_value=1_000.0),
+            ):
+                first = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                    runtime_timing_overrides={"harvest_scripted_sleep_seconds_cap": 10},
+                )
+                second = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                    checkpoint=first.checkpoint,
+                    runtime_timing_overrides={"harvest_scripted_sleep_seconds_cap": 10},
+                )
+                terminal_checkpoint = {
+                    **first.checkpoint,
+                    "remote_provider_terminal_event": {"event_type": "ACTOR.RUN.SUCCEEDED"},
+                    "force_scripted_terminal_fetch": True,
+                }
+                completed = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                    checkpoint=terminal_checkpoint,
+                    runtime_timing_overrides={"harvest_scripted_sleep_seconds_cap": 10},
+                )
+
+        sleep_mock.assert_not_called()
+        self.assertTrue(first.pending)
+        self.assertTrue(second.pending)
+        self.assertFalse(completed.pending)
+        self.assertEqual(first.checkpoint["run_id"], second.checkpoint["run_id"])
+        self.assertEqual(first.checkpoint["dataset_id"], second.checkpoint["dataset_id"])
+        self.assertTrue(first.checkpoint["scripted_remote_wait_after_submit"])
+        self.assertEqual(first.checkpoint["scripted_remote_wait_seconds"], 10.0)
+        self.assertEqual(first.checkpoint["scripted_remote_ready_epoch_ms"], 1_010_000)
+        self.assertEqual(second.checkpoint["scripted_remote_ready_epoch_ms"], 1_010_000)
+        self.assertEqual(completed.body[0]["publicIdentifier"], "jane-doe")
+        self.assertEqual(completed.checkpoint["provider_timings"]["actor_run_duration_ms"], 10000.0)
+        self.assertEqual(
+            completed.artifacts[-2].metadata["provider_timings"]["actor_run_duration_ms"],
+            10000.0,
+        )
+
+    def test_scripted_remote_wait_seconds_is_not_clamped_by_local_sleep_cap(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "openai" / "snap-remote-wait-explicit"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            scenario_path = Path(tempdir) / "scripted_harvest.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "remote_wait_profile_batch",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "execute_sleep_seconds": 30,
+                                    "execute_sleep_position": "remote_wait",
+                                    "scripted_remote_wait_seconds": 7,
+                                    "body": [
+                                        {
+                                            "linkedinUrl": "https://www.linkedin.com/in/jane-doe/",
+                                            "publicIdentifier": "jane-doe",
+                                            "fullName": "Jane Doe",
+                                            "headline": "Agent engineer at OpenAI",
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch.dict(
+                    "os.environ",
+                    {
+                        "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                        "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                        "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                        "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0.1",
+                    },
+                    clear=False,
+                ),
+                patch("sourcing_agent.harvest_connectors.time.sleep") as sleep_mock,
+                patch("sourcing_agent.harvest_connectors.time.time", return_value=1_000.0),
+            ):
+                result = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                )
+
+        sleep_mock.assert_not_called()
+        self.assertTrue(result.pending)
+        self.assertEqual(result.checkpoint["scripted_remote_wait_seconds"], 7.0)
+        self.assertEqual(result.checkpoint["scripted_remote_ready_epoch_ms"], 1_007_000)
+
+    def test_scripted_harvest_provider_timing_overrides_are_persisted(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "openai" / "snap-scripted-provider-io"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            scenario_path = Path(tempdir) / "scripted_harvest.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "provider_io_profile_batch",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "scripted_actor_run_duration_ms": 22500,
+                                    "scripted_dataset_download_duration_ms": 4300,
+                                    "body": [
+                                        {
+                                            "linkedinUrl": "https://www.linkedin.com/in/jane-doe/",
+                                            "publicIdentifier": "jane-doe",
+                                            "fullName": "Jane Doe",
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                },
+                clear=False,
+            ):
+                result = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                )
+
+        provider_timings = dict(result.checkpoint.get("provider_timings") or {})
+        self.assertEqual(provider_timings["actor_run_duration_ms"], 22500.0)
+        self.assertEqual(provider_timings["dataset_download_duration_ms"], 4300.0)
+        dataset_artifact = next(item for item in result.artifacts if item.label == "dataset_items")
+        self.assertEqual(dataset_artifact.metadata["provider_timings"], provider_timings)
+
+    def test_scripted_sample_fixture_without_fallback_fails_when_profile_url_missing(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "openai" / "snap-scripted"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            sample_path = Path(tempdir) / "profile_pool.json"
+            sample_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "linkedinUrl": "https://www.linkedin.com/in/present/",
+                            "publicIdentifier": "present",
+                            "headline": "Present profile",
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            scenario_path = Path(tempdir) / "scripted_harvest.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "profile_batch",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "sample_body_path": str(sample_path),
+                                    "sample_fallback_generated": False,
+                                    "generated_body": {"kind": "profile_scraper_batch", "max_profiles": 1},
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                },
+                clear=False,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "missing requested profile URLs"):
+                    connector.execute_batch_with_checkpoint(
+                        ["https://www.linkedin.com/in/missing/"],
+                        snapshot_dir,
+                    )
+
+    def test_scripted_real_asset_candidate_documents_drive_profile_search_and_scraper(self) -> None:
+        search_settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")
+        profile_settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        search_connector = HarvestProfileSearchConnector(search_settings)
+        profile_connector = HarvestProfileConnector(profile_settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "google" / "snap-real"
+            profile_dir = snapshot_dir / "harvest_profiles"
+            profile_dir.mkdir(parents=True, exist_ok=True)
+            profile_url = "https://www.linkedin.com/in/google-real-vision-language/"
+            raw_profile_path = profile_dir / "real_profile.json"
+            raw_profile_path.write_text(
+                json.dumps(
+                    {
+                        "_harvest_request": {"kind": "url", "value": profile_url, "profile_url": profile_url},
+                        "item": {
+                            "linkedinUrl": profile_url,
+                            "publicIdentifier": "google-real-vision-language",
+                            "fullName": "Google Real Vision",
+                            "headline": "Vision-language researcher at Google",
+                            "experience": [{"companyName": "Google", "title": "Research Engineer"}],
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            candidate_documents_path = snapshot_dir / "candidate_documents.json"
+            candidate_documents_path.write_text(
+                json.dumps(
+                    {
+                        "candidates": [
+                            {
+                                "candidate_id": "google-real-1",
+                                "display_name": "Google Real Vision",
+                                "target_company": "Google",
+                                "employment_status": "current",
+                                "role": "Research Engineer",
+                                "focus_areas": "Vision-language models",
+                                "linkedin_url": profile_url,
+                                "metadata": {
+                                    "public_identifier": "google-real-vision-language",
+                                    "headline": "Vision-language researcher at Google",
+                                    "profile_timeline_source_path": str(raw_profile_path),
+                                    "profile_url": profile_url,
+                                },
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            scenario_path = Path(tempdir) / "scenario.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "real_search",
+                                    "match": {"logical_name": "harvest_profile_search"},
+                                    "sample_candidate_documents_path": str(candidate_documents_path),
+                                    "sample_candidate_employment_scope": "current",
+                                    "sample_candidate_contains": ["vision-language"],
+                                    "sample_fallback_generated": False,
+                                },
+                                {
+                                    "name": "real_scraper",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "sample_candidate_documents_path": str(candidate_documents_path),
+                                    "sample_candidate_contains": ["vision-language"],
+                                    "sample_fallback_generated": False,
+                                },
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            env = {
+                "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0",
+            }
+            with patch.dict("os.environ", env):
+                search_result = search_connector.search_profiles(
+                    query_text="vision-language",
+                    filter_hints={"current_companies": ["https://www.linkedin.com/company/google/"]},
+                    employment_status="current",
+                    discovery_dir=snapshot_dir / "search_seed_discovery",
+                    limit=25,
+                    pages=1,
+                    auto_probe=False,
+                )
+                profile_result = profile_connector.execute_batch_with_checkpoint([profile_url], snapshot_dir)
+
+        assert search_result is not None
+        self.assertEqual(search_result["pagination"]["total_elements"], 1)
+        self.assertEqual(search_result["rows"][0]["profile_url"], profile_url)
+        self.assertFalse(profile_result.pending)
+        self.assertEqual(len(profile_result.body), 1)
+        parsed = parse_harvest_profile_payload(profile_result.body[0])
+        self.assertEqual(parsed["requested_profile_url"], profile_url)
+        self.assertEqual(parsed["full_name"], "Google Real Vision")
+
+    def test_scripted_real_asset_candidate_documents_prefer_candidates_over_auxiliary_items(self) -> None:
+        search_settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")
+        search_connector = HarvestProfileSearchConnector(search_settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "google" / "snap-real"
+            profile_dir = snapshot_dir / "harvest_profiles"
+            profile_dir.mkdir(parents=True, exist_ok=True)
+            profile_url = "https://www.linkedin.com/in/google-real-vision-language-candidate/"
+            raw_profile_path = profile_dir / "real_profile.json"
+            raw_profile_path.write_text(
+                json.dumps(
+                    {
+                        "_harvest_request": {"kind": "url", "value": profile_url, "profile_url": profile_url},
+                        "item": {
+                            "linkedinUrl": profile_url,
+                            "publicIdentifier": "google-real-vision-language-candidate",
+                            "fullName": "Google Real Candidate",
+                            "headline": "Vision-language researcher at Google",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            candidate_documents_path = snapshot_dir / "candidate_documents.json"
+            candidate_documents_path.write_text(
+                json.dumps(
+                    {
+                        "snapshot": {"snapshot_id": "snap-real"},
+                        "target_company": "Google",
+                        "candidate_count": 1,
+                        "items": [
+                            {
+                                "linkedinUrl": "https://www.linkedin.com/in/wrong-auxiliary-item/",
+                                "headline": "Auxiliary provider row must not drive candidate-doc replay",
+                            }
+                        ],
+                        "candidates": [
+                            {
+                                "candidate_id": "google-real-candidate",
+                                "display_name": "Google Real Candidate",
+                                "target_company": "Google",
+                                "employment_status": "current",
+                                "focus_areas": "Vision-language models",
+                                "linkedin_url": profile_url,
+                                "metadata": {
+                                    "public_identifier": "google-real-vision-language-candidate",
+                                    "profile_timeline_source_path": str(raw_profile_path),
+                                    "profile_url": profile_url,
+                                },
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            scenario_path = Path(tempdir) / "scenario.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "real_search",
+                                    "match": {"logical_name": "harvest_profile_search"},
+                                    "sample_candidate_documents_path": str(candidate_documents_path),
+                                    "sample_candidate_employment_scope": "current",
+                                    "sample_candidate_contains": ["vision-language"],
+                                    "sample_candidate_require_profile_source": True,
+                                    "sample_fallback_generated": False,
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                    "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0",
+                },
+            ):
+                search_result = search_connector.search_profiles(
+                    query_text="vision-language",
+                    filter_hints={"current_companies": ["https://www.linkedin.com/company/google/"]},
+                    employment_status="current",
+                    discovery_dir=snapshot_dir / "search_seed_discovery",
+                    limit=25,
+                    pages=1,
+                    auto_probe=False,
+                )
+
+        assert search_result is not None
+        self.assertEqual(search_result["pagination"]["total_elements"], 1)
+        self.assertEqual(search_result["rows"][0]["profile_url"], profile_url)
+
+    def test_scripted_real_asset_profile_source_paths_are_rebased_before_stale_absolute_path(self) -> None:
+        profile_settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        profile_connector = HarvestProfileConnector(profile_settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir) / "repo"
+            runtime_dir = repo_root / "runtime"
+            source_snapshot = runtime_dir / "company_assets" / "google" / "source-snap"
+            sample_snapshot = runtime_dir / "company_assets" / "google" / "sample-snap"
+            profile_dir = source_snapshot / "harvest_profiles"
+            sample_snapshot.mkdir(parents=True, exist_ok=True)
+            profile_dir.mkdir(parents=True, exist_ok=True)
+            profile_url = "https://www.linkedin.com/in/google-rebased-real-profile/"
+            raw_profile_path = profile_dir / "rebased_profile.json"
+            raw_profile_path.write_text(
+                json.dumps(
+                    {
+                        "_harvest_request": {"kind": "url", "value": profile_url, "profile_url": profile_url},
+                        "item": {
+                            "linkedinUrl": profile_url,
+                            "publicIdentifier": "google-rebased-real-profile",
+                            "fullName": "Google Rebased Profile",
+                            "headline": "Vision-language researcher at Google",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            stale_absolute_path = (
+                "/home/old-host/projects/Sourcing AI Agent Dev/sourcing-ai-agent/"
+                "runtime/company_assets/google/source-snap/harvest_profiles/rebased_profile.json"
+            )
+            candidate_documents_path = sample_snapshot / "candidate_documents.json"
+            candidate_documents_path.write_text(
+                json.dumps(
+                    {
+                        "snapshot": {"snapshot_id": "sample-snap"},
+                        "target_company": "Google",
+                        "candidate_count": 1,
+                        "candidates": [
+                            {
+                                "candidate_id": "google-rebased",
+                                "display_name": "Google Rebased Profile",
+                                "target_company": "Google",
+                                "employment_status": "current",
+                                "focus_areas": "Vision-language models",
+                                "linkedin_url": profile_url,
+                                "metadata": {
+                                    "profile_timeline_source_path": stale_absolute_path,
+                                    "profile_url": profile_url,
+                                },
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            scenario_path = Path(tempdir) / "scenario.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "real_scraper",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "sample_candidate_documents_path": str(candidate_documents_path),
+                                    "sample_candidate_contains": ["vision-language"],
+                                    "sample_candidate_require_profile_source": True,
+                                    "sample_fallback_generated": False,
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                    "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0",
+                },
+            ):
+                with patch("sourcing_agent.harvest_connectors.Path.cwd", return_value=repo_root):
+                    profile_result = profile_connector.execute_batch_with_checkpoint([profile_url], sample_snapshot)
+
+        self.assertFalse(profile_result.pending)
+        self.assertEqual(len(profile_result.body), 1)
+        parsed = parse_harvest_profile_payload(profile_result.body[0])
+        self.assertEqual(parsed["full_name"], "Google Rebased Profile")
+
+    def test_scripted_real_asset_scraper_matches_candidate_url_alias_when_raw_profile_canonical_url_differs(
+        self,
+    ) -> None:
+        profile_settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        profile_connector = HarvestProfileConnector(profile_settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "google" / "snap-real"
+            profile_dir = snapshot_dir / "harvest_profiles"
+            profile_dir.mkdir(parents=True, exist_ok=True)
+            requested_profile_url = "https://www.linkedin.com/in/google-vanity-vision/"
+            canonical_profile_url = "https://www.linkedin.com/in/google-canonical-vision/"
+            raw_profile_path = profile_dir / "canonical_profile.json"
+            raw_profile_path.write_text(
+                json.dumps(
+                    {
+                        "_harvest_request": {
+                            "kind": "url",
+                            "value": "https://www.linkedin.com/in/ACwCANONICAL",
+                            "profile_url": "https://www.linkedin.com/in/ACwCANONICAL",
+                        },
+                        "item": {
+                            "linkedinUrl": canonical_profile_url,
+                            "publicIdentifier": "google-canonical-vision",
+                            "fullName": "Google Canonical Vision",
+                            "headline": "Vision-language researcher at Google",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            candidate_documents_path = snapshot_dir / "candidate_documents.json"
+            candidate_documents_path.write_text(
+                json.dumps(
+                    {
+                        "snapshot": {"snapshot_id": "snap-real"},
+                        "target_company": "Google",
+                        "candidate_count": 1,
+                        "candidates": [
+                            {
+                                "candidate_id": "google-vanity",
+                                "display_name": "Google Canonical Vision",
+                                "target_company": "Google",
+                                "employment_status": "current",
+                                "focus_areas": "Vision-language models",
+                                "linkedin_url": requested_profile_url,
+                                "metadata": {
+                                    "profile_timeline_source_path": str(raw_profile_path),
+                                    "profile_url": requested_profile_url,
+                                },
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            scenario_path = Path(tempdir) / "scenario.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "real_scraper",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "sample_candidate_documents_path": str(candidate_documents_path),
+                                    "sample_candidate_contains": ["vision-language"],
+                                    "sample_candidate_require_profile_source": True,
+                                    "sample_fallback_generated": False,
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                    "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0",
+                },
+            ):
+                profile_result = profile_connector.execute_batch_with_checkpoint(
+                    [requested_profile_url],
+                    snapshot_dir,
+                )
+
+        self.assertFalse(profile_result.pending)
+        self.assertEqual(len(profile_result.body), 1)
+        parsed = parse_harvest_profile_payload(profile_result.body[0])
+        self.assertEqual(parsed["profile_url"], canonical_profile_url)
+        self.assertEqual(parsed["requested_profile_url"], "https://www.linkedin.com/in/ACwCANONICAL")
+
+    def test_scripted_real_asset_profile_source_rebases_runtime_object_store_path(self) -> None:
+        profile_settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        profile_connector = HarvestProfileConnector(profile_settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir) / "repo"
+            runtime_dir = repo_root / "runtime"
+            object_profile_dir = (
+                runtime_dir
+                / "object_store"
+                / "sourcing-ai-agent-dev"
+                / "bundles"
+                / "company_handoff"
+                / "payload"
+                / "company_assets"
+                / "google"
+                / "snap-object"
+                / "harvest_profiles"
+            )
+            snapshot_dir = runtime_dir / "company_assets" / "google" / "snap-real"
+            object_profile_dir.mkdir(parents=True, exist_ok=True)
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            profile_url = "https://www.linkedin.com/in/google-object-store-vision/"
+            raw_profile_path = object_profile_dir / "object_profile.json"
+            raw_profile_path.write_text(
+                json.dumps(
+                    {
+                        "_harvest_request": {"kind": "url", "value": profile_url, "profile_url": profile_url},
+                        "item": {
+                            "linkedinUrl": profile_url,
+                            "publicIdentifier": "google-object-store-vision",
+                            "fullName": "Google Object Store Vision",
+                            "headline": "Vision-language researcher at Google",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            candidate_documents_path = snapshot_dir / "candidate_documents.json"
+            candidate_documents_path.write_text(
+                json.dumps(
+                    {
+                        "snapshot": {"snapshot_id": "snap-real"},
+                        "target_company": "Google",
+                        "candidate_count": 1,
+                        "candidates": [
+                            {
+                                "candidate_id": "google-object-store",
+                                "display_name": "Google Object Store Vision",
+                                "target_company": "Google",
+                                "employment_status": "current",
+                                "focus_areas": "Vision-language models",
+                                "linkedin_url": profile_url,
+                                "metadata": {
+                                    "profile_timeline_source_path": (
+                                        "runtime/object_store/sourcing-ai-agent-dev/bundles/"
+                                        "company_handoff/payload/company_assets/google/"
+                                        "snap-object/harvest_profiles/object_profile.json"
+                                    ),
+                                    "profile_url": profile_url,
+                                },
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            scenario_path = Path(tempdir) / "scenario.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "real_scraper",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "sample_candidate_documents_path": str(candidate_documents_path),
+                                    "sample_candidate_contains": ["vision-language"],
+                                    "sample_candidate_require_profile_source": True,
+                                    "sample_fallback_generated": False,
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                    "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0",
+                },
+            ):
+                with patch("sourcing_agent.harvest_connectors.Path.cwd", return_value=repo_root):
+                    profile_result = profile_connector.execute_batch_with_checkpoint([profile_url], snapshot_dir)
+
+        self.assertFalse(profile_result.pending)
+        self.assertEqual(len(profile_result.body), 1)
+        parsed = parse_harvest_profile_payload(profile_result.body[0])
+        self.assertEqual(parsed["full_name"], "Google Object Store Vision")
+
+    def test_scripted_real_asset_profile_source_rejects_non_profile_summary_path(self) -> None:
+        profile_settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        profile_connector = HarvestProfileConnector(profile_settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "google" / "snap-real"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            profile_url = "https://www.linkedin.com/in/google-summary-not-profile/"
+            summary_path = snapshot_dir / "search_seed_discovery" / "summary.json"
+            summary_path.parent.mkdir(parents=True, exist_ok=True)
+            summary_path.write_text(
+                json.dumps({"entries": [{"profile_url": profile_url}], "status": "completed"}),
+                encoding="utf-8",
+            )
+            candidate_documents_path = snapshot_dir / "candidate_documents.json"
+            candidate_documents_path.write_text(
+                json.dumps(
+                    {
+                        "snapshot": {"snapshot_id": "snap-real"},
+                        "target_company": "Google",
+                        "candidate_count": 1,
+                        "candidates": [
+                            {
+                                "candidate_id": "google-summary-not-profile",
+                                "display_name": "Google Summary Not Profile",
+                                "target_company": "Google",
+                                "employment_status": "current",
+                                "focus_areas": "Vision-language models",
+                                "linkedin_url": profile_url,
+                                "metadata": {
+                                    "profile_timeline_source_path": str(summary_path),
+                                    "profile_url": profile_url,
+                                },
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            scenario_path = Path(tempdir) / "scenario.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "real_scraper",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "sample_candidate_documents_path": str(candidate_documents_path),
+                                    "sample_candidate_contains": ["vision-language"],
+                                    "sample_candidate_require_profile_source": True,
+                                    "sample_fallback_generated": False,
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                    "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0",
+                },
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "real-asset candidate filter produced no rows|real-asset profile sample produced no readable raw profiles",
+                ):
+                    profile_connector.execute_batch_with_checkpoint([profile_url], snapshot_dir)
+
+    def test_scripted_real_asset_profile_search_paginates_once(self) -> None:
+        search_settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")
+        search_connector = HarvestProfileSearchConnector(search_settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "google" / "snap-real"
+            profile_dir = snapshot_dir / "harvest_profiles"
+            profile_dir.mkdir(parents=True, exist_ok=True)
+            candidates: list[dict[str, object]] = []
+            for index in range(30):
+                profile_url = f"https://www.linkedin.com/in/google-real-vision-language-{index:02d}/"
+                raw_profile_path = profile_dir / f"real_profile_{index:02d}.json"
+                raw_profile_path.write_text(
+                    json.dumps(
+                        {
+                            "_harvest_request": {"kind": "url", "value": profile_url, "profile_url": profile_url},
+                            "item": {
+                                "linkedinUrl": profile_url,
+                                "publicIdentifier": f"google-real-vision-language-{index:02d}",
+                                "fullName": f"Google Real Vision {index:02d}",
+                                "headline": "Vision-language researcher at Google",
+                            },
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+                candidates.append(
+                    {
+                        "candidate_id": f"google-real-{index:02d}",
+                        "display_name": f"Google Real Vision {index:02d}",
+                        "target_company": "Google",
+                        "employment_status": "current",
+                        "focus_areas": "Vision-language models",
+                        "linkedin_url": profile_url,
+                        "metadata": {
+                            "public_identifier": f"google-real-vision-language-{index:02d}",
+                            "profile_timeline_source_path": str(raw_profile_path),
+                            "profile_url": profile_url,
+                        },
+                    }
+                )
+            candidate_documents_path = snapshot_dir / "candidate_documents.json"
+            candidate_documents_path.write_text(
+                json.dumps({"candidates": candidates}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            scenario_path = Path(tempdir) / "scenario.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "real_search",
+                                    "match": {"logical_name": "harvest_profile_search"},
+                                    "sample_candidate_documents_path": str(candidate_documents_path),
+                                    "sample_candidate_employment_scope": "current",
+                                    "sample_candidate_contains": ["vision-language"],
+                                    "sample_candidate_require_profile_source": True,
+                                    "sample_fallback_generated": False,
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                    "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0",
+                },
+            ):
+                page_two = search_connector.search_profiles(
+                    query_text="vision-language",
+                    filter_hints={"current_companies": ["https://www.linkedin.com/company/google/"]},
+                    employment_status="current",
+                    discovery_dir=snapshot_dir / "search_seed_discovery",
+                    limit=25,
+                    pages=1,
+                    start_page=2,
+                    auto_probe=False,
+                )
+
+        assert page_two is not None
+        self.assertEqual(page_two["pagination"]["total_elements"], 30)
+        self.assertEqual(len(page_two["rows"]), 5)
+        self.assertEqual(page_two["rows"][0]["profile_url"], "https://www.linkedin.com/in/google-real-vision-language-25/")
+
+    def test_scripted_real_asset_candidate_documents_fail_closed_when_profile_source_missing(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "google" / "snap-real"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            profile_url = "https://www.linkedin.com/in/google-real-missing/"
+            candidate_documents_path = snapshot_dir / "candidate_documents.json"
+            candidate_documents_path.write_text(
+                json.dumps(
+                    {
+                        "candidates": [
+                            {
+                                "display_name": "Google Missing",
+                                "employment_status": "current",
+                                "focus_areas": "Vision-language",
+                                "linkedin_url": profile_url,
+                                "metadata": {
+                                    "profile_timeline_source_path": str(snapshot_dir / "missing.json"),
+                                    "profile_url": profile_url,
+                                },
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            scenario_path = Path(tempdir) / "scenario.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "real_scraper",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "sample_candidate_documents_path": str(candidate_documents_path),
+                                    "sample_candidate_contains": ["vision-language"],
+                                    "sample_fallback_generated": False,
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                },
+            ):
+                with self.assertRaisesRegex(RuntimeError, "real-asset profile sample produced no readable raw profiles"):
+                    connector.execute_batch_with_checkpoint([profile_url], snapshot_dir)
+
+    def test_company_employees_scripted_completion_exposes_dataset_items_artifact(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Physical Intelligence",
+            canonical_name="Physical Intelligence",
+            company_key="physicalintelligence",
+            linkedin_slug="physical-intelligence",
+            linkedin_company_url="https://www.linkedin.com/company/physical-intelligence/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "physicalintelligence" / "snap-scripted"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            scenario_path = Path(tempdir) / "scripted_company_roster.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "company_roster",
+                                    "match": {"logical_name": "harvest_company_employees"},
+                                    "execute_pending_rounds": 1,
+                                    "body": [
+                                        {
+                                            "linkedinUrl": "https://www.linkedin.com/in/scripted-pi-systems/",
+                                            "publicIdentifier": "scripted-pi-systems",
+                                            "headline": "Systems Engineer at Physical Intelligence",
+                                            "currentCompany": "Physical Intelligence",
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                    "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0",
+                },
+            ), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                side_effect=AssertionError("scripted company roster must not submit live Harvest runs"),
+            ):
+                first = connector.execute_with_checkpoint(identity, snapshot_dir, max_pages=1, page_limit=25)
+                second = connector.execute_with_checkpoint(
+                    identity,
+                    snapshot_dir,
+                    max_pages=1,
+                    page_limit=25,
+                    checkpoint=first.checkpoint,
+                )
+                invocations = load_scripted_provider_invocations()
+
+        self.assertTrue(first.pending)
+        self.assertFalse(second.pending)
+        self.assertEqual(second.checkpoint["status"], "completed")
+        self.assertEqual(len(second.body), 1)
+        dataset_artifacts = [artifact for artifact in second.artifacts if artifact.label == "dataset_items"]
+        self.assertEqual(len(dataset_artifacts), 1)
+        self.assertEqual(dataset_artifacts[0].payload, second.body)
+        self.assertEqual(
+            [item.get("logical_name") for item in invocations],
+            ["harvest_company_employees"],
+        )
+
+    def test_lovable_live_roster_scripted_fixture_replays_unique_100_plus_roster_sample(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Lovable",
+            canonical_name="Lovable",
+            company_key="lovable",
+            linkedin_slug="lovable",
+            linkedin_company_url="https://www.linkedin.com/company/lovable/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "lovable" / "snap-scripted"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(self._lovable_live_roster_scenario_path()),
+                    "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0",
+                },
+            ), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                side_effect=AssertionError("scripted Lovable roster must not submit live Harvest runs"),
+            ):
+                checkpoint = None
+                attempts = []
+                for _attempt in range(3):
+                    result = connector.execute_with_checkpoint(
+                        identity,
+                        snapshot_dir,
+                        max_pages=20,
+                        page_limit=25,
+                        checkpoint=checkpoint,
+                    )
+                    attempts.append(result)
+                    checkpoint = result.checkpoint
+                    if not result.pending:
+                        break
+
+        self.assertEqual([attempt.pending for attempt in attempts], [True, True, False])
+        second = attempts[-1]
+        self.assertGreaterEqual(len(second.body), 100)
+        names = [
+            str(
+                item.get("fullName")
+                or item.get("item", {}).get("fullName")
+                or " ".join(
+                    part
+                    for part in (str(item.get("firstName") or "").strip(), str(item.get("lastName") or "").strip())
+                    if part
+                )
+            )
+            for item in second.body
+        ]
+        public_ids = [
+            str(item.get("publicIdentifier") or item.get("id") or item.get("linkedinUrl") or "") for item in second.body
+        ]
+        locations = {str(item.get("location") or "") for item in second.body if item.get("location")}
+        self.assertEqual(len(set(names)), len(names))
+        self.assertEqual(len(set(public_ids)), len(public_ids))
+        self.assertGreater(len(locations), 1)
+        self.assertTrue(
+            all(
+                any(str(position.get("companyName") or "") == "Lovable" for position in item.get("currentPositions") or [])
+                for item in second.body
+            )
+        )
+
+    def test_openai_chatgpt_scripted_fixture_replays_real_search_and_profile_samples(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+            default_mode="full",
+            max_paid_items=25,
+        )
+        search_connector = HarvestProfileSearchConnector(settings)
+        profile_connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            discovery_dir = runtime_dir / "company_assets" / "openai" / "snap-chatgpt" / "search_seed_discovery"
+            snapshot_dir = runtime_dir / "company_assets" / "openai" / "snap-chatgpt"
+            discovery_dir.mkdir(parents=True, exist_ok=True)
+            env = {
+                "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(self._openai_chatgpt_streaming_scenario_path()),
+                "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0",
+            }
+            with patch.dict("os.environ", env), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                side_effect=AssertionError("scripted ChatGPT profile-search must not submit live Harvest runs"),
+            ):
+                search_result = search_connector.search_profiles(
+                    query_text="ChatGPT",
+                    filter_hints={
+                        "current_companies": ["https://www.linkedin.com/company/openai/"],
+                        "function_ids": ["8", "24"],
+                    },
+                    employment_status="current",
+                    discovery_dir=discovery_dir,
+                    limit=25,
+                    pages=1,
+                    auto_probe=False,
+                )
+                urls = [str(row.get("profile_url") or "") for row in list(search_result["rows"])[:20]]
+                current_full = search_connector.search_profiles(
+                    query_text="ChatGPT",
+                    filter_hints={
+                        "current_companies": ["https://www.linkedin.com/company/openai/"],
+                        "function_ids": ["8", "24"],
+                    },
+                    employment_status="current",
+                    discovery_dir=discovery_dir,
+                    limit=175,
+                    pages=7,
+                    auto_probe=False,
+                    allow_shared_provider_cache=False,
+                )
+                former_full = search_connector.search_profiles(
+                    query_text="ChatGPT",
+                    filter_hints={
+                        "past_companies": ["https://www.linkedin.com/company/openai/"],
+                        "function_ids": ["8", "24"],
+                    },
+                    employment_status="former",
+                    discovery_dir=discovery_dir,
+                    limit=100,
+                    pages=4,
+                    auto_probe=False,
+                    allow_shared_provider_cache=False,
+                )
+                all_urls = []
+                seen_urls = set()
+                for row in list(current_full["rows"]) + list(former_full["rows"]):
+                    profile_url = str(row.get("profile_url") or "").strip()
+                    normalized_url = profile_url.rstrip("/").lower()
+                    if profile_url and normalized_url not in seen_urls:
+                        seen_urls.add(normalized_url)
+                        all_urls.append(profile_url)
+
+                def run_profile_batch(batch_urls: list[str]):
+                    checkpoint = None
+                    result = None
+                    for _attempt in range(3):
+                        result = profile_connector.execute_batch_with_checkpoint(
+                            batch_urls,
+                            snapshot_dir,
+                            checkpoint=checkpoint,
+                        )
+                        checkpoint = result.checkpoint
+                        if not result.pending:
+                            break
+                        if checkpoint.get("run_id") and checkpoint.get("dataset_id"):
+                            checkpoint = {
+                                **checkpoint,
+                                "remote_provider_terminal_event": {
+                                    "status": "succeeded",
+                                    "run_id": checkpoint["run_id"],
+                                    "dataset_id": checkpoint["dataset_id"],
+                                },
+                            }
+                    assert result is not None
+                    return result
+
+                profile_result = run_profile_batch(urls[:10])
+                second_profile_result = run_profile_batch(urls[10:20])
+                full_profile_result = run_profile_batch(all_urls)
+
+        assert profile_result is not None
+        assert full_profile_result is not None
+        self.assertEqual(len(search_result["rows"]), 25)
+        self.assertEqual(search_result["pagination"]["total_elements"], 218)
+        self.assertFalse(any("OpenAI ChatGPT openai-chatgpt" in str(row.get("full_name") or "") for row in search_result["rows"]))
+        self.assertEqual(len(all_urls), 250)
+        self.assertFalse(profile_result.pending)
+        self.assertEqual(len(profile_result.body), 10)
+        self.assertFalse(second_profile_result.pending)
+        self.assertEqual(len(second_profile_result.body), 10)
+        self.assertFalse(full_profile_result.pending)
+        self.assertEqual(len(full_profile_result.body), 250)
+        self.assertFalse(
+            any("OpenAI ChatGPT" in str(row.get("fullName") or row.get("full_name") or "") for row in full_profile_result.body)
+        )
+        self.assertNotEqual(profile_result.checkpoint["run_id"], second_profile_result.checkpoint["run_id"])
+        self.assertNotEqual(profile_result.checkpoint["dataset_id"], second_profile_result.checkpoint["dataset_id"])
+        parsed_profiles = [parse_harvest_profile_payload(row) for row in profile_result.body]
+        self.assertGreaterEqual(sum(bool(profile.get("experience")) for profile in parsed_profiles), 4)
+        self.assertGreaterEqual(sum(bool(profile.get("education")) for profile in parsed_profiles), 4)
+        self.assertGreaterEqual(len({str(profile.get("location") or "") for profile in parsed_profiles}), 5)
+        self.assertTrue(any(str(profile.get("full_name") or "") == "Martin Spier" for profile in parsed_profiles))
+
+    def test_openai_agent_scripted_profile_search_models_probe_and_scale_without_live_api(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+            default_mode="short",
+            max_paid_items=25,
+        )
+        connector = HarvestProfileSearchConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            discovery_dir = runtime_dir / "company_assets" / "openai" / "snap-agent" / "search_seed_discovery"
+            discovery_dir.mkdir(parents=True, exist_ok=True)
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(self._openai_agent_streaming_scenario_path()),
+                },
+            ), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                side_effect=AssertionError("scripted profile-search must not submit live Harvest runs"),
+            ), patch(
+                "sourcing_agent.harvest_connectors.time.sleep",
+                return_value=None,
+            ):
+                current_result = connector.search_profiles(
+                    query_text="Agent",
+                    filter_hints={
+                        "current_companies": ["https://www.linkedin.com/company/openai/"],
+                        "function_ids": ["8", "24"],
+                    },
+                    employment_status="current",
+                    discovery_dir=discovery_dir,
+                    limit=125,
+                    pages=5,
+                    auto_probe=True,
+                )
+                former_result = connector.search_profiles(
+                    query_text="Agent",
+                    filter_hints={
+                        "past_companies": ["https://www.linkedin.com/company/openai/"],
+                        "function_ids": ["8", "24"],
+                    },
+                    employment_status="former",
+                    discovery_dir=discovery_dir,
+                    limit=100,
+                    pages=4,
+                    auto_probe=True,
+                )
+                invocations = load_scripted_provider_invocations()
+
+        assert current_result is not None
+        assert former_result is not None
+        self.assertEqual(len(current_result["rows"]), 125)
+        self.assertEqual(current_result["pagination"]["total_elements"], 236)
+        self.assertEqual(current_result["pagination"]["total_pages"], 10)
+        self.assertEqual(len(former_result["rows"]), 78)
+        self.assertEqual(former_result["pagination"]["total_elements"], 78)
+        current_names = [
+            str(row.get("fullName") or row.get("full_name") or row.get("name") or "")
+            for row in current_result["rows"][:5]
+        ]
+        self.assertEqual(len(set(current_names)), len(current_names))
+        self.assertTrue(all("openai-agent-current" in name for name in current_names))
+        profile_search_invocations = [
+            item for item in invocations if item.get("logical_name") == "harvest_profile_search"
+        ]
+        current_payloads = [
+            dict(item.get("payload") or {})
+            for item in profile_search_invocations
+            if list(dict(item.get("payload") or {}).get("currentCompanies") or [])
+        ]
+        former_payloads = [
+            dict(item.get("payload") or {})
+            for item in profile_search_invocations
+            if list(dict(item.get("payload") or {}).get("pastCompanies") or [])
+        ]
+        self.assertEqual([payload["maxItems"] for payload in current_payloads], [25, 125])
+        self.assertEqual([payload["takePages"] for payload in current_payloads], [1, 5])
+        self.assertEqual([payload["maxItems"] for payload in former_payloads], [25, 78])
+        self.assertEqual([payload["takePages"] for payload in former_payloads], [1, 4])
+        self.assertTrue(all(payload.get("searchQuery") == "Agent" for payload in current_payloads + former_payloads))
+
+    def test_scripted_profile_search_honors_explicit_zero_returned_count(self) -> None:
+        scenario = {
+            "harvest": {
+                "rules": [
+                    {
+                        "name": "google_gemini_zero_scaled",
+                        "match": {
+                            "logical_name": "harvest_profile_search",
+                            "payload_equals": {"startPage": 1, "takePages": 3},
+                        },
+                        "generated_body": {
+                            "kind": "profile_search",
+                            "company": "Google",
+                            "employment_scope": "current",
+                            "search_query": "Gemini",
+                            "estimated_total_count": 3,
+                            "returned_count": 0,
+                            "total_pages": 3
+                        }
+                    }
+                ]
+            }
+        }
+        with tempfile.TemporaryDirectory() as tempdir:
+            scenario_path = Path(tempdir) / "scenario.json"
+            scenario_path.write_text(json.dumps(scenario), encoding="utf-8")
+            settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+            connector = HarvestProfileSearchConnector(settings)
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": tempdir,
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                },
+            ), patch("sourcing_agent.harvest_connectors.time.sleep", return_value=None):
+                result = connector.search_profiles(
+                    query_text="Gemini",
+                    filter_hints={
+                        "current_companies": ["https://www.linkedin.com/company/google/"],
+                    },
+                    employment_status="current",
+                    discovery_dir=Path(tempdir),
+                    limit=75,
+                    pages=3,
+                    auto_probe=False,
+                )
+
+        assert result is not None
+        self.assertEqual(result["rows"], [])
+        self.assertEqual(result["pagination"]["total_elements"], 0)
+        self.assertEqual(result["pagination"]["total_pages"], 0)
+
+    def test_openai_agent_scripted_profile_scraper_batches_resume_and_generate_profiles(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        urls = [
+            "https://www.linkedin.com/in/openai-agent-current-0001/",
+            "https://www.linkedin.com/in/openai-agent-current-0002/",
+            "https://www.linkedin.com/in/openai-agent-former-0003/",
+        ]
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "openai" / "snap-agent"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            env = {
+                "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(self._openai_agent_streaming_scenario_path()),
+            }
+            fake_times = iter([1000.0, 1000.0, 1001.0, 1013.0])
+
+            def _fake_time() -> float:
+                return next(fake_times, 1013.0)
+
+            with (
+                patch.dict("os.environ", env),
+                patch("sourcing_agent.harvest_connectors.time.sleep"),
+                patch("sourcing_agent.harvest_connectors.time.time", side_effect=_fake_time),
+            ):
+                first = connector.execute_batch_with_checkpoint(urls, snapshot_dir)
+                second = connector.execute_batch_with_checkpoint(urls, snapshot_dir, checkpoint=first.checkpoint)
+                terminal = second
+                for _ in range(20):
+                    if not terminal.pending:
+                        break
+                    terminal = connector.execute_batch_with_checkpoint(
+                        urls,
+                        snapshot_dir,
+                        checkpoint=terminal.checkpoint,
+                    )
+                invocations = load_scripted_provider_invocations()
+
+        self.assertTrue(first.pending)
+        self.assertTrue(second.pending)
+        self.assertFalse(terminal.pending)
+        self.assertEqual(terminal.checkpoint["provider_mode"], "scripted")
+        self.assertEqual(terminal.checkpoint["status"], "completed")
+        self.assertEqual(len(terminal.body), 3)
+        self.assertEqual(
+            [item.get("logical_name") for item in invocations],
+            ["harvest_profile_scraper_batch"],
+        )
+        self.assertEqual(
+            len({str(item.get("fullName") or "") for item in terminal.body}),
+            3,
+        )
+        parsed = parse_harvest_profile_payload(terminal.body[0])
+        self.assertEqual(parsed["current_company"], "OpenAI")
+        self.assertIn("Agent Research Engineer", parsed["headline"])
+        self.assertTrue(any(item.get("companyName") == "OpenAI" for item in parsed["experience"]))
+
+    def test_scripted_profile_scraper_template_can_use_slug_index_for_roster_name_matching(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "lovable" / "snap-lovable"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            scenario_path = Path(tempdir) / "scenario.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "match": {
+                                        "logical_name": "harvest_profile_scraper_batch",
+                                        "payload_contains": ["lovable-roster"],
+                                    },
+                                    "generated_body": {
+                                        "kind": "profile_scraper_batch",
+                                        "company": "Lovable",
+                                        "search_query": "Product Engineering",
+                                        "full_name_template": "Lovable Employee {slug_index:04d}",
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            env = {
+                "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "0",
+            }
+            with patch.dict("os.environ", env):
+                result = connector.execute_batch_with_checkpoint(
+                    [
+                        "https://www.linkedin.com/in/lovable-roster-0025/",
+                        "https://www.linkedin.com/in/lovable-roster-0107/",
+                    ],
+                    snapshot_dir,
+                )
+
+        self.assertFalse(result.pending)
+        self.assertEqual([row["fullName"] for row in result.body], ["Lovable Employee 0025", "Lovable Employee 0107"])
+
+    def test_openai_agent_scripted_profile_scraper_timing_matrix_models_out_of_order_and_timeout_tail(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+
+        def _execute_until_complete(urls: list[str], snapshot_dir: Path) -> list[Any]:
+            results = []
+            checkpoint = None
+            result = connector.execute_batch_with_checkpoint(urls, snapshot_dir, checkpoint=checkpoint)
+            results.append(result)
+            if not result.pending:
+                return results
+            checkpoint = {
+                **dict(result.checkpoint or {}),
+                "remote_provider_terminal_event": {"event_type": "ACTOR.RUN.SUCCEEDED"},
+                "force_scripted_terminal_fetch": True,
+            }
+            completed = connector.execute_batch_with_checkpoint(urls, snapshot_dir, checkpoint=checkpoint)
+            results.append(completed)
+            return results
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "openai" / "snap-agent-timing"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            env = {
+                "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(self._openai_agent_streaming_scenario_path()),
+                "SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP": "",
+            }
+            with patch.dict("os.environ", env), patch(
+                "sourcing_agent.harvest_connectors.time.sleep", return_value=None
+            ) as sleep_mock:
+                fast_later = _execute_until_complete(
+                    ["https://www.linkedin.com/in/openai-agent-current-0028/"],
+                    snapshot_dir,
+                )
+                retryable_mid = _execute_until_complete(
+                    ["https://www.linkedin.com/in/openai-agent-current-0054/"],
+                    snapshot_dir,
+                )
+                timeout_tail = _execute_until_complete(
+                    ["https://www.linkedin.com/in/openai-agent-former-0053/"],
+                    snapshot_dir,
+                )
+
+        self.assertEqual([result.pending for result in fast_later], [True, False])
+        self.assertEqual([result.pending for result in retryable_mid], [True, False])
+        self.assertEqual([result.pending for result in timeout_tail], [True, False])
+        self.assertEqual(fast_later[-1].checkpoint["scripted_rule_name"], "openai_agent_profile_scraper_current_fast_out_of_order")
+        self.assertEqual(
+            retryable_mid[-1].checkpoint["scripted_rule_name"],
+            "openai_agent_profile_scraper_current_retryable_mid_tail",
+        )
+        self.assertEqual(
+            timeout_tail[-1].checkpoint["scripted_rule_name"],
+            "openai_agent_profile_scraper_former_timeout_long_tail",
+        )
+        self.assertTrue(any(artifact.label == "scripted_harvest_pending" for artifact in timeout_tail[0].artifacts))
+        self.assertFalse(any(artifact.payload.get("kind") == "timeout" for artifact in timeout_tail[0].artifacts))
+        self.assertTrue(fast_later[0].checkpoint["scripted_remote_wait_after_submit"])
+        self.assertEqual(fast_later[0].checkpoint["scripted_remote_wait_seconds"], 1.0)
+        self.assertEqual(retryable_mid[0].checkpoint["scripted_remote_wait_seconds"], 8.0)
+        self.assertEqual(timeout_tail[0].checkpoint["scripted_remote_wait_seconds"], 14.0)
+        self.assertTrue(fast_later[-1].checkpoint["remote_provider_terminal_event_consumed"])
+        self.assertTrue(retryable_mid[-1].checkpoint["remote_provider_terminal_event_consumed"])
+        self.assertTrue(timeout_tail[-1].checkpoint["remote_provider_terminal_event_consumed"])
+        sleep_mock.assert_not_called()
 
     def test_harvest_profile_batch_execute_with_checkpoint_request_scoped_fast_smoke_caps_scripted_sleep_across_resume(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
@@ -2060,8 +4456,10 @@ class HarvestConnectorTest(unittest.TestCase):
     def test_get_harvest_dataset_items_paginates_large_dataset_download(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
         observed_offsets: list[int] = []
+        observed_timeouts: list[int] = []
 
         def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            observed_timeouts.append(int(timeout))
             query = urlparse.parse_qs(urlparse.urlparse(endpoint).query)
             offset = int(query.get("offset", ["0"])[0])
             limit = int(query.get("limit", ["0"])[0])
@@ -2086,6 +4484,553 @@ class HarvestConnectorTest(unittest.TestCase):
 
         self.assertEqual(len(items), 201)
         self.assertEqual(observed_offsets, [0, 100, 200])
+        self.assertEqual(observed_timeouts, [45, 45, 45])
+
+    def test_submit_harvest_actor_run_attaches_apify_ad_hoc_webhook_when_configured(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="harvestapi/linkedin-profile-scraper",
+            default_mode="full",
+            timeout_seconds=900,
+            max_total_charge_usd=1.25,
+        )
+        observed_endpoints: list[str] = []
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            observed_endpoints.append(endpoint)
+            return {"data": {"id": "run-webhook", "status": "RUNNING"}}
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SOURCING_APIFY_WEBHOOK_URL": "https://runtime.example.test/api/providers/apify/webhook",
+                    "SOURCING_PROVIDER_WEBHOOK_TOKEN": "provider-secret",
+                },
+                clear=False,
+            ),
+            patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request),
+        ):
+            _submit_harvest_actor_run(settings, {"urls": ["https://www.linkedin.com/in/example/"]})
+
+        query = urlparse.parse_qs(urlparse.urlparse(observed_endpoints[0]).query)
+        self.assertEqual(query["waitForFinish"], ["0"])
+        self.assertEqual(query["timeout"], ["900"])
+        self.assertEqual(query["maxTotalChargeUsd"], ["1.25"])
+        webhook_defs = json.loads(base64.b64decode(query["webhooks"][0]).decode("utf-8"))
+        self.assertEqual(len(webhook_defs), 1)
+        webhook = webhook_defs[0]
+        self.assertEqual(webhook["requestUrl"], "https://runtime.example.test/api/providers/apify/webhook")
+        self.assertEqual(
+            webhook["eventTypes"],
+            [
+                "ACTOR.RUN.SUCCEEDED",
+                "ACTOR.RUN.FAILED",
+                "ACTOR.RUN.TIMED_OUT",
+                "ACTOR.RUN.ABORTED",
+            ],
+        )
+        self.assertEqual(
+            json.loads(webhook["headersTemplate"]),
+            {
+                "X-Sourcing-Provider-Webhook-Token": "provider-secret",
+                "User-Agent": "SourcingAgentApifyWebhook/1.0",
+            },
+        )
+
+    def test_submit_harvest_actor_run_reuses_apify_api_token_for_webhook_secret_by_default(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="actor-api-token",
+            actor_id="harvestapi/linkedin-profile-scraper",
+            default_mode="full",
+            timeout_seconds=900,
+            max_total_charge_usd=1.25,
+        )
+        observed_endpoints: list[str] = []
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            observed_endpoints.append(endpoint)
+            return {"data": {"id": "run-webhook", "status": "RUNNING"}}
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SOURCING_APIFY_WEBHOOK_URL": "https://runtime.example.test/api/providers/apify/webhook",
+                    "SOURCING_PROVIDER_WEBHOOK_TOKEN": "",
+                    "APIFY_WEBHOOK_TOKEN": "",
+                    "SOURCING_PROVIDER_WEBHOOK_USE_APIFY_API_TOKEN": "",
+                },
+                clear=False,
+            ),
+            patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request),
+        ):
+            _submit_harvest_actor_run(settings, {"urls": ["https://www.linkedin.com/in/example/"]})
+
+        query = urlparse.parse_qs(urlparse.urlparse(observed_endpoints[0]).query)
+        webhook_defs = json.loads(base64.b64decode(query["webhooks"][0]).decode("utf-8"))
+        self.assertEqual(
+            json.loads(webhook_defs[0]["headersTemplate"]),
+            {
+                "X-Sourcing-Provider-Webhook-Token": "actor-api-token",
+                "User-Agent": "SourcingAgentApifyWebhook/1.0",
+            },
+        )
+
+    def test_submit_harvest_actor_run_defaults_hosted_webhook_for_production_live_runtime(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="actor-api-token",
+            actor_id="harvestapi/linkedin-profile-scraper",
+            default_mode="full",
+            timeout_seconds=900,
+            max_total_charge_usd=1.25,
+        )
+        observed_endpoints: list[str] = []
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            observed_endpoints.append(endpoint)
+            return {"data": {"id": "run-webhook", "status": "RUNNING"}}
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SOURCING_APIFY_WEBHOOK_URL": "",
+                    "APIFY_WEBHOOK_URL": "",
+                    "SOURCING_RUNTIME_ENVIRONMENT": "production",
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+                    "SOURCING_DEFAULT_APIFY_WEBHOOK_URL_ENABLED": "",
+                    "SOURCING_PROVIDER_WEBHOOK_TOKEN": "",
+                    "APIFY_WEBHOOK_TOKEN": "",
+                    "SOURCING_PROVIDER_WEBHOOK_USE_APIFY_API_TOKEN": "1",
+                },
+                clear=False,
+            ),
+            patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request),
+        ):
+            _submit_harvest_actor_run(settings, {"urls": ["https://www.linkedin.com/in/example/"]})
+
+        query = urlparse.parse_qs(urlparse.urlparse(observed_endpoints[0]).query)
+        webhook_defs = json.loads(base64.b64decode(query["webhooks"][0]).decode("utf-8"))
+        self.assertEqual(webhook_defs[0]["requestUrl"], "https://api.111874.xyz/api/providers/apify/webhook")
+        self.assertEqual(
+            json.loads(webhook_defs[0]["headersTemplate"])["X-Sourcing-Provider-Webhook-Token"],
+            "actor-api-token",
+        )
+
+    def test_submit_harvest_actor_run_defaults_local_dev_webhook_for_local_live_runtime(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="actor-api-token",
+            actor_id="harvestapi/linkedin-profile-scraper",
+            default_mode="full",
+            timeout_seconds=900,
+            max_total_charge_usd=1.25,
+        )
+        observed_endpoints: list[str] = []
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            observed_endpoints.append(endpoint)
+            return {"data": {"id": "run-webhook", "status": "RUNNING"}}
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SOURCING_APIFY_WEBHOOK_URL": "",
+                    "APIFY_WEBHOOK_URL": "",
+                    "SOURCING_RUNTIME_ENVIRONMENT": "local_dev",
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "",
+                    "SOURCING_DEFAULT_APIFY_WEBHOOK_URL_ENABLED": "",
+                    "SOURCING_LOCAL_DEV_APIFY_WEBHOOK_URL": "https://relay.example.test/local-dev/providers/apify/webhook",
+                    "SOURCING_PROVIDER_WEBHOOK_TOKEN": "local-dev-secret",
+                },
+                clear=False,
+            ),
+            patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request),
+        ):
+            _submit_harvest_actor_run(settings, {"urls": ["https://www.linkedin.com/in/example/"]})
+
+        query = urlparse.parse_qs(urlparse.urlparse(observed_endpoints[0]).query)
+        webhook_defs = json.loads(base64.b64decode(query["webhooks"][0]).decode("utf-8"))
+        self.assertEqual(webhook_defs[0]["requestUrl"], "https://relay.example.test/local-dev/providers/apify/webhook")
+        self.assertEqual(
+            json.loads(webhook_defs[0]["headersTemplate"])["X-Sourcing-Provider-Webhook-Token"],
+            "local-dev-secret",
+        )
+
+    def test_submit_harvest_actor_run_rejects_scripted_runtime_before_live_http(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="actor-api-token",
+            actor_id="harvestapi/linkedin-profile-scraper",
+            default_mode="full",
+            timeout_seconds=900,
+            max_total_charge_usd=1.25,
+        )
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SOURCING_APIFY_WEBHOOK_URL": "",
+                    "APIFY_WEBHOOK_URL": "",
+                    "SOURCING_RUNTIME_ENVIRONMENT": "scripted",
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_DEFAULT_APIFY_WEBHOOK_URL_ENABLED": "",
+                },
+                clear=False,
+            ),
+            patch("sourcing_agent.harvest_connectors._harvest_json_request") as request_mock,
+        ):
+            with self.assertRaises(LiveProviderAccessError):
+                _submit_harvest_actor_run(settings, {"urls": ["https://www.linkedin.com/in/example/"]})
+
+        request_mock.assert_not_called()
+
+    def test_harvest_json_request_rejects_apify_endpoint_in_scripted_runtime_before_http(self) -> None:
+        endpoint = "https://api.apify.com/v2/acts/harvestapi%2Flinkedin-profile-scraper/runs?token=secret"
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SOURCING_RUNTIME_ENVIRONMENT": "scripted",
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                },
+                clear=True,
+            ),
+            patch("sourcing_agent.harvest_connectors.request.urlopen") as urlopen_mock,
+        ):
+            with self.assertRaises(LiveProviderAccessError):
+                _harvest_json_request(endpoint, payload={"urls": ["https://www.linkedin.com/in/example/"]})
+
+        urlopen_mock.assert_not_called()
+
+    def test_fake_apify_base_url_exercises_async_dataset_http_connector(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="fake-token",
+            actor_id="harvestapi/linkedin-profile-scraper",
+            default_mode="full",
+            timeout_seconds=60,
+            max_total_charge_usd=1.25,
+        )
+        actor_path = "/v2/acts/harvestapi%2Flinkedin-profile-scraper/runs"
+        run_path = "/v2/actor-runs/run-1"
+        dataset_path = "/v2/datasets/dataset-1/items"
+        dataset_items = [
+            {
+                "name": "Ada Lovelace",
+                "linkedinUrl": "https://www.linkedin.com/in/ada-lovelace-real/",
+            }
+        ]
+
+        fake_apify = FakeApifyProvider()
+        fake_apify.add_actor_run(
+            actor_id="harvestapi/linkedin-profile-scraper",
+            run_id="run-1",
+            dataset_id="dataset-1",
+            dataset_items=dataset_items,
+        )
+        with fake_apify:
+            with patch.dict(
+                os.environ,
+                {
+                    "SOURCING_APIFY_API_BASE_URL": fake_apify.base_url,
+                    "SOURCING_RUNTIME_ENVIRONMENT": "local_dev",
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+                    "SOURCING_LIVE_PROVIDER_CONFIRM": "1",
+                    "SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS": "1",
+                    "SOURCING_DEFAULT_APIFY_WEBHOOK_URL_ENABLED": "0",
+                    "HARVEST_RUN_STATUS_WAIT_FOR_FINISH_SECONDS": "0",
+                },
+                clear=True,
+            ):
+                result = _run_harvest_actor_via_async_dataset(
+                    settings,
+                    {"urls": ["https://www.linkedin.com/in/ada-lovelace-real/"]},
+                    logical_name="harvest_profile_scraper_batch",
+                    request_context={
+                        "harvest_poll_interval_seconds": 0.0,
+                        "harvest_dataset_fetch_max_attempts": 1,
+                    },
+                )
+
+        self.assertEqual(result, dataset_items)
+        self.assertEqual(
+            [(request["method"], request["path"]) for request in fake_apify.requests],
+            [("POST", actor_path), ("GET", run_path), ("GET", dataset_path)],
+        )
+        submit_request = fake_apify.requests[0]
+        self.assertEqual(submit_request["payload"], {"urls": ["https://www.linkedin.com/in/ada-lovelace-real/"]})
+        self.assertEqual(submit_request["query"]["waitForFinish"], ["0"])
+        self.assertEqual(submit_request["query"]["token"], ["fake-token"])
+        dataset_request = fake_apify.requests[2]
+        self.assertEqual(dataset_request["query"]["format"], ["json"])
+        self.assertEqual(dataset_request["query"]["clean"], ["true"])
+        self.assertEqual(dataset_request["query"]["offset"], ["0"])
+
+    def test_fake_apify_dataset_rate_limit_maps_to_retryable_dataset_error(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="fake-token", actor_id="actor", default_mode="full")
+        dataset_path = "/v2/datasets/dataset-rate-limit/items"
+        fake_apify = FakeApifyProvider()
+        fake_apify.add_actor_run(
+            actor_id="actor",
+            run_id="run-rate-limit",
+            dataset_id="dataset-rate-limit",
+            dataset_failures=[(429, {"error": {"message": "rate limited by fake Apify"}})],
+        )
+        with fake_apify:
+            with patch.dict(
+                os.environ,
+                {
+                    "SOURCING_APIFY_API_BASE_URL": fake_apify.base_url,
+                    "SOURCING_RUNTIME_ENVIRONMENT": "local_dev",
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+                    "SOURCING_LIVE_PROVIDER_CONFIRM": "1",
+                    "SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS": "1",
+                },
+                clear=True,
+            ):
+                with self.assertRaises(HarvestRetryableRequestError):
+                    _get_harvest_dataset_items(
+                        settings,
+                        "dataset-rate-limit",
+                        logical_name="harvest_profile_scraper_batch",
+                        run_id="run-rate-limit",
+                        request_context={
+                            "requested_url_count": 25,
+                            "harvest_dataset_fetch_max_attempts": 1,
+                        },
+                    )
+
+        self.assertEqual([(request["method"], request["path"]) for request in fake_apify.requests], [("GET", dataset_path)])
+
+    def test_fake_apify_provider_can_deliver_configured_webhook_to_local_receiver(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="fake-token",
+            actor_id="harvestapi/linkedin-profile-scraper",
+            default_mode="full",
+            timeout_seconds=60,
+            max_total_charge_usd=1.25,
+        )
+        fake_apify = FakeApifyProvider()
+        fake_apify.add_actor_run(
+            actor_id="harvestapi/linkedin-profile-scraper",
+            run_id="run-webhook",
+            dataset_id="dataset-webhook",
+        )
+        receiver_path = "/api/providers/apify/webhook"
+        with FakeProviderHTTPServer({("POST", receiver_path): (200, {"ok": True})}) as receiver:
+            with fake_apify:
+                with patch.dict(
+                    os.environ,
+                    {
+                        "SOURCING_APIFY_API_BASE_URL": fake_apify.base_url,
+                        "SOURCING_APIFY_WEBHOOK_URL": receiver.url(receiver_path),
+                        "SOURCING_PROVIDER_WEBHOOK_TOKEN": "provider-secret",
+                        "SOURCING_RUNTIME_ENVIRONMENT": "local_dev",
+                        "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+                        "SOURCING_LIVE_PROVIDER_CONFIRM": "1",
+                        "SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS": "1",
+                    },
+                    clear=True,
+                ):
+                    _submit_harvest_actor_run(
+                        settings,
+                        {"urls": ["https://www.linkedin.com/in/ada-lovelace-real/"]},
+                    )
+                    delivered = fake_apify.deliver_webhooks(run_id="run-webhook")
+
+        self.assertEqual(delivered[0]["status"], 200)
+        webhooks = fake_apify.submitted_webhooks()
+        self.assertEqual(webhooks[0]["requestUrl"], receiver.url(receiver_path))
+        self.assertEqual(receiver.requests[0]["headers"]["X-Sourcing-Provider-Webhook-Token"], "provider-secret")
+        self.assertEqual(receiver.requests[0]["payload"]["eventType"], "ACTOR.RUN.SUCCEEDED")
+        self.assertEqual(receiver.requests[0]["payload"]["eventData"]["actorRunId"], "run-webhook")
+
+    def test_harvest_json_request_rejects_configured_fake_apify_endpoint_in_scripted_runtime_before_http(self) -> None:
+        actor_path = "/v2/acts/harvestapi%2Flinkedin-profile-scraper/runs"
+        fake_apify = FakeApifyProvider()
+        fake_apify.add_actor_run(
+            actor_id="harvestapi/linkedin-profile-scraper",
+            run_id="run-should-not-start",
+            dataset_id="dataset-should-not-start",
+        )
+        with fake_apify:
+            endpoint = f"{fake_apify.base_url}{actor_path}?token=secret"
+            with patch.dict(
+                os.environ,
+                {
+                    "SOURCING_APIFY_API_BASE_URL": fake_apify.base_url,
+                    "SOURCING_RUNTIME_ENVIRONMENT": "scripted",
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                },
+                clear=True,
+            ):
+                with self.assertRaises(LiveProviderAccessError):
+                    _harvest_json_request(
+                        endpoint,
+                        payload={"urls": ["https://www.linkedin.com/in/ada-lovelace-real/"]},
+                    )
+
+        self.assertEqual(fake_apify.requests, [])
+
+    def test_harvest_json_request_rejects_synthetic_fixture_payload_even_in_local_live_runtime(self) -> None:
+        endpoint = "https://api.apify.com/v2/acts/harvestapi%2Flinkedin-profile-scraper/runs?token=secret"
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SOURCING_RUNTIME_ENVIRONMENT": "local_dev",
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+                },
+                clear=True,
+            ),
+            patch("sourcing_agent.harvest_connectors.request.urlopen") as urlopen_mock,
+        ):
+            with self.assertRaises(LiveProviderAccessError):
+                _harvest_json_request(
+                    endpoint,
+                    payload={"urls": ["https://www.linkedin.com/in/openai-agent-current-0189/"]},
+                )
+
+        urlopen_mock.assert_not_called()
+
+    def test_submit_harvest_actor_run_can_disable_default_webhook_url(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="actor-api-token",
+            actor_id="harvestapi/linkedin-profile-scraper",
+            default_mode="full",
+            timeout_seconds=900,
+            max_total_charge_usd=1.25,
+        )
+        observed_endpoints: list[str] = []
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            observed_endpoints.append(endpoint)
+            return {"data": {"id": "run-no-webhook", "status": "RUNNING"}}
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SOURCING_APIFY_WEBHOOK_URL": "",
+                    "APIFY_WEBHOOK_URL": "",
+                    "SOURCING_RUNTIME_ENVIRONMENT": "production",
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+                    "SOURCING_DEFAULT_APIFY_WEBHOOK_URL_ENABLED": "0",
+                },
+                clear=False,
+            ),
+            patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request),
+        ):
+            _submit_harvest_actor_run(settings, {"urls": ["https://www.linkedin.com/in/example/"]})
+
+        query = urlparse.parse_qs(urlparse.urlparse(observed_endpoints[0]).query)
+        self.assertNotIn("webhooks", query)
+
+    def test_harvest_run_status_poll_uses_short_control_plane_timeout(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+            default_mode="full",
+            timeout_seconds=900,
+        )
+        observed_timeouts: list[int] = []
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            observed_timeouts.append(int(timeout))
+            return {"data": {"id": "run-1", "status": "SUCCEEDED", "defaultDatasetId": "dataset-1"}}
+
+        with (
+            patch.dict(os.environ, {"HARVEST_RUN_STATUS_TIMEOUT_SECONDS": ""}),
+            patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request),
+        ):
+            payload = _get_harvest_actor_run(settings, "run-1")
+
+        self.assertEqual(payload["data"]["id"], "run-1")
+        self.assertEqual(observed_timeouts, [30])
+
+    def test_harvest_run_status_poll_can_long_poll_wait_for_finish(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+            default_mode="full",
+            timeout_seconds=900,
+        )
+        observed_queries: list[dict[str, list[str]]] = []
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            observed_queries.append(urlparse.parse_qs(urlparse.urlparse(endpoint).query))
+            self.assertEqual(int(timeout), 30)
+            return {"data": {"id": "run-long-poll", "status": "SUCCEEDED", "defaultDatasetId": "dataset-long-poll"}}
+
+        with (
+            patch.dict(os.environ, {"HARVEST_RUN_STATUS_WAIT_FOR_FINISH_SECONDS": "12"}),
+            patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request),
+        ):
+            payload = _get_harvest_actor_run(settings, "run-long-poll")
+
+        self.assertEqual(payload["data"]["id"], "run-long-poll")
+        self.assertEqual(observed_queries[0].get("waitForFinish"), ["12"])
+
+    def test_harvest_run_status_poll_request_context_can_disable_long_poll(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+            default_mode="full",
+            timeout_seconds=900,
+        )
+        observed_queries: list[dict[str, list[str]]] = []
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            observed_queries.append(urlparse.parse_qs(urlparse.urlparse(endpoint).query))
+            return {"data": {"id": "run-no-wait", "status": "RUNNING", "defaultDatasetId": "dataset-no-wait"}}
+
+        with (
+            patch.dict(os.environ, {"HARVEST_RUN_STATUS_WAIT_FOR_FINISH_SECONDS": "12"}),
+            patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request),
+        ):
+            payload = _get_harvest_actor_run(
+                settings,
+                "run-no-wait",
+                request_context={"harvest_run_status_wait_for_finish_seconds": 0},
+            )
+
+        self.assertEqual(payload["data"]["id"], "run-no-wait")
+        self.assertNotIn("waitForFinish", observed_queries[0])
+
+    def test_harvest_run_status_poll_accepts_request_scoped_timeout_override(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+            default_mode="full",
+            timeout_seconds=900,
+        )
+        observed_timeouts: list[int] = []
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            observed_timeouts.append(int(timeout))
+            return {"data": {"id": "run-override", "status": "SUCCEEDED", "defaultDatasetId": "dataset-override"}}
+
+        with patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request):
+            payload = _get_harvest_actor_run(
+                settings,
+                "run-override",
+                request_context={"harvest_run_status_timeout_seconds": 18},
+            )
+
+        self.assertEqual(payload["data"]["id"], "run-override")
+        self.assertEqual(observed_timeouts, [18])
 
     def test_get_harvest_dataset_items_retries_retryable_page_failure_before_succeeding(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
@@ -2109,6 +5054,31 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(items, [{"idx": 1}])
         self.assertEqual(attempt_counter["count"], 3)
 
+    def test_get_harvest_dataset_items_retries_code_22_queue_backpressure(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        attempt_counter = {"count": 0}
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            attempt_counter["count"] += 1
+            if attempt_counter["count"] == 1:
+                raise RuntimeError("Harvest API HTTP 400: Too many queued requests (code_22)")
+            return [{"idx": 22}]
+
+        with patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request), patch(
+            "sourcing_agent.harvest_connectors.time.sleep",
+            return_value=None,
+        ):
+            items = _get_harvest_dataset_items(
+                settings,
+                "dataset-code-22",
+                logical_name="harvest_profile_scraper_batch",
+                run_id="run-code-22",
+                request_context={"requested_url_count": 73},
+            )
+
+        self.assertEqual(items, [{"idx": 22}])
+        self.assertEqual(attempt_counter["count"], 2)
+
     def test_get_harvest_dataset_items_request_scoped_fast_smoke_shortens_retry_backoff(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
         attempt_counter = {"count": 0}
@@ -2131,12 +5101,40 @@ class HarvestConnectorTest(unittest.TestCase):
                 request_context={
                     "requested_url_count": 50,
                     "runtime_tuning_profile": "fast_smoke",
+                    "harvest_dataset_fetch_max_attempts": 3,
                 },
             )
 
         self.assertEqual(items, [{"idx": 1}])
         self.assertEqual(attempt_counter["count"], 3)
         self.assertEqual(sleep_mock.call_args_list, [call(0.25), call(0.25)])
+
+    def test_get_harvest_dataset_items_request_scoped_timeout_and_attempt_override(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        attempt_counter = {"count": 0}
+        observed_timeouts: list[int] = []
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            attempt_counter["count"] += 1
+            observed_timeouts.append(int(timeout))
+            raise RuntimeError("Harvest API request failed: IncompleteRead(2048 bytes read)")
+
+        with patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request):
+            with self.assertRaises(HarvestRetryableRequestError):
+                _get_harvest_dataset_items(
+                    settings,
+                    "dataset-retryable-tight",
+                    logical_name="harvest_profile_scraper_batch",
+                    run_id="run-retryable-tight",
+                    request_context={
+                        "requested_url_count": 73,
+                        "harvest_dataset_page_timeout_seconds": 20,
+                        "harvest_dataset_fetch_max_attempts": 1,
+                    },
+                )
+
+        self.assertEqual(attempt_counter["count"], 1)
+        self.assertEqual(observed_timeouts, [20])
 
     def test_harvest_profile_batch_execute_with_checkpoint_preserves_run_on_retryable_dataset_download_failure(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
@@ -2217,6 +5215,64 @@ class HarvestConnectorTest(unittest.TestCase):
 
         self.assertEqual(body, [{"idx": 1}])
         self.assertEqual(dataset_mock.call_count, 1)
+
+    def test_scripted_sync_harvest_actor_waits_for_remote_wait_terminal_body(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short", max_paid_items=25)
+        payload = {
+            "profileScraperMode": "Short",
+            "maxItems": 25,
+            "startPage": 1,
+            "takePages": 1,
+            "searchQuery": "Agent",
+            "currentCompanies": ["https://www.linkedin.com/company/openai/"],
+        }
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            scenario_path = Path(tempdir) / "scripted_harvest.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "remote_wait_profile_search",
+                                    "match": {
+                                        "logical_name": "harvest_profile_search",
+                                        "payload_contains": ["currentCompanies", "openai", "Agent"],
+                                    },
+                                    "execute_sleep_position": "remote_wait",
+                                    "scripted_remote_wait_seconds": 0.01,
+                                    "body": [
+                                        {
+                                            "fullName": "OpenAI Agent 1",
+                                            "linkedinUrl": "https://www.linkedin.com/in/openai-agent-1/",
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_RUNTIME_DIR": str(runtime_dir),
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                    "SOURCING_SCRIPTED_SYNC_HARVEST_MAX_ROUNDS": "1",
+                    "SOURCING_SCRIPTED_SYNC_REMOTE_WAIT_TIMEOUT_SECONDS": "2",
+                },
+                clear=False,
+            ):
+                from sourcing_agent.harvest_connectors import _run_harvest_actor
+
+                body = _run_harvest_actor(settings, payload)
+
+        self.assertEqual(body, [{"fullName": "OpenAI Agent 1", "linkedinUrl": "https://www.linkedin.com/in/openai-agent-1/"}])
 
     def test_harvest_company_execute_with_checkpoint_polls_and_caches_dataset(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")

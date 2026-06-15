@@ -16,6 +16,26 @@ from .storage import ControlPlaneStore
 _CANDIDATE_FIELD_NAMES = {field.name for field in fields(Candidate)}
 
 
+def _shard_serving_record(shard_payload: dict[str, Any]) -> dict[str, Any]:
+    materialized_record = dict(dict(shard_payload or {}).get("materialized_candidate") or {})
+    normalized_record = dict(dict(shard_payload or {}).get("normalized_candidate") or {})
+    if not materialized_record and not normalized_record:
+        return {}
+    merged = dict(normalized_record)
+    for key, value in materialized_record.items():
+        if key == "metadata":
+            continue
+        if value not in (None, "", [], {}):
+            merged[key] = value
+    metadata = dict(normalized_record.get("metadata") or {})
+    for key, value in dict(materialized_record.get("metadata") or {}).items():
+        if value not in (None, "", [], {}):
+            metadata[key] = value
+    if metadata:
+        merged["metadata"] = metadata
+    return merged
+
+
 @dataclass(frozen=True, slots=True)
 class AuthoritativeCandidateSnapshot:
     target_company: str
@@ -101,9 +121,11 @@ def load_authoritative_candidate_detail(
             asset_view=asset_view,
         )
         shard_payload = read_snapshot_candidate_shard(artifact_store, candidate_id=normalized_candidate_id)
+        materialized_record = _shard_serving_record(shard_payload)
         candidate = _candidate_from_payload(
             dict(
-                shard_payload.get("candidate")
+                materialized_record
+                or shard_payload.get("candidate")
                 or shard_payload.get("materialized_candidate")
                 or shard_payload.get("normalized_candidate")
                 or {}
@@ -119,6 +141,8 @@ def load_authoritative_candidate_detail(
                 "asset_view": artifact_store.asset_view,
                 "source_kind": "candidate_shard",
                 "candidate": candidate,
+                "materialized_record": materialized_record,
+                "shard_payload": dict(shard_payload),
                 "evidence_records": evidence_records,
                 "evidence": [item.to_record() for item in evidence_records],
             }
@@ -186,9 +210,11 @@ def load_authoritative_candidate_details(
             except CandidateArtifactError:
                 unresolved_candidate_ids.append(normalized_candidate_id)
                 continue
+            materialized_record = _shard_serving_record(shard_payload)
             candidate = _candidate_from_payload(
                 dict(
-                    shard_payload.get("candidate")
+                    materialized_record
+                    or shard_payload.get("candidate")
                     or shard_payload.get("materialized_candidate")
                     or shard_payload.get("normalized_candidate")
                     or {}
@@ -206,6 +232,8 @@ def load_authoritative_candidate_details(
                 "asset_view": artifact_store.asset_view,
                 "source_kind": "candidate_shard",
                 "candidate": candidate,
+                "materialized_record": materialized_record,
+                "shard_payload": dict(shard_payload),
                 "evidence_records": evidence_records,
                 "evidence": [item.to_record() for item in evidence_records],
             }

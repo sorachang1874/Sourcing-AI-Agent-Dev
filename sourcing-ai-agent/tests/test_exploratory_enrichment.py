@@ -505,6 +505,25 @@ class ExploratoryEnrichmentTest(unittest.TestCase):
         self.assertEqual(build_queries_mock.call_count, 1)
         self.assertEqual(pending_specs[0]["exploration_queries"], ["q1", "q2"])
 
+    def test_exploration_query_task_key_uses_query_identity_not_order_ordinal(self) -> None:
+        first = exploratory_enrichment_module._exploration_query_task_key(
+            "c1",
+            '"Jane Doe" "Thinking Machines Lab"',
+        )
+        reordered = exploratory_enrichment_module._exploration_query_task_key(
+            "c1",
+            '"Jane Doe" "Thinking Machines Lab"',
+        )
+        different_query = exploratory_enrichment_module._exploration_query_task_key(
+            "c1",
+            '"Jane Doe" "Thinking Machines Lab" publications',
+        )
+
+        self.assertEqual(first, reordered)
+        self.assertNotEqual(first, different_query)
+        self.assertTrue(first.startswith("c1::q_"))
+        self.assertNotIn("::01", first)
+
     def test_enrich_does_not_repoll_ready_cached_queries(self) -> None:
         class _BatchSearchProvider:
             provider_name = "dataforseo_google_organic"
@@ -690,7 +709,7 @@ class ExploratoryEnrichmentTest(unittest.TestCase):
                 runtime_mode="workflow",
                 parallel_workers=1,
             )
-            self.assertTrue(provider.ready_calls[0][0].endswith("::01"))
+            self.assertIn("::q_", provider.ready_calls[0][0])
             self.assertTrue(all(not key.endswith("::01") for key in provider.ready_calls[1]))
 
     def test_enrich_worker_direct_fetch_updates_batch_manifest(self) -> None:
@@ -853,7 +872,7 @@ class ExploratoryEnrichmentTest(unittest.TestCase):
             manifest = json.loads(
                 (snapshot_dir / "exploration" / "search_batch_manifest.json").read_text(encoding="utf-8")
             )
-            first_entry = next(item for item in manifest["entries"] if item["task_key"].endswith("::01"))
+            first_entry = next(item for item in manifest["entries"] if item.get("query_index") == "1")
             self.assertEqual(provider.execute_calls[0]["checkpoint"]["status"], "ready_cached")
             self.assertEqual(first_entry["search_state"]["status"], "fetched_cached")
             self.assertTrue(str(first_entry["search_state"]["fetch_token"]).startswith("worker_direct_"))

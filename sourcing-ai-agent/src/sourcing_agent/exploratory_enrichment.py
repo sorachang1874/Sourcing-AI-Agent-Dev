@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
 import os
+from hashlib import sha1
 from pathlib import Path
 from typing import Any
 
@@ -816,7 +817,7 @@ def _prepare_batched_exploration_queries(
     for candidate_id, spec in pending_by_candidate_id.items():
         prefetched_queries: dict[str, dict[str, Any]] = {}
         for index, query_text in enumerate(_pending_exploration_queries(spec, target_company), start=1):
-            task_key = f"{candidate_id}::{index:02d}"
+            task_key = _exploration_query_task_key(candidate_id, query_text)
             entry = dict(manifest_entries.get(task_key) or {})
             search_state = dict(entry.get("search_state") or {})
             if str(search_state.get("task_id") or "").strip():
@@ -842,9 +843,17 @@ def _prepare_batched_exploration_queries(
                 continue
             unresolved_requests.append(
                 {
-                    "task_key": f"{candidate_id}::{index:02d}",
+                    "task_key": _exploration_query_task_key(candidate_id, query_text),
+                    "query_identity_key": _exploration_query_task_key(candidate_id, query_text),
                     "query_text": query_text,
                     "max_results": 10,
+                    "candidate_id": candidate_id,
+                    "query_index": str(index),
+                    "metadata": {
+                        "candidate_id": candidate_id,
+                        "query_index": str(index),
+                        "query_identity_key": _exploration_query_task_key(candidate_id, query_text),
+                    },
                     "runtime_timing_overrides": dict(spec.get("runtime_timing_overrides") or {}),
                 }
             )
@@ -919,8 +928,21 @@ def _prepare_batched_exploration_queries(
             task_key = str(getattr(task, "task_key", "") or "").strip()
             if not task_key:
                 continue
-            candidate_id, _, query_index = task_key.partition("::")
-            query_index = query_index or "01"
+            original_request = next(
+                (item for item in unresolved_requests if str(item.get("task_key") or "") == task_key),
+                {},
+            )
+            task_metadata = dict(getattr(task, "metadata", {}) or {})
+            candidate_id = str(
+                original_request.get("candidate_id")
+                or task_metadata.get("candidate_id")
+                or task_key.partition("::")[0]
+            ).strip()
+            query_index = str(
+                original_request.get("query_index")
+                or task_metadata.get("query_index")
+                or "1"
+            ).strip()
             entry = {
                 "task_key": task_key,
                 "candidate_id": candidate_id,
@@ -928,7 +950,12 @@ def _prepare_batched_exploration_queries(
                 "query": str(getattr(task, "query_text", "") or "").strip(),
                 "search_state": dict(getattr(task, "checkpoint", {}) or {}),
                 "artifact_paths": {},
-                "metadata": dict(getattr(task, "metadata", {}) or {}),
+                "metadata": {
+                    **task_metadata,
+                    "candidate_id": candidate_id,
+                    "query_index": query_index,
+                    "query_identity_key": task_key,
+                },
             }
             artifact_label = str(entry["metadata"].get("artifact_label") or "").strip()
             if artifact_label and artifact_label in artifact_paths:
@@ -991,7 +1018,7 @@ def _refresh_batched_exploration_ready_cache(
     attempted_at = _batch_lane_timestamp()
     for candidate_id, spec in pending_by_candidate_id.items():
         for index, query_text in enumerate(_pending_exploration_queries(spec, target_company), start=1):
-            task_key = f"{candidate_id}::{index:02d}"
+            task_key = _exploration_query_task_key(candidate_id, query_text)
             entry = dict(manifest_entries.get(task_key) or {})
             search_state = dict(entry.get("search_state") or {})
             task_id = str(search_state.get("task_id") or "").strip()
@@ -1011,8 +1038,14 @@ def _refresh_batched_exploration_ready_cache(
             poll_specs.append(
                 {
                     "task_key": task_key,
+                    "query_identity_key": task_key,
                     "query_text": str(entry.get("query") or query_text or "").strip(),
                     "checkpoint": search_state,
+                    "metadata": {
+                        "candidate_id": candidate_id,
+                        "query_index": str(index),
+                        "query_identity_key": task_key,
+                    },
                 }
             )
     if not poll_specs:
@@ -1045,9 +1078,13 @@ def _refresh_batched_exploration_ready_cache(
         task_key = str(getattr(task, "task_key", "") or "").strip()
         if not task_key:
             continue
-        candidate_id, _, query_index = task_key.partition("::")
-        query_index = str(int(query_index or "1"))
         entry = dict(manifest_entries.get(task_key) or {})
+        candidate_id = str(
+            entry.get("candidate_id") or dict(entry.get("metadata") or {}).get("candidate_id") or task_key.partition("::")[0]
+        ).strip()
+        query_index = str(
+            entry.get("query_index") or dict(entry.get("metadata") or {}).get("query_index") or "1"
+        ).strip()
         search_state = dict(getattr(task, "checkpoint", {}) or {})
         search_state["ready_attempted_at"] = attempted_at
         search_state["ready_poll_token"] = poll_token
@@ -1098,7 +1135,7 @@ def _fetch_batched_exploration_ready_results(
     attempted_at = _batch_lane_timestamp()
     for candidate_id, spec in pending_by_candidate_id.items():
         for index, query_text in enumerate(_pending_exploration_queries(spec, target_company), start=1):
-            task_key = f"{candidate_id}::{index:02d}"
+            task_key = _exploration_query_task_key(candidate_id, query_text)
             entry = dict(manifest_entries.get(task_key) or {})
             search_state = dict(entry.get("search_state") or {})
             if str(search_state.get("status") or "").strip() != "ready_cached":
@@ -1119,8 +1156,14 @@ def _fetch_batched_exploration_ready_results(
             fetch_specs.append(
                 {
                     "task_key": task_key,
+                    "query_identity_key": task_key,
                     "query_text": str(entry.get("query") or query_text or "").strip(),
                     "checkpoint": search_state,
+                    "metadata": {
+                        "candidate_id": candidate_id,
+                        "query_index": str(index),
+                        "query_identity_key": task_key,
+                    },
                 }
             )
     if not fetch_specs:
@@ -1153,9 +1196,11 @@ def _fetch_batched_exploration_ready_results(
         task_key = str(getattr(task, "task_key", "") or "").strip()
         if not task_key:
             continue
-        candidate_id, _, query_index_text = task_key.partition("::")
-        query_index = int(query_index_text or "1")
         entry = dict(manifest_entries.get(task_key) or {})
+        candidate_id = str(
+            entry.get("candidate_id") or dict(entry.get("metadata") or {}).get("candidate_id") or task_key.partition("::")[0]
+        ).strip()
+        query_index = int(str(entry.get("query_index") or dict(entry.get("metadata") or {}).get("query_index") or "1"))
         spec = pending_by_candidate_id.get(candidate_id)
         response = getattr(task, "response", None)
         if response is None or spec is None:
@@ -1518,6 +1563,12 @@ def _pending_exploration_queries(spec: dict[str, Any], target_company: str) -> l
     queries = _build_exploration_queries(candidate, target_company)
     spec["exploration_queries"] = list(queries)
     return queries
+
+
+def _exploration_query_task_key(candidate_id: str, query_text: str) -> str:
+    query_signature = " ".join(str(query_text or "").lower().split()).strip()
+    query_hash = sha1(query_signature.encode("utf-8")).hexdigest()[:16]
+    return f"{str(candidate_id or '').strip()}::q_{query_hash}"
 
 
 def _write_search_execution_artifact(

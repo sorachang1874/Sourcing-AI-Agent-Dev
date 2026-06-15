@@ -155,6 +155,49 @@ def read_snapshot_candidate_window(
     }
 
 
+def read_snapshot_materialized_candidate_window(
+    store: SnapshotArtifactStore,
+    *,
+    offset: int = 0,
+    limit: int = 0,
+) -> dict[str, Any]:
+    materialized_path = store.artifact_dir / "materialized_candidate_documents.json"
+    payload = read_json_dict(materialized_path)
+    if not payload:
+        raise CandidateArtifactError(
+            f"Materialized candidate documents not found for {store.target_company} snapshot "
+            f"{store.snapshot_id} ({store.asset_view})"
+        )
+    candidates = [dict(item) for item in list(payload.get("candidates") or []) if isinstance(item, dict)]
+    total_candidates = max(int(payload.get("candidate_count") or len(candidates) or 0), 0)
+    normalized_offset = max(int(offset or 0), 0)
+    normalized_limit = max(int(limit or 0), 0)
+    if total_candidates <= 0 or normalized_offset >= total_candidates:
+        selected_candidates: list[dict[str, Any]] = []
+    else:
+        end_index = total_candidates if normalized_limit <= 0 else min(
+            total_candidates,
+            normalized_offset + normalized_limit,
+        )
+        selected_candidates = candidates[normalized_offset:end_index]
+    next_offset = normalized_offset + len(selected_candidates)
+    return {
+        "target_company": store.target_company,
+        "snapshot_id": store.snapshot_id,
+        "asset_view": store.asset_view,
+        "offset": normalized_offset,
+        "limit": normalized_limit,
+        "page_size": 0,
+        "page_count": 0,
+        "total_candidate_count": total_candidates,
+        "source_kind": "materialized_candidate_documents",
+        "source_path": str(materialized_path),
+        "has_more": bool(next_offset < total_candidates),
+        "next_offset": next_offset if next_offset < total_candidates else None,
+        "candidates": selected_candidates,
+    }
+
+
 def read_snapshot_candidate_shard(store: SnapshotArtifactStore, *, candidate_id: str) -> dict[str, Any]:
     normalized_candidate_id = str(candidate_id or "").strip()
     if not normalized_candidate_id:

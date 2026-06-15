@@ -5,7 +5,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Mapping
 
-from .asset_paths import resolve_company_snapshot_dir, resolve_snapshot_dir_from_source_path
+from .asset_paths import (
+    resolve_company_snapshot_dir,
+    resolve_company_snapshot_dir_by_key,
+    resolve_snapshot_dir_from_source_path,
+)
 from .candidate_artifacts import (
     CandidateArtifactError,
     load_authoritative_company_snapshot_candidate_documents,
@@ -320,6 +324,7 @@ def load_outreach_layering_context(
     snapshot_id = str(candidate_source.get("snapshot_id") or "").strip()
     if not snapshot_id:
         return {}
+    target_company = str(candidate_source.get("target_company") or request.target_company or "").strip()
     analysis_path = ""
     runtime_layering = dict(runtime_policy.get("outreach_layering") or {})
     runtime_analysis_paths = dict(runtime_layering.get("analysis_paths") or {})
@@ -327,17 +332,48 @@ def load_outreach_layering_context(
     if runtime_full_path and Path(runtime_full_path).exists():
         analysis_path = runtime_full_path
     else:
-        snapshot_dir = resolve_candidate_source_snapshot_dir(
-            runtime_dir=runtime_dir,
-            request=request,
-            candidate_source=candidate_source,
-        )
-        if snapshot_dir is not None:
-            candidates = sorted(
-                snapshot_dir.glob("layered_segmentation/greater_china_outreach_*/layered_analysis.json")
+        snapshot_dirs: list[Path] = []
+        seen_dirs: set[str] = set()
+
+        def add_snapshot_dir(candidate: Path | None) -> None:
+            if candidate is None or not candidate.exists():
+                return
+            key = str(candidate.resolve())
+            if key in seen_dirs:
+                return
+            seen_dirs.add(key)
+            snapshot_dirs.append(candidate)
+
+        add_snapshot_dir(
+            resolve_candidate_source_snapshot_dir(
+                runtime_dir=runtime_dir,
+                request=request,
+                candidate_source=candidate_source,
             )
-            if candidates:
-                analysis_path = str(candidates[-1])
+        )
+        for prefer_hot_cache in (False, True):
+            add_snapshot_dir(
+                resolve_company_snapshot_dir_by_key(
+                    runtime_dir,
+                    company_key=target_company,
+                    snapshot_id=snapshot_id,
+                    prefer_hot_cache=prefer_hot_cache,
+                )
+            )
+        candidates: list[Path] = []
+        for snapshot_dir in snapshot_dirs:
+            candidates.extend(snapshot_dir.glob("layered_segmentation/greater_china_outreach_*/layered_analysis.json"))
+        if candidates:
+            analysis_path = str(
+                max(
+                    candidates,
+                    key=lambda path: (
+                        path.parent.name,
+                        0 if "hot_cache_company_assets" in path.parts else 1,
+                        str(path),
+                    ),
+                )
+            )
     if not analysis_path:
         return {}
     try:
@@ -373,5 +409,6 @@ def load_outreach_layering_context(
         "layer_map": layer_map,
         "layer_counts": layer_counts,
         "cumulative_layer_counts": dict(analysis_payload.get("cumulative_layer_counts") or {}),
+        "final_layer_distribution": dict(analysis_payload.get("final_layer_distribution") or {}),
         "ai_verification": dict(analysis_payload.get("ai_verification") or {}),
     }

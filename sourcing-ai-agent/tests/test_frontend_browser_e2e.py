@@ -11,6 +11,10 @@ from urllib import request as urllib_request
 
 import tests.test_hosted_workflow_smoke as hosted_smoke_module
 from sourcing_agent.domain import Candidate
+from sourcing_agent.legacy_public_web_storage import (
+    seed_legacy_target_public_web_batch,
+    seed_legacy_target_public_web_run,
+)
 from tests.test_excel_intake import _write_inline_workbook
 
 
@@ -24,12 +28,14 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
             "name": "small_full_reuse_humansand_coding",
             "query": "我想了解Humans&里偏Coding agents方向的研究成员",
             "expected_target_company": "Humans&",
-            "expected_strategy": "全量本地资产复用",
+            "expected_strategy": "Baseline 复用 + 缺口增量",
             "expected_project_scope": "目标公司全量范围",
             "expected_keywords_contains": ["Coding"],
             "expected_metadata": {
-                "dispatchStrategy": "直接复用 snapshot",
-                "requiresDeltaAcquisition": False,
+                "dispatchStrategy": "基于 snapshot 补 delta",
+                "requiresDeltaAcquisition": True,
+                "currentLaneBehavior": "复用本地 baseline",
+                "formerLaneBehavior": "只补缺口增量",
                 "organizationScaleBand": "小型组织",
             },
             "max_final_results_to_candidate_board_ms": 4000,
@@ -42,10 +48,10 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
             "expected_project_scope": "目标公司全量范围",
             "expected_keywords_contains": ["Pre-train"],
             "expected_metadata": {
-                "dispatchStrategy": "直接复用 snapshot",
-                "requiresDeltaAcquisition": False,
-                "currentLaneBehavior": "复用本地 baseline",
-                "formerLaneBehavior": "复用本地 baseline",
+                "dispatchStrategy": "基于 snapshot 补 delta",
+                "requiresDeltaAcquisition": True,
+                "currentLaneBehavior": "只补缺口增量",
+                "formerLaneBehavior": "只补缺口增量",
                 "organizationScaleBand": "中型组织",
             },
             "max_final_results_to_candidate_board_ms": 5000,
@@ -77,7 +83,7 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
             "query": "帮我找Google里做多模态和Pre-train方向的人（包括Veo和Nano Banana相关）",
             "timeout_seconds": 240,
             "expected_target_company": "Google",
-            "expected_strategy": "Scoped search + Baseline 复用增量",
+            "expected_strategy": "Baseline 复用 + 缺口增量",
             "expected_project_scope": "目标公司全量范围",
             "expected_keywords_contains": ["Multimodal", "Pre-train", "Veo", "Nano Banana"],
             "expected_metadata": {
@@ -125,6 +131,70 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
         "max_final_results_to_candidate_board_ms": 5000,
         "max_final_results_duration_seconds": 45,
     }
+    OPENAI_AGENT_DELTA_STREAMING_CASE = {
+        "name": "openai_agent_scoped_delta_streaming",
+        "query": "帮我找OpenAI做Agent方向的人",
+        "expected_target_company": "OpenAI",
+        "expected_strategy": "Scoped search + Baseline 复用增量",
+        "expected_project_scope": "目标公司全量范围",
+        "expected_keywords_contains": ["Agent"],
+        "expected_baseline_snapshot_id": "20260414T120300",
+        "expected_baseline_min_count": 250,
+        "expected_metadata": {
+            "dispatchStrategy": "基于 snapshot 补 delta",
+            "plannerMode": "delta_from_snapshot",
+            "requiresDeltaAcquisition": True,
+            "currentLaneBehavior": "只补缺口增量",
+            "formerLaneBehavior": "只补缺口增量",
+            "organizationScaleBand": "大型组织",
+        },
+        "allow_reloaded_preview_change": True,
+        "max_final_results_duration_seconds": 180,
+    }
+    OPENAI_CHATGPT_DELTA_STREAMING_CASE = {
+        "name": "openai_chatgpt_scoped_delta_streaming",
+        "query": "我想要OpenAI在ChatGPT组的人",
+        "expected_target_company": "OpenAI",
+        "expected_strategy": "Scoped search + Baseline 复用增量",
+        "expected_project_scope": "目标公司全量范围",
+        "expected_keywords_contains": ["ChatGPT"],
+        "expected_baseline_snapshot_id": "20260414T120300",
+        "expected_baseline_min_count": 250,
+        "expected_metadata": {
+            "dispatchStrategy": "基于 snapshot 补 delta",
+            "plannerMode": "delta_from_snapshot",
+            "requiresDeltaAcquisition": True,
+            "currentLaneBehavior": "只补缺口增量",
+            "formerLaneBehavior": "只补缺口增量",
+            "organizationScaleBand": "大型组织",
+        },
+        "allow_reloaded_preview_change": True,
+        "max_final_results_duration_seconds": 240,
+        "min_provider_invocations": {
+            "harvest_profile_search": 4,
+            "harvest_profile_scraper_batch": 8,
+        },
+    }
+    LOVABLE_LIVE_ROSTER_STREAMING_CASE = {
+        "name": "lovable_live_roster_streaming",
+        "query": "帮我找Lovable的全部成员",
+        "expected_target_company": "Lovable",
+        "expected_strategy": "全量 live roster",
+        "expected_project_scope": "目标公司全量范围",
+        "expected_keywords_contains": [],
+        "expected_metadata": {
+            "dispatchStrategy": "新建 workflow",
+            "requiresDeltaAcquisition": False,
+            "currentLaneBehavior": "直接实时采集",
+            "formerLaneBehavior": "直接实时采集",
+        },
+        "allow_reloaded_preview_change": True,
+        "max_final_results_duration_seconds": 240,
+        "min_provider_invocations": {
+            "harvest_company_employees": 1,
+            "harvest_profile_scraper_batch": 4,
+        },
+    }
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -164,6 +234,12 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
         )
         env["NPM_CONFIG_CACHE"] = env.get("NPM_CONFIG_CACHE", str(repo_root / ".cache" / "npm"))
         return env
+
+    def _build_same_origin_frontend_env(self, api_base_url: str) -> dict[str, str]:
+        frontend_env = dict(self.playwright_env)
+        frontend_env["VITE_API_BASE_URL"] = "same-origin"
+        frontend_env["VITE_DEV_PROXY_TARGET"] = api_base_url
+        return frontend_env
 
     def _reserve_free_port(self) -> int:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -206,6 +282,13 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
         pagination_hydration_timeout_seconds: int = 20,
         start_url: str = "",
         restore_existing_results: bool = False,
+        api_base_url: str = "",
+        observe_delta_streaming: bool = False,
+        expected_baseline_snapshot_id: str = "",
+        expected_baseline_min_count: int = 0,
+        drive_worker_recovery: bool = False,
+        drive_provider_webhook_events: bool = False,
+        provider_webhook_token: str = "",
     ) -> dict:
         command = [
             "node",
@@ -223,6 +306,20 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
             command.append("--restore-existing-results")
         else:
             command.extend(["--query", query])
+        if observe_delta_streaming:
+            command.append("--observe-delta-streaming")
+            if api_base_url:
+                command.extend(["--api-base-url", api_base_url])
+            if expected_baseline_snapshot_id:
+                command.extend(["--expected-baseline-snapshot-id", expected_baseline_snapshot_id])
+            if expected_baseline_min_count > 0:
+                command.extend(["--expected-baseline-min-count", str(expected_baseline_min_count)])
+            if drive_worker_recovery:
+                command.append("--drive-worker-recovery")
+            if drive_provider_webhook_events:
+                command.append("--drive-provider-webhook-events")
+                if provider_webhook_token:
+                    command.extend(["--provider-webhook-token", provider_webhook_token])
         if check_pagination_stability:
             command.extend(
                 [
@@ -241,7 +338,7 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout_seconds + 30,
+            timeout=(timeout_seconds * 3 + 60) if observe_delta_streaming else timeout_seconds + 30,
         )
         return json.loads(result.stdout)
 
@@ -252,6 +349,7 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
         workbook_path: Path,
         screenshot_path: Path,
         timeout_seconds: int = 60,
+        exercise_target_actions: bool = False,
     ) -> dict:
         command = [
             "node",
@@ -265,6 +363,8 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
             "--screenshot",
             str(screenshot_path),
         ]
+        if exercise_target_actions:
+            command.append("--exercise-target-actions")
         result = subprocess.run(
             command,
             cwd=self.frontend_dir,
@@ -341,6 +441,12 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
         )
         return json.loads(result.stdout)
 
+    def _assert_public_web_guardrail_text_clean(self, payload: dict) -> None:
+        guardrail_text = str(payload.get("batchGuardrailText") or "").strip()
+        self.assertIn("服务门禁", guardrail_text, payload)
+        self.assertNotIn("终态物化违规", guardrail_text, payload)
+        self.assertNotIn("缺少阶段指标", guardrail_text, payload)
+
     def _parse_duration_seconds(self, value: object) -> int | None:
         text = str(value or "").strip()
         if not text:
@@ -406,13 +512,18 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
         self.assertGreater(payload["results"]["reloadedCount"], 0)
         self.assertEqual(payload["results"]["initialCount"], payload["results"]["reloadedCount"])
         self.assertTrue(payload["results"]["previewNames"])
-        self.assertEqual(payload["results"]["previewNames"], payload["results"]["reloadedPreviewNames"])
+        self.assertTrue(payload["results"]["reloadedPreviewNames"])
+        if not bool(case.get("allow_reloaded_preview_change")):
+            self.assertEqual(payload["results"]["previewNames"], payload["results"]["reloadedPreviewNames"])
         self.assertGreater(payload["results"]["openLinkedinActionCount"], 0)
         self.assertIn("history=", payload["historyUrl"])
         self.assertTrue(
             payload["manualReview"]["hasEmptyState"] or payload["manualReview"]["hasReviewCards"],
             payload,
         )
+        endpoint_parity = dict(payload.get("endpointParity") or {})
+        self.assertTrue(endpoint_parity.get("attempted"), payload)
+        self.assertTrue(endpoint_parity.get("consistent"), payload)
         timings = dict(payload["results"].get("timingsMs") or {})
         final_results_to_candidate_board_ms = timings.get("finalResultsToCandidateBoardMs")
         max_final_results_to_candidate_board_ms = case.get("max_final_results_to_candidate_board_ms")
@@ -487,8 +598,7 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
         with helper._hosted_harness(provider_mode="simulate") as harness:
             helper._seed_explain_matrix_assets(harness)
 
-            frontend_env = dict(self.playwright_env)
-            frontend_env["VITE_API_BASE_URL"] = harness.client.base_url
+            frontend_env = self._build_same_origin_frontend_env(harness.client.base_url)
             with log_path.open("w", encoding="utf-8") as log_handle:
                 frontend_process = subprocess.Popen(
                     ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(frontend_port)],
@@ -555,8 +665,7 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
             if hasattr(harness.orchestrator.acquisition_engine, "multi_source_enricher"):
                 harness.orchestrator.acquisition_engine.multi_source_enricher.worker_runtime = None
 
-            frontend_env = dict(self.playwright_env)
-            frontend_env["VITE_API_BASE_URL"] = harness.client.base_url
+            frontend_env = self._build_same_origin_frontend_env(harness.client.base_url)
             with log_path.open("w", encoding="utf-8") as log_handle:
                 frontend_process = subprocess.Popen(
                     ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(frontend_port)],
@@ -612,8 +721,7 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
                     candidate_specs=self._build_large_org_candidate_specs("xAI", current_count=2600, former_count=320),
                 )
 
-                frontend_env = dict(self.playwright_env)
-                frontend_env["VITE_API_BASE_URL"] = harness.client.base_url
+                frontend_env = self._build_same_origin_frontend_env(harness.client.base_url)
                 with log_path.open("w", encoding="utf-8") as log_handle:
                     frontend_process = subprocess.Popen(
                         ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(frontend_port)],
@@ -697,8 +805,7 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
                 if str((smoke_record.get("final") or {}).get("job_status") or "") != "completed" or not job_id:
                     raise AssertionError(smoke_record)
 
-                frontend_env = dict(self.playwright_env)
-                frontend_env["VITE_API_BASE_URL"] = harness.client.base_url
+                frontend_env = self._build_same_origin_frontend_env(harness.client.base_url)
                 with log_path.open("w", encoding="utf-8") as log_handle:
                     frontend_process = subprocess.Popen(
                         ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(frontend_port)],
@@ -769,8 +876,7 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
                 poll_seconds=0.1,
                 max_poll_seconds=60.0,
             )
-            frontend_env = dict(self.playwright_env)
-            frontend_env["VITE_API_BASE_URL"] = harness.client.base_url
+            frontend_env = self._build_same_origin_frontend_env(harness.client.base_url)
             with log_path.open("w", encoding="utf-8") as log_handle:
                 frontend_process = subprocess.Popen(
                     ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(frontend_port)],
@@ -802,6 +908,166 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
                     self._terminate_process(frontend_process, log_path)
 
         return first_record, second_payload
+
+    def _run_scripted_streaming_observation_case(
+        self,
+        *,
+        case: dict,
+        scenario_filename: str,
+        report_slug: str,
+        seed_reference_assets: bool = False,
+        seed_runtime_identity: dict | None = None,
+        timeout_seconds: int = 240,
+        expected_baseline_snapshot_id: str = "",
+        expected_baseline_min_count: int = 0,
+        drive_provider_webhook_events: bool = True,
+        inject_fast_runtime_env: bool = False,
+        scripted_sleep_seconds_cap: str = "",
+    ) -> dict:
+        helper = hosted_smoke_module.HostedWorkflowSmokeTest(
+            methodName="test_hosted_scripted_openai_agent_scoped_delta_outputs_service_metrics"
+        )
+        frontend_port = self._reserve_free_port()
+        frontend_url = f"http://127.0.0.1:{frontend_port}"
+        log_path = self.repo_root / "runtime" / "service_logs" / f"frontend-e2e-{report_slug}-{frontend_port}.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        scenario_path = self.repo_root / "configs" / "scripted" / scenario_filename
+
+        previous_sleep_cap = os.environ.get("SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP")
+        if str(scripted_sleep_seconds_cap or "").strip():
+            os.environ["SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP"] = str(scripted_sleep_seconds_cap).strip()
+        try:
+            harness_context = helper._hosted_harness(
+                provider_mode="scripted",
+                scripted_scenario=str(scenario_path),
+                inject_fast_runtime_env=inject_fast_runtime_env,
+            )
+            harness = harness_context.__enter__()
+            if seed_reference_assets:
+                helper._seed_reference_org_assets(harness)
+            if seed_runtime_identity:
+                helper._write_runtime_identity(runtime_dir=harness.settings.runtime_dir, **seed_runtime_identity)
+
+            frontend_env = self._build_same_origin_frontend_env(harness.client.base_url)
+            with log_path.open("w", encoding="utf-8") as log_handle:
+                frontend_process = subprocess.Popen(
+                    ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(frontend_port)],
+                    cwd=self.frontend_dir,
+                    env=frontend_env,
+                    stdout=log_handle,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                try:
+                    self._wait_for_http_ready(frontend_url, timeout=45)
+                    payload = self._run_browser_case(
+                        frontend_url=frontend_url,
+                        query=case["query"],
+                        screenshot_path=self.repo_root
+                        / "output"
+                        / "playwright"
+                        / f"frontend-browser-e2e-{report_slug}.png",
+                        timeout_seconds=timeout_seconds,
+                        api_base_url=harness.client.base_url,
+                        observe_delta_streaming=True,
+                        expected_baseline_snapshot_id=expected_baseline_snapshot_id,
+                        expected_baseline_min_count=expected_baseline_min_count,
+                        drive_provider_webhook_events=drive_provider_webhook_events,
+                        provider_webhook_token="test-token",
+                    )
+                except Exception as exc:
+                    log_excerpt = ""
+                    if log_path.exists():
+                        log_excerpt = log_path.read_text(encoding="utf-8", errors="replace")[-2000:]
+                    stderr_excerpt = ""
+                    if isinstance(exc, subprocess.CalledProcessError):
+                        stderr_excerpt = exc.stderr or ""
+                    raise AssertionError(
+                        f"frontend scripted streaming browser e2e failed for {report_slug}.\n"
+                        f"playwright stderr:\n{stderr_excerpt}\nfrontend log tail:\n{log_excerpt}"
+                    ) from exc
+                finally:
+                    self._terminate_process(frontend_process, log_path)
+
+            invocations = hosted_smoke_module.load_scripted_provider_invocations()
+        finally:
+            try:
+                harness_context.__exit__(None, None, None)
+            except UnboundLocalError:
+                pass
+            if previous_sleep_cap is None:
+                os.environ.pop("SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP", None)
+            else:
+                os.environ["SOURCING_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP"] = previous_sleep_cap
+
+        payload["providerInvocationSummary"] = {
+            "harvest_company_employees": sum(
+                1 for item in invocations if str(item.get("logical_name") or "") == "harvest_company_employees"
+            ),
+            "harvest_profile_search": sum(
+                1 for item in invocations if str(item.get("logical_name") or "") == "harvest_profile_search"
+            ),
+            "harvest_profile_scraper_batch": sum(
+                1 for item in invocations if str(item.get("logical_name") or "") == "harvest_profile_scraper_batch"
+            ),
+            "total": len(invocations),
+        }
+        report_path = (
+            self.repo_root
+            / "output"
+            / "playwright"
+            / f"frontend-browser-e2e-{report_slug}-report.json"
+        )
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        payload["reportPath"] = str(report_path)
+        return payload
+
+    def _run_scripted_openai_agent_delta_streaming_observation_case(self) -> dict:
+        case = self.OPENAI_AGENT_DELTA_STREAMING_CASE
+        return self._run_scripted_streaming_observation_case(
+            case=case,
+            scenario_filename="openai_agent_scoped_delta_streaming.json",
+            report_slug="openai-agent-delta-streaming",
+            seed_reference_assets=True,
+            expected_baseline_snapshot_id=str(case["expected_baseline_snapshot_id"]),
+            expected_baseline_min_count=int(case["expected_baseline_min_count"]),
+            timeout_seconds=900,
+            scripted_sleep_seconds_cap=os.getenv("SOURCING_HEAVY_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP", "30"),
+        )
+
+    def _run_scripted_openai_chatgpt_delta_streaming_observation_case(self) -> dict:
+        case = self.OPENAI_CHATGPT_DELTA_STREAMING_CASE
+        return self._run_scripted_streaming_observation_case(
+            case=case,
+            scenario_filename="openai_chatgpt_scoped_delta_streaming.json",
+            report_slug="openai-chatgpt-delta-streaming",
+            seed_reference_assets=True,
+            expected_baseline_snapshot_id=str(case["expected_baseline_snapshot_id"]),
+            expected_baseline_min_count=int(case["expected_baseline_min_count"]),
+            timeout_seconds=900,
+            scripted_sleep_seconds_cap=os.getenv("SOURCING_HEAVY_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP", "30"),
+        )
+
+    def _run_scripted_lovable_live_roster_streaming_observation_case(self) -> dict:
+        case = self.LOVABLE_LIVE_ROSTER_STREAMING_CASE
+        return self._run_scripted_streaming_observation_case(
+            case=case,
+            scenario_filename="lovable_live_roster.json",
+            report_slug="lovable-live-roster-streaming",
+            seed_reference_assets=False,
+            seed_runtime_identity={
+                "company_key": "lovable",
+                "snapshot_id": "20260415T020304",
+                "requested_name": "Lovable",
+                "canonical_name": "Lovable",
+                "linkedin_slug": "lovable-dev",
+                "aliases": ["lovable", "lovable.dev"],
+            },
+            timeout_seconds=900,
+            drive_provider_webhook_events=True,
+            scripted_sleep_seconds_cap=os.getenv("SOURCING_HEAVY_SCRIPTED_HARVEST_SLEEP_SECONDS_CAP", "30"),
+        )
 
 
 class FrontendBrowserFastE2ETest(_FrontendBrowserE2EBase):
@@ -886,6 +1152,7 @@ class FrontendBrowserFastE2ETest(_FrontendBrowserE2EBase):
                         workbook_path=workbook_path,
                         screenshot_path=self.repo_root / "output" / "playwright" / "frontend-browser-e2e-excel-intake.png",
                         timeout_seconds=90,
+                        exercise_target_actions=True,
                     )
                 except Exception as exc:
                     log_excerpt = ""
@@ -905,6 +1172,13 @@ class FrontendBrowserFastE2ETest(_FrontendBrowserE2EBase):
         combined_groups = "\n".join(str(item) for item in list(payload.get("groups") or []))
         self.assertIn("OpenAI", combined_groups)
         self.assertIn("Anthropic", combined_groups)
+        row_manifest_summaries = "\n".join(str(item) for item in list(payload.get("rowManifestSummaries") or []))
+        self.assertIn("已匹配 1 行", row_manifest_summaries, payload)
+        self.assertIn("需人工审核 0 行", row_manifest_summaries, payload)
+        self.assertIn("未解析 0 行", row_manifest_summaries, payload)
+        target_actions = dict(payload.get("targetActions") or {})
+        self.assertIn("已导入", str(target_actions.get("importMessage") or ""), payload)
+        self.assertRegex(str(target_actions.get("downloadFilename") or ""), r"target-candidates-\d{8}T\d{4}\.zip")
         self.assertFalse(str(payload.get("errorText") or "").strip(), payload)
 
     def test_browser_target_candidate_public_web_selection_trigger_and_polling(self) -> None:
@@ -924,11 +1198,12 @@ class FrontendBrowserFastE2ETest(_FrontendBrowserE2EBase):
                     "candidate_name": "Alice Public Web",
                     "headline": "Research Engineer",
                     "current_company": "Example AI",
+                    "avatar_url": "https://example.com/alice.png",
                     "linkedin_url": "https://www.linkedin.com/in/alice-public-web/",
+                    "primary_email": "alice.public.web@example.com",
                 }
             )
-            frontend_env = dict(self.playwright_env)
-            frontend_env["VITE_API_BASE_URL"] = harness.client.base_url
+            frontend_env = self._build_same_origin_frontend_env(harness.client.base_url)
             with log_path.open("w", encoding="utf-8") as log_handle:
                 frontend_process = subprocess.Popen(
                     ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(frontend_port)],
@@ -963,7 +1238,12 @@ class FrontendBrowserFastE2ETest(_FrontendBrowserE2EBase):
 
         self.assertEqual(payload.get("status"), "ok", payload)
         self.assertGreaterEqual(int(payload.get("initialCandidateCount") or 0), 1, payload)
+        self.assertEqual(int(payload.get("updatePostsBeforeExplicitSave") or 0), 0, payload)
+        self.assertEqual(int(payload.get("updatePostsAfterExplicitSave") or 0), 1, payload)
+        self.assertTrue(payload.get("explicitSaveCreatedSingleTargetUpdate"), payload)
+        self.assertTrue(payload.get("detailDrawerVisible"), payload)
         self.assertTrue(payload.get("sawQueuedOrRunningStatus"), payload)
+        self._assert_public_web_guardrail_text_clean(payload)
         self.assertIn("Web Search", str(payload.get("exportButtonText") or ""), payload)
 
     def test_browser_target_candidate_public_web_promotion_and_export(self) -> None:
@@ -992,7 +1272,33 @@ class FrontendBrowserFastE2ETest(_FrontendBrowserE2EBase):
                     "linkedin_url": "https://www.linkedin.com/in/alice-public-web-promotion/",
                 }
             )
-            run = harness.store.upsert_target_candidate_public_web_run(
+            seed_legacy_target_public_web_batch(
+                harness.store,
+                {
+                    "batch_id": "browser-public-web-promotion-batch-1",
+                    "idempotency_key": "browser-public-web-promotion-batch-key-1",
+                    "status": "completed",
+                    "requested_record_ids": [record["id"]],
+                    "run_ids": ["browser-public-web-promotion-run-1"],
+                    "summary": {
+                        "status": "completed",
+                        "run_count": 1,
+                        "completed_count": 1,
+                        "phase_metrics": {
+                            "metric_run_count": 1,
+                            "signal_materialization_required_count": 2,
+                            "signal_materialized_count": 2,
+                            "terminal_with_errors_count": 0,
+                            "partial_failure_count": 0,
+                            "runs_with_errors_count": 0,
+                            "missing_phase_metric_count": 0,
+                            "service_guardrail_violation_detected": False,
+                        },
+                    },
+                }
+            )
+            run = seed_legacy_target_public_web_run(
+                harness.store,
                 {
                     "run_id": "browser-public-web-promotion-run-1",
                     "batch_id": "browser-public-web-promotion-batch-1",
@@ -1011,6 +1317,14 @@ class FrontendBrowserFastE2ETest(_FrontendBrowserE2EBase):
                         "fetched_document_count": 2,
                         "email_candidate_count": 1,
                         "promotion_recommended_email_count": 1,
+                        "phase_metrics": {
+                            "signal_materialization_required_count": 2,
+                            "signal_materialized_count": 2,
+                            "email_signal_count": 1,
+                            "profile_link_signal_count": 1,
+                            "email_signal_materialized_count": 1,
+                            "profile_link_signal_materialized_count": 1,
+                        },
                     },
                     "analysis_checkpoint": {"stage": "completed", "status": "completed"},
                 }
@@ -1085,8 +1399,7 @@ class FrontendBrowserFastE2ETest(_FrontendBrowserE2EBase):
                     },
                 ],
             )
-            frontend_env = dict(self.playwright_env)
-            frontend_env["VITE_API_BASE_URL"] = harness.client.base_url
+            frontend_env = self._build_same_origin_frontend_env(harness.client.base_url)
             with log_path.open("w", encoding="utf-8") as log_handle:
                 frontend_process = subprocess.Popen(
                     ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(frontend_port)],
@@ -1129,8 +1442,10 @@ class FrontendBrowserFastE2ETest(_FrontendBrowserE2EBase):
             promotions = harness.store.list_target_candidate_public_web_promotions(record_id=record["id"])
 
         self.assertEqual(payload.get("status"), "ok", payload)
+        self.assertEqual(payload.get("exportMode"), "promoted_and_publishable", payload)
         self.assertTrue(payload.get("promotedEmailVisible"), payload)
         self.assertTrue(payload.get("promotedLinkVisible"), payload)
+        self._assert_public_web_guardrail_text_clean(payload)
         self.assertGreater(int(payload.get("downloadedSize") or 0), 0, payload)
         download_path = Path(str(payload.get("downloadPath") or ""))
         self.assertTrue(zipfile.is_zipfile(download_path), payload)
@@ -1188,6 +1503,120 @@ class FrontendBrowserSlowE2ETest(_FrontendBrowserE2EBase):
         self.assertGreater(second_payload["results"]["initialCount"], 0)
         self.assertGreater(second_payload["results"]["reloadedCount"], 0)
         self.assertIn("history=", second_payload["historyUrl"])
+
+    def test_browser_openai_agent_delta_streaming_contract_observation_when_enabled(self) -> None:
+        enabled = _env_flag("SOURCING_RUN_DELTA_STREAMING_BROWSER_E2E")
+        if not enabled:
+            self.skipTest(
+                "set SOURCING_RUN_DELTA_STREAMING_BROWSER_E2E=1 to run the OpenAI Agent delta-streaming browser contract"
+            )
+        payload = self._run_scripted_openai_agent_delta_streaming_observation_case()
+        self._assert_case_payload(self.OPENAI_AGENT_DELTA_STREAMING_CASE, payload)
+        invocation_summary = dict(payload.get("providerInvocationSummary") or {})
+        self.assertGreaterEqual(int(invocation_summary.get("harvest_profile_search") or 0), 4, payload)
+        self.assertGreaterEqual(int(invocation_summary.get("harvest_profile_scraper_batch") or 0), 4, payload)
+
+        observation = dict(payload.get("deltaStreaming") or {})
+        self.assertTrue(observation.get("attempted"), payload)
+        self.assertGreater(int(observation.get("sampleCount") or 0), 0, payload)
+        if _env_flag("SOURCING_EXPECT_DELTA_STREAMING_BROWSER_E2E"):
+            self.assertTrue(observation.get("baselineFirstBoardObserved"), payload)
+            self.assertTrue(observation.get("finalCurrentSnapshotObserved"), payload)
+            self.assertTrue(observation.get("contractReady"), payload)
+            self.assertTrue(observation.get("executionMetricsObserved"), payload)
+            self.assertTrue(observation.get("candidateSyncObserved"), payload)
+            self.assertTrue(observation.get("profileProgressObserved"), payload)
+            self.assertTrue(observation.get("profileProgressCompleted"), payload)
+            self.assertTrue(observation.get("candidateSyncProfileProgressObserved"), payload)
+            self.assertTrue(observation.get("executionProfileProgressObserved"), payload)
+            self.assertTrue(observation.get("providerWebhookDriven"), payload)
+            self.assertGreater(len(list(observation.get("providerWebhookEvents") or [])), 0, payload)
+            webhook_summary = dict(observation.get("providerWebhookSummary") or {})
+            self.assertGreater(int(webhook_summary.get("eventCount") or 0), 0, payload)
+            self.assertEqual(int(webhook_summary.get("failedEventCount") or 0), 0, payload)
+            self.assertGreater(int(webhook_summary.get("recoveryCount") or 0), 0, payload)
+            self.assertLessEqual(int(webhook_summary.get("maxWebhookToResponseMs") or 0), 30000, payload)
+            self.assertFalse(observation.get("progressRegressionDetected"), payload)
+            self.assertFalse(observation.get("snapshotDivergenceDetected"), payload)
+            self.assertFalse(observation.get("prematurePublicWebStageDetected"), payload)
+            self.assertFalse(observation.get("prematureCandidateSyncCompleteDetected"), payload)
+            self.assertFalse(observation.get("materializedAheadOfFetchedDetected"), payload)
+            self.assertFalse(observation.get("impossibleStage1ProgressDetected"), payload)
+            self.assertTrue(observation.get("boardRuntimeObserved"), payload)
+            self.assertTrue(observation.get("boardRuntimeFilterContractObserved"), payload)
+            self.assertFalse(observation.get("boardRuntimePreviewShellSyncLeakDetected"), payload)
+        else:
+            self.assertIn("contractGapDetected", observation, payload)
+
+    def _assert_scripted_streaming_observation_payload(self, case: dict, payload: dict) -> None:
+        self._assert_case_payload(case, payload)
+        invocation_summary = dict(payload.get("providerInvocationSummary") or {})
+        for logical_name, minimum_count in dict(case.get("min_provider_invocations") or {}).items():
+            self.assertGreaterEqual(
+                int(invocation_summary.get(logical_name) or 0),
+                int(minimum_count),
+                payload,
+            )
+
+        observation = dict(payload.get("deltaStreaming") or {})
+        self.assertTrue(observation.get("attempted"), payload)
+        self.assertGreater(int(observation.get("sampleCount") or 0), 0, payload)
+        self.assertTrue(observation.get("executionMetricsObserved"), payload)
+        self.assertTrue(observation.get("candidateSyncObserved"), payload)
+        self.assertTrue(observation.get("profileProgressObserved"), payload)
+        self.assertTrue(observation.get("profileProgressCompleted"), payload)
+        self.assertTrue(observation.get("candidateSyncProfileProgressObserved"), payload)
+        self.assertTrue(observation.get("executionProfileProgressObserved"), payload)
+        self.assertTrue(observation.get("providerWebhookDriven"), payload)
+        self.assertGreater(len(list(observation.get("providerWebhookEvents") or [])), 0, payload)
+        webhook_summary = dict(observation.get("providerWebhookSummary") or {})
+        self.assertGreater(int(webhook_summary.get("eventCount") or 0), 0, payload)
+        self.assertEqual(int(webhook_summary.get("failedEventCount") or 0), 0, payload)
+        self.assertGreater(int(webhook_summary.get("recoveryCount") or 0), 0, payload)
+        self.assertLessEqual(int(webhook_summary.get("maxWebhookToResponseMs") or 0), 30000, payload)
+        self.assertFalse(observation.get("progressRegressionDetected"), payload)
+        self.assertFalse(observation.get("snapshotDivergenceDetected"), payload)
+        self.assertFalse(observation.get("materializationStuckAfterFetchDetected"), payload)
+        self.assertFalse(observation.get("prematurePublicWebStageDetected"), payload)
+        self.assertFalse(observation.get("prematureCandidateSyncCompleteDetected"), payload)
+        self.assertFalse(observation.get("materializedAheadOfFetchedDetected"), payload)
+        self.assertFalse(observation.get("impossibleStage1ProgressDetected"), payload)
+        self.assertTrue(observation.get("boardRuntimeObserved"), payload)
+        self.assertTrue(observation.get("boardRuntimeFilterContractObserved"), payload)
+        self.assertFalse(observation.get("boardRuntimePreviewShellSyncLeakDetected"), payload)
+
+    def test_browser_openai_chatgpt_delta_streaming_contract_observation_when_enabled(self) -> None:
+        enabled = _env_flag("SOURCING_RUN_HEAVY_SCRIPTED_BROWSER_E2E")
+        if not enabled:
+            self.skipTest(
+                "set SOURCING_RUN_HEAVY_SCRIPTED_BROWSER_E2E=1 to run the ChatGPT delta browser contract"
+            )
+        payload = self._run_scripted_openai_chatgpt_delta_streaming_observation_case()
+        self._assert_scripted_streaming_observation_payload(self.OPENAI_CHATGPT_DELTA_STREAMING_CASE, payload)
+        observation = dict(payload.get("deltaStreaming") or {})
+        self.assertTrue(observation.get("baselineFirstBoardObserved"), payload)
+        self.assertTrue(observation.get("finalCurrentSnapshotObserved"), payload)
+        self.assertTrue(observation.get("contractReady"), payload)
+
+    def test_browser_lovable_live_roster_streaming_contract_observation_when_enabled(self) -> None:
+        enabled = _env_flag("SOURCING_RUN_HEAVY_SCRIPTED_BROWSER_E2E")
+        if not enabled:
+            self.skipTest(
+                "set SOURCING_RUN_HEAVY_SCRIPTED_BROWSER_E2E=1 to run the Lovable live-roster browser contract"
+            )
+        payload = self._run_scripted_lovable_live_roster_streaming_observation_case()
+        self._assert_scripted_streaming_observation_payload(self.LOVABLE_LIVE_ROSTER_STREAMING_CASE, payload)
+        observation = dict(payload.get("deltaStreaming") or {})
+        max_current_returned = 0
+        for sample in list(observation.get("samples") or []):
+            dashboard_progress = dict(dict(sample.get("dashboard") or {}).get("linkedinStage1Progress") or {})
+            progress_payload = dict(dict(sample.get("progress") or {}).get("linkedinStage1Progress") or {})
+            max_current_returned = max(
+                max_current_returned,
+                int(dashboard_progress.get("currentSearchReturnedCount") or 0),
+                int(progress_payload.get("currentSearchReturnedCount") or 0),
+            )
+        self.assertGreaterEqual(max_current_returned, 100, payload)
 
 
 if __name__ == "__main__":

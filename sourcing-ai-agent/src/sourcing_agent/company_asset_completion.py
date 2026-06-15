@@ -5,8 +5,8 @@ import os
 import re
 import threading
 import time
+import uuid
 from collections import defaultdict
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -40,9 +40,8 @@ from .profile_registry_utils import (
     harvest_profile_payload_has_usable_content,
     profile_cache_path_candidates,
 )
-from .search_provider import build_search_provider
 from .runtime_environment import external_provider_mode
-from .runtime_tuning import resolved_harvest_profile_scrape_global_inflight, runtime_inflight_slot
+from .search_provider import build_search_provider
 from .settings import AppSettings
 from .storage import ControlPlaneStore
 
@@ -191,11 +190,19 @@ class CompanyAssetCompletionManager:
         profile_targets = self._select_profile_targets(
             materialized_candidates, evidence_by_candidate=evidence_by_candidate, limit=profile_detail_limit
         )
+        profile_scheduler_job_id = self._ensure_profile_completion_scheduler_job(
+            target_company=company_name,
+            company_key=company_key,
+            snapshot_dir=snapshot_dir,
+            operation="complete_company_assets",
+            enabled=bool(profile_targets),
+        )
         profile_results = self._complete_known_profile_targets(
             identity=identity,
             snapshot_dir=snapshot_dir,
             logger=logger,
             candidates=profile_targets,
+            source_job_id=profile_scheduler_job_id,
         )
 
         refreshed_candidates = self.store.list_candidates_for_company(company_name)
@@ -246,6 +253,7 @@ class CompanyAssetCompletionManager:
                 snapshot_dir=snapshot_dir,
                 logger=logger,
                 candidates=followup_targets,
+                source_job_id=profile_scheduler_job_id,
             )
             if followup_targets
             else {
@@ -278,6 +286,7 @@ class CompanyAssetCompletionManager:
             "target_company": company_name,
             "company_key": company_key,
             "snapshot_id": snapshot_dir.name,
+            "profile_scheduler_job_id": profile_scheduler_job_id,
             "materialized_view": {
                 "candidate_count": len(materialized_candidates),
                 "evidence_count": len(materialized_evidence),
@@ -311,6 +320,7 @@ class CompanyAssetCompletionManager:
         *,
         target_company: str,
         snapshot_id: str = "",
+        source_job_id: str = "",
         employment_scope: str = "all",
         profile_limit: int = 12,
         only_missing_profile_detail: bool = True,
@@ -356,11 +366,20 @@ class CompanyAssetCompletionManager:
             only_missing_profile_detail=only_missing_profile_detail,
             candidate_ids=set(normalized_candidate_ids),
         )
+        profile_scheduler_job_id = self._ensure_profile_completion_scheduler_job(
+            target_company=company_name,
+            company_key=company_key,
+            snapshot_dir=snapshot_dir,
+            operation="complete_snapshot_profiles",
+            source_job_id=source_job_id,
+            enabled=bool(targets),
+        )
         result = self._complete_known_profile_targets(
             identity=identity,
             snapshot_dir=snapshot_dir,
             logger=logger,
             candidates=targets,
+            source_job_id=profile_scheduler_job_id,
             force_refresh=force_refresh,
             allow_live_refetch_for_unmatched=allow_live_refetch_for_unmatched,
         )
@@ -386,6 +405,7 @@ class CompanyAssetCompletionManager:
             "target_company": company_name,
             "company_key": company_key,
             "snapshot_id": snapshot_dir.name,
+            "profile_scheduler_job_id": profile_scheduler_job_id,
             "employment_scope": scope_key,
             "profile_mode": mode_key,
             "force_refresh": bool(force_refresh),
@@ -412,6 +432,70 @@ class CompanyAssetCompletionManager:
         summary["summary_path"] = str(summary_path)
         return summary
 
+    def _ensure_profile_completion_scheduler_job(
+        self,
+        *,
+        target_company: str,
+        company_key: str,
+        snapshot_dir: Path,
+        operation: str,
+        source_job_id: str = "",
+        enabled: bool = True,
+    ) -> str:
+        normalized_source_job_id = str(source_job_id or "").strip()
+        if normalized_source_job_id or not enabled:
+            return normalized_source_job_id
+        normalized_company_key = str(company_key or target_company or "company").strip().lower() or "company"
+        normalized_company_key = re.sub(r"[^a-z0-9]+", "_", normalized_company_key).strip("_") or "company"
+        job_id = f"profile_completion_{normalized_company_key}_{snapshot_dir.name}_{uuid.uuid4().hex[:8]}"
+        request_payload = {
+            "target_company": str(target_company or "").strip(),
+            "query": f"{str(target_company or '').strip()} profile completion",
+            "raw_user_request": (
+                f"Complete cached/scheduler-owned LinkedIn profile hydration for {str(target_company or '').strip()}."
+            ),
+            "workflow_mode": "company_asset_profile_completion",
+            "snapshot_id": snapshot_dir.name,
+        }
+        plan_payload = {
+            "mode": "profile_completion_scheduler_scope",
+            "operation": str(operation or "company_asset_completion").strip() or "company_asset_completion",
+            "snapshot_dir": str(snapshot_dir),
+            "profile_provider_owner": "linkedin_profile_scheduler",
+            "direct_profile_fetch_enabled": False,
+        }
+        summary_payload = {
+            "status": "scheduler_scope_active",
+            "operation": str(operation or "company_asset_completion").strip() or "company_asset_completion",
+            "snapshot_id": snapshot_dir.name,
+            "snapshot_dir": str(snapshot_dir),
+            "contract": "cache-only completion hydrator; missing profile URLs are owned by linkedin_profile_registry refill",
+        }
+        self.store.save_job(
+            job_id=job_id,
+            job_type="profile_completion_scheduler",
+            status="completed",
+            stage="profile_scheduler_scope",
+            request_payload=request_payload,
+            plan_payload=plan_payload,
+            summary_payload=summary_payload,
+            artifact_path=str(snapshot_dir),
+            idempotency_key=job_id,
+        )
+        self.store.append_job_event(
+            job_id,
+            "profile_scheduler_scope",
+            "created",
+            "Created profile scheduler scope job for company asset completion cache misses.",
+            {
+                "snapshot_id": snapshot_dir.name,
+                "snapshot_dir": str(snapshot_dir),
+                "operation": str(operation or "company_asset_completion").strip() or "company_asset_completion",
+                "direct_profile_fetch_enabled": False,
+            },
+        )
+        return job_id
+
     def _complete_known_profile_targets(
         self,
         *,
@@ -419,6 +503,7 @@ class CompanyAssetCompletionManager:
         snapshot_dir: Path,
         logger: AssetLogger,
         candidates: list[Candidate],
+        source_job_id: str = "",
         force_refresh: bool = False,
         allow_live_refetch_for_unmatched: bool = True,
     ) -> dict[str, Any]:
@@ -452,12 +537,16 @@ class CompanyAssetCompletionManager:
             snapshot_dir=snapshot_dir,
             logger=logger,
             use_cache=not force_refresh,
+            source_jobs=[source_job_id] if str(source_job_id or "").strip() else [],
             source_shards_by_url={
                 profile_url: sorted(list(source_shards_by_url.get(profile_url) or set()))
                 for profile_url in requested_urls
             },
         )
         errors.extend(fetch_errors)
+        scheduler_pending = any(
+            str(error or "").startswith("profile_completion_scheduler_") for error in fetch_errors
+        )
         completed_candidates: list[dict[str, Any]] = []
         non_member_candidates: list[dict[str, Any]] = []
         manual_review_candidates: list[dict[str, Any]] = []
@@ -485,6 +574,20 @@ class CompanyAssetCompletionManager:
                 if candidate.candidate_id in resolved_ids:
                     continue
                 if not _profile_matches_candidate(parsed, candidate, identity, model_client=self.model_client):
+                    if _names_match(candidate.name_en, str(parsed.get("full_name") or "")):
+                        merged_candidate, resolved_profile, evidence = _apply_non_member_profile(
+                            candidate,
+                            parsed,
+                            raw_path,
+                            str(payload.get("account_id") or "harvest_profile_scraper"),
+                        )
+                        self.store.upsert_candidate(merged_candidate)
+                        if evidence:
+                            self.store.upsert_evidence_records(evidence)
+                        non_member_candidates.append(resolved_profile)
+                        resolved_ids.add(candidate.candidate_id)
+                        matched = True
+                        break
                     continue
                 merged_candidate, resolved_profile, evidence = _apply_verified_profile(
                     candidate,
@@ -557,6 +660,7 @@ class CompanyAssetCompletionManager:
                     snapshot_dir=snapshot_dir,
                     logger=logger,
                     use_cache=True,
+                    source_jobs=[source_job_id] if str(source_job_id or "").strip() else [],
                     source_shards_by_url={
                         profile_url: sorted(list(source_shards_by_url.get(profile_url) or set()))
                         for profile_url in canonical_url_set
@@ -574,12 +678,13 @@ class CompanyAssetCompletionManager:
                     normalized_url = str(profile_url or "").strip()
                     if normalized_url and normalized_url not in refresh_requested_urls:
                         refresh_requested_urls.append(normalized_url)
-            if refresh_requested_urls:
+            if refresh_requested_urls and not scheduler_pending:
                 retry_profiles, refresh_errors = self._fetch_profile_batches(
                     refresh_requested_urls,
                     snapshot_dir=snapshot_dir,
                     logger=logger,
                     use_cache=False,
+                    source_jobs=[source_job_id] if str(source_job_id or "").strip() else [],
                     source_shards_by_url={
                         profile_url: sorted(list(source_shards_by_url.get(profile_url) or set()))
                         for profile_url in refresh_requested_urls
@@ -640,6 +745,8 @@ class CompanyAssetCompletionManager:
                 continue
             if refreshed:
                 errors.append(f"profile_completion_still_unmatched:{candidate.candidate_id}")
+            elif scheduler_pending:
+                errors.append(f"profile_completion_waiting_scheduler:{candidate.candidate_id}")
             final_skipped_candidates.append(
                 {
                     "candidate_id": candidate.candidate_id,
@@ -755,6 +862,7 @@ class CompanyAssetCompletionManager:
         snapshot_dir: Path,
         logger: AssetLogger,
         use_cache: bool,
+        source_jobs: list[str] | None = None,
         source_shards_by_url: dict[str, list[str]] | None = None,
     ) -> tuple[dict[str, dict[str, Any]], list[str]]:
         normalized_urls = _dedupe_strings(requested_urls)
@@ -762,15 +870,14 @@ class CompanyAssetCompletionManager:
             return {}, []
         fetched: dict[str, dict[str, Any]] = {}
         errors: list[str] = []
-        lease_owner = _profile_registry_lease_owner("profile_completion")
-        acquired_leases: dict[str, dict[str, Any]] = {}
         source_shards_by_url = {
             str(profile_url or "").strip(): list(values or [])
             for profile_url, values in dict(source_shards_by_url or {}).items()
             if str(profile_url or "").strip()
         }
+        normalized_source_jobs = _dedupe_strings(list(source_jobs or []))
         registry_entries = self.store.get_linkedin_profile_registry_bulk(normalized_urls)
-        pending_urls: list[str] = []
+        scheduler_required_urls: list[str] = []
 
         def _record_event(
             profile_url: str,
@@ -789,15 +896,6 @@ class CompanyAssetCompletionManager:
                 metadata=metadata or {},
                 duration_ms=duration_ms,
             )
-
-        def _release_acquired_leases() -> None:
-            for profile_url, lease_payload in list(acquired_leases.items()):
-                self.store.release_linkedin_profile_registry_lease(
-                    profile_url,
-                    lease_owner=str(lease_payload.get("lease_owner") or lease_owner),
-                    lease_token=str(lease_payload.get("lease_token") or ""),
-                )
-            acquired_leases.clear()
 
         def _wait_for_peer_fetch(
             profile_url: str,
@@ -843,6 +941,7 @@ class CompanyAssetCompletionManager:
                     self.store.upsert_linkedin_profile_registry_sources(
                         profile_url,
                         source_shards=source_shards,
+                        source_jobs=normalized_source_jobs,
                         alias_urls=list(alias_metadata.get("alias_urls") or []),
                         raw_linkedin_url=str(alias_metadata.get("raw_linkedin_url") or ""),
                         sanity_linkedin_url=str(alias_metadata.get("sanity_linkedin_url") or ""),
@@ -854,6 +953,7 @@ class CompanyAssetCompletionManager:
                     error="registry_cached_raw_missing_or_invalid",
                     retryable=True,
                     source_shards=source_shards,
+                    source_jobs=normalized_source_jobs,
                     snapshot_dir=str(snapshot_dir),
                 )
             if use_cache and registry_status == "queued":
@@ -866,6 +966,7 @@ class CompanyAssetCompletionManager:
                 self.store.upsert_linkedin_profile_registry_sources(
                     profile_url,
                     source_shards=source_shards,
+                    source_jobs=normalized_source_jobs,
                 )
                 _record_event(profile_url, event_type="cache_skip_unrecoverable", event_status="unrecoverable")
                 errors.append(f"profile_completion_registry_unrecoverable:{profile_url}")
@@ -883,6 +984,7 @@ class CompanyAssetCompletionManager:
                         profile_url,
                         raw_path=str(local_cached.get("raw_path") or ""),
                         source_shards=source_shards,
+                        source_jobs=normalized_source_jobs,
                         alias_urls=list(alias_metadata.get("alias_urls") or []),
                         raw_linkedin_url=str(alias_metadata.get("raw_linkedin_url") or profile_url),
                         sanity_linkedin_url=str(alias_metadata.get("sanity_linkedin_url") or ""),
@@ -890,213 +992,49 @@ class CompanyAssetCompletionManager:
                     )
                     _record_event(profile_url, event_type="cache_hit_local_raw")
                     continue
-            lease_payload = self.store.acquire_linkedin_profile_registry_lease(
+            registry_refill_state = str(registry_entry.get("refill_queue_state") or "").strip()
+            peer_fetch_may_be_active = registry_refill_state in {
+                "planned_dispatch",
+                "dispatch_reserved",
+                "dispatch_claimed",
+            }
+            if peer_fetch_may_be_active:
+                waited = _wait_for_peer_fetch(profile_url, normalized_registry_key=registry_key)
+                if waited is not None:
+                    fetched[profile_url] = waited
+                    _record_event(profile_url, event_type="cache_hit_lease_wait")
+                    continue
+            self.store.upsert_linkedin_profile_registry_sources(
                 profile_url,
-                lease_owner=lease_owner,
-                lease_seconds=_PROFILE_REGISTRY_LEASE_SECONDS,
+                source_shards=source_shards,
+                source_jobs=normalized_source_jobs,
             )
-            if bool(lease_payload.get("acquired")):
-                acquired_leases[profile_url] = lease_payload
-                pending_urls.append(profile_url)
-                continue
-            waited = _wait_for_peer_fetch(profile_url, normalized_registry_key=registry_key)
-            if waited is not None:
-                fetched[profile_url] = waited
-                _record_event(profile_url, event_type="cache_hit_lease_wait")
-                continue
+            scheduler_required_urls.append(profile_url)
             _record_event(
                 profile_url,
-                event_type="lease_contended_skip",
-                event_status=str(lease_payload.get("lease_owner") or ""),
-                detail="peer lease active",
+                event_type="profile_completion_scheduler_required",
+                event_status="deferred_budget" if normalized_source_jobs else "source_job_missing",
+                detail="company asset completion is cache-only; provider submit belongs to profile scheduler",
             )
-            errors.append(f"profile_completion_registry_lease_contended:{profile_url}")
-
-        if not pending_urls:
-            return fetched, errors
-
-        def _mark_queued(url_batch: list[str], *, run_id: str = "", dataset_id: str = "") -> None:
-            for requested_url in url_batch:
-                self.store.mark_linkedin_profile_registry_queued(
-                    requested_url,
-                    source_shards=list(source_shards_by_url.get(requested_url) or []),
-                    run_id=run_id,
-                    dataset_id=dataset_id,
+        if scheduler_required_urls:
+            if normalized_source_jobs:
+                self.store.record_linkedin_profile_refill_plan_items(
+                    deferred_profile_urls=scheduler_required_urls,
+                    source_shards_by_url={
+                        profile_url: list(source_shards_by_url.get(profile_url) or [])
+                        for profile_url in scheduler_required_urls
+                    },
+                    source_jobs=normalized_source_jobs,
                     snapshot_dir=str(snapshot_dir),
+                    trigger_kind="company_asset_completion_profile_enqueue",
+                    plan_reason="profile_completion_scheduler_required",
+                    deferred_reason="direct_profile_fetch_retired",
+                    deferred_queue_state="deferred_budget",
                 )
-                _record_event(
-                    requested_url,
-                    event_type="live_fetch_requested",
-                    metadata={"batch_size": len(url_batch)},
-                )
-
-        def _mark_fetched(profile_url: str, payload: dict[str, Any]) -> None:
-            raw_path = str(payload.get("raw_path") or "").strip()
-            alias_metadata = _profile_registry_alias_metadata(profile_url, payload)
-            before_entry = self.store.get_linkedin_profile_registry(profile_url) or {}
-            retry_count_before = int(dict(before_entry).get("retry_count") or 0)
-            fetched_entry = self.store.mark_linkedin_profile_registry_fetched(
-                profile_url,
-                raw_path=raw_path,
-                source_shards=list(source_shards_by_url.get(profile_url) or []),
-                alias_urls=list(alias_metadata.get("alias_urls") or []),
-                raw_linkedin_url=str(alias_metadata.get("raw_linkedin_url") or profile_url),
-                sanity_linkedin_url=str(alias_metadata.get("sanity_linkedin_url") or ""),
-                snapshot_dir=str(snapshot_dir),
-            )
-            queue_duration_ms = _profile_registry_queue_duration_ms(dict(fetched_entry or {}))
-            _record_event(
-                profile_url,
-                event_type="live_fetch_success",
-                metadata={"retry_count_before": retry_count_before},
-                duration_ms=queue_duration_ms,
-            )
-
-        def _mark_failed(url_batch: list[str], error_message: str) -> None:
-            for requested_url in url_batch:
-                before_entry = self.store.get_linkedin_profile_registry(requested_url) or {}
-                retry_count_before = int(dict(before_entry).get("retry_count") or 0)
-                self.store.mark_linkedin_profile_registry_failed(
-                    requested_url,
-                    error=error_message,
-                    retryable=True,
-                    source_shards=list(source_shards_by_url.get(requested_url) or []),
-                    snapshot_dir=str(snapshot_dir),
-                )
-                _record_event(
-                    requested_url,
-                    event_type="live_fetch_failed",
-                    event_status="failed_retryable",
-                    detail=error_message,
-                    metadata={"retry_count_before": retry_count_before},
-                )
-
-        def _fetch_batch(url_batch: list[str]) -> dict[str, dict[str, Any]]:
-            with runtime_inflight_slot(
-                "harvest_profile_scrape",
-                budget=resolved_harvest_profile_scrape_global_inflight({}),
-                metadata={"chunk_size": len(url_batch), "source": "company_asset_completion"},
-            ):
-                return self.harvest_profile_connector.fetch_profiles_by_urls(
-                    url_batch,
-                    snapshot_dir,
-                    asset_logger=logger,
-                    use_cache=use_cache,
-                )
-
-        fetch_window = _recommended_profile_completion_fetch_window(
-            len(pending_urls),
-            source_shards_by_url=source_shards_by_url,
-        )
-        url_batches = _balanced_chunk_values(pending_urls, int(fetch_window.get("batch_size") or 1))
-        if not url_batches:
-            return fetched, errors
-        if len(url_batches) == 1:
-            try:
-                url_batch = url_batches[0]
-                _mark_queued(url_batch)
-                try:
-                    batch_payload = _fetch_batch(url_batch) or {}
-                except Exception as exc:
-                    _mark_failed(url_batch, f"batch_failed:{exc}")
-                    return fetched, [*errors, f"profile_completion_batch_failed:{len(url_batch)}:{exc}"]
-                returned_urls = {
-                    str(profile_url or "").strip()
-                    for profile_url in batch_payload.keys()
-                    if str(profile_url or "").strip()
-                }
-                for requested_url in url_batch:
-                    if requested_url not in returned_urls:
-                        before_entry = self.store.get_linkedin_profile_registry(requested_url) or {}
-                        retry_count_before = int(dict(before_entry).get("retry_count") or 0)
-                        self.store.mark_linkedin_profile_registry_failed(
-                            requested_url,
-                            error="batch_response_missing_profile",
-                            retryable=True,
-                            source_shards=list(source_shards_by_url.get(requested_url) or []),
-                            snapshot_dir=str(snapshot_dir),
-                        )
-                        _record_event(
-                            requested_url,
-                            event_type="live_fetch_failed",
-                            event_status="failed_retryable",
-                            detail="batch_response_missing_profile",
-                            metadata={"retry_count_before": retry_count_before},
-                        )
-                for profile_url, payload in batch_payload.items():
-                    normalized_url = str(profile_url or "").strip()
-                    if not normalized_url:
-                        continue
-                    fetched[normalized_url] = payload
-                    _mark_fetched(normalized_url, payload)
-                return fetched, errors
-            finally:
-                _release_acquired_leases()
-
-        max_workers = min(len(url_batches), max(1, int(fetch_window.get("max_workers") or 1)))
-        try:
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                batch_iter = iter(url_batches)
-                futures: dict[Any, list[str]] = {}
-
-                def _submit_next_batch() -> bool:
-                    try:
-                        url_batch = next(batch_iter)
-                    except StopIteration:
-                        return False
-                    _mark_queued(url_batch)
-                    future = executor.submit(_fetch_batch, list(url_batch))
-                    futures[future] = list(url_batch)
-                    return True
-
-                for _ in range(max_workers):
-                    if not _submit_next_batch():
-                        break
-
-                while futures:
-                    done, _ = wait(set(futures.keys()), return_when=FIRST_COMPLETED)
-                    for future in done:
-                        url_batch = futures.pop(future)
-                        try:
-                            batch_payload = future.result() or {}
-                        except Exception as exc:
-                            _mark_failed(url_batch, f"batch_failed:{exc}")
-                            errors.append(f"profile_completion_batch_failed:{len(url_batch)}:{exc}")
-                            _submit_next_batch()
-                            continue
-                        returned_urls = {
-                            str(profile_url or "").strip()
-                            for profile_url in batch_payload.keys()
-                            if str(profile_url or "").strip()
-                        }
-                        for requested_url in url_batch:
-                            if requested_url not in returned_urls:
-                                before_entry = self.store.get_linkedin_profile_registry(requested_url) or {}
-                                retry_count_before = int(dict(before_entry).get("retry_count") or 0)
-                                self.store.mark_linkedin_profile_registry_failed(
-                                    requested_url,
-                                    error="batch_response_missing_profile",
-                                    retryable=True,
-                                    source_shards=list(source_shards_by_url.get(requested_url) or []),
-                                    snapshot_dir=str(snapshot_dir),
-                                )
-                                _record_event(
-                                    requested_url,
-                                    event_type="live_fetch_failed",
-                                    event_status="failed_retryable",
-                                    detail="batch_response_missing_profile",
-                                    metadata={"retry_count_before": retry_count_before},
-                                )
-                        for profile_url, payload in batch_payload.items():
-                            normalized_url = str(profile_url or "").strip()
-                            if not normalized_url:
-                                continue
-                            fetched[normalized_url] = payload
-                            _mark_fetched(normalized_url, payload)
-                        _submit_next_batch()
-            return fetched, errors
-        finally:
-            _release_acquired_leases()
+                errors.append(f"profile_completion_scheduler_queued:{len(scheduler_required_urls)}")
+            else:
+                errors.append(f"profile_completion_scheduler_job_required:{len(scheduler_required_urls)}")
+        return fetched, errors
 
     def _select_profile_targets(
         self,

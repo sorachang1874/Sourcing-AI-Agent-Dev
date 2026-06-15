@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .candidate_artifacts import load_authoritative_company_snapshot_candidate_documents
+from .candidate_artifacts import CandidateArtifactError, load_authoritative_company_snapshot_candidate_documents
 from .domain import Candidate
 from .harvest_connectors import parse_harvest_profile_payload
 from .linkedin_url_normalization import normalize_linkedin_profile_url_key
@@ -197,6 +197,8 @@ _SINOPHONE_UNIVERSITY_TOKENS = (
     "南京大学",
     "wuhan university",
     "武汉大学",
+    "nankai university",
+    "南开大学",
     "sun yat-sen university",
     "中山大学",
     "harbin institute of technology",
@@ -353,15 +355,31 @@ def analyze_company_outreach_layers(
     ai_max_retries: int = 2,
     ai_retry_backoff_seconds: float = 0.8,
     output_dir: str | Path | None = None,
+    allow_candidate_documents_source: bool = False,
 ) -> dict[str, Any]:
-    loaded = load_authoritative_company_snapshot_candidate_documents(
-        runtime_dir=runtime_dir,
-        store=store,
-        target_company=target_company,
-        snapshot_id=snapshot_id,
-        view=view,
-        allow_materialization_fallback=store is not None,
-    )
+    allow_materialization_fallback = store is not None and not allow_candidate_documents_source
+    try:
+        loaded = load_authoritative_company_snapshot_candidate_documents(
+            runtime_dir=runtime_dir,
+            store=store,
+            target_company=target_company,
+            snapshot_id=snapshot_id,
+            view=view,
+            prefer_hot_cache=False,
+            allow_materialization_fallback=allow_materialization_fallback,
+            allow_candidate_documents_fallback=allow_candidate_documents_source,
+        )
+    except CandidateArtifactError:
+        loaded = load_authoritative_company_snapshot_candidate_documents(
+            runtime_dir=runtime_dir,
+            store=store,
+            target_company=target_company,
+            snapshot_id=snapshot_id,
+            view=view,
+            prefer_hot_cache=True,
+            allow_materialization_fallback=allow_materialization_fallback,
+            allow_candidate_documents_fallback=allow_candidate_documents_source,
+        )
     candidates = list(loaded.get("candidates") or [])
     registry_raw_paths = _load_registry_raw_paths_for_candidates(
         runtime_dir=runtime_dir,
@@ -385,6 +403,7 @@ def analyze_company_outreach_layers(
             "company_key": str(loaded.get("company_key") or "").strip(),
             "snapshot_id": str(loaded.get("snapshot_id") or "").strip(),
             "asset_view": str(loaded.get("asset_view") or view).strip() or "canonical_merged",
+            "source_kind": str(loaded.get("source_kind") or "").strip(),
             "source_path": str(loaded.get("source_path") or "").strip(),
         }
     )
@@ -695,7 +714,9 @@ def _build_candidate_profile_text(candidate: Candidate, *, source_profile: dict[
         "profile_summary",
         "positions",
         "education",
+        "education_lines",
         "work_history",
+        "experience_lines",
     ]:
         if key in metadata:
             _append_text_fragments(fragments, metadata.get(key))

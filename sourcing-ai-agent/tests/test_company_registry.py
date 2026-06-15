@@ -106,7 +106,9 @@ class CompanyRegistryTest(unittest.TestCase):
         self.assertEqual(builtin["linkedin_slug"], "ssi-ai")
         self.assertEqual(builtin["resolver"], "seed_catalog")
 
-    def test_infer_target_company_from_text_heuristically_detects_physical_intelligence_without_runtime_identity(self) -> None:
+    def test_infer_target_company_from_text_heuristically_detects_physical_intelligence_without_runtime_identity(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             runtime_dir = Path(temp_dir) / "runtime"
             with patch.dict(os.environ, {"SOURCING_COMPANY_REGISTRY_RUNTIME_DIR": str(runtime_dir)}):

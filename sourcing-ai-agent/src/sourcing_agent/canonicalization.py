@@ -1,10 +1,17 @@
 from __future__ import annotations
 
-from collections import defaultdict
 import re
+from collections import defaultdict
 from typing import Any
 
-from .domain import Candidate, EvidenceRecord, make_evidence_id, merge_candidate, normalize_name_token
+from .domain import (
+    Candidate,
+    EvidenceRecord,
+    make_evidence_id,
+    merge_candidate,
+    merge_candidate_source_match_metadata,
+    normalize_name_token,
+)
 
 
 def canonicalize_company_records(
@@ -313,7 +320,7 @@ def _merge_metadata(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[
         if key.startswith("membership_review_") and merged.get("membership_review_required") in (False, "", None) and value not in ("", None, [], {}):
             merged[key] = _copy_value(value)
             continue
-    return merged
+    return merge_candidate_source_match_metadata(existing, incoming, base=merged)
 
 
 def _merge_unique_lists(existing: Any, incoming: Any) -> list[Any]:

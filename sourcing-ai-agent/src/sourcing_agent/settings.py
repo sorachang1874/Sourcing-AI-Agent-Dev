@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .local_postgres import resolve_default_control_plane_db_path
+from .runtime_environment import NON_LIVE_PROVIDER_MODES, normalize_provider_mode
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,7 +14,7 @@ class QwenSettings:
     enabled: bool
     api_key: str = ""
     base_url: str = "https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1"
-    model: str = "qwen-flash"
+    model: str = "qwen3.5-plus-2026-04-20"
     timeout_seconds: int = 45
 
 
@@ -76,6 +77,10 @@ class SearchProviderSettings:
     google_browser_browsers_path: str = "/tmp/playwright-browsers"
     google_browser_headless: bool = True
     google_browser_locale: str = "en-US"
+    enable_model_native_search: bool = False
+    model_native_search_mode: str = "disabled"
+    model_native_search_max_queries_per_operation: int = 0
+    model_native_search_cost_budget_usd: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,8 +146,27 @@ def _resolve_path_env(value: str | Path | None, *, base_dir: Path) -> Path | Non
     return path
 
 
+def _read_secret_text_file(path_value: str | Path | None, *, base_dir: Path) -> str:
+    path = _resolve_path_env(path_value, base_dir=base_dir)
+    if path is None:
+        return ""
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+    for line in text.splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        if key.strip().lower().replace("_", " ") == "api key":
+            return value.strip()
+    return text
+
+
 def load_settings(project_root: str | Path) -> AppSettings:
     root = Path(project_root).resolve()
+    external_provider_mode = normalize_provider_mode()
+    non_live_external_providers = external_provider_mode in NON_LIVE_PROVIDER_MODES
     runtime_dir = _resolve_path_env(os.getenv("SOURCING_RUNTIME_DIR"), base_dir=root) or (root / "runtime")
     runtime_dir = runtime_dir.resolve()
     secret_dir = runtime_dir / "secrets"
@@ -168,7 +192,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
     base_url = os.getenv("DASHSCOPE_BASE_URL") or str(
         qwen_payload.get("base_url", "https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1")
     ).strip()
-    model = os.getenv("DASHSCOPE_MODEL") or str(qwen_payload.get("model", "qwen-flash")).strip()
+    model = os.getenv("DASHSCOPE_MODEL") or str(qwen_payload.get("model", "qwen3.5-plus-2026-04-20")).strip()
     timeout = os.getenv("DASHSCOPE_TIMEOUT_SECONDS") or qwen_payload.get("timeout_seconds", 45)
 
     try:
@@ -176,7 +200,15 @@ def load_settings(project_root: str | Path) -> AppSettings:
     except (TypeError, ValueError):
         timeout_seconds = 45
 
-    model_provider_api_key = os.getenv("MODEL_PROVIDER_API_KEY") or str(model_provider_payload.get("api_key", "")).strip()
+    model_provider_api_key_file = os.getenv("MODEL_PROVIDER_API_KEY_FILE") or str(
+        model_provider_payload.get("api_key_file", "")
+    ).strip()
+    model_provider_file_api_key = _read_secret_text_file(model_provider_api_key_file, base_dir=root)
+    model_provider_api_key = (
+        os.getenv("MODEL_PROVIDER_API_KEY")
+        or model_provider_file_api_key
+        or str(model_provider_payload.get("api_key", "")).strip()
+    )
     model_provider_base_url = os.getenv("MODEL_PROVIDER_BASE_URL") or str(model_provider_payload.get("base_url", "")).strip()
     model_provider_model = os.getenv("MODEL_PROVIDER_MODEL") or str(model_provider_payload.get("model", "")).strip()
     model_provider_name = os.getenv("MODEL_PROVIDER_NAME") or str(model_provider_payload.get("provider_name", "")).strip()
@@ -257,6 +289,8 @@ def load_settings(project_root: str | Path) -> AppSettings:
     except (TypeError, ValueError):
         search_max_results_value = 10
     serper_api_key = os.getenv("SERPER_API_KEY") or str(search_payload.get("serper_api_key", "")).strip()
+    if non_live_external_providers:
+        serper_api_key = ""
     serper_base_url = os.getenv("SERPER_BASE_URL") or str(
         search_payload.get("serper_base_url", "https://google.serper.dev/search")
     ).strip()
@@ -266,6 +300,9 @@ def load_settings(project_root: str | Path) -> AppSettings:
     )
     dataforseo_login = os.getenv("DATAFORSEO_LOGIN") or str(search_payload.get("dataforseo_login", "")).strip()
     dataforseo_password = os.getenv("DATAFORSEO_PASSWORD") or str(search_payload.get("dataforseo_password", "")).strip()
+    if non_live_external_providers:
+        dataforseo_login = ""
+        dataforseo_password = ""
     dataforseo_base_url = os.getenv("DATAFORSEO_BASE_URL") or str(
         search_payload.get("dataforseo_base_url", "https://api.dataforseo.com")
     ).strip()
@@ -317,6 +354,32 @@ def load_settings(project_root: str | Path) -> AppSettings:
     google_browser_locale = os.getenv("SEARCH_PROVIDER_GOOGLE_BROWSER_LOCALE") or str(
         search_payload.get("google_browser_locale", "en-US")
     ).strip()
+    enable_model_native_search = _coerce_bool(
+        os.getenv("SEARCH_PROVIDER_ENABLE_MODEL_NATIVE_SEARCH"),
+        default=bool(search_payload.get("enable_model_native_search", False)),
+    )
+    model_native_search_mode = str(
+        os.getenv("SEARCH_PROVIDER_MODEL_NATIVE_SEARCH_MODE")
+        or search_payload.get("model_native_search_mode", "disabled")
+    ).strip().lower()
+    if not model_native_search_mode:
+        model_native_search_mode = "disabled"
+    model_native_search_max_queries = (
+        os.getenv("SEARCH_PROVIDER_MODEL_NATIVE_SEARCH_MAX_QUERIES")
+        or search_payload.get("model_native_search_max_queries_per_operation", 0)
+    )
+    try:
+        model_native_search_max_queries_per_operation = int(model_native_search_max_queries)
+    except (TypeError, ValueError):
+        model_native_search_max_queries_per_operation = 0
+    model_native_search_cost_budget = (
+        os.getenv("SEARCH_PROVIDER_MODEL_NATIVE_SEARCH_COST_BUDGET_USD")
+        or search_payload.get("model_native_search_cost_budget_usd", 0.0)
+    )
+    try:
+        model_native_search_cost_budget_usd = float(model_native_search_cost_budget)
+    except (TypeError, ValueError):
+        model_native_search_cost_budget_usd = 0.0
 
     object_storage_provider = os.getenv("OBJECT_STORAGE_PROVIDER") or str(
         object_storage_payload.get("provider", "filesystem")
@@ -384,6 +447,8 @@ def load_settings(project_root: str | Path) -> AppSettings:
         shared_harvest_token = str(profile_search_payload.get("api_token", "")).strip()
     if not shared_harvest_token:
         shared_harvest_token = str(company_employees_payload.get("api_token", "")).strip()
+    if non_live_external_providers:
+        shared_harvest_token = ""
 
     def _harvest_actor_settings(
         payload: dict,
@@ -398,6 +463,8 @@ def load_settings(project_root: str | Path) -> AppSettings:
         default_collect_email: bool = False,
     ) -> HarvestActorSettings:
         api_token = shared_harvest_token or str(payload.get("api_token", "")).strip()
+        if non_live_external_providers:
+            api_token = ""
         actor_id = str(payload.get("actor_id", actor_id_default)).strip()
         timeout = os.getenv(timeout_env) or payload.get("timeout_seconds", 180)
         max_charge = os.getenv(charge_env) or payload.get("max_total_charge_usd", default_charge)
@@ -486,6 +553,10 @@ def load_settings(project_root: str | Path) -> AppSettings:
             google_browser_browsers_path=google_browser_browsers_path,
             google_browser_headless=google_browser_headless,
             google_browser_locale=google_browser_locale,
+            enable_model_native_search=enable_model_native_search,
+            model_native_search_mode=model_native_search_mode,
+            model_native_search_max_queries_per_operation=max(0, min(model_native_search_max_queries_per_operation, 100)),
+            model_native_search_cost_budget_usd=max(0.0, model_native_search_cost_budget_usd),
         ),
         object_storage=ObjectStorageSettings(
             enabled=bool(

@@ -36,6 +36,7 @@ from .profile_registry_utils import extract_profile_registry_aliases_from_payloa
 from .search_provider import build_search_provider
 from .seed_discovery import SearchSeedAcquirer, SearchSeedSnapshot, build_candidates_from_seed_snapshot
 from .settings import AppSettings
+from .snapshot_state import candidate_records_from_payload as _snapshot_candidate_records_from_payload
 from .storage import ControlPlaneStore
 
 
@@ -1059,15 +1060,7 @@ def _utc_snapshot_id() -> str:
 
 
 def _candidate_records_from_payload(payload: dict[str, Any]) -> list[Candidate]:
-    candidates: list[Candidate] = []
-    for item in list(payload.get("candidates") or []):
-        if not isinstance(item, dict):
-            continue
-        try:
-            candidates.append(normalize_candidate(Candidate(**item)))
-        except TypeError:
-            continue
-    return candidates
+    return _snapshot_candidate_records_from_payload(payload.get("candidates") or [])
 
 
 def _stage_archive_label(value: str) -> str:

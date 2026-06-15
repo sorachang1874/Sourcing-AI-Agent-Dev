@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
 from hashlib import sha1
 from pathlib import Path
 from typing import Any
 
+from .asset_coverage_contracts import build_population_coverage_contract
 from .asset_paths import iter_company_asset_snapshot_dirs, load_company_snapshot_identity
 from .candidate_artifacts import CandidateArtifactError, _resolve_company_snapshot
 from .company_registry import normalize_company_key, resolve_company_alias_key
@@ -150,6 +152,19 @@ _ORGANIZATION_ASSET_PROMOTION_MAX_COMPLETENESS_SCORE_REGRESSION = 1.0
 _ORGANIZATION_ASSET_REGISTRY_READY_STATUSES = {"", "ready", "completed", "complete", "canonical"}
 _ORGANIZATION_ASSET_REGISTRY_NON_PROMOTABLE_STATUSES = {"draft", "partial", "superseded", "archived", "empty"}
 _LARGE_ORG_REUSE_BASELINE_MIN_CANDIDATES = 2500
+_REUSABLE_SOURCE_SHARD_NON_INHERITABLE_STATUSES = {
+    "failed",
+    "error",
+    "cancelled",
+    "canceled",
+    "running",
+    "queued",
+    "planned",
+    "draft",
+}
+_REUSABLE_SOURCE_SHARD_LANES = {"profile_search", "company_employees"}
+
+
 def _normalize_query_family_text(value: Any) -> str:
     normalized = _normalize_query_text(value).lower()
     normalized = re.sub(r"[\-_]+", " ", normalized)
@@ -330,6 +345,42 @@ def _task_metadata_value(metadata: dict[str, Any], key: str, default: Any = None
     return value
 
 
+def _profile_search_seed_queries_for_task(metadata: dict[str, Any]) -> list[Any]:
+    task_queries = list(metadata.get("search_seed_queries") or [])
+    intent_view = _task_intent_metadata_view(metadata)
+    intent_queries = list(intent_view.get("search_seed_queries") or [])
+    if not task_queries:
+        return intent_queries
+    if not intent_queries:
+        return task_queries
+    task_families = {
+        next(iter(sorted(_query_family_signatures(_canonical_query_family_label(query)))), _query_signature(query))
+        for query in task_queries
+        if _canonical_query_family_label(query)
+    }
+    intent_families = {
+        next(iter(sorted(_query_family_signatures(_canonical_query_family_label(query)))), _query_signature(query))
+        for query in intent_queries
+        if _canonical_query_family_label(query)
+    }
+    if task_families and task_families.issubset(intent_families):
+        return task_queries
+    return intent_queries
+
+
+def _request_population_boundary(request: JobRequest | None) -> dict[str, Any]:
+    if request is None:
+        return {}
+    boundary = getattr(request, "requested_population_boundary", None)
+    if isinstance(boundary, dict) and boundary:
+        return dict(boundary)
+    try:
+        effective_payload = build_effective_request_payload(request)
+    except Exception:
+        return {}
+    return dict(effective_payload.get("requested_population_boundary") or {})
+
+
 def _json_signature(payload: dict[str, Any]) -> str:
     serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return sha1(serialized.encode("utf-8")).hexdigest()[:24]
@@ -345,10 +396,7 @@ def _preferred_company_display_name(
     if not resolved_text:
         return requested_text
     if requested_text and normalize_company_key(requested_text) == normalize_company_key(resolved_text):
-        if (
-            requested_text == normalize_company_key(requested_text)
-            and resolved_text != requested_text
-        ):
+        if requested_text == normalize_company_key(requested_text) and resolved_text != requested_text:
             return resolved_text
         return requested_text
     return resolved_text or requested_text
@@ -384,9 +432,7 @@ def _resolve_registry_lane_coverages(
     current_lane_coverage: dict[str, Any] | None = None,
     former_lane_coverage: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    membership_summary = dict(
-        summary.get("exact_membership_summary") or summary.get("membership_summary") or {}
-    )
+    membership_summary = dict(summary.get("exact_membership_summary") or summary.get("membership_summary") or {})
     employment_scope_counts = dict(membership_summary.get("employment_scope_counts") or {})
 
     def _membership_fallback(employment_scope: str) -> dict[str, Any]:
@@ -584,6 +630,12 @@ def build_asset_reuse_baseline_selection_explanation(
         "baseline_multi_snapshot_aggregate_coverage_proven": bool(
             asset_reuse_plan.get("baseline_multi_snapshot_aggregate_coverage_proven")
         ),
+        "baseline_full_company_coverage_proven": bool(
+            asset_reuse_plan.get("baseline_full_company_coverage_proven")
+        ),
+        "baseline_population_coverage_contract": dict(
+            asset_reuse_plan.get("baseline_population_coverage_contract") or {}
+        ),
         "baseline_completeness_score": _safe_float(
             asset_reuse_plan.get("baseline_completeness_score") or baseline.get("completeness_score")
         ),
@@ -595,6 +647,9 @@ def build_asset_reuse_baseline_selection_explanation(
         "baseline_former_embedded_sufficient": bool(asset_reuse_plan.get("baseline_former_embedded_sufficient")),
         "baseline_full_company_lane_reuse_sufficient": bool(
             asset_reuse_plan.get("baseline_full_company_lane_reuse_sufficient")
+        ),
+        "profile_query_requires_explicit_coverage": bool(
+            asset_reuse_plan.get("profile_query_requires_explicit_coverage")
         ),
         "baseline_current_embedded_query_reuse_allowed": bool(
             asset_reuse_plan.get("baseline_current_embedded_query_reuse_allowed", True)
@@ -768,14 +823,313 @@ def _organization_registry_selected_snapshot_ids(payload: dict[str, Any]) -> lis
     return _normalize_string_list(payload.get("selected_snapshot_ids") or selection.get("selected_snapshot_ids") or [])
 
 
+def _source_snapshot_selection_materialized_ids(record: dict[str, Any]) -> list[str]:
+    selection = dict(record.get("source_snapshot_selection") or {})
+    return _normalize_string_list(
+        selection.get("materialized_snapshot_ids")
+        or dict(record.get("summary") or {}).get("materialized_snapshot_ids")
+        or selection.get("selected_snapshot_ids")
+        or record.get("selected_snapshot_ids")
+        or [record.get("snapshot_id")]
+    )
+
+
+def _snapshot_ids_with_reusable_shard_coverage(
+    *,
+    store: ControlPlaneStore,
+    target_company: str,
+    snapshot_ids: list[str],
+) -> set[str]:
+    normalized_snapshot_ids = _normalize_string_list(snapshot_ids)
+    if not target_company or not normalized_snapshot_ids:
+        return set()
+    rows = store.list_acquisition_shard_registry(
+        target_company=target_company,
+        snapshot_ids=normalized_snapshot_ids,
+        limit=max(1000, len(normalized_snapshot_ids) * 100),
+    )
+    reusable: set[str] = set()
+    normalized_id_lookup = {item.lower(): item for item in normalized_snapshot_ids}
+    for row in list(rows or []):
+        lane = _normalize_text(row.get("lane")).lower()
+        status = _normalize_text(row.get("status")).lower()
+        snapshot_id = _normalize_text(row.get("snapshot_id"))
+        if lane not in _REUSABLE_SOURCE_SHARD_LANES:
+            continue
+        if status in _REUSABLE_SOURCE_SHARD_NON_INHERITABLE_STATUSES:
+            continue
+        canonical_snapshot_id = normalized_id_lookup.get(snapshot_id.lower())
+        if canonical_snapshot_id:
+            reusable.add(canonical_snapshot_id)
+    return reusable
+
+
+def inherit_reusable_source_snapshot_coverage(
+    *,
+    store: ControlPlaneStore,
+    candidate_record: dict[str, Any],
+    existing_authoritative: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Preserve reusable shard coverage when the serving snapshot changes.
+
+    The authoritative registry row has two jobs: point serving at the best
+    current snapshot, and tell the planner which source snapshots carry scoped
+    acquisition coverage. A newer Health/Whisper delta snapshot can be the best
+    serving snapshot without replacing older Agent/ChatGPT/Gemini shard proofs.
+    Only source snapshots that already have acquisition-shard registry rows are
+    inherited; repeated no-increment snapshots without shard value are not.
+    """
+
+    record = dict(candidate_record or {})
+    target_company = _normalize_text(record.get("target_company"))
+    asset_view = _normalize_text(record.get("asset_view")) or "canonical_merged"
+    candidate_snapshot_id = _normalize_text(record.get("snapshot_id"))
+    if not target_company or not candidate_snapshot_id:
+        return record
+    existing = dict(existing_authoritative or {})
+    if not existing:
+        existing = dict(
+            store.get_authoritative_organization_asset_registry(
+                target_company=target_company,
+                asset_view=asset_view,
+            )
+            or {}
+        )
+    if not existing:
+        return record
+
+    candidate_selected_ids = _normalize_string_list(
+        _organization_registry_selected_snapshot_ids(record) or [candidate_snapshot_id]
+    )
+    existing_selected_ids = _normalize_string_list(
+        _organization_registry_selected_snapshot_ids(existing) or [existing.get("snapshot_id")]
+    )
+    if not candidate_selected_ids:
+        candidate_selected_ids = [candidate_snapshot_id]
+    if candidate_snapshot_id.lower() not in {item.lower() for item in candidate_selected_ids}:
+        candidate_selected_ids = [candidate_snapshot_id, *candidate_selected_ids]
+
+    reusable_existing_ids = _snapshot_ids_with_reusable_shard_coverage(
+        store=store,
+        target_company=target_company,
+        snapshot_ids=existing_selected_ids,
+    )
+    inherited_ids = [
+        snapshot_id
+        for snapshot_id in existing_selected_ids
+        if snapshot_id in reusable_existing_ids
+        and snapshot_id.lower() not in {item.lower() for item in candidate_selected_ids}
+    ]
+    if not inherited_ids:
+        record["selected_snapshot_ids"] = candidate_selected_ids
+        return record
+
+    merged_selected_ids = _normalize_string_list([*candidate_selected_ids, *inherited_ids])
+    original_selection = dict(record.get("source_snapshot_selection") or {})
+    materialized_snapshot_ids = _source_snapshot_selection_materialized_ids(record)
+    excluded_snapshot_ids = [
+        snapshot_id
+        for snapshot_id in _normalize_string_list(original_selection.get("excluded_snapshot_ids") or [])
+        if snapshot_id.lower() not in {item.lower() for item in merged_selected_ids}
+    ]
+    selection = {
+        **original_selection,
+        "mode": "authoritative_serving_snapshot_with_reusable_shard_sources",
+        "reason": (
+            "Serving snapshot was promoted, while reusable scoped shard coverage was inherited "
+            "from the previous authoritative registry row."
+        ),
+        "source_snapshot_contract_version": 2,
+        "serving_snapshot_id": candidate_snapshot_id,
+        "materialized_snapshot_ids": materialized_snapshot_ids or candidate_selected_ids,
+        "selected_snapshot_ids": merged_selected_ids,
+        "reusable_source_snapshot_ids": merged_selected_ids,
+        "inherited_source_snapshot_ids": inherited_ids,
+        "inheritance_source_snapshot_id": _normalize_text(existing.get("snapshot_id")),
+        "inheritance_source": "acquisition_shard_registry",
+        "excluded_snapshot_ids": excluded_snapshot_ids,
+    }
+    summary = dict(record.get("summary") or {})
+    summary["source_snapshot_selection"] = selection
+    summary["selected_snapshot_ids"] = merged_selected_ids
+    summary["source_snapshot_count"] = len(merged_selected_ids)
+    record["source_snapshot_selection"] = selection
+    record["selected_snapshot_ids"] = merged_selected_ids
+    record["source_snapshot_count"] = max(_safe_int(record.get("source_snapshot_count")), len(merged_selected_ids))
+    record["summary"] = summary
+    return record
+
+
+def enforce_reusable_source_snapshot_provenance(
+    *,
+    store: ControlPlaneStore,
+    candidate_record: dict[str, Any],
+) -> dict[str, Any]:
+    """Keep selected source ids to the serving snapshot plus proven reusable shards."""
+
+    record = dict(candidate_record or {})
+    target_company = _normalize_text(record.get("target_company"))
+    serving_snapshot_id = _normalize_text(record.get("snapshot_id"))
+    if not target_company or not serving_snapshot_id:
+        return record
+    selected_snapshot_ids = _normalize_string_list(
+        _organization_registry_selected_snapshot_ids(record) or [serving_snapshot_id]
+    )
+    if not selected_snapshot_ids:
+        return record
+    serving_key = serving_snapshot_id.lower()
+    source_snapshot_ids = [item for item in selected_snapshot_ids if item.lower() != serving_key]
+    reusable_source_ids = _snapshot_ids_with_reusable_shard_coverage(
+        store=store,
+        target_company=target_company,
+        snapshot_ids=source_snapshot_ids,
+    )
+    kept_ids = _normalize_string_list(
+        [
+            serving_snapshot_id,
+            *[
+                snapshot_id
+                for snapshot_id in selected_snapshot_ids
+                if snapshot_id.lower() == serving_key or snapshot_id in reusable_source_ids
+            ],
+        ]
+    )
+    dropped_ids = [
+        snapshot_id
+        for snapshot_id in selected_snapshot_ids
+        if snapshot_id.lower() != serving_key and snapshot_id not in reusable_source_ids
+    ]
+    if not dropped_ids and kept_ids == selected_snapshot_ids:
+        return record
+
+    selection = dict(record.get("source_snapshot_selection") or {})
+    summary = dict(record.get("summary") or {})
+    archived_ids = _normalize_string_list(
+        [
+            *list(selection.get("archived_source_snapshot_ids_without_shard_registry_rows") or []),
+            *list(summary.get("archived_source_snapshot_ids_without_shard_registry_rows") or []),
+            *dropped_ids,
+        ]
+    )
+    selection["selected_snapshot_ids"] = kept_ids
+    selection["serving_snapshot_id"] = serving_snapshot_id
+    selection["source_snapshot_contract_version"] = max(_safe_int(selection.get("source_snapshot_contract_version")), 2)
+    selection["reusable_source_snapshot_ids"] = [
+        snapshot_id for snapshot_id in kept_ids if snapshot_id.lower() != serving_key
+    ]
+    if dropped_ids:
+        selection["archived_source_snapshot_ids_without_shard_registry_rows"] = archived_ids
+        selection["provenance_normalization_reason"] = "selected_source_snapshot_missing_reusable_shard_registry_row"
+    summary["source_snapshot_selection"] = selection
+    summary["selected_snapshot_ids"] = kept_ids
+    summary["source_snapshot_count"] = len(kept_ids)
+    if dropped_ids:
+        summary["archived_source_snapshot_ids_without_shard_registry_rows"] = archived_ids
+    record["source_snapshot_selection"] = selection
+    record["selected_snapshot_ids"] = kept_ids
+    record["source_snapshot_count"] = len(kept_ids)
+    record["summary"] = summary
+    return record
+
+
+def ensure_explicit_population_coverage_for_registry_record(
+    *,
+    store: ControlPlaneStore,
+    candidate_record: dict[str, Any],
+    ledger_summary: dict[str, Any] | None = None,
+    write_source: str = "authoritative_registry_write",
+) -> dict[str, Any]:
+    record = dict(candidate_record or {})
+    if _existing_population_coverage_payload(record):
+        return record
+    target_company = _normalize_text(record.get("target_company"))
+    snapshot_id = _normalize_text(record.get("snapshot_id"))
+    selected_snapshot_ids = _normalize_string_list(
+        _organization_registry_selected_snapshot_ids(record) or [snapshot_id]
+    )
+    if not target_company or not selected_snapshot_ids:
+        return record
+    shard_rows = store.list_acquisition_shard_registry(
+        target_company=target_company,
+        snapshot_ids=selected_snapshot_ids,
+        limit=max(1000, len(selected_snapshot_ids) * 100),
+    )
+    contract = build_population_coverage_contract(
+        registry_row=record,
+        ledger_summary=ledger_summary,
+        shard_rows=[
+            dict(row)
+            for row in list(shard_rows or [])
+            if _normalize_text(row.get("status")).lower() not in _REUSABLE_SOURCE_SHARD_NON_INHERITABLE_STATUSES
+        ],
+        allow_legacy_inference=True,
+    )
+    if _normalize_text(contract.get("coverage_kind")).lower() == "unknown":
+        return record
+    coverage_payload = _population_coverage_payload_from_contract(contract, write_source=write_source)
+    summary = dict(record.get("summary") or {})
+    selection = dict(record.get("source_snapshot_selection") or summary.get("source_snapshot_selection") or {})
+    selection["population_coverage"] = coverage_payload
+    if bool(coverage_payload.get("full_company_coverage_proven")):
+        selection["full_company_coverage"] = coverage_payload
+    summary["population_coverage"] = coverage_payload
+    summary["source_snapshot_selection"] = selection
+    record["source_snapshot_selection"] = selection
+    record["summary"] = summary
+    return record
+
+
+def _existing_population_coverage_payload(record: dict[str, Any]) -> dict[str, Any]:
+    summary = dict(record.get("summary") or {})
+    selection = dict(record.get("source_snapshot_selection") or summary.get("source_snapshot_selection") or {})
+    for value in (
+        selection.get("population_coverage"),
+        selection.get("full_company_coverage"),
+        summary.get("population_coverage"),
+        summary.get("full_company_coverage"),
+    ):
+        if isinstance(value, dict) and value:
+            return dict(value)
+    return {}
+
+
+def _population_coverage_payload_from_contract(
+    contract: dict[str, Any],
+    *,
+    write_source: str,
+) -> dict[str, Any]:
+    return {
+        "contract_version": 1,
+        "coverage_kind": _normalize_text(contract.get("coverage_kind")) or "unknown",
+        "coverage_status": _normalize_text(contract.get("coverage_status")) or "unverified",
+        "coverage_scope": _normalize_text(contract.get("coverage_scope")),
+        "full_company_coverage_proven": bool(contract.get("full_company_coverage_proven")),
+        "exact_scoped_coverage_available": bool(contract.get("exact_scoped_coverage_available")),
+        "scoped_shard_only": bool(contract.get("scoped_shard_only")),
+        "directional_scope_reuse_allowed": bool(contract.get("directional_scope_reuse_allowed")),
+        "proof_source": _normalize_text(contract.get("proof_source")),
+        "reason_codes": _normalize_string_list(contract.get("reason_codes") or []),
+        "selected_snapshot_ids": _normalize_string_list(contract.get("selected_snapshot_ids") or []),
+        "company_employee_shard_count": _safe_int(contract.get("company_employee_shard_count")),
+        "summary_company_employee_lane_count": _safe_int(contract.get("summary_company_employee_lane_count")),
+        "profile_search_shard_count": _safe_int(contract.get("profile_search_shard_count")),
+        "standard_bundle_count": _safe_int(contract.get("standard_bundle_count")),
+        "candidate_count": _safe_int(contract.get("candidate_count")),
+        "current_lane_effective_candidate_count": _safe_int(
+            contract.get("current_lane_effective_candidate_count")
+        ),
+        "former_lane_effective_candidate_count": _safe_int(
+            contract.get("former_lane_effective_candidate_count")
+        ),
+        "write_source": _normalize_text(write_source) or "authoritative_registry_write",
+        "written_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 def _baseline_source_snapshot_selection(baseline: dict[str, Any]) -> dict[str, Any]:
     baseline_payload = dict(baseline or {})
     summary = dict(baseline_payload.get("summary") or {})
-    return dict(
-        baseline_payload.get("source_snapshot_selection")
-        or summary.get("source_snapshot_selection")
-        or {}
-    )
+    return dict(baseline_payload.get("source_snapshot_selection") or summary.get("source_snapshot_selection") or {})
 
 
 def _baseline_source_snapshot_selection_mode(baseline: dict[str, Any]) -> str:
@@ -808,13 +1162,33 @@ def _baseline_has_large_org_reuse_coverage_contract(
     org_scale_band = _normalize_text(organization_execution_profile.get("org_scale_band")).lower()
     if org_scale_band != "large" and org_default_mode != "scoped_search_roster":
         return True
-    if baseline_candidate_count >= _LARGE_ORG_REUSE_BASELINE_MIN_CANDIDATES:
+    population_contract = build_population_coverage_contract(
+        registry_row=baseline,
+        ledger_summary=ledger_summary,
+        shard_rows=shard_rows,
+    )
+    if bool(population_contract.get("full_company_coverage_proven")):
         return True
-    if list(shard_rows or []):
+    if bool(population_contract.get("exact_scoped_coverage_available")):
+        return True
+    if baseline_candidate_count >= _LARGE_ORG_REUSE_BASELINE_MIN_CANDIDATES:
         return True
     if _baseline_standard_bundle_count(baseline, ledger_summary) > 0:
         return True
     return _source_snapshot_selection_has_coverage_proof(_baseline_source_snapshot_selection(baseline))
+
+
+def _baseline_full_company_coverage_proven(
+    *,
+    baseline: dict[str, Any],
+    ledger_summary: dict[str, Any] | None,
+    shard_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return build_population_coverage_contract(
+        registry_row=baseline,
+        ledger_summary=ledger_summary,
+        shard_rows=shard_rows,
+    )
 
 
 def _multi_snapshot_authoritative_aggregate_has_coverage_proof(
@@ -880,9 +1254,7 @@ def evaluate_organization_asset_registry_promotion(
     selected_snapshot_ids = _organization_registry_selected_snapshot_ids(candidate_record)
     existing_sort_key = _organization_asset_registry_candidate_sort_key(existing_authoritative)
     candidate_sort_key = _organization_asset_registry_candidate_sort_key(candidate_record)
-    explicit_baseline_inclusion = bool(
-        existing_snapshot_id and existing_snapshot_id in selected_snapshot_ids
-    )
+    explicit_baseline_inclusion = bool(existing_snapshot_id and existing_snapshot_id in selected_snapshot_ids)
 
     existing_candidate_count = _safe_int(existing_authoritative.get("candidate_count"))
     candidate_candidate_count = _safe_int(candidate_record.get("candidate_count"))
@@ -943,11 +1315,7 @@ def evaluate_organization_asset_registry_promotion(
     )
     coverage_materially_higher = bool(
         effective_lane_total_materially_higher
-        or (
-            candidate_count_materially_higher
-            and profile_detail_materially_higher
-            and evidence_materially_higher
-        )
+        or (candidate_count_materially_higher and profile_detail_materially_higher and evidence_materially_higher)
     )
     source_snapshot_count_bias = (
         existing_source_snapshot_count > candidate_source_snapshot_count and candidate_source_snapshot_count > 0
@@ -969,10 +1337,7 @@ def evaluate_organization_asset_registry_promotion(
         explicit_baseline_inclusion
         and candidate_sort_key > existing_sort_key
         and (
-            (
-                subsumption_higher
-                and score_gap <= _ORGANIZATION_ASSET_PROMOTION_MAX_COMPLETENESS_SCORE_REGRESSION
-            )
+            (subsumption_higher and score_gap <= _ORGANIZATION_ASSET_PROMOTION_MAX_COMPLETENESS_SCORE_REGRESSION)
             or explicit_baseline_inclusion_quality_recovery
         )
     )
@@ -1052,11 +1417,7 @@ def select_organization_asset_registry_promotion_candidate(
     candidate_records: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     existing_authoritative: dict[str, Any] | None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    normalized_candidates = [
-        dict(record)
-        for record in list(candidate_records or [])
-        if isinstance(record, dict)
-    ]
+    normalized_candidates = [dict(record) for record in list(candidate_records or []) if isinstance(record, dict)]
     if not normalized_candidates:
         return {}, {}
     sorted_candidates = sorted(
@@ -1124,8 +1485,7 @@ def build_organization_asset_registry_candidate_inventory(
     authoritative_row = next((row for row in rows if bool(row.get("authoritative"))), {})
     candidate_rows = [row for row in rows if _organization_asset_registry_record_is_candidate_eligible(row)]
     if authoritative_row and not any(
-        _safe_int(row.get("registry_id")) == _safe_int(authoritative_row.get("registry_id"))
-        for row in candidate_rows
+        _safe_int(row.get("registry_id")) == _safe_int(authoritative_row.get("registry_id")) for row in candidate_rows
     ):
         candidate_rows.append(dict(authoritative_row))
     selected_row, selection_decision = select_organization_asset_registry_promotion_candidate(
@@ -1169,6 +1529,19 @@ def upsert_organization_asset_registry_with_guard(
         store.get_authoritative_organization_asset_registry(target_company=target_company, asset_view=asset_view)
         if target_company
         else {}
+    )
+    candidate_record = inherit_reusable_source_snapshot_coverage(
+        store=store,
+        candidate_record=candidate_record,
+        existing_authoritative=existing_authoritative,
+    )
+    candidate_record = enforce_reusable_source_snapshot_provenance(
+        store=store,
+        candidate_record=candidate_record,
+    )
+    candidate_record = ensure_explicit_population_coverage_for_registry_record(
+        store=store,
+        candidate_record=candidate_record,
     )
     decision = evaluate_organization_asset_registry_promotion(
         existing_authoritative=existing_authoritative,
@@ -1307,6 +1680,11 @@ def backfill_organization_asset_registry_for_company(
             "record_count": len(candidate_records),
         }
 
+    selected_record = inherit_reusable_source_snapshot_coverage(
+        store=store,
+        candidate_record=selected_record,
+        existing_authoritative=current_authoritative or None,
+    )
     persisted = store.upsert_organization_asset_registry(selected_record, authoritative=True)
     execution_profile = {}
     try:
@@ -1462,9 +1840,8 @@ def build_search_seed_shard_registry_records(
         item_employment_scope = _normalize_profile_search_employment_scope(
             item.get("employment_scope") or item.get("employment_status") or employment_scope
         )
-        item_strategy_type = (
-            _normalize_text(item.get("strategy_type") or strategy_type)
-            or ("former_employee_search" if item_employment_scope == "former" else "scoped_search_roster")
+        item_strategy_type = _normalize_text(item.get("strategy_type") or strategy_type) or (
+            "former_employee_search" if item_employment_scope == "former" else "scoped_search_roster"
         )
         base_company_filters = {
             "companies": list(item_filter_hints.get("current_companies") or []),
@@ -1643,14 +2020,11 @@ def ensure_acquisition_shard_registry_for_snapshot(
     for search_seed_summary in _load_search_seed_lane_summaries(snapshot_dir):
         query_summaries = list(search_seed_summary.get("query_summaries") or [])
         effective_filter_hints = dict(
-            search_seed_summary.get("effective_filter_hints")
-            or search_seed_summary.get("filter_hints")
-            or {}
+            search_seed_summary.get("effective_filter_hints") or search_seed_summary.get("filter_hints") or {}
         )
         employment_scope = _infer_search_seed_summary_employment_scope(search_seed_summary)
-        strategy_type = (
-            _normalize_text(search_seed_summary.get("strategy_type"))
-            or ("former_employee_search" if employment_scope == "former" else "scoped_search_roster")
+        strategy_type = _normalize_text(search_seed_summary.get("strategy_type")) or (
+            "former_employee_search" if employment_scope == "former" else "scoped_search_roster"
         )
         for record in build_search_seed_shard_registry_records(
             target_company=preferred_target_company,
@@ -1928,19 +2302,23 @@ def _planned_profile_search_query_specs(task: AcquisitionTask) -> tuple[list[dic
         seen_query_families.add(family_signature)
         queries.append(canonical)
 
+    # Prefer the task-level provider seed when it is a subset of the canonical
+    # intent seed, so serving/filter facets do not expand one provider shard into
+    # several runs. If task and intent seeds conflict, the nested intent view wins
+    # because the flat task fields may be stale compatibility mirrors.
+    for value in _profile_search_seed_queries_for_task(metadata):
+        _add_query(value)
     preferred_filter_keyword_queries: list[str] = []
-    for value in list(filter_hints.get("keywords") or []):
-        canonical = _canonical_query_family_label(value)
-        family_signature = next(iter(sorted(_query_family_signatures(canonical))), _query_signature(canonical))
-        if not canonical or family_signature in _PROFILE_SEARCH_GENERIC_QUERY_FAMILY_SIGNATURES:
-            continue
-        preferred_filter_keyword_queries.append(canonical)
-    if preferred_filter_keyword_queries:
-        for value in preferred_filter_keyword_queries:
-            _add_query(value)
     if not queries:
-        for value in list(_task_metadata_value(metadata, "search_seed_queries") or []):
-            _add_query(value)
+        for value in list(filter_hints.get("keywords") or []):
+            canonical = _canonical_query_family_label(value)
+            family_signature = next(iter(sorted(_query_family_signatures(canonical))), _query_signature(canonical))
+            if not canonical or family_signature in _PROFILE_SEARCH_GENERIC_QUERY_FAMILY_SIGNATURES:
+                continue
+            preferred_filter_keyword_queries.append(canonical)
+        if preferred_filter_keyword_queries:
+            for value in preferred_filter_keyword_queries:
+                _add_query(value)
     if not queries:
         for value in list(filter_hints.get("keywords") or []):
             _add_query(value)
@@ -2171,6 +2549,21 @@ def _registry_or_ledger_lane_coverage(
     registry_key: str,
 ) -> dict[str, Any]:
     registry_lane = _normalize_lane_coverage_payload(dict(baseline.get(registry_key) or {}))
+    if registry_key == "current_lane_coverage":
+        top_level_count_key = "current_lane_effective_candidate_count"
+        top_level_ready_key = "current_lane_effective_ready"
+    elif registry_key == "former_lane_coverage":
+        top_level_count_key = "former_lane_effective_candidate_count"
+        top_level_ready_key = "former_lane_effective_ready"
+    else:
+        top_level_count_key = ""
+        top_level_ready_key = ""
+    if top_level_count_key and _safe_int(baseline.get(top_level_count_key)) > _safe_int(
+        registry_lane.get("effective_candidate_count")
+    ):
+        registry_lane["effective_candidate_count"] = _safe_int(baseline.get(top_level_count_key))
+    if top_level_ready_key and bool(baseline.get(top_level_ready_key)):
+        registry_lane["effective_ready"] = True
     ledger_lane = dict(_ledger_lane_coverage_summary(ledger_summary, lane_key) or {})
     if registry_lane.get("effective_candidate_count") or registry_lane.get("effective_ready"):
         merged = dict(ledger_lane)
@@ -2567,6 +2960,7 @@ def _authoritative_population_default_reuse_assessment(
     baseline_candidate_count: int,
     current_lane_coverage: dict[str, Any],
     former_lane_coverage: dict[str, Any],
+    population_coverage_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     source_snapshot_selection = _baseline_source_snapshot_selection(baseline)
     selection_mode = _baseline_source_snapshot_selection_mode(baseline)
@@ -2575,6 +2969,8 @@ def _authoritative_population_default_reuse_assessment(
         or source_snapshot_selection.get("selected_snapshot_ids")
         or [baseline.get("snapshot_id")]
     )
+    population_contract = dict(population_coverage_contract or {})
+    full_company_coverage_proven = bool(population_contract.get("full_company_coverage_proven"))
     multi_snapshot_aggregate_coverage_proven = _multi_snapshot_authoritative_aggregate_has_coverage_proof(
         baseline=baseline,
         selected_snapshot_ids=selected_snapshot_ids,
@@ -2620,9 +3016,7 @@ def _authoritative_population_default_reuse_assessment(
     current_lane = dict(current_lane_coverage or {})
     former_lane = dict(former_lane_coverage or {})
     lane_requirements = (
-        _requested_lane_requirements(request)
-        if request is not None
-        else {"need_current": True, "need_former": True}
+        _requested_lane_requirements(request) if request is not None else {"need_current": True, "need_former": True}
     )
     current_ready = bool(current_lane.get("effective_ready"))
     former_ready = bool(former_lane.get("effective_ready"))
@@ -2641,20 +3035,15 @@ def _authoritative_population_default_reuse_assessment(
     )
     need_current = bool(lane_requirements.get("need_current"))
     need_former = bool(lane_requirements.get("need_former"))
-    lane_requirements_ready = (
-        (not need_current or (current_ready and current_count > 0))
-        and (not need_former or (former_ready and former_count > 0))
+    lane_requirements_ready = (not need_current or (current_ready and current_count > 0)) and (
+        not need_former or (former_ready and former_count > 0)
     )
-    requested_effective_total = (
-        (current_count if need_current else 0)
-        + (former_count if need_former else 0)
-    )
+    requested_effective_total = (current_count if need_current else 0) + (former_count if need_former else 0)
     if need_current and need_former:
         coverage_floor = max(1, int(round(baseline_candidate_count * _FULL_COMPANY_LANE_REUSE_MIN_COVERAGE_RATIO)))
         slack_allowance = max(10, int(round(baseline_candidate_count * 0.02)))
-        coverage_sufficient = (
-            requested_effective_total >= coverage_floor
-            or requested_effective_total >= max(1, baseline_candidate_count - slack_allowance)
+        coverage_sufficient = requested_effective_total >= coverage_floor or requested_effective_total >= max(
+            1, baseline_candidate_count - slack_allowance
         )
     else:
         coverage_sufficient = requested_effective_total > 0
@@ -2666,11 +3055,11 @@ def _authoritative_population_default_reuse_assessment(
         and baseline_candidate_count >= minimum_candidate_floor
     )
     former_ratio_sufficient = (
-        not former_ratio_required
-        or former_ratio >= _LARGE_AUTHORITATIVE_BASELINE_LOCAL_REUSE_MIN_FORMER_RATIO
+        not former_ratio_required or former_ratio >= _LARGE_AUTHORITATIVE_BASELINE_LOCAL_REUSE_MIN_FORMER_RATIO
     )
     eligible = bool(
         bool(baseline.get("authoritative"))
+        and full_company_coverage_proven
         and baseline_candidate_count >= minimum_candidate_floor
         and not multi_snapshot_directional_blocked
         and lane_requirements_ready
@@ -2685,6 +3074,8 @@ def _authoritative_population_default_reuse_assessment(
         "selected_snapshot_ids": selected_snapshot_ids,
         "multi_snapshot_aggregate_coverage_proven": multi_snapshot_aggregate_coverage_proven,
         "multi_snapshot_directional_blocked": multi_snapshot_directional_blocked,
+        "full_company_coverage_proven": full_company_coverage_proven,
+        "population_coverage_contract": population_contract,
         "lane_requirements_ready": lane_requirements_ready,
         "coverage_sufficient": coverage_sufficient,
         "former_ratio": round(former_ratio, 6),
@@ -2716,6 +3107,11 @@ def _large_authoritative_baseline_local_reuse_eligible(
         baseline_candidate_count=baseline_candidate_count,
         current_lane_coverage=current_lane_coverage,
         former_lane_coverage=former_lane_coverage,
+        population_coverage_contract=build_population_coverage_contract(
+            registry_row=baseline,
+            ledger_summary={},
+            shard_rows=[],
+        ),
     )
     return bool(assessment.get("eligible"))
 
@@ -2729,6 +3125,7 @@ def _allow_embedded_profile_query_reuse(
     baseline_candidate_count: int,
     current_lane_coverage: dict[str, Any],
     former_lane_coverage: dict[str, Any],
+    population_coverage_contract: dict[str, Any] | None = None,
 ) -> bool:
     assessment = _authoritative_population_default_reuse_assessment(
         baseline=baseline,
@@ -2739,8 +3136,52 @@ def _allow_embedded_profile_query_reuse(
         baseline_candidate_count=baseline_candidate_count,
         current_lane_coverage=current_lane_coverage,
         former_lane_coverage=former_lane_coverage,
+        population_coverage_contract=population_coverage_contract,
     )
     return bool(assessment.get("eligible"))
+
+
+def _explicit_broad_profile_query_reuse_allowed(request: JobRequest | None) -> bool:
+    preferences = dict(getattr(request, "execution_preferences", {}) or {}) if request is not None else {}
+    return bool(
+        preferences.get("allow_embedded_profile_query_reuse")
+        or preferences.get("allow_broad_baseline_profile_query_reuse")
+    )
+
+
+def _large_scoped_profile_queries_require_explicit_coverage(
+    *,
+    plan: SourcingPlan,
+    request: JobRequest | None,
+    current_strategy_type: str,
+    baseline_candidate_count: int,
+    population_coverage_contract: dict[str, Any] | None = None,
+) -> bool:
+    if _explicit_broad_profile_query_reuse_allowed(request):
+        return False
+    if bool(dict(population_coverage_contract or {}).get("directional_scope_reuse_allowed")):
+        return False
+    if baseline_candidate_count < _LARGE_ORG_REUSE_BASELINE_MIN_CANDIDATES:
+        return False
+    organization_execution_profile = _plan_organization_execution_profile(plan)
+    org_default_mode = str(organization_execution_profile.get("default_acquisition_mode") or "").strip().lower()
+    org_scale_band = str(organization_execution_profile.get("org_scale_band") or "").strip().lower()
+    normalized_strategy_type = str(current_strategy_type or "").strip().lower()
+    # Full-company queries (e.g. "给我Anthropic的全部成员") explicitly want the entire roster, so
+    # the embedded profile-search queries the planner emits are scoped *within* that complete
+    # population, not a narrower scoped search. Reusing a complete authoritative baseline is the
+    # whole point — don't force explicit per-query coverage just because the org is large.
+    if normalized_strategy_type == "full_company_roster":
+        return False
+    if normalized_strategy_type not in {"scoped_search_roster", "former_employee_search"} and not (
+        org_scale_band == "large" or org_default_mode == "scoped_search_roster"
+    ):
+        return False
+    for task in list(plan.acquisition_tasks or []):
+        _desired_specs, desired_queries = _planned_profile_search_query_specs(task)
+        if desired_queries:
+            return True
+    return False
 
 
 def _baseline_full_company_lane_reuse_sufficient(
@@ -2750,10 +3191,13 @@ def _baseline_full_company_lane_reuse_sufficient(
     baseline_candidate_count: int,
     current_lane_coverage: dict[str, Any],
     former_lane_coverage: dict[str, Any],
+    population_coverage_contract: dict[str, Any] | None = None,
 ) -> bool:
     if str(request.target_scope or "").strip().lower() != "full_company_asset":
         return False
     if str(current_strategy_type or "").strip().lower() != "full_company_roster":
+        return False
+    if not bool(dict(population_coverage_contract or {}).get("full_company_coverage_proven")):
         return False
     lane_requirements = _requested_lane_requirements(request)
     current_lane = dict(current_lane_coverage or {})
@@ -2805,6 +3249,11 @@ def _baseline_population_default_reuse_sufficient(
         baseline_candidate_count=baseline_candidate_count,
         current_lane_coverage=current_lane_coverage,
         former_lane_coverage=former_lane_coverage,
+        population_coverage_contract=build_population_coverage_contract(
+            registry_row=baseline,
+            ledger_summary={},
+            shard_rows=[],
+        ),
     )
     return bool(assessment.get("eligible"))
 
@@ -2841,6 +3290,28 @@ def _build_task_delta_execution_plan(
                 "delta_reason": (
                     "current_roster_already_covered_by_baseline"
                     if bool(baseline_snapshot_id) and not missing_shards
+                    else ""
+                ),
+            }
+        if strategy_type == "former_employee_search":
+            missing_queries = list(asset_reuse_plan.get("missing_former_profile_search_queries") or [])
+            covered_queries = _summarize_registry_rows(
+                list(asset_reuse_plan.get("covered_former_profile_search_queries") or [])
+            )
+            return {
+                "lane": "former_profile_search",
+                "strategy_type": strategy_type,
+                "planner_mode": planner_mode,
+                "baseline_snapshot_id": baseline_snapshot_id,
+                "selected_snapshot_ids": selected_snapshot_ids,
+                "baseline_selection_explanation": baseline_selection_explanation,
+                "delta_required": bool(missing_queries),
+                "delta_noop": bool(baseline_snapshot_id) and not missing_queries,
+                "missing_profile_search_queries": missing_queries,
+                "covered_profile_search_queries": covered_queries,
+                "delta_reason": (
+                    "former_profile_search_queries_already_covered_by_baseline"
+                    if bool(baseline_snapshot_id) and not missing_queries
                     else ""
                 ),
             }
@@ -2907,6 +3378,7 @@ def _compile_asset_reuse_plan_for_baseline(
     request: JobRequest,
     plan: SourcingPlan,
     baseline: dict[str, Any],
+    allow_missing_ledger_rebuild: bool = True,
 ) -> dict[str, Any]:
     baseline = dict(baseline or {})
     if not baseline:
@@ -2934,7 +3406,7 @@ def _compile_asset_reuse_plan_for_baseline(
         or dict(baseline.get("current_lane_coverage") or {})
         or dict(baseline.get("former_lane_coverage") or {})
     )
-    if not cached_lane_coverage_available:
+    if not cached_lane_coverage_available and allow_missing_ledger_rebuild:
         ledger_result = ensure_organization_completeness_ledger(
             runtime_dir=runtime_dir,
             store=store,
@@ -2944,6 +3416,11 @@ def _compile_asset_reuse_plan_for_baseline(
             selected_snapshot_ids=selected_snapshot_ids,
         )
         ledger_summary = dict(ledger_result.get("summary") or {})
+    elif not cached_lane_coverage_available:
+        ledger_result = {
+            "status": "skipped_missing_ledger_rebuild",
+            "reason": "read_only_audit",
+        }
 
     shard_rows = store.list_acquisition_shard_registry(
         target_company=request.target_company,
@@ -2999,8 +3476,11 @@ def _compile_asset_reuse_plan_for_baseline(
         if current_task and current_strategy_type == "scoped_search_roster"
         else ([], [])
     )
+    former_profile_search_task = former_task
+    if former_profile_search_task is None and current_task and current_strategy_type == "former_employee_search":
+        former_profile_search_task = current_task
     desired_former_specs, desired_former_queries = (
-        _planned_profile_search_query_specs(former_task) if former_task else ([], [])
+        _planned_profile_search_query_specs(former_profile_search_task) if former_profile_search_task else ([], [])
     )
 
     covered_current = []
@@ -3101,6 +3581,12 @@ def _compile_asset_reuse_plan_for_baseline(
         former_lane_coverage,
         former_profile_candidate_rows,
     )
+    population_coverage_contract = _baseline_full_company_coverage_proven(
+        baseline=baseline,
+        ledger_summary=ledger_summary,
+        shard_rows=shard_rows,
+    )
+    requested_population_boundary = _request_population_boundary(request)
     current_lane_coverage = _registry_or_ledger_lane_coverage(
         baseline=baseline,
         ledger_summary=ledger_summary,
@@ -3122,6 +3608,7 @@ def _compile_asset_reuse_plan_for_baseline(
         baseline_candidate_count=baseline_candidate_count,
         current_lane_coverage=current_lane_coverage,
         former_lane_coverage=former_lane_coverage,
+        population_coverage_contract=population_coverage_contract,
     )
     allow_current_embedded_query_reuse = _allow_embedded_profile_query_reuse(
         plan=plan,
@@ -3131,6 +3618,7 @@ def _compile_asset_reuse_plan_for_baseline(
         baseline_candidate_count=baseline_candidate_count,
         current_lane_coverage=current_lane_coverage,
         former_lane_coverage=former_lane_coverage,
+        population_coverage_contract=population_coverage_contract,
     )
     if missing_current_shards and baseline_full_company_lane_reuse_sufficient:
         reusable_current_pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
@@ -3169,6 +3657,13 @@ def _compile_asset_reuse_plan_for_baseline(
         plan_payload.get("organization_execution_profile") or getattr(plan, "organization_execution_profile", {}) or {}
     )
     prefer_delta_from_baseline = bool(organization_execution_profile.get("prefer_delta_from_baseline"))
+    profile_query_requires_explicit_coverage = _large_scoped_profile_queries_require_explicit_coverage(
+        plan=plan,
+        request=request,
+        current_strategy_type=current_strategy_type,
+        baseline_candidate_count=baseline_candidate_count,
+        population_coverage_contract=population_coverage_contract,
+    )
     baseline_population_default_reuse_assessment = _authoritative_population_default_reuse_assessment(
         request=request,
         plan=plan,
@@ -3177,15 +3672,23 @@ def _compile_asset_reuse_plan_for_baseline(
         baseline_candidate_count=baseline_candidate_count,
         current_lane_coverage=current_lane_coverage,
         former_lane_coverage=former_lane_coverage,
+        population_coverage_contract=population_coverage_contract,
     )
-    baseline_population_default_reuse_sufficient = bool(
-        baseline_population_default_reuse_assessment.get("eligible")
+    baseline_population_default_reuse_sufficient = bool(baseline_population_default_reuse_assessment.get("eligible"))
+    full_company_filter_from_baseline = bool(
+        str(requested_population_boundary.get("boundary_type") or "").strip().lower() == "scoped_directional"
+        and bool(requested_population_boundary.get("full_company_filter_allowed"))
+        and baseline_population_default_reuse_sufficient
     )
     allow_population_default_profile_query_reuse = bool(
-        baseline_population_default_reuse_sufficient and not prefer_delta_from_baseline
+        baseline_population_default_reuse_sufficient
+        and (not prefer_delta_from_baseline or full_company_filter_from_baseline)
+        and (not profile_query_requires_explicit_coverage or full_company_filter_from_baseline)
     )
     if missing_current_profile_queries:
-        if baseline_full_company_lane_reuse_sufficient or allow_population_default_profile_query_reuse:
+        if (not profile_query_requires_explicit_coverage or full_company_filter_from_baseline) and (
+            baseline_full_company_lane_reuse_sufficient or allow_population_default_profile_query_reuse
+        ):
             covered_current_profile.extend(
                 _synthetic_baseline_query_coverage_rows(
                     target_company=request.target_company,
@@ -3199,7 +3702,11 @@ def _compile_asset_reuse_plan_for_baseline(
             missing_current_profile = []
             missing_current_profile_queries = []
             current_profile_exact_overlap_gaps = []
-        elif baseline_current_embedded_sufficient and allow_current_embedded_query_reuse:
+        elif (
+            not profile_query_requires_explicit_coverage
+            and baseline_current_embedded_sufficient
+            and allow_current_embedded_query_reuse
+        ):
             covered_current_profile.extend(
                 _synthetic_baseline_query_coverage_rows(
                     target_company=request.target_company,
@@ -3222,13 +3729,19 @@ def _compile_asset_reuse_plan_for_baseline(
         baseline_candidate_count=baseline_candidate_count,
         current_lane_coverage=current_lane_coverage,
         former_lane_coverage=former_lane_coverage,
+        population_coverage_contract=population_coverage_contract,
     )
     allow_population_default_former_query_reuse = bool(
         allow_population_default_profile_query_reuse
-        and (current_strategy_type == "full_company_roster" or not prefer_delta_from_baseline)
+        and (
+            current_strategy_type == "full_company_roster"
+            or not prefer_delta_from_baseline
+            or full_company_filter_from_baseline
+        )
     )
     if missing_former_queries and (
-        baseline_full_company_lane_reuse_sufficient or allow_population_default_former_query_reuse
+        (not profile_query_requires_explicit_coverage or full_company_filter_from_baseline)
+        and (baseline_full_company_lane_reuse_sufficient or allow_population_default_former_query_reuse)
     ):
         covered_former.extend(
             _synthetic_baseline_query_coverage_rows(
@@ -3244,7 +3757,7 @@ def _compile_asset_reuse_plan_for_baseline(
         missing_former_queries = []
         former_exact_overlap_gaps = []
         baseline_former_embedded_sufficient = True
-    if missing_former_queries and allow_former_embedded_query_reuse:
+    if missing_former_queries and not profile_query_requires_explicit_coverage and allow_former_embedded_query_reuse:
         baseline_former_embedded_sufficient = _baseline_embedded_former_sufficient(
             baseline_candidate_count=baseline_candidate_count,
             former_lane_coverage=former_lane_coverage,
@@ -3317,6 +3830,7 @@ def _compile_asset_reuse_plan_for_baseline(
         "baseline_former_embedded_sufficient": baseline_former_embedded_sufficient,
         "baseline_full_company_lane_reuse_sufficient": baseline_full_company_lane_reuse_sufficient,
         "baseline_population_default_reuse_sufficient": baseline_population_default_reuse_sufficient,
+        "profile_query_requires_explicit_coverage": profile_query_requires_explicit_coverage,
         "baseline_source_snapshot_selection_mode": str(
             baseline_population_default_reuse_assessment.get("source_snapshot_selection_mode") or ""
         ),
@@ -3326,12 +3840,25 @@ def _compile_asset_reuse_plan_for_baseline(
         "baseline_multi_snapshot_directional_blocked": bool(
             baseline_population_default_reuse_assessment.get("multi_snapshot_directional_blocked")
         ),
-        "baseline_current_embedded_query_reuse_allowed": allow_current_embedded_query_reuse,
-        "baseline_former_embedded_query_reuse_allowed": allow_former_embedded_query_reuse,
+        "baseline_full_company_coverage_proven": bool(
+            population_coverage_contract.get("full_company_coverage_proven")
+        ),
+        "baseline_population_coverage_contract": population_coverage_contract,
+        "requested_population_boundary": requested_population_boundary,
+        "full_company_filter_from_baseline": full_company_filter_from_baseline,
+        "baseline_current_embedded_query_reuse_allowed": bool(
+            allow_current_embedded_query_reuse and not profile_query_requires_explicit_coverage
+        ),
+        "baseline_former_embedded_query_reuse_allowed": bool(
+            allow_former_embedded_query_reuse and not profile_query_requires_explicit_coverage
+        ),
         "baseline_directional_local_reuse_eligible": bool(
-            baseline_population_default_reuse_sufficient
-            or allow_current_embedded_query_reuse
-            or allow_former_embedded_query_reuse
+            (not profile_query_requires_explicit_coverage or full_company_filter_from_baseline)
+            and (
+                baseline_population_default_reuse_sufficient
+                or allow_current_embedded_query_reuse
+                or allow_former_embedded_query_reuse
+            )
         ),
         "selected_snapshot_ids": selected_snapshot_ids,
         "covered_current_company_employee_shard_count": len(covered_current),
@@ -3363,7 +3890,15 @@ def _compile_asset_reuse_plan_for_baseline(
         ),
         "requires_delta_acquisition": requires_delta_acquisition,
         "baseline_sufficiency": ("delta_required" if requires_delta_acquisition else (baseline_readiness or "ready")),
-        "baseline_resolution_mode": ("repaired_missing_cache" if not cached_lane_coverage_available else "cached_only"),
+        "baseline_resolution_mode": (
+            "cached_only"
+            if cached_lane_coverage_available
+            else (
+                "repaired_missing_cache"
+                if allow_missing_ledger_rebuild
+                else "cached_missing_no_rebuild"
+            )
+        ),
         "planner_mode": ("delta_from_snapshot" if requires_delta_acquisition else "reuse_snapshot_only"),
     }
     plan_payload["baseline_selection_explanation"] = build_asset_reuse_baseline_selection_explanation(
@@ -3390,9 +3925,8 @@ def _asset_reuse_plan_missing_count(plan_payload: dict[str, Any]) -> int:
 
 def _asset_reuse_plan_effective_candidate_total(plan_payload: dict[str, Any]) -> int:
     payload = dict(plan_payload or {})
-    return (
-        _safe_int(payload.get("baseline_current_effective_candidate_count"))
-        + _safe_int(payload.get("baseline_former_effective_candidate_count"))
+    return _safe_int(payload.get("baseline_current_effective_candidate_count")) + _safe_int(
+        payload.get("baseline_former_effective_candidate_count")
     )
 
 
@@ -3409,10 +3943,6 @@ def _asset_reuse_plan_candidate_is_better(candidate: dict[str, Any], incumbent: 
     incumbent_requires_delta = bool(incumbent_payload.get("requires_delta_acquisition"))
     if candidate_requires_delta != incumbent_requires_delta:
         return not candidate_requires_delta
-    candidate_missing_count = _asset_reuse_plan_missing_count(candidate_payload)
-    incumbent_missing_count = _asset_reuse_plan_missing_count(incumbent_payload)
-    if candidate_missing_count != incumbent_missing_count:
-        return candidate_missing_count < incumbent_missing_count
     candidate_population_default = bool(candidate_payload.get("baseline_population_default_reuse_sufficient"))
     incumbent_population_default = bool(incumbent_payload.get("baseline_population_default_reuse_sufficient"))
     if candidate_population_default != incumbent_population_default:
@@ -3425,6 +3955,10 @@ def _asset_reuse_plan_candidate_is_better(candidate: dict[str, Any], incumbent: 
     incumbent_candidate_count = _safe_int(incumbent_payload.get("baseline_candidate_count"))
     if candidate_candidate_count != incumbent_candidate_count:
         return candidate_candidate_count > incumbent_candidate_count
+    candidate_missing_count = _asset_reuse_plan_missing_count(candidate_payload)
+    incumbent_missing_count = _asset_reuse_plan_missing_count(incumbent_payload)
+    if candidate_missing_count != incumbent_missing_count:
+        return candidate_missing_count < incumbent_missing_count
     candidate_completeness = _safe_float(candidate_payload.get("baseline_completeness_score"))
     incumbent_completeness = _safe_float(incumbent_payload.get("baseline_completeness_score"))
     if candidate_completeness != incumbent_completeness:
@@ -3455,6 +3989,7 @@ def compile_asset_reuse_plan(
     store: ControlPlaneStore,
     request: JobRequest,
     plan: SourcingPlan,
+    allow_missing_ledger_rebuild: bool = True,
 ) -> dict[str, Any]:
     if not str(request.target_company or "").strip():
         return {}
@@ -3489,6 +4024,7 @@ def compile_asset_reuse_plan(
             request=request,
             plan=plan,
             baseline=candidate_baseline,
+            allow_missing_ledger_rebuild=allow_missing_ledger_rebuild,
         )
         if not best_plan or _asset_reuse_plan_candidate_is_better(candidate_plan, best_plan):
             best_plan = candidate_plan
@@ -3500,6 +4036,7 @@ def compile_asset_reuse_plan(
             request=request,
             plan=plan,
             baseline=authoritative_baseline,
+            allow_missing_ledger_rebuild=allow_missing_ledger_rebuild,
         )
 
     return _strip_asset_reuse_plan_private_fields(best_plan)

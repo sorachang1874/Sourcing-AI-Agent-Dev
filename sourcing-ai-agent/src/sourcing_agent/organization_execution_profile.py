@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .asset_coverage_contracts import build_population_coverage_contract
 from .company_registry import resolve_company_alias_key
 from .organization_assets import load_cached_organization_completeness_ledger
 from .source_snapshot_coverage import (
@@ -305,16 +306,25 @@ def build_organization_execution_profile(
     )
     standard_bundle_count = _standard_bundle_count(registry, ledger)
     shard_count = company_employee_shard_count + current_profile_search_shard_count + former_profile_search_shard_count
-    coverage_baseline_reuse_ready = True
+    population_coverage_contract = build_population_coverage_contract(
+        registry_row=registry,
+        ledger_summary=ledger,
+        shard_rows=shard_rows,
+    )
+    coverage_baseline_reuse_ready = bool(population_coverage_contract.get("full_company_coverage_proven"))
     if org_scale_band == "large":
         coverage_baseline_reuse_ready = _large_org_reuse_baseline_has_coverage_contract(
             baseline_candidate_count=baseline_candidate_count,
             shard_count=shard_count,
             standard_bundle_count=standard_bundle_count,
             source_snapshot_selection=source_snapshot_selection,
-        )
+        ) and bool(population_coverage_contract.get("full_company_coverage_proven"))
         if not coverage_baseline_reuse_ready:
             reason_codes.append("large_org_supplemental_baseline_not_coverage_ready")
+    elif not coverage_baseline_reuse_ready and bool(population_coverage_contract.get("exact_scoped_coverage_available")):
+        reason_codes.append("authoritative_asset_has_scoped_coverage_only")
+    elif not coverage_baseline_reuse_ready:
+        reason_codes.append("authoritative_asset_missing_full_company_coverage_proof")
 
     prefer_delta_from_baseline = bool(
         baseline_candidate_count > 0
@@ -366,6 +376,8 @@ def build_organization_execution_profile(
         "former_profile_search_shard_count": former_profile_search_shard_count,
         "standard_bundle_count": standard_bundle_count,
         "coverage_baseline_reuse_ready": coverage_baseline_reuse_ready,
+        "population_coverage_contract": population_coverage_contract,
+        "full_company_coverage_proven": bool(population_coverage_contract.get("full_company_coverage_proven")),
         "company_employee_cap_hit_count": company_employee_cap_hit_count,
         "profile_search_cap_hit_count": profile_search_cap_hit_count,
     }
@@ -481,8 +493,6 @@ def ensure_organization_execution_profile(
             asset_view=normalized_asset_view,
         )
         return store.upsert_organization_execution_profile(fallback)
-    if not bool(registry_row.get("authoritative")):
-        registry_row = store.upsert_organization_asset_registry(registry_row, authoritative=True)
     source_snapshot_id = _normalize_text(registry_row.get("snapshot_id"))
     selected_snapshot_ids = _dedupe_strings(
         registry_row.get("selected_snapshot_ids") or [source_snapshot_id]
@@ -499,6 +509,21 @@ def ensure_organization_execution_profile(
         snapshot_id=source_snapshot_id,
         asset_view=normalized_asset_view,
     )
+    from .asset_reuse_planning import ensure_explicit_population_coverage_for_registry_record
+
+    registry_row_with_coverage = ensure_explicit_population_coverage_for_registry_record(
+        store=store,
+        candidate_record=registry_row,
+        ledger_summary=ledger_summary,
+        write_source="organization_execution_profile_repair",
+    )
+    should_persist_registry_row = (
+        not bool(registry_row.get("authoritative"))
+        or registry_row_with_coverage != registry_row
+    )
+    registry_row = registry_row_with_coverage
+    if should_persist_registry_row:
+        registry_row = store.upsert_organization_asset_registry(registry_row, authoritative=True)
     built = build_organization_execution_profile(
         target_company=normalized_target_company,
         asset_view=normalized_asset_view,

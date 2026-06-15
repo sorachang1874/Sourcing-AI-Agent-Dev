@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import time
 from typing import Any, Protocol
 from urllib import error, request
 
@@ -14,10 +16,122 @@ from .runtime_environment import external_provider_mode
 from .settings import ModelProviderSettings, QwenSettings
 
 _OUTREACH_LAYER_PROMPT_TEMPLATE_VERSION = "outreach_layering_v3_explicit_greater_china_scope"
+_SCRIPTED_LIVE_MODEL_PLANNING_ENV = "SOURCING_SCRIPTED_LIVE_MODEL_PLANNING"
+_MODEL_PROVIDER_HEALTHCHECK_CACHE_SECONDS_ENV = "SOURCING_MODEL_PROVIDER_HEALTHCHECK_CACHE_SECONDS"
+_MODEL_PROVIDER_FAILURE_COOLDOWN_SECONDS_ENV = "SOURCING_MODEL_PROVIDER_FAILURE_COOLDOWN_SECONDS"
+_MODEL_PROVIDER_CIRCUIT_DISABLED_ENV = "SOURCING_MODEL_PROVIDER_CIRCUIT_DISABLED"
+_MODEL_PROVIDER_CALL_MAX_ATTEMPTS_ENV = "SOURCING_MODEL_PROVIDER_CALL_MAX_ATTEMPTS"
+_MODEL_PROVIDER_CIRCUITS: dict[tuple[str, str, str], dict[str, Any]] = {}
 
 
 def _external_provider_mode() -> str:
     return external_provider_mode()
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = str(os.getenv(name) or "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on", "y"}
+
+
+def _env_int(name: str, default: int, *, minimum: int | None = None, maximum: int | None = None) -> int:
+    raw = str(os.getenv(name) or "").strip()
+    if not raw:
+        value = default
+    else:
+        try:
+            value = int(raw)
+        except ValueError:
+            value = default
+    if minimum is not None:
+        value = max(minimum, value)
+    if maximum is not None:
+        value = min(maximum, value)
+    return value
+
+
+def _scripted_live_model_planning_enabled(*, provider_mode: str) -> bool:
+    return str(provider_mode or "").strip().lower() == "scripted" and _env_bool(
+        _SCRIPTED_LIVE_MODEL_PLANNING_ENV,
+        False,
+    )
+
+
+def _model_call_error_message(exc: Exception) -> str:
+    return " ".join(str(exc or "").strip().split())[:500]
+
+
+def _model_provider_circuit_key(provider: str, base_url: str, model: str) -> tuple[str, str, str]:
+    return (
+        str(provider or "").strip() or "model_provider",
+        str(base_url or "").strip().rstrip("/"),
+        str(model or "").strip() or "unknown_model",
+    )
+
+
+def _model_provider_circuit_error(key: tuple[str, str, str]) -> str:
+    if _env_bool(_MODEL_PROVIDER_CIRCUIT_DISABLED_ENV, False):
+        return ""
+    state = _MODEL_PROVIDER_CIRCUITS.get(key) or {}
+    open_until = float(state.get("open_until") or 0)
+    now = time.time()
+    if open_until <= now:
+        if state:
+            _MODEL_PROVIDER_CIRCUITS.pop(key, None)
+        return ""
+    reason = str(state.get("reason") or "previous_model_provider_failure").strip()
+    remaining = int(max(1, open_until - now))
+    return f"model_provider_circuit_open:{remaining}s_remaining:{reason}"
+
+
+def _record_model_provider_failure(key: tuple[str, str, str], error_text: str) -> None:
+    if _env_bool(_MODEL_PROVIDER_CIRCUIT_DISABLED_ENV, False):
+        return
+    cooldown = _env_int(_MODEL_PROVIDER_FAILURE_COOLDOWN_SECONDS_ENV, 900, minimum=1, maximum=86_400)
+    _MODEL_PROVIDER_CIRCUITS[key] = {
+        "open_until": time.time() + cooldown,
+        "reason": " ".join(str(error_text or "").strip().split())[:240],
+        "cooldown_seconds": cooldown,
+    }
+
+
+def _record_model_provider_success(key: tuple[str, str, str]) -> None:
+    _MODEL_PROVIDER_CIRCUITS.pop(key, None)
+
+
+def _reset_model_provider_circuits_for_tests() -> None:
+    _MODEL_PROVIDER_CIRCUITS.clear()
+
+
+def _model_fallback_reason(*, response: str, error: str, parsed: dict[str, Any]) -> str:
+    if error:
+        return "model_call_failed"
+    if response and not parsed:
+        return "model_response_parse_failed"
+    if not response:
+        return "empty_model_response"
+    return ""
+
+
+def _annotate_public_web_model_fallback(
+    result: dict[str, Any],
+    *,
+    response: str,
+    error: str,
+    parsed: dict[str, Any],
+) -> None:
+    fallback_used = not bool(parsed)
+    result["fallback_used"] = fallback_used
+    if not fallback_used:
+        return
+    reason = _model_fallback_reason(response=response, error=error, parsed=parsed)
+    if reason:
+        result["fallback_reason"] = reason
+    if error:
+        result["model_error"] = error
+    elif response:
+        result["raw_response_preview"] = response[:300]
 
 
 def _build_outreach_layer_system_prompt() -> str:
@@ -140,7 +254,7 @@ def _build_request_normalization_system_prompt() -> str:
         "and direction/topic/model/technology terms in keywords. "
         + _explicit_thematic_keyword_boundary_prompt()
         +
-        "Common AI direction terms such as Coding, Math, Text, Audio, Vision/Visual, Multimodal, Reasoning, "
+        "Common AI direction terms such as Coding, Agent, Math, Text, Audio, Vision/Visual, Multimodal, Reasoning, "
         "Pre-train, Post-train, World model, Alignment, and Safety should usually be preserved as explicit keywords "
         "and, when applicable, repeated in research_direction_keywords instead of being dropped as generic language. "
         "If a term is both a team/sub-org clue and an important retrieval/search constraint, it may appear in both organization_keywords and keywords. "
@@ -154,7 +268,7 @@ def _build_request_normalization_system_prompt() -> str:
         "categories should prefer employee, former_employee, investor, researcher, engineer. "
         "employment_statuses should use current or former. "
         "If the user asks for people in a technical direction/topic (for example Pre-train, Post-train, Reasoning, "
-        "Infra, Multimodal, Eval, RL, Coding, or Math) and does not explicitly say researcher-only or engineer-only, "
+        "Infra, Multimodal, Eval, RL, Coding, Agent, or Math) and does not explicitly say researcher-only or engineer-only, "
         "prefer categories=['researcher','engineer'] instead of narrowing to one side. "
         "retrieval_strategy must be one of empty string, structured, hybrid, semantic. "
         "Unless the user explicitly limits the scope, default employment_statuses to both current and former members. "
@@ -492,31 +606,20 @@ class DeterministicModelClient:
             }:
                 identity_score += 0.15
             identity_score = min(identity_score, 0.95)
-            confidence_score = max(float(item.get("confidence_score") or 0.0), identity_score)
-            publishable = bool(item.get("publishable", True))
             suppression_reason = str(item.get("suppression_reason") or "").strip()
-            if identity_score < 0.35:
-                publishable = False
-                suppression_reason = suppression_reason or "weak_identity_match"
+            confidence_score = min(max(float(item.get("confidence_score") or 0.0), identity_score), 0.65)
+            suppression_reason = suppression_reason or "model_fallback_requires_ai_review"
             assessments.append(
                 {
                     "email": email,
                     "email_type": str(item.get("email_type") or "unknown").strip() or "unknown",
-                    "confidence_label": "high" if confidence_score >= 0.72 else "medium" if confidence_score >= 0.45 else "low",
+                    "confidence_label": "medium" if confidence_score >= 0.45 else "low",
                     "confidence_score": round(min(confidence_score, 0.95), 2),
-                    "publishable": publishable,
-                    "promotion_status": (
-                        "promotion_recommended"
-                        if publishable and confidence_score >= 0.72 and not suppression_reason
-                        else "suppressed"
-                        if suppression_reason
-                        else "not_promoted"
-                    ),
+                    "publishable": False,
+                    "promotion_status": "not_promoted",
                     "suppression_reason": suppression_reason,
                     "identity_match_label": (
-                        "likely_same_person"
-                        if identity_score >= 0.65
-                        else "needs_review"
+                        "needs_review"
                         if identity_score >= 0.35
                         else "ambiguous_identity"
                     ),
@@ -563,20 +666,16 @@ class DeterministicModelClient:
             if signal_type == "company_page":
                 identity_score -= 0.05
             identity_score = max(0.0, min(identity_score, 0.95))
-            label = (
-                "likely_same_person"
-                if identity_score >= 0.65
-                else "needs_review"
-                if identity_score >= 0.35
-                else "ambiguous_identity"
-            )
+            label = "needs_review" if identity_score >= 0.35 else "ambiguous_identity"
             assessments.append(
                 {
                     "url": url,
                     "signal_type": signal_type,
                     "identity_match_label": label,
-                    "identity_match_score": round(identity_score, 2),
-                    "confidence_label": "high" if identity_score >= 0.75 else "medium" if identity_score >= 0.45 else "low",
+                    "identity_match_score": round(min(identity_score, 0.64), 2),
+                    "confidence_label": "medium" if identity_score >= 0.45 else "low",
+                    "user_visible_signal": False,
+                    "review_queue_reason": "deterministic_fallback_requires_live_ai_review",
                     "rationale": "Deterministic public-web link adjudication fallback.",
                 }
             )
@@ -629,6 +728,57 @@ class OfflineModelClient(DeterministicModelClient):
             "provider_mode": self.mode,
             "note": note,
         }
+
+
+class ScriptedLivePlanningModelClient(DeterministicModelClient):
+    """Use a live model only for front-door planning in scripted provider tests."""
+
+    def __init__(self, delegate: ModelClient, *, mode: str) -> None:
+        self.delegate = delegate
+        self.mode = str(mode or "scripted").strip().lower() or "scripted"
+
+    def provider_name(self) -> str:
+        return "scripted_live_planning_model"
+
+    def healthcheck(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider_name(),
+            "status": "ready",
+            "provider_mode": self.mode,
+            "delegate_provider": self.delegate.provider_name(),
+            "live_model_scope": [
+                "normalize_request",
+                "normalize_review_instruction",
+                "normalize_refinement_instruction",
+                "interpret_intent",
+                "draft_intent_brief",
+                "plan_search_strategy",
+            ],
+            "note": (
+                "Scripted providers remain offline; only front-door planning calls may use the live model."
+            ),
+        }
+
+    def supports_outreach_ai_verification(self) -> bool:
+        return False
+
+    def normalize_request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.delegate.normalize_request(payload)
+
+    def normalize_review_instruction(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.delegate.normalize_review_instruction(payload)
+
+    def normalize_refinement_instruction(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.delegate.normalize_refinement_instruction(payload)
+
+    def interpret_intent(self, request: JobRequest, draft_plan: dict[str, Any]) -> str:
+        return self.delegate.interpret_intent(request, draft_plan)
+
+    def draft_intent_brief(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
+        return self.delegate.draft_intent_brief(request, draft_payload)
+
+    def plan_search_strategy(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
+        return self.delegate.plan_search_strategy(request, draft_payload)
 
 
 class QwenResponsesModelClient(DeterministicModelClient):
@@ -808,12 +958,23 @@ class QwenResponsesModelClient(DeterministicModelClient):
 
     def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]:
         fallback = super().analyze_public_web_candidate_signals(payload)
-        response = self._safe_text_prompt(
+        response, model_error = self._safe_text_prompt_with_error(
             _build_public_web_signal_adjudication_prompt(),
             json.dumps(payload, ensure_ascii=False),
+            max_tokens=720,
         )
         parsed = _safe_json_object(response)
-        return _normalize_public_web_signal_adjudication(parsed, fallback=fallback)
+        result = _normalize_public_web_signal_adjudication(parsed, fallback=fallback)
+        result["provider"] = "qwen"
+        result["model"] = self.settings.model
+        result["model_version"] = self.settings.model
+        _annotate_public_web_model_fallback(
+            result,
+            response=response,
+            error=model_error,
+            parsed=parsed,
+        )
+        return result
 
     def plan_search_strategy(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
         response = self._safe_text_prompt(
@@ -899,22 +1060,32 @@ class QwenResponsesModelClient(DeterministicModelClient):
             return {"error": "non_json_response", "raw_preview": response[:240]}
         return _normalize_outreach_profile_response(parsed)
 
-    def _run_text_prompt(self, system_prompt: str, user_prompt: str) -> str:
+    def _run_text_prompt(self, system_prompt: str, user_prompt: str, *, max_tokens: int | None = None) -> str:
         input_text = f"System instruction:\n{system_prompt}\n\nUser input:\n{user_prompt}"
-        return self._call_responses_api(input_text)
+        return self._call_responses_api(input_text, max_tokens=max_tokens)
 
-    def _safe_text_prompt(self, system_prompt: str, user_prompt: str) -> str:
+    def _safe_text_prompt(self, system_prompt: str, user_prompt: str, *, max_tokens: int | None = None) -> str:
+        response, _error = self._safe_text_prompt_with_error(
+            system_prompt,
+            user_prompt,
+            max_tokens=max_tokens,
+        )
+        return response
+
+    def _safe_text_prompt_with_error(self, system_prompt: str, user_prompt: str, *, max_tokens: int | None = None) -> tuple[str, str]:
         try:
-            return self._run_text_prompt(system_prompt, user_prompt)
-        except Exception:
-            return ""
+            return self._run_text_prompt(system_prompt, user_prompt, max_tokens=max_tokens), ""
+        except Exception as exc:
+            return "", _model_call_error_message(exc)
 
-    def _call_responses_api(self, input_text: str) -> str:
+    def _call_responses_api(self, input_text: str, *, max_tokens: int | None = None) -> str:
         endpoint = f"{self.settings.base_url}/responses"
         payload = {
             "model": self.settings.model,
             "input": input_text,
         }
+        if max_tokens is not None:
+            payload["max_output_tokens"] = max(32, int(max_tokens or 32))
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         http_request = request.Request(
             endpoint,
@@ -939,9 +1110,39 @@ class QwenResponsesModelClient(DeterministicModelClient):
 class OpenAICompatibleChatModelClient(DeterministicModelClient):
     def __init__(self, settings: ModelProviderSettings) -> None:
         self.settings = settings
+        self._healthcheck_cache: dict[str, Any] | None = None
+        self._healthcheck_cache_expires_at = 0.0
 
     def provider_name(self) -> str:
         return self.settings.provider_name or "openai_compatible"
+
+    def _circuit_key(self) -> tuple[str, str, str]:
+        return _model_provider_circuit_key(self.provider_name(), self.settings.base_url, self.settings.model)
+
+    def _healthcheck_cache_seconds(self) -> int:
+        return _env_int(_MODEL_PROVIDER_HEALTHCHECK_CACHE_SECONDS_ENV, 300, minimum=0, maximum=86_400)
+
+    def _cache_healthcheck(self, payload: dict[str, Any]) -> dict[str, Any]:
+        ttl = self._healthcheck_cache_seconds()
+        result = dict(payload)
+        result.setdefault("healthcheck_cache_seconds", ttl)
+        if ttl > 0 and str(result.get("status") or "").strip().lower() == "ready":
+            self._healthcheck_cache = dict(result)
+            self._healthcheck_cache_expires_at = time.time() + ttl
+        return result
+
+    def _cached_healthcheck(self) -> dict[str, Any] | None:
+        # A cached ready result must never mask a later model-call circuit.
+        # Live validation uses /api/providers/health as a cost gate before
+        # starting external provider work, so circuit state is always current.
+        if _model_provider_circuit_error(self._circuit_key()):
+            return None
+        if self._healthcheck_cache and self._healthcheck_cache_expires_at > time.time():
+            payload = dict(self._healthcheck_cache)
+            payload["cache_hit"] = True
+            payload["cache_expires_in_seconds"] = int(max(1, self._healthcheck_cache_expires_at - time.time()))
+            return payload
+        return None
 
     def supports_outreach_ai_verification(self) -> bool:
         return True
@@ -1103,13 +1304,25 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
 
     def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]:
         fallback = super().analyze_public_web_candidate_signals(payload)
-        response = self._safe_text_prompt(
+        response, model_error = self._safe_text_prompt_with_error(
             _build_public_web_signal_adjudication_prompt(),
             json.dumps(payload, ensure_ascii=False),
             max_tokens=900,
         )
         parsed = _safe_json_object(response)
-        return _normalize_public_web_signal_adjudication(parsed, fallback=fallback)
+        result = _normalize_public_web_signal_adjudication(parsed, fallback=fallback)
+        model_name = str(getattr(self, "model", "") or getattr(getattr(self, "settings", None), "model", "") or "").strip()
+        result["provider"] = self.provider_name()
+        if model_name:
+            result["model"] = model_name
+            result["model_version"] = model_name
+        _annotate_public_web_model_fallback(
+            result,
+            response=response,
+            error=model_error,
+            parsed=parsed,
+        )
+        return result
 
     def plan_search_strategy(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
         response = self._safe_text_prompt(
@@ -1201,33 +1414,95 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         return _normalize_outreach_profile_response(parsed)
 
     def healthcheck(self) -> dict[str, Any]:
+        cached = self._cached_healthcheck()
+        if cached is not None:
+            return cached
+        circuit_error = _model_provider_circuit_error(self._circuit_key())
+        if circuit_error:
+            return self._cache_healthcheck(
+                {
+                    "provider": self.provider_name(),
+                    "status": "degraded",
+                    "model": self.settings.model,
+                    "base_url": self.settings.base_url,
+                    "models_status": "not_checked",
+                    "chat_status": "circuit_open",
+                    "error": circuit_error,
+                    "available_models": [],
+                    "circuit_open": True,
+                }
+            )
+        models: list[str] = []
+        models_status = "not_checked"
+        models_error = ""
         try:
             body = self._list_models()
             models = _extract_openai_models(body)
-            return {
-                "provider": self.provider_name(),
-                "status": "ready" if self.settings.model in models else "model_missing",
-                "model": self.settings.model,
-                "base_url": self.settings.base_url,
-                "available_models": models[:8],
-            }
+            models_status = "ready" if self.settings.model in models else "model_missing"
         except Exception as exc:
-            return {
+            models_status = "degraded"
+            models_error = str(exc)
+        try:
+            preview = self._call_prompt(
+                [
+                    {
+                        "role": "system",
+                        "content": "Healthcheck. Reply with exactly: MODEL_OK",
+                    },
+                    {
+                        "role": "user",
+                        "content": "Reply with exactly: MODEL_OK",
+                    },
+                ],
+                max_tokens=32,
+            )
+            chat_status = "ready" if "MODEL_OK" in preview else "unexpected_response"
+            status = "ready" if chat_status == "ready" and models_status == "ready" else models_status
+            return self._cache_healthcheck(
+                {
+                    "provider": self.provider_name(),
+                    "status": status,
+                    "model": self.settings.model,
+                    "base_url": self.settings.base_url,
+                    "models_status": models_status,
+                    "chat_status": chat_status,
+                    "chat_preview": preview[:80],
+                    "available_models": models[:8],
+                }
+            )
+        except Exception as exc:
+            error_text = _model_call_error_message(exc)
+            _record_model_provider_failure(self._circuit_key(), error_text)
+            payload = {
                 "provider": self.provider_name(),
                 "status": "degraded",
                 "model": self.settings.model,
                 "base_url": self.settings.base_url,
-                "error": str(exc),
+                "models_status": models_status,
+                "chat_status": "degraded",
+                "error": error_text,
+                "available_models": models[:8],
             }
+            if models_error:
+                payload["models_error"] = models_error
+            return self._cache_healthcheck(payload)
 
     def _safe_text_prompt(self, system_prompt: str, user_prompt: str, *, max_tokens: int) -> str:
+        response, _error = self._safe_text_prompt_with_error(
+            system_prompt,
+            user_prompt,
+            max_tokens=max_tokens,
+        )
+        return response
+
+    def _safe_text_prompt_with_error(self, system_prompt: str, user_prompt: str, *, max_tokens: int) -> tuple[str, str]:
         try:
-            return self._run_text_prompt(system_prompt, user_prompt, max_tokens=max_tokens)
-        except Exception:
-            return ""
+            return self._run_text_prompt(system_prompt, user_prompt, max_tokens=max_tokens), ""
+        except Exception as exc:
+            return "", _model_call_error_message(exc)
 
     def _run_text_prompt(self, system_prompt: str, user_prompt: str, *, max_tokens: int) -> str:
-        return self._call_chat_completions(
+        return self._call_prompt(
             [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -1255,7 +1530,19 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         except requests.RequestException as exc:
             raise RuntimeError(f"OpenAI-compatible request failed: {exc}") from exc
 
+    def _call_prompt(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:
+        api_style = str(self.settings.api_style or "openai_chat_completions").strip().lower()
+        if api_style == "openai_responses":
+            return self._call_responses_api(messages, max_tokens=max_tokens)
+        if api_style in {"", "openai_chat_completions"}:
+            return self._call_chat_completions(messages, max_tokens=max_tokens)
+        raise RuntimeError(f"Unsupported OpenAI-compatible api_style: {self.settings.api_style}")
+
     def _call_chat_completions(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:
+        circuit_error = _model_provider_circuit_error(self._circuit_key())
+        if circuit_error:
+            raise RuntimeError(circuit_error)
+        max_attempts = _env_int(_MODEL_PROVIDER_CALL_MAX_ATTEMPTS_ENV, 1, minimum=1, maximum=3)
         endpoint = f"{self.settings.base_url}/chat/completions"
         payload = {
             "model": self.settings.model,
@@ -1263,26 +1550,87 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
             "max_tokens": max(32, int(max_tokens or 32)),
             "temperature": 0,
         }
-        try:
-            response = requests.post(
-                endpoint,
-                timeout=self.settings.timeout_seconds,
-                headers={
-                    "Authorization": f"Bearer {self.settings.api_key}",
-                    "Content-Type": "application/json",
-                    "User-Agent": "Mozilla/5.0",
-                },
-                json=payload,
-            )
-            response.raise_for_status()
-            body = response.json()
-        except requests.HTTPError as exc:
-            detail = exc.response.text if exc.response is not None else str(exc)
-            status_code = exc.response.status_code if exc.response is not None else "?"
-            raise RuntimeError(f"OpenAI-compatible HTTP {status_code}: {detail[:200]}") from exc
-        except requests.RequestException as exc:
-            raise RuntimeError(f"OpenAI-compatible request failed: {exc}") from exc
-        return _extract_openai_chat_text(body)
+        last_error: RuntimeError | None = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = requests.post(
+                    endpoint,
+                    timeout=self.settings.timeout_seconds,
+                    headers={
+                        "Authorization": f"Bearer {self.settings.api_key}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+                body = response.json()
+                _record_model_provider_success(self._circuit_key())
+                return _extract_openai_chat_text(body)
+            except requests.HTTPError as exc:
+                detail = exc.response.text if exc.response is not None else str(exc)
+                status_code = exc.response.status_code if exc.response is not None else "?"
+                last_error = RuntimeError(f"OpenAI-compatible HTTP {status_code}: {detail[:200]}")
+                if attempt >= max_attempts:
+                    _record_model_provider_failure(self._circuit_key(), _model_call_error_message(last_error))
+                    raise last_error from exc
+            except requests.RequestException as exc:
+                last_error = RuntimeError(f"OpenAI-compatible request failed: {exc}")
+                if attempt >= max_attempts:
+                    _record_model_provider_failure(self._circuit_key(), _model_call_error_message(last_error))
+                    raise last_error from exc
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("OpenAI-compatible request failed: no attempts executed")
+
+    def _call_responses_api(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:
+        circuit_error = _model_provider_circuit_error(self._circuit_key())
+        if circuit_error:
+            raise RuntimeError(circuit_error)
+        max_attempts = _env_int(_MODEL_PROVIDER_CALL_MAX_ATTEMPTS_ENV, 1, minimum=1, maximum=3)
+        endpoint = f"{self.settings.base_url}/responses"
+        input_text = "\n\n".join(
+            f"{str(message.get('role') or 'user').strip()}: {str(message.get('content') or '').strip()}"
+            for message in messages
+        ).strip()
+        payload = {
+            "model": self.settings.model,
+            "input": input_text,
+            "max_output_tokens": max(32, int(max_tokens or 32)),
+            "temperature": 0,
+        }
+        last_error: RuntimeError | None = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = requests.post(
+                    endpoint,
+                    timeout=self.settings.timeout_seconds,
+                    headers={
+                        "Authorization": f"Bearer {self.settings.api_key}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+                body = response.json()
+                _record_model_provider_success(self._circuit_key())
+                return _extract_output_text(body)
+            except requests.HTTPError as exc:
+                detail = exc.response.text if exc.response is not None else str(exc)
+                status_code = exc.response.status_code if exc.response is not None else "?"
+                last_error = RuntimeError(f"OpenAI-compatible HTTP {status_code}: {detail[:200]}")
+                if attempt >= max_attempts:
+                    _record_model_provider_failure(self._circuit_key(), _model_call_error_message(last_error))
+                    raise last_error from exc
+            except requests.RequestException as exc:
+                last_error = RuntimeError(f"OpenAI-compatible request failed: {exc}")
+                if attempt >= max_attempts:
+                    _record_model_provider_failure(self._circuit_key(), _model_call_error_message(last_error))
+                    raise last_error from exc
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("OpenAI-compatible request failed: no attempts executed")
 
 
 def _extract_output_text(payload: dict[str, Any]) -> str:
@@ -1322,44 +1670,29 @@ def _safe_json_object(text: str) -> dict[str, Any]:
 
 def _build_public_web_signal_adjudication_prompt() -> str:
     return (
-        "You are adjudicating public-web evidence for recruiter-facing candidate research. "
-        "Return strict JSON with keys summary,email_assessments,link_assessments,academic_summary,notes. "
-        "email_assessments must be a list of objects with keys email,email_type,confidence_label,confidence_score,"
-        "publishable,promotion_status,suppression_reason,identity_match_label,identity_match_score,rationale. "
-        "link_assessments must be a list of objects with keys url,signal_type,identity_match_label,"
-        "identity_match_score,confidence_label,rationale. "
-        "academic_summary must be an object with keys research_directions,notable_work,academic_affiliations,"
-        "publication_signals,outreach_angles,confidence_label,evidence_sources. "
-        "research_directions, academic_affiliations, publication_signals, outreach_angles, and evidence_sources must be arrays "
-        "of concise strings. notable_work must be a list of objects with keys title,year,venue,why_it_matters,evidence. "
-        "email_type must be one of personal,academic,company,generic,unknown. "
-        "confidence_label must be high, medium, or low. promotion_status must be not_promoted,"
-        "promotion_recommended,rejected,or suppressed. "
-        "identity_match_label must be one of confirmed,likely_same_person,needs_review,ambiguous_identity,not_same_person. "
-        "Use high confidence only when the source plausibly belongs to the target candidate, such as a personal homepage, "
-        "CV/resume, paper PDF, university profile, or strong company-domain evidence. "
-        "Suppress generic inboxes, unrelated coauthor emails, same-name collisions, and boilerplate contacts. "
-        "Suppress paper-title artifacts that look like emails, such as Learning@Scale.Conference. "
-        "Do not infer a real address from Google Scholar verified-domain text such as Verified email at google.com. "
-        "For grouped addresses such as {barryz, lesli}@domain, judge each expanded address separately and identify whether it is "
-        "the candidate's own address or a coauthor/lab group address. "
-        "For paper PDFs, treat an email as high confidence only when the surrounding author block or local-part evidence ties it "
-        "to the target candidate; otherwise mark coauthor or lab addresses as needs_review or suppressed. "
-        "For X/Twitter, Substack, GitHub, Scholar, and homepage links discovered only from search results, do not mark confirmed "
-        "solely because the name matches. Prefer needs_review or ambiguous_identity unless URL/title/snippet/fetched content "
-        "contains strong identity evidence such as matching employer, education, homepage cross-links, or LinkedIn context. "
-        "Use the candidate LinkedIn URL/key, headline, known work history, education, current company, source URL, title, "
-        "snippet, search_evidence, and evidence_slices to judge identity. search_evidence contains DataForSEO/search-result "
-        "URL/title/snippet/query context and is useful for platform pages that cannot be fetched. evidence_slices are source-aware model-safe excerpts from fetched "
-        "GitHub, Scholar, X/Twitter, Substack, homepage, academic profile, resume/CV, and publication pages; do not assume "
-        "raw HTML/PDF is available in the prompt. "
-        "When Scholar, publication, academic profile, or personal homepage evidence is present, summarize the candidate's "
-        "research directions, important publications or technical achievements, academic affiliations, and practical outreach "
-        "angles. First decide whether each evidence slice belongs to the target candidate; do not use same-name Scholar pages, "
-        "coauthor profiles, unrelated university profiles, or conflicting profiles in academic_summary. Keep academic_summary "
-        "grounded in evidence_slices that you judge confirmed or likely_same_person, and mark low confidence when identity or "
-        "evidence is weak. "
-        "Do not promote anything to primary email; only recommend promotion when a human should review it."
+        "Adjudicate public-web evidence for one candidate. Return strict JSON only with keys: "
+        "summary,email_assessments,link_assessments,academic_summary,notes. "
+        "email_assessments items: email,email_type,confidence_label,confidence_score,publishable,"
+        "promotion_status,suppression_reason,identity_match_label,identity_match_score,rationale. "
+        "link_assessments items: url,signal_type,identity_match_label,identity_match_score,confidence_label,"
+        "user_visible_signal,review_queue_reason,rationale. "
+        "academic_summary keys: research_directions,notable_work,academic_affiliations,publication_signals,"
+        "outreach_angles,confidence_label,evidence_sources. Lists must be concise. "
+        "Allowed identity labels: confirmed,likely_same_person,needs_review,ambiguous_identity,not_same_person. "
+        "Be conservative. Same name, same first name, or weak company mention is not enough. "
+        "Use candidate LinkedIn/headline/work/education plus URL/title/snippet/evidence_slices. "
+        "For each link, set user_visible_signal=true only when it is a candidate-owned profile/homepage or a "
+        "high-value reviewable lead with concrete identity evidence; set it false for low-value same-name results, "
+        "third-party mentions, unrelated Scholar profiles, repository/blob pages, articles, obituaries, videos, "
+        "company pages, and publication-only pages. review_queue_reason must briefly explain why the link should "
+        "or should not be shown to a human reviewer. "
+        "Publication/article/YouTube/company-blog/Substack-post pages are evidence only, not profile/homepage links. "
+        "Use publication evidence only if the candidate is clearly an author. Prefer confirmed Scholar profile or owned homepage "
+        "for research directions. Reject same-name Scholar/publication/profile pages when work/education/employer conflicts. "
+        "Emails are publishable only with full-name or owned-page evidence; suppress generic, coauthor, grouped, paper-title, "
+        "verified-domain text, and same-name-collision emails. "
+        "Set promotion_status=promotion_recommended only when a human should review a high-confidence candidate-owned signal; "
+        "otherwise use not_promoted or suppressed. When uncertain, use needs_review/ambiguous_identity and low confidence."
     )
 
 
@@ -1369,7 +1702,11 @@ def _normalize_public_web_signal_adjudication(
     fallback: dict[str, Any],
 ) -> dict[str, Any]:
     if not parsed:
-        return fallback
+        return {
+            **fallback,
+            "email_assessments": [],
+            "link_assessments": [],
+        }
     normalized: dict[str, Any] = {
         "summary": str(parsed.get("summary") or fallback.get("summary") or "").strip(),
         "email_assessments": [],
@@ -1411,6 +1748,8 @@ def _normalize_public_web_signal_adjudication(
                 "suppression_reason": str(item.get("suppression_reason") or "").strip(),
                 "identity_match_label": str(item.get("identity_match_label") or "needs_review").strip(),
                 "identity_match_score": round(identity_match_score, 2),
+                "user_visible_signal": bool(item.get("user_visible_signal", False)),
+                "review_queue_reason": str(item.get("review_queue_reason") or "").strip(),
                 "rationale": str(item.get("rationale") or "").strip(),
             }
         )
@@ -1427,13 +1766,11 @@ def _normalize_public_web_signal_adjudication(
                     "identity_match_label": str(item.get("identity_match_label") or "needs_review").strip(),
                     "identity_match_score": round(identity_match_score, 2),
                     "confidence_label": str(item.get("confidence_label") or "low").strip(),
+                    "user_visible_signal": bool(item.get("user_visible_signal", False)),
+                    "review_queue_reason": str(item.get("review_queue_reason") or "").strip(),
                     "rationale": str(item.get("rationale") or "").strip(),
                 }
             )
-    if not normalized["email_assessments"] and fallback.get("email_assessments"):
-        normalized["email_assessments"] = list(fallback.get("email_assessments") or [])
-    if not normalized["link_assessments"] and fallback.get("link_assessments"):
-        normalized["link_assessments"] = list(fallback.get("link_assessments") or [])
     return normalized
 
 
@@ -1608,9 +1945,14 @@ def build_model_client(
 ) -> ModelClient:
     external_mode = _external_provider_mode()
     if external_mode in {"simulate", "replay", "scripted"}:
+        if _scripted_live_model_planning_enabled(provider_mode=external_mode):
+            if model_settings and model_settings.enabled:
+                return ScriptedLivePlanningModelClient(OpenAICompatibleChatModelClient(model_settings), mode=external_mode)
+            if qwen_settings and qwen_settings.enabled:
+                return ScriptedLivePlanningModelClient(QwenResponsesModelClient(qwen_settings), mode=external_mode)
         return OfflineModelClient(mode=external_mode)
-    if qwen_settings and qwen_settings.enabled:
-        return QwenResponsesModelClient(qwen_settings)
     if model_settings and model_settings.enabled:
         return OpenAICompatibleChatModelClient(model_settings)
+    if qwen_settings and qwen_settings.enabled:
+        return QwenResponsesModelClient(qwen_settings)
     return DeterministicModelClient()

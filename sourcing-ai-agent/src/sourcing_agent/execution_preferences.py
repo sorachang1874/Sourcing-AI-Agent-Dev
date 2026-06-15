@@ -10,6 +10,7 @@ EXECUTION_PREFERENCE_FIELDS = {
     "confirmed_company_scope",
     "extra_source_families",
     "allow_local_bootstrap_fallback",
+    "allow_stage1_web_seed_fallback",
     "require_stage2_confirmation",
     "precision_recall_bias",
     "acquisition_strategy_override",
@@ -18,6 +19,8 @@ EXECUTION_PREFERENCE_FIELDS = {
     "former_keyword_queries_only",
     "provider_people_search_query_strategy",
     "provider_people_search_max_queries",
+    "provider_people_search_pages",
+    "provider_people_search_scale_chunk_pages",
     "large_org_keyword_probe_mode",
     "force_fresh_run",
     "reuse_existing_roster",
@@ -34,6 +37,10 @@ EXECUTION_PREFERENCE_FIELDS = {
     "task_get_batch_workers",
     "harvest_poll_interval_seconds",
     "harvest_retry_backoff_seconds",
+    "harvest_run_status_timeout_seconds",
+    "harvest_run_status_wait_for_finish_seconds",
+    "harvest_dataset_page_timeout_seconds",
+    "harvest_dataset_fetch_max_attempts",
     "harvest_scripted_sleep_seconds_cap",
     "provider_people_search_parallel_queries",
     "harvest_company_roster_parallel_shards",
@@ -42,6 +49,14 @@ EXECUTION_PREFERENCE_FIELDS = {
     "parallel_search_workers",
     "parallel_exploration_workers",
     "harvest_prefetch_submit_workers",
+    "harvest_global_inflight_budget",
+    "harvest_profile_actor_global_inflight",
+    "harvest_profile_batch_submit_global_inflight",
+    "harvest_profile_scrape_global_inflight",
+    "harvest_people_search_global_inflight",
+    "harvest_company_roster_global_inflight",
+    "materialization_global_writer_budget",
+    "materialization_coalescing_window_ms",
     "search_worker_unit_budget",
     "public_media_worker_unit_budget",
     "exploration_worker_unit_budget",
@@ -54,6 +69,10 @@ RUNTIME_TUNING_NONNEGATIVE_INT_FIELDS = {
 
 RUNTIME_TUNING_POSITIVE_INT_FIELDS = {
     "task_get_batch_workers",
+    "harvest_run_status_timeout_seconds",
+    "harvest_run_status_wait_for_finish_seconds",
+    "harvest_dataset_page_timeout_seconds",
+    "harvest_dataset_fetch_max_attempts",
     "provider_people_search_parallel_queries",
     "harvest_company_roster_parallel_shards",
     "candidate_artifact_parallel_min_candidates",
@@ -61,6 +80,14 @@ RUNTIME_TUNING_POSITIVE_INT_FIELDS = {
     "parallel_search_workers",
     "parallel_exploration_workers",
     "harvest_prefetch_submit_workers",
+    "harvest_global_inflight_budget",
+    "harvest_profile_actor_global_inflight",
+    "harvest_profile_batch_submit_global_inflight",
+    "harvest_profile_scrape_global_inflight",
+    "harvest_people_search_global_inflight",
+    "harvest_company_roster_global_inflight",
+    "materialization_global_writer_budget",
+    "materialization_coalescing_window_ms",
     "search_worker_unit_budget",
     "public_media_worker_unit_budget",
     "exploration_worker_unit_budget",
@@ -77,6 +104,8 @@ EXECUTION_PREFERENCE_ALIASES = {
     "confirmed_scope": "confirmed_company_scope",
     "scope": "confirmed_company_scope",
     "source_families": "extra_source_families",
+    "allow_public_web_seed_fallback": "allow_stage1_web_seed_fallback",
+    "stage1_web_seed_fallback": "allow_stage1_web_seed_fallback",
     "pause_before_stage2_analysis": "require_stage2_confirmation",
     "require_stage2_approval": "require_stage2_confirmation",
     "wait_for_stage2_approval": "require_stage2_confirmation",
@@ -90,6 +119,10 @@ EXECUTION_PREFERENCE_ALIASES = {
     "provider_people_query_strategy": "provider_people_search_query_strategy",
     "people_search_max_queries": "provider_people_search_max_queries",
     "provider_people_query_max": "provider_people_search_max_queries",
+    "people_search_pages": "provider_people_search_pages",
+    "provider_people_query_pages": "provider_people_search_pages",
+    "people_search_scale_chunk_pages": "provider_people_search_scale_chunk_pages",
+    "provider_people_query_scale_chunk_pages": "provider_people_search_scale_chunk_pages",
     "large_org_keyword_probe": "large_org_keyword_probe_mode",
     "require_fresh_snapshot": "force_fresh_run",
     "disable_cached_roster_fallback": "force_fresh_run",
@@ -155,6 +188,7 @@ def normalize_execution_preferences(
             continue
         if key in {
             "allow_local_bootstrap_fallback",
+            "allow_stage1_web_seed_fallback",
             "require_stage2_confirmation",
             "use_company_employees_lane",
             "keyword_priority_only",
@@ -206,6 +240,16 @@ def normalize_execution_preferences(
             continue
         if key == "provider_people_search_max_queries":
             value = _coerce_small_positive_int(raw_value, maximum=32)
+            if value is not None:
+                normalized[key] = value
+            continue
+        if key == "provider_people_search_pages":
+            value = _coerce_small_positive_int(raw_value, maximum=100)
+            if value is not None:
+                normalized[key] = value
+            continue
+        if key == "provider_people_search_scale_chunk_pages":
+            value = _coerce_small_positive_int(raw_value, maximum=10)
             if value is not None:
                 normalized[key] = value
             continue
@@ -366,6 +410,14 @@ def apply_execution_preference_policy(
 ) -> dict[str, Any]:
     updated = dict(preferences or {})
     lower = " ".join(str(raw_text or "").strip().split()).lower()
+    if _should_force_default_former_search_seed(
+        lower=lower,
+        preferences=updated,
+        categories=categories,
+        employment_statuses=employment_statuses,
+        current_strategy_type=current_strategy_type,
+    ):
+        updated["run_former_search_seed"] = True
     if (
         "use_company_employees_lane" not in updated
         and _should_infer_company_employees_lane(
@@ -379,6 +431,52 @@ def apply_execution_preference_policy(
     ):
         updated["use_company_employees_lane"] = True
     return updated
+
+
+def _should_force_default_former_search_seed(
+    *,
+    lower: str,
+    preferences: dict[str, Any],
+    categories: list[str],
+    employment_statuses: list[str],
+    current_strategy_type: str,
+) -> bool:
+    normalized_statuses = {str(item).strip().lower() for item in employment_statuses if str(item).strip()}
+    if "former" not in normalized_statuses:
+        return False
+    normalized_categories = {str(item).strip().lower() for item in categories if str(item).strip()}
+    if "investor" in normalized_categories:
+        return False
+    if _infer_run_former_search_seed(lower) is False:
+        return False
+    strategy = str(preferences.get("acquisition_strategy_override") or current_strategy_type or "").strip().lower()
+    if not strategy and bool(preferences.get("use_company_employees_lane")):
+        strategy = "full_company_roster"
+    if not strategy:
+        strategy = _infer_strategy_override_from_text(lower)
+    if not strategy and _has_full_roster_population_phrase(lower):
+        strategy = "full_company_roster"
+    if strategy != "full_company_roster":
+        return False
+    return bool(preferences.get("run_former_search_seed") is False or "run_former_search_seed" not in preferences)
+
+
+def _has_full_roster_population_phrase(lower: str) -> bool:
+    return any(
+        token in lower
+        for token in [
+            "all members",
+            "all employees",
+            "所有成员",
+            "全部成员",
+            "全体成员",
+            "全量成员",
+            "全量资产",
+            "整家公司",
+            "全公司的人",
+            "全公司的 roster",
+        ]
+    )
 
 
 def _normalize_string_list(value: Any, *, key: str, target_company: str) -> list[str]:

@@ -58,16 +58,22 @@ def candidate_profile_lookup_url(payload: dict[str, Any], metadata: dict[str, An
     explicit_url = _first_non_empty_text(
         payload.get("linkedin_url"),
         payload.get("profile_url"),
+        payload.get("selected_profile_url"),
+        payload.get("selectedProfileUrl"),
         metadata.get("profile_url"),
         metadata.get("linkedin_url"),
+        metadata.get("selected_profile_url"),
+        metadata.get("selectedProfileUrl"),
     )
     if explicit_url:
         return explicit_url
     public_identifier = _first_non_empty_text(
         payload.get("public_identifier"),
         payload.get("username"),
+        payload.get("member_id"),
         metadata.get("public_identifier"),
         metadata.get("username"),
+        metadata.get("member_id"),
     )
     normalized_identifier = str(public_identifier or "").strip().strip("/ ")
     if not normalized_identifier:
@@ -90,12 +96,11 @@ def resolve_candidate_profile_timeline(
     source_path: str = "",
     registry_row: dict[str, Any] | None = None,
     timeline_cache: dict[str, dict[str, Any]] | None = None,
+    prefer_embedded_profile: bool = False,
 ) -> dict[str, Any]:
     metadata = dict(metadata or payload.get("metadata") or {})
     suppression_context = _email_suppression_context(payload, metadata)
-    resolved_source_path = _resolved_profile_source_path(
-        source_path or payload.get("source_path") or metadata.get("source_path") or ""
-    )
+    raw_source_path = _first_non_empty_text(source_path, payload.get("source_path"), metadata.get("source_path"))
     embedded_experience_lines = normalized_text_lines(
         payload.get("experience_lines") or metadata.get("experience_lines")
     )
@@ -106,6 +111,31 @@ def resolve_candidate_profile_timeline(
     embedded_email_metadata = normalized_primary_email_metadata(
         payload.get("primary_email_metadata") or metadata.get("primary_email_metadata")
     )
+    if prefer_embedded_profile and (
+        embedded_experience_lines
+        or embedded_education_lines
+        or any(_has_signal_value(value) for value in embedded_signals.values())
+    ):
+        profile_capture_kind = infer_profile_capture_kind(
+            payload=payload,
+            metadata=metadata,
+            source_path=raw_source_path,
+        )
+        return scrub_unpublishable_primary_email(
+            {
+                "experience_lines": embedded_experience_lines,
+                "education_lines": embedded_education_lines,
+                **embedded_signals,
+                "primary_email_metadata": embedded_email_metadata,
+                "profile_capture_kind": profile_capture_kind,
+                "profile_capture_source_path": raw_source_path,
+                "source_kind": "embedded",
+                "source_path": raw_source_path,
+            },
+            context=suppression_context,
+        )
+
+    resolved_source_path = _resolved_profile_source_path(raw_source_path)
 
     direct_timeline = profile_snapshot_from_source_path(
         resolved_source_path,

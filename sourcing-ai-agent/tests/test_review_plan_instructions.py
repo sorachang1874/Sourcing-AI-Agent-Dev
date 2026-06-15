@@ -133,6 +133,8 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
                     "use_company_employees_lane": "false",
                     "provider_people_search_query_strategy": "union",
                     "provider_people_search_max_queries": "6",
+                    "provider_people_search_pages": "95",
+                    "provider_people_search_scale_chunk_pages": "4",
                     "large_org_keyword_probe_mode": "yes",
                 }
             },
@@ -142,6 +144,8 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
                 "use_company_employees_lane",
                 "provider_people_search_query_strategy",
                 "provider_people_search_max_queries",
+                "provider_people_search_pages",
+                "provider_people_search_scale_chunk_pages",
                 "large_org_keyword_probe_mode",
             },
         )
@@ -153,6 +157,8 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
                 "use_company_employees_lane": False,
                 "provider_people_search_query_strategy": "all_queries_union",
                 "provider_people_search_max_queries": 6,
+                "provider_people_search_pages": 95,
+                "provider_people_search_scale_chunk_pages": 4,
                 "large_org_keyword_probe_mode": True,
             },
         )

@@ -23,8 +23,8 @@ from .domain import (
 )
 from .model_provider import DeterministicModelClient, ModelClient
 from .organization_execution_profile import organization_execution_profile_full_roster_max_pages
-from .publication_planning import compile_publication_coverage_plan
 from .provider_execution_policy import normalize_former_member_search_contract
+from .publication_planning import compile_publication_coverage_plan
 from .query_intent_rewrite import summarize_query_intent_rewrite
 from .request_normalization import (
     build_effective_job_request,
@@ -98,6 +98,10 @@ def build_sourcing_plan(
         publication_coverage,
         search_strategy,
         intent_view=intent_view,
+    )
+    acquisition_strategy.provider_execution_manifest = _build_provider_execution_manifest(
+        acquisition_strategy=acquisition_strategy,
+        acquisition_tasks=acquisition_tasks,
     )
     criteria_summary = _criteria_summary(effective_request, categories, employment_statuses, intent_view=intent_view)
     assumptions = _build_assumptions(effective_request, categories, retrieval_plan.strategy, acquisition_strategy)
@@ -223,6 +227,7 @@ def hydrate_sourcing_plan(payload: dict[str, object]) -> SourcingPlan:
             cost_policy=dict(acquisition_payload.get("cost_policy") or {}),
             confirmation_points=list(acquisition_payload.get("confirmation_points") or []),
             reasoning=list(acquisition_payload.get("reasoning") or []),
+            provider_execution_manifest=dict(acquisition_payload.get("provider_execution_manifest") or {}),
             organization_execution_profile=dict(acquisition_payload.get("organization_execution_profile") or {}),
             strategy_decision_explanation=dict(acquisition_payload.get("strategy_decision_explanation") or {}),
         ),
@@ -877,6 +882,148 @@ def _task_intent_view_with_overrides(metadata: dict[str, Any], **overrides: Any)
         elif value is not None:
             cloned[key] = value
     return cloned
+
+
+def _build_provider_execution_manifest(
+    *,
+    acquisition_strategy: AcquisitionStrategyPlan,
+    acquisition_tasks: list[AcquisitionTask],
+) -> dict[str, Any]:
+    lanes: list[dict[str, Any]] = []
+    strategy_type = str(acquisition_strategy.strategy_type or "").strip()
+    filter_hints = {
+        str(key): [str(item).strip() for item in list(value or []) if str(item).strip()]
+        for key, value in dict(acquisition_strategy.filter_hints or {}).items()
+        if str(key).strip()
+    }
+    cost_policy = dict(acquisition_strategy.cost_policy or {})
+
+    def _add_lane(
+        *,
+        lane_id: str,
+        employment_status: str,
+        provider: str,
+        operation: str,
+        query_texts: list[str] | None = None,
+        company_filters: dict[str, list[str]] | None = None,
+        provider_facing_query: bool = False,
+        display_label: str = "",
+        reason: str = "",
+        task_id: str = "",
+    ) -> None:
+        lanes.append(
+            {
+                "lane_id": lane_id,
+                "employment_status": employment_status,
+                "provider": provider,
+                "operation": operation,
+                "query_texts": [
+                    str(item).strip()
+                    for item in list(query_texts or [])
+                    if str(item).strip()
+                ],
+                "company_filters": {
+                    str(key): [str(item).strip() for item in list(value or []) if str(item).strip()]
+                    for key, value in dict(company_filters or {}).items()
+                    if str(key).strip()
+                },
+                "provider_facing_query": bool(provider_facing_query),
+                "display_label": display_label,
+                "reason": reason,
+                "task_id": task_id,
+            }
+        )
+
+    acquire_task = next((task for task in acquisition_tasks if task.task_type == "acquire_full_roster"), None)
+    former_task = next((task for task in acquisition_tasks if task.task_type == "acquire_former_search_seed"), None)
+    if strategy_type == "full_company_roster":
+        shard_policy = dict(dict(getattr(acquire_task, "metadata", {}) or {}).get("company_employee_shard_policy") or {})
+        keyword_shards = [
+            str(dict(dict(item or {}).get("include_patch") or {}).get("search_query") or "").strip()
+            for item in list(shard_policy.get("keyword_shards") or [])
+            if str(dict(dict(item or {}).get("include_patch") or {}).get("search_query") or "").strip()
+        ]
+        _add_lane(
+            lane_id="current_company_employees",
+            employment_status="current",
+            provider="harvest_company_employees",
+            operation="company_employees",
+            query_texts=keyword_shards if bool(cost_policy.get("large_org_keyword_probe_mode")) else [],
+            company_filters={
+                "current_companies": list(filter_hints.get("current_companies") or filter_hints.get("companies") or []),
+                "locations": list(filter_hints.get("locations") or []),
+                "function_ids": list(filter_hints.get("function_ids") or []),
+            },
+            provider_facing_query=bool(keyword_shards and cost_policy.get("large_org_keyword_probe_mode")),
+            display_label="Harvest company employees",
+            reason=(
+                "large_org_keyword_probe"
+                if bool(cost_policy.get("large_org_keyword_probe_mode"))
+                else "full_company_roster_company_filter"
+            ),
+            task_id=str(getattr(acquire_task, "task_id", "") or ""),
+        )
+        if former_task is not None:
+            former_keywords = [
+                str(item).strip()
+                for item in list(dict(getattr(former_task, "metadata", {}) or {}).get("search_seed_queries") or [])
+                if str(item).strip()
+            ]
+            broad_former = bool(dict(getattr(former_task, "metadata", {}) or {}).get("cost_policy", {}).get("former_broad_past_company_only"))
+            _add_lane(
+                lane_id="former_past_company_search",
+                employment_status="former",
+                provider="harvest_profile_search",
+                operation="profile_search",
+                query_texts=[] if broad_former else former_keywords,
+                company_filters={"past_companies": list(filter_hints.get("past_companies") or filter_hints.get("current_companies") or [])},
+                provider_facing_query=bool(former_keywords and not broad_former),
+                display_label="Harvest profile search",
+                reason="former_broad_past_company_filter" if broad_former else "former_keyword_profile_search",
+                task_id=str(getattr(former_task, "task_id", "") or ""),
+            )
+    elif strategy_type in {"scoped_search_roster", "former_employee_search"}:
+        seed_queries = [
+            str(item).strip()
+            for item in list(acquisition_strategy.search_seed_queries or [])
+            if str(item).strip()
+        ]
+        statuses = {str(item or "").strip().lower() for item in list(dict(getattr(acquire_task, "metadata", {}) or {}).get("employment_statuses") or [])}
+        if not statuses:
+            statuses = {"former"} if strategy_type == "former_employee_search" else {"current"}
+        if "current" in statuses or strategy_type == "scoped_search_roster":
+            _add_lane(
+                lane_id="current_profile_search",
+                employment_status="current",
+                provider="harvest_profile_search",
+                operation="profile_search",
+                query_texts=seed_queries,
+                company_filters={"current_companies": list(filter_hints.get("current_companies") or [])},
+                provider_facing_query=bool(seed_queries),
+                display_label="Harvest profile search",
+                reason="scoped_keyword_profile_search",
+                task_id=str(getattr(acquire_task, "task_id", "") or ""),
+            )
+        if "former" in statuses and former_task is not None:
+            _add_lane(
+                lane_id="former_profile_search",
+                employment_status="former",
+                provider="harvest_profile_search",
+                operation="profile_search",
+                query_texts=seed_queries,
+                company_filters={"past_companies": list(filter_hints.get("past_companies") or filter_hints.get("current_companies") or [])},
+                provider_facing_query=bool(seed_queries),
+                display_label="Harvest profile search",
+                reason="scoped_former_keyword_profile_search",
+                task_id=str(getattr(former_task, "task_id", "") or ""),
+            )
+
+    return {
+        "version": 1,
+        "source": "planning_contract",
+        "strategy_type": strategy_type,
+        "lanes": lanes,
+    }
 
 
 def _default_full_company_roster_max_pages(

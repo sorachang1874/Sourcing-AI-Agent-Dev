@@ -164,10 +164,11 @@ DEFAULT_EXPLAIN_CASES: list[dict[str, Any]] = [
             "dispatch_strategy": "delta_from_snapshot",
             "planner_mode": "delta_from_snapshot",
             "requires_delta_acquisition": True,
-            "current_lane": "reuse_baseline",
+            "current_lane": "delta_acquisition",
             "former_lane": "delta_acquisition",
             "covered_current_profile_search_queries_contains": ["Multimodal"],
             "covered_former_profile_search_queries_contains": ["Multimodal"],
+            "missing_current_profile_search_queries_contains": ["Pre-train"],
             "missing_former_profile_search_queries_contains": ["Pre-train"],
         },
     },
@@ -214,11 +215,45 @@ def load_explain_cases(matrix_file: str = "", selected_cases: set[str] | None = 
         expect = case.get("expect")
         if expect is not None and not isinstance(expect, dict):
             raise ValueError(f"case `{case_name}` has non-dict expect payload")
-        normalized.append({"case": case_name, "payload": payload, "expect": dict(expect or {})})
+        normalized_case: dict[str, Any] = {
+            "case": case_name,
+            "payload": payload,
+            "expect": _normalized_explain_expectations(case),
+        }
+        scripted_scenario = str(case.get("scripted_scenario") or "").strip()
+        if scripted_scenario:
+            normalized_case["scripted_scenario"] = scripted_scenario
+        runtime_env = {
+            str(key or "").strip(): str(value)
+            for key, value in dict(case.get("runtime_env") or {}).items()
+            if str(key or "").strip()
+        }
+        if runtime_env:
+            normalized_case["runtime_env"] = runtime_env
+        normalized.append(normalized_case)
     if selected and not normalized:
         missing = ", ".join(sorted(selected))
         raise ValueError(f"requested cases not found in matrix: {missing}")
     return normalized
+
+
+def _normalized_explain_expectations(case: dict[str, Any]) -> dict[str, Any]:
+    expect = dict(case.get("expect") or {})
+    smoke_expectations = dict(case.get("expectations") or {})
+    mapping = {
+        "expect_explain_dispatch_strategy": "dispatch_strategy",
+        "expect_explain_planner_mode": "planner_mode",
+        "expect_explain_effective_acquisition_mode": "effective_acquisition_mode",
+        "expect_explain_requires_delta_acquisition": "requires_delta_acquisition",
+        "expect_explain_keywords_include": "keywords_contains",
+        "expect_explain_baseline_snapshot_id": "asset_reuse_baseline_snapshot_id",
+        "expect_explain_dispatch_matched_snapshot_id": "dispatch_matched_snapshot_id",
+        "expect_explain_request_delta_baseline_snapshot_id": "request_delta_baseline_snapshot_id",
+    }
+    for smoke_key, explain_key in mapping.items():
+        if smoke_key in smoke_expectations and explain_key not in expect:
+            expect[explain_key] = smoke_expectations.get(smoke_key)
+    return expect
 
 
 def _normalize_string_list(values: Any) -> list[str]:
@@ -278,10 +313,13 @@ def summarize_explain_payload(explain: dict[str, Any]) -> dict[str, Any]:
     asset_reuse_plan = dict(explain.get("asset_reuse_plan") or {})
     lane_preview = dict(explain.get("lane_preview") or {})
     dispatch_preview = dict(explain.get("dispatch_preview") or {})
+    request_after_dispatch_hints = dict(dispatch_preview.get("request_after_dispatch_hints") or {})
+    request_after_dispatch_preferences = dict(request_after_dispatch_hints.get("execution_preferences") or {})
     effective_execution_semantics = dict(explain.get("effective_execution_semantics") or {})
     plan = dict(explain.get("plan") or {})
     plan_acquisition_strategy = dict(plan.get("acquisition_strategy") or {})
     matched_job = dict(dispatch_preview.get("matched_job") or {})
+    dispatch_explanation = dict(dispatch_preview.get("request_family_match_explanation") or {})
     acquire_full_roster_metadata = _extract_task_metadata(plan, "acquire_full_roster")
     former_search_metadata = _extract_task_metadata(plan, "acquire_former_search_seed")
     plan_company_employee_shard_policy = dict(acquire_full_roster_metadata.get("company_employee_shard_policy") or {})
@@ -298,9 +336,18 @@ def summarize_explain_payload(explain: dict[str, Any]) -> dict[str, Any]:
         "default_results_mode": str(effective_execution_semantics.get("default_results_mode") or ""),
         "asset_population_supported": bool(effective_execution_semantics.get("asset_population_supported")),
         "dispatch_strategy": str(dispatch_preview.get("strategy") or ""),
+        "reuse_basis": str(dispatch_preview.get("reuse_basis") or dispatch_explanation.get("reuse_basis") or ""),
         "dispatch_matched_job_id": str(matched_job.get("job_id") or ""),
         "dispatch_matched_job_status": str(matched_job.get("status") or ""),
         "planner_mode": str(asset_reuse_plan.get("planner_mode") or ""),
+        "asset_reuse_baseline_snapshot_id": str(asset_reuse_plan.get("baseline_snapshot_id") or ""),
+        "dispatch_matched_snapshot_id": str(dispatch_preview.get("matched_snapshot_id") or ""),
+        "request_delta_baseline_snapshot_id": str(
+            request_after_dispatch_preferences.get("delta_baseline_snapshot_id") or ""
+        ),
+        "organization_execution_profile_source_snapshot_id": str(
+            organization_execution_profile.get("source_snapshot_id") or ""
+        ),
         "baseline_directional_local_reuse_eligible": bool(
             asset_reuse_plan.get("baseline_directional_local_reuse_eligible")
         ),
@@ -349,6 +396,23 @@ def summarize_explain_payload(explain: dict[str, Any]) -> dict[str, Any]:
 
 def evaluate_explain_summary(summary: dict[str, Any], expect: dict[str, Any]) -> list[str]:
     mismatches: list[str] = []
+    if str(summary.get("dispatch_strategy") or "") == "delta_from_snapshot":
+        baseline_snapshot_id = str(summary.get("asset_reuse_baseline_snapshot_id") or "").strip()
+        dispatch_snapshot_id = str(summary.get("dispatch_matched_snapshot_id") or "").strip()
+        request_delta_snapshot_id = str(summary.get("request_delta_baseline_snapshot_id") or "").strip()
+        inconsistent = []
+        if not baseline_snapshot_id:
+            inconsistent.append("asset_reuse_baseline_snapshot_id_missing")
+        if baseline_snapshot_id and dispatch_snapshot_id != baseline_snapshot_id:
+            inconsistent.append(
+                f"dispatch_matched_snapshot_id={dispatch_snapshot_id or '<empty>'}!={baseline_snapshot_id}"
+            )
+        if baseline_snapshot_id and request_delta_snapshot_id != baseline_snapshot_id:
+            inconsistent.append(
+                f"request_delta_baseline_snapshot_id={request_delta_snapshot_id or '<empty>'}!={baseline_snapshot_id}"
+            )
+        if inconsistent:
+            mismatches.append("baseline_snapshot_consistency: " + "; ".join(inconsistent))
     for key, expected in dict(expect or {}).items():
         if key.endswith("_contains"):
             actual_key = key[: -len("_contains")]

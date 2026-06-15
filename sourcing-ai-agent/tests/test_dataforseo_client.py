@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from sourcing_agent.dataforseo_client import (
+    DataForSeoClientError,
     DataForSeoGoogleOrganicClient,
     build_google_organic_task,
     extract_google_organic_submitted_tasks,
@@ -33,6 +34,33 @@ class DataForSeoClientTest(unittest.TestCase):
             request_mock.call_args.kwargs["json"],
             tasks,
         )
+
+    def test_task_post_many_can_preserve_partial_task_errors_for_item_level_retry(self) -> None:
+        client = DataForSeoGoogleOrganicClient(login="login", password="password", timeout_seconds=30)
+        payload = {
+            "status_code": 20000,
+            "tasks": [
+                {"id": "task_1", "status_code": 20100, "result": None},
+                {"id": "", "status_code": 50000, "status_message": "Temporary provider error", "result": None},
+            ],
+        }
+        tasks = [
+            build_google_organic_task(keyword="Jane Doe Thinking Machines Lab", tag="q1"),
+            build_google_organic_task(keyword="John Smith Thinking Machines Lab", tag="q2"),
+        ]
+        with patch("sourcing_agent.dataforseo_client.requests.request") as request_mock:
+            request_mock.return_value.raise_for_status.return_value = None
+            request_mock.return_value.json.return_value = payload
+            response = client.task_post_many(tasks, allow_partial_task_errors=True)
+
+        self.assertEqual(response["tasks"][0]["id"], "task_1")
+        self.assertEqual(response["tasks"][1]["status_code"], 50000)
+
+        with patch("sourcing_agent.dataforseo_client.requests.request") as request_mock:
+            request_mock.return_value.raise_for_status.return_value = None
+            request_mock.return_value.json.return_value = payload
+            with self.assertRaises(DataForSeoClientError):
+                client.task_post_many(tasks)
 
     def test_extract_google_organic_submitted_tasks_uses_fallback_when_data_missing(self) -> None:
         payload = {

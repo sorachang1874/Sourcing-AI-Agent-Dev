@@ -292,7 +292,12 @@ def _resolve_snapshot_dir_from_existing_path(path: Path) -> Path | None:
         return None
     if path.name.startswith("candidate_documents."):
         return path.parent
-    if path.name in {"materialized_candidate_documents.json", "artifact_summary.json", "manifest.json", "snapshot_manifest.json"}:
+    if path.name in {
+        "materialized_candidate_documents.json",
+        "artifact_summary.json",
+        "manifest.json",
+        "snapshot_manifest.json",
+    }:
         if path.parent.name == "normalized_artifacts":
             return path.parent.parent
         if path.parent.parent.name == "normalized_artifacts":
@@ -383,12 +388,14 @@ def resolve_company_snapshot_dir_by_key(
         return None
     selected = max(
         candidates,
-        key=lambda entry: _snapshot_dir_serving_preference_sort_key(Path(entry["snapshot_dir"]))
-        + (
-            int(entry.get("root_priority") or 0),
-            1 if bool(entry.get("canonical_root")) else 0,
-            str(Path(entry["snapshot_dir"]).parent.name),
-            str(Path(entry["snapshot_dir"]).name),
+        key=lambda entry: (
+            _snapshot_dir_serving_preference_sort_key(Path(entry["snapshot_dir"]))
+            + (
+                int(entry.get("root_priority") or 0),
+                1 if bool(entry.get("canonical_root")) else 0,
+                str(Path(entry["snapshot_dir"]).parent.name),
+                str(Path(entry["snapshot_dir"]).name),
+            )
         ),
     )
     return Path(selected["snapshot_dir"])
@@ -501,7 +508,9 @@ def build_company_snapshot_match_entry(
 def _snapshot_dir_serving_preference_sort_key(snapshot_dir: Path) -> tuple[int, int, int, int, int]:
     normalized_dir = Path(snapshot_dir)
     normalized_artifact_dir = normalized_dir / "normalized_artifacts"
-    has_materialized_candidate_documents = int((normalized_artifact_dir / "materialized_candidate_documents.json").exists())
+    has_materialized_candidate_documents = int(
+        (normalized_artifact_dir / "materialized_candidate_documents.json").exists()
+    )
     has_manifest = int(
         (normalized_artifact_dir / "manifest.json").exists()
         or (normalized_artifact_dir / "snapshot_manifest.json").exists()
@@ -612,7 +621,9 @@ def resolve_company_snapshot_selection(
     if not entries:
         return None
     for company_key in normalized_company_keys:
-        company_key_entries = [entry for entry in entries if str(entry.get("requested_company_key") or "") == company_key]
+        company_key_entries = [
+            entry for entry in entries if str(entry.get("requested_company_key") or "") == company_key
+        ]
         if company_key_entries:
             return select_company_snapshot_resolution(company_key_entries, snapshot_id=snapshot_id)
     return None
@@ -795,8 +806,10 @@ def _preferred_snapshot_dir_for_snapshot_id(
         return None
     selected_entry = max(
         matching_entries,
-        key=lambda entry: _snapshot_dir_serving_preference_sort_key(Path(entry["company_dir"]) / normalized_snapshot_id)
-        + _company_snapshot_entry_sort_key(entry),
+        key=lambda entry: (
+            _snapshot_dir_serving_preference_sort_key(Path(entry["company_dir"]) / normalized_snapshot_id)
+            + _company_snapshot_entry_sort_key(entry)
+        ),
     )
     return Path(selected_entry["company_dir"]) / normalized_snapshot_id
 

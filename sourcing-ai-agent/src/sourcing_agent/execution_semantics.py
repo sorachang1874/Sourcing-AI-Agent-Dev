@@ -5,6 +5,13 @@ from typing import Any
 from .domain import JobRequest
 from .retrieval_runtime import candidate_source_is_snapshot_authoritative
 
+_ACQUISITION_MODE_OVERRIDES = {
+    "full_company_roster",
+    "scoped_search_roster",
+    "former_employee_search",
+    "investor_firm_roster",
+}
+
 
 def _safe_int(value: Any) -> int:
     try:
@@ -148,15 +155,30 @@ def compile_execution_semantics(
         organization_execution_profile=organization_execution_profile,
     )
     org_scale_band = str(organization_execution_profile.get("org_scale_band") or "").strip().lower()
-    default_acquisition_mode = (
+    profile_default_acquisition_mode = (
         str(organization_execution_profile.get("default_acquisition_mode") or "").strip().lower()
     )
+    request_acquisition_override = str(
+        dict(request.execution_preferences or {}).get("acquisition_strategy_override") or ""
+    ).strip().lower()
+    if request_acquisition_override not in _ACQUISITION_MODE_OVERRIDES:
+        request_acquisition_override = ""
+    default_acquisition_mode = request_acquisition_override or profile_default_acquisition_mode
     source_kind = str(candidate_source.get("source_kind") or "").strip().lower()
     baseline_reuse_available = bool(lane_semantics.get("baseline_reuse_available"))
     requires_delta_acquisition = bool(
         asset_reuse_plan.get("requires_delta_acquisition") or lane_semantics.get("requires_delta_acquisition")
     )
     baseline_candidate_count = int(asset_reuse_plan.get("baseline_candidate_count") or 0)
+    baseline_full_company_coverage_proven = bool(
+        asset_reuse_plan.get("baseline_full_company_coverage_proven")
+        or dict(asset_reuse_plan.get("baseline_population_coverage_contract") or {}).get("full_company_coverage_proven")
+    )
+    requested_population_boundary = dict(
+        asset_reuse_plan.get("requested_population_boundary")
+        or getattr(request, "requested_population_boundary", {})
+        or {}
+    )
     current_lane_payload = dict(lane_semantics.get("current_lane") or {})
     former_lane_payload = dict(lane_semantics.get("former_lane") or {})
     current_lane_default = str(current_lane_payload.get("default_mode") or "").strip().lower()
@@ -165,17 +187,29 @@ def compile_execution_semantics(
     company_snapshot_available = bool(
         str(request.target_company or "").strip() and candidate_source_is_snapshot_authoritative(candidate_source)
     )
+    result_view_payload = dict(candidate_source.get("result_view") or {})
+    result_view_summary = dict(candidate_source.get("result_view_summary") or result_view_payload.get("summary") or {})
+    result_view_kind = str(
+        candidate_source.get("result_view_kind") or result_view_payload.get("view_kind") or ""
+    ).strip().lower()
+    stored_result_view_default_mode = str(result_view_summary.get("default_results_mode") or "").strip().lower()
+    stored_asset_population_view = bool(
+        company_snapshot_available
+        and (result_view_kind == "asset_population" or stored_result_view_default_mode == "asset_population")
+    )
     current_delta_required = bool(current_lane_payload.get("delta_required"))
     former_delta_required = bool(former_lane_payload.get("delta_required"))
     full_local_asset_reuse = bool(
         target_scope == "full_company_asset"
         and baseline_reuse_available
         and not requires_delta_acquisition
+        and baseline_full_company_coverage_proven
         and company_snapshot_available
     )
     authoritative_population_default = bool(
         target_scope == "full_company_asset"
         and baseline_reuse_available
+        and baseline_full_company_coverage_proven
         and baseline_candidate_count >= 1000
         and current_lane_default == "reuse_baseline"
         and former_lane_default == "reuse_baseline"
@@ -265,11 +299,25 @@ def compile_execution_semantics(
         reason_codes.append("hybrid_live_default")
         summary = "This run uses hybrid baseline reuse plus incremental live acquisition."
         execution_strategy_label = "Baseline 复用 + 增量采集"
-    elif company_snapshot_available and target_scope == "full_company_asset":
+    elif company_snapshot_available and target_scope == "full_company_asset" and baseline_full_company_coverage_proven:
         default_results_mode = "asset_population"
         reason_codes.extend(["company_snapshot_candidate_source", "full_asset_results_view"])
         summary = "This run materialized a company snapshot, so results default to the full company asset population."
         execution_strategy_label = "全量公司资产"
+
+    if default_results_mode == "ranked_results" and company_snapshot_available:
+        if stored_asset_population_view or (target_scope == "full_company_asset" and not baseline_reuse_available):
+            # Serving-view support is not the same as planner authority. A job
+            # may already have a concrete asset-population result view even when
+            # it is not allowed to claim full-local reuse for future planning.
+            default_results_mode = "asset_population"
+            reason_codes.append(
+                "stored_asset_population_result_view" if stored_asset_population_view else "job_snapshot_result_view"
+            )
+            if not summary:
+                summary = "This job has a snapshot-backed asset population result view."
+            if not execution_strategy_label:
+                execution_strategy_label = "本地资产看板"
 
     reason_codes = list(dict.fromkeys([code for code in reason_codes if str(code).strip()]))
     return {
@@ -277,9 +325,13 @@ def compile_execution_semantics(
         "target_scope": str(request.target_scope or "").strip(),
         "org_scale_band": org_scale_band,
         "default_acquisition_mode": default_acquisition_mode,
+        "profile_default_acquisition_mode": profile_default_acquisition_mode,
+        "request_acquisition_strategy_override": request_acquisition_override,
         "effective_acquisition_mode": effective_acquisition_mode,
         "baseline_reuse_available": baseline_reuse_available,
         "baseline_candidate_count": baseline_candidate_count,
+        "baseline_full_company_coverage_proven": baseline_full_company_coverage_proven,
+        "requested_population_boundary": requested_population_boundary,
         "requires_delta_acquisition": requires_delta_acquisition,
         "candidate_source_kind": source_kind,
         "company_snapshot_available": company_snapshot_available,
@@ -296,8 +348,8 @@ def compile_execution_semantics(
         "default_results_mode": default_results_mode,
         "asset_population_supported": bool(
             full_local_asset_reuse
-            or company_snapshot_available
             or authoritative_population_default
+            or (company_snapshot_available and default_results_mode == "asset_population")
         ),
         "execution_strategy_label": execution_strategy_label,
         "summary": summary,

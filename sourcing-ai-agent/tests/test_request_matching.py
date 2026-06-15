@@ -86,10 +86,10 @@ class RequestMatchingTest(unittest.TestCase):
         self.assertEqual(request_signature(left), request_signature(right))
         self.assertEqual(request_family_signature(left), request_family_signature(right))
 
-    def test_family_signature_normalizes_primary_role_bucket_aliases(self) -> None:
+    def test_family_signature_normalizes_explicit_primary_role_bucket_aliases(self) -> None:
         left = {
             "target_company": "xAI",
-            "must_have_primary_role_bucket": "infra",
+            "must_have_primary_role_bucket": "infrastructure engineer",
             "categories": ["employee"],
         }
         right = {
@@ -99,6 +99,19 @@ class RequestMatchingTest(unittest.TestCase):
         }
         self.assertEqual(request_signature(left), request_signature(right))
         self.assertEqual(request_family_signature(left), request_family_signature(right))
+
+    def test_family_signature_does_not_treat_infra_theme_as_role_bucket(self) -> None:
+        left = {
+            "target_company": "xAI",
+            "keywords": ["Infra"],
+            "categories": ["employee"],
+        }
+        right = {
+            "target_company": "xAI",
+            "must_have_primary_role_buckets": ["infra_systems"],
+            "categories": ["employee"],
+        }
+        self.assertNotEqual(request_signature(left), request_signature(right))
 
     def test_matching_signature_uses_effective_request_normalization(self) -> None:
         raw_query_payload = {

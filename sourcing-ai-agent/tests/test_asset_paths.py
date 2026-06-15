@@ -101,7 +101,9 @@ class AssetPathsSnapshotResolutionTest(unittest.TestCase):
         self.assertEqual(Path(selection["snapshot_dir"]).resolve(), hot_cache_canonical_snapshot_dir.resolve())
         self.assertEqual(snapshot_dir.resolve(), hot_cache_canonical_snapshot_dir.resolve())
 
-    def test_resolve_company_snapshot_dir_prefers_complete_canonical_snapshot_over_incomplete_hot_cache_shadow(self) -> None:
+    def test_resolve_company_snapshot_dir_prefers_complete_canonical_snapshot_over_incomplete_hot_cache_shadow(
+        self,
+    ) -> None:
         snapshot_id = "20260412T090000"
         canonical_root = self.project_root / "canonical_assets"
         hot_cache_root = self.project_root / "hot_cache_assets"
@@ -147,8 +149,12 @@ class AssetPathsSnapshotResolutionTest(unittest.TestCase):
             },
             clear=False,
         ):
-            selection = resolve_company_snapshot_selection(self.runtime_dir, company_keys=["Google"], snapshot_id=snapshot_id)
-            snapshot_dir = resolve_company_snapshot_dir(self.runtime_dir, target_company="Google", snapshot_id=snapshot_id)
+            selection = resolve_company_snapshot_selection(
+                self.runtime_dir, company_keys=["Google"], snapshot_id=snapshot_id
+            )
+            snapshot_dir = resolve_company_snapshot_dir(
+                self.runtime_dir, target_company="Google", snapshot_id=snapshot_id
+            )
 
         self.assertIsNotNone(selection)
         assert selection is not None
@@ -304,12 +310,7 @@ class AssetPathsSnapshotResolutionTest(unittest.TestCase):
 
     def test_resolve_source_path_in_runtime_remaps_legacy_linux_file_path(self) -> None:
         source_file = (
-            self.runtime_dir
-            / "company_assets"
-            / "acme"
-            / "20260409T101500"
-            / "harvest_profiles"
-            / "alice.json"
+            self.runtime_dir / "company_assets" / "acme" / "20260409T101500" / "harvest_profiles" / "alice.json"
         )
         source_file.parent.mkdir(parents=True, exist_ok=True)
         source_file.write_text("{}", encoding="utf-8")

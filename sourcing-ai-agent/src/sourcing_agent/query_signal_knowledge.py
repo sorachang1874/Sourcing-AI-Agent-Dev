@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Stable, reusable query signal knowledge.
 
 This module owns durable mappings such as product/team/model -> parent company,
@@ -7,11 +5,12 @@ related scope hints, search aliases, and role bucket -> function ids.
 Business shorthand policies should live in query_intent_policy.py instead.
 """
 
+from __future__ import annotations
+
 import re
 from typing import Any, Iterable
 
 from .company_registry import normalize_company_key
-
 
 GOOGLE_COMPANY_URL = "https://www.linkedin.com/company/google/"
 ALPHABET_COMPANY_URL = "https://www.linkedin.com/company/alphabet-inc/"
@@ -156,6 +155,24 @@ KNOWN_SCOPE_SIGNAL_SPECS: tuple[dict[str, Any], ...] = (
         },
     },
     {
+        "canonical_label": "Health",
+        "aliases": ("health", "health team", "health group", "health组", "health 组"),
+        "target_company": "OpenAI",
+        "organization_keywords": ("Health",),
+        "keyword_labels": ("Health",),
+        "search_query_aliases": ("Health",),
+        "company_scope_labels": (),
+        "related_company_urls": (),
+        "review_parent_company_keys": (),
+        "scope_disambiguation": {
+            "inferred_scope": "uncertain",
+            "sub_org_candidates": ["Health"],
+            "confidence": 0.72,
+            "rationale": "Health is treated as a high-confidence OpenAI group/product signal for scoped sourcing.",
+            "source": "rules",
+        },
+    },
+    {
         "canonical_label": "Claude",
         "aliases": ("claude",),
         "target_company": "Anthropic",
@@ -203,6 +220,13 @@ KNOWN_THEMATIC_SIGNAL_SPECS: tuple[dict[str, Any], ...] = (
         "provider_search_aliases": ("Coding",),
     },
     {
+        "canonical_label": "Agent",
+        "aliases": ("agent", "agentic", "agent system", "agent systems", "agent model", "agent models", "智能体"),
+        "keyword_labels": ("Agent",),
+        "research_direction_keywords": ("Agent",),
+        "provider_search_aliases": ("Agent",),
+    },
+    {
         "canonical_label": "Math",
         "aliases": ("math", "mathematics", "mathematical", "math reasoning", "数学"),
         "keyword_labels": ("Math",),
@@ -236,6 +260,14 @@ KNOWN_THEMATIC_SIGNAL_SPECS: tuple[dict[str, Any], ...] = (
         "keyword_labels": ("Vision",),
         "research_direction_keywords": ("Vision",),
         "provider_search_aliases": ("Vision", "Computer Vision"),
+    },
+    {
+        "canonical_label": "Vision-language",
+        "aliases": ("vision-language", "vision language", "vision_language", "vlm", "vision-language model"),
+        "keyword_labels": ("Vision-language",),
+        "research_direction_keywords": ("Vision-language",),
+        "facet_labels": ("multimodal",),
+        "provider_search_aliases": ("Vision-language", "Vision Language", "VLM"),
     },
     {
         "canonical_label": "Multimodal",
@@ -336,9 +368,10 @@ ROLE_BUCKET_KNOWLEDGE: dict[str, dict[str, Any]] = {
     },
     "infra_systems": {
         "aliases": (
-            "infra",
-            "infrastructure",
             "infra systems",
+            "infra engineer",
+            "infrastructure engineer",
+            "infrastructure engineering",
             "platform engineer",
             "systems engineer",
             "distributed systems",
@@ -409,11 +442,19 @@ def match_scope_signals(text: str) -> list[dict[str, Any]]:
     normalized_text = " ".join(str(text or "").lower().split()).strip()
     if not normalized_text:
         return []
+    specific_aliases = _specific_matched_alias_spans(normalized_text, KNOWN_SCOPE_SIGNAL_SPECS)
     matches: list[dict[str, Any]] = []
     seen: set[str] = set()
     for spec in KNOWN_SCOPE_SIGNAL_SPECS:
         aliases = [str(spec.get("canonical_label") or "").strip(), *list(spec.get("aliases") or [])]
-        if not any(_alias_matches_text(normalized_text, alias) for alias in aliases):
+        if not any(
+            _alias_matches_text(
+                normalized_text,
+                alias,
+                matched_specific_aliases=specific_aliases,
+            )
+            for alias in aliases
+        ):
             continue
         canonical = str(spec.get("canonical_label") or "").strip()
         if not canonical or canonical in seen:
@@ -568,11 +609,19 @@ def match_thematic_signals(text: str) -> list[dict[str, Any]]:
     normalized_text = " ".join(str(text or "").lower().split()).strip()
     if not normalized_text:
         return []
+    specific_aliases = _specific_matched_alias_spans(normalized_text, KNOWN_THEMATIC_SIGNAL_SPECS)
     matches: list[dict[str, Any]] = []
     seen: set[str] = set()
     for spec in KNOWN_THEMATIC_SIGNAL_SPECS:
         aliases = [str(spec.get("canonical_label") or "").strip(), *list(spec.get("aliases") or [])]
-        if not any(_alias_matches_text(normalized_text, alias) for alias in aliases):
+        if not any(
+            _alias_matches_text(
+                normalized_text,
+                alias,
+                matched_specific_aliases=specific_aliases,
+            )
+            for alias in aliases
+        ):
             continue
         canonical = str(spec.get("canonical_label") or "").strip()
         if not canonical or canonical in seen:
@@ -657,9 +706,50 @@ def default_large_org_priority_function_ids() -> list[str]:
     return role_bucket_function_ids(("engineering", "founding", "product_management", "research"))
 
 
-def _alias_matches_text(normalized_text: str, alias: str) -> bool:
+def _specific_matched_alias_spans(
+    normalized_text: str,
+    specs: Iterable[dict[str, Any]],
+) -> set[str]:
+    matched: set[str] = set()
+    for spec in specs:
+        aliases = [str(spec.get("canonical_label") or "").strip(), *list(spec.get("aliases") or [])]
+        for alias in aliases:
+            normalized_alias = " ".join(str(alias or "").lower().split()).strip()
+            if not normalized_alias or not re.search(r"[\s_-]", normalized_alias):
+                continue
+            if _alias_matches_text(normalized_text, normalized_alias):
+                matched.add(normalized_alias)
+    return matched
+
+
+def _alias_is_subspan_of_specific_alias(alias: str, matched_specific_aliases: set[str]) -> bool:
+    normalized_alias = " ".join(str(alias or "").lower().split()).strip()
+    if not normalized_alias or not matched_specific_aliases:
+        return False
+    compact_alias = normalize_scope_signal_key(normalized_alias)
+    if not compact_alias:
+        return False
+    for specific in matched_specific_aliases:
+        if normalized_alias == specific:
+            continue
+        compact_specific = normalize_scope_signal_key(specific)
+        if compact_alias == compact_specific:
+            continue
+        if compact_alias and compact_specific and compact_alias in compact_specific:
+            return True
+    return False
+
+
+def _alias_matches_text(
+    normalized_text: str,
+    alias: str,
+    *,
+    matched_specific_aliases: set[str] | None = None,
+) -> bool:
     normalized_alias = " ".join(str(alias or "").lower().split()).strip()
     if not normalized_alias:
+        return False
+    if _alias_is_subspan_of_specific_alias(normalized_alias, set(matched_specific_aliases or set())):
         return False
     boundary_pattern = rf"(?<![a-z0-9]){re.escape(normalized_alias)}(?![a-z0-9])"
     if re.search(boundary_pattern, normalized_text):

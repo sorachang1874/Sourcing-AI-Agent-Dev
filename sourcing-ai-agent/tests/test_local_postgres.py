@@ -13,9 +13,9 @@ from sourcing_agent.local_postgres import (
     normalize_control_plane_postgres_connect_dsn,
     normalize_control_plane_postgres_schema,
     resolve_control_plane_postgres_dsn,
+    resolve_control_plane_postgres_schema,
     resolve_default_control_plane_db_path,
     resolve_default_control_plane_postgres_live_mode,
-    resolve_control_plane_postgres_schema,
     resolve_local_postgres_settings,
 )
 
@@ -102,6 +102,8 @@ class LocalPostgresResolverTest(unittest.TestCase):
                 _resolved_path_text(summary["default_db_path"]),
                 _resolved_path_text(runtime_dir / "control_plane.shadow.db"),
             )
+            self.assertEqual(summary["default_db_path_role"], "compatibility_shadow_seed_path")
+            self.assertFalse(summary["default_db_path_is_live_authoritative"])
             self.assertFalse(summary["local_postgres"]["available"])
             self.assertEqual(
                 _resolved_path_text(summary["local_postgres"]["env_file"]),
@@ -135,6 +137,8 @@ class LocalPostgresResolverTest(unittest.TestCase):
                 _resolved_path_text(summary["default_db_path"]),
                 _resolved_path_text(runtime_dir / "control_plane.shadow.db"),
             )
+            self.assertEqual(summary["default_db_path_role"], "compatibility_shadow_seed_path")
+            self.assertFalse(summary["default_db_path_is_live_authoritative"])
             local_postgres = dict(summary["local_postgres"])
             self.assertTrue(local_postgres["available"])
             self.assertEqual(_resolved_path_text(local_postgres["root"]), _resolved_path_text(local_root))

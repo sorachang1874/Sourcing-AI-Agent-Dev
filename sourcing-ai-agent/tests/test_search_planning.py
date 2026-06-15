@@ -31,6 +31,7 @@ class SearchPlanningTest(unittest.TestCase):
             raw_user_request="在 YouTube 和 Podcast 上检索所有 Gemini Team 的访谈内容，找到其中的 Gemini 成员",
             query="Gemini Team interviews podcast YouTube",
             target_company="Google",
+            execution_preferences={"allow_stage1_web_seed_fallback": True},
         )
         retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
         strategy = compile_acquisition_strategy(request, ["employee"], ["current"], retrieval_plan)
@@ -57,7 +58,7 @@ class SearchPlanningTest(unittest.TestCase):
         fallback_bundle = next(item for item in search_plan.query_bundles if item.bundle_id == "targeted_people_search")
         self.assertEqual(fallback_bundle.execution_mode, "paid_fallback")
         self.assertTrue(
-            any("paid" in rule.lower() or "LinkedIn URL" in rule for rule in search_plan.follow_up_rules),
+            any("profile-search query shards" in rule or "LinkedIn-related providers" in rule for rule in search_plan.follow_up_rules),
             search_plan.follow_up_rules,
         )
 
@@ -71,6 +72,7 @@ class SearchPlanningTest(unittest.TestCase):
                 "employment_statuses": ["current", "former"],
                 "keywords": ["RL", "Eval", "Infra"],
                 "execution_preferences": {
+                    "allow_stage1_web_seed_fallback": True,
                     "keyword_priority_only": True,
                     "provider_people_search_query_strategy": "all_queries_union",
                 },
@@ -100,6 +102,7 @@ class SearchPlanningTest(unittest.TestCase):
                 "must_have_primary_role_buckets": ["research"],
                 "primary_role_bucket_mode": "soft",
                 "execution_preferences": {
+                    "allow_stage1_web_seed_fallback": True,
                     "keyword_priority_only": True,
                     "provider_people_search_query_strategy": "all_queries_union",
                 },

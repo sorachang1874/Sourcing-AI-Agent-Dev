@@ -3,8 +3,8 @@ import unittest
 from sourcing_agent.query_signal_knowledge import (
     default_large_org_priority_function_ids,
     lookup_scope_signal,
-    match_thematic_signals,
     match_scope_signals_by_rewrite_tag,
+    match_thematic_signals,
     related_company_scope_labels,
     related_company_scope_urls,
     role_bucket_function_ids,
@@ -51,6 +51,12 @@ class QuerySignalKnowledgeTest(unittest.TestCase):
             [item["canonical_label"] for item in matches],
             ["Coding", "Math", "Text", "Audio", "Vision"],
         )
+
+    def test_vision_language_is_preserved_as_a_single_direction(self) -> None:
+        matches = match_thematic_signals("帮我找Google做vision-language方向的人")
+        labels = [item["canonical_label"] for item in matches]
+        self.assertIn("Vision-language", labels)
+        self.assertNotIn("Text", labels)
 
 
 if __name__ == "__main__":

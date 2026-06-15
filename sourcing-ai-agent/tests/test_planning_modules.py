@@ -39,6 +39,26 @@ class PlanningModulesTest(unittest.TestCase):
 
         self.assertEqual(intent_view["categories"], ["researcher", "engineer"])
 
+    def test_vision_language_keyword_stays_single_shard_in_intent_view(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找Google做vision-language方向的人",
+                "target_company": "Google",
+                "categories": ["employee", "former_employee"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["vision-language"],
+            }
+        )
+
+        intent_view = resolve_request_intent_view(
+            request,
+            fallback_categories=["employee", "former_employee"],
+            fallback_employment_statuses=["current", "former"],
+        )
+
+        self.assertEqual(intent_view["keywords"], ["Vision-language"])
+        self.assertEqual(intent_view["must_have_facets"], ["multimodal"])
+
     def test_explicit_role_queries_do_not_expand_beyond_requested_role_population(self) -> None:
         request = JobRequest.from_payload(
             {
@@ -112,15 +132,39 @@ class PlanningModulesTest(unittest.TestCase):
             organization_execution_profile={"org_scale_band": "large"},
         )
 
-        eligible = _large_authoritative_baseline_local_reuse_eligible(
+        baseline = {
+            "authoritative": True,
+            "candidate_count": 3455,
+            "current_lane_effective_candidate_count": 3015,
+            "former_lane_effective_candidate_count": 556,
+            "completeness_score": 86.95,
+            "profile_detail_count": 3389,
+            "missing_linkedin_count": 9,
+            "profile_completion_backlog_count": 57,
+            "manual_review_backlog_count": 12,
+        }
+        hidden_legacy_eligible = _large_authoritative_baseline_local_reuse_eligible(
+            baseline=baseline,
+            plan=plan,
+            baseline_candidate_count=3455,
+            current_lane_coverage={
+                "effective_ready": True,
+                "effective_candidate_count": 3015,
+            },
+            former_lane_coverage={
+                "effective_ready": True,
+                "effective_candidate_count": 556,
+            },
+        )
+        explicit_coverage_eligible = _large_authoritative_baseline_local_reuse_eligible(
             baseline={
-                "authoritative": True,
-                "candidate_count": 3455,
-                "completeness_score": 86.95,
-                "profile_detail_count": 3389,
-                "missing_linkedin_count": 9,
-                "profile_completion_backlog_count": 57,
-                "manual_review_backlog_count": 12,
+                **baseline,
+                "source_snapshot_selection": {
+                    "population_coverage": {
+                        "coverage_kind": "full_company_roster",
+                        "coverage_status": "verified",
+                    },
+                },
             },
             plan=plan,
             baseline_candidate_count=3455,
@@ -134,7 +178,8 @@ class PlanningModulesTest(unittest.TestCase):
             },
         )
 
-        self.assertTrue(eligible)
+        self.assertFalse(hidden_legacy_eligible)
+        self.assertTrue(explicit_coverage_eligible)
 
     def test_multi_snapshot_all_history_union_does_not_unlock_population_default_reuse(self) -> None:
         request = JobRequest.from_payload(
@@ -312,6 +357,9 @@ class PlanningModulesTest(unittest.TestCase):
                         "must_have_primary_role_buckets": ["product_management"],
                         "keywords": ["Gemini"],
                     },
+                    "execution_preferences": {
+                        "allow_stage1_web_seed_fallback": True,
+                    },
                 },
             }
         )
@@ -323,6 +371,7 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(intent_view["must_have_primary_role_buckets"], ["product_management"])
         self.assertTrue(intent_view["execution_preferences"]["keyword_priority_only"])
         self.assertTrue(intent_view["execution_preferences"]["run_former_search_seed"])
+        self.assertTrue(intent_view["execution_preferences"]["allow_stage1_web_seed_fallback"])
         self.assertEqual(
             intent_view["execution_preferences"]["provider_people_search_query_strategy"],
             "all_queries_union",
@@ -450,6 +499,8 @@ class PlanningModulesTest(unittest.TestCase):
                 "run_former_search_seed": True,
                 "provider_people_search_query_strategy": "all_queries_union",
                 "provider_people_search_max_queries": 6,
+                "provider_people_search_pages": 40,
+                "provider_people_search_scale_chunk_pages": 4,
             },
         )
 
@@ -463,6 +514,8 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(cost_policy["allow_company_employee_api"], False)
         self.assertEqual(cost_policy["provider_people_search_query_strategy"], "all_queries_union")
         self.assertEqual(cost_policy["provider_people_search_max_queries"], 6)
+        self.assertEqual(cost_policy["provider_people_search_pages"], 40)
+        self.assertEqual(cost_policy["provider_people_search_scale_chunk_pages"], 4)
 
     def test_plan_review_scoped_search_high_cost_approval_promotes_current_harvest_lane(self) -> None:
         request_payload = {
@@ -504,7 +557,41 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(cost_policy["provider_people_search_query_strategy"], "all_queries_union")
         self.assertEqual(cost_policy["provider_people_search_min_expected_results"], 50)
         self.assertEqual(cost_policy["provider_people_search_pages"], 2)
+        self.assertTrue(cost_policy["provider_people_search_accept_zero_results"])
         self.assertTrue(cost_policy["former_keyword_queries_only"])
+
+    def test_plan_review_confirmed_scope_does_not_write_target_company_as_scope_keyword(self) -> None:
+        request_payload = {
+            "raw_user_request": "帮我找PostHog做Coding方向的人",
+            "target_company": "PostHog",
+            "execution_preferences": {},
+        }
+        plan_payload = {
+            "acquisition_strategy": {
+                "strategy_type": "scoped_search_roster",
+                "company_scope": ["PostHog"],
+                "filter_hints": {
+                    "current_companies": ["PostHog"],
+                    "keywords": ["Coding"],
+                    "scope_keywords": ["PostHog"],
+                },
+                "cost_policy": {},
+                "reasoning": [],
+            },
+            "acquisition_tasks": [],
+        }
+
+        _updated_request, updated_plan = apply_plan_review_decision(
+            request_payload,
+            plan_payload,
+            {
+                "confirmed_company_scope": ["PostHog", "https://www.linkedin.com/company/posthog/"],
+            },
+        )
+
+        strategy = dict(updated_plan.get("acquisition_strategy") or {})
+        self.assertEqual(strategy.get("company_scope"), ["PostHog"])
+        self.assertNotIn("scope_keywords", dict(strategy.get("filter_hints") or {}))
 
     def test_plan_review_gate_exposes_target_company_linkedin_override_field(self) -> None:
         request = JobRequest.from_payload(
@@ -593,6 +680,33 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertNotIn("job_titles", strategy.filter_hints)
         self.assertTrue(strategy.cost_policy.get("former_keyword_queries_only"))
 
+    def test_scoped_search_provider_keywords_exclude_role_facet_terms(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找PostHog做Coding方向的人，做scoped search",
+                "target_company": "PostHog",
+                "categories": ["researcher", "engineer"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Coding"],
+                "must_have_facets": ["research"],
+                "must_have_primary_role_buckets": ["research"],
+                "primary_role_bucket_mode": "soft",
+                "execution_preferences": {
+                    "acquisition_strategy_override": "scoped_search_roster",
+                    "keyword_priority_only": True,
+                    "provider_people_search_query_strategy": "all_queries_union",
+                },
+            }
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(request, ["researcher", "engineer"], ["current", "former"], retrieval_plan)
+
+        self.assertEqual(strategy.strategy_type, "scoped_search_roster")
+        self.assertEqual(strategy.search_seed_queries, ["Coding"])
+        self.assertEqual(strategy.filter_hints.get("keywords"), ["Coding"])
+        self.assertNotIn("scope_keywords", strategy.filter_hints)
+        self.assertCountEqual(strategy.filter_hints.get("function_ids"), ["24", "8"])
+
     def test_keyword_priority_directional_query_keeps_research_and_engineering_functions(self) -> None:
         request = JobRequest.from_payload(
             {
@@ -612,6 +726,41 @@ class PlanningModulesTest(unittest.TestCase):
         strategy = compile_acquisition_strategy(request, ["employee"], ["current", "former"], retrieval_plan)
 
         self.assertEqual(strategy.search_seed_queries, ["Reasoning"])
+        self.assertCountEqual(strategy.filter_hints.get("function_ids"), ["24", "8"])
+        self.assertNotIn("job_titles", strategy.filter_hints)
+
+    def test_openai_agent_directional_query_uses_agent_provider_keyword(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找OpenAI做Agent方向的人",
+                "query": "帮我找OpenAI做Agent方向的人",
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Agent"],
+                "execution_preferences": {
+                    "keyword_priority_only": True,
+                    "provider_people_search_query_strategy": "all_queries_union",
+                },
+            }
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(
+            request,
+            ["employee"],
+            ["current", "former"],
+            retrieval_plan,
+            organization_execution_profile={
+                "target_company": "OpenAI",
+                "org_scale_band": "large",
+                "default_acquisition_mode": "scoped_search_roster",
+                "reason_codes": ["large_scale_signal"],
+            },
+        )
+
+        self.assertEqual(strategy.strategy_type, "scoped_search_roster")
+        self.assertEqual(strategy.search_seed_queries, ["Agent"])
+        self.assertEqual(strategy.filter_hints.get("keywords"), ["Agent"])
         self.assertCountEqual(strategy.filter_hints.get("function_ids"), ["24", "8"])
         self.assertNotIn("job_titles", strategy.filter_hints)
 
@@ -893,8 +1042,22 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertNotIn("exclude_current_companies", strategy.filter_hints)
         self.assertFalse(strategy.cost_policy.get("allow_company_employee_api"))
         self.assertEqual(strategy.cost_policy.get("provider_people_search_min_expected_results"), 50)
+        self.assertFalse(strategy.cost_policy.get("former_broad_past_company_only"))
 
-    def test_directional_xai_query_with_all_members_language_stays_scoped_search(self) -> None:
+    def test_unscoped_former_only_strategy_explicitly_allows_broad_past_company_recall(self) -> None:
+        request = JobRequest(
+            raw_user_request="找 Anthropic 的前员工",
+            target_company="Anthropic",
+            employment_statuses=["former"],
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(request, ["former_employee"], ["former"], retrieval_plan)
+
+        self.assertEqual(strategy.strategy_type, "former_employee_search")
+        self.assertTrue(strategy.cost_policy.get("former_broad_past_company_only"))
+        self.assertFalse(strategy.cost_policy.get("former_keyword_queries_only"))
+
+    def test_directional_all_members_language_without_full_coverage_stays_scoped_search(self) -> None:
         request = JobRequest(
             raw_user_request="我要 xAI 做 Coding 方向的全部成员",
             query="xAI coding all members",
@@ -918,8 +1081,60 @@ class PlanningModulesTest(unittest.TestCase):
         )
 
         self.assertEqual(strategy.strategy_type, "scoped_search_roster")
-        self.assertNotIn(
-            "explicit_full_roster_intent",
+        self.assertEqual(
+            strategy.strategy_decision_explanation.get("decision_source"),
+            "request_population_boundary",
+        )
+        self.assertIn(
+            "full_company_filter_requires_coverage_proof",
+            list(strategy.strategy_decision_explanation.get("reason_codes") or []),
+        )
+        self.assertEqual(
+            dict(strategy.strategy_decision_explanation.get("requested_population_boundary") or {}).get(
+                "boundary_type"
+            ),
+            "scoped_directional",
+        )
+
+    def test_directional_all_members_language_with_full_coverage_uses_full_company_filter(self) -> None:
+        request = JobRequest(
+            raw_user_request="我要 xAI 做 Coding 方向的全部成员",
+            query="xAI coding all members",
+            target_company="xAI",
+            keywords=["Coding"],
+            must_have_facets=["coding"],
+            employment_statuses=["current", "former"],
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(
+            request,
+            ["employee"],
+            ["current", "former"],
+            retrieval_plan,
+            organization_execution_profile={
+                "target_company": "xAI",
+                "org_scale_band": "large",
+                "default_acquisition_mode": "scoped_search_roster",
+                "full_company_coverage_proven": True,
+                "coverage_baseline_reuse_ready": True,
+                "population_coverage_contract": {
+                    "full_company_coverage_proven": True,
+                    "coverage_kind": "full_company_roster",
+                },
+            },
+        )
+
+        self.assertEqual(strategy.strategy_type, "full_company_roster")
+        self.assertEqual(
+            strategy.strategy_decision_explanation.get("decision_source"),
+            "request_population_boundary",
+        )
+        self.assertIn(
+            "full_company_filter_allowed",
+            list(strategy.strategy_decision_explanation.get("reason_codes") or []),
+        )
+        self.assertIn(
+            "full_company_coverage_proven",
             list(strategy.strategy_decision_explanation.get("reason_codes") or []),
         )
 
@@ -943,6 +1158,9 @@ class PlanningModulesTest(unittest.TestCase):
                 "raw_user_request": "找产品经理",
                 "query": "product manager",
                 "target_company": "WrongCo",
+                "execution_preferences": {
+                    "allow_stage1_web_seed_fallback": True,
+                },
                 "intent_axes": {
                     "population_boundary": {
                         "categories": ["employee"],
@@ -981,6 +1199,9 @@ class PlanningModulesTest(unittest.TestCase):
                 "raw_user_request": "找产品经理",
                 "query": "product manager",
                 "target_company": "WrongCo",
+                "execution_preferences": {
+                    "allow_stage1_web_seed_fallback": True,
+                },
                 "intent_axes": {
                     "population_boundary": {
                         "categories": ["employee"],
@@ -1259,11 +1480,39 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(profile_specs[0]["employment_scope"], "current")
         self.assertEqual(profile_specs[0]["function_ids"], ["24", "8"])
 
+    def test_asset_reuse_delta_specs_do_not_promote_facets_into_provider_shards(self) -> None:
+        task = AcquisitionTask(
+            task_id="task_google_vision_language_scope",
+            task_type="acquire_full_roster",
+            title="Acquire scoped Google roster",
+            description="test",
+            source_hint="test",
+            status="ready",
+            metadata={
+                "strategy_type": "scoped_search_roster",
+                "search_seed_queries": ["Vision-language"],
+                "filter_hints": {
+                    "current_companies": ["https://www.linkedin.com/company/google/"],
+                    "function_ids": ["24", "8"],
+                    "keywords": ["Vision-language", "Multimodal"],
+                },
+                "employment_statuses": ["current", "former"],
+            },
+        )
+
+        profile_specs, profile_queries = _planned_profile_search_query_specs(task)
+
+        self.assertEqual(profile_queries, ["Vision-language"])
+        self.assertEqual(len(profile_specs), 1)
+        self.assertEqual(profile_specs[0]["search_query"], "Vision-language")
+        self.assertEqual(profile_specs[0]["function_ids"], ["24", "8"])
+
     def test_sourcing_plan_contains_search_strategy_and_filter_layers(self) -> None:
         request = JobRequest(
             raw_user_request="在 YouTube 和 Podcast 上检索所有 Gemini Team 的访谈内容，找到 Post-train 方向 researcher",
             query="Gemini post-train interview researcher",
             target_company="Google",
+            execution_preferences={"allow_stage1_web_seed_fallback": True},
         )
         plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
 
@@ -1516,6 +1765,7 @@ class PlanningModulesTest(unittest.TestCase):
         acquire_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster")
 
         self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
+        self.assertTrue(plan.acquisition_strategy.cost_policy.get("former_broad_past_company_only"))
         self.assertEqual(acquire_task.metadata["max_pages"], 100)
         self.assertEqual(acquire_task.metadata["page_limit"], 25)
         self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "adaptive_us_technical_partition")
@@ -1545,6 +1795,85 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
         self.assertNotIn("locations", plan.acquisition_strategy.filter_hints)
         self.assertNotIn("locations", former_task.metadata["filter_hints"])
+
+    def test_small_org_full_company_roster_does_not_emit_generic_stage1_seed_queries(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找Lovable的全部成员",
+                "target_company": "Lovable",
+                "employment_statuses": ["current", "former"],
+            }
+        )
+
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+        acquire_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster")
+        former_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_former_search_seed")
+
+        self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
+        self.assertEqual(plan.acquisition_strategy.search_seed_queries, [])
+        self.assertEqual(acquire_task.metadata["search_seed_queries"], [])
+        self.assertEqual(acquire_task.metadata["intent_view"]["search_seed_queries"], [])
+        self.assertEqual(former_task.metadata["search_seed_queries"], [])
+        self.assertEqual(former_task.metadata["intent_view"]["search_seed_queries"], [])
+        manifest = dict(plan.acquisition_strategy.provider_execution_manifest or {})
+        lanes = list(manifest.get("lanes") or [])
+        self.assertEqual(manifest.get("strategy_type"), "full_company_roster")
+        self.assertEqual(
+            [(lane.get("provider"), lane.get("operation"), lane.get("query_texts")) for lane in lanes],
+            [
+                ("harvest_company_employees", "company_employees", []),
+                ("harvest_profile_search", "profile_search", []),
+            ],
+        )
+        self.assertFalse(any(lane.get("provider_facing_query") for lane in lanes))
+
+    def test_full_company_roster_ignores_model_false_former_seed_without_user_denial(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找Lovable的全部成员",
+                "target_company": "Lovable",
+                "intent_axes": {
+                    "population_boundary": {
+                        "categories": ["employee", "former_employee"],
+                        "employment_statuses": ["current", "former"],
+                    },
+                    "acquisition_lane_policy": {
+                        "use_company_employees_lane": True,
+                    },
+                    "fallback_policy": {
+                        "run_former_search_seed": False,
+                    },
+                },
+            }
+        )
+
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+        acquire_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster")
+        former_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_former_search_seed")
+
+        self.assertTrue(request.execution_preferences["run_former_search_seed"])
+        self.assertTrue(acquire_task.metadata["include_former_search_seed"])
+        self.assertEqual(former_task.metadata["employment_statuses"], ["former"])
+
+    def test_full_company_roster_honors_explicit_user_former_seed_denial(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找Lovable的全部成员，不要 former",
+                "target_company": "Lovable",
+                "categories": ["employee", "former_employee"],
+                "employment_statuses": ["current", "former"],
+                "execution_preferences": {
+                    "run_former_search_seed": False,
+                    "use_company_employees_lane": True,
+                },
+            }
+        )
+
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+        task_types = [task.task_type for task in plan.acquisition_tasks]
+
+        self.assertFalse(request.execution_preferences["run_former_search_seed"])
+        self.assertNotIn("acquire_former_search_seed", task_types)
 
     def test_xai_full_company_roster_plan_uses_overflow_tolerant_shard_policy(self) -> None:
         request = JobRequest.from_payload(
@@ -1603,7 +1932,17 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertTrue(acquire_task.metadata["include_former_search_seed"])
         self.assertEqual(former_task.metadata["employment_statuses"], ["former"])
         self.assertEqual(former_task.metadata["search_channel_order"], ["harvest_profile_search"])
+        self.assertFalse(former_task.metadata["cost_policy"].get("former_broad_past_company_only"))
         self.assertEqual(former_task.metadata["intent_view"]["employment_statuses"], ["former"])
+        manifest_lanes = list(dict(plan.acquisition_strategy.provider_execution_manifest or {}).get("lanes") or [])
+        self.assertEqual(
+            [(lane.get("employment_status"), lane.get("provider"), lane.get("query_texts")) for lane in manifest_lanes],
+            [
+                ("current", "harvest_profile_search", ["Reasoning"]),
+                ("former", "harvest_profile_search", ["Reasoning"]),
+            ],
+        )
+        self.assertTrue(all(lane.get("provider_facing_query") for lane in manifest_lanes))
 
     def test_google_full_roster_enables_large_org_keyword_probe_mode(self) -> None:
         request = JobRequest.from_payload(
@@ -1653,6 +1992,11 @@ class PlanningModulesTest(unittest.TestCase):
         )
         self.assertTrue(any("Nano Banana" in query for query in acquire_task.metadata.get("search_seed_queries", [])))
         self.assertFalse(any("Researcher" in query for query in acquire_task.metadata.get("search_seed_queries", [])))
+        manifest_lanes = list(dict(plan.acquisition_strategy.provider_execution_manifest or {}).get("lanes") or [])
+        current_lane = next(lane for lane in manifest_lanes if lane.get("lane_id") == "current_company_employees")
+        self.assertEqual(current_lane.get("provider"), "harvest_company_employees")
+        self.assertTrue(current_lane.get("provider_facing_query"))
+        self.assertTrue(any("Nano Banana" in query for query in list(current_lane.get("query_texts") or [])))
 
     def test_plan_review_sync_keeps_large_org_keyword_shard_policy(self) -> None:
         request_payload = {

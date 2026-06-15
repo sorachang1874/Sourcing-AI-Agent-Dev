@@ -36,6 +36,14 @@ class _ExcelWorkflowOrchestrator:
 
 
 class ApiJsonSerializationTest(unittest.TestCase):
+    def test_server_request_threads_do_not_block_smoke_runner_shutdown(self) -> None:
+        server = create_server(_BytesPlanOrchestrator(), host="127.0.0.1", port=0)
+        try:
+            self.assertTrue(server.daemon_threads)
+            self.assertFalse(server.block_on_close)
+        finally:
+            server.server_close()
+
     def test_plan_route_normalizes_bytes_payload(self) -> None:
         orchestrator = _BytesPlanOrchestrator()
         server = create_server(orchestrator, host="127.0.0.1", port=0)
