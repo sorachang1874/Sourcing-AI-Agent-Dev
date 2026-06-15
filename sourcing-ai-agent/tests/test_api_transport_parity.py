@@ -51,6 +51,8 @@ EXPECTED_ROUTES = [
     ("GET", "/api/company-assets/evidence"),
     ("GET", "/api/company-assets/assertions"),
     ("GET", "/api/media/assets/{asset_id}"),
+    ("GET", "/api/exports/{command_id}"),
+    ("GET", "/api/exports/{command_id}/artifact"),
     ("GET", "/api/migrations/legacy-result-endpoints"),
     ("GET", "/api/migrations/legacy-public-web"),
     ("GET", "/api/manual-review"),
@@ -205,6 +207,32 @@ class _StubOrchestrator:
         return {"status": "not_found", "asset_id": asset_id, "content": b""}
 
     def export_projection_candidates_archive(self, _payload):
+        # C1.4b: submit returns a 202 async-task envelope (no inline bytes).
+        return {
+            "task_id": "cmd-export-1",
+            "task_type": "export.projection.generate",
+            "status": "queued",
+            "domain_status": "queued",
+            "idempotency_key": "export.projection.generate:abc",
+        }
+
+    def get_export_command_status(self, command_id):
+        return {
+            "task_id": command_id,
+            "task_type": "export.projection.generate",
+            "status": "succeeded",
+            "domain_status": "succeeded",
+            "error": None,
+            "artifact": {
+                "handle": f"/api/exports/{command_id}/artifact",
+                "content_type": "application/zip",
+                "filename": "projection-export.zip",
+                "byte_size": 17,
+                "headers": {"X-Sourcing-Projection-Id": "proj-1"},
+            },
+        }
+
+    def get_export_command_artifact(self, _command_id):
         return {
             "status": "ok",
             "body": b"ZIP-ARCHIVE-BYTES",
@@ -452,14 +480,29 @@ class ApiTransportParityTest(unittest.TestCase):
         status, _headers, body = self._request(opener, f"{base_url}/api/media/assets/missing")
         self.assertEqual(status, 404)
         self.assertNotIn("content", json.loads(body))
-        # Projection export path (POST bytes + attachment headers).
-        status, headers, body = self._request(
+        # C1.4b projection export — async task contract:
+        # 1) POST submit -> 202 + envelope (no inline bytes).
+        status, _headers, body = self._request(
             opener,
             f"{base_url}/api/projections/export",
             method="POST",
             data=json.dumps({"projection_id": "proj-1"}).encode("utf-8"),
             headers={"Content-Type": "application/json"},
         )
+        self.assertEqual(status, 202)
+        envelope = json.loads(body)
+        self.assertEqual(envelope.get("status"), "queued")
+        self.assertEqual(envelope.get("task_type"), "export.projection.generate")
+        task_id = str(envelope.get("task_id") or "")
+        self.assertTrue(task_id)
+        # 2) GET poll -> 200 + succeeded envelope with an artifact handle.
+        status, _headers, body = self._request(opener, f"{base_url}/api/exports/{task_id}")
+        self.assertEqual(status, 200)
+        poll = json.loads(body)
+        self.assertEqual(poll.get("status"), "succeeded")
+        self.assertEqual(poll.get("artifact", {}).get("handle"), f"/api/exports/{task_id}/artifact")
+        # 3) GET artifact download -> 200 + zip bytes + X-Sourcing-* headers.
+        status, headers, body = self._request(opener, f"{base_url}/api/exports/{task_id}/artifact")
         self.assertEqual(status, 200)
         self.assertEqual(body, b"ZIP-ARCHIVE-BYTES")
         self.assertEqual(headers.get("Content-Type"), "application/zip")

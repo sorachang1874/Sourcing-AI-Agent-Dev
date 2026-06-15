@@ -814,9 +814,23 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
             self.assertEqual(person_payload["projection_membership_count"], 1)
             self.assertEqual(person_payload["assertion_summary"]["assertion_count"], 2)
 
-            export_body, export_headers = _post_binary(
+            # C1.4b: export is an async task — submit -> 202 + task_id; the worker
+            # export drain builds the artifact; then poll + download the handle.
+            submit_payload, submit_status = _post_json_with_status(
                 f"{base_url}/api/projections/export",
                 {"projection_id": "proj_openai_delta"},
+            )
+            self.assertEqual(submit_status, 202)
+            self.assertEqual(submit_payload["status"], "queued")
+            export_task_id = str(submit_payload["task_id"])
+            self.orchestrator._drain_export_projection_generate_commands({})
+            export_poll = _get_json(f"{base_url}/api/exports/{export_task_id}")
+            self.assertEqual(export_poll["status"], "succeeded")
+            self.assertEqual(
+                export_poll["artifact"]["handle"], f"/api/exports/{export_task_id}/artifact"
+            )
+            export_body, export_headers = _get_binary(
+                f"{base_url}/api/exports/{export_task_id}/artifact"
             )
             self.assertEqual(export_headers["X-Sourcing-Projection-Id"], "proj_openai_delta")
             self.assertEqual(export_headers["X-Sourcing-Export-Record-Count"], "1")
@@ -2396,6 +2410,11 @@ def _post_binary(url: str, payload: dict) -> tuple[bytes, dict[str, str]]:
         headers={"Content-Type": "application/json"},
     )
     with _urlopen_local_api(request) as response:
+        return response.read(), dict(response.headers.items())
+
+
+def _get_binary(url: str) -> tuple[bytes, dict[str, str]]:
+    with _urlopen_local_api(url) as response:
         return response.read(), dict(response.headers.items())
 
 

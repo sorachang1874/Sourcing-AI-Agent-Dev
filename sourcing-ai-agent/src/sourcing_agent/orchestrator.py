@@ -34,6 +34,12 @@ from .artifact_cache import (
     load_hot_cache_governance_state,
     run_hot_cache_governance_cycle,
 )
+from .async_task_contract import (
+    async_task_accepted,
+    async_task_artifact,
+    async_task_status,
+    normalize_task_status,
+)
 from .asset_catalog import AssetCatalog
 from .asset_paths import (
     resolve_company_snapshot_dir,
@@ -27944,6 +27950,10 @@ class SourcingOrchestrator:
         }
 
     def export_projection_candidates_archive(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """C1.4b: submit the export as a durable task and return 202 (the worker
+        export drain builds the archive off the request thread). An idempotent hit
+        on an already-succeeded command replays its artifact handle immediately.
+        Conforms to the unified async-task contract (async_task_contract)."""
         command = self._plan_projection_export_generate_command(payload)
         if not command:
             return {
@@ -27957,7 +27967,102 @@ class SourcingOrchestrator:
                     "fail_closed": True,
                 },
             }
-        return self._run_projection_export_generate_command(command)
+        command_id = str(command.get("command_id") or "")
+        domain_status = str(command.get("status") or "").strip()
+        if domain_status == "succeeded":
+            # Idempotent replay: the identical export already finished.
+            return self._export_task_status_envelope(command)
+        # Enqueued: signal the worker daemon to run the export drain now (5b wakeup);
+        # the request thread does not build the archive.
+        self._signal_shared_recovery_wakeup(
+            reason="projection_export_generate",
+            requested_by="export_projection_candidates_archive",
+        )
+        return async_task_accepted(
+            task_id=command_id,
+            task_type=EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
+            idempotency_key=str(command.get("idempotency_key") or ""),
+            domain_status=domain_status,
+        )
+
+    def _export_artifact_headers(self, result: dict[str, Any]) -> dict[str, str]:
+        """The X-Sourcing-* download headers for a projection export artifact —
+        byte-for-byte the set the old synchronous /api/projections/export emitted."""
+        return {
+            "X-Sourcing-Projection-Id": str(result.get("projection_id") or ""),
+            "X-Sourcing-Export-Record-Count": str(int(result.get("record_count") or 0)),
+            "X-Sourcing-Exported-Record-Count": str(int(result.get("exported_record_count") or 0)),
+            "X-Sourcing-Skipped-Assertion-Count": str(int(result.get("skipped_assertion_count") or 0)),
+        }
+
+    def _export_task_status_envelope(self, command: dict[str, Any]) -> dict[str, Any]:
+        """Project a durable export command into the unified async-task poll body."""
+        command_id = str(command.get("command_id") or "")
+        command_type = str(command.get("command_type") or EXPORT_PROJECTION_GENERATE_COMMAND_TYPE)
+        domain_status = str(command.get("status") or "").strip()
+        result = dict(command.get("result") or {})
+        artifact = None
+        if domain_status == "succeeded":
+            artifact = async_task_artifact(
+                handle=f"/api/exports/{command_id}/artifact",
+                content_type=str(result.get("content_type") or "application/zip"),
+                filename=str(result.get("filename") or "projection-export.zip"),
+                byte_size=int(result.get("byte_size") or 0),
+                headers=self._export_artifact_headers(result),
+            )
+        error = None
+        if domain_status in {"failed", "failed_terminal"}:
+            error = {
+                "reason": str(
+                    result.get("reason")
+                    or dict(command.get("metadata") or {}).get("failure_reason")
+                    or "projection_export_failed"
+                )
+            }
+        return async_task_status(
+            task_id=command_id,
+            task_type=command_type,
+            domain_status=domain_status,
+            error=error,
+            artifact=artifact,
+            idempotency_key=str(command.get("idempotency_key") or ""),
+        )
+
+    def get_export_command_status(self, command_id: str) -> dict[str, Any]:
+        """Poll endpoint backing GET /api/exports/{command_id}."""
+        normalized = str(command_id or "").strip()
+        if not normalized:
+            return {"status": "invalid", "reason": "command_id_required"}
+        command = self.store.get_workflow_command(normalized)
+        if not command:
+            return {"status": "not_found", "task_id": normalized}
+        return self._export_task_status_envelope(command)
+
+    def get_export_command_artifact(self, command_id: str) -> dict[str, Any]:
+        """Download endpoint backing GET /api/exports/{command_id}/artifact —
+        streams the succeeded command's artifact bytes + X-Sourcing-* headers."""
+        normalized = str(command_id or "").strip()
+        if not normalized:
+            return {"status": "invalid", "reason": "command_id_required"}
+        command = self.store.get_workflow_command(normalized)
+        if not command:
+            return {"status": "not_found", "command_id": normalized}
+        command_type = str(command.get("command_type") or "").strip()
+        domain_status = str(command.get("status") or "").strip()
+        if domain_status != "succeeded":
+            return {
+                "status": "not_ready",
+                "command_id": normalized,
+                "task_status": normalize_task_status(domain_status),
+            }
+        if command_type != EXPORT_PROJECTION_GENERATE_COMMAND_TYPE:
+            return {"status": "invalid", "reason": "unsupported_export_command_type", "command_type": command_type}
+        result = dict(command.get("result") or {})
+        return self._projection_export_payload_from_artifact(
+            command=command,
+            artifact_path=str(result.get("artifact_path") or "").strip(),
+            filename=str(result.get("filename") or ""),
+        )
 
     def _projection_export_workflow_run_id(self, projection_id: str) -> str:
         normalized_projection_id = str(projection_id or "").strip()

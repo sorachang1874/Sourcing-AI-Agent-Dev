@@ -579,6 +579,48 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
 
     add(["GET"], "/api/media/assets/{asset_id}", get_media_asset)
 
+    def get_export_command(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        # C1.4b: async export task poll. submit (POST /api/projections/export) -> 202
+        # + command_id; the client polls here until status='succeeded', then GETs
+        # the artifact handle below.
+        result = orchestrator.get_export_command_status(_decode_path_param(request.path_params["command_id"]))
+        payload_status = str(result.get("status") or "").strip()
+        if payload_status == "not_found":
+            return _json_response(HTTPStatus.NOT_FOUND, result)
+        if payload_status == "invalid":
+            return _json_response(HTTPStatus.BAD_REQUEST, result)
+        return _json_response(HTTPStatus.OK, result)
+
+    add(["GET"], "/api/exports/{command_id}", get_export_command)
+
+    def get_export_command_artifact(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        # C1.4b: stream a succeeded export task's artifact bytes + the X-Sourcing-*
+        # headers (byte/header parity with the old synchronous export blob).
+        result = orchestrator.get_export_command_artifact(_decode_path_param(request.path_params["command_id"]))
+        payload_status = str(result.get("status") or "").strip()
+        if payload_status == "not_found":
+            return _json_response(HTTPStatus.NOT_FOUND, result)
+        if payload_status == "invalid":
+            return _json_response(HTTPStatus.BAD_REQUEST, result)
+        if payload_status == "not_ready":
+            return _json_response(HTTPStatus.CONFLICT, result)
+        if payload_status != "ok":
+            return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, result)
+        return _bytes_response(
+            HTTPStatus.OK,
+            bytes(result.get("body") or b""),
+            content_type=str(result.get("content_type") or "application/octet-stream"),
+            filename=str(result.get("filename") or "download.bin"),
+            extra_headers={
+                "X-Sourcing-Projection-Id": str(result.get("projection_id") or ""),
+                "X-Sourcing-Export-Record-Count": str(int(result.get("record_count") or 0)),
+                "X-Sourcing-Exported-Record-Count": str(int(result.get("exported_record_count") or 0)),
+                "X-Sourcing-Skipped-Assertion-Count": str(int(result.get("skipped_assertion_count") or 0)),
+            },
+        )
+
+    add(["GET"], "/api/exports/{command_id}/artifact", get_export_command_artifact)
+
     def get_legacy_result_endpoint_retirement(
         request: Request, query: dict[str, Any], payload: dict[str, Any]
     ) -> Response:
@@ -1750,23 +1792,17 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/crm/backfill-public-web-promotions", post_crm_backfill_public_web_promotions, read_body=True)
 
     def post_projections_export(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        # C1.4b: submit -> 202 + {task_id, status:"queued"} — the worker export drain
+        # builds the archive off the request thread; the client polls
+        # GET /api/exports/{task_id} then downloads GET /api/exports/{task_id}/artifact.
+        # An idempotent hit on an already-succeeded export replays 200 + its handle.
         result = orchestrator.export_projection_candidates_archive(payload)
-        if result.get("status") == "not_found":
-            return _json_response(HTTPStatus.NOT_FOUND, result)
-        if result.get("status") in {"invalid", "not_ready"}:
+        status = str(result.get("status") or "").strip()
+        if status == "failed":
             return _json_response(HTTPStatus.BAD_REQUEST, result)
-        return _bytes_response(
-            HTTPStatus.OK,
-            bytes(result.get("body") or b""),
-            content_type=str(result.get("content_type") or "application/octet-stream"),
-            filename=str(result.get("filename") or "download.bin"),
-            extra_headers={
-                "X-Sourcing-Projection-Id": str(result.get("projection_id") or ""),
-                "X-Sourcing-Export-Record-Count": str(int(result.get("record_count") or 0)),
-                "X-Sourcing-Exported-Record-Count": str(int(result.get("exported_record_count") or 0)),
-                "X-Sourcing-Skipped-Assertion-Count": str(int(result.get("skipped_assertion_count") or 0)),
-            },
-        )
+        if status == "succeeded":
+            return _json_response(HTTPStatus.OK, result)
+        return _json_response(HTTPStatus.ACCEPTED, result)
 
     add(["POST"], "/api/projections/export", post_projections_export, read_body=True)
 
