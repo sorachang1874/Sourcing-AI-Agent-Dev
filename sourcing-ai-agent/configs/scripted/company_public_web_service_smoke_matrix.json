@@ -1,0 +1,74 @@
+{
+  "cases": [
+    {
+      "case": "company_public_web_collector_bundle_from_workflow_result",
+      "scripted_scenario": "configs/scripted/openai_agent_scoped_delta_streaming.json",
+      "coverage_tags": [
+        "company_public_web_collector_bundle_service_slo"
+      ],
+      "payload": {
+        "raw_user_request": "帮我找OpenAI做Agent方向的人",
+        "top_k": 10
+      },
+      "company_public_web_action": {
+        "enabled": true,
+        "collection_mode": "collector_bundle",
+        "force_refresh": true,
+        "options": {
+          "max_assets": 10
+        },
+        "source_families": [
+          "company_rss",
+          "company_arxiv",
+          "company_openreview",
+          "company_crawl"
+        ],
+        "collector_documents": [
+          {
+            "url": "https://openai.com/research/rss.xml",
+            "content_type": "application/xml",
+            "content": "<rss><channel><item><title>OpenAI Research RSS</title><link>https://openai.com/research/rss-item</link><description>Model-safe RSS item.</description></item></channel></rss>"
+          },
+          {
+            "url": "https://export.arxiv.org/api/query?search_query=all:OpenAI",
+            "collector_type": "arxiv",
+            "content": "<feed xmlns=\"http://www.w3.org/2005/Atom\"><entry><id>https://arxiv.org/abs/2601.00001</id><title>OpenAI Inference Systems</title><summary>Model-safe arXiv abstract.</summary><author><name>Ada Lovelace</name></author></entry></feed>"
+          },
+          {
+            "url": "https://api2.openreview.net/notes?term=OpenAI",
+            "collector_type": "openreview",
+            "content": "{\"notes\":[{\"id\":\"or-openai-1\",\"content\":{\"title\":{\"value\":\"OpenAI Review Systems\"},\"abstract\":{\"value\":\"Model-safe OpenReview abstract.\"},\"authors\":{\"value\":[\"Grace Hopper\"]}}}]}"
+          },
+          {
+            "url": "https://openai.com/engineering",
+            "collector_type": "crawl",
+            "content": "<html><head><title>OpenAI Engineering</title><meta name=\"description\" content=\"Model-safe engineering summary.\"></head><body>Raw body is parsed but not exposed.</body></html>"
+          }
+        ]
+      },
+      "expectations": {
+        "allow_results_ready_nonterminal": false,
+        "require_terminal_job": true,
+        "post_terminal_recovery_rounds": 24,
+        "require_post_terminal_recovery_settled": true,
+        "require_no_duplicate_provider_dispatch": true,
+        "require_no_event_level_efficiency_violation": true,
+        "require_no_progress_contract_violation": true,
+        "require_no_service_recovery_violation": true,
+        "require_no_board_visible_projection_violation": true,
+        "require_no_serving_publication_gap": true,
+        "require_no_company_public_web_guardrail_violation": true,
+        "min_company_public_web_asset_count": 4,
+        "min_company_public_web_collector_record_count": 4,
+        "max_company_public_web_failed_run_count": 0,
+        "max_company_public_web_raw_assets_included_count": 0,
+        "max_company_public_web_collector_manifest_missing_count": 0,
+        "max_job_to_board_nonempty_ms": 30000,
+        "max_final_results_to_board_nonempty_ms": 15000,
+        "max_global_next_worker_start_gap_ms": 30000,
+        "min_board_total_candidates": 1,
+        "min_materialize_completed_count": 1
+      }
+    }
+  ]
+}

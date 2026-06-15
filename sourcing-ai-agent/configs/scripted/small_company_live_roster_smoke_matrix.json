@@ -1,0 +1,72 @@
+{
+  "cases": [
+    {
+      "case": "lovable_small_company_live_roster",
+      "scripted_scenario": "configs/scripted/lovable_live_roster.json",
+      "coverage_tags": [
+        "lovable_small_company_full_roster",
+        "live_roster_profile_tail",
+        "provider_handoff_slo",
+        "out_of_order_profile_completion"
+      ],
+      "payload": {
+        "raw_user_request": "帮我找Lovable的全部成员",
+        "top_k": 10,
+        "execution_preferences": {
+          "harvest_profile_actor_global_inflight": 4,
+          "harvest_profile_batch_submit_global_inflight": 4
+        }
+      },
+      "expectations": {
+        "allow_results_ready_nonterminal": false,
+        "require_terminal_job": true,
+        "require_no_duplicate_provider_dispatch": true,
+        "require_no_unexpected_public_web_stage": true,
+        "require_no_event_level_efficiency_violation": true,
+        "require_no_progress_contract_violation": true,
+        "require_board_runtime_state_cross_endpoint_parity": true,
+        "require_no_service_recovery_violation": true,
+        "require_no_local_apply_candidate_documents_retry_storm": true,
+        "require_stable_expected_candidate_count_during_stage1": true,
+        "require_stable_user_facing_profile_card_denominator_during_stage1": true,
+        "require_layering_visible_after_results_within_slo": true,
+        "require_no_serving_publication_gap": true,
+        "require_no_placeholder_to_final_board_jump": true,
+        "require_partial_board_visible_before_final_results": true,
+        "max_remote_provider_event_lag_ms": 30000,
+        "max_serving_publication_gap_ms": 30000,
+        "max_job_to_stage_1_preview_ms": 120000,
+        "max_job_to_board_visible_partial_ms": 30000,
+        "max_final_results_to_board_nonempty_ms": 15000,
+        "max_final_results_to_layering_visible_ms": 30000,
+        "max_job_to_board_nonempty_ms": 30000,
+        "max_stage_1_preview_to_final_results_ms": 30000,
+        "max_global_next_worker_start_gap_ms": 30000,
+        "max_remote_to_next_submit_start_ms": 10000,
+        "max_local_to_next_submit_start_ms": 1000,
+        "max_next_submit_attempt_elapsed_ms": 10000,
+        "max_provider_slot_to_remote_wait_started_ms": 5000,
+        "max_post_profile_url_terminal_state_leak_count": 0,
+        "max_profile_file_visible_to_board_patch_visible_ms": 30000,
+        "max_all_profiles_fetched_to_all_cards_visible_ms": 30000,
+        "max_event_level_materialization_callback_elapsed_ms": 30000,
+        "min_provider_invocation_count": 1,
+        "min_provider_invocations_by_logical_name": {
+          "harvest_company_employees": 1,
+          "harvest_profile_scraper_batch": 1
+        },
+        "min_board_total_candidates": 100,
+        "min_materialize_completed_count": 1,
+        "min_board_visible_patch_count": 1,
+        "min_board_visible_patch_display_ready_count": 1,
+        "min_board_visible_display_ready_progression_count": 1,
+        "min_board_visible_patch_consumable_card_count": 1,
+        "min_board_visible_consumable_card_progression_count": 1,
+        "min_out_of_order_profile_completion_count": 1,
+        "min_profile_batch_envelope_count": 1,
+        "max_profile_unexplained_tiny_batch_count": 0,
+        "max_provider_slot_underuse_with_backlog_count": 0
+      }
+    }
+  ]
+}

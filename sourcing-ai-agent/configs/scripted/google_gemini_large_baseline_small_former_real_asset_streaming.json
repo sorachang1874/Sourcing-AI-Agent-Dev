@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "behavior_fixture": "google_gemini_large_baseline_small_former_real_asset_streaming",
+    "driver_query": "帮我找Google在Gemini组的人",
+    "purpose": "Real-asset scripted pressure fixture for a very large Google baseline plus a small Gemini scoped shard. The baseline is seeded from the 9359-candidate Google asset with Gemini rows excluded; the provider-quality shape intentionally returns a true-zero current lane and a small former shard replayed from existing raw-profile assets rather than generated fixtures.",
+    "expected_behavior": {
+      "provider_mode": "scripted",
+      "real_api_calls_required": false,
+      "generated_profile_fallback_allowed": false,
+      "fresh_runtime_required": true,
+      "effective_acquisition_mode": "baseline_reuse_with_delta",
+      "baseline_seed": "SOURCING_SEED_GOOGLE_LARGE_BASELINE_REAL_ASSET=1",
+      "baseline_candidate_count_min": 8000,
+      "baseline_exclude_terms": ["gemini"],
+      "current_lane_zero_result_is_valid": true,
+      "former_lane_delta_is_valid": true,
+      "delta_profile_search_current_count": 0,
+      "delta_profile_search_former_count": 120,
+      "delta_profile_search_total_count": 120
+    }
+  },
+  "harvest": {
+    "rules": [
+      {
+        "name": "google_gemini_current_profile_search_true_zero_real_asset",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["currentCompanies", "google", "Gemini"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 4,
+        "pending_message": "Scripted Google Gemini current profile-search actor returns a true zero-result response.",
+        "body": []
+      },
+      {
+        "name": "google_gemini_former_profile_search_small_real_asset",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["pastCompanies", "google", "Gemini"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 4,
+        "partial_result": true,
+        "pending_message": "Scripted Google Gemini former profile-search actor returns a small real-asset shard.",
+        "scripted_actor_run_duration_ms": 52000,
+        "scripted_dataset_download_duration_ms": 3800,
+        "sample_candidate_documents_path": "runtime/company_assets/google/20260428T011339/candidate_documents.json",
+        "sample_candidate_employment_scope": "former",
+        "sample_candidate_contains": ["gemini"],
+        "sample_candidate_limit": 120,
+        "sample_candidate_require_profile_source": true,
+        "sample_fallback_generated": false
+      },
+      {
+        "name": "google_gemini_profile_scraper_small_real_asset_batches",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["linkedin.com/in/"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 1,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 1,
+        "scripted_actor_run_duration_ms": 60000,
+        "scripted_dataset_download_duration_ms": 4500,
+        "pending_message": "Scripted Google Gemini small real-asset profile batch is running.",
+        "errors": [
+          {
+            "phase": "validation_only",
+            "round": 1,
+            "kind": "retryable",
+            "message": "Fixture coverage marker for retryable provider behavior; not used by the normal scripted execute path."
+          },
+          {
+            "phase": "validation_only",
+            "round": 2,
+            "kind": "timeout",
+            "retryable": true,
+            "message": "Fixture coverage marker for timeout provider behavior; not used by the normal scripted execute path."
+          }
+        ],
+        "sample_candidate_documents_path": "runtime/company_assets/google/20260428T011339/candidate_documents.json",
+        "sample_candidate_employment_scope": "former",
+        "sample_candidate_contains": ["gemini"],
+        "sample_candidate_limit": 120,
+        "sample_candidate_require_profile_source": true,
+        "sample_fallback_generated": false
+      }
+    ]
+  }
+}

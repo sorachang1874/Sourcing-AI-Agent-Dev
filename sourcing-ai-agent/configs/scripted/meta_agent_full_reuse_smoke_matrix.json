@@ -1,0 +1,42 @@
+{
+  "cases": [
+    {
+      "case": "meta_agent_full_reuse_execution_timeline",
+      "coverage_tags": [
+        "meta_agent_full_reuse_execution_timeline_browser",
+        "full_local_reuse_progress_payload_budget",
+        "full_local_reuse_no_stage1_timeline"
+      ],
+      "payload": {
+        "raw_user_request": "帮我找Meta做Agent方向的人",
+        "target_company": "Meta",
+        "keywords": ["Agent"],
+        "employment_statuses": ["current", "former"],
+        "categories": ["employee", "former_employee"],
+        "top_k": 10
+      },
+      "expectations": {
+        "allow_results_ready_nonterminal": false,
+        "require_terminal_job": true,
+        "post_terminal_recovery_rounds": 8,
+        "require_post_terminal_recovery_settled": true,
+        "require_no_unexpected_public_web_stage": true,
+        "require_no_progress_contract_violation": true,
+        "require_no_service_recovery_violation": true,
+        "require_no_active_stage1_for_full_local_reuse": true,
+        "require_no_serving_publication_gap": true,
+        "max_provider_invocation_count": 0,
+        "max_progress_payload_bytes": 50000,
+        "max_serving_publication_gap_ms": 30000,
+        "max_final_results_to_board_nonempty_ms": 5000,
+        "max_job_to_board_nonempty_ms": 10000,
+        "expect_explain_dispatch_strategy": "reuse_snapshot",
+        "expect_explain_planner_mode": "reuse_snapshot_only",
+        "expect_explain_requires_delta_acquisition": false,
+        "expect_explain_effective_acquisition_mode": "full_local_asset_reuse",
+        "expect_explain_keywords_include": ["Agent"],
+        "min_board_total_candidates": 2
+      }
+    }
+  ]
+}

@@ -1,0 +1,141 @@
+{
+  "meta": {
+    "behavior_fixture": "openai_whisper_zero_current_overlay_streaming",
+    "driver_query": "帮我找OpenAI在Whisper组的人",
+    "purpose": "Scripted reproduction of the OpenAI Health/Whisper zero-current baseline+delta overlay incident: the current lane returns a true zero-result response, the former lane returns a small scoped delta, and terminal public APIs must serve a baseline+delta view instead of a raw delta-only result view.",
+    "live_reference": {
+      "historical_query": "帮我找OpenAI在Whisper组的人",
+      "failure_mechanism": "The backend completed the job but result view publication could point at only the delta snapshot. Manual refresh then exposed a frontend fetch failure instead of a stable baseline+delta candidate board."
+    },
+    "expected_behavior": {
+      "provider_mode": "scripted",
+      "real_api_calls_required": false,
+      "stage_1_public_web_seed_fallback_allowed": false,
+      "current_lane_zero_result_is_valid": true,
+      "former_lane_delta_is_valid": true,
+      "terminal_public_apis_must_serve_baseline_delta_overlay": true,
+      "raw_delta_only_result_view_allowed": false
+    },
+    "synthetic_counts": {
+      "baseline_candidate_count": 300,
+      "current_profile_search_returned": 0,
+      "former_profile_search_returned": 12,
+      "expected_deduped_candidate_count": 12,
+      "expected_deduped_profile_url_count": 12,
+      "expected_profile_fetch_required_count": 12,
+      "min_terminal_served_candidate_count": 301
+    },
+    "worker_timing_matrix": [
+      {
+        "match_token": "openai-whisper-former-0001",
+        "sleep_seconds": 45,
+        "pending_rounds": 2,
+        "purpose": "former delta profile batch"
+      }
+    ]
+  },
+  "harvest": {
+    "rules": [
+      {
+        "name": "openai_whisper_current_profile_search_true_zero",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["currentCompanies", "openai", "Whisper"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 4,
+        "pending_message": "Scripted OpenAI Whisper current profile-search actor returns a true zero-result response.",
+        "body": []
+      },
+      {
+        "name": "openai_whisper_former_profile_search_delta",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["pastCompanies", "openai", "Whisper"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 4,
+        "partial_result": true,
+        "pending_message": "Scripted OpenAI Whisper former profile-search actor is returning the scoped delta.",
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "OpenAI",
+          "employment_scope": "former",
+          "search_query": "Whisper",
+          "estimated_total_count": 12,
+          "returned_count": 12,
+          "total_pages": 1,
+          "linkedin_slug_prefix": "openai-whisper-former",
+          "full_name_template": "OpenAI Whisper {slug_index:04d}",
+          "headline_template": "Former speech systems engineer at OpenAI",
+          "summary_template": "Former OpenAI contributor who worked on Whisper, speech recognition, audio systems, and model deployment."
+        }
+      },
+      {
+        "name": "openai_whisper_profile_scraper_former_delta",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-whisper-former-0001"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 45,
+        "execute_sleep_position": "remote_wait",
+        "pending_message": "Scripted OpenAI Whisper former profile batch is still running.",
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 2,
+            "kind": "retryable",
+            "message": "Scripted transient profile-scraper delay; the same Whisper batch should resume without duplicate dispatch."
+          }
+        ],
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Whisper",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Whisper {slug_index:04d}",
+          "title_template": "Former Speech Systems Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Built Whisper, speech recognition systems, audio model evaluation, and production deployment tooling.",
+          "previous_company": "Google",
+          "previous_title": "Speech Recognition Engineer",
+          "skills": ["Whisper", "Speech recognition", "Audio ML", "Model deployment"]
+        }
+      },
+      {
+        "name": "openai_whisper_profile_scraper_default_timeout",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-whisper-former"]
+        },
+        "execute_pending_rounds": 3,
+        "execute_sleep_seconds": 90,
+        "execute_sleep_position": "remote_wait",
+        "pending_message": "Scripted OpenAI Whisper fallback profile batch is still running after a retryable timeout.",
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 1,
+            "kind": "timeout",
+            "retryable": true,
+            "message": "Scripted timeout edge on the OpenAI Whisper overlay path; recovery should retry without duplicate dispatch."
+          }
+        ],
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Whisper",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Whisper {slug_index:04d}",
+          "title_template": "Former Speech Systems Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Built Whisper, speech recognition systems, audio model evaluation, and production deployment tooling.",
+          "previous_company": "Microsoft",
+          "previous_title": "Speech Engineer",
+          "skills": ["Whisper", "Speech recognition", "Audio ML", "Model deployment"]
+        }
+      }
+    ]
+  }
+}

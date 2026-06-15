@@ -1,0 +1,265 @@
+{
+  "meta": {
+    "behavior_fixture": "openai_chatgpt_scoped_delta_streaming",
+    "driver_query": "我想要OpenAI在ChatGPT组的人",
+    "purpose": "Scripted reproduction of the 2026-04-29 OpenAI ChatGPT live-smoke delta path: large baseline reuse, hundreds of scoped search rows, batched profile scraper tail, result-view repoint, and completed-job reconcile coalescing.",
+    "live_reference": {
+      "job_id": "6fccb376681e",
+      "history_id": "e1ed3b16-ae33-4e97-a2ed-c4e9e29388fc",
+      "baseline_snapshot_id": "20260428T183413",
+      "current_snapshot_id": "20260429T174612",
+      "baseline_candidate_count": 890,
+      "final_candidate_count": 1061,
+      "search_current_returned": 166,
+      "search_former_returned": 100,
+      "deduped_search_count": 250,
+      "profile_batch_required_count": 165
+    },
+    "expected_behavior": {
+      "provider_mode": "scripted",
+      "real_api_calls_required": false,
+      "stage_1_public_web_seed_fallback_allowed": false,
+      "profile_search_lanes": ["current", "former"],
+      "profile_actor_global_inflight_target": 4,
+      "board_should_be_renderable_before_current_snapshot_materialization": true,
+      "repeated_materialize_signature_count_max": 0,
+      "same_worker_reconcile_repeat_count_max": 0
+    },
+    "worker_timing_matrix": [
+      {
+        "match_token": "openai-chatgpt-current-0001",
+        "sleep_seconds": 45,
+        "pending_rounds": 2,
+        "purpose": "early current batch"
+      },
+      {
+        "match_token": "openai-chatgpt-current-0048",
+        "sleep_seconds": 90,
+        "pending_rounds": 2,
+        "purpose": "mid current retryable delay"
+      },
+      {
+        "match_token": "openai-chatgpt-former-0004",
+        "sleep_seconds": 60,
+        "pending_rounds": 1,
+        "purpose": "former lane completes out of order"
+      },
+      {
+        "match_token": "openai-chatgpt-former-0058",
+        "sleep_seconds": 150,
+        "pending_rounds": 3,
+        "purpose": "slow long-tail worker"
+      }
+    ]
+  },
+  "harvest": {
+    "rules": [
+      {
+        "name": "openai_chatgpt_current_profile_search_probe_and_scale",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["currentCompanies", "openai", "ChatGPT"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 4,
+        "partial_result": true,
+        "pending_message": "Scripted OpenAI ChatGPT current profile-search actor is draining probe/scale pages.",
+        "sample_body_path": "configs/scripted/samples/openai_chatgpt_profile_search_current.json",
+        "sample_fallback_generated": false,
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "OpenAI",
+          "employment_scope": "current",
+          "search_query": "ChatGPT",
+          "estimated_total_count": 166,
+          "returned_count": 166,
+          "total_pages": 7,
+          "linkedin_slug_prefix": "openai-chatgpt-current",
+          "duplicate_url_every": 11,
+          "full_name_template": "OpenAI ChatGPT {slug}",
+          "headline_template": "ChatGPT product and research engineer at OpenAI",
+          "summary_template": "Works on ChatGPT model behavior, product systems, safety, evaluation, and production research at OpenAI."
+        }
+      },
+      {
+        "name": "openai_chatgpt_former_profile_search_probe_and_scale",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["pastCompanies", "openai", "ChatGPT"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 4,
+        "partial_result": true,
+        "pending_message": "Scripted OpenAI ChatGPT former profile-search actor is draining probe/scale pages.",
+        "sample_body_path": "configs/scripted/samples/openai_chatgpt_profile_search_former.json",
+        "sample_fallback_generated": false,
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "OpenAI",
+          "employment_scope": "former",
+          "search_query": "ChatGPT",
+          "estimated_total_count": 84,
+          "returned_count": 84,
+          "total_pages": 4,
+          "linkedin_slug_prefix": "openai-chatgpt-former",
+          "duplicate_url_every": 13,
+          "full_name_template": "OpenAI ChatGPT {slug}",
+          "headline_template": "Former ChatGPT engineer at OpenAI",
+          "summary_template": "Former OpenAI contributor who worked on ChatGPT product systems, evaluations, safety, and applied model behavior."
+        }
+      },
+      {
+        "name": "openai_chatgpt_profile_scraper_current_early",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["ACwAABcLd4kBBOT1YMqfelyDam4rT-BMJ4G4obw"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 45,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 3,
+        "pending_message": "Scripted OpenAI ChatGPT early current profile batch is still running.",
+        "sample_body_path": "configs/scripted/samples/openai_chatgpt_profile_scraper_pool.json",
+        "sample_fallback_generated": false,
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "ChatGPT",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI ChatGPT {slug}",
+          "title_template": "ChatGPT Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Builds ChatGPT product systems, model behavior evaluations, safety workflows, and production research loops.",
+          "previous_company": "Meta",
+          "previous_title": "Software Engineer",
+          "skills": ["ChatGPT", "LLM evaluation", "Product engineering", "Model behavior"]
+        }
+      },
+      {
+        "name": "openai_chatgpt_profile_scraper_current_retryable_mid_tail",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["ACwAAAq6ZAcBHp86sskY3YyRSTrDJPdYtEkA0Qc"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 90,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 8,
+        "pending_message": "Scripted OpenAI ChatGPT current mid-tail profile batch is still running after a retryable provider delay.",
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 2,
+            "kind": "retryable",
+            "message": "Scripted transient profile-scraper delay; the same ChatGPT batch should resume without duplicate dispatch."
+          }
+        ],
+        "sample_body_path": "configs/scripted/samples/openai_chatgpt_profile_scraper_pool.json",
+        "sample_fallback_generated": false,
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "ChatGPT",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI ChatGPT {slug}",
+          "title_template": "ChatGPT Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Builds ChatGPT product systems, model behavior evaluations, safety workflows, and production research loops.",
+          "previous_company": "Meta",
+          "previous_title": "Software Engineer",
+          "skills": ["ChatGPT", "LLM evaluation", "Product engineering", "Model behavior"]
+        }
+      },
+      {
+        "name": "openai_chatgpt_profile_scraper_former_out_of_order",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["ACwAAAHcuA8BzajAov7b1iT0rRhp7SeP6FWGCYw"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 60,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 1,
+        "pending_message": "Scripted OpenAI ChatGPT former profile batch completes out of order.",
+        "sample_body_path": "configs/scripted/samples/openai_chatgpt_profile_scraper_pool.json",
+        "sample_fallback_generated": false,
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "ChatGPT",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI ChatGPT {slug}",
+          "title_template": "Former ChatGPT Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Built ChatGPT product systems, evaluations, safety workflows, and applied model behavior tooling.",
+          "previous_company": "Google",
+          "previous_title": "Software Engineer",
+          "skills": ["ChatGPT", "LLM evaluation", "Product engineering", "Model behavior"]
+        }
+      },
+      {
+        "name": "openai_chatgpt_profile_scraper_former_timeout_long_tail",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["ACwAADAEf7oB5NlAaJKxvUQ_QkEXk-k4jKaoNfM"]
+        },
+        "execute_pending_rounds": 3,
+        "execute_sleep_seconds": 150,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 12,
+        "pending_message": "Scripted OpenAI ChatGPT former long-tail profile batch is still running after a retryable timeout.",
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 1,
+            "kind": "timeout",
+            "retryable": true,
+            "message": "Scripted timeout edge on the OpenAI ChatGPT path; recovery should retry without duplicate dispatch."
+          }
+        ],
+        "sample_body_path": "configs/scripted/samples/openai_chatgpt_profile_scraper_pool.json",
+        "sample_fallback_generated": false,
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "ChatGPT",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI ChatGPT {slug}",
+          "title_template": "Former ChatGPT Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Built ChatGPT product systems, evaluations, safety workflows, and applied model behavior tooling.",
+          "previous_company": "Google",
+          "previous_title": "Software Engineer",
+          "skills": ["ChatGPT", "LLM evaluation", "Product engineering", "Model behavior"]
+        }
+      },
+      {
+        "name": "openai_chatgpt_profile_scraper_batches_default_tail",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["ACw"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 75,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 3,
+        "pending_message": "Scripted OpenAI ChatGPT profile scraper batch is still running; recovery should keep actor slots full without blocking on materialization.",
+        "sample_body_path": "configs/scripted/samples/openai_chatgpt_profile_scraper_pool.json",
+        "sample_fallback_generated": false,
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "ChatGPT",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI ChatGPT {slug}",
+          "title_template": "ChatGPT Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Builds ChatGPT product systems, model behavior evaluations, safety workflows, and production research loops.",
+          "previous_company": "Meta",
+          "previous_title": "Software Engineer",
+          "skills": ["ChatGPT", "LLM evaluation", "Product engineering", "Model behavior"]
+        }
+      }
+    ]
+  }
+}

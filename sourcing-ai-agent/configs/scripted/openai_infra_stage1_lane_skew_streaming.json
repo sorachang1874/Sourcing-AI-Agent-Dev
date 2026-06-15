@@ -1,0 +1,219 @@
+{
+  "meta": {
+    "behavior_fixture": "openai_infra_stage1_lane_skew_streaming",
+    "driver_query": "帮我找OpenAI做Infra方向的人",
+    "purpose": "Scripted reproduction of the OpenAI Infra Stage 1 lane-skew incident: the current lane returns a true zero-result response, the former lane returns a scoped delta, and public progress must keep lane counts, dedupe counts, and profile-fetch denominators from one coherent projection.",
+    "live_reference": {
+      "job_id": "c5248ea4b3b4",
+      "observed_at": "2026-04-30T15:58:00+08:00",
+      "historical_bad_progress_shape": {
+        "current_search_returned_count": 0,
+        "former_search_returned_count": 10,
+        "deduped_candidate_count": 77,
+        "profile_fetch_required_count": 77
+      },
+      "failure_mechanism": "Public progress mixed partially restored lane counters with a worker/profile URL denominator. Worker queue size must remain a technical metric, not the business Stage 1 denominator."
+    },
+    "expected_behavior": {
+      "provider_mode": "scripted",
+      "real_api_calls_required": false,
+      "stage_1_public_web_seed_fallback_allowed": false,
+      "current_lane_zero_result_is_valid": true,
+      "former_lane_delta_is_valid": true,
+      "coherent_stage1_projection_required": true,
+      "profile_actor_global_inflight_target": 4,
+      "board_should_be_renderable_before_current_snapshot_materialization": true
+    },
+    "synthetic_counts": {
+      "current_profile_search_returned": 0,
+      "former_profile_search_returned": 77,
+      "expected_deduped_candidate_count": 77,
+      "expected_deduped_profile_url_count": 77,
+      "expected_profile_fetch_required_count": 77
+    },
+    "worker_timing_matrix": [
+      {
+        "match_token": "openai-infra-former-0001",
+        "sleep_seconds": 45,
+        "pending_rounds": 2,
+        "purpose": "early former batch"
+      },
+      {
+        "match_token": "openai-infra-former-0046",
+        "sleep_seconds": 90,
+        "pending_rounds": 2,
+        "purpose": "mid former batch with retryable provider delay"
+      },
+      {
+        "match_token": "openai-infra-former-0066",
+        "sleep_seconds": 30,
+        "pending_rounds": 1,
+        "purpose": "later former batch completes out of order"
+      }
+    ]
+  },
+  "harvest": {
+    "rules": [
+      {
+        "name": "openai_infra_current_profile_search_true_zero",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["currentCompanies", "openai", "Infra"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 4,
+        "pending_message": "Scripted OpenAI Infra current profile-search actor returns a true zero-result response.",
+        "body": []
+      },
+      {
+        "name": "openai_infra_former_profile_search_delta",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["pastCompanies", "openai", "Infra"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 4,
+        "partial_result": true,
+        "pending_message": "Scripted OpenAI Infra former profile-search actor is draining the scoped delta pages.",
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "OpenAI",
+          "employment_scope": "former",
+          "search_query": "Infra",
+          "estimated_total_count": 77,
+          "returned_count": 77,
+          "total_pages": 4,
+          "linkedin_slug_prefix": "openai-infra-former",
+          "full_name_template": "OpenAI Infra {slug_index:04d}",
+          "headline_template": "Former infrastructure engineer at OpenAI",
+          "summary_template": "Former OpenAI contributor who worked on infrastructure, distributed systems, reliability, and platform engineering."
+        }
+      },
+      {
+        "name": "openai_infra_profile_scraper_former_early",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-infra-former-0001"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 45,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 3,
+        "scripted_actor_run_duration_ms": 45000,
+        "scripted_dataset_download_duration_ms": 2600,
+        "pending_message": "Scripted OpenAI Infra early former profile batch is still running.",
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Infra",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Infra {slug_index:04d}",
+          "title_template": "Former Infrastructure Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Built infrastructure, distributed systems, platform reliability, and production compute systems.",
+          "previous_company": "Meta",
+          "previous_title": "Production Engineer",
+          "skills": ["Infrastructure", "Distributed systems", "Reliability", "Platform engineering"]
+        }
+      },
+      {
+        "name": "openai_infra_profile_scraper_former_retryable_mid_tail",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-infra-former-0046"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 90,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 8,
+        "scripted_actor_run_duration_ms": 90000,
+        "scripted_dataset_download_duration_ms": 4300,
+        "pending_message": "Scripted OpenAI Infra mid-tail former profile batch is still running after a retryable provider delay.",
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 2,
+            "kind": "retryable",
+            "message": "Scripted transient profile-scraper delay; the same Infra batch should resume without duplicate dispatch."
+          }
+        ],
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Infra",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Infra {slug_index:04d}",
+          "title_template": "Former Infrastructure Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Built infrastructure, distributed systems, platform reliability, and production compute systems.",
+          "previous_company": "Google",
+          "previous_title": "Site Reliability Engineer",
+          "skills": ["Infrastructure", "Distributed systems", "Reliability", "Platform engineering"]
+        }
+      },
+      {
+        "name": "openai_infra_profile_scraper_former_fast_out_of_order",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-infra-former-0066"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 30,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 1,
+        "scripted_actor_run_duration_ms": 30000,
+        "scripted_dataset_download_duration_ms": 2100,
+        "pending_message": "Scripted OpenAI Infra later former profile batch completes faster to exercise out-of-order returns.",
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Infra",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Infra {slug_index:04d}",
+          "title_template": "Former Infrastructure Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Built infrastructure, distributed systems, platform reliability, and production compute systems.",
+          "previous_company": "Stripe",
+          "previous_title": "Infrastructure Engineer",
+          "skills": ["Infrastructure", "Distributed systems", "Reliability", "Platform engineering"]
+        }
+      },
+      {
+        "name": "openai_infra_profile_scraper_former_timeout_default_tail",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-infra-former"]
+        },
+        "execute_pending_rounds": 3,
+        "execute_sleep_seconds": 120,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 12,
+        "scripted_actor_run_duration_ms": 120000,
+        "scripted_dataset_download_duration_ms": 5200,
+        "pending_message": "Scripted OpenAI Infra fallback former profile batch is still running after a retryable timeout.",
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 1,
+            "kind": "timeout",
+            "retryable": true,
+            "message": "Scripted timeout edge on the OpenAI Infra path; recovery should retry without duplicate dispatch."
+          }
+        ],
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Infra",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Infra {slug_index:04d}",
+          "title_template": "Former Infrastructure Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Built infrastructure, distributed systems, platform reliability, and production compute systems.",
+          "previous_company": "Amazon Web Services",
+          "previous_title": "Infrastructure Engineer",
+          "skills": ["Infrastructure", "Distributed systems", "Reliability", "Platform engineering"]
+        }
+      }
+    ]
+  }
+}

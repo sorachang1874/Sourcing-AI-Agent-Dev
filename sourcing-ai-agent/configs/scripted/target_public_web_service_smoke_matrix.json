@@ -1,0 +1,70 @@
+{
+  "cases": [
+    {
+      "case": "target_public_web_service_slo_from_workflow_result",
+      "scripted_scenario": "configs/scripted/openai_agent_scoped_delta_streaming.json",
+      "coverage_tags": [
+        "target_candidate_public_web_service_slo"
+      ],
+      "payload": {
+        "raw_user_request": "帮我找OpenAI做Agent方向的人",
+        "top_k": 10
+      },
+      "target_public_web_action": {
+        "enabled": true,
+        "import_limit": 1,
+        "record_limit": 1,
+        "max_recovery_rounds": 12,
+        "force_refresh": true,
+        "options": {
+          "max_queries_per_candidate": 1,
+          "fetch_content": false,
+          "ai_extraction": "off"
+        }
+      },
+      "expectations": {
+        "allow_results_ready_nonterminal": false,
+        "require_terminal_job": true,
+        "post_terminal_recovery_rounds": 24,
+        "require_post_terminal_recovery_settled": true,
+        "require_no_duplicate_provider_dispatch": true,
+        "require_no_event_level_efficiency_violation": true,
+        "require_no_progress_contract_violation": true,
+        "require_no_service_recovery_violation": true,
+        "require_no_board_visible_projection_violation": true,
+        "require_no_serving_publication_gap": true,
+        "require_no_target_public_web_guardrail_violation": true,
+        "require_crm_public_web_storage_owner": true,
+        "require_crm_public_web_queue_batch_command": true,
+        "require_public_web_execution_backend_report": true,
+        "require_legacy_public_web_retirement_ready": true,
+        "max_target_public_web_legacy_storage_owner_batch_count": 0,
+        "max_target_public_web_execution_backend_bridge_count": 0,
+        "max_target_public_web_queue_batch_command_pending_count": 0,
+        "max_target_public_web_queue_batch_command_failed_count": 0,
+        "max_target_public_web_queue_batch_command_invalid_owner_count": 0,
+        "max_target_public_web_queue_batch_command_incomplete_causality_count": 0,
+        "max_target_public_web_remote_pending_run_count": 0,
+        "max_target_public_web_partial_failure_count": 0,
+        "max_target_public_web_completed_without_materialized_signals_count": 0,
+        "max_target_public_web_missing_phase_metric_count": 0,
+        "max_target_public_web_provider_or_fetch_failure_count": 0,
+        "max_target_public_web_local_processing_error_count": 0,
+        "max_target_public_web_duration_by_phase_ms": {
+          "search_submit": 10000,
+          "search_poll": 10000,
+          "search_fetch": 10000,
+          "document_fetch": 30000,
+          "analysis": 10000,
+          "adjudication": 10000,
+          "signal_materialization": 10000
+        },
+        "max_job_to_board_nonempty_ms": 30000,
+        "max_final_results_to_board_nonempty_ms": 15000,
+        "max_global_next_worker_start_gap_ms": 30000,
+        "min_board_total_candidates": 1,
+        "min_materialize_completed_count": 1
+      }
+    }
+  ]
+}

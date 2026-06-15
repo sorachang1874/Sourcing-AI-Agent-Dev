@@ -1,0 +1,374 @@
+{
+  "meta": {
+    "behavior_fixture": "openai_agent_scoped_delta_streaming",
+    "driver_query": "帮我找OpenAI做Agent方向的人",
+    "purpose": "Scripted foundation fixture for Delta asset board streaming and full event-level scoped-search response.",
+    "not_represented_by": "2026-04-28 OpenAI Pulse two-profile delta; this fixture intentionally models an older baseline plus a larger scoped-search delta.",
+    "baseline_reference": {
+      "company": "OpenAI",
+      "baseline_snapshot_id": "20260414T120300",
+      "baseline_candidate_count": 300,
+      "expected_baseline_serving_before_delta": true
+    },
+    "expected_behavior": {
+      "provider_mode": "scripted",
+      "real_api_calls_required": false,
+      "stage_1_public_web_seed_fallback_allowed": false,
+      "profile_search_lanes": ["current", "former"],
+      "probe_then_scale": true,
+      "profile_actor_global_inflight_target": 4,
+      "profile_batch_size_live_equivalent": "actor-slot packed envelopes; current fast-smoke fixture commonly uses two ~110-url current batches plus a former tail",
+      "board_should_be_renderable_before_current_snapshot_materialization": true,
+      "slow_strict_runtime_supported": true
+    },
+    "synthetic_counts": {
+      "current_profile_search_total": 236,
+      "current_scaled_returned": 150,
+      "former_profile_search_total": 78,
+      "former_scaled_returned": 78,
+      "expected_duplicate_url_stride": 17,
+      "expected_unique_profile_urls_before_profile_scrape": 215
+    },
+    "live_timing_model": {
+      "profile_search_probe_seconds": "5-15s each in recent Harvest profile-search observations",
+      "profile_search_scaled_seconds": "10-90s depending on pages and LinkedIn backend",
+      "profile_scraper_batch_seconds": "roughly 60-180s per 45-55 url batch in live mode; scripted tests cap sleeps by runtime tuning",
+      "local_materialization": "run real local delta snapshot/artifact/materialization/finalization in the isolated runtime"
+    },
+    "worker_timing_matrix": [
+      {
+        "match_token": "openai-agent-current-0001",
+        "sleep_seconds": 180,
+        "pending_rounds": 14,
+        "purpose": "first actor-slot packed current batch; intentionally slower than the following current batch to make out-of-order completion observable"
+      },
+      {
+        "match_token": "openai-agent-current-0120",
+        "sleep_seconds": 90,
+        "pending_rounds": 2,
+        "purpose": "second actor-slot packed current batch; overlaps long enough to prove actor occupancy, while still completing before the first batch"
+      },
+      {
+        "match_token": "openai-agent-current-0055",
+        "sleep_seconds": 180,
+        "pending_rounds": 14,
+        "purpose": "earlier-dispatched current batch intentionally completes after the following fast batch to make out-of-order completion observable"
+      },
+      {
+        "match_token": "openai-agent-current-0054",
+        "sleep_seconds": 120,
+        "pending_rounds": 2,
+        "purpose": "mid current batch with retryable provider delay"
+      },
+      {
+        "match_token": "openai-agent-current-0028",
+        "sleep_seconds": 45,
+        "pending_rounds": 1,
+        "purpose": "faster following current batch to exercise out-of-order completion"
+      },
+      {
+        "match_token": "openai-agent-former-0003",
+        "sleep_seconds": 90,
+        "pending_rounds": 2,
+        "purpose": "former-lane batch interleaved with current batches"
+      },
+      {
+        "match_token": "openai-agent-former-0053",
+        "sleep_seconds": 180,
+        "pending_rounds": 3,
+        "purpose": "very slow long-tail batch with retryable timeout on the primary path"
+      }
+    ]
+  },
+  "harvest": {
+    "rules": [
+      {
+        "name": "openai_agent_current_profile_search_probe_and_scale",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["currentCompanies", "openai", "Agent"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 4,
+        "pending_message": "Scripted OpenAI Agent current profile-search actor is draining probe/scale pages.",
+        "partial_result": true,
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "OpenAI",
+          "employment_scope": "current",
+          "search_query": "Agent",
+          "estimated_total_count": 236,
+          "total_pages": 10,
+          "linkedin_slug_prefix": "openai-agent-current",
+          "duplicate_url_every": 17,
+          "full_name_template": "OpenAI Agent {slug}",
+          "headline_template": "Agent systems researcher at OpenAI",
+          "summary_template": "Works on Agent models, tool use, agent reliability, evaluation, and production research at OpenAI."
+        }
+      },
+      {
+        "name": "openai_agent_former_profile_search_probe_and_scale",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["pastCompanies", "openai", "Agent"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 4,
+        "pending_message": "Scripted OpenAI Agent former profile-search actor is draining probe/scale pages.",
+        "partial_result": true,
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "OpenAI",
+          "employment_scope": "former",
+          "search_query": "Agent",
+          "estimated_total_count": 78,
+          "total_pages": 4,
+          "linkedin_slug_prefix": "openai-agent-former",
+          "duplicate_url_every": 19,
+          "full_name_template": "OpenAI Agent {slug}",
+          "headline_template": "Former Agent research engineer at OpenAI",
+          "summary_template": "Former OpenAI contributor who worked on Agent research, tool-use systems, evaluations, and applied model behavior."
+        }
+      },
+      {
+        "name": "openai_agent_profile_scraper_current_first_actor_slow_out_of_order_anchor",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-agent-current-0001"]
+        },
+        "execute_pending_rounds": 14,
+        "execute_sleep_seconds": 180,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 12,
+        "pending_message": "Scripted OpenAI Agent first actor-slot packed current profile batch is intentionally slow so the following batch can complete out of order.",
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Agent",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Agent {slug}",
+          "title_template": "Agent Research Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Builds Agent models, tool-use scaffolding, evaluation harnesses, and product-facing research systems.",
+          "previous_company": "Google DeepMind",
+          "previous_title": "Research Engineer",
+          "skills": ["Agent", "Tool use", "LLM evaluation", "Distributed systems"]
+        }
+      },
+      {
+        "name": "openai_agent_profile_scraper_current_second_actor_fast_out_of_order",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-agent-current-0120"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 90,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 4,
+        "pending_message": "Scripted OpenAI Agent second actor-slot packed current profile batch overlaps the slow first batch and completes faster.",
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Agent",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Agent {slug}",
+          "title_template": "Agent Research Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Builds Agent models, tool-use scaffolding, evaluation harnesses, and product-facing research systems.",
+          "previous_company": "Google DeepMind",
+          "previous_title": "Research Engineer",
+          "skills": ["Agent", "Tool use", "LLM evaluation", "Distributed systems"]
+        }
+      },
+      {
+        "name": "openai_agent_profile_scraper_current_slow_out_of_order_anchor",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-agent-current-0055"]
+        },
+        "execute_pending_rounds": 14,
+        "execute_sleep_seconds": 180,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 12,
+        "pending_message": "Scripted OpenAI Agent current profile batch is intentionally slow so the following batch can complete out of order.",
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Agent",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Agent {slug}",
+          "title_template": "Agent Research Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Builds Agent models, tool-use scaffolding, evaluation harnesses, and production research systems.",
+          "previous_company": "Google DeepMind",
+          "previous_title": "Research Engineer",
+          "skills": ["Agent", "Tool use", "LLM evaluation", "Distributed systems"]
+        }
+      },
+      {
+        "name": "openai_agent_profile_scraper_current_retryable_mid_tail",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-agent-current-0054"],
+          "payload_not_contains": ["openai-agent-current-0028"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 120,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 8,
+        "pending_message": "Scripted OpenAI Agent current mid-tail profile batch is still running after a retryable provider delay.",
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 2,
+            "kind": "retryable",
+            "message": "Scripted transient profile-scraper delay; the same current batch should resume without duplicate dispatch."
+          }
+        ],
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Agent",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Agent {slug}",
+          "title_template": "Agent Research Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Builds Agent models, tool-use scaffolding, evaluation harnesses, and product-facing research systems.",
+          "previous_company": "Google DeepMind",
+          "previous_title": "Research Engineer",
+          "skills": ["Agent", "Tool use", "LLM evaluation", "Distributed systems"]
+        }
+      },
+      {
+        "name": "openai_agent_profile_scraper_current_fast_out_of_order",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-agent-current-0028"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 45,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 1,
+        "pending_message": "Scripted OpenAI Agent following current profile batch completes faster to exercise out-of-order returns.",
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Agent",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Agent {slug}",
+          "title_template": "Agent Research Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Builds Agent models, tool-use scaffolding, evaluation harnesses, and product-facing research systems.",
+          "previous_company": "Google DeepMind",
+          "previous_title": "Research Engineer",
+          "skills": ["Agent", "Tool use", "LLM evaluation", "Distributed systems"]
+        }
+      },
+      {
+        "name": "openai_agent_profile_scraper_former_interleaved_tail",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-agent-former-0003"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 90,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 4,
+        "pending_message": "Scripted OpenAI Agent former profile batch is interleaved with current-lane batches.",
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Agent",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Agent {slug}",
+          "title_template": "Former Agent Research Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Built Agent models, tool-use scaffolding, evaluation harnesses, and product-facing research systems.",
+          "previous_company": "Google DeepMind",
+          "previous_title": "Research Engineer",
+          "skills": ["Agent", "Tool use", "LLM evaluation", "Distributed systems"]
+        }
+      },
+      {
+        "name": "openai_agent_profile_scraper_former_timeout_long_tail",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-agent-former-0053"]
+        },
+        "execute_pending_rounds": 3,
+        "execute_sleep_seconds": 180,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 14,
+        "pending_message": "Scripted OpenAI Agent former long-tail profile batch is still running after a retryable timeout.",
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 1,
+            "kind": "timeout",
+            "retryable": true,
+            "message": "Scripted timeout edge on the primary OpenAI Agent path; recovery should retry without duplicate dispatch."
+          }
+        ],
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Agent",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Agent {slug}",
+          "title_template": "Former Agent Research Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Built Agent models, tool-use scaffolding, evaluation harnesses, and product-facing research systems.",
+          "previous_company": "Google DeepMind",
+          "previous_title": "Research Engineer",
+          "skills": ["Agent", "Tool use", "LLM evaluation", "Distributed systems"]
+        }
+      },
+      {
+        "name": "openai_agent_profile_scraper_batches_default_tail",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-agent"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 90,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 3,
+        "pending_message": "Scripted OpenAI Agent profile scraper batch is still running; recovery should keep actor slots full without blocking on materialization.",
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Agent",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Agent {slug}",
+          "title_template": "Agent Research Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Builds Agent models, tool-use scaffolding, evaluation harnesses, and product-facing research systems.",
+          "previous_company": "Google DeepMind",
+          "previous_title": "Research Engineer",
+          "skills": ["Agent", "Tool use", "LLM evaluation", "Distributed systems"]
+        }
+      },
+      {
+        "name": "openai_agent_profile_scraper_timeout_edge",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["scripted-timeout-edge"]
+        },
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 1,
+            "kind": "timeout",
+            "message": "Scripted timeout edge for validation coverage; not used by the primary OpenAI Agent happy path."
+          }
+        ],
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Agent",
+          "max_profiles": 1
+        }
+      }
+    ]
+  }
+}
