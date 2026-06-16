@@ -259,3 +259,32 @@ registry，并以这两个已验证 provider 各填一份作为首批 golden。�
 
 > 下一步（M2.1）：用精化字段集落 `ProviderTaskSpec` + registry（先形式化 profile-fetch 血脉 + DataForSEO 两份），
 > golden sha1 钉表；零执行变更。M2.0 characterize 与之并行/前置。
+
+---
+
+## 10. M2.1 DONE + M2.2 重新定界（2026-06-16，characterize-first 修正）
+
+**M2.1 已交付（commit acfeed3，CI 绿）**：`src/sourcing_agent/provider_task_runtime.py` —
+frozen `ProviderTaskSpec` + `RetryContract` + `DEFAULT_PROVIDER_TASK_SPECS`（2 份：`harvest.profile_batch`→
+`LINKEDIN_PROFILE_FETCH_PROVIDER`、`dataforseo.discovery_query`→`LINKEDIN_DISCOVERY_QUERY_RUN`），R1 精化字段集，
+纯数据。`tests/test_provider_task_specs.py` golden sha1 + 结构守卫（每个 command_type 已注册且为 provider_attempt、
+work_reshape 须带 ladder、R1 三轴保真），入 CI lane。
+
+**M2.2（migrate seed_discovery 零结果 inline sleep → durable not_before_at）= MOOT，已重新定界。**
+characterize-first 核验发现 **seed_discovery 没有任何 `sleep` 调用**——其 zero-result / retryable-failure 重试
+**早已是 durable not_before_at 模式**（`seed_discovery.py:1833` `_utc_timestamp_after_seconds` → status=
+`failed_retryable` / phase=`retry_wait` / `not_before_at`，由 recovery 在到点后重新 claim；`:412`
+`CommandPlanRequested` 重排）。且该契约**已被现有测试钉死**：`test_seed_discovery.py:2767`
+`test_provider_people_search_retryable_failure_enters_discovery_query_retry_wait`（断言 status/phase/not_before_at）。
+即：M2.2 想引入的崩溃安全 durable backoff，在 seed_discovery **已存在且已测**——无 inline sleep 可删。
+（初始 workflow 图谱把它误标为 inline-sleep；这是图谱误差，characterize-first 捕获。该 retry 测试目前也在
+**已知 genuine 失败集**内 `discovery_items` 空——属 mid-refactor debt，**不在 M2 范围**、不在 curated CI lane。）
+
+**真正残留的 inline sleep**（harvest_connectors 7 / enrichment 3 / connectors 1 / public_web_search 1）**都在
+同步 provider 调用内部**（Apify run-status poll loop、分页、lease poll）——把它们改 durable 需要 provider-task-
+on-substrate 的完整迁移，即 **M2.3 ProviderScheduler + M2.4 Harvest 收编**，而非一个独立的 M2.2。
+
+**重新定界结论**：**M2.2 折叠进 M2.3**（durable-backoff 模式已由 seed_discovery + operation_native_profile_fetch
+两处证明 + 测试；RetryContract 已在 M2.1 形式化）。下一真实步骤 = **M2.3 ProviderScheduler**（把 §1.3 三层并发/
+预算折叠成单一 gate + 删 `defer_provider_submit` + durable defer），保留 I1-I6。这是一处实质执行变更，宜独立、
+characterize-first 起步。
