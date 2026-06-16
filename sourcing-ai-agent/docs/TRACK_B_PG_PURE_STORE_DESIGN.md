@@ -115,5 +115,14 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   40 unique / 19 sequence)+ 可复现生成器 `scripts/capture_pg_schema_baseline.py`。生成法:fresh 库经**真实代码路径**
   bootstrap(store + ensure_bootstrapped + writer/coordination ensures)→ `pg_dump --schema-only` → 规范化为 schema-agnostic
   (无限定名,runner 设 search_path)。**验证**:(a) capture 表集 == live `public` 83 表 0 diff;(b) **round-trip**:
-  baseline apply 到 fresh schema 后 re-dump 与 capture **逐字节相同**;(c) 生成器跨运行**确定性**逐字节稳定。下一步:
-  B1.2 runner(advisory-lock 串行化 + `schema_migrations` 记账;接入启动/`ensure_bootstrapped`)。
+  baseline apply 到 fresh schema 后 re-dump 与 capture **逐字节相同**;(c) 生成器跨运行**确定性**逐字节稳定。
+- **2026-06-16 B1.2 runner DONE**:`src/sourcing_agent/migration_runner.py`(`apply_pending_migrations(connection, *, schema)`)
+  + `tests/test_migration_runner.py`(4 测试,纳入 CI 合同 lane)。特性:**幂等**(ledger-gated)、**串行**
+  (transaction-scoped `pg_advisory_xact_lock`,key 形如 `_advisory_lock_key`:`{schema}:schema_migrations`)、
+  **原子**(全部 pending + ledger 行单事务提交;DDL 事务性)、**brownfield-safe**(已有 baseline 表但无 ledger 的库
+  —— prod `public` / 本地 / 已 bootstrap 的 test schema —— 在 baseline **stamp** 而非重跑 `CREATE TABLE`,使 B1.3
+  cutover 对存量库安全)、**tamper-evident**(每行 sha256;已应用迁移文件被改则 fail closed)。验证:**drift guard**
+  runner-built 与 code-bootstrap 结构逐列逐索引相同(83 表);幂等;brownfield stamp;checksum fail-closed。
+  **尚未接入** `ensure_bootstrapped`(B1.3 做 cutover)。打包注:migrations 经 `Path(__file__).parent` 定位(当前 source-run
+  部署 OK);未来容器化/wheel 需配 package-data。下一步:B1.3 —— 让 runner 成为唯一建表者,删 `sqlite_master` 派生
+  schema 路径(`ensure_bootstrapped` 改调 runner)。
