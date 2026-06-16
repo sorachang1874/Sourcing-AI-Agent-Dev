@@ -62,10 +62,11 @@ class ReadAllowedNamespaceTest(unittest.TestCase):
 
 
 class _StubStore:
-    def __init__(self, jobs, crm_records, commands=None):
+    def __init__(self, jobs, crm_records, commands=None, links=None):
         self._jobs = jobs
         self._crm = crm_records
         self._commands = commands or {}
+        self._links = links or {}
 
     def get_job(self, job_id):
         return self._jobs.get(job_id)
@@ -75,6 +76,9 @@ class _StubStore:
 
     def get_workflow_command(self, command_id):
         return self._commands.get(command_id, {})
+
+    def get_frontend_history_link(self, history_id):
+        return self._links.get(history_id)
 
 
 class _StubOrchestrator:
@@ -97,6 +101,12 @@ class _StubOrchestrator:
     def get_export_command_status(self, command_id):
         return {"status": "succeeded", "task_id": command_id}
 
+    def get_frontend_history_recovery(self, history_id):
+        return {"status": "ok", "history_id": history_id}
+
+    def delete_frontend_history(self, history_id):
+        return {"status": "ok", "history_id": history_id}
+
 
 _TOKENS = json.dumps({"tok-alice": "alice", "tok-bob": "bob"})
 
@@ -117,6 +127,11 @@ class UserPrivateReadGateTest(unittest.TestCase):
                 "exp-alice-crm": {"payload": {"workspace_id": "user-alice"}},
                 "exp-legacy-crm": {"payload": {"workspace_id": "default"}},
                 "exp-projection": {"payload": {}},
+            },
+            links={
+                "hist-alice": {"job_id": "job-alice"},
+                "hist-legacy": {"job_id": "job-legacy-empty"},
+                "hist-unlinked": {"job_id": ""},
             },
         )
         env_patch = patch.dict(os.environ, dict(env or {}))
@@ -199,6 +214,33 @@ class UserPrivateReadGateTest(unittest.TestCase):
         # No workspace_id on the command -> canonical-derived -> readable by anyone.
         base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
         self.assertEqual(self._get(opener, f"{base}/api/exports/exp-projection", token="tok-bob"), 200)
+
+    # ---- frontend-history (owner derived from the linked job's requester_id) ----
+    def _delete(self, opener, url, *, token=None):
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        request = urllib_request.Request(url, headers=headers, method="DELETE")
+        try:
+            with opener.open(request, timeout=10) as response:
+                return response.status
+        except HTTPError as error:
+            return error.code
+
+    def test_owner_reads_own_history(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        self.assertEqual(self._get(opener, f"{base}/api/frontend-history/hist-alice", token="tok-alice"), 200)
+
+    def test_non_owner_history_is_404(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        self.assertEqual(self._get(opener, f"{base}/api/frontend-history/hist-alice", token="tok-bob"), 404)
+
+    def test_legacy_and_unlinked_history_readable(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        self.assertEqual(self._get(opener, f"{base}/api/frontend-history/hist-legacy", token="tok-bob"), 200)
+        self.assertEqual(self._get(opener, f"{base}/api/frontend-history/hist-unlinked", token="tok-bob"), 200)
+
+    def test_non_owner_cannot_delete_history(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        self.assertEqual(self._delete(opener, f"{base}/api/frontend-history/hist-alice", token="tok-bob"), 404)
 
 
 if __name__ == "__main__":

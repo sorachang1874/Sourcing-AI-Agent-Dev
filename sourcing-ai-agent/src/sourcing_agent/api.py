@@ -634,6 +634,24 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "task_id": command_id})
         return None
 
+    def _gate_frontend_history_owner(request: Request, history_id: str) -> Response | None:
+        """C2.3-followup: 404 when the caller doesn't own a frontend-history entry.
+
+        frontend_history_links has no owner column; ownership is derived from the
+        linked job's requester_id. Readable when the link or its job is missing, or
+        the link has no job_id (legacy/unlinked). Open mode is a true no-op.
+        """
+        if _server_identity(request) is None:
+            return None
+        link = orchestrator.store.get_frontend_history_link(history_id)
+        job_id = str((link or {}).get("job_id") or "").strip()
+        if not job_id:
+            return None
+        job_row = orchestrator.store.get_job(job_id)
+        if job_row is not None and not _read_allowed_requester(request, job_row.get("requester_id")):
+            return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "history_id": history_id})
+        return None
+
     # ------------------------------------------------------------------ GET
     def get_health(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
         health = orchestrator.get_runtime_metrics(query)
@@ -1047,7 +1065,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/frontend-history", get_frontend_history)
 
     def get_frontend_history_recovery(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.get_frontend_history_recovery(request.path_params["history_id"])
+        history_id = request.path_params["history_id"]
+        denied = _gate_frontend_history_owner(request, history_id)
+        if denied is not None:
+            return denied
+        result = orchestrator.get_frontend_history_recovery(history_id)
         status = HTTPStatus.OK
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -1471,7 +1493,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
 
     # --------------------------------------------------------------- DELETE
     def delete_frontend_history(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.delete_frontend_history(request.path_params["history_id"])
+        history_id = request.path_params["history_id"]
+        denied = _gate_frontend_history_owner(request, history_id)
+        if denied is not None:
+            return denied
+        result = orchestrator.delete_frontend_history(history_id)
         status = HTTPStatus.OK
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
