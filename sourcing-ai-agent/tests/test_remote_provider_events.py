@@ -790,6 +790,117 @@ def test_handle_remote_provider_event_marks_terminal_checkpoint_before_recovery(
     assert fake_store.events[0]["payload"]["released_provider_limiter_worker_ids"] == [907]
 
 
+def test_terminal_marker_handoff_is_strand_safe_daemon_check_superset_of_event_dedup() -> None:
+    """M2.6 crash-safety invariant: the daemon recoverability check is a SUPERSET of the event dedup check.
+
+    The webhook/watcher delivery path and the generic recovery daemon use two DIFFERENT
+    marker detectors guarding one stranding-critical handoff:
+
+      * event-path dedup -> ``orchestrator._worker_has_remote_provider_terminal_event``
+        (terminal-only; decides "this is a duplicate terminal delivery, suppress recovery")
+      * daemon ownership -> ``workflow_event_response.worker_has_remote_provider_terminal_event_marker``
+        (broader; decides "this remote-wait worker is now generic-recovery work, drain it")
+
+    Crash-safety of harvest's webhook+poll+terminal delivery RELIES on the daemon check being
+    a superset of the event check: a worker the event path deduped (recovery suppressed) whose
+    recovery then crashed before draining must still be claimable by the daemon. If the daemon
+    check were ever narrowed below the event check, such workers would strand silently. The
+    detectors live in different modules and must not drift apart -- this test pins the
+    ``daemon-positive >= event-positive`` direction so a narrowing regression fails loudly.
+    """
+    from sourcing_agent.orchestrator import (
+        _mark_remote_provider_terminal_event_on_workers,
+        _worker_has_remote_provider_terminal_event,
+    )
+    from sourcing_agent.workflow_event_response import (
+        worker_has_remote_provider_terminal_event_marker,
+    )
+
+    # (1) Concrete handoff: the exact checkpoint that _mark_..._on_workers persists (the only
+    # writer of the terminal marker, called only for is_terminal events) must be recognized by
+    # BOTH detectors, for every terminal outcome.
+    class _MarkStore:
+        def __init__(self, worker: dict[str, object]) -> None:
+            self._worker = dict(worker)
+
+        def get_agent_worker(self, *, worker_id=None, **_kwargs):
+            return dict(self._worker) if int(worker_id or 0) == int(self._worker["worker_id"]) else None
+
+        def checkpoint_agent_worker(
+            self, worker_id, *, checkpoint_payload=None, output_payload=None, status="running"
+        ):
+            self._worker["checkpoint"] = dict(checkpoint_payload or {})
+            self._worker["output"] = dict(output_payload or {})
+            self._worker["status"] = status
+            return dict(self._worker)
+
+    for event_type in ("ACTOR.RUN.SUCCEEDED", "ACTOR.RUN.FAILED", "ACTOR.RUN.TIMED_OUT"):
+        event = normalize_remote_provider_event(
+            {
+                "provider": "apify",
+                "eventType": event_type,
+                "eventData": {"actorRunId": "run-x", "defaultDatasetId": "dataset-x"},
+            },
+            provider="apify",
+        )
+        assert bool(event.get("is_terminal")), event_type
+        store = _MarkStore(
+            {
+                "worker_id": 11,
+                "status": "queued",
+                "checkpoint": {"stage": "waiting_remote_harvest"},
+                "output": {},
+            }
+        )
+        _mark_remote_provider_terminal_event_on_workers(
+            store,
+            worker_ids=[11],
+            event=event,
+            event_metrics={"local_event_seen_at": "2026-06-16T00:00:00+00:00", "source": "provider_webhook"},
+        )
+        marked = store.get_agent_worker(worker_id=11)
+        assert _worker_has_remote_provider_terminal_event(marked), event_type
+        assert worker_has_remote_provider_terminal_event_marker(marked), event_type
+
+    # (2) Strand-safety invariant over a matrix of worker shapes: event-dedup-positive MUST
+    # imply daemon-marker-positive. The reverse may hold (daemon broader) -- that is the SAFE
+    # direction, the daemon claiming ownership more eagerly never strands a worker.
+    def _w(checkpoint: dict[str, object], metadata: dict[str, object] | None = None) -> dict[str, object]:
+        return {"worker_id": 1, "status": "queued", "checkpoint": dict(checkpoint), "metadata": dict(metadata or {})}
+
+    terminal_event = {
+        "event_type": "ACTOR.RUN.SUCCEEDED",
+        "status": "SUCCEEDED",
+        "is_terminal": True,
+        "run_id": "r",
+        "dataset_id": "d",
+    }
+    nonterminal_event = {"event_type": "ACTOR.RUN.RESUMED", "status": "RUNNING", "is_terminal": False, "run_id": "r"}
+    shapes = [
+        _w({}),  # no marker at all
+        _w({"stage": "waiting_remote_harvest", "run_id": "r"}),  # remote-wait, no terminal marker yet
+        _w(
+            {
+                "remote_provider_terminal_event": terminal_event,
+                "remote_provider_terminal_event_seen_at": "2026-06-16T00:00:00+00:00",
+                "force_scripted_terminal_fetch": True,
+            }
+        ),  # canonical marker as written by _mark_..._on_workers
+        _w({"remote_provider_terminal_event": nonterminal_event}),  # non-terminal event present
+        _w({}, {"remote_provider_terminal_event_seen_at": "2026-06-16T00:00:00+00:00"}),  # metadata-only marker
+    ]
+    saw_daemon_broader = False
+    for shape in shapes:
+        event_positive = _worker_has_remote_provider_terminal_event(shape)
+        daemon_positive = worker_has_remote_provider_terminal_event_marker(shape)
+        # the no-stranding invariant: anything the event path deduped is still daemon-recoverable
+        assert (not event_positive) or daemon_positive, shape["checkpoint"]
+        if daemon_positive and not event_positive:
+            saw_daemon_broader = True
+    # the asymmetry is real and in the SAFE direction (daemon is the broader, owning check)
+    assert saw_daemon_broader
+
+
 def test_handle_remote_provider_event_records_late_event_for_completed_worker_without_recovery() -> None:
     class _FakeStore:
         def __init__(self) -> None:

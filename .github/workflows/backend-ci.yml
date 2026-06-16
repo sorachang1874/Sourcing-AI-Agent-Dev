@@ -117,3 +117,6 @@ jobs:
           python -m pytest -q \
             tests/test_scripted_smoke_signoff.py \
             -k durable_command_owner_contract
+          python -m pytest -q \
+            tests/test_remote_provider_events.py \
+            -k terminal_marker_handoff_is_strand_safe

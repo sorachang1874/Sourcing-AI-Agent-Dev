@@ -417,3 +417,44 @@ dedup(I10,terminal-event 写先于 dispatch)已 crash-safe 运作;「统一」�
 **建议**:判定 **M2 实质完成**。下一里程碑应是别的实质 build(per [[project-direction]]:Track B PG-pure store 重写 /
 Track D agentic streaming),而非继续打磨 M2。M2 的持久价值 = `provider_task_runtime.py` registry 作为「每个外部 provider
 如何以 durable task 运行」的**单一、已验证、self-verifying 事实源**。
+
+---
+
+## §14 — M2.6 收尾验证(VERIFIED-MOOT,非假设)
+
+按 owner 指示「先验证 M2.6 再宣布 M2 完成」,对 harvest 的 **webhook-primary + poll-fallback + terminal-event dedup**
+投递做了 read-code 全链路验证(非 M2.4 时的旁证判断)。结论:**该投递设计 crash-safe,且已被既有测试全面钉死;不存在
+需要修补的真实缺陷。** M2.6 的「统一」是形式化的,**判定 verified-moot**。
+
+**投递链与 crash-safety 设计(代码事实):**
+1. webhook(`POST /api/providers/apify/webhook`,`api.py:1558`)、sync-recovery、local-watcher poll 三入口**全部汇聚**到
+   `orchestrator.handle_remote_provider_event`(`orchestrator.py:38018`)——单一去重/投递点。
+2. terminal 事件先**写 marker 再 dispatch recovery**(`_mark_remote_provider_terminal_event_on_workers`,38300 →
+   recovery dispatch 38320):marker 写 `force_scripted_terminal_fetch=True`、保留 worker `status=queued`(**非 completed**)
+   → marker 含义是「terminal 已见,去 drain 做 scripted terminal fetch+admit」,**不是「已完成」**。
+3. **handoff 契约**(`workflow_event_response.py:288` docstring):**无 marker 的 remote-wait worker 归 webhook/watcher
+   路径所有;有 marker 后归 generic recovery daemon 所有。** 故 crash-after-mark 落在 daemon 域内,daemon 独立 drain 完成——
+   事件路径的去重(对已标记 worker 抑制重复 recovery)之所以安全,正因 daemon 拥有 drainage。
+4. admission 期间 crash 从 partial-persist checkpoint resume(`stage=persisting_terminal_harvest_profiles` +
+   `terminal_persist_progress`),`_consumed` 幂等。
+
+**已钉死的覆盖(既有,跨两文件):**
+- ordering(mark 先于 recovery)→ `test_remote_provider_events.py::..._marks_terminal_checkpoint_before_recovery`
+- 事件去重(重复 webhook / webhook+watcher 不重复 recovery、不重开 durable queue)→ `..._does_not_rewake_checkpointed_terminal_event`、
+  `..._dedupes_recoverable_worker_with_terminal_marker`、`..._late_duplicate_does_not_reopen_durable_queues`、`..._records_late_watcher_event_after_webhook_completion_without_recovery`
+- handoff 完成端(有 marker 的 worker 被 daemon claim→execute→**completed**)→
+  `test_worker_recovery_daemon.py::test_terminal_remote_event_marker_allows_remote_wait_recovery_owner_to_resume`
+- handoff 方向(无 marker 的 remote-wait **不**被 generic recovery 轮询)→ `..._non_explicit_submitted_remote_wait_is_not_polled_without_terminal_event`
+- admission 期间 crash 可立即 resume → `..._terminal_profile_persist_stage_is_immediately_recoverable_after_partial_yield`
+
+**验证中发现并修补的一处潜在脆弱点(本次唯一新增工件):** 该 handoff 由**两个不同的 marker 检测函数**把守——事件去重用
+`orchestrator._worker_has_remote_provider_terminal_event`(仅 terminal),daemon 归属用
+`workflow_event_response.worker_has_remote_provider_terminal_event_marker`(更宽)。被事件路径去重的 worker 之所以不会
+stranded,**完全依赖 daemon 检测是事件检测的超集**(daemon-positive ⊇ event-positive)。当前代码满足该超集关系(任一让
+`_worker_has...` 为真的 worker,其 checkpoint 必含 `remote_provider_terminal_event` dict,从而 `..._marker` 也为真),但此跨模块
+不变量此前**只是隐式、无测试守护**——若将来有人把 daemon 检测收窄到事件检测之下,被去重的崩溃 worker 会**静默 strand**。新增
+`test_terminal_marker_handoff_is_strand_safe_daemon_check_superset_of_event_dedup`(纳入 CI 合同 lane)钉死该方向的不变量:
+对真实写入的 marker 形状及一组 worker shape 矩阵,断言 `event-positive ⟹ daemon-positive`,并断言「daemon 更宽」这一安全方向确实
+存在。这是 M2.6 的唯一实质交付——验证 + 一个保护 stranding 缝的小不变量,而非假造一个「统一」build。
+
+**最终判定:M2 完成(M2.1–M2.6 全部 settled)。** 下一里程碑交 owner 选(Track B / Track D)。
