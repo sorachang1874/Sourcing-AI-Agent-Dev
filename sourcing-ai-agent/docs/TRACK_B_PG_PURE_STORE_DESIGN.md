@@ -105,4 +105,15 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
 ## §6 进度
 
 - **2026-06-16 设计 RATIFIED**:reframe(删-非-重写)+ schema 机制(versioned SQL + runner)+ 顺序
-  (foundation-first)owner 已批。下一步:B1.0 characterize 当前 PG schema 创建机制。
+  (foundation-first)owner 已批。
+- **2026-06-16 B1.0 characterize DONE**:确认 live PG schema 当前**由 SQLite schema 在每次 bootstrap 时生成**
+  —— `adapter.ensure_bootstrapped()`(`control_plane_live_postgres.py:820`)→ `sync_runtime_control_plane_to_postgres(sqlite_path=...)`
+  读 SQLite(`_sqlite_table_columns`→`_build_create_table_sql`),UNION 手工 `_ensure_runtime_coordination_schema()` +
+  `_ensure_control_plane_writer_schema()` + `_ensure_control_plane_unique_indexes` + `ensure_acquisition_shard_registry_split_schema`。
+  SQLite DDL 源 = `storage.py::init_schema`(1436)。物化 schema = **83 物理表**(非 124;124 含 split 逻辑名 + 条件表)。
+- **2026-06-16 B1.1 baseline DONE**:`src/sourcing_agent/migrations/0001_baseline.sql`(83 表 / 96 ALTER / 91 index /
+  40 unique / 19 sequence)+ 可复现生成器 `scripts/capture_pg_schema_baseline.py`。生成法:fresh 库经**真实代码路径**
+  bootstrap(store + ensure_bootstrapped + writer/coordination ensures)→ `pg_dump --schema-only` → 规范化为 schema-agnostic
+  (无限定名,runner 设 search_path)。**验证**:(a) capture 表集 == live `public` 83 表 0 diff;(b) **round-trip**:
+  baseline apply 到 fresh schema 后 re-dump 与 capture **逐字节相同**;(c) 生成器跨运行**确定性**逐字节稳定。下一步:
+  B1.2 runner(advisory-lock 串行化 + `schema_migrations` 记账;接入启动/`ensure_bootstrapped`)。
