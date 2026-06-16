@@ -134,5 +134,19 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   (B4 随 shadow 一并删)。**验证**:generator 重生成 baseline 逐字节相同(83 表,无 schema_migrations);4 runner 测试绿
   (drift guard 现为 runner-built vs SQLite-source);**store-bootstrapping 合同子集 174 passed**(storage_surface_guardrails /
   user_private_reads / api_auth / operation_runtime / crm_public_web_runtime_boundary + migration_runner —— 全部经 runner 建库)。
-  部署仍 full-stop(advisory-lock 身份)。下一步:B2 —— port 仍跑 SQLite 的 2-3 方法(`refresh_matching_metadata`、
-  `upsert_job_result_lifecycle` merge)到 PG。`sync_runtime_control_plane_to_postgres` 的 mirror/legacy 用途仍存(B3/B4 删)。
+  部署仍 full-stop(advisory-lock 身份)。
+- **2026-06-16 B2 DONE(scope 由 characterize-first 重定 + 修 2 个真实 stale-read bug)**:用 ultracode workflow 做了
+  understand(5 reader)+ triage(5 adversarial classifier)。**关键纠偏**:"2-3 个 SQLite-only 方法"是错的 —— 完整 sweep 找出
+  **22 个**。triage 分类:**REAL_B2_GAP ×2**(本次修)、DUAL_PATH_B3(PG-aware 父方法的死 SQLite 半:event-summary 族
+  4669/4706/4747/4789、profile-alias 三件 25699/25724/25744、`_insert_candidates_and_evidence` 29238、`upsert_job_result_lifecycle`
+  尾 6524-6539、replace_* 数据装载 3902/3918/3952/4004)、SHADOW_INFRA_B4(917/924/939/1429/1436/29214/29221)。
+  **两个澄清的非-gap**:`upsert_job_result_lifecycle`(PG 路径已工作:读 PG+Python merge+`adapter.upsert_row` SQL 重实现 merge;
+  仅死 SQLite 尾→B3)、`refresh_matching_metadata`(NOT_A_GAP —— save_job@4488/create_plan_review_session@6938 等写路径**在写时**
+  即把 matching signature 写入 PG,故 PG 行天生带签名,backfill 在 postgres_only 对空 shadow no-op,纯 legacy 一次性迁移)。
+  **修复的 2 个真实 bug**(SQLite-only public read,在 postgres_only 读空 shadow 返 None,静默废掉去重):
+  (1) `find_latest_job_by_idempotency_key`(storage.py:16615,jobs;orchestrator.py:54032 idempotency 去重→重复 job)——加 PG 分支
+  `_select_control_plane_job_rows` + `should_skip_sqlite_fallback('jobs')`,镜像 sibling `find_latest_job_by_request_signature`(16314)。
+  (2) `find_pending_plan_review_session`(storage.py:25786,plan_review_sessions;orchestrator.py:52704/52790 待审去重→重复 pending session)
+  ——加 `_select_control_plane_row` PG 分支。**验证**:`tests/test_pg_only_dedup_reads.py`(5 测试,纳入 CI 合同 lane)——
+  git-stash 回退 storage.py 证明 pre-fix 下 3 个 positive-find 测试 FAIL(正是空-shadow bug),fix 后 5/5 绿。下一步:B3 ——
+  按表组删 DUAL_PATH 的死 SQLite 半(含上面 triage 标的);`sync_runtime_control_plane_to_postgres` 的 mirror/legacy 用途随之删(B3/B4)。

@@ -16633,19 +16633,42 @@ class ControlPlaneStore:
             placeholders = ",".join("?" for _ in normalized_statuses)
             clauses.append(f"status IN ({placeholders})")
             params.extend(normalized_statuses)
-        rows = self._connection.execute(
-            f"""
-            SELECT * FROM jobs
-            WHERE {" AND ".join(clauses)}
-            ORDER BY updated_at DESC, created_at DESC
-            LIMIT ?
-            """,
-            (*params, max(1, int(limit or 200))),
-        ).fetchall()
+        # PG-authoritative read (Track B B2): the SQLite `jobs` shadow is empty in
+        # postgres_only, so this idempotency-dedup probe must read PG — mirroring the
+        # sibling find_latest_job_by_request_signature. Reading the shadow returned None
+        # and silently defeated idempotency dedup (duplicate jobs).
+        postgres_rows = self._select_control_plane_job_rows(
+            where_sql=" AND ".join(
+                [
+                    "idempotency_key = %s",
+                    *([f"status IN ({', '.join('%s' for _ in normalized_statuses)})"] if normalized_statuses else []),
+                ]
+            ),
+            params=[normalized_idempotency_key, *normalized_statuses],
+            order_by_sql="updated_at DESC, created_at DESC",
+            limit=max(1, int(limit or 200)),
+        )
+        if postgres_rows:
+            rows = postgres_rows
+        elif self._control_plane_postgres_should_skip_sqlite_fallback("jobs"):
+            return None
+        else:
+            rows = [
+                self._job_from_row(row)
+                for row in self._connection.execute(
+                    f"""
+                    SELECT * FROM jobs
+                    WHERE {" AND ".join(clauses)}
+                    ORDER BY updated_at DESC, created_at DESC
+                    LIMIT ?
+                    """,
+                    (*params, max(1, int(limit or 200))),
+                ).fetchall()
+            ]
         scope_mode = _normalize_dispatch_scope(scope, requester_id=requester_id, tenant_id=tenant_id)
         normalized_target_company = str(target_company or "").strip().lower()
         for row in rows:
-            payload = self._job_from_row(row)
+            payload = row
             request_payload = dict(payload.get("request") or {})
             if (
                 normalized_target_company
@@ -25793,6 +25816,24 @@ class ControlPlaneStore:
         if not target:
             return None
         request_sig = matching_request_signature(request_payload)
+        # PG-authoritative read (Track B B2): the SQLite plan_review_sessions shadow is empty
+        # in postgres_only, so this pending-session dedup probe must read PG. Reading the shadow
+        # returned None and silently defeated dedup (duplicate pending plan-review sessions).
+        postgres_row = self._select_control_plane_row(
+            "plan_review_sessions",
+            row_builder=self._plan_review_session_from_row,
+            where_sql=(
+                "lower(target_company) = lower(%s) AND status = 'pending' AND ("
+                "matching_request_signature = %s "
+                "OR (coalesce(matching_request_signature, '') = '' AND request_signature = %s))"
+            ),
+            params=[target, request_sig, request_sig],
+            order_by_sql="updated_at DESC, review_id DESC",
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("plan_review_sessions"):
+            return None
         row = self._connection.execute(
             """
             SELECT * FROM plan_review_sessions
