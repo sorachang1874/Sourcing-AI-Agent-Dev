@@ -62,15 +62,19 @@ class ReadAllowedNamespaceTest(unittest.TestCase):
 
 
 class _StubStore:
-    def __init__(self, jobs, crm_records):
+    def __init__(self, jobs, crm_records, commands=None):
         self._jobs = jobs
         self._crm = crm_records
+        self._commands = commands or {}
 
     def get_job(self, job_id):
         return self._jobs.get(job_id)
 
     def get_crm_record(self, record_id):
         return self._crm.get(record_id)
+
+    def get_workflow_command(self, command_id):
+        return self._commands.get(command_id, {})
 
 
 class _StubOrchestrator:
@@ -90,6 +94,9 @@ class _StubOrchestrator:
             return {"status": "not_found", "record_id": record_id}
         return {"status": "ok", "record_id": record_id}
 
+    def get_export_command_status(self, command_id):
+        return {"status": "succeeded", "task_id": command_id}
+
 
 _TOKENS = json.dumps({"tok-alice": "alice", "tok-bob": "bob"})
 
@@ -105,6 +112,11 @@ class UserPrivateReadGateTest(unittest.TestCase):
             crm_records={
                 "rec-alice": {"workspace_id": "user-alice"},
                 "rec-legacy": {"workspace_id": "default"},
+            },
+            commands={
+                "exp-alice-crm": {"payload": {"workspace_id": "user-alice"}},
+                "exp-legacy-crm": {"payload": {"workspace_id": "default"}},
+                "exp-projection": {"payload": {}},
             },
         )
         env_patch = patch.dict(os.environ, dict(env or {}))
@@ -169,6 +181,24 @@ class UserPrivateReadGateTest(unittest.TestCase):
         self.assertEqual(
             self._get(opener, f"{base}/api/crm/records/rec-legacy/public-web-search", token="tok-bob"), 200
         )
+
+    # ---- export commands (workspace_id gate; projection canonical -> open) ----
+    def test_owner_reads_own_crm_export(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        self.assertEqual(self._get(opener, f"{base}/api/exports/exp-alice-crm", token="tok-alice"), 200)
+
+    def test_non_owner_crm_export_is_404(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        self.assertEqual(self._get(opener, f"{base}/api/exports/exp-alice-crm", token="tok-bob"), 404)
+
+    def test_legacy_crm_export_readable_by_anyone(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        self.assertEqual(self._get(opener, f"{base}/api/exports/exp-legacy-crm", token="tok-bob"), 200)
+
+    def test_projection_export_is_canonical_and_open(self) -> None:
+        # No workspace_id on the command -> canonical-derived -> readable by anyone.
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        self.assertEqual(self._get(opener, f"{base}/api/exports/exp-projection", token="tok-bob"), 200)
 
 
 if __name__ == "__main__":

@@ -617,6 +617,23 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "record_id": record_id})
         return None
 
+    def _gate_export_owner(request: Request, command_id: str) -> Response | None:
+        """C2.3-followup: 404 when the caller is not the export's workspace owner.
+
+        Export commands are workflow_command rows. CRM exports carry the derived
+        workspace_id ('user-<id>') in their command payload (set by C2.2); gate on
+        it. Projection exports carry no workspace_id (canonical-derived, not
+        user-private) and stay readable. Legacy/'default' workspace stays readable.
+        Open mode is a true no-op.
+        """
+        if _server_identity(request) is None:
+            return None
+        command = orchestrator.store.get_workflow_command(command_id)
+        workspace = str((command or {}).get("payload", {}).get("workspace_id") or "").strip()
+        if workspace and not _read_allowed_namespace(request, workspace):
+            return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "task_id": command_id})
+        return None
+
     # ------------------------------------------------------------------ GET
     def get_health(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
         health = orchestrator.get_runtime_metrics(query)
@@ -825,7 +842,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         # C1.4b: async export task poll. submit (POST /api/projections/export) -> 202
         # + command_id; the client polls here until status='succeeded', then GETs
         # the artifact handle below.
-        result = orchestrator.get_export_command_status(_decode_path_param(request.path_params["command_id"]))
+        command_id = _decode_path_param(request.path_params["command_id"])
+        denied = _gate_export_owner(request, command_id)
+        if denied is not None:
+            return denied
+        result = orchestrator.get_export_command_status(command_id)
         payload_status = str(result.get("status") or "").strip()
         if payload_status == "not_found":
             return _json_response(HTTPStatus.NOT_FOUND, result)
@@ -839,7 +860,11 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         # C1.4b: stream a succeeded export task's artifact bytes + the command-type's
         # X-Sourcing-* headers (the orchestrator returns a generic 'headers' dict so
         # this one endpoint serves both projection and CRM exports byte/header-parity).
-        result = orchestrator.get_export_command_artifact(_decode_path_param(request.path_params["command_id"]))
+        command_id = _decode_path_param(request.path_params["command_id"])
+        denied = _gate_export_owner(request, command_id)
+        if denied is not None:
+            return denied
+        result = orchestrator.get_export_command_artifact(command_id)
         payload_status = str(result.get("status") or "").strip()
         if payload_status == "not_found":
             return _json_response(HTTPStatus.NOT_FOUND, result)
