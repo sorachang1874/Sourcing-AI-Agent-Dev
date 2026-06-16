@@ -17,6 +17,7 @@ Usage:
 DSN comes from the standard control-plane resolution (``SOURCING_CONTROL_PLANE_POSTGRES_DSN``
 or the docker ``.local-postgres.env``). ``pg_dump`` is located via ``PG_DUMP_BIN`` or PATH.
 """
+
 from __future__ import annotations
 
 import argparse
