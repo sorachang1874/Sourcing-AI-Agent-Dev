@@ -140,9 +140,11 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         store = ControlPlaneStore(Path(tmp) / "capture.db")
         adapter = store._control_plane_postgres
-        adapter.ensure_bootstrapped()
-        adapter._ensure_control_plane_writer_schema()
-        adapter._ensure_runtime_coordination_schema()
+        # Capture the SQLite-derived schema (init_schema source of truth), NOT the runner —
+        # ensure_bootstrapped now applies the migrations, which would make regeneration
+        # circular. _bootstrap_schema_from_sqlite_source is the legacy source the baseline
+        # must keep matching until B4 deletes the SQLite shadow.
+        adapter._bootstrap_schema_from_sqlite_source()
         store.close()
 
     raw = subprocess.run(

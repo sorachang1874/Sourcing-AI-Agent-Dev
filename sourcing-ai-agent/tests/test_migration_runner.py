@@ -1,9 +1,10 @@
 """Track B B1.2 — migration runner contract tests (PG-backed).
 
 Pins the runner's four load-bearing behaviors:
-  1. drift guard — a runner-built schema is structurally IDENTICAL to a code-bootstrap
-     schema (init_schema + ensure_bootstrapped + writer/coordination ensures). If the store
-     schema changes without regenerating migrations/0001_baseline.sql, this fails.
+  1. drift guard — a runner-built schema is structurally IDENTICAL to the SQLite-derived
+     source schema (init_schema + sync + writer/coordination ensures, via the explicit legacy
+     _bootstrap_schema_from_sqlite_source path). If the store schema changes without
+     regenerating migrations/0001_baseline.sql, this fails. Retires with the shadow at B4.
   2. idempotency — re-running applies nothing (ledger-gated).
   3. brownfield adoption — a schema that already has the baseline tables but no ledger is
      STAMPED at the baseline (not re-CREATE-d), so the B1.3 cutover is safe on live DBs.
@@ -96,15 +97,16 @@ class MigrationRunnerTest(unittest.TestCase):
             with conn.cursor() as cur:
                 cur.execute(f"DROP SCHEMA IF EXISTS {quoted} CASCADE")
 
-    def test_runner_builds_schema_identical_to_code_bootstrap(self) -> None:
-        # code-bootstrap side: a real ControlPlaneStore bootstrap (same path the generator captured)
+    def test_runner_builds_schema_identical_to_sqlite_source(self) -> None:
+        # SQLite-derived side: the init_schema source of truth, built via the explicit legacy
+        # path (NOT ensure_bootstrapped — that now applies the migrations, which would make this
+        # guard circular). This catches the store schema (init_schema + ensures) drifting from
+        # migrations/0001_baseline.sql until B4 removes the SQLite shadow.
         from tests.pg_store_fixture import pg_backed_control_plane_store
 
         with pg_backed_control_plane_store(schema_label="mr_code") as store:
             adapter = store._control_plane_postgres
-            adapter.ensure_bootstrapped()
-            adapter._ensure_control_plane_writer_schema()
-            adapter._ensure_runtime_coordination_schema()
+            adapter._bootstrap_schema_from_sqlite_source()
             code_schema = adapter.schema
             with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
                 with conn.cursor() as cur:
@@ -119,9 +121,9 @@ class MigrationRunnerTest(unittest.TestCase):
 
         self.assertEqual(result.applied, ["0001_baseline"])
         self.assertEqual(result.stamped, [])
-        self.assertEqual(runner_fp["tables"], code_fp["tables"], "table set drift vs code bootstrap")
-        self.assertEqual(runner_fp["columns"], code_fp["columns"], "column drift vs code bootstrap")
-        self.assertEqual(runner_fp["indexes"], code_fp["indexes"], "index drift vs code bootstrap")
+        self.assertEqual(runner_fp["tables"], code_fp["tables"], "table set drift vs SQLite source")
+        self.assertEqual(runner_fp["columns"], code_fp["columns"], "column drift vs SQLite source")
+        self.assertEqual(runner_fp["indexes"], code_fp["indexes"], "index drift vs SQLite source")
         self.assertEqual(len(runner_fp["tables"]), 83)
 
     def test_runner_is_idempotent(self) -> None:

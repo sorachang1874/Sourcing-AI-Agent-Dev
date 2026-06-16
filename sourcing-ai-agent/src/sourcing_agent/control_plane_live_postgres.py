@@ -36,6 +36,7 @@ from .local_postgres import (
     resolve_control_plane_postgres_schema,
     resolve_default_control_plane_db_path,
 )
+from .migration_runner import apply_pending_migrations
 from .runtime_lease_utils import worker_lease_owner_is_dead_local_process
 
 CONTROL_PLANE_LIVE_TABLES = (
@@ -818,28 +819,71 @@ class LiveControlPlanePostgresAdapter:
         )
 
     def ensure_bootstrapped(self) -> None:
+        # Track B B1.3: the PG schema is now created by the versioned migration runner
+        # (migrations/0001_baseline.sql + schema_migrations ledger), the single source of
+        # truth — NOT generated from the SQLite shadow's sqlite_master. Pre-runner databases
+        # (prod `public`, local dev, already-bootstrapped test schemas) carry the baseline
+        # tables but no ledger; the runner STAMPS them at the baseline rather than re-creating.
         if not self.enabled:
             return
         with self._lock:
             if self._bootstrapped:
                 return
-            bootstrap_tables = list(self.tables)
-            if int(getattr(self, "_legacy_target_public_web_migration_table_depth", 0) or 0) > 0:
-                bootstrap_tables.extend(
-                    table_name
-                    for table_name in LEGACY_TARGET_PUBLIC_WEB_TABLES
-                    if table_name not in bootstrap_tables
-                )
-            sync_runtime_control_plane_to_postgres(
-                runtime_dir=self.runtime_dir,
-                sqlite_path=self.sqlite_path,
-                dsn=self.dsn,
-                schema=self.schema,
-                tables=bootstrap_tables,
-                min_interval_seconds=0.0,
-                force=False,
-            )
+            self._apply_schema_migrations()
             self._bootstrapped = True
+        self._ensure_runtime_coordination_schema()
+
+    def _apply_schema_migrations(self) -> None:
+        attempt = 0
+        while True:
+            connection = None
+            try:
+                connection = self._connect()
+                apply_pending_migrations(connection, schema=self.schema)
+                return
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+            finally:
+                if connection is not None:
+                    try:
+                        connection.close()
+                    except Exception:
+                        pass
+
+    def _bootstrap_schema_from_sqlite_source(self) -> None:
+        """LEGACY (Track B, pre-B4): build the PG schema by generating it from the SQLite
+        shadow (sqlite_master-derived) plus the hand-maintained writer/coordination ensures.
+
+        This is NO LONGER the live bootstrap path — ``ensure_bootstrapped`` now applies
+        versioned migrations. It is retained ONLY so the baseline generator
+        (``scripts/capture_pg_schema_baseline.py``) and the migration-runner drift guard can
+        validate ``migrations/0001_baseline.sql`` against the ``init_schema``-defined source of
+        truth until B4 deletes the SQLite shadow. Do not call from serving paths.
+        """
+        bootstrap_tables = list(self.tables)
+        if int(getattr(self, "_legacy_target_public_web_migration_table_depth", 0) or 0) > 0:
+            bootstrap_tables.extend(
+                table_name
+                for table_name in LEGACY_TARGET_PUBLIC_WEB_TABLES
+                if table_name not in bootstrap_tables
+            )
+        sync_runtime_control_plane_to_postgres(
+            runtime_dir=self.runtime_dir,
+            sqlite_path=self.sqlite_path,
+            dsn=self.dsn,
+            schema=self.schema,
+            tables=bootstrap_tables,
+            min_interval_seconds=0.0,
+            force=False,
+        )
+        # Mark bootstrapped so the writer/coordination ensures (which call ensure_bootstrapped,
+        # now the migration runner) do not re-enter and create the schema_migrations ledger —
+        # this path must yield ONLY the SQLite-derived application schema.
+        self._bootstrapped = True
+        self._ensure_control_plane_writer_schema()
         self._ensure_runtime_coordination_schema()
 
     def replace_table_from_sqlite(self, table_name: str) -> None:

@@ -124,5 +124,15 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   cutover 对存量库安全)、**tamper-evident**(每行 sha256;已应用迁移文件被改则 fail closed)。验证:**drift guard**
   runner-built 与 code-bootstrap 结构逐列逐索引相同(83 表);幂等;brownfield stamp;checksum fail-closed。
   **尚未接入** `ensure_bootstrapped`(B1.3 做 cutover)。打包注:migrations 经 `Path(__file__).parent` 定位(当前 source-run
-  部署 OK);未来容器化/wheel 需配 package-data。下一步:B1.3 —— 让 runner 成为唯一建表者,删 `sqlite_master` 派生
-  schema 路径(`ensure_bootstrapped` 改调 runner)。
+  部署 OK);未来容器化/wheel 需配 package-data。
+- **2026-06-16 B1.3 cutover DONE**:`LiveControlPlanePostgresAdapter.ensure_bootstrapped` 现调
+  `apply_pending_migrations`(经 `_apply_schema_migrations`,带 `_is_retryable_postgres_exception` 重试),runner 成为
+  PG schema 唯一建表者;`sqlite_master` 派生 schema 生成从 live bootstrap 退役。存量库(prod `public` / 本地 / 已 bootstrap
+  的 test schema)经 brownfield **stamp** 安全(不重建)。**保留 drift guard 的诚实性**:抽出 legacy `_bootstrap_schema_from_sqlite_source()`
+  (sync + writer + coordination ensures;**先置 `_bootstrapped=True`** 再调 writer/coordination,否则它们内部的
+  `ensure_bootstrapped` 会回灌 runner 把 `schema_migrations` 混入 capture),供 generator + drift test 用作"SQLite 源"对照
+  (B4 随 shadow 一并删)。**验证**:generator 重生成 baseline 逐字节相同(83 表,无 schema_migrations);4 runner 测试绿
+  (drift guard 现为 runner-built vs SQLite-source);**store-bootstrapping 合同子集 174 passed**(storage_surface_guardrails /
+  user_private_reads / api_auth / operation_runtime / crm_public_web_runtime_boundary + migration_runner —— 全部经 runner 建库)。
+  部署仍 full-stop(advisory-lock 身份)。下一步:B2 —— port 仍跑 SQLite 的 2-3 方法(`refresh_matching_metadata`、
+  `upsert_job_result_lifecycle` merge)到 PG。`sync_runtime_control_plane_to_postgres` 的 mirror/legacy 用途仍存(B3/B4 删)。
