@@ -57,8 +57,8 @@ def _spec_sha1(spec: ptr.ProviderTaskSpec) -> str:
 
 # Golden sha1 per provider_task_type. Update deliberately when a spec intentionally changes.
 GOLDEN_PROVIDER_TASK_SNAPSHOT = {
-    "harvest.profile_batch": "8bdda0d8334d36ab22745c417155f646f71f2072",
-    "dataforseo.discovery_query": "77cf65762796884cb6c322ccba9991ce10be6633",
+    "harvest.profile_batch": "df5b0af265276ebd3d378a0e2dd841c9595a25d0",
+    "dataforseo.discovery_query": "e957fce787e04a073f331206ec42c44ea3ef955c",
 }
 
 
@@ -109,6 +109,16 @@ class ProviderTaskSpecStructuralTest(unittest.TestCase):
         for spec in ptr.DEFAULT_PROVIDER_TASK_SPECS.values():
             cmd = DEFAULT_COMMAND_TYPE_SPECS[spec.command_type]
             self.assertEqual(spec.after_start_mode, cmd.provider_after_start_mode, spec.provider_task_type)
+
+    def test_budget_keys_resolve_in_runtime_tuning(self) -> None:
+        # M2.5: any non-empty inflight/backoff budget key must be a real runtime_tuning
+        # resolver (catches speculative forward-refs like the M2.5 dataforseo correction).
+        from sourcing_agent import runtime_tuning
+
+        for spec in ptr.DEFAULT_PROVIDER_TASK_SPECS.values():
+            for key in (spec.inflight_budget_key, spec.retry.backoff_seconds_key):
+                if key:
+                    self.assertTrue(hasattr(runtime_tuning, key), f"{spec.provider_task_type}: {key}")
 
     def test_harvest_binds_the_apify_harvest_batch_command(self) -> None:
         # M2.4 correction: harvest.profile_batch must bind the harvest-actor batch command

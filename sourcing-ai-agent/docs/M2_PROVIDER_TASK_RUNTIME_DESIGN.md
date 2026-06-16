@@ -363,3 +363,57 @@ golden 重算,并加 cross-check `test_after_start_mode_matches_bound_command` +
 > substrate」前提大体不成立——substrate 早已 durably 拥有 provider 调用**。M2 真实价值 = (a) registry 作诚实文档(M2.1,
 > 已含本次误绑修正);(b) 逐 provider 验证 spec↔reality(harvest 已验,DataForSEO = M2.5);(c) 可选 M2.6 event-delivery。
 > 「重铺 runtime」式框架被代码证伪。建议 M2.5 后重估 M2 是否还有 M2.6 之外的实质工作。
+
+---
+
+## 13. M2.5（DataForSEO 验证）+ M2-COMPLETE 评估（2026-06-16）
+
+**M2.5 裁定:dataforseo.discovery_query 的 command 绑定 ACCURATE(与 harvest 误绑相反);behavioral 字段已验证;
+ref 字符串已修正诚实。**
+
+- **绑定正确**:`LINKEDIN_DISCOVERY_QUERY_RUN` 的 owner(`linkedin_acquisition_owner`)经注入的
+  `search_provider`(`build_search_provider(settings.search)`,`acquisition.py:711`)运行;DataForSEO
+  (`DataForSeoGoogleOrganicClient`,`provider_name="dataforseo_google_organic"`)是其可配置 provider 之一,走
+  3-相 batch(`seed_discovery.py:2853` `submit_batch_queries` → ready-cache refresh → fetch)。**nuance:该命令
+  provider-polymorphic**(default `DuckDuckGoHtmlSearchProvider`),故 spec 是「DataForSEO 行为视图」,寄宿在共享
+  discovery 命令上——与 harvest(误绑到从不调 harvest 的 RapidAPI 命令)本质不同,**无需改绑**。
+- **behavioral 字段已验证**:`batch_submit_poll_fetch` ✓、`readiness_fallback=direct_probe`(tasks_ready→ThreadPool
+  probe)✓、retry `granularity=item` / `max_attempts=1`(`DATAFORSEO_BATCH_ITEM_RETRY_COUNT` default 1)✓、
+  100/req(`MAX_TASK_POST_BATCH_SIZE=100`)✓、retryable codes 40800/42900/≥50000 ✓。
+- **crash-safety**:DataForSEO 3-相的 task_key/search_state 写入 manifest + discovery item 的
+  `prefetched_search_state`(寄于 durable `LINKEDIN_DISCOVERY_QUERY_RUN` 命令)→ 重启可 resume,与 M2.4 一致。
+- **ref 字符串修正(M2.5 + 顺修 harvest)**:`retryable_classifier` → 真实 `_dataforseo_error_message_retryable`
+  (`search_provider.py:85`,原 `_dataforseo_retryable_status_code` 不存在);dataforseo 的 inflight/cost/backoff key
+  与 harvest 的 `cost_budget_key`(`resolved_harvest_profile_lane_budget_cap` 不存在)均为 M2.1 投机性 forward-ref
+  →置 `""`(dispatch-time TBD;discovery 并发由 worker search-lane cap `resolved_lane_budget_caps` 治理)。新增
+  **self-verifying guard** `test_budget_keys_resolve_in_runtime_tuning`(非空 budget key 必须是真实 runtime_tuning
+  resolver),防再现投机 ref。golden 重算。12 tests 绿。
+
+---
+
+## M2-COMPLETE 评估(grounded)
+
+**M2 实质已完成**,交付 = **typed ProviderTaskSpec registry(诚实 + self-verifying 文档) + 两 provider 的
+spec↔reality 验证**。逐项:
+
+| 增量 | 结果 |
+|---|---|
+| design / R1 | 批准 + GO(带 3 字段精化) |
+| **M2.1** registry | 已建(frozen spec + RetryContract + golden);经 M2.4/M2.5 修正后**绑定与 ref 均诚实** |
+| **M2.2** seed_discovery durable backoff | MOOT(早已 durable not_before_at + 已测) |
+| **M2.3** ProviderScheduler fold | INADVISABLE(`runtime_inflight_slot` 已 enforced/reentrant;backpressure report 仅 observability;`defer_provider_submit` 已 durable)— 仅交付 I3/I6 characterization |
+| **M2.4** Harvest | 收编 MOOT(已 checkpoint-resume crash-safe);**修正真实误绑** |
+| **M2.5** DataForSEO | 绑定 ACCURATE;behavioral 已验证;**修正投机 ref + 加 resolver guard** |
+
+**核心结论(4 次 characterize-first 纠偏的累计):M2 设计的「provider 调用碎片化/崩溃不安全、需收编上 substrate」前提
+被代码证伪——durable command substrate + checkpoint-resume(`agent_worker_runs` / discovery item)+ enforced
+`runtime_inflight_slot` 早已 durably 拥有 provider 调用。** 故 M2 不是一次「重铺 runtime」的 build,而是「钉死 + 验证 +
+诚实文档」——这部分已做完。
+
+**M2.6(webhook-vs-poll 统一)= 很可能也 moot**:M2.4 已证 harvest 的 webhook-primary + poll-fallback + terminal-event
+dedup(I10,terminal-event 写先于 dispatch)已 crash-safe 运作;「统一」多为形式化。建议 M2.6 仅作一次轻量验证(若发现
+真实 dedup/投递缺陷再做),否则**判定 M2 完成**。
+
+**建议**:判定 **M2 实质完成**。下一里程碑应是别的实质 build(per [[project-direction]]:Track B PG-pure store 重写 /
+Track D agentic streaming),而非继续打磨 M2。M2 的持久价值 = `provider_task_runtime.py` registry 作为「每个外部 provider
+如何以 durable task 运行」的**单一、已验证、self-verifying 事实源**。

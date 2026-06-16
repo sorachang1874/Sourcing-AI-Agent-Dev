@@ -116,7 +116,7 @@ DEFAULT_PROVIDER_TASK_SPECS: dict[str, ProviderTaskSpec] = {
         readiness_fallback_mechanism=READINESS_FALLBACK_LOCAL_EVENT_WATCHER,
         after_start_mode=PROVIDER_AFTER_START_CONTROL_MODE_POLL_CANCEL_QUARANTINE,
         inflight_budget_key="resolved_harvest_profile_actor_global_inflight",
-        cost_budget_key="resolved_harvest_profile_lane_budget_cap",
+        cost_budget_key="",  # M2.5: no per-provider cost resolver exists; wired at dispatch
         retry=RetryContract(
             granularity=RETRY_GRANULARITY_WORK_RESHAPE,  # R1 #2: re-batch unresolved URLs
             max_attempts=0,
@@ -137,14 +137,18 @@ DEFAULT_PROVIDER_TASK_SPECS: dict[str, ProviderTaskSpec] = {
         readiness_primary_signal=READINESS_POLL_ONLY,  # tasks_ready
         readiness_fallback_mechanism=READINESS_FALLBACK_DIRECT_PROBE,  # R1 #3: per-task ThreadPool probe
         after_start_mode=PROVIDER_AFTER_START_CONTROL_MODE_POLL_CANCEL_QUARANTINE,
-        inflight_budget_key="resolved_dataforseo_batch_submit_global_inflight",
-        cost_budget_key="resolved_search_lane_budget_cap",
+        # M2.5: LINKEDIN_DISCOVERY_QUERY_RUN is provider-polymorphic (hosts whatever
+        # search_provider is configured; default DuckDuckGo, DataForSEO when set). DataForSEO
+        # discovery concurrency is governed by the worker search-lane cap (resolved_lane_budget_caps),
+        # not a per-provider inflight resolver, so these reference keys are dispatch-time TBD.
+        inflight_budget_key="",
+        cost_budget_key="",
         retry=RetryContract(
             granularity=RETRY_GRANULARITY_ITEM,  # R1 #2: per-item, MAX=1
             max_attempts=1,
-            backoff_seconds_key="resolved_dataforseo_ready_poll_cooldown_seconds",
+            backoff_seconds_key="",
             reshape_ladder_key="",
-            retryable_classifier="_dataforseo_retryable_status_code",
+            retryable_classifier="_dataforseo_error_message_retryable",  # M2.5: real fn (search_provider.py:85)
         ),
         identity_key_recipe="dataforseo_task_query_identity_key",
         provider_fallback_chain=(),
