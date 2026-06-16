@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from .durable_runtime import (
     DEFAULT_COMMAND_TYPE_SPECS,
     LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
-    LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE,
+    LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH_COMMAND_TYPE,
     LINKEDIN_PROFILE_TERMINAL_ADMIT_COMMAND_TYPE,
     PROVIDER_AFTER_START_CONTROL_MODE_POLL_CANCEL_QUARANTINE,
 )
@@ -98,14 +98,18 @@ class ProviderTaskSpec:
     terminal_admit_handler: str  # terminal-admission command type / handler name ("" if none)
 
 
-# Registry. Seeded (M2.1) with the two providers validated by the R1 spike: the
-# existing operation_native_profile_fetch family (Apify Harvest) and DataForSEO
-# discovery. Both bind to provider_attempt CommandTypeSpecs with POLL_CANCEL_QUARANTINE.
+# Registry. Seeded with the two providers validated by R1: the Apify-Harvest profile
+# refill batch and DataForSEO discovery. Both bind to provider_attempt CommandTypeSpecs
+# with POLL_CANCEL_QUARANTINE.
+# M2.4 correction: harvest.profile_batch binds LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH (the
+# command whose owner runs the Apify Harvest actor via execute_batch_with_checkpoint),
+# NOT LINKEDIN_PROFILE_FETCH_PROVIDER — that command's owner calls the synchronous RapidAPI
+# LinkedInProfileDetailConnector, not Harvest (verified profile_fetch_owner.py:987-1037).
 DEFAULT_PROVIDER_TASK_SPECS: dict[str, ProviderTaskSpec] = {
     "harvest.profile_batch": ProviderTaskSpec(
         provider_task_type="harvest.profile_batch",
         provider_family="apify_harvest",
-        command_type=LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE,
+        command_type=LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH_COMMAND_TYPE,
         submit_primary_mode=SUBMIT_MODE_SYNC_RUN,  # run-sync-get-dataset-items
         submit_fallback_mode=SUBMIT_MODE_ASYNC_SUBMIT_POLL,  # R1 #1: sync->async fallback
         readiness_primary_signal=READINESS_WEBHOOK_PRIMARY_POLL_FALLBACK,

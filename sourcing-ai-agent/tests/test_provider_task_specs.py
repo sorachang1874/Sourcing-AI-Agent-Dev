@@ -57,7 +57,7 @@ def _spec_sha1(spec: ptr.ProviderTaskSpec) -> str:
 
 # Golden sha1 per provider_task_type. Update deliberately when a spec intentionally changes.
 GOLDEN_PROVIDER_TASK_SNAPSHOT = {
-    "harvest.profile_batch": "c6b3b7d0f163fb2cb4a43988f3463aba2c48a587",
+    "harvest.profile_batch": "8bdda0d8334d36ab22745c417155f646f71f2072",
     "dataforseo.discovery_query": "77cf65762796884cb6c322ccba9991ce10be6633",
 }
 
@@ -101,6 +101,20 @@ class ProviderTaskSpecStructuralTest(unittest.TestCase):
         for spec in ptr.DEFAULT_PROVIDER_TASK_SPECS.values():
             cmd = DEFAULT_COMMAND_TYPE_SPECS[spec.command_type]
             self.assertIn("provider_attempt", cmd.running_control_categories, spec.command_type)
+
+    def test_after_start_mode_matches_bound_command(self) -> None:
+        # M2.4: the spec's after_start_mode must equal the bound command's actual mode.
+        # (This cross-check is what catches a spec bound to the wrong command — the M2.4
+        # finding that harvest.profile_batch was mis-bound to the RapidAPI provider command.)
+        for spec in ptr.DEFAULT_PROVIDER_TASK_SPECS.values():
+            cmd = DEFAULT_COMMAND_TYPE_SPECS[spec.command_type]
+            self.assertEqual(spec.after_start_mode, cmd.provider_after_start_mode, spec.provider_task_type)
+
+    def test_harvest_binds_the_apify_harvest_batch_command(self) -> None:
+        # M2.4 correction: harvest.profile_batch must bind the harvest-actor batch command
+        # (linkedin.profile_refill.submit_batch), NOT the RapidAPI per-profile fetch command.
+        spec = ptr.DEFAULT_PROVIDER_TASK_SPECS["harvest.profile_batch"]
+        self.assertEqual(spec.command_type, "linkedin.profile_refill.submit_batch")
 
     # ── R1 spike fidelity: the two seeded providers exercise the refined axes ──
     def test_harvest_is_compound_submit_and_work_reshape(self) -> None:

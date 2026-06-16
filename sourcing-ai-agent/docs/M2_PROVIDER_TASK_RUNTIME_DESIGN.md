@@ -324,3 +324,42 @@ provider-call（含 §1 残留的 7 处 poll-loop inline sleep）接入 `harvest
 > characterize-first 三次纠偏累计结论:初始 workflow 图谱系统性高估了碎片化/advisory 程度——真实代码比图谱所述
 > **更 durable、更 enforced**。这是好消息(地基稳),并把 M2 价值重定向到 M2.4+(接真实 provider call 进 typed spec
 > + durable-ify 真正的 poll-loop inline sleep),而非重新铺设已稳的并发层。
+
+---
+
+## 12. M2.4（Harvest 收编）— LARGELY MOOT + 修正一处真实 M2.1 误绑（2026-06-16，characterize-first 第四次）
+
+**决定性 crash-safety 裁定:harvest fetch 进程重启时 RESUME,不丢。** 生产 refill/prefetch 路径是 code-verified
+checkpoint-resume 状态机:`_execute_harvest_actor_with_checkpoint`（`harvest_connectors.py:3682-3731`)单步提交后
+**立即返回 `pending=True` + run_id/dataset_id 入 checkpoint**(不 inline poll);caller `_execute_harvest_profile_
+batch_worker`(`enrichment.py:7526-7594`)把 run_id/dataset_id 经 `complete_worker(status="queued")` →
+`store.checkpoint_agent_worker` → `UPDATE agent_worker_runs`(`storage.py:12451-12482`)写入 **substrate**,**在等待之前**;
+重启时 `enrichment.py:6403-6442` 重载 checkpoint、`resume_remote_run=True`、跳过 submit 直接 poll 既有 run。即
+设计「plans durable command 但 off-substrate 执行」之说被代码推翻。
+
+**7 处 inline sleep = 非问题。** 5/7 已 durable(poll-interval/scripted/zero-result-retry,均在 deadline-bounded 或
+checkpoint-advanced 循环内);另 2 处(dataset page-fetch retry `:4018`、dispatch-guard spinlock `:5986/5990`)在
+**`_run_harvest_actor` 这条不同路径**上(非 durable batch worker `_execute_harvest_actor_with_checkpoint`),且被 durable
+worker 幂等重入覆盖——属效率细节,非 durability gap。
+
+**真实发现(已修):M2.1 一处误绑。** `LINKEDIN_PROFILE_FETCH_PROVIDER` 命令族(`profile_fetch_owner.py:987-1037`)
+**调的是同步 RapidAPI `LinkedInProfileDetailConnector.fetch_profile`,不是 Apify Harvest actor**;Apify-harvest-actor
+batch 实际属 `LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH_COMMAND_TYPE`(`enrichment.py:7355` `execute_batch_with_checkpoint`)。
+M2.1 把 `harvest.profile_batch`(provider_family=apify_harvest / sync_run→async / work_reshape ladder)误绑到了 RapidAPI
+那条命令。**已修(commit 见下):`harvest.profile_batch.command_type` → `LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH_COMMAND_TYPE`**,
+golden 重算,并加 cross-check `test_after_start_mode_matches_bound_command` + `test_harvest_binds_the_apify_harvest_batch_command`
+(spec↔command 一致性守卫,正是能抓住此类误绑的断言)。
+
+**裁定:M2.4-as-designed(收 bypass + durable-ify 7 sleep + merge 双状态机,「最大单步」)= largely MOOT**(第四次纠偏)。
+不做收编(harvest fetch 已 substrate-backed + recovery-safe;命令族走 RapidAPI 同步、re-run 幂等/缓存去重);不 durable-ify
+7 sleep(非关键路径);不 merge refill 双状态机(I12 race 未证实、store 已 durable+atomic,merge 反增 I12 风险)。
+**真实交付 = M2.1 误绑修正 + spec↔command cross-check。** thin ProviderScheduler facade 仍 YAGNI(无真实新 caller)。
+
+**下一真实价值 = M2.5(DataForSEO serp_batch)**:design R1 标的**异质** provider(batch_submit_poll_fetch、per-item retry、
+100/req、retryable codes 40800/42900/≥50000),其 durability/spec-binding **尚未** characterize 验证——是抽象真正受检、
+真实价值所在之处。Harvest 已完;停止打磨。
+
+> characterize-first 四次纠偏(M2.2 moot / M2.3 fold inadvisable / M2.4 moot)累计强信号:**M2 的「把 provider call 收上
+> substrate」前提大体不成立——substrate 早已 durably 拥有 provider 调用**。M2 真实价值 = (a) registry 作诚实文档(M2.1,
+> 已含本次误绑修正);(b) 逐 provider 验证 spec↔reality(harvest 已验,DataForSEO = M2.5);(c) 可选 M2.6 event-delivery。
+> 「重铺 runtime」式框架被代码证伪。建议 M2.5 后重估 M2 是否还有 M2.6 之外的实质工作。
