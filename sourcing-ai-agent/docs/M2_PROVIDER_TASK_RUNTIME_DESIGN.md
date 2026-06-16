@@ -222,3 +222,40 @@ reawaken· I17 tick budget 强制（`worker_daemon:451-574`）· I18 崩溃安�
 3. **R1 go/no-go spike 放 M2.1 内**（两异质 provider 填 spec 验证抽象）先于任何执行迁移，是否同意。
 
 批准后方进入实现。本提案只设计、不改码。
+
+---
+
+## 9. R1 spike 结果（go/no-go）— **GO，带 3 处 spec 精化**（2026-06-16，已读码）
+
+用两个最异质 provider 各填一份 ProviderTaskSpec：**Harvest profile fetch**（既有
+`LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE`，`durable_runtime.py:261-272`，provider_attempt
++ POLL_CANCEL_QUARANTINE）vs **DataForSEO serp_batch**（`search_provider.py` 三相）。核心 shape
+（typed spec / 单 scheduler / durable backoff / 绑 CommandTypeSpec / 以 profile-fetch 血脉为模板）**成立**。
+但 §2.2 字段集在 3 个轴上「打架」，**M2.1 冻结 registry 前须精化**：
+
+1. **`submit_mode` 须能表达 sync→async 复合回退**。Harvest 先 `run-sync-get-dataset-items`
+   （`harvest_connectors.py:4229`），失败才转 async submit→poll→fetch（`:4258`）；DataForSEO 是纯
+   `batch_submit_poll_fetch`。单 enum 不够 → submit_mode 改为有序策略元组（如 `("sync_run",
+   "async_submit_poll")`）或新增 `sync_run_with_async_fallback`。
+
+2. **retry 不是统一 `{max_attempts, backoff}`——有两种 granularity + 一种 reshape**：
+   - Harvest = **work-reshape retry**：把未解析 URL 重新切成递减批次（50→25→10→5，`:699-720`）+
+     单 URL direct fallback（`:718`）。retry 单元是「未解析子集」，重新分批。
+   - DataForSEO = **per-item retry**（MAX=1，`:1124`），与 batch 无关。
+   → RetryContract 须加 `granularity` 轴（`batch` | `item` | `work_reshape`），work_reshape 引用一个
+     reshape-ladder 函数名。扁平 `{max_attempts, backoff_strategy}` 无法表达 batch-shrink 阶梯。
+
+3. **「fallback」一词被超载在 ≥3 个轴上**，单 `fallback_chain`（provider 降级）无法表达：
+   - Harvest **submit-strategy fallback**（batch → 单 URL direct，`:718`）；
+   - DataForSEO **readiness-mechanism fallback**（`tasks_ready` poll → direct-probe 逐 task ThreadPool
+     fetch，`:1370-1392`）；
+   - provider-downgrade chain（字段当前建模的那个）。
+   → 拆成三轴：`submit_fallback`（归入 submit_mode）/ `readiness_fallback`（归入 readiness_signal）/
+     `provider_fallback_chain`（降级）。**不要混为一谈。**
+
+**结论**：GO。R1 没有否定设计——它精确告诉我们 M2.1 的 ProviderTaskSpec 必须把 **submit 策略（含 sync→async +
+work-reshape）、retry granularity（batch/item/reshape）、三类 fallback** 显式分离。M2.1 即用此精化后的字段集建
+registry，并以这两个已验证 provider 各填一份作为首批 golden。其余增量（M2.2+）不变。
+
+> 下一步（M2.1）：用精化字段集落 `ProviderTaskSpec` + registry（先形式化 profile-fetch 血脉 + DataForSEO 两份），
+> golden sha1 钉表；零执行变更。M2.0 characterize 与之并行/前置。
