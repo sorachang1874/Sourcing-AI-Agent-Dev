@@ -288,3 +288,39 @@ on-substrate 的完整迁移，即 **M2.3 ProviderScheduler + M2.4 Harvest 收�
 两处证明 + 测试；RetryContract 已在 M2.1 形式化）。下一真实步骤 = **M2.3 ProviderScheduler**（把 §1.3 三层并发/
 预算折叠成单一 gate + 删 `defer_provider_submit` + durable defer），保留 I1-I6。这是一处实质执行变更，宜独立、
 characterize-first 起步。
+
+---
+
+## 11. M2.3 — characterize 完成 + 「fold」重新定界为 INADVISABLE（2026-06-16，characterize-first 第三次纠偏）
+
+**M2.3 characterize 已交付（commit 132b937，CI lane）**：`tests/test_provider_budget_characterization.py` 钉
+I3（5 个 per-lane inflight budget 默认值 + env 优先级）+ I6（`build_provider_backpressure_budget_report` 的
+recommended_action 三态转移）。纯函数、零行为变更。
+
+**M2.3 的「fold」（把三层折叠成单一 gate + 删 `defer_provider_submit` → durable defer）= INADVISABLE**，
+characterize-first 读码核验推翻了它的三条前提：
+
+1. **per-lane 并发已被强制执行，不是 advisory。** `runtime_inflight_slot`（`runtime_tuning.py:705`）是一个
+   **真正阻塞的 `BoundedSemaphore.acquire(blocking=True)`**（含同线程重入），被**每一条真实 provider 路径**消费
+   （harvest_connectors / enrichment / seed_discovery / acquisition / candidate_artifacts / snapshot_materializer /
+   orchestrator）。它就是 §1.3「runtime inflight 层」——而且**已经是那个 enforced 单点 gate**。
+2. **backpressure report 是 observability-only。** `build_provider_backpressure_budget_report` 的**唯一**消费者是
+   `workflow_smoke.py`（smoke/可观测），**不在 serving 提交路径**。即:不存在「算了 recommended_action 但不强制」的
+   serving 缝——`recommended_action` 从不进 orchestrator 提交决策。设计 §1.3 把它当成待修的脆弱缝是图谱误判。
+3. **`defer_provider_submit` 已是 durable。** 它不是崩溃不安全的 advise flag，而是「completion callback 不自己提交、
+   交给 runtime-owned refill daemon」的**所有权**标志（`orchestrator.py:64231-64237` 文档；路由到 durable refill
+   daemon）。无 inline-sleep / 丢失语义可修。
+
+**结论（durable-foundation 原则）**：重写/替换这套**已强制执行、已重入、已正确**的 load-bearing 并发 gate
+（保护 HarvestAPI 隐藏 ~8-actor 上限）= **高风险 churn、零行为收益**——正是不该做的改动。M2.3 的真实交付 = 上面的
+characterization（已完成）。「单一 ProviderScheduler」若要存在，应是 M2.4 接入第一个真实 caller 时的**薄 facade**
+（`ProviderTaskSpec.inflight_budget_key` getattr→runtime_tuning resolver → 复用既有 `runtime_inflight_slot`），
+**由真实 caller 塑形、加 facade 不重写底层**，而非现在凭空建一个无人调用的 gate（YAGNI）。
+
+**重新定界**：M2.3「fold」**不做**（前提不成立）。M2 真正剩余价值集中在 **M2.4 — Harvest 收编**：把 harvest
+provider-call（含 §1 残留的 7 处 poll-loop inline sleep）接入 `harvest.profile_batch` ProviderTaskSpec + 既有
+`operation_native_profile_fetch` 命令族，届时按需建薄 ProviderScheduler facade。这是下一真实步骤。
+
+> characterize-first 三次纠偏累计结论:初始 workflow 图谱系统性高估了碎片化/advisory 程度——真实代码比图谱所述
+> **更 durable、更 enforced**。这是好消息(地基稳),并把 M2 价值重定向到 M2.4+(接真实 provider call 进 typed spec
+> + durable-ify 真正的 poll-loop inline sleep),而非重新铺设已稳的并发层。
