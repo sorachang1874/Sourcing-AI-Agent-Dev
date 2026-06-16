@@ -652,6 +652,29 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "history_id": history_id})
         return None
 
+    def _filter_frontend_history_for_owner(request: Request, result: dict[str, Any]) -> dict[str, Any]:
+        """C2.3-followup: drop frontend-history list items the caller doesn't own.
+
+        Each item carries job_id; ownership is the linked job's requester_id (same
+        rule as _gate_frontend_history_owner). Unlinked items stay visible. Open
+        mode returns the list unchanged.
+        """
+        if _server_identity(request) is None:
+            return result
+        items = result.get("history")
+        if not isinstance(items, list):
+            return result
+        allowed: list[Any] = []
+        for item in items:
+            job_id = str((item or {}).get("job_id") or "").strip()
+            if not job_id:
+                allowed.append(item)
+                continue
+            job_row = orchestrator.store.get_job(job_id)
+            if job_row is None or _read_allowed_requester(request, job_row.get("requester_id")):
+                allowed.append(item)
+        return {**result, "history": allowed, "count": len(allowed)}
+
     # ------------------------------------------------------------------ GET
     def get_health(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
         health = orchestrator.get_runtime_metrics(query)
@@ -1057,10 +1080,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/assets/governance/default-pointers", get_asset_default_pointers)
 
     def get_frontend_history(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        return _json_response(
-            HTTPStatus.OK,
-            orchestrator.list_frontend_history(limit=_env_int_from_payload(query, "limit", 24)),
-        )
+        result = orchestrator.list_frontend_history(limit=_env_int_from_payload(query, "limit", 24))
+        return _json_response(HTTPStatus.OK, _filter_frontend_history_for_owner(request, result))
 
     add(["GET"], "/api/frontend-history", get_frontend_history)
 

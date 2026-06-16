@@ -107,6 +107,14 @@ class _StubOrchestrator:
     def delete_frontend_history(self, history_id):
         return {"status": "ok", "history_id": history_id}
 
+    def list_frontend_history(self, limit=24):
+        items = [
+            {"history_id": "h1", "job_id": "job-alice"},
+            {"history_id": "h2", "job_id": "job-legacy-empty"},
+            {"history_id": "h3", "job_id": ""},
+        ]
+        return {"history": items, "count": len(items)}
+
 
 _TOKENS = json.dumps({"tok-alice": "alice", "tok-bob": "bob"})
 
@@ -241,6 +249,27 @@ class UserPrivateReadGateTest(unittest.TestCase):
     def test_non_owner_cannot_delete_history(self) -> None:
         base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
         self.assertEqual(self._delete(opener, f"{base}/api/frontend-history/hist-alice", token="tok-bob"), 404)
+
+    # ---- frontend-history LIST (owner-filtered) ----
+    def _get_json(self, opener, url, *, token=None):
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        request = urllib_request.Request(url, headers=headers, method="GET")
+        with opener.open(request, timeout=10) as response:
+            return json.loads(response.read())
+
+    def test_history_list_filters_out_other_users(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        alice = self._get_json(opener, f"{base}/api/frontend-history", token="tok-alice")
+        self.assertEqual({i["job_id"] for i in alice["history"]}, {"job-alice", "job-legacy-empty", ""})
+        bob = self._get_json(opener, f"{base}/api/frontend-history", token="tok-bob")
+        # bob does not see alice's entry; legacy + unlinked stay visible.
+        self.assertEqual({i["job_id"] for i in bob["history"]}, {"job-legacy-empty", ""})
+        self.assertEqual(bob["count"], 2)
+
+    def test_history_list_open_mode_unfiltered(self) -> None:
+        base, opener = self._start_server(env={})
+        result = self._get_json(opener, f"{base}/api/frontend-history")
+        self.assertEqual(result["count"], 3)
 
 
 if __name__ == "__main__":
