@@ -1466,7 +1466,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 return ControlPlaneStore(self.db_path)
 
     def test_job_result_view_write_is_mirrored_to_live_postgres(self) -> None:
-        store = self._build_store(mode="mirror")
+        store = self._build_store(mode="postgres_only")
 
         store.upsert_job_result_view(
             job_id="job-1",
@@ -1521,12 +1521,13 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(projection["counts"], {"candidate_count": 1})
         self.assertEqual(member_count, 1)
         self.assertEqual(shard["manifest_ref"], "s3://cold-path/proj_pg_foundation/shard-000.json")
-        self.assertIn("serving_projections", {table_name for table_name, _row in adapter.upserts})
-        self.assertIn("projection_manifest_shards", {table_name for table_name, _row in adapter.upserts})
-        self.assertIn("serving_projection_members", {table_name for table_name, _rows in adapter.bulk_upserts})
+        # postgres_only: serving-projection writes go through native writers (not the upsert/
+        # bulk-upsert mirror); the return values above + the read-back below prove they reached PG.
         self.assertEqual(store.count_serving_projection_members("proj_pg_foundation"), 1)
         rows = store.list_serving_projection_members("proj_pg_foundation")
-        self.assertEqual(rows[0]["public_summary"], {"name": "Test Candidate"})
+        # postgres_only native read returns the store-enriched member summary (display_name /
+        # person_identity_key derived); assert the round-tripped name rather than the raw input dict.
+        self.assertEqual(rows[0]["public_summary"]["name"], "Test Candidate")
         self.assertNotIn("raw_profile", rows[0])
 
         link = store.upsert_run_projection_link(
@@ -1551,7 +1552,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertIn("collection_authoritative_pointers", {table_name for table_name, _row in adapter.upserts})
 
     def test_serving_projection_foundation_mirrors_sqlite_writes(self) -> None:
-        store = self._build_store(mode="mirror")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
@@ -1947,7 +1948,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(len(results[0]["evidence"]), 1)
 
     def test_candidate_bulk_replace_writes_natively_in_prefer_postgres(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
@@ -2026,7 +2027,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         )
 
     def test_candidate_category_replace_clears_conflicting_evidence_in_prefer_postgres(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
 
         existing_candidate = Candidate(
             candidate_id="cand_category_conflict",
@@ -2081,7 +2082,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual([row["evidence_id"] for row in evidence_rows], ["ev_category_conflict_replacement"])
 
     def test_job_result_view_prefers_postgres_read_but_falls_back_to_sqlite(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
         adapter.select_one_rows["job_result_views"] = _job_result_view_row(
@@ -2107,7 +2108,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(sqlite_result["target_company"], "Acme SQLite")
 
     def test_plan_review_session_list_prefers_postgres_when_available(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
         adapter.select_many_rows["plan_review_sessions"] = [
@@ -2131,7 +2132,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(int(created["review_id"] or 0), int(fallback_sessions[0]["review_id"] or 0))
 
     def test_prefer_postgres_save_job_preserves_artifact_path_on_empty_update(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
         job_id = "job-pg-artifact-pointer"
         artifact_path = str(self.root / "jobs" / f"{job_id}.json")
         store.save_job(
@@ -2160,7 +2161,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(job.get("artifact_path"), artifact_path)
 
     def test_jobs_and_progress_summaries_are_mirrored_and_can_prefer_postgres_reads(self) -> None:
-        store = self._build_store(mode="mirror")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
@@ -2180,11 +2181,11 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             {"candidate_count": 3},
         )
 
-        mirrored_tables = [table_name for table_name, _ in adapter.upserts]
-        self.assertIn("jobs", mirrored_tables)
-        self.assertIn("job_progress_event_summaries", mirrored_tables)
+        # postgres_only: jobs + progress summaries are written via native writers (asserted in
+        # test_prefer_postgres_uses_native_writers_for_jobs_events_and_runtime_sessions); this case
+        # focuses on the PG read path below.
 
-        prefer_store = self._build_store(mode="prefer_postgres")
+        prefer_store = self._build_store(mode="postgres_only")
         prefer_adapter = prefer_store._control_plane_postgres
         assert isinstance(prefer_adapter, _FakeLiveControlPlanePostgresAdapter)
         prefer_adapter.select_one_rows["jobs"] = _job_row(job_id="job-pg", target_company="Acme PG")
@@ -2206,43 +2207,13 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(int(postgres_progress["event_count"] or 0), 4)
         self.assertEqual(int(postgres_progress["latest_metrics"]["candidate_count"] or 0), 7)
 
-    def test_registry_canonicalization_replaces_live_postgres_table_from_sqlite(self) -> None:
-        store = self._build_store(mode="mirror")
-        adapter = store._control_plane_postgres
-        assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
-
-        store.upsert_organization_asset_registry(
-            {
-                "target_company": "Acme",
-                "company_key": "acme",
-                "snapshot_id": "20260419T120000",
-                "asset_view": "canonical_merged",
-                "candidate_count": 5,
-            },
-            authoritative=True,
-        )
-        store.upsert_organization_asset_registry(
-            {
-                "target_company": "Acme AI",
-                "company_key": "acme",
-                "snapshot_id": "20260419T120000",
-                "asset_view": "canonical_merged",
-                "candidate_count": 3,
-            },
-            authoritative=False,
-        )
-
-        result = store.canonicalize_organization_asset_registry_target_company(
-            target_company="Acme",
-            company_key="acme",
-            asset_view="canonical_merged",
-        )
-
-        self.assertGreaterEqual(int(result["updated_rows"] or 0), 0)
-        self.assertIn("organization_asset_registry", adapter.replaced_tables)
+    # Track B B3.1: test_registry_canonicalization_replaces_live_postgres_table_from_sqlite removed —
+    # it asserted the SQLite-canonicalize-then-replace_table_from_sqlite path, which no longer exists
+    # under mandatory postgres_only. The native canonicalization path is covered by
+    # test_registry_canonicalization_writes_natively_when_postgres_prefers_reads below.
 
     def test_registry_canonicalization_writes_natively_when_postgres_prefers_reads(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
@@ -2317,7 +2288,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 },
                 clear=False,
             ):
-                with self.assertRaisesRegex(RuntimeError, "no control-plane Postgres DSN was resolved"):
+                with self.assertRaisesRegex(RuntimeError, "no longer supported"):
                     ControlPlaneStore(self.db_path)
 
     def test_production_runtime_requires_postgres_even_if_legacy_override_is_set(self) -> None:
@@ -2333,7 +2304,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 },
                 clear=False,
             ):
-                with self.assertRaisesRegex(RuntimeError, "no control-plane Postgres DSN was resolved"):
+                with self.assertRaisesRegex(RuntimeError, "no longer supported"):
                     ControlPlaneStore(self.db_path)
 
     def test_postgres_only_rejects_disk_backed_shadow_even_without_require_flag(self) -> None:
@@ -2449,7 +2420,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(int(sqlite_backfill_count or 0), 0)
 
     def test_prefer_postgres_profile_registry_backfill_batch_uses_bulk_upserts(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
@@ -2954,7 +2925,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(int(sqlite_run_count or 0), 0)
 
     def test_prefer_postgres_uses_native_writers_for_jobs_events_and_runtime_sessions(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
@@ -3015,7 +2986,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertFalse(any(table_name == "agent_runtime_sessions" for table_name, _ in adapter.upserts))
 
     def test_prefer_postgres_uses_native_writers_for_frontend_state_tables(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
 
         review = store.upsert_candidate_review_record(
             {
@@ -3234,7 +3205,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(int(sqlite_promotion_count or 0), 0)
 
     def test_job_events_ui_tables_and_runtime_sessions_mirror_and_prefer_postgres(self) -> None:
-        mirror_store = self._build_store(mode="mirror")
+        mirror_store = self._build_store(mode="postgres_only")
         mirror_adapter = mirror_store._control_plane_postgres
         assert isinstance(mirror_adapter, _FakeLiveControlPlanePostgresAdapter)
 
@@ -3315,16 +3286,8 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 {"source": "worker-1", "tick": index},
             )
 
-        mirrored_tables = [table_name for table_name, _ in mirror_adapter.upserts]
-        self.assertIn("candidate_review_registry", mirrored_tables)
-        self.assertIn("target_candidates", mirrored_tables)
-        self.assertIn("frontend_history_links", mirrored_tables)
-        self.assertIn("agent_runtime_sessions", mirrored_tables)
-        self.assertIn("job_events", mirrored_tables)
-        self.assertIn("query_dispatches", mirrored_tables)
-        self.assertIn("job_events", mirror_adapter.replaced_tables)
-        self.assertIn("manual_review_items", mirror_adapter.replaced_tables)
-        self.assertIn("confidence_policy_controls", mirror_adapter.replaced_tables)
+        # postgres_only: all of these writes go through native writers (not the upsert/replace
+        # mirror); their return values below confirm they reached PG.
         self.assertEqual(review["job_id"], "job-1")
         self.assertEqual(target["job_id"], "job-1")
         self.assertEqual(history["job_id"], "job-1")
@@ -3333,7 +3296,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(dispatch["created_job_id"], "job-1")
         self.assertEqual(control["target_company"], "Acme")
 
-        prefer_store = self._build_store(mode="prefer_postgres")
+        prefer_store = self._build_store(mode="postgres_only")
         prefer_adapter = prefer_store._control_plane_postgres
         assert isinstance(prefer_adapter, _FakeLiveControlPlanePostgresAdapter)
         prefer_adapter.select_many_rows["manual_review_items"] = [
@@ -3505,7 +3468,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(event_rows[0]["payload"]["source"], "postgres")
 
     def test_remaining_control_plane_tables_write_natively_in_prefer_postgres(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
@@ -3800,7 +3763,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(int(sqlite_policy_run_count or 0), 0)
 
     def test_merge_manual_review_item_metadata_writes_natively_in_prefer_postgres(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
 
         manual_items = store.replace_manual_review_items(
             "job-native-metadata",
@@ -3832,7 +3795,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(int(sqlite_manual_review_count or 0), 0)
 
     def test_materialization_runtime_state_prefers_postgres_and_avoids_sqlite(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
@@ -3902,7 +3865,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(int(sqlite_run_count or 0), 0)
 
     def test_bulk_materialization_runtime_state_prefers_postgres_and_batches_writes(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
@@ -3973,7 +3936,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(int(sqlite_state_count or 0), 0)
 
     def test_replace_materialization_runtime_state_scope_prefers_postgres_and_replaces_scope(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
@@ -4050,7 +4013,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         )
 
     def test_asset_materialization_generation_prefers_postgres_and_avoids_sqlite(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
@@ -4143,7 +4106,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(len(adapter.generic_rows.get("asset_membership_index", [])), 4)
 
     def test_patch_asset_materialization_generation_prefers_postgres_and_keeps_patch_rows_incremental(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
@@ -4227,7 +4190,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(len(adapter.generic_rows.get("asset_membership_index", [])), 4)
 
     def test_runtime_coordination_prefers_postgres_for_spans_workers_and_leases(self) -> None:
-        store = self._build_store(mode="prefer_postgres")
+        store = self._build_store(mode="postgres_only")
 
         session = store.create_agent_runtime_session(
             job_id="job-runtime-pg",
@@ -4616,7 +4579,7 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
 
             self.assertEqual(captured, ["sourcing_scripted_fixed"])
 
-    def test_bootstrap_sync_uses_frozen_schema_after_environment_restores(self) -> None:
+    def test_bootstrap_applies_migrations_against_frozen_schema_after_environment_restores(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             runtime_dir = Path(temp_dir)
             env_file = runtime_dir / ".scripted-local-postgres.env"
@@ -4644,12 +4607,16 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
                     mode="postgres_only",
                 )
             adapter._ensure_runtime_coordination_schema = lambda: None  # type: ignore[method-assign]
-            captured: list[dict[str, object]] = []
+            captured_schemas: list[str] = []
 
-            def _capture_sync(**kwargs: object) -> dict[str, object]:
-                captured.append(dict(kwargs))
-                return {"status": "completed"}
+            def _capture_apply(connection: object, *, schema: str, **kwargs: object) -> None:
+                captured_schemas.append(schema)
+                return None
 
+            # Track B B3.1 (was a B1.3 leftover that mocked the retired sync path):
+            # ensure_bootstrapped now applies the versioned migrations against the schema FROZEN at
+            # adapter construction, even after the env restores to a different schema. _connect is
+            # stubbed so no real Postgres connection is needed.
             with mock.patch.dict(
                 os.environ,
                 {
@@ -4657,14 +4624,13 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
                     "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "public",
                     "SOURCING_RUNTIME_ENVIRONMENT": "",
                 },
-            ), mock.patch(
-                "sourcing_agent.control_plane_live_postgres.sync_runtime_control_plane_to_postgres",
-                side_effect=_capture_sync,
+            ), mock.patch.object(adapter, "_connect", return_value=mock.MagicMock()), mock.patch(
+                "sourcing_agent.control_plane_live_postgres.apply_pending_migrations",
+                side_effect=_capture_apply,
             ):
                 adapter.ensure_bootstrapped()
 
-            self.assertEqual(len(captured), 1)
-            self.assertEqual(captured[0]["schema"], "sourcing_scripted_bootstrap")
+            self.assertEqual(captured_schemas, ["sourcing_scripted_bootstrap"])
 
     def test_execute_returning_one_retries_retryable_postgres_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

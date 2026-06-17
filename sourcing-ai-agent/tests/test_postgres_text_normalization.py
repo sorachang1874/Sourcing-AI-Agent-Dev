@@ -5,7 +5,7 @@ from unittest import mock
 
 from sourcing_agent.control_plane_live_postgres import _fetch_one_dict_row
 from sourcing_agent.local_postgres import describe_control_plane_runtime
-from sourcing_agent.storage import ControlPlaneStore
+from tests.pg_store_fixture import pg_backed_control_plane_store
 
 
 class _FakeCursor:
@@ -36,61 +36,52 @@ class PostgresTextNormalizationTest(unittest.TestCase):
         )
 
     def test_storage_upserts_normalize_byte_literal_text_payloads(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            runtime_dir = Path(temp_dir) / "runtime"
-            db_path = runtime_dir / "sourcing_agent.db"
-            with mock.patch.dict(
-                "os.environ",
+        # Track B B3.1: the byte-literal text normalization is store-upsert logic (not SQLite-
+        # specific), so this runs against the PG-only store via the fixture.
+        with pg_backed_control_plane_store(schema_label="text_normalization") as store:
+            registry = store.upsert_organization_asset_registry(
                 {
-                    "SOURCING_CONTROL_PLANE_POSTGRES_DSN": "",
-                    "SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE": "disabled",
+                    "target_company": "b'OpenAI'",
+                    "company_key": "b'openai'",
+                    "snapshot_id": "b'20260417T041804'",
+                    "asset_view": "b'canonical_merged'",
+                    "status": "b'ready'",
+                    "completeness_band": "b'high'",
+                    "source_path": "b'runtime/company_assets/openai/20260417T041804'",
+                    "source_job_id": "b'job-1'",
+                    "materialization_generation_key": "b'openai:20260417T041804'",
+                    "materialization_watermark": "b'2026-04-21T10:00:00+00:00'",
+                    "selected_snapshot_ids": ["b'20260417T041804'"],
                 },
-                clear=False,
-            ):
-                store = ControlPlaneStore(db_path)
-                registry = store.upsert_organization_asset_registry(
-                    {
-                        "target_company": "b'OpenAI'",
-                        "company_key": "b'openai'",
-                        "snapshot_id": "b'20260417T041804'",
-                        "asset_view": "b'canonical_merged'",
-                        "status": "b'ready'",
-                        "completeness_band": "b'high'",
-                        "source_path": "b'runtime/company_assets/openai/20260417T041804'",
-                        "source_job_id": "b'job-1'",
-                        "materialization_generation_key": "b'openai:20260417T041804'",
-                        "materialization_watermark": "b'2026-04-21T10:00:00+00:00'",
-                        "selected_snapshot_ids": ["b'20260417T041804'"],
-                    },
-                    authoritative=True,
-                )
-                profile = store.upsert_organization_execution_profile(
-                    {
-                        "target_company": "b'OpenAI'",
-                        "company_key": "b'openai'",
-                        "asset_view": "b'canonical_merged'",
-                        "source_snapshot_id": "b'20260417T041804'",
-                        "status": "b'ready'",
-                        "org_scale_band": "b'large'",
-                        "default_acquisition_mode": "b'full_company_roster'",
-                        "current_lane_default": "b'local_reuse'",
-                        "former_lane_default": "b'local_reuse'",
-                        "completeness_band": "b'high'",
-                    }
-                )
-                shard = store.upsert_acquisition_shard_registry(
-                    {
-                        "shard_key": "b'openai:20260417T041804:all:all'",
-                        "target_company": "b'OpenAI'",
-                        "company_key": "b'openai'",
-                        "snapshot_id": "b'20260417T041804'",
-                        "asset_view": "b'canonical_merged'",
-                        "status": "b'completed'",
-                        "employment_scope": "b'all'",
-                        "search_query": "b'Reasoning'",
-                        "query_signature": "b'reasoning'",
-                    }
-                )
+                authoritative=True,
+            )
+            profile = store.upsert_organization_execution_profile(
+                {
+                    "target_company": "b'OpenAI'",
+                    "company_key": "b'openai'",
+                    "asset_view": "b'canonical_merged'",
+                    "source_snapshot_id": "b'20260417T041804'",
+                    "status": "b'ready'",
+                    "org_scale_band": "b'large'",
+                    "default_acquisition_mode": "b'full_company_roster'",
+                    "current_lane_default": "b'local_reuse'",
+                    "former_lane_default": "b'local_reuse'",
+                    "completeness_band": "b'high'",
+                }
+            )
+            shard = store.upsert_acquisition_shard_registry(
+                {
+                    "shard_key": "b'openai:20260417T041804:all:all'",
+                    "target_company": "b'OpenAI'",
+                    "company_key": "b'openai'",
+                    "snapshot_id": "b'20260417T041804'",
+                    "asset_view": "b'canonical_merged'",
+                    "status": "b'completed'",
+                    "employment_scope": "b'all'",
+                    "search_query": "b'Reasoning'",
+                    "query_signature": "b'reasoning'",
+                }
+            )
 
             self.assertEqual(registry["target_company"], "OpenAI")
             self.assertEqual(registry["snapshot_id"], "20260417T041804")

@@ -163,3 +163,15 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   `_build_store` 用例,测被删的双路径 routing)、`test_postgres_text_normalization.py`(disabled)、`test_pipeline.py:73`(裸构造,从不全跑)
   —— guard 落地后这些构造会 raise;B3.1 紧接迁移/退役(delete routing 测,migrate 数据-correctness 测到 postgres_only)。
   下一步:B3.1 测试迁移 → B3.2+ 按表组删 DUAL_PATH 死 SQLite 半 + 简化恒真 routing scaffolding。
+- **2026-06-17 B3.1 SQLite-test 迁移 DONE**:AST 全扫(precondition workflow 的 test-surface agent 曾 stall,故自查)找出
+  **8 个**裸构造 store 的类。处理:(1) `test_control_plane_live_postgres.py` **57 绿** —— `mode="mirror"/"prefer_postgres"`
+  → `postgres_only`(19 个机械 swap,facade 仍路由到 adapter)、2 guard 测 regex 改 "no longer supported"、3 mirror-assert 改
+  native read-back/return-value、删 1 个 mirror-canon 测(native sibling 已覆盖)、**修 1 个 B1.3 遗留**(`test_bootstrap_sync...`
+  原 mock 退役的 `sync_runtime_control_plane_to_postgres` → 改 mock runner `apply_pending_migrations`)、1 个 enrichment 断言。
+  (2) `test_postgres_text_normalization.py` 迁到 `pg_backed_control_plane_store`(byte-literal 规范化是 upsert 逻辑非 SQLite-specific)。
+  (3) `test_company_public_web_assets.py` 迁 PG mixin 后 **SKIP** —— **B3.1 FINDING**:暴露真实 PG-vs-SQLite 分歧(collector/provider
+  失败注入测期望 run status='failed',PG 给 'completed';sibling sync 测 PRE-EXISTING fail)—— B2-style 真 bug 候选,待诊断。
+  (4) `test_target_candidate_public_web.py::...SqliteLegacyTableTest` SKIP(其前提=历史 SQLite 文件,PG-only 下不可构造;需 re-home
+  到 PG legacy-migration-context)。(5) test_control_plane_pool / testcontainers_* 安全(自解析真 DSN 或 SkipTest)。(6) test_pipeline:73
+  deferred(从不全跑,随 test_pipeline 单独 redesign)。结果:相关 4 文件 63 passed / 29 skipped / 0 fail。**B3.1 surfaced 2 follow-ups:
+  company_public_web PG run-status 分歧(诊断)+ legacy SQLite 测 re-home。** 下一步:B3.2+ 按表组删 DUAL_PATH 死 SQLite 半。
