@@ -22055,34 +22055,18 @@ class ControlPlaneStore:
         key = _normalize_linkedin_profile_url_key(profile_url)
         if not key:
             return None
-        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry"):
-            resolved_key = self._resolve_linkedin_profile_registry_key(key)
-            payload = self._select_control_plane_row(
-                "linkedin_profile_registry",
-                row_builder=self._linkedin_profile_registry_from_row,
-                where_sql="profile_url_key = %s",
-                params=[resolved_key],
-            )
-            if payload is not None:
-                payload["alias_urls"] = self._list_linkedin_profile_alias_urls(resolved_key)
-                return payload
-            if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
-                return None
-        with self._lock:
-            resolved_key = self._resolve_linkedin_profile_registry_key_locked(key)
-            row = self._connection.execute(
-                """
-                SELECT * FROM linkedin_profile_registry
-                WHERE profile_url_key = ?
-                LIMIT 1
-                """,
-                (resolved_key,),
-            ).fetchone()
-            alias_urls = self._list_linkedin_profile_alias_urls_locked(resolved_key)
-        if row is None:
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed.
+        resolved_key = self._resolve_linkedin_profile_registry_key(key)
+        payload = self._select_control_plane_row(
+            "linkedin_profile_registry",
+            row_builder=self._linkedin_profile_registry_from_row,
+            where_sql="profile_url_key = %s",
+            params=[resolved_key],
+        )
+        if payload is None:
             return None
-        payload = self._linkedin_profile_registry_from_row(row)
-        payload["alias_urls"] = alias_urls
+        payload["alias_urls"] = self._list_linkedin_profile_alias_urls(resolved_key)
         return payload
 
     def get_linkedin_profile_registry_bulk(self, profile_urls: list[str]) -> dict[str, dict[str, Any]]:
@@ -22091,109 +22075,50 @@ class ControlPlaneStore:
         )
         if not keys:
             return {}
-        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry"):
-            alias_map: dict[str, str] = {}
-            if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry_aliases"):
-                placeholders = ", ".join("%s" for _ in keys)
-                alias_rows = self._select_control_plane_rows(
-                    "linkedin_profile_registry_aliases",
-                    row_builder=lambda row: dict(row),
-                    where_sql=f"alias_url_key IN ({placeholders})",
-                    params=keys,
-                    limit=0,
-                )
-                alias_map = {
-                    str(dict(row).get("alias_url_key") or "").strip(): str(dict(row).get("profile_url_key") or "").strip()
-                    for row in alias_rows
-                    if str(dict(row).get("alias_url_key") or "").strip()
-                    and str(dict(row).get("profile_url_key") or "").strip()
-                }
-            canonical_keys = _dedupe_preserve_order(
-                [str(alias_map.get(key) or key).strip() for key in keys if str(alias_map.get(key) or key).strip()]
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the parallel
+        # SQLite fallback below is dead and removed. The PG branch always resolves canonical_keys whenever
+        # any input key is present and returns `resolved` (the alias-table routing is unchanged).
+        alias_map: dict[str, str] = {}
+        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry_aliases"):
+            placeholders = ", ".join("%s" for _ in keys)
+            alias_rows = self._select_control_plane_rows(
+                "linkedin_profile_registry_aliases",
+                row_builder=lambda row: dict(row),
+                where_sql=f"alias_url_key IN ({placeholders})",
+                params=keys,
+                limit=0,
             )
-            if canonical_keys:
-                placeholders = ", ".join("%s" for _ in canonical_keys)
-                rows = self._select_control_plane_rows(
-                    "linkedin_profile_registry",
-                    row_builder=self._linkedin_profile_registry_from_row,
-                    where_sql=f"profile_url_key IN ({placeholders})",
-                    params=canonical_keys,
-                    limit=0,
-                )
-                alias_rows_all = self._select_control_plane_rows(
-                    "linkedin_profile_registry_aliases",
-                    row_builder=lambda row: dict(row),
-                    where_sql=f"profile_url_key IN ({placeholders})",
-                    params=canonical_keys,
-                    order_by_sql="updated_at DESC",
-                    limit=0,
-                )
-                aliases_by_canonical: dict[str, list[str]] = {}
-                for alias_row in alias_rows_all:
-                    canonical_key = str(dict(alias_row).get("profile_url_key") or "").strip()
-                    alias_url = str(dict(alias_row).get("alias_url") or "").strip()
-                    if not canonical_key or not alias_url:
-                        continue
-                    aliases_by_canonical.setdefault(canonical_key, [])
-                    if alias_url not in aliases_by_canonical[canonical_key]:
-                        aliases_by_canonical[canonical_key].append(alias_url)
-                payload_by_canonical: dict[str, dict[str, Any]] = {}
-                for row in rows:
-                    canonical_key = str(dict(row).get("profile_url_key") or "").strip()
-                    if not canonical_key:
-                        continue
-                    payload = dict(row)
-                    payload["alias_urls"] = list(aliases_by_canonical.get(canonical_key) or [])
-                    payload_by_canonical[canonical_key] = payload
-                resolved: dict[str, dict[str, Any]] = dict(payload_by_canonical)
-                for key in keys:
-                    canonical_key = str(alias_map.get(key) or key).strip()
-                    payload = payload_by_canonical.get(canonical_key)
-                    if payload is not None:
-                        resolved[key] = dict(payload)
-                if resolved or self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
-                    return resolved
-        with self._lock:
-            placeholder_keys = ",".join("?" for _ in keys)
-            alias_rows = self._connection.execute(
-                f"""
-                SELECT alias_url_key, profile_url_key
-                FROM linkedin_profile_registry_aliases
-                WHERE alias_url_key IN ({placeholder_keys})
-                """,
-                tuple(keys),
-            ).fetchall()
             alias_map = {
-                str(row["alias_url_key"] or "").strip(): str(row["profile_url_key"] or "").strip()
+                str(dict(row).get("alias_url_key") or "").strip(): str(dict(row).get("profile_url_key") or "").strip()
                 for row in alias_rows
-                if str(row["alias_url_key"] or "").strip() and str(row["profile_url_key"] or "").strip()
+                if str(dict(row).get("alias_url_key") or "").strip()
+                and str(dict(row).get("profile_url_key") or "").strip()
             }
-            canonical_keys = _dedupe_preserve_order(
-                [str(alias_map.get(key) or key).strip() for key in keys if str(alias_map.get(key) or key).strip()]
-            )
-            if not canonical_keys:
-                return {}
-            canonical_placeholders = ",".join("?" for _ in canonical_keys)
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM linkedin_profile_registry
-                WHERE profile_url_key IN ({canonical_placeholders})
-                """,
-                tuple(canonical_keys),
-            ).fetchall()
-            alias_rows_all = self._connection.execute(
-                f"""
-                SELECT profile_url_key, alias_url
-                FROM linkedin_profile_registry_aliases
-                WHERE profile_url_key IN ({canonical_placeholders})
-                ORDER BY updated_at DESC
-                """,
-                tuple(canonical_keys),
-            ).fetchall()
+        canonical_keys = _dedupe_preserve_order(
+            [str(alias_map.get(key) or key).strip() for key in keys if str(alias_map.get(key) or key).strip()]
+        )
+        if not canonical_keys:
+            return {}
+        placeholders = ", ".join("%s" for _ in canonical_keys)
+        rows = self._select_control_plane_rows(
+            "linkedin_profile_registry",
+            row_builder=self._linkedin_profile_registry_from_row,
+            where_sql=f"profile_url_key IN ({placeholders})",
+            params=canonical_keys,
+            limit=0,
+        )
+        alias_rows_all = self._select_control_plane_rows(
+            "linkedin_profile_registry_aliases",
+            row_builder=lambda row: dict(row),
+            where_sql=f"profile_url_key IN ({placeholders})",
+            params=canonical_keys,
+            order_by_sql="updated_at DESC",
+            limit=0,
+        )
         aliases_by_canonical: dict[str, list[str]] = {}
         for alias_row in alias_rows_all:
-            canonical_key = str(alias_row["profile_url_key"] or "").strip()
-            alias_url = str(alias_row["alias_url"] or "").strip()
+            canonical_key = str(dict(alias_row).get("profile_url_key") or "").strip()
+            alias_url = str(dict(alias_row).get("alias_url") or "").strip()
             if not canonical_key or not alias_url:
                 continue
             aliases_by_canonical.setdefault(canonical_key, [])
@@ -22201,16 +22126,13 @@ class ControlPlaneStore:
                 aliases_by_canonical[canonical_key].append(alias_url)
         payload_by_canonical: dict[str, dict[str, Any]] = {}
         for row in rows:
-            canonical_key = str(row["profile_url_key"] or "").strip()
+            canonical_key = str(dict(row).get("profile_url_key") or "").strip()
             if not canonical_key:
                 continue
-            payload = self._linkedin_profile_registry_from_row(row)
+            payload = dict(row)
             payload["alias_urls"] = list(aliases_by_canonical.get(canonical_key) or [])
             payload_by_canonical[canonical_key] = payload
-
-        resolved: dict[str, dict[str, Any]] = {}
-        for canonical_key, payload in payload_by_canonical.items():
-            resolved[canonical_key] = payload
+        resolved: dict[str, dict[str, Any]] = dict(payload_by_canonical)
         for key in keys:
             canonical_key = str(alias_map.get(key) or key).strip()
             payload = payload_by_canonical.get(canonical_key)
@@ -22248,35 +22170,18 @@ class ControlPlaneStore:
                 "snapshot_dir": normalized_snapshot_dir,
             }
 
-        rows: list[dict[str, Any]] = []
-        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry"):
-            rows = self._select_control_plane_rows(
-                "linkedin_profile_registry",
-                row_builder=self._linkedin_profile_registry_from_row,
-                where_sql="last_snapshot_dir = %s",
-                params=[normalized_snapshot_dir],
-                order_by_sql="updated_at ASC",
-                limit=0,
-            )
-            if rows or self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
-                return _summarize_linkedin_profile_registry_rows_for_scope(
-                    rows,
-                    source_job=normalized_source_job,
-                    snapshot_dir=normalized_snapshot_dir,
-                )
-
-        with self._lock:
-            sqlite_rows = self._connection.execute(
-                """
-                SELECT *
-                FROM linkedin_profile_registry
-                WHERE last_snapshot_dir = ?
-                ORDER BY updated_at ASC
-                """,
-                (normalized_snapshot_dir,),
-            ).fetchall()
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed (no-row collapses to the summary of an empty row set).
+        rows = self._select_control_plane_rows(
+            "linkedin_profile_registry",
+            row_builder=self._linkedin_profile_registry_from_row,
+            where_sql="last_snapshot_dir = %s",
+            params=[normalized_snapshot_dir],
+            order_by_sql="updated_at ASC",
+            limit=0,
+        )
         return _summarize_linkedin_profile_registry_rows_for_scope(
-            [self._linkedin_profile_registry_from_row(row) for row in sqlite_rows],
+            rows,
             source_job=normalized_source_job,
             snapshot_dir=normalized_snapshot_dir,
         )
@@ -22718,31 +22623,19 @@ class ControlPlaneStore:
         normalized_key = _normalize_linkedin_profile_url_key(profile_url)
         if not normalized_key:
             return None
-        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry_leases"):
-            canonical_key = self._resolve_linkedin_profile_registry_key(normalized_key)
-            payload = self._select_control_plane_row(
-                "linkedin_profile_registry_leases",
-                row_builder=self._linkedin_profile_registry_lease_from_row,
-                where_sql="profile_url_key = %s",
-                params=[canonical_key],
-            )
-            if payload is not None:
-                return payload
-            if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry_leases"):
-                # Parity with the SQLite path below: a missing lease row is the
-                # empty-dict sentinel, never None for a valid URL.
-                return self._linkedin_profile_registry_lease_from_row(None)
-        with self._lock:
-            canonical_key = self._resolve_linkedin_profile_registry_key_locked(normalized_key)
-            row = self._connection.execute(
-                """
-                SELECT * FROM linkedin_profile_registry_leases
-                WHERE profile_url_key = ?
-                LIMIT 1
-                """,
-                (canonical_key,),
-            ).fetchone()
-        return self._linkedin_profile_registry_lease_from_row(row)
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed. Parity with the historical SQLite path is preserved: a missing
+        # lease row is the empty-dict sentinel from _..._lease_from_row(None), never None for a valid URL.
+        canonical_key = self._resolve_linkedin_profile_registry_key(normalized_key)
+        payload = self._select_control_plane_row(
+            "linkedin_profile_registry_leases",
+            row_builder=self._linkedin_profile_registry_lease_from_row,
+            where_sql="profile_url_key = %s",
+            params=[canonical_key],
+        )
+        if payload is not None:
+            return payload
+        return self._linkedin_profile_registry_lease_from_row(None)
 
     def release_linkedin_profile_registry_lease(
         self,
@@ -24585,54 +24478,30 @@ class ControlPlaneStore:
         normalized_source_job = str(source_job or "").strip()
         normalized_snapshot_dir = str(snapshot_dir or "").strip()
         normalized_ready_only = bool(ready_only)
-        ready_clause_sqlite = "(refill_not_before_at IS NULL OR refill_not_before_at = '' OR datetime(refill_not_before_at) <= datetime('now'))"
         ready_clause_postgres = "(coalesce(refill_not_before_at, '') = '' OR refill_not_before_at <= %s)"
         provider_owned_states = {"planned_dispatch"}
         include_provider_owned_states = any(state in provider_owned_states for state in normalized_states)
         if normalized_ready_only and include_provider_owned_states:
             return []
         now_timestamp = _utc_now_timestamp()
-        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry"):
-            placeholders = ", ".join("%s" for _ in normalized_states)
-            where_sql = f"refill_queue_state IN ({placeholders})"
-            params: list[Any] = [*normalized_states]
-            if normalized_ready_only:
-                where_sql = f"{where_sql} AND {ready_clause_postgres}"
-                params.append(now_timestamp)
-            rows = self._select_control_plane_rows(
-                "linkedin_profile_registry",
-                row_builder=self._linkedin_profile_registry_from_row,
-                where_sql=where_sql,
-                params=params,
-                order_by_sql="refill_not_before_at ASC, last_refill_planned_at ASC, updated_at ASC",
-                limit=normalized_limit * 3,
-            )
-            filtered_rows = self._filter_linkedin_profile_refill_queue_rows(
-                rows,
-                source_job=normalized_source_job,
-                snapshot_dir=normalized_snapshot_dir,
-                limit=normalized_limit,
-            )
-            if filtered_rows or self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
-                return filtered_rows
-        with self._lock:
-            placeholders = ", ".join("?" for _ in normalized_states)
-            where_sql = f"refill_queue_state IN ({placeholders})"
-            params: list[Any] = [*normalized_states]
-            if normalized_ready_only:
-                where_sql = f"{where_sql} AND {ready_clause_sqlite}"
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM linkedin_profile_registry
-                WHERE {where_sql}
-                ORDER BY refill_not_before_at ASC, last_refill_planned_at ASC, updated_at ASC
-                LIMIT ?
-                """,
-                (*params, normalized_limit * 3),
-            ).fetchall()
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback (and its SQLite-only ready_clause + `?` builders) are dead and removed.
+        placeholders = ", ".join("%s" for _ in normalized_states)
+        where_sql = f"refill_queue_state IN ({placeholders})"
+        params: list[Any] = [*normalized_states]
+        if normalized_ready_only:
+            where_sql = f"{where_sql} AND {ready_clause_postgres}"
+            params.append(now_timestamp)
+        rows = self._select_control_plane_rows(
+            "linkedin_profile_registry",
+            row_builder=self._linkedin_profile_registry_from_row,
+            where_sql=where_sql,
+            params=params,
+            order_by_sql="refill_not_before_at ASC, last_refill_planned_at ASC, updated_at ASC",
+            limit=normalized_limit * 3,
+        )
         return self._filter_linkedin_profile_refill_queue_rows(
-            [self._linkedin_profile_registry_from_row(row) for row in rows],
+            rows,
             source_job=normalized_source_job,
             snapshot_dir=normalized_snapshot_dir,
             limit=normalized_limit,
@@ -24664,42 +24533,21 @@ class ControlPlaneStore:
         normalized_item_limit = max(1, min(10000, int(item_limit_per_group or 200)))
         normalized_source_job = str(source_job or "").strip()
         row_limit = max(normalized_limit * normalized_item_limit, normalized_item_limit)
-        ready_clause_sqlite = "(refill_not_before_at IS NULL OR refill_not_before_at = '' OR datetime(refill_not_before_at) <= datetime('now'))"
         ready_clause_postgres = "(coalesce(refill_not_before_at, '') = '' OR refill_not_before_at <= %s)"
         now_timestamp = _utc_now_timestamp()
-        if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry"):
-            placeholders = ", ".join("%s" for _ in normalized_states)
-            rows = self._select_control_plane_rows(
-                "linkedin_profile_registry",
-                row_builder=self._linkedin_profile_registry_from_row,
-                where_sql=f"refill_queue_state IN ({placeholders}) AND {ready_clause_postgres}",
-                params=[*normalized_states, now_timestamp],
-                order_by_sql="refill_not_before_at ASC, last_refill_planned_at ASC, updated_at ASC",
-                limit=row_limit,
-            )
-            groups = self._group_linkedin_profile_refill_queue_rows(
-                rows,
-                source_job=normalized_source_job,
-                group_limit=normalized_limit,
-                item_limit_per_group=normalized_item_limit,
-            )
-            if groups or self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
-                return groups
-        with self._lock:
-            placeholders = ", ".join("?" for _ in normalized_states)
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM linkedin_profile_registry
-                WHERE refill_queue_state IN ({placeholders})
-                  AND {ready_clause_sqlite}
-                ORDER BY refill_not_before_at ASC, last_refill_planned_at ASC, updated_at ASC
-                LIMIT ?
-                """,
-                (*normalized_states, row_limit),
-            ).fetchall()
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback (and its SQLite-only ready_clause + `?` builders) are dead and removed.
+        placeholders = ", ".join("%s" for _ in normalized_states)
+        rows = self._select_control_plane_rows(
+            "linkedin_profile_registry",
+            row_builder=self._linkedin_profile_registry_from_row,
+            where_sql=f"refill_queue_state IN ({placeholders}) AND {ready_clause_postgres}",
+            params=[*normalized_states, now_timestamp],
+            order_by_sql="refill_not_before_at ASC, last_refill_planned_at ASC, updated_at ASC",
+            limit=row_limit,
+        )
         return self._group_linkedin_profile_refill_queue_rows(
-            [self._linkedin_profile_registry_from_row(row) for row in rows],
+            rows,
             source_job=normalized_source_job,
             group_limit=normalized_limit,
             item_limit_per_group=normalized_item_limit,

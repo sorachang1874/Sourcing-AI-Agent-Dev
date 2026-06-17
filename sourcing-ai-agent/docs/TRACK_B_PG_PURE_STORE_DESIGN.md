@@ -228,3 +228,25 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   证 batch-3 编辑 innocent;均**非 CI 合同 lane**,典型如 `expected_candidate_count 80 != 297`(snapshot 人口 floor),
   与 read-method 删支无关 → 记为 Track-B-外 follow-up(snapshot population/projection 计数,待独立诊断)。
   storage.py AST/import clean;ruff 编辑区(5481-5577)零错。
+- **2026-06-17 B3.2 batch 4 DONE(LinkedIn profile registry domain)** —— 首次用 **ultracode workflow(wf_def39da8,
+  29 agent,6 表并行 scout + 逐 gate 对抗式 verify)** 产出 verified edit-list:6 表 23 个 read gate 全部
+  DELETABLE_READ、0 DEFER(verifier 还交叉核对了 e41d287 的 sentinel-divergence 修复、并确认 `_select_control_plane_row(s)`
+  在 PG error 时 **raise**(不静默吞成 sentinel),故 error 语义不变)。本批落地 **linkedin_profile_registry(5)+
+  linkedin_profile_registry_leases(1)= 6 读方法**:get_linkedin_profile_registry、get_linkedin_profile_registry_bulk
+  (并行 accumulator;verifier 证 canonical_keys 在有输入 key 时恒非空,`if canonical_keys`/`if resolved or skip`
+  均恒真 → 重构为 `if not canonical_keys: return {}` 防御性保 `{}` sentinel;`linkedin_profile_registry_aliases`
+  的独立 routing 留作它批不动)、summarize_linkedin_profile_registry_scope、get_linkedin_profile_registry_lease
+  (**保 e41d287 parity**:缺行返 `_..._lease_from_row(None)` 空 sentinel,非 None)、list_linkedin_profile_refill_queue_items
+  + list_linkedin_profile_refill_queue_groups(并行 `ready_clause_sqlite`/`_postgres` → 删 SQLite clause)。其余
+  linkedin_profile_registry 5 + leases 7 个 gate 是 write/mirror → B4。gates:registry 10→5、leases 8→7;总 222→216。
+  **验证**:group A(test_storage_profile_registry/profile_registry_backfill/control_plane_live_postgres/enrichment/
+  operation_runtime)**320 passed 0 fail** —— 6 方法的直接 regression 全绿;group B(candidate_artifacts/cloud_asset_import/
+  company_asset_completion/company_asset_supplement)90 passed,**3 fail + 1 teardown error 全 PRE-EXISTING**(git-stash
+  至 batch-3 baseline 后逐一同样 FAIL,10.82s;含 cloud_asset_import DSN 错误消息漂移、company_asset_completion
+  'former_false_positive' 成员标记、background_followup JSONDecode/teardown OSError —— 均非 CI lane,与本批无关)。
+  storage.py AST/import clean;ruff 总错仍 18(pre-existing,无新增),编辑区零错。
+  **workflow 已产出 batch 5+ 的 verified plan(待执行,未编辑)**:job_results(4 方法:get_job_results、
+  get_job_results_page、get_job_results_for_candidates [各 2 gate]、count_job_results)、workflow_commands(3:
+  get_workflow_command、list_workflow_commands、list_ready_workflow_commands)、projection_person_search_index(3:
+  count_projection_person_search_index、_search_projection_person_index_rows、_list_projection_person_search_index_rows)、
+  frontend_history_links(4:get/list/list_for_job/list_for_review)。全部 DELETABLE_READ。
