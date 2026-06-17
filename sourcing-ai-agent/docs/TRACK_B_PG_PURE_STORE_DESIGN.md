@@ -148,5 +148,18 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   `_select_control_plane_job_rows` + `should_skip_sqlite_fallback('jobs')`,镜像 sibling `find_latest_job_by_request_signature`(16314)。
   (2) `find_pending_plan_review_session`(storage.py:25786,plan_review_sessions;orchestrator.py:52704/52790 待审去重→重复 pending session)
   ——加 `_select_control_plane_row` PG 分支。**验证**:`tests/test_pg_only_dedup_reads.py`(5 测试,纳入 CI 合同 lane)——
-  git-stash 回退 storage.py 证明 pre-fix 下 3 个 positive-find 测试 FAIL(正是空-shadow bug),fix 后 5/5 绿。下一步:B3 ——
-  按表组删 DUAL_PATH 的死 SQLite 半(含上面 triage 标的);`sync_runtime_control_plane_to_postgres` 的 mirror/legacy 用途随之删(B3/B4)。
+  git-stash 回退 storage.py 证明 pre-fix 下 3 个 positive-find 测试 FAIL(正是空-shadow bug),fix 后 5/5 绿。
+- **2026-06-17 B3 precondition workflow + owner 决策**:precondition map(workflow wf_85e57579)证实 **SQLite-authoritative
+  模式今仍 live** —— PG-only guard 只对 literal `production` 或 `SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1` 强制;默认
+  local_dev/CLI/scripted(`cli.py:133`、`cloud_asset_import.py`、`smoke_runtime_seed.py`)在无 DSN 时 mode='disabled' → SQLite-authoritative。
+  故删死 SQLite 分支前必须先**丢弃 SQLite-authoritative 支持(PG 对所有 runtime 强制)**。**owner 批准(2026-06-17):drop it,proceed B3。**
+- **2026-06-17 B3.0 guard DONE**:`ControlPlaneStore.__init__` 现**无条件**要求 resolved DSN + `postgres_only`(否则 raise
+  "...no longer supported"),取代原 production-/flag-only guard;`should_prefer_read`/`should_skip_sqlite_fallback` 自此对每张表恒 True
+  ——删死分支的前提达成。删除孤儿 `_control_plane_postgres_required` + `current_runtime_environment` import。SQLite 连接仅作 ephemeral
+  shared_memory shadow 存续(B4 删)。**CI-lane 修**:`test_operation_runtime.py::test_operation_and_acquisition_runtime_state_are_pg_only`
+  + `test_durable_runtime.py::test_sqlite_durable_runtime_normal_path_fails_closed` 改为断言**构造期** raise(比原 per-op fail-closed 更强)。
+  验证:2 改测 + durable_runtime 48 + dedup + storage_surface/api_auth 19 全绿;PG-fixture 构造(postgres_only)不受影响。
+  **已知待修(B3.1,非-CI lane,本 commit 显式披露)**:`test_control_plane_live_postgres.py`(~24 `mirror`/`prefer_postgres`
+  `_build_store` 用例,测被删的双路径 routing)、`test_postgres_text_normalization.py`(disabled)、`test_pipeline.py:73`(裸构造,从不全跑)
+  —— guard 落地后这些构造会 raise;B3.1 紧接迁移/退役(delete routing 测,migrate 数据-correctness 测到 postgres_only)。
+  下一步:B3.1 测试迁移 → B3.2+ 按表组删 DUAL_PATH 死 SQLite 半 + 简化恒真 routing scaffolding。

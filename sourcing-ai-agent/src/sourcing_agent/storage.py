@@ -66,7 +66,6 @@ from .request_matching import (
     request_family_signature,
     request_signature,
 )
-from .runtime_environment import current_runtime_environment
 from .runtime_lease_utils import worker_lease_owner_is_dead_local_process
 from .worker_scheduler import effective_worker_status, wait_stage
 
@@ -198,13 +197,6 @@ def _linkedin_profile_max_retry_attempts(default: int = 1) -> int:
     """Number of retry submissions allowed after the initial profile fetch failure."""
 
     return max(0, _env_int("SOURCING_LINKEDIN_PROFILE_MAX_RETRY_ATTEMPTS", default))
-
-
-def _control_plane_postgres_required(runtime_dir: Path | None = None) -> bool:
-    if _env_flag_enabled(os.getenv("SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES"), default=False):
-        return True
-    runtime = current_runtime_environment(runtime_dir=runtime_dir)
-    return bool(runtime.is_production)
 
 
 def _strict_legacy_materialization_write_gate_enabled() -> bool:
@@ -784,21 +776,29 @@ class ControlPlaneStore:
                 control_plane_postgres_mode=control_plane_postgres_mode,
             )
         )
-        if _control_plane_postgres_required(runtime_dir):
-            if not control_plane_postgres_dsn:
-                raise RuntimeError(
-                    "SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1 but no control-plane Postgres DSN was resolved."
-                )
-            if control_plane_postgres_mode != "postgres_only":
-                raise RuntimeError(
-                    "SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1 requires "
-                    "SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only."
-                )
-            if self._sqlite_backend_mode == "disk":
-                raise RuntimeError(
-                    "SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1 refuses disk-backed SQLite shadow storage. "
-                    "Use the default shared_memory shadow backend instead."
-                )
+        # Track B B3: SQLite-authoritative control-plane storage is no longer supported. Every
+        # ControlPlaneStore — serving, CLI, local-dev, scripted, tests — requires a resolved
+        # Postgres DSN and postgres_only live mode, so PostgreSQL is the sole authoritative
+        # backend and should_prefer_read / should_skip_sqlite_fallback are always True. The
+        # SQLite connection survives ONLY as the ephemeral shared_memory compatibility shadow
+        # (removed entirely in B4). This generalizes the former production-/flag-only guard.
+        if not control_plane_postgres_dsn:
+            raise RuntimeError(
+                "ControlPlaneStore requires a resolved control-plane Postgres DSN "
+                "(set SOURCING_CONTROL_PLANE_POSTGRES_DSN, provide a .local-postgres.env, or run "
+                "`make local-pg-up`). SQLite-authoritative control-plane storage is no longer supported."
+            )
+        if control_plane_postgres_mode != "postgres_only":
+            raise RuntimeError(
+                "ControlPlaneStore requires SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only "
+                f"(resolved mode={control_plane_postgres_mode!r}). The 'disabled', 'mirror', and "
+                "'prefer_postgres' control-plane modes are no longer supported."
+            )
+        if self._sqlite_backend_mode == "disk":
+            raise RuntimeError(
+                "postgres_only control-plane storage refuses a disk-backed SQLite shadow; "
+                "use the default shared_memory shadow backend."
+            )
         self._control_plane_postgres = LiveControlPlanePostgresAdapter(
             runtime_dir=runtime_dir,
             sqlite_path=self._sqlite_connect_target,

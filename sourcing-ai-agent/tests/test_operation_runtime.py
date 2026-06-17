@@ -2105,109 +2105,12 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             },
             clear=False,
         ):
-            store = ControlPlaneStore(self.runtime_dir / "blocked-operation.db")
-            with self.assertRaisesRegex(RuntimeError, "PG-only durable runtime storage"):
-                store.upsert_agent_action(
-                    action_id="act_sqlite_blocked",
-                    action_type=ACTION_ADD_TO_CRM,
-                    owner_module="crm_writer",
-                    operation_type="crm_update",
-                    idempotency_key="add_to_crm:blocked",
-                )
-            with self.assertRaisesRegex(RuntimeError, "PG-only durable runtime storage"):
-                store.upsert_acquisition_run(
-                    {
-                        "acquisition_run_id": "acqrun_sqlite_blocked",
-                        "operation_run_id": "op_sqlite_blocked",
-                        "workflow_run_id": "wf_sqlite_blocked",
-                        "target_company": "SQLite Blocked",
-                        "idempotency_key": "acquisition_run:sqlite_blocked",
-                    }
-                )
-            with self.assertRaisesRegex(RuntimeError, "PG-only durable runtime storage"):
-                store.upsert_crm_task(
-                    {
-                        "task_id": "crmtask_sqlite_blocked",
-                        "crm_record_id": "crmrec_sqlite_blocked",
-                        "title": "Blocked SQLite task",
-                        "idempotency_key": "crm_task:sqlite_blocked",
-                    }
-                )
-            with self.assertRaisesRegex(RuntimeError, "PG-only durable runtime storage"):
-                store.upsert_company_asset(
-                    {
-                        "asset_id": "ca_sqlite_blocked",
-                        "company_key": "sqliteblocked",
-                        "target_company": "SQLite Blocked",
-                        "asset_type": "logo_media",
-                    }
-                )
-            with self.assertRaisesRegex(RuntimeError, "PG-only durable runtime storage"):
-                store.upsert_workflow_activity_run(
-                    {
-                        "activity_run_id": "actrun_sqlite_blocked",
-                        "workflow_run_id": "wf_sqlite_blocked",
-                        "activity_type": LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
-                        "idempotency_key": "activity:sqlite_blocked",
-                    }
-                )
-            with self.assertRaisesRegex(RuntimeError, "PG-only durable runtime storage"):
-                store.upsert_workflow_activity_attempt(
-                    {
-                        "attempt_id": "actattempt_sqlite_blocked",
-                        "activity_run_id": "actrun_sqlite_blocked",
-                        "workflow_run_id": "wf_sqlite_blocked",
-                        "idempotency_key": "activity_attempt:sqlite_blocked",
-                    }
-                )
-            with self.assertRaisesRegex(RuntimeError, "PG-only durable runtime storage"):
-                store.upsert_acquisition_discovery_lane(
-                    {
-                        "lane_id": "lane_sqlite_blocked",
-                        "acquisition_run_id": "acqrun_sqlite_blocked",
-                        "workflow_run_id": "wf_sqlite_blocked",
-                        "idempotency_key": "lane:sqlite_blocked",
-                    }
-                )
-            with self.assertRaisesRegex(RuntimeError, "PG-only durable runtime storage"):
-                store.upsert_workflow_entity_delta(
-                    {
-                        "delta_id": "entitydelta_sqlite_blocked",
-                        "workflow_run_id": "wf_sqlite_blocked",
-                        "entity_type": "candidate",
-                        "entity_key": "cand_sqlite_blocked",
-                        "delta_kind": "candidate_discovered",
-                        "idempotency_key": "entity_delta:sqlite_blocked",
-                    }
-                )
-            acquisition_schema_row = store._connection.execute(  # noqa: SLF001
-                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'acquisition_runs'"
-            ).fetchone()
-            self.assertIsNone(acquisition_schema_row)
-            operation_runtime_tables = {
-                row["name"]
-                for row in store._connection.execute(  # noqa: SLF001
-                    "SELECT name FROM sqlite_master WHERE type = 'table'"
-                ).fetchall()
-            }
-            self.assertFalse(
-                {
-                    "agent_actions",
-                    "operation_runs",
-                    "acquisition_runs",
-                    "workflow_activity_runs",
-                    "workflow_activity_attempts",
-                    "workflow_entity_deltas",
-                    "acquisition_discovery_lanes",
-                    "operation_events",
-                    "crm_tasks",
-                    "company_assets",
-                    "company_evidence",
-                    "company_assertions",
-                }
-                & operation_runtime_tables
-            )
-            store._connection.close()  # noqa: SLF001
+            # Track B B3: SQLite-authoritative control-plane storage is no longer supported —
+            # a store with no resolved DSN / disabled mode is rejected at CONSTRUCTION (stronger
+            # than the former per-durable-op fail-closed), so operation/acquisition runtime state
+            # can only ever live in Postgres.
+            with self.assertRaisesRegex(RuntimeError, "no longer supported"):
+                ControlPlaneStore(self.runtime_dir / "blocked-operation.db")
         self._start_pg_durable_runtime(runtime_dir=self.runtime_dir)
         self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
         self.writer = OperationRuntimeWriter(self.store)

@@ -115,30 +115,11 @@ class DurableRuntimeStorageTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             },
             clear=False,
         ):
-            store = ControlPlaneStore(self.runtime_dir / "blocked.db")
-            with self.assertRaisesRegex(RuntimeError, "PG-only durable runtime storage"):
-                store.append_workflow_event(
-                    workflow_run_id="wf_sqlite_blocked",
-                    event_family="workflow_event",
-                    event_type="WorkflowStarted",
-                    idempotency_key="wf_sqlite_blocked:start",
-                )
-            durable_runtime_tables = {
-                row["name"]
-                for row in store._connection.execute(  # noqa: SLF001
-                    "SELECT name FROM sqlite_master WHERE type = 'table'"
-                ).fetchall()
-            }
-            self.assertFalse(
-                {
-                    "workflow_events",
-                    "workflow_current_state",
-                    "workflow_commands",
-                    "runtime_outbox",
-                }
-                & durable_runtime_tables
-            )
-            store._connection.close()  # noqa: SLF001
+            # Track B B3: SQLite-authoritative control-plane storage is no longer supported —
+            # the disabled-mode store is rejected at construction (stronger than the former
+            # per-durable-op fail-closed); durable runtime state can only live in Postgres.
+            with self.assertRaisesRegex(RuntimeError, "no longer supported"):
+                ControlPlaneStore(self.runtime_dir / "blocked.db")
         self._start_pg_durable_runtime(runtime_dir=self.runtime_dir)
         self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
 
