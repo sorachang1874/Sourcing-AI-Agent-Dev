@@ -213,3 +213,18 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   + `test_projection_crm_api_contracts` + `test_user_private_reads` + `test_pg_only_dedup_reads` = **121 passed**;
   storage.py AST/import clean;ruff 编辑区零错(18 个 pre-existing 错在 line 10123-10186 另一方法的 mixed
   tab/space,非编辑区,storage.py 非 lint-gated)。
+- **2026-06-17 B3.2 batch 3 DONE(job_materialization_items reads)**:该表 9 个 gate 中**仅 3 个是纯读**,
+  删其死 SQLite fallback —— `get_job_materialization_item`(read_single,`{}`)、`list_job_materialization_items`
+  (read_list,`[]`)、`list_ready_job_materialization_items`(read_list,`[]`)。后两者原**并行构造** SQLite(`?`)+
+  PG(`%s`)两套 clause/param;删 SQLite 分支后 `?` 套连同 `where_sql`/`limit_sql`/`sqlite_params` 局部一并移除,
+  仅留 `%s` 套(PG 读路径**逐字节不变**)。其余 **6 个是 write+mirror**(`claim_*`、`mark_*completed/failed/
+  waiting_prerequisite/partial_progress`、`reawaken_waiting_prerequisite_*` —— UPDATE+SELECT+`_mirror_control_plane_row`
+  尾)→ 留 B4。job_materialization_items gates 9→6;总 gate 225→222。**验证**:test_durable_runtime 43 +
+  test_snapshot_materialization_backfill / test_local_apply_closure_prerequisite / test_frontend_history_recovery /
+  test_results_api 合计 336 passed。**6 个 pre-existing 失败(非本批引入)**:test_snapshot_materialization_backfill
+  ::...materialization_items_apply_is_idempotent + test_results_api 5 个(board_runtime_state_current_snapshot_serving、
+  crm_public_web_promotions_survive_force_refresh、crm_public_web_service_e2e、lovable_board_visible_patches、
+  partial_current_snapshot_overlay)—— **git-stash 回退 storage.py 至 batch-2 baseline 后这 6 个逐一同样 FAIL**(13.33s),
+  证 batch-3 编辑 innocent;均**非 CI 合同 lane**,典型如 `expected_candidate_count 80 != 297`(snapshot 人口 floor),
+  与 read-method 删支无关 → 记为 Track-B-外 follow-up(snapshot population/projection 计数,待独立诊断)。
+  storage.py AST/import clean;ruff 编辑区(5481-5577)零错。

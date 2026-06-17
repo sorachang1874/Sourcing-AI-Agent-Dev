@@ -5488,16 +5488,11 @@ class ControlPlaneStore:
             where_sql="item_id = %s",
             params=[normalized_item_id],
         )
-        if postgres_row is not None:
-            return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("job_materialization_items"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed.
+        if postgres_row is None:
             return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM job_materialization_items WHERE item_id = ? LIMIT 1",
-                (normalized_item_id,),
-            ).fetchone()
-        return self._job_materialization_item_from_row(row) or {}
+        return postgres_row
 
     def list_job_materialization_items(
         self,
@@ -5507,20 +5502,17 @@ class ControlPlaneStore:
         statuses: list[str] | tuple[str, ...] | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        clauses: list[str] = []
-        params: list[Any] = []
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed, along with the now-unused SQLite-`?`-placeholder clause/param
+        # builders (only the postgres %s variants remain).
         postgres_clauses: list[str] = []
         postgres_params: list[Any] = []
         normalized_job_id = str(job_id or "").strip()
         if normalized_job_id:
-            clauses.append("job_id = ?")
-            params.append(normalized_job_id)
             postgres_clauses.append("job_id = %s")
             postgres_params.append(normalized_job_id)
         normalized_kind = str(item_kind or "").strip()
         if normalized_kind:
-            clauses.append("item_kind = ?")
-            params.append(normalized_kind)
             postgres_clauses.append("item_kind = %s")
             postgres_params.append(normalized_kind)
         normalized_statuses = [
@@ -5529,9 +5521,6 @@ class ControlPlaneStore:
             if str(status or "").strip()
         ]
         if normalized_statuses:
-            placeholders = ", ".join(["?"] * len(normalized_statuses))
-            clauses.append(f"status IN ({placeholders})")
-            params.extend(normalized_statuses)
             postgres_placeholders = ", ".join(["%s"] * len(normalized_statuses))
             postgres_clauses.append(f"status IN ({postgres_placeholders})")
             postgres_params.extend(normalized_statuses)
@@ -5543,28 +5532,9 @@ class ControlPlaneStore:
             order_by_sql="priority DESC, updated_at ASC, created_at ASC",
             limit=max(0, int(limit or 0)),
         )
-        if postgres_rows:
-            return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("job_materialization_items"):
+        if not postgres_rows:
             return []
-        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
-        sqlite_params = list(params)
-        if int(limit or 0) > 0:
-            sqlite_params.append(max(1, int(limit or 0)))
-        with self._lock:
-            rows = self._connection.execute(
-                (
-                    "SELECT * FROM job_materialization_items "
-                    f"{where_sql} ORDER BY priority DESC, updated_at ASC, created_at ASC{limit_sql}"
-                ),
-                tuple(sqlite_params),
-            ).fetchall()
-        return [
-            payload
-            for row in rows
-            if (payload := self._job_materialization_item_from_row(row))
-        ]
+        return postgres_rows
 
     def list_ready_job_materialization_items(
         self,
@@ -5581,13 +5551,9 @@ class ControlPlaneStore:
         normalized_job_id = str(job_id or "").strip()
         normalized_kind = str(item_kind or "board_visible_delta_apply").strip() or "board_visible_delta_apply"
         now = _utc_now_timestamp()
-        clauses = [
-            "item_kind = ?",
-            "status IN (?, ?, ?, ?, ?)",
-            "(not_before_at = '' OR datetime(not_before_at) <= datetime(?))",
-            "(lease_expires_at = '' OR datetime(lease_expires_at) <= datetime(?))",
-        ]
-        params: list[Any] = [normalized_kind, *statuses, now, now]
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed, along with the now-unused SQLite clause/param builders
+        # (only the postgres %s variants remain; the SQLite `datetime(...)` wrappers were dialect-only).
         postgres_clauses = [
             "item_kind = %s",
             "status IN (%s, %s, %s, %s, %s)",
@@ -5596,8 +5562,6 @@ class ControlPlaneStore:
         ]
         postgres_params: list[Any] = [normalized_kind, *statuses, now, now]
         if normalized_job_id:
-            clauses.append("job_id = ?")
-            params.append(normalized_job_id)
             postgres_clauses.append("job_id = %s")
             postgres_params.append(normalized_job_id)
         postgres_rows = self._select_control_plane_rows(
@@ -5608,24 +5572,9 @@ class ControlPlaneStore:
             order_by_sql="priority DESC, updated_at ASC, created_at ASC",
             limit=max(1, int(limit or 100)),
         )
-        if postgres_rows:
-            return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("job_materialization_items"):
+        if not postgres_rows:
             return []
-        with self._lock:
-            rows = self._connection.execute(
-                (
-                    "SELECT * FROM job_materialization_items WHERE "
-                    + " AND ".join(clauses)
-                    + " ORDER BY priority DESC, updated_at ASC, created_at ASC LIMIT ?"
-                ),
-                tuple([*params, max(1, int(limit or 100))]),
-            ).fetchall()
-        return [
-            payload
-            for row in rows
-            if (payload := self._job_materialization_item_from_row(row))
-        ]
+        return postgres_rows
 
     def claim_job_materialization_item(
         self,
