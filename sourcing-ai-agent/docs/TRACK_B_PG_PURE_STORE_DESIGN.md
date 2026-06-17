@@ -174,4 +174,19 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   (4) `test_target_candidate_public_web.py::...SqliteLegacyTableTest` SKIP(其前提=历史 SQLite 文件,PG-only 下不可构造;需 re-home
   到 PG legacy-migration-context)。(5) test_control_plane_pool / testcontainers_* 安全(自解析真 DSN 或 SkipTest)。(6) test_pipeline:73
   deferred(从不全跑,随 test_pipeline 单独 redesign)。结果:相关 4 文件 63 passed / 29 skipped / 0 fail。**B3.1 surfaced 2 follow-ups:
-  company_public_web PG run-status 分歧(诊断)+ legacy SQLite 测 re-home。** 下一步:B3.2+ 按表组删 DUAL_PATH 死 SQLite 半。
+  company_public_web PG run-status 分歧(诊断)+ legacy SQLite 测 re-home。**
+- **2026-06-17 company_public_web finding DIAGNOSED(commit 6c94627)**:**非 production bug。** failure-marking
+  在 bootstrapped schema 下正确返 'failed'(实测)。"joined" 是 TEST-ISOLATION artifact:run idempotency key 按
+  target_company 确定性('OpenAI' 每测都一样)+ `PGDurableRuntimeTestMixin` 的 per-CLASS schema 测间不重置 → 测 N join 测 N-1 的 run。
+  旧 per-test SQLite DB 隔离了每测。修=per-test 隔离(unique target_company/nonce/force_refresh 或 truncate)。**潜在前瞻注**:
+  adapter `search_path = <schema>, public`,tenant schema 缺表会静默落到 `public` —— 单-public-schema prod 无害,但若走 per-user schema
+  (multi-tenant 方向)是跨租户污染风险。
+- **2026-06-17 B3.2 pilot DONE — dead-SQLite-branch 删除 PATTERN 证实**:guard 后 `should_prefer_read`/`should_skip_sqlite_fallback`
+  对每张 control-plane 表恒 True,故每个 dual-path 方法 PG 分支后的 SQLite fallback `else` 死。**Pattern**:删 `else: SQLite` + 仅供它用的
+  SQLite `clauses`/`params` builder → `if not postgres_rows: return None` + `rows = postgres_rows`(postgres_only 下行为逐一等价)。
+  **Pilot**:jobs signature-read family(`find_latest_job_by_request_signature` + `find_latest_job_by_request_family_signature`)。
+  验证:test_control_plane_live_postgres 57 + user_private_reads + pg_only_dedup_reads = **88 passed**。
+  **B3.2 BULK = 多批 follow-up(~295 dual-path 方法)**,按表组:每批删该组方法的死 SQLite 半 + 跑合同 lane(PG-fixture 测 exercise PG 路径,
+  验证简化保持 PG 语义)。每方法 characterize 行-不存在语义(invariant 7)。最后(B3.2 尾 / B4 头)简化恒真 routing scaffolding
+  (`should_prefer_read`/`should_skip_sqlite_fallback`/`_select_control_plane_row(s)` 的 not-prefer/skip 分支)。`self._conn`/init_schema/
+  mirror/`_bootstrap_schema_from_sqlite_source`/SHADOW_INFRA 留到 **B4**。鉴于 295 方法的体量,bulk 宜以专批(可新 context)推进。

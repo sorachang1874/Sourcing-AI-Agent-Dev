@@ -16303,14 +16303,8 @@ class ControlPlaneStore:
         if not signature:
             return None
         normalized_statuses = [str(item or "").strip() for item in list(statuses or []) if str(item or "").strip()]
-        params: list[Any] = [signature, signature]
-        clauses = [
-            "(matching_request_signature = ? OR (coalesce(matching_request_signature, '') = '' AND request_signature = ?))"
-        ]
-        if normalized_statuses:
-            placeholders = ",".join("?" for _ in normalized_statuses)
-            clauses.append(f"status IN ({placeholders})")
-            params.extend(normalized_statuses)
+        # Track B B3.2: PG is the sole authoritative control-plane store; the dead SQLite fallback
+        # branch is removed (should_prefer_read / should_skip_sqlite_fallback are always true).
         postgres_rows = self._select_control_plane_job_rows(
             where_sql=" AND ".join(
                 [
@@ -16322,23 +16316,9 @@ class ControlPlaneStore:
             order_by_sql="updated_at DESC, created_at DESC",
             limit=max(1, int(limit or 200)),
         )
-        if postgres_rows:
-            rows = postgres_rows
-        elif self._control_plane_postgres_should_skip_sqlite_fallback("jobs"):
+        if not postgres_rows:
             return None
-        else:
-            rows = [
-                self._job_from_row(row)
-                for row in self._connection.execute(
-                    f"""
-                    SELECT * FROM jobs
-                    WHERE {" AND ".join(clauses)}
-                    ORDER BY updated_at DESC, created_at DESC
-                    LIMIT ?
-                    """,
-                    (*params, max(1, int(limit or 200))),
-                ).fetchall()
-            ]
+        rows = postgres_rows
         scope_mode = _normalize_dispatch_scope(scope, requester_id=requester_id, tenant_id=tenant_id)
         normalized_target_company = str(target_company or "").strip().lower()
         for row in rows:
@@ -16378,17 +16358,9 @@ class ControlPlaneStore:
         if not family_signature:
             return None
         normalized_statuses = [str(item or "").strip() for item in list(statuses or []) if str(item or "").strip()]
-        params: list[Any] = [family_signature, family_signature]
-        clauses = [
-            "("
-            "matching_request_family_signature = ? "
-            "OR (coalesce(matching_request_family_signature, '') = '' AND request_family_signature = ?)"
-            ")"
-        ]
-        if normalized_statuses:
-            placeholders = ",".join("?" for _ in normalized_statuses)
-            clauses.append(f"status IN ({placeholders})")
-            params.extend(normalized_statuses)
+        # Track B B3.2: PG is the sole authoritative control-plane store (postgres_only is required at
+        # construction), so should_prefer_read / should_skip_sqlite_fallback are always true and the
+        # SQLite fallback branch here is dead. Removed; the PG read is authoritative.
         postgres_rows = self._select_control_plane_job_rows(
             where_sql=" AND ".join(
                 [
@@ -16403,23 +16375,9 @@ class ControlPlaneStore:
             order_by_sql="updated_at DESC, created_at DESC",
             limit=max(1, int(limit or 200)),
         )
-        if postgres_rows:
-            rows = postgres_rows
-        elif self._control_plane_postgres_should_skip_sqlite_fallback("jobs"):
+        if not postgres_rows:
             return None
-        else:
-            rows = [
-                self._job_from_row(row)
-                for row in self._connection.execute(
-                    f"""
-                    SELECT * FROM jobs
-                    WHERE {" AND ".join(clauses)}
-                    ORDER BY updated_at DESC, created_at DESC
-                    LIMIT ?
-                    """,
-                    (*params, max(1, int(limit or 200))),
-                ).fetchall()
-            ]
+        rows = postgres_rows
         scope_mode = _normalize_dispatch_scope(scope, requester_id=requester_id, tenant_id=tenant_id)
         normalized_target_company = str(target_company or "").strip().lower()
         for row in rows:
