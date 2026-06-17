@@ -186,7 +186,17 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   SQLite `clauses`/`params` builder → `if not postgres_rows: return None` + `rows = postgres_rows`(postgres_only 下行为逐一等价)。
   **Pilot**:jobs signature-read family(`find_latest_job_by_request_signature` + `find_latest_job_by_request_family_signature`)。
   验证:test_control_plane_live_postgres 57 + user_private_reads + pg_only_dedup_reads = **88 passed**。
-  **B3.2 BULK = 多批 follow-up(~295 dual-path 方法)**,按表组:每批删该组方法的死 SQLite 半 + 跑合同 lane(PG-fixture 测 exercise PG 路径,
-  验证简化保持 PG 语义)。每方法 characterize 行-不存在语义(invariant 7)。最后(B3.2 尾 / B4 头)简化恒真 routing scaffolding
-  (`should_prefer_read`/`should_skip_sqlite_fallback`/`_select_control_plane_row(s)` 的 not-prefer/skip 分支)。`self._conn`/init_schema/
-  mirror/`_bootstrap_schema_from_sqlite_source`/SHADOW_INFRA 留到 **B4**。鉴于 295 方法的体量,bulk 宜以专批(可新 context)推进。
+  **B3.2 batch 1 DONE(commit 664349d)**:jobs request-lookup read family 完成(idempotency + list_by_signature;另 2 在 pilot)。
+- **2026-06-17 B3.2 CATALOG DONE(workflow wf_0c6dc3e6,6 并行 scanner;full result 见 tasks/w9h1hvpkc.output)—— 重定 B3.2 体量与排序**:
+  全量 **300 个** dead-SQLite-fallback dual-path 方法,**仅 87 个 clean_3way(机械可塌缩,如已做的 jobs reads),213 个 irregular(需手工)**。
+  irregular 主簇:**write-and-mirror 81**(SQLite 写 + `_mirror_control_plane_row` 尾)、multi-step delete/replace 36、parallel SQLite/PG
+  clause builder 17、count/int-shaped read 9、entangled side-effects(hydrate/compact/summary)5。shape:write 124 / read_list 89 /
+  read_single 73 / 其它 14。表组热点:workflow_commands 15、agent_worker_runs 15、job_materialization_items 10、linkedin_profile_registry 9、
+  candidates/jobs 各 8。**关键排序洞见**:81 个 write-and-mirror 方法的"死 SQLite 写 + mirror 尾"与 **B4 要整体删除的 mirror 机制**
+  (`_mirror_control_plane_row`/`_replace_control_plane_table_from_sqlite`/`self._conn`/`init_schema`)纠缠 —— 逐方法手删 81 个 mirror 尾不如
+  **B4 一次性删 mirror 机制**让这些 SQLite 写自然死亡并随之移除。故**精化排序**:
+  - **B3.2 = 删死 SQLite READ 分支**(read_single/read_list:87 clean + parallel-clause read irregulars)—— 纯读,无 mirror 纠缠,按表组分批,每批跑合同 lane。
+  - **B4 = 整体删 mirror 机制 + `self._conn` + `init_schema` + `_configure_connection` + `_bootstrap_schema_from_sqlite_source` + SHADOW_INFRA + generator/drift-test legacy 路径**,
+    这会令 write-and-mirror(81)与剩余 SQLite-write 分支批量死亡移除;再清 count/replace/entangled 的尾。
+  - 尾声简化恒真 routing scaffolding(`should_prefer_read`/`should_skip_sqlite_fallback`/`_select_control_plane_row(s)` 的 not-prefer/skip 分支)。
+  **结论:B3.2/B4 是一次大而需谨慎的多批重构(非机械 sweep),宜以专批(可新 context)按表组/子模式推进,每批合同-lane 验证。** invariant-7 行-不存在语义逐方法 characterize。
