@@ -200,3 +200,16 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     这会令 write-and-mirror(81)与剩余 SQLite-write 分支批量死亡移除;再清 count/replace/entangled 的尾。
   - 尾声简化恒真 routing scaffolding(`should_prefer_read`/`should_skip_sqlite_fallback`/`_select_control_plane_row(s)` 的 not-prefer/skip 分支)。
   **结论:B3.2/B4 是一次大而需谨慎的多批重构(非机械 sweep),宜以专批(可新 context)按表组/子模式推进,每批合同-lane 验证。** invariant-7 行-不存在语义逐方法 characterize。
+- **2026-06-17 B3.2 batch 2 DONE(serving_projection_members reads)**:删 6 个读方法的死 SQLite fallback ——
+  `list_serving_projection_members`、`list_serving_projection_members_by_identity_keys`、
+  `list_serving_projection_members_by_person_identity`、`count_serving_projection_members_by_readiness`、
+  `get_serving_projection_member`、`count_serving_projection_members`。3 种 shape 各保行为等价:(a) simple
+  list/single(pilot 形:`if not postgres_rows: return [] / {}`);(b) chunked accumulator(去恒真
+  `should_prefer_read` 外壳 + parallel SQLite chunk loop,`rows` 累加器保留);(c) `count_*` try/except
+  ——**保留 swallow-and-return-sentinel-on-PG-error 语义不变**(PG 异常返 {} / 0,与原 skip-fallback 哨兵
+  一致;改 fail-closed 属 B3.2 范畴外,记为后续可议)。`replace_serving_projection_members`(write/mirror)
+  留 B4。skip_fallback gates 232→225(serving_projection_members 8→1,仅剩 write 方法 18681)。**验证**:
+  `test_serving_projection_storage` + `test_serving_projection_writer` 13 + `test_control_plane_live_postgres`
+  + `test_projection_crm_api_contracts` + `test_user_private_reads` + `test_pg_only_dedup_reads` = **121 passed**;
+  storage.py AST/import clean;ruff 编辑区零错(18 个 pre-existing 错在 line 10123-10186 另一方法的 mixed
+  tab/space,非编辑区,storage.py 非 lint-gated)。

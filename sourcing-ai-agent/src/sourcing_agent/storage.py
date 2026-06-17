@@ -18720,22 +18720,12 @@ class ControlPlaneStore:
             limit=normalized_limit,
             offset=normalized_offset,
         )
-        if postgres_rows:
-            return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only, so
+        # should_skip_sqlite_fallback is always true and the SQLite fallback below is dead. Removed;
+        # the PG read is authoritative.
+        if not postgres_rows:
             return []
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM serving_projection_members
-                WHERE {where_sqlite}
-                ORDER BY rank_index ASC, candidate_identity_key ASC
-                LIMIT ? OFFSET ?
-                """,
-                (*params, normalized_limit, normalized_offset),
-            ).fetchall()
-        return [self._serving_projection_member_from_row(row) for row in rows]
+        return postgres_rows
 
     def list_serving_projection_members_by_identity_keys(
         self,
@@ -18754,41 +18744,24 @@ class ControlPlaneStore:
             return []
 
         rows: list[dict[str, Any]] = []
-        # Keep parameter counts comfortably below SQLite limits and avoid very
-        # large postgres IN clauses on production-scale projection publish paths.
+        # Keep parameter counts comfortably below very large postgres IN clauses on
+        # production-scale projection publish paths.
+        # Track B B3.2: PG is authoritative under postgres_only; the parallel SQLite chunk loop is dead
+        # and removed.
         chunk_size = 500
-        if self._control_plane_postgres_should_prefer_read("serving_projection_members"):
-            for offset in range(0, len(normalized_keys), chunk_size):
-                chunk = normalized_keys[offset : offset + chunk_size]
-                placeholders = ", ".join("%s" for _ in chunk)
-                rows.extend(
-                    self._select_control_plane_rows(
-                        "serving_projection_members",
-                        row_builder=self._serving_projection_member_from_row,
-                        where_sql=f"projection_id = %s AND candidate_identity_key IN ({placeholders})",
-                        params=[normalized_projection_id, *chunk],
-                        order_by_sql="rank_index ASC, candidate_identity_key ASC",
-                        limit=0,
-                    )
+        for offset in range(0, len(normalized_keys), chunk_size):
+            chunk = normalized_keys[offset : offset + chunk_size]
+            placeholders = ", ".join("%s" for _ in chunk)
+            rows.extend(
+                self._select_control_plane_rows(
+                    "serving_projection_members",
+                    row_builder=self._serving_projection_member_from_row,
+                    where_sql=f"projection_id = %s AND candidate_identity_key IN ({placeholders})",
+                    params=[normalized_projection_id, *chunk],
+                    order_by_sql="rank_index ASC, candidate_identity_key ASC",
+                    limit=0,
                 )
-            if rows:
-                return rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
-            return []
-        with self._lock:
-            for offset in range(0, len(normalized_keys), chunk_size):
-                chunk = normalized_keys[offset : offset + chunk_size]
-                placeholders = ",".join("?" for _ in chunk)
-                fetched = self._connection.execute(
-                    f"""
-                    SELECT *
-                    FROM serving_projection_members
-                    WHERE projection_id = ? AND candidate_identity_key IN ({placeholders})
-                    ORDER BY rank_index ASC, candidate_identity_key ASC
-                    """,
-                    (normalized_projection_id, *chunk),
-                ).fetchall()
-                rows.extend(self._serving_projection_member_from_row(row) for row in fetched)
+            )
         return rows
 
     def list_serving_projection_members_by_person_identity(
@@ -18809,22 +18782,11 @@ class ControlPlaneStore:
             order_by_sql="updated_at DESC, projection_id ASC, rank_index ASC",
             limit=normalized_limit,
         )
-        if postgres_rows:
-            return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed.
+        if not postgres_rows:
             return []
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT *
-                FROM serving_projection_members
-                WHERE person_identity_key = ?
-                ORDER BY updated_at DESC, projection_id ASC, rank_index ASC
-                LIMIT ?
-                """,
-                (normalized_person_key, normalized_limit),
-            ).fetchall()
-        return [self._serving_projection_member_from_row(row) for row in rows]
+        return postgres_rows
 
     def count_serving_projection_members_by_readiness(
         self,
@@ -18841,31 +18803,23 @@ class ControlPlaneStore:
             clauses.append("visibility_state = ?")
             params.append("visible")
         where_sqlite = " AND ".join(clauses)
-        if self._control_plane_postgres_should_prefer_read("serving_projection_members"):
-            try:
-                rows = self._control_plane_postgres.select_many(
-                    "serving_projection_members",
-                    where_sql=where_sqlite.replace("?", "%s"),
-                    params=params,
-                    order_by_sql="profile_readiness ASC, card_readiness ASC",
-                    limit=0,
-                )
-                return _serving_projection_readiness_counts(
-                    [self._serving_projection_member_from_row(row) for row in rows]
-                )
-            except Exception:
-                if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
-                    return {}
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT profile_readiness, card_readiness
-                FROM serving_projection_members
-                WHERE {where_sqlite}
-                """,
-                tuple(params),
-            ).fetchall()
-        return _serving_projection_readiness_counts([self._serving_projection_member_from_row(row) for row in rows])
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed. should_prefer_read / should_skip_sqlite_fallback are always
+        # true, so a PG error returns the empty sentinel rather than falling through to SQLite (behavior
+        # preserved exactly).
+        try:
+            rows = self._control_plane_postgres.select_many(
+                "serving_projection_members",
+                where_sql=where_sqlite.replace("?", "%s"),
+                params=params,
+                order_by_sql="profile_readiness ASC, card_readiness ASC",
+                limit=0,
+            )
+            return _serving_projection_readiness_counts(
+                [self._serving_projection_member_from_row(row) for row in rows]
+            )
+        except Exception:
+            return {}
 
     def get_serving_projection_member(self, projection_id: str, candidate_identity_key: str) -> dict[str, Any]:
         normalized_projection_id = str(projection_id or "").strip()
@@ -18878,21 +18832,11 @@ class ControlPlaneStore:
             where_sql="projection_id = %s AND candidate_identity_key = %s",
             params=[normalized_projection_id, normalized_candidate_key],
         )
-        if postgres_row is not None:
-            return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed.
+        if postgres_row is None:
             return {}
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM serving_projection_members
-                WHERE projection_id = ? AND candidate_identity_key = ?
-                LIMIT 1
-                """,
-                (normalized_projection_id, normalized_candidate_key),
-            ).fetchone()
-        return self._serving_projection_member_from_row(row)
+        return postgres_row
 
     def count_serving_projection_members(self, projection_id: str, *, visible_only: bool = True) -> int:
         normalized_projection_id = str(projection_id or "").strip()
@@ -18904,42 +18848,33 @@ class ControlPlaneStore:
             clauses.append("visibility_state = ?")
             params.append("visible")
         where_sqlite = " AND ".join(clauses)
-        if self._control_plane_postgres_should_prefer_read("serving_projection_members"):
-            try:
-                count_rows = getattr(self._control_plane_postgres, "count_rows", None)
-                if callable(count_rows):
-                    return int(
-                        count_rows(
-                            "serving_projection_members",
-                            where_sql=where_sqlite.replace("?", "%s"),
-                            params=params,
-                        )
-                        or 0
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # COUNT(*) fallback below is dead and removed. count_rows is preferred; the select_many length is
+        # the fallback when the adapter lacks count_rows. A PG error returns 0 (the prior skip-fallback
+        # sentinel; behavior preserved exactly).
+        try:
+            count_rows = getattr(self._control_plane_postgres, "count_rows", None)
+            if callable(count_rows):
+                return int(
+                    count_rows(
+                        "serving_projection_members",
+                        where_sql=where_sqlite.replace("?", "%s"),
+                        params=params,
                     )
-            except Exception:
-                if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
-                    return 0
-            try:
-                rows = self._control_plane_postgres.select_many(
-                    "serving_projection_members",
-                    where_sql=where_sqlite.replace("?", "%s"),
-                    params=params,
-                    limit=0,
+                    or 0
                 )
-                return len(rows)
-            except Exception:
-                if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
-                    return 0
-        with self._lock:
-            row = self._connection.execute(
-                f"""
-                SELECT COUNT(*) AS row_count
-                FROM serving_projection_members
-                WHERE {where_sqlite}
-                """,
-                tuple(params),
-            ).fetchone()
-        return int(row["row_count"] or 0) if row is not None else 0
+        except Exception:
+            return 0
+        try:
+            rows = self._control_plane_postgres.select_many(
+                "serving_projection_members",
+                where_sql=where_sqlite.replace("?", "%s"),
+                params=params,
+                limit=0,
+            )
+            return len(rows)
+        except Exception:
+            return 0
 
     def replace_projection_person_search_index(
         self,
