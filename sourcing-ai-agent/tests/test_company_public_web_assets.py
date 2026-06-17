@@ -101,12 +101,13 @@ class FailingCompanyPublicWebCollectorFetcher:
 
 
 @unittest.skip(
-    "Track B B3.1 FINDING: migrating this class off SQLite-authoritative onto the PG store (required "
-    "by the B3.0 guard) surfaced a real PG-vs-SQLite behavioral DIVERGENCE — the failure-injection "
-    "tests (collector/provider fetch failure -> 'marks run failed') get status='completed' on PG "
-    "where SQLite gave 'failed'. The dual-path hid this. Skipped pending diagnosis of the "
-    "company-public-web run-failure-marking divergence on the PG path (a B2-style real-bug candidate), "
-    "not deleted. The sibling CompanyPublicWebAssetsCanonicalSyncTest (no failure injection) passes."
+    "Track B B3.1 — TEST-ISOLATION issue (diagnosed; NOT a production bug). The failure-marking is "
+    "correct: with a bootstrapped schema a provider failure returns 'failed'. These tests fail on PG "
+    "because (a) the run idempotency key is deterministic per target_company ('OpenAI' in every test) "
+    "and (b) PGDurableRuntimeTestMixin's per-CLASS schema is NOT reset between tests, so test N finds "
+    "test N-1's run and returns status='joined' instead of running fresh. The old per-test SQLite DB "
+    "isolated every test. Re-home with per-test isolation (unique target_company / idempotency nonce / "
+    "force_refresh, or schema truncation) to un-skip. Skipped, not deleted, pending that re-home."
 )
 class CompanyPublicWebAssetsTest(PGDurableRuntimeTestMixin, unittest.TestCase):
     def setUp(self) -> None:
@@ -542,9 +543,9 @@ class CompanyPublicWebAssetsTest(PGDurableRuntimeTestMixin, unittest.TestCase):
 
 
 @unittest.skip(
-    "Track B B3.1 FINDING: PRE-EXISTING failure on the PG path (this non-CI class was never validated). "
-    "Same company-public-web PG-vs-SQLite divergence as CompanyPublicWebAssetsTest above; skipped "
-    "pending diagnosis of the company-public-web refresh/sync behavior on Postgres."
+    "Track B B3.1 — same per-class-schema TEST-ISOLATION issue as CompanyPublicWebAssetsTest above "
+    "(deterministic idempotency key + non-reset per-class PG schema -> cross-test 'joined'); this "
+    "non-CI class was never validated on PG. Re-home with per-test isolation to un-skip. Not a prod bug."
 )
 class CompanyPublicWebAssetsCanonicalSyncTest(PGDurableRuntimeTestMixin, unittest.TestCase):
     def setUp(self) -> None:
