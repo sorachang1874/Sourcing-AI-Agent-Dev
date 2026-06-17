@@ -6737,30 +6737,11 @@ class ControlPlaneStore:
             params=[job_id],
             limit=0,
         )
-        if postgres_rows:
-            postgres_records = self._job_result_records_from_postgres_rows(postgres_rows, include_evidence=include_evidence)
-            if (
-                postgres_records
-                or self._control_plane_postgres_should_skip_sqlite_fallback("job_results")
-                or self._control_plane_postgres_should_skip_sqlite_fallback("candidates")
-            ):
-                return postgres_records
-        if self._control_plane_postgres_should_skip_sqlite_fallback("job_results"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # JOIN fallback below is dead and removed (should_skip_sqlite_fallback is always true).
+        if not postgres_rows:
             return []
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT jr.*, c.display_name, c.name_en, c.name_zh, c.category, c.organization,
-                       c.role, c.team, c.employment_status, c.focus_areas, c.education,
-                       c.work_history, c.notes, c.linkedin_url, c.media_url, c.source_dataset, c.source_path, c.metadata_json
-                FROM job_results jr
-                JOIN candidates c ON c.candidate_id = jr.candidate_id
-                WHERE jr.job_id = ?
-                ORDER BY jr.rank_index
-                """,
-                (job_id,),
-            ).fetchall()
-        return self._job_result_records_from_rows(rows, include_evidence=include_evidence)
+        return self._job_result_records_from_postgres_rows(postgres_rows, include_evidence=include_evidence)
 
     def get_job_results_page(
         self,
@@ -6777,35 +6758,12 @@ class ControlPlaneStore:
             params=[job_id],
             limit=0,
         )
-        if postgres_rows:
-            selected_rows = postgres_rows[normalized_offset : normalized_offset + normalized_limit]
-            postgres_records = self._job_result_records_from_postgres_rows(
-                selected_rows,
-                include_evidence=include_evidence,
-            )
-            if (
-                postgres_records
-                or self._control_plane_postgres_should_skip_sqlite_fallback("job_results")
-                or self._control_plane_postgres_should_skip_sqlite_fallback("candidates")
-            ):
-                return postgres_records
-        if self._control_plane_postgres_should_skip_sqlite_fallback("job_results"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # JOIN fallback below is dead and removed (should_skip_sqlite_fallback is always true).
+        if not postgres_rows:
             return []
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT jr.*, c.display_name, c.name_en, c.name_zh, c.category, c.organization,
-                       c.role, c.team, c.employment_status, c.focus_areas, c.education,
-                       c.work_history, c.notes, c.linkedin_url, c.media_url, c.source_dataset, c.source_path, c.metadata_json
-                FROM job_results jr
-                JOIN candidates c ON c.candidate_id = jr.candidate_id
-                WHERE jr.job_id = ?
-                ORDER BY jr.rank_index
-                LIMIT ? OFFSET ?
-                """,
-                (job_id, normalized_limit, normalized_offset),
-            ).fetchall()
-        return self._job_result_records_from_rows(rows, include_evidence=include_evidence)
+        selected_rows = postgres_rows[normalized_offset : normalized_offset + normalized_limit]
+        return self._job_result_records_from_postgres_rows(selected_rows, include_evidence=include_evidence)
 
     def get_job_results_for_candidates(
         self,
@@ -6828,31 +6786,11 @@ class ControlPlaneStore:
             params=postgres_params,
             limit=0,
         )
-        if postgres_rows:
-            postgres_records = self._job_result_records_from_postgres_rows(postgres_rows, include_evidence=include_evidence)
-            if (
-                postgres_records
-                or self._control_plane_postgres_should_skip_sqlite_fallback("job_results")
-                or self._control_plane_postgres_should_skip_sqlite_fallback("candidates")
-            ):
-                return postgres_records
-        if self._control_plane_postgres_should_skip_sqlite_fallback("job_results"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # JOIN fallback below (and its now-unused SQLite-`?` placeholders builder) is dead and removed.
+        if not postgres_rows:
             return []
-        placeholders = ", ".join("?" for _ in normalized_candidate_ids)
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT jr.*, c.display_name, c.name_en, c.name_zh, c.category, c.organization,
-                       c.role, c.team, c.employment_status, c.focus_areas, c.education,
-                       c.work_history, c.notes, c.linkedin_url, c.media_url, c.source_dataset, c.source_path, c.metadata_json
-                FROM job_results jr
-                JOIN candidates c ON c.candidate_id = jr.candidate_id
-                WHERE jr.job_id = ? AND jr.candidate_id IN ({placeholders})
-                ORDER BY jr.rank_index
-                """,
-                (job_id, *normalized_candidate_ids),
-            ).fetchall()
-        return self._job_result_records_from_rows(rows, include_evidence=include_evidence)
+        return self._job_result_records_from_postgres_rows(postgres_rows, include_evidence=include_evidence)
 
     def count_job_results(self, job_id: str) -> int:
         postgres_rows = self._select_postgres_job_result_rows(
@@ -6860,14 +6798,9 @@ class ControlPlaneStore:
             params=[job_id],
             limit=0,
         )
-        if postgres_rows or self._control_plane_postgres_should_skip_sqlite_fallback("job_results"):
-            return len(postgres_rows)
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT COUNT(*) AS row_count FROM job_results WHERE job_id = ?",
-                (job_id,),
-            ).fetchone()
-        return int((row["row_count"] if row is not None else 0) or 0)
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # COUNT(*) fallback below is dead and removed (should_skip_sqlite_fallback is always true).
+        return len(postgres_rows)
 
     def create_plan_review_session(
         self,

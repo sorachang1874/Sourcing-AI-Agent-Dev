@@ -250,3 +250,15 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   get_workflow_command、list_workflow_commands、list_ready_workflow_commands)、projection_person_search_index(3:
   count_projection_person_search_index、_search_projection_person_index_rows、_list_projection_person_search_index_rows)、
   frontend_history_links(4:get/list/list_for_job/list_for_review)。全部 DELETABLE_READ。
+- **2026-06-17 B3.2 batch 5 DONE(job_results reads)**:删 4 个读方法的死 SQLite JOIN fallback ——
+  get_job_results、get_job_results_page、get_job_results_for_candidates、count_job_results(均 read_list/scalar,
+  sentinel []/0)。这些方法 JOIN candidates,故每个死分支同时含 `skip("job_results")` 与 `skip("candidates")` 两 gate
+  (恒真);塌缩 `if postgres_rows: records; if (records or skip or skip): return records; if skip: return []; <SQLite JOIN>`
+  → `if not postgres_rows: return []; return records`(get_job_results_for_candidates 另删死 SQLite-`?` placeholders
+  builder)。第 8 个 job_results gate 在 `replace_job_results`(write,line 4894)→ B4。gates:job_results 8→1,
+  另顺带移除 3 个嵌在这些 JOIN 分支里的 `candidates` gate(11→8);总 216→206。**验证**:test_results_api(job_results
+  读方法唯一 PG-fixture 覆盖)**292 passed**;**5 failed = batch-3 已证 PRE-EXISTING 的同一组 test_results_api 失败**
+  (board_runtime_state_current_snapshot_serving、crm_public_web_promotions_survive_force_refresh、crm_public_web_service_e2e、
+  lovable_board_visible_patches、partial_current_snapshot_overlay;失败集合逐一相同 → 本批零新增 regression,无需再 stash 对照)。
+  storage.py AST/import clean;ruff 总错仍 18(无新增)。batch 6+ verified plan(workflow_commands 3 /
+  projection_person_search_index 3 / frontend_history_links 4)仍待执行。
