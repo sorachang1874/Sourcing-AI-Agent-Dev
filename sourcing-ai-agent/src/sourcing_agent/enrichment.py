@@ -11191,10 +11191,14 @@ def _candidate_profile_identifiers(candidate: Candidate) -> set[str]:
 
 
 def _profile_identifiers(profile: dict[str, Any]) -> set[str]:
+    # Track B diagnosis fix: `requested_profile_url` is the URL that was *requested* (the candidate's
+    # seed LinkedIn URL), not the *resolved* person the provider returned. Including it here let a
+    # former-false-positive resolve-target overlap the candidate's identity and be miscounted as a
+    # member. Identity matching must use only resolved-person identifiers. (requested_profile_url keeps
+    # its legitimate registry-alias-linking uses elsewhere — those are separate code paths.)
     return _linkedin_identifier_set(
         [
             profile.get("profile_url"),
-            profile.get("requested_profile_url"),
             profile.get("public_identifier"),
             profile.get("username"),
             profile.get("more_profiles"),
