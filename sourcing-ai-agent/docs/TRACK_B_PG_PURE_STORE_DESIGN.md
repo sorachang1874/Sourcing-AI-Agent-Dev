@@ -323,3 +323,21 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   - **下一步 B4.1b**:删 `init_schema`(storage.py:1436-3495,~2000 行 SQLite DDL)+ `_ensure_column` ALTER drift +
     `_configure_connection` + `_bootstrap_schema_from_sqlite_source`(adapter)。再 B4.1c 起 re-home 16 个 `_replace_*_from_sqlite`
     bulk-load + ~10 个外部 sync caller → 删 mirror(B4.1d)→ 删 shadow self._conn(B4.1e)→ 塌缩恒真 routing + 修 drifted registry(B4.1f)。
+- **2026-06-21 B4.1b CHARACTERIZE + PILOT(workflow wf_76d6035c,5 investigator,default-to-LIVE)—— 纠正 B4.1b 计划**:
+  **init_schema 不能直接删** —— characterization 发现 shadow 仍被 LIVE 路径触达。**关键洞见**:init_schema 删除只需 shadow
+  触点**不可达**(unreachable),不必先物删(unreachable 代码引用缺表不会报错)。故 B4.1b 重定为**给 conditional-gated 写方法加
+  fail-closed guard**(非删除;物删随 B4.1d mirror/tail sweep)。
+  - **LIVE 触点(~9 个写方法,anti-pattern:`if row is not None: return` 后缺 skip-fallback guard → native-None 时 fall through 到 shadow)**:
+    save_job(4488)、append_job_event(4596,+compaction tail 4667)、upsert_acquisition_shard_registry(17624 SELECT pre-check)、
+    upsert_organization_asset_registry(~16590)、upsert_organization_execution_profile(~16920)、review_plan_session(7072)、
+    review_manual_review_item(7566)、create_plan_review_session(6895)、record_cloud_asset_operation(21593)。
+  - **CLEAN(无 live 触点,characterization 确认)**:init_schema tail 的 refresh_matching_metadata / _backfill_* / _ensure_column
+    (仅 init_schema 调,删 init_schema 即随之消失);advisory-lock SQLite fallback(profile_prefetch/board_visible patch lock);
+    legacy target-public-web SQLite 子系统;__init__/close()。bulk-replace candidate/evidence + manual_review + confidence_policy +
+    organization_asset_registry 的 `_replace_*` 尾**全 gated-dead**(PG-native 早返/raise)—— **唯 append_job_event 例外**(conditional
+    `if result is not None: return`,native 在 empty job_id / no-row 时返 None 非异常 → fall through)。
+  - **PILOT DONE(commit 7184240)**:save_job 加 `if should_skip_sqlite_fallback("jobs"): return`(native-None = terminal-protection
+    no-op,行为等价;shadow tail 转 unreachable)。验证:test_pg_only_dedup_reads + storage_surface_guardrails + operation_runtime
+    101 passed;ruff 仍 18。
+  - **B4.1b 剩余(下一批)**:append_job_event(void + compaction)+ 7 个 value-returning upsert(native-None 时正确返值需逐方法定:
+    re-read PG 行 vs raise vs {} sentinel)。全部 fail-close 后 → 删 init_schema + shadow(原 B4.1b/e)。
