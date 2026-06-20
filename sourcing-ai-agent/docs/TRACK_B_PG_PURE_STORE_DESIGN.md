@@ -27,9 +27,16 @@
    monotonic-delta 字段处理 214-976,故为"改用 adapter upsert"而非从零)。`get_latest_criteria_version`
    纯计算无 DB。
 
-**结论:Track B 不是"重写 292 方法补 PG",而是"删除已死的 SQLite 双路径 + 统一 schema 单源"。**
+**结论:Track B 的下限是"删除已死的 SQLite 双路径 + 统一 schema 单源",上限是把控制平面存储层重做成前瞻、高效的设计。**
 dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md` invariant 7)的根 —
-删 SQLite = 从结构上消灭该 bug 族。风险低于"重写"定性,因为被删的 SQLite 分支在生产本就不执行。
+删 SQLite = 从结构上消灭该 bug 族;这部分逐方法删支、行为等价、低风险,是 B3.2 的纪律。
+
+> **REFRAME(owner 2026-06-21):允许部分乃至完全重写。** 继承自前任的代码并未完全实现前瞻架构与高效工程,
+> 凡 PG 路径本身或整体存储设计有缺陷(非前瞻、低效、facade 冗余、routing 脚手架已恒真等)的地方,**应改进甚至重构,
+> 而不是机械保留**。即:B3.2 仍走"删死支、行为等价"的安全节奏;但 B4 及收尾**不再受"删-非-重写"约束** ——
+> 在删 mirror/shadow 的同时,主动评估并重做 `ControlPlaneStore` facade / adapter 边界 / 路由层 / 写路径,
+> 朝"一个优秀的 PG-native 类型化存储层"演进。重写仍受 characterize-first + 对抗式验证 + 行为不变量(invariant 7)+
+> 合同 lane 把关;凡改变可观察契约处,须独立 review gate。
 
 ## §1 当前架构(要拆除的)
 
@@ -48,7 +55,8 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
 
 ## §2 Ratified 决策(owner 2026-06-16)
 
-- **取径**:删-非-重写(consolidation;durable-foundation:修设计不修症状)。
+- **取径**:删-非-重写(consolidation;durable-foundation:修设计不修症状)。**已被 2026-06-21 REFRAME 放宽
+  (见 §0):删支是下限/B3.2 纪律,B4 及收尾允许重写/重构以达成前瞻高效设计。**
 - **schema 机制**:**versioned SQL migration files + tiny runner** —— `migrations/000N_*.sql` 顺序应用,
   `schema_migrations(version, applied_at)` 记账,幂等;DB-native、无新依赖、plain reviewable DDL、可移植
   (优于 in-house Python DDL registry 的"魔法",优于 Alembic 的 SQLAlchemy 阻抗)。
@@ -276,3 +284,27 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   ruff 总错仍 18(并行 clause 删除无 F841 残留)。**B3.2 累计:232→196 gate(36 个死 SQLite read 分支删除,横跨 jobs/
   serving_projection_members/job_materialization_items/LinkedIn registry/job_results/frontend_history_links/workflow_commands/
   projection_person_search_index 8 个表组)。**
+- **2026-06-21 pre-existing 失败簇 DIAGNOSE DONE(workflow wf_48a95eaf,8 analyzer + 8 对抗式 verifier)**:
+  8 个稳定失败(第 9 个 background_followup_refresh 隔离下 PASS = order-dependent flake)定性 —— **2 个真 production bug
+  (已修)**,其余非 bug:
+  - **REAL_BUG #1(已修,commit 见下):** `partial_current_snapshot_overlay`(`80!=297`)—— `storage.py` 的
+    upsert_job_result_lifecycle 非-delta clamp `else` 分支把 expected_candidate_count 强行压到 served_count,
+    clobber 掉 orchestrator 已算好的 current-snapshot 人口 floor(297)。**关键纠偏**:diagnosis 给的一行 fix
+    (`max(served, incoming)`)经 full-suite 验证**会 regress** `test_non_delta_partial_patch_after_row_shell_does_not_reinflate_raw_expected_count`
+    (raw 145 reinflate)—— A/B 两场景都走同一 else 分支但要相反结果(A 保 297,B 压到 served)。store 无法从字段区分
+    "真人口" vs "陈旧 raw 分母"。正确 fix = **trusted provenance signal**:orchestrator reuse 路径(`orchestrator.py:11238+`)
+    把**当场计数的** current_snapshot_candidate_count 盖进 `metadata["current_snapshot_population"]`,clamp else 分支
+    只在该可信信号 > served 时抬高 expected(否则压到 served)。验证:full test_results_api 4 failed/293 passed
+    (修前 5/292;reinflate 不再 fail,overlay 转 pass,promoted shrink-after-dedupe 测不受影响)。
+  - **REAL_BUG #8(已修):** `company_asset_completion name_matched_non_member` —— `enrichment.py:_profile_identifiers`
+    把 `requested_profile_url`(*请求*的 URL,非*解析出*的人)算进身份集,导致 former-false-positive 与候选人身份 overlap、
+    被误判为 member。fix = 从 `_profile_identifiers` 去掉 requested_profile_url(其 registry-alias-linking 合法用途是别的代码路径,保留)。
+    验证:test_company_asset_completion + test_enrichment 152 passed。
+  - **非 bug(留待处理,非 Track B 本体):** CONTRACT_DRIFT ×4 —— `board_runtime_state_row_shell`(测断言看板计数过时,应 112/297)、
+    `lovable_board_visible_patches`(**owner 级 contract 决策**:哪个 numerator 才"诚实")、`crm_public_web_promotions_force_refresh`
+    + `crm_public_web_service_e2e`(C1.4 已把导出改异步,这两测仍断言旧**同步**导出契约 → 应仿 sibling 改 submit→drain→poll);
+    TEST_ARTIFACT ×1 —— `requires_postgres_dsn`(setUp 未 unset DSN env,需自隔离);FLAKE ×1 —— `background_followup_refresh`
+    (teardown OSError / JSONDecode,隔离下 PASS)。**对抗式 verifier 有效**:把 `snapshot_materialization_idempotent`
+    从 analyst 的 REAL_BUG 翻成 CONTRACT_DRIFT/low(backfill 探针读 legacy 表,非 serving bug)。
+  - **方法论教训(已沉淀进 playbook principle 16):** 即便对抗式验证过的一行 fix,仍须跑**全 clamp 测族**(blast-radius),
+    否则会漏掉反向场景测 —— 本例正是 full run 抓出 reinflate regression,逼出正确的 trusted-signal 双文件设计。
