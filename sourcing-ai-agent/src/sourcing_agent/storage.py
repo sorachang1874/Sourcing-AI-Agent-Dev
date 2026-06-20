@@ -11602,18 +11602,11 @@ class ControlPlaneStore:
             where_sql="history_id = %s",
             params=[normalized_history_id],
         )
-        if postgres_row is not None:
-            return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("frontend_history_links"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed.
+        if postgres_row is None:
             return None
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM frontend_history_links WHERE history_id = ? LIMIT 1",
-                (normalized_history_id,),
-            ).fetchone()
-        if row is None:
-            return None
-        return self._frontend_history_link_from_row(row)
+        return postgres_row
 
     def list_frontend_history_links(
         self,
@@ -11626,20 +11619,11 @@ class ControlPlaneStore:
             order_by_sql="updated_at DESC, created_at DESC, history_id DESC",
             limit=limit,
         )
-        if postgres_rows:
-            return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("frontend_history_links"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed.
+        if not postgres_rows:
             return []
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT * FROM frontend_history_links
-                ORDER BY updated_at DESC, created_at DESC, history_id DESC
-                LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
-        return [self._frontend_history_link_from_row(row) for row in rows]
+        return postgres_rows
 
     def list_frontend_history_links_for_job(
         self,
@@ -11658,21 +11642,11 @@ class ControlPlaneStore:
             order_by_sql="updated_at DESC, created_at DESC, history_id DESC",
             limit=limit,
         )
-        if postgres_rows:
-            return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("frontend_history_links"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed.
+        if not postgres_rows:
             return []
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT * FROM frontend_history_links
-                WHERE job_id = ?
-                ORDER BY updated_at DESC, created_at DESC, history_id DESC
-                LIMIT ?
-                """,
-                (normalized_job_id, limit),
-            ).fetchall()
-        return [self._frontend_history_link_from_row(row) for row in rows]
+        return postgres_rows
 
     def list_frontend_history_links_for_review(
         self,
@@ -11691,21 +11665,11 @@ class ControlPlaneStore:
             order_by_sql="updated_at DESC, created_at DESC, history_id DESC",
             limit=limit,
         )
-        if postgres_rows:
-            return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("frontend_history_links"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed.
+        if not postgres_rows:
             return []
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT * FROM frontend_history_links
-                WHERE review_id = ?
-                ORDER BY updated_at DESC, created_at DESC, history_id DESC
-                LIMIT ?
-                """,
-                (normalized_review_id, limit),
-            ).fetchall()
-        return [self._frontend_history_link_from_row(row) for row in rows]
+        return postgres_rows
 
     def upsert_frontend_history_link(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = _normalize_frontend_history_link_payload(payload)
@@ -14723,16 +14687,11 @@ class ControlPlaneStore:
             where_sql="command_id = %s",
             params=[normalized_command_id],
         )
-        if postgres_row is not None:
-            return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_commands"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed.
+        if postgres_row is None:
             return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
-                (normalized_command_id,),
-            ).fetchone()
-        return self._workflow_command_from_row(row)
+        return postgres_row
 
     def update_workflow_command_payload(
         self,
@@ -14845,33 +14804,25 @@ class ControlPlaneStore:
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         self._require_postgres_for_durable_runtime("workflow_commands")
-        clauses: list[str] = []
-        params: list[Any] = []
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback (and its now-unused SQLite-`?` clause/param builders) is dead and removed; only the
+        # postgres %s variants remain.
         pg_clauses: list[str] = []
         pg_params: list[Any] = []
         normalized_run_id = str(workflow_run_id or "").strip()
         if normalized_run_id:
-            clauses.append("workflow_run_id = ?")
-            params.append(normalized_run_id)
             pg_clauses.append("workflow_run_id = %s")
             pg_params.append(normalized_run_id)
         normalized_operation_id = str(operation_id or "").strip()
         if normalized_operation_id:
-            clauses.append("operation_id = ?")
-            params.append(normalized_operation_id)
             pg_clauses.append("operation_id = %s")
             pg_params.append(normalized_operation_id)
         normalized_owner = str(owner or "").strip()
         if normalized_owner:
-            clauses.append("owner = ?")
-            params.append(normalized_owner)
             pg_clauses.append("owner = %s")
             pg_params.append(normalized_owner)
         normalized_statuses = [str(status or "").strip() for status in list(statuses or []) if str(status or "").strip()]
         if normalized_statuses:
-            placeholders = ", ".join(["?"] * len(normalized_statuses))
-            clauses.append(f"status IN ({placeholders})")
-            params.extend(normalized_statuses)
             pg_placeholders = ", ".join(["%s"] * len(normalized_statuses))
             pg_clauses.append(f"status IN ({pg_placeholders})")
             pg_params.extend(normalized_statuses)
@@ -14883,21 +14834,9 @@ class ControlPlaneStore:
             order_by_sql="updated_at ASC, created_at ASC",
             limit=max(0, int(limit or 0)),
         )
-        if pg_rows:
-            return pg_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_commands"):
+        if not pg_rows:
             return []
-        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
-        sqlite_params = list(params)
-        if int(limit or 0) > 0:
-            sqlite_params.append(max(1, int(limit or 0)))
-        with self._lock:
-            rows = self._connection.execute(
-                f"SELECT * FROM workflow_commands {where_sql} ORDER BY updated_at ASC, created_at ASC{limit_sql}",
-                tuple(sqlite_params),
-            ).fetchall()
-        return [payload for row in rows if (payload := self._workflow_command_from_row(row))]
+        return pg_rows
 
     def list_ready_workflow_commands(
         self,
@@ -14926,12 +14865,9 @@ class ControlPlaneStore:
             if reclaim_claimed
             else "status IN ('queued', 'retry_wait', 'running')"
         )
-        clauses = [
-            ready_status_in,
-            "(not_before_at = '' OR datetime(not_before_at) <= datetime(?))",
-            "(lease_expires_at = '' OR datetime(lease_expires_at) <= datetime(?))",
-        ]
-        params: list[Any] = [now, now]
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback (and its now-unused SQLite-`?` clause/param builders, incl. the datetime() wrappers) is
+        # dead and removed; only the postgres %s variants remain. ready_status_in is dialect-neutral.
         pg_clauses = [
             ready_status_in,
             "(not_before_at = '' OR not_before_at <= %s)",
@@ -14939,18 +14875,12 @@ class ControlPlaneStore:
         ]
         pg_params: list[Any] = [now, now]
         if normalized_run_id:
-            clauses.append("workflow_run_id = ?")
-            params.append(normalized_run_id)
             pg_clauses.append("workflow_run_id = %s")
             pg_params.append(normalized_run_id)
         if normalized_owner:
-            clauses.append("owner = ?")
-            params.append(normalized_owner)
             pg_clauses.append("owner = %s")
             pg_params.append(normalized_owner)
         if normalized_type:
-            clauses.append("command_type = ?")
-            params.append(normalized_type)
             pg_clauses.append("command_type = %s")
             pg_params.append(normalized_type)
         pg_rows = self._select_control_plane_rows(
@@ -14961,20 +14891,9 @@ class ControlPlaneStore:
             order_by_sql="updated_at ASC, created_at ASC",
             limit=max(1, int(limit or 100)),
         )
-        if pg_rows:
-            return pg_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_commands"):
+        if not pg_rows:
             return []
-        with self._lock:
-            rows = self._connection.execute(
-                (
-                    "SELECT * FROM workflow_commands WHERE "
-                    + " AND ".join(clauses)
-                    + " ORDER BY updated_at ASC, created_at ASC LIMIT ?"
-                ),
-                tuple([*params, max(1, int(limit or 100))]),
-            ).fetchall()
-        return [payload for row in rows if (payload := self._workflow_command_from_row(row))]
+        return pg_rows
 
     def claim_workflow_command(
         self,
@@ -19018,31 +18937,24 @@ class ControlPlaneStore:
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             return 0
-        if self._control_plane_postgres_should_prefer_read("projection_person_search_index"):
-            try:
-                count_rows = getattr(self._control_plane_postgres, "count_rows", None)
-                if callable(count_rows):
-                    return int(
-                        count_rows(
-                            "projection_person_search_index",
-                            where_sql="projection_id = %s",
-                            params=[normalized_projection_id],
-                        )
-                        or 0
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # COUNT(*) fallback is dead and removed. count_rows is the PG count path; a PG error returns 0 (the
+        # prior skip-fallback sentinel). If the adapter lacks count_rows, the prior path hit the empty SQLite
+        # shadow and also returned 0 -- preserved exactly as the trailing `return 0`.
+        try:
+            count_rows = getattr(self._control_plane_postgres, "count_rows", None)
+            if callable(count_rows):
+                return int(
+                    count_rows(
+                        "projection_person_search_index",
+                        where_sql="projection_id = %s",
+                        params=[normalized_projection_id],
                     )
-            except Exception:
-                if self._control_plane_postgres_should_skip_sqlite_fallback("projection_person_search_index"):
-                    return 0
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT COUNT(*) AS row_count
-                FROM projection_person_search_index
-                WHERE projection_id = ?
-                """,
-                (normalized_projection_id,),
-            ).fetchone()
-        return int(row["row_count"] or 0) if row is not None else 0
+                    or 0
+                )
+        except Exception:
+            return 0
+        return 0
 
     def search_projection_person_index(
         self,
@@ -19226,21 +19138,11 @@ class ControlPlaneStore:
             order_by_sql="candidate_identity_key ASC",
             limit=0,
         )
-        if postgres_rows:
-            return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("projection_person_search_index"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed (the where clause is still fed to the PG read via .replace).
+        if not postgres_rows:
             return []
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM projection_person_search_index
-                WHERE {where_sqlite}
-                ORDER BY candidate_identity_key ASC
-                """,
-                tuple(params),
-            ).fetchall()
-        return [self._projection_person_search_index_from_row(row) for row in rows]
+        return postgres_rows
 
     def get_projection_person_search_index_summary(self, projection_id: str) -> dict[str, Any]:
         normalized_projection_id = str(projection_id or "").strip()
@@ -19301,22 +19203,11 @@ class ControlPlaneStore:
             limit=max(1, int(limit or 1000)),
             offset=normalized_offset,
         )
-        if postgres_rows:
-            return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("projection_person_search_index"):
+        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
+        # fallback below is dead and removed.
+        if not postgres_rows:
             return []
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT *
-                FROM projection_person_search_index
-                WHERE projection_id = ?
-                ORDER BY updated_at DESC, candidate_identity_key ASC
-                LIMIT ? OFFSET ?
-                """,
-                (projection_id, max(1, int(limit or 1000)), normalized_offset),
-            ).fetchall()
-        return [self._projection_person_search_index_from_row(row) for row in rows]
+        return postgres_rows
 
     def _projection_person_search_index_row_payload(
         self,

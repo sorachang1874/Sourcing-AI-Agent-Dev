@@ -262,3 +262,17 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   lovable_board_visible_patches、partial_current_snapshot_overlay;失败集合逐一相同 → 本批零新增 regression,无需再 stash 对照)。
   storage.py AST/import clean;ruff 总错仍 18(无新增)。batch 6+ verified plan(workflow_commands 3 /
   projection_person_search_index 3 / frontend_history_links 4)仍待执行。
+- **2026-06-20 B3.2 batch 6 DONE(3 表合并:frontend_history_links + workflow_commands + projection_person_search_index)**
+  —— ultracode 关闭,主循环驱动(用 batch-4 workflow 已 verified 的 plan,逐方法重读确认后编辑)。**10 读方法**:
+  frontend_history_links(get_frontend_history_link + list_frontend_history_links + _for_job + _for_review,皆 clean
+  Shape A,sentinel None/[])、workflow_commands(get_workflow_command sentinel {};list_workflow_commands +
+  list_ready_workflow_commands 删并行 `?` clause/param builder,留 `%s`;update_workflow_command_payload 是 write+mirror
+  留 B4)、projection_person_search_index(count_projection_person_search_index —— **特例**:它 count_rows→SQLite 无
+  select_many 中间层,故 count_rows 不可调用时原经空 SQLite shadow 返 0,塌缩保留为尾部 `return 0`;_search_projection_person_index_rows
+  + _list_projection_person_search_index_rows clean)。其余 gate(frontend delete 2、workflow 3 write、projection 3 write)→ B4。
+  gates:frontend 6→2、workflow 6→3、projection 6→3;总 206→196。**验证 424 passed 0 fail**:group A(durable_runtime/
+  recovery_drain_registry/recovery_event_wakeup/export_async_task/frontend_history_recovery)102 + group B(projection_crm_api_contracts/
+  person_asset_crm_projection_contracts/control_plane_live_postgres/operation_runtime/enrichment)322。零失败 → 无需 baseline 对照。
+  ruff 总错仍 18(并行 clause 删除无 F841 残留)。**B3.2 累计:232→196 gate(36 个死 SQLite read 分支删除,横跨 jobs/
+  serving_projection_members/job_materialization_items/LinkedIn registry/job_results/frontend_history_links/workflow_commands/
+  projection_person_search_index 8 个表组)。**
