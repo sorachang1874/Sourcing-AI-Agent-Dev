@@ -308,3 +308,18 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     从 analyst 的 REAL_BUG 翻成 CONTRACT_DRIFT/low(backfill 探针读 legacy 表,非 serving bug)。
   - **方法论教训(已沉淀进 playbook principle 16):** 即便对抗式验证过的一行 fix,仍须跑**全 clamp 测族**(blast-radius),
     否则会漏掉反向场景测 —— 本例正是 full run 抓出 reinflate regression,逼出正确的 trusted-signal 双文件设计。
+- **2026-06-21 B4.1a DONE(commit 5af6dc5)—— schema oracle 脱离 SQLite 源(PG-native drift guard)**:B4.1 第一子阶段,
+  只改测试+脚本(无 production code),为 B4.1b 删 init_schema + SQLite shadow 解阻。**设计**:migrations 既是唯一 schema 源,
+  就不再有独立 SQLite oracle 可对照 —— migration 文件本身即 golden;有意义的 drift 是"schema 创建在 migration ledger 之外"。
+  - `tests/test_migration_runner.py`:drift guard(改名 `test_runner_built_schema_matches_live_bootstrap`)改为构建**真实 live
+    bootstrap**(migration runner + bootstrap 时跑的 writer/coordination ensures)并断言它与**仅 runner**建的 schema 结构逐表/列/索引
+    相同(83 表)。PG-native,无 SQLite。若某 ensure 开始建 migrations 没有的 schema 即 fail。取代旧的
+    `_bootstrap_schema_from_sqlite_source` 对照。
+  - `scripts/capture_pg_schema_baseline.py`:改为 dump **live PG-native** schema(ensure_bootstrapped + writer ensure),
+    排除 runner 自己的 `schema_migrations` ledger(baseline 本就不含)。
+  - **验证**:4 migration_runner 测绿;repurposed generator 重生成 `0001_baseline.sql` **逐字节相同**(83 表)—— 证明 live
+    PG-native bootstrap 产出的 application schema 与已退役的 SQLite 派生路径**完全一致**(raw dump 唯一差异是 schema_migrations
+    ledger,已排除)。`_bootstrap_schema_from_sqlite_source` 现**零 caller**,B4.1b 删。
+  - **下一步 B4.1b**:删 `init_schema`(storage.py:1436-3495,~2000 行 SQLite DDL)+ `_ensure_column` ALTER drift +
+    `_configure_connection` + `_bootstrap_schema_from_sqlite_source`(adapter)。再 B4.1c 起 re-home 16 个 `_replace_*_from_sqlite`
+    bulk-load + ~10 个外部 sync caller → 删 mirror(B4.1d)→ 删 shadow self._conn(B4.1e)→ 塌缩恒真 routing + 修 drifted registry(B4.1f)。
