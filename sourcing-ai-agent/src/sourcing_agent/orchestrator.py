@@ -11238,6 +11238,13 @@ class SourcingOrchestrator:
             existing_lifecycle_for_reuse = dict(existing_lifecycle)
             if canonical_expected_count > _coerce_int(existing_lifecycle_for_reuse.get("expected_candidate_count"), 0):
                 existing_lifecycle_for_reuse["expected_candidate_count"] = canonical_expected_count
+            # Stamp the freshly-counted current-snapshot population as a trusted floor signal for the
+            # storage non-delta clamp. The clamp cannot otherwise distinguish a real current-snapshot
+            # population from a stale raw URL-lane denominator, so without this it would clobber the
+            # population back down to the served count on the already-served reuse path.
+            _reuse_metadata = dict(existing_lifecycle_for_reuse.get("metadata") or {})
+            _reuse_metadata["current_snapshot_population"] = current_snapshot_candidate_count
+            existing_lifecycle_for_reuse["metadata"] = _reuse_metadata
             return self._publish_current_snapshot_already_served_partial_board_visible_patch(
                 job_id=job_id,
                 request=request,

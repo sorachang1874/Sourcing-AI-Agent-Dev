@@ -6386,11 +6386,27 @@ class ControlPlaneStore:
                         "stage1_public_candidate_count",
                     )
                 else:
-                    merged["expected_candidate_count"] = canonical_served_count
-                    metadata_payload_for_clamp.setdefault(
-                        "non_delta_expected_source",
-                        "canonical_served_candidate_count",
+                    # Track B diagnosis fix: floor expected on a TRUSTED current-snapshot population
+                    # signal, never on the raw incoming expected_candidate_count. The orchestrator stamps
+                    # metadata["current_snapshot_population"] only when it has freshly counted the current
+                    # snapshot (the already-served reuse path), so an honest population (e.g. 297) survives
+                    # the clamp while a stale raw URL-lane denominator — which never carries this signal —
+                    # is still suppressed down to the served count.
+                    trusted_current_snapshot_population = int(
+                        metadata_payload_for_clamp.get("current_snapshot_population") or 0
                     )
+                    if trusted_current_snapshot_population > canonical_served_count:
+                        merged["expected_candidate_count"] = trusted_current_snapshot_population
+                        metadata_payload_for_clamp.setdefault(
+                            "non_delta_expected_source",
+                            "current_snapshot_population",
+                        )
+                    else:
+                        merged["expected_candidate_count"] = canonical_served_count
+                        metadata_payload_for_clamp.setdefault(
+                            "non_delta_expected_source",
+                            "canonical_served_candidate_count",
+                        )
                 metadata_payload_for_clamp.setdefault(
                     "non_delta_canonical_served_candidate_count",
                     canonical_served_count,
