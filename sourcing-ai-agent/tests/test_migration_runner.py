@@ -1,10 +1,12 @@
 """Track B B1.2 — migration runner contract tests (PG-backed).
 
 Pins the runner's four load-bearing behaviors:
-  1. drift guard — a runner-built schema is structurally IDENTICAL to the SQLite-derived
-     source schema (init_schema + sync + writer/coordination ensures, via the explicit legacy
-     _bootstrap_schema_from_sqlite_source path). If the store schema changes without
-     regenerating migrations/0001_baseline.sql, this fails. Retires with the shadow at B4.
+  1. drift guard (Track B B4.1a, PG-native) — the live runtime bootstrap (the migration runner
+     PLUS the writer/coordination ensures that run on bootstrap) is structurally IDENTICAL to a
+     schema built by the migration runner ALONE. If a writer/coordination ensure starts creating
+     schema that migrations/000N_*.sql do not, this fails — no schema may live outside the ledger.
+     (Replaces the pre-B4.1a guard that compared against the SQLite init_schema source via
+     _bootstrap_schema_from_sqlite_source.)
   2. idempotency — re-running applies nothing (ledger-gated).
   3. brownfield adoption — a schema that already has the baseline tables but no ledger is
      STAMPED at the baseline (not re-CREATE-d), so the B1.3 cutover is safe on live DBs.
@@ -97,20 +99,25 @@ class MigrationRunnerTest(unittest.TestCase):
             with conn.cursor() as cur:
                 cur.execute(f"DROP SCHEMA IF EXISTS {quoted} CASCADE")
 
-    def test_runner_builds_schema_identical_to_sqlite_source(self) -> None:
-        # SQLite-derived side: the init_schema source of truth, built via the explicit legacy
-        # path (NOT ensure_bootstrapped — that now applies the migrations, which would make this
-        # guard circular). This catches the store schema (init_schema + ensures) drifting from
-        # migrations/0001_baseline.sql until B4 removes the SQLite shadow.
+    def test_runner_built_schema_matches_live_bootstrap(self) -> None:
+        # Track B B4.1a: migrations are the sole schema source of truth, so there is no longer an
+        # independent SQLite oracle to diff against — the migration files ARE the golden. The
+        # meaningful remaining drift is "schema created outside the migration ledger": this builds
+        # the real live runtime bootstrap (the migration runner + the writer/coordination ensures
+        # that run on bootstrap) and asserts it is structurally identical to a schema built by the
+        # migration runner ALONE. PG-native, no SQLite — the pre-B4.1a
+        # _bootstrap_schema_from_sqlite_source comparison is retired.
         from tests.pg_store_fixture import pg_backed_control_plane_store
 
-        with pg_backed_control_plane_store(schema_label="mr_code") as store:
+        with pg_backed_control_plane_store(schema_label="mr_live") as store:
             adapter = store._control_plane_postgres
-            adapter._bootstrap_schema_from_sqlite_source()
-            code_schema = adapter.schema
+            # Construction already ran ensure_bootstrapped (migration runner + coordination ensure);
+            # force the writer ensure too so the full live schema is materialized.
+            adapter._ensure_control_plane_writer_schema()
+            live_schema = adapter.schema
             with psycopg.connect(self.dsn, autocommit=True, client_encoding="utf8") as conn:
                 with conn.cursor() as cur:
-                    code_fp = _fingerprint(cur, code_schema)
+                    live_fp = _fingerprint(cur, live_schema)
 
         # runner side: a fresh schema built solely by applying the migrations
         runner_schema = self._fresh_schema("runner")
@@ -121,9 +128,9 @@ class MigrationRunnerTest(unittest.TestCase):
 
         self.assertEqual(result.applied, ["0001_baseline"])
         self.assertEqual(result.stamped, [])
-        self.assertEqual(runner_fp["tables"], code_fp["tables"], "table set drift vs SQLite source")
-        self.assertEqual(runner_fp["columns"], code_fp["columns"], "column drift vs SQLite source")
-        self.assertEqual(runner_fp["indexes"], code_fp["indexes"], "index drift vs SQLite source")
+        self.assertEqual(runner_fp["tables"], live_fp["tables"], "table set: schema created outside the migration ledger")
+        self.assertEqual(runner_fp["columns"], live_fp["columns"], "column: schema created outside the migration ledger")
+        self.assertEqual(runner_fp["indexes"], live_fp["indexes"], "index: schema created outside the migration ledger")
         self.assertEqual(len(runner_fp["tables"]), 83)
 
     def test_runner_is_idempotent(self) -> None:

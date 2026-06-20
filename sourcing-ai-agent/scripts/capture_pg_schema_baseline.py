@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Regenerate the Track B PG-native schema baseline migration.
+"""Dump the live PG-native control-plane schema (Track B B4.1a).
 
-The baseline (``src/sourcing_agent/migrations/0001_baseline.sql``) is GENERATED, not
-hand-written: it is the schema a fresh ``ControlPlaneStore`` bootstrap produces via the
-real code path (``init_schema`` + ``ensure_bootstrapped`` + the writer/coordination
-ensures), captured with ``pg_dump --schema-only`` and normalized to be schema-agnostic
-(unqualified object names; the migration runner sets ``search_path`` to the target schema).
+Since B4.1a, versioned migrations (``src/sourcing_agent/migrations/000N_*.sql``) are the SOLE
+schema source of truth — the SQLite shadow is no longer the oracle. This script captures the
+schema a fresh ``ControlPlaneStore`` bootstrap produces via the live PG-native path (the
+migration runner ``ensure_bootstrapped`` + the writer/coordination ensures), with
+``pg_dump --schema-only`` normalized to be schema-agnostic (unqualified object names; the
+migration runner sets ``search_path`` to the target schema).
 
-This script is the single regeneration path so the baseline can never silently drift from
-what the code produces — re-run it and ``git diff`` after any schema-affecting change, and
-keep it byte-stable until a deliberate, reviewed migration adds ``0002_*.sql`` instead.
+Because migrations are now the source, dumping the live schema round-trips
+``0001_baseline.sql`` byte-identically today. Use this to (a) verify that round-trip, and
+(b) author a new ``0002_*.sql`` migration: change a writer/coordination ensure, run this to
+see the resulting live schema, and hand-write the migration that captures the delta. Do NOT
+regenerate ``0001_baseline.sql`` from a schema change — add ``0002_*.sql`` instead.
 
 Usage:
     PYTHONPATH=src python scripts/capture_pg_schema_baseline.py [--out PATH] [--keep-schema]
@@ -140,11 +143,12 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         store = ControlPlaneStore(Path(tmp) / "capture.db")
         adapter = store._control_plane_postgres
-        # Capture the SQLite-derived schema (init_schema source of truth), NOT the runner —
-        # ensure_bootstrapped now applies the migrations, which would make regeneration
-        # circular. _bootstrap_schema_from_sqlite_source is the legacy source the baseline
-        # must keep matching until B4 deletes the SQLite shadow.
-        adapter._bootstrap_schema_from_sqlite_source()
+        # Track B B4.1a: capture the LIVE PG-native schema — migrations are the source of truth.
+        # ensure_bootstrapped (run during construction) applied the migration runner + coordination
+        # ensure; force the writer ensure too so the full live schema is materialized. This dumps
+        # exactly what the runtime builds and round-trips 0001_baseline.sql byte-identically today.
+        adapter.ensure_bootstrapped()
+        adapter._ensure_control_plane_writer_schema()
         store.close()
 
     raw = subprocess.run(
@@ -156,6 +160,10 @@ def main() -> int:
             "--no-owner",
             "--no-privileges",
             "--no-comments",
+            # The migration runner's own ledger is created by apply_pending_migrations, not by the
+            # baseline migration — exclude it so the dump captures only the application schema (the
+            # SQLite-derived path used to suppress it by never running the runner).
+            f"--exclude-table={CAPTURE_SCHEMA}.schema_migrations",
         ],
         check=True,
         capture_output=True,
