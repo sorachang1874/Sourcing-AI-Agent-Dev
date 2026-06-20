@@ -183,6 +183,25 @@ class _PublicWebServiceE2EModelClient:
         }
 
 
+def _drive_crm_export(orchestrator, payload: dict) -> dict:
+    """C1.4: drive the now-async CRM public-web export end-to-end for tests —
+    submit (queued, or idempotent succeeded) -> worker CRM export drain -> read the
+    succeeded artifact result (the same {status: ok, body, counts, ...} shape the old
+    synchronous export returned). Submit-time failures (validation / fail-closed
+    pre-flight) are returned as-is; a command that fails in the drain is returned as the
+    poll envelope (status 'failed' + error)."""
+    submitted = orchestrator.export_crm_record_public_web_archive(payload)
+    status = str(submitted.get("status") or "").strip()
+    if status not in {"queued", "succeeded"}:
+        return submitted
+    task_id = str(submitted.get("task_id") or "")
+    orchestrator._drain_export_crm_public_web_generate_commands({})  # noqa: SLF001
+    poll = orchestrator.get_export_command_status(task_id)
+    if str(poll.get("status") or "") == "succeeded":
+        return orchestrator.get_export_command_artifact(task_id)
+    return poll
+
+
 class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -16683,8 +16702,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(promoted["write_contract"]["public_web_storage_owner"], "crm_public_web_v1")
         self.assertEqual(self.store.list_target_candidate_public_web_promotions(record_id=crm_record_id), [])
 
-        publishable_export = self.orchestrator.export_crm_record_public_web_archive(
-            {"workspace_id": "default", "crm_record_ids": [crm_record_id], "mode": "promoted_and_publishable"}
+        publishable_export = _drive_crm_export(
+            self.orchestrator,
+            {"workspace_id": "default", "crm_record_ids": [crm_record_id], "mode": "promoted_and_publishable"},
         )
         self.assertEqual(publishable_export["status"], "ok")
         self.assertEqual(publishable_export["public_web_storage_owner"], "crm_public_web_v1")
@@ -16701,8 +16721,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(manifest["exported_record_count"], 1)
         self.assertEqual(manifest["records"][0]["export_record_status"], "exported")
 
-        export = self.orchestrator.export_crm_record_public_web_archive(
-            {"workspace_id": "default", "crm_record_ids": [crm_record_id]}
+        export = _drive_crm_export(
+            self.orchestrator,
+            {"workspace_id": "default", "crm_record_ids": [crm_record_id]},
         )
         self.assertEqual(export["status"], "ok")
         with zipfile.ZipFile(io.BytesIO(export["body"]), "r") as archive:
@@ -16996,8 +17017,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(detail["profile_links"][0]["promotion_match_basis"], "stable_signal_identity")
         self.assertTrue(detail["profile_links"][0]["promotion_signal_identity_inherited"])
 
-        export = self.orchestrator.export_crm_record_public_web_archive(
-            {"workspace_id": "default", "crm_record_ids": [crm_record_id]}
+        export = _drive_crm_export(
+            self.orchestrator,
+            {"workspace_id": "default", "crm_record_ids": [crm_record_id]},
         )
         self.assertEqual(export["status"], "ok")
         self.assertEqual(export["export_contract_version"], CRM_PUBLIC_WEB_EXPORT_CONTRACT_VERSION)
@@ -21085,7 +21107,11 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(board_state["sync_status_text"], "297/297")
         self.assertEqual(board_state["profile_fetched_count"], 186)
         self.assertEqual(board_state["profile_fetch_status_text"], "本次 LinkedIn Profile 已取回 186/297")
-        self.assertEqual(board_state["card_materialization_status_text"], "卡片详情已合入看板 186/297")
+        # Card materialization (112) and profile-fetch (186) numerators must diverge: profiles fetched
+        # must NOT drag the card count up. The card count is the honest display-ready count (cards
+        # materialized of 186 fetched / 297 required); inferring 186 cards from the profile-fetch lane is
+        # exactly the row-shell anti-pattern this test guards against.
+        self.assertEqual(board_state["card_materialization_status_text"], "卡片详情已合入看板 112/297")
         self.assertTrue(board_state["delta_profile_denominator_promoted"])
 
     def test_partial_current_snapshot_overlay_preserves_stage1_denominator(self) -> None:

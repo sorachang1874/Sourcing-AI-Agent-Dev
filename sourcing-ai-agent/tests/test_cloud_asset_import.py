@@ -10,6 +10,7 @@ from sourcing_agent.artifact_cache import load_hot_cache_governance_state
 from sourcing_agent.asset_sync import AssetBundleError, AssetBundleManager
 from sourcing_agent.cloud_asset_import import hydrate_cloud_generation, import_cloud_assets
 from sourcing_agent.domain import Candidate, make_evidence_id
+from sourcing_agent.local_postgres import _LOCAL_POSTGRES_ENV_KEYS
 from sourcing_agent.object_storage import ObjectStorageConfig, build_object_storage_client
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
@@ -802,6 +803,15 @@ class CloudAssetImportWithoutPostgresEnvTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        # Isolate from any ambient Postgres DSN env: the backend-ci PG lane and the local
+        # .local-postgres.env inject SOURCING_CONTROL_PLANE_POSTGRES_DSN (and friends) process-wide, which
+        # would make the absent-DSN rejection path asserted here unreachable. patch.dict snapshots+restores
+        # os.environ on cleanup; we pop the resolver keys so the no-DSN branch is actually taken.
+        _pg_env_patch = unittest.mock.patch.dict(os.environ, {}, clear=False)
+        _pg_env_patch.start()
+        self.addCleanup(_pg_env_patch.stop)
+        for _pg_env_key in _LOCAL_POSTGRES_ENV_KEYS:
+            os.environ.pop(_pg_env_key, None)
         self.tempdir = tempfile.TemporaryDirectory()
         self.root = Path(self.tempdir.name)
         self.source_project = self.root / "source_project"
