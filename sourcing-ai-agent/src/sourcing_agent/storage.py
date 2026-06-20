@@ -4512,6 +4512,13 @@ class ControlPlaneStore:
             )
             if row is not None:
                 return
+            if self._control_plane_postgres_should_skip_sqlite_fallback("jobs"):
+                # Track B B4.1b: PG is the sole authoritative store. save_job_row returns None ONLY when
+                # its terminal-status protection skips a terminal->non-terminal downgrade (a deliberate
+                # no-op; real PG errors raise via strict-no-fallback). The write is complete either way —
+                # never fall through to the dead SQLite shadow tail below (which would write the row to a
+                # never-read shadow, and would break once init_schema stops creating shadow tables).
+                return
         row: sqlite3.Row | None = None
         with self._lock, self._connection:
             existing_job = self._connection.execute(
