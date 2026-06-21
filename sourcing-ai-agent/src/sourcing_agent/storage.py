@@ -7577,6 +7577,11 @@ class ControlPlaneStore:
             )
             if row is not None:
                 return self._manual_review_item_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("manual_review_items"):
+                # Track B B4.1b: PG is authoritative. The native update returns None only when the row
+                # vanished between the read and the update; re-read PG for the current row rather than
+                # fall through to the dead SQLite shadow.
+                return self.get_manual_review_item(review_item_id)
         with self._lock, self._connection:
             self._connection.execute(
                 """
@@ -16782,6 +16787,14 @@ class ControlPlaneStore:
                 )
             if row is not None:
                 return self._organization_asset_registry_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("organization_asset_registry"):
+                # Track B B4.1b: PG is authoritative — fail closed rather than fall through to the dead
+                # SQLite shadow.
+                self._raise_control_plane_postgres_write_failure(
+                    table_name="organization_asset_registry",
+                    method_name="upsert_organization_asset_registry",
+                    reason="native upsert returned no row under postgres_only",
+                )
         company_lookup_clause, company_lookup_params = _company_identity_lookup_predicate(
             normalized_target_company,
             normalized_company_key,
@@ -17088,6 +17101,14 @@ class ControlPlaneStore:
                 )
             if row is not None:
                 return self._organization_execution_profile_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("organization_execution_profiles"):
+                # Track B B4.1b: PG is authoritative — fail closed rather than fall through to the dead
+                # SQLite shadow.
+                self._raise_control_plane_postgres_write_failure(
+                    table_name="organization_execution_profiles",
+                    method_name="upsert_organization_execution_profile",
+                    reason="native upsert returned no row under postgres_only",
+                )
         company_lookup_clause, company_lookup_params = _company_identity_lookup_predicate(
             normalized_target_company,
             normalized_company_key,
@@ -17670,7 +17691,11 @@ class ControlPlaneStore:
             where_sql="shard_key = %s",
             params=[shard_key],
         )
-        if not existing:
+        if not existing and not self._control_plane_postgres_should_skip_sqlite_fallback(
+            "acquisition_shard_registry"
+        ):
+            # Track B B4.1b: PG is authoritative. A missing PG row means a new shard; the downstream
+            # (existing or {}) carry-over already handles None, so skip this dead SQLite shadow re-read.
             with self._lock:
                 existing_row = self._connection.execute(
                     """
@@ -17729,6 +17754,14 @@ class ControlPlaneStore:
                 where_sql="shard_key = %s",
                 params=[shard_key],
             ) or self._acquisition_shard_registry_from_row(row_payload)
+        if self._control_plane_postgres_should_skip_sqlite_fallback("acquisition_shard_registry"):
+            # Track B B4.1b: PG is authoritative. _write_control_plane_row_to_postgres returns True or
+            # raises under postgres_only, so this is a fail-closed assertion — never the dead SQLite tail.
+            self._raise_control_plane_postgres_write_failure(
+                table_name="acquisition_shard_registry",
+                method_name="upsert_acquisition_shard_registry",
+                reason="native write did not confirm under postgres_only",
+            )
         with self._lock, self._connection:
             self._connection.execute(
                 """
@@ -21599,6 +21632,15 @@ class ControlPlaneStore:
             )
             if row is not None:
                 return self._cloud_asset_operation_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("cloud_asset_operation_ledger"):
+                # Track B B4.1b: PG is authoritative. The native insert is a plain sequence-id
+                # INSERT...RETURNING (no ON CONFLICT) — a None is unreachable for valid input; fail closed
+                # rather than fall through to the dead SQLite shadow.
+                self._raise_control_plane_postgres_write_failure(
+                    table_name="cloud_asset_operation_ledger",
+                    method_name="insert_row_with_generated_id",
+                    reason="native insert returned no row under postgres_only",
+                )
         with self._lock, self._connection:
             cursor = self._connection.execute(
                 """
