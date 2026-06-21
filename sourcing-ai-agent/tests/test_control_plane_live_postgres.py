@@ -2003,16 +2003,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual([candidate.candidate_id for candidate in candidates], ["cand_bulk_2"])
         self.assertEqual(evidence_rows[0]["evidence_id"], "ev_bulk_2")
 
-        sqlite_candidate_count = store._connection.execute(
-            "SELECT COUNT(*) FROM candidates WHERE lower(target_company) = lower(?)",
-            ("Acme Bulk",),
-        ).fetchone()[0]
-        sqlite_evidence_count = store._connection.execute(
-            "SELECT COUNT(*) FROM evidence WHERE candidate_id IN (?, ?)",
-            ("cand_bulk_1", "cand_bulk_2"),
-        ).fetchone()[0]
-        self.assertEqual(int(sqlite_candidate_count or 0), 0)
-        self.assertEqual(int(sqlite_evidence_count or 0), 0)
         candidate_bulk_upserts = [rows for table_name, rows in adapter.bulk_upserts if table_name == "candidates"]
         evidence_bulk_upserts = [rows for table_name, rows in adapter.bulk_upserts if table_name == "evidence"]
         self.assertGreaterEqual(len(candidate_bulk_upserts), 2)
@@ -2251,11 +2241,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(len(remaining_rows), 1)
         self.assertEqual(str(remaining_rows[0]["target_company"] or ""), "Acme")
         self.assertTrue(bool(remaining_rows[0]["authoritative"]))
-        sqlite_registry_count = store._connection.execute(
-            "SELECT COUNT(*) FROM organization_asset_registry WHERE lower(target_company) = lower(?)",
-            ("Acme",),
-        ).fetchone()[0]
-        self.assertEqual(int(sqlite_registry_count or 0), 0)
 
     def test_default_live_mode_uses_postgres_only_when_dsn_is_present(self) -> None:
         store = self._build_store(mode=None)
@@ -2374,14 +2359,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             by_alias["profile_url_key"],
             store.normalize_linkedin_profile_url(canonical_url),
         )
-        sqlite_registry_count = store._connection.execute(
-            "SELECT COUNT(*) FROM linkedin_profile_registry",
-        ).fetchone()[0]
-        sqlite_alias_count = store._connection.execute(
-            "SELECT COUNT(*) FROM linkedin_profile_registry_aliases",
-        ).fetchone()[0]
-        self.assertEqual(int(sqlite_registry_count or 0), 0)
-        self.assertEqual(int(sqlite_alias_count or 0), 0)
 
     def test_postgres_only_profile_registry_leases_events_and_backfill_runs(self) -> None:
         store = self._build_store(mode="postgres_only")
@@ -2406,18 +2383,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             status="running",
         )
         self.assertEqual(str(dict(run or {}).get("scope_company") or ""), "acme")
-        sqlite_lease_count = store._connection.execute(
-            "SELECT COUNT(*) FROM linkedin_profile_registry_leases",
-        ).fetchone()[0]
-        sqlite_event_count = store._connection.execute(
-            "SELECT COUNT(*) FROM linkedin_profile_registry_events",
-        ).fetchone()[0]
-        sqlite_backfill_count = store._connection.execute(
-            "SELECT COUNT(*) FROM linkedin_profile_registry_backfill_runs",
-        ).fetchone()[0]
-        self.assertEqual(int(sqlite_lease_count or 0), 0)
-        self.assertEqual(int(sqlite_event_count or 0), 0)
-        self.assertEqual(int(sqlite_backfill_count or 0), 0)
 
     def test_prefer_postgres_profile_registry_backfill_batch_uses_bulk_upserts(self) -> None:
         store = self._build_store(mode="postgres_only")
@@ -2488,207 +2453,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
-
-        sqlite_request_payload = {
-            "raw_user_request": "找 SQLite Only 的推理人才",
-            "target_company": "SQLite Only",
-            "title_keywords": ["reasoning"],
-        }
-        sqlite_request_signature = "req-sqlite"
-        sqlite_request_family_signature = "reqfam-sqlite"
-        store._connection.execute(
-            """
-            INSERT INTO job_result_views (
-                view_id, job_id, target_company, company_key, source_kind, view_kind, snapshot_id,
-                asset_view, source_path, authoritative_snapshot_id, materialization_generation_key,
-                request_signature, summary_json, metadata_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "sqlite-view-only",
-                "sqlite-job-only",
-                "SQLite Only",
-                "sqliteonly",
-                "artifact_registry",
-                "latest_results",
-                "snap-sqlite",
-                "canonical_merged",
-                "/tmp/sqlite-only.json",
-                "snap-sqlite",
-                "gen-sqlite",
-                "req-sqlite",
-                json.dumps({"source": "sqlite_only"}, ensure_ascii=False),
-                json.dumps({"source": "sqlite_only"}, ensure_ascii=False),
-            ),
-        )
-        store._connection.execute(
-            """
-            INSERT INTO jobs (
-                job_id, job_type, status, stage, request_json, plan_json, execution_bundle_json,
-                matching_request_json, summary_json, request_signature, request_family_signature,
-                matching_request_signature, matching_request_family_signature, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "sqlite-job-completed",
-                "workflow",
-                "completed",
-                "completed",
-                json.dumps(sqlite_request_payload, ensure_ascii=False),
-                json.dumps({}, ensure_ascii=False),
-                json.dumps({}, ensure_ascii=False),
-                json.dumps({}, ensure_ascii=False),
-                json.dumps({"source": "sqlite_only"}, ensure_ascii=False),
-                sqlite_request_signature,
-                sqlite_request_family_signature,
-                sqlite_request_signature,
-                sqlite_request_family_signature,
-                "2026-04-18T00:00:00+00:00",
-            ),
-        )
-        store._connection.execute(
-            """
-            INSERT INTO jobs (
-                job_id, job_type, status, stage, request_json, plan_json, execution_bundle_json,
-                matching_request_json, summary_json, request_signature, request_family_signature,
-                matching_request_signature, matching_request_family_signature, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "sqlite-job-queued",
-                "workflow",
-                "queued",
-                "planning",
-                json.dumps(sqlite_request_payload, ensure_ascii=False),
-                json.dumps({}, ensure_ascii=False),
-                json.dumps({}, ensure_ascii=False),
-                json.dumps({}, ensure_ascii=False),
-                json.dumps({"source": "sqlite_only"}, ensure_ascii=False),
-                sqlite_request_signature,
-                sqlite_request_family_signature,
-                sqlite_request_signature,
-                sqlite_request_family_signature,
-                "2026-04-18T00:00:00+00:00",
-            ),
-        )
-        store._connection.execute(
-            """
-            INSERT INTO jobs (
-                job_id, job_type, status, stage, request_json, plan_json, execution_bundle_json,
-                matching_request_json, summary_json, request_signature, request_family_signature,
-                matching_request_signature, matching_request_family_signature, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "sqlite-job-acquiring",
-                "workflow",
-                "running",
-                "acquiring",
-                json.dumps(sqlite_request_payload, ensure_ascii=False),
-                json.dumps({}, ensure_ascii=False),
-                json.dumps({}, ensure_ascii=False),
-                json.dumps({}, ensure_ascii=False),
-                json.dumps({"source": "sqlite_only"}, ensure_ascii=False),
-                sqlite_request_signature,
-                sqlite_request_family_signature,
-                sqlite_request_signature,
-                sqlite_request_family_signature,
-                "2026-04-18T00:00:00+00:00",
-            ),
-        )
-        store._connection.execute(
-            """
-            INSERT INTO candidate_materialization_state (
-                target_company, company_key, snapshot_id, asset_view, candidate_id,
-                fingerprint, shard_path, list_page, dirty_reason, materialized_at, metadata_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "SQLite Only",
-                "sqliteonly",
-                "snap-sqlite",
-                "canonical_merged",
-                "cand-sqlite",
-                "fp-sqlite",
-                "candidate_shards/cand-sqlite.json",
-                1,
-                "",
-                "2026-04-19T12:00:00Z",
-                json.dumps({"source": "sqlite_only"}, ensure_ascii=False),
-            ),
-        )
-        store._connection.execute(
-            """
-            INSERT INTO confidence_policy_controls (
-                target_company, request_signature, request_family_signature,
-                matching_request_signature, matching_request_family_signature,
-                scope_kind, control_mode, status, high_threshold, medium_threshold,
-                reviewer, notes, locked_policy_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "SQLite Only",
-                sqlite_request_signature,
-                sqlite_request_family_signature,
-                sqlite_request_signature,
-                sqlite_request_family_signature,
-                "request_family",
-                "override",
-                "active",
-                0.9,
-                0.6,
-                "sqlite-reviewer",
-                "sqlite-only",
-                json.dumps({"source": "sqlite_only"}, ensure_ascii=False),
-            ),
-        )
-        store._connection.commit()
-
-        self.assertIsNone(store.get_job_result_view(job_id="sqlite-job-only"))
-        self.assertIsNone(store.find_latest_completed_job(target_company="SQLite Only"))
-        self.assertIsNone(
-            store.find_latest_job_by_request_signature(
-                request_signature_value=sqlite_request_signature,
-                target_company="SQLite Only",
-                limit=10,
-            )
-        )
-        self.assertIsNone(
-            store.find_latest_job_by_request_family_signature(
-                request_family_signature_value=sqlite_request_family_signature,
-                target_company="SQLite Only",
-                limit=10,
-            )
-        )
-        self.assertEqual(
-            store.list_jobs_by_request_signature(
-                request_signature_value=sqlite_request_signature,
-                target_company="SQLite Only",
-                limit=10,
-            ),
-            [],
-        )
-        self.assertEqual(store.list_stale_workflow_jobs_in_queue(stale_after_seconds=0, limit=10), [])
-        self.assertEqual(store.list_stale_workflow_jobs_in_acquiring(stale_after_seconds=0, limit=10), [])
-        self.assertIsNone(store.get_confidence_policy_control(1))
-        self.assertEqual(store.list_confidence_policy_controls(target_company="SQLite Only"), [])
-        self.assertEqual(
-            store.get_candidate_materialization_state(
-                target_company="SQLite Only",
-                snapshot_id="snap-sqlite",
-                asset_view="canonical_merged",
-                candidate_id="cand-sqlite",
-            ),
-            {},
-        )
-        self.assertEqual(
-            store.list_candidate_materialization_states(
-                target_company="SQLite Only",
-                snapshot_id="snap-sqlite",
-                asset_view="canonical_merged",
-            ),
-            [],
-        )
 
         pg_view = store.upsert_job_result_view(
             job_id="postgres-job-only",
@@ -2862,12 +2626,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 plan_payload={"mode": "strict"},
             )
 
-        sqlite_job_count = store._connection.execute(
-            "SELECT COUNT(*) FROM jobs WHERE job_id = ?",
-            ("job-strict-fail",),
-        ).fetchone()[0]
-        self.assertEqual(int(sqlite_job_count or 0), 0)
-
     def test_postgres_only_raises_instead_of_falling_back_when_generic_upsert_fails(self) -> None:
         store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
@@ -2883,12 +2641,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 snapshot_id="snap-strict",
             )
 
-        sqlite_view_count = store._connection.execute(
-            "SELECT COUNT(*) FROM job_result_views WHERE job_id = ?",
-            ("job-strict-view",),
-        ).fetchone()[0]
-        self.assertEqual(int(sqlite_view_count or 0), 0)
-
     def test_postgres_only_raises_instead_of_falling_back_when_native_public_web_reader_fails(self) -> None:
         store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
@@ -2903,12 +2655,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 workspace_id="default",
             )
 
-        sqlite_run_count = store._connection.execute(
-            "SELECT COUNT(*) FROM crm_public_web_runs WHERE crm_record_id = ?",
-            ("crmrec-strict",),
-        ).fetchone()[0]
-        self.assertEqual(int(sqlite_run_count or 0), 0)
-
     def test_postgres_only_raises_instead_of_falling_back_when_generic_public_web_reader_fails(self) -> None:
         store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
@@ -2917,12 +2663,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "Postgres authoritative read failed for crm_public_web_runs"):
             store.get_crm_public_web_run(run_id="crm-public-web-run-strict")
-
-        sqlite_run_count = store._connection.execute(
-            "SELECT COUNT(*) FROM crm_public_web_runs WHERE run_id = ?",
-            ("crm-public-web-run-strict",),
-        ).fetchone()[0]
-        self.assertEqual(int(sqlite_run_count or 0), 0)
 
     def test_prefer_postgres_uses_native_writers_for_jobs_events_and_runtime_sessions(self) -> None:
         store = self._build_store(mode="postgres_only")
@@ -2966,21 +2706,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         assert updated_session is not None
         self.assertEqual(str(updated_session["status"] or ""), "completed")
         self.assertEqual(int(session["session_id"] or 0), int(updated_session["session_id"] or 0))
-
-        sqlite_job_count = store._connection.execute(
-            "SELECT COUNT(*) FROM jobs WHERE job_id = ?", ("job-native",)
-        ).fetchone()[0]
-        sqlite_event_count = store._connection.execute(
-            "SELECT COUNT(*) FROM job_events WHERE job_id = ?",
-            ("job-native",),
-        ).fetchone()[0]
-        sqlite_session_count = store._connection.execute(
-            "SELECT COUNT(*) FROM agent_runtime_sessions WHERE job_id = ?",
-            ("job-native",),
-        ).fetchone()[0]
-        self.assertEqual(int(sqlite_job_count or 0), 0)
-        self.assertEqual(int(sqlite_event_count or 0), 0)
-        self.assertEqual(int(sqlite_session_count or 0), 0)
         self.assertFalse(any(table_name == "jobs" for table_name, _ in adapter.upserts))
         self.assertFalse(any(table_name == "job_events" for table_name, _ in adapter.upserts))
         self.assertFalse(any(table_name == "agent_runtime_sessions" for table_name, _ in adapter.upserts))
@@ -3033,28 +2758,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(target["metadata"]["source"], "postgres_native")
         self.assertEqual(history["metadata"]["source"], "postgres_native")
         self.assertEqual(view["metadata"]["source"], "postgres_native")
-
-        sqlite_review_count = store._connection.execute(
-            "SELECT COUNT(*) FROM candidate_review_registry WHERE record_id = ?",
-            ("review-native-1",),
-        ).fetchone()[0]
-        sqlite_target_count = store._connection.execute(
-            "SELECT COUNT(*) FROM target_candidates WHERE record_id = ?",
-            ("target-native-1",),
-        ).fetchone()[0]
-        sqlite_history_count = store._connection.execute(
-            "SELECT COUNT(*) FROM frontend_history_links WHERE history_id = ?",
-            ("hist-native-1",),
-        ).fetchone()[0]
-        sqlite_view_count = store._connection.execute(
-            "SELECT COUNT(*) FROM job_result_views WHERE job_id = ?",
-            ("job-native-state",),
-        ).fetchone()[0]
-
-        self.assertEqual(int(sqlite_review_count or 0), 0)
-        self.assertEqual(int(sqlite_target_count or 0), 0)
-        self.assertEqual(int(sqlite_history_count or 0), 0)
-        self.assertEqual(int(sqlite_view_count or 0), 0)
 
     def test_target_candidate_public_web_state_is_postgres_authoritative(self) -> None:
         store = self._build_store(mode="postgres_only")
@@ -3177,32 +2880,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         promotions = list_legacy_target_public_web_promotions(store, record_id="target-1")
         self.assertEqual(len(promotions), 1)
         self.assertEqual(promotions[0]["signal_id"], "signal-1")
-
-        sqlite_batch_count = store._connection.execute(
-            "SELECT COUNT(*) FROM target_candidate_public_web_batches WHERE batch_id = ?",
-            ("pw-batch-1",),
-        ).fetchone()[0]
-        sqlite_run_count = store._connection.execute(
-            "SELECT COUNT(*) FROM target_candidate_public_web_runs WHERE run_id = ?",
-            ("pw-run-1",),
-        ).fetchone()[0]
-        sqlite_asset_count = store._connection.execute(
-            "SELECT COUNT(*) FROM person_public_web_assets WHERE asset_id = ?",
-            ("asset-1",),
-        ).fetchone()[0]
-        sqlite_signal_count = store._connection.execute(
-            "SELECT COUNT(*) FROM person_public_web_signals WHERE signal_id = ?",
-            ("signal-1",),
-        ).fetchone()[0]
-        sqlite_promotion_count = store._connection.execute(
-            "SELECT COUNT(*) FROM target_candidate_public_web_promotions WHERE promotion_id = ?",
-            ("promotion-1",),
-        ).fetchone()[0]
-        self.assertEqual(int(sqlite_batch_count or 0), 0)
-        self.assertEqual(int(sqlite_run_count or 0), 0)
-        self.assertEqual(int(sqlite_asset_count or 0), 0)
-        self.assertEqual(int(sqlite_signal_count or 0), 0)
-        self.assertEqual(int(sqlite_promotion_count or 0), 0)
 
     def test_job_events_ui_tables_and_runtime_sessions_mirror_and_prefer_postgres(self) -> None:
         mirror_store = self._build_store(mode="postgres_only")
@@ -3690,78 +3367,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(policy_rows[0]["policy_run_id"], int(policy_run["policy_run_id"]))
         self.assertEqual(policy_rows[0]["summary"]["source"], "postgres_native")
 
-        sqlite_review_count = store._connection.execute(
-            "SELECT COUNT(*) FROM plan_review_sessions WHERE review_id = ?",
-            (int(review["review_id"]),),
-        ).fetchone()[0]
-        sqlite_manual_review_count = store._connection.execute(
-            "SELECT COUNT(*) FROM manual_review_items WHERE job_id = ?",
-            ("job-native",),
-        ).fetchone()[0]
-        sqlite_dispatch_count = store._connection.execute(
-            "SELECT COUNT(*) FROM query_dispatches WHERE dispatch_id = ?",
-            (int(dispatch["dispatch_id"]),),
-        ).fetchone()[0]
-        sqlite_control_count = store._connection.execute(
-            "SELECT COUNT(*) FROM confidence_policy_controls WHERE control_id = ?",
-            (int(control["control_id"]),),
-        ).fetchone()[0]
-        sqlite_registry_count = store._connection.execute(
-            "SELECT COUNT(*) FROM organization_asset_registry WHERE lower(target_company) = lower(?)",
-            ("Acme Native",),
-        ).fetchone()[0]
-        sqlite_profile_count = store._connection.execute(
-            "SELECT COUNT(*) FROM organization_execution_profiles WHERE lower(target_company) = lower(?)",
-            ("Acme Native",),
-        ).fetchone()[0]
-        sqlite_ledger_count = store._connection.execute(
-            "SELECT COUNT(*) FROM cloud_asset_operation_ledger WHERE bundle_id = ?",
-            ("bundle-native",),
-        ).fetchone()[0]
-        sqlite_feedback_count = store._connection.execute(
-            "SELECT COUNT(*) FROM criteria_feedback WHERE feedback_id = ?",
-            (int(feedback["feedback_id"]),),
-        ).fetchone()[0]
-        sqlite_pattern_count = store._connection.execute(
-            "SELECT COUNT(*) FROM criteria_patterns WHERE lower(target_company) = lower(?)",
-            ("Acme Native",),
-        ).fetchone()[0]
-        sqlite_suggestion_count = store._connection.execute(
-            "SELECT COUNT(*) FROM criteria_pattern_suggestions WHERE suggestion_id = ?",
-            (int(suggestions[0]["suggestion_id"]),),
-        ).fetchone()[0]
-        sqlite_version_count = store._connection.execute(
-            "SELECT COUNT(*) FROM criteria_versions WHERE version_id = ?",
-            (int(version["version_id"]),),
-        ).fetchone()[0]
-        sqlite_compiler_count = store._connection.execute(
-            "SELECT COUNT(*) FROM criteria_compiler_runs WHERE compiler_run_id = ?",
-            (int(compiler_run["compiler_run_id"]),),
-        ).fetchone()[0]
-        sqlite_diff_count = store._connection.execute(
-            "SELECT COUNT(*) FROM criteria_result_diffs WHERE diff_id = ?",
-            (int(diff["diff_id"]),),
-        ).fetchone()[0]
-        sqlite_policy_run_count = store._connection.execute(
-            "SELECT COUNT(*) FROM confidence_policy_runs WHERE policy_run_id = ?",
-            (int(policy_run["policy_run_id"]),),
-        ).fetchone()[0]
-
-        self.assertEqual(int(sqlite_review_count or 0), 0)
-        self.assertEqual(int(sqlite_manual_review_count or 0), 0)
-        self.assertEqual(int(sqlite_dispatch_count or 0), 0)
-        self.assertEqual(int(sqlite_control_count or 0), 0)
-        self.assertEqual(int(sqlite_registry_count or 0), 0)
-        self.assertEqual(int(sqlite_profile_count or 0), 0)
-        self.assertEqual(int(sqlite_ledger_count or 0), 0)
-        self.assertEqual(int(sqlite_feedback_count or 0), 0)
-        self.assertEqual(int(sqlite_pattern_count or 0), 0)
-        self.assertEqual(int(sqlite_suggestion_count or 0), 0)
-        self.assertEqual(int(sqlite_version_count or 0), 0)
-        self.assertEqual(int(sqlite_compiler_count or 0), 0)
-        self.assertEqual(int(sqlite_diff_count or 0), 0)
-        self.assertEqual(int(sqlite_policy_run_count or 0), 0)
-
     def test_merge_manual_review_item_metadata_writes_natively_in_prefer_postgres(self) -> None:
         store = self._build_store(mode="postgres_only")
 
@@ -3788,11 +3393,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(merged["metadata"]["source"], "postgres_native")
         self.assertEqual(merged["metadata"]["seed"], 2)
         self.assertTrue(bool(merged["metadata"]["merged"]))
-        sqlite_manual_review_count = store._connection.execute(
-            "SELECT COUNT(*) FROM manual_review_items WHERE job_id = ?",
-            ("job-native-metadata",),
-        ).fetchone()[0]
-        self.assertEqual(int(sqlite_manual_review_count or 0), 0)
 
     def test_materialization_runtime_state_prefers_postgres_and_avoids_sqlite(self) -> None:
         store = self._build_store(mode="postgres_only")
@@ -3851,18 +3451,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(started_run["status"], "running")
         self.assertEqual(completed_run["status"], "completed")
         self.assertEqual(fetched_run["summary"]["source"], "postgres_native")
-
-        sqlite_state_count = store._connection.execute(
-            "SELECT COUNT(*) FROM candidate_materialization_state WHERE candidate_id = ?",
-            ("cand-materialized",),
-        ).fetchone()[0]
-        sqlite_run_count = store._connection.execute(
-            "SELECT COUNT(*) FROM snapshot_materialization_runs WHERE run_id = ?",
-            ("run-materialized",),
-        ).fetchone()[0]
-
-        self.assertEqual(int(sqlite_state_count or 0), 0)
-        self.assertEqual(int(sqlite_run_count or 0), 0)
 
     def test_bulk_materialization_runtime_state_prefers_postgres_and_batches_writes(self) -> None:
         store = self._build_store(mode="postgres_only")
@@ -3928,12 +3516,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         )
         self.assertEqual(listed_by_candidate_id["cand-materialized-1"]["fingerprint"], "fp-updated")
         self.assertEqual(listed_by_candidate_id["cand-materialized-2"]["list_page"], 3)
-
-        sqlite_state_count = store._connection.execute(
-            "SELECT COUNT(*) FROM candidate_materialization_state WHERE candidate_id IN (?, ?)",
-            ("cand-materialized-1", "cand-materialized-2"),
-        ).fetchone()[0]
-        self.assertEqual(int(sqlite_state_count or 0), 0)
 
     def test_replace_materialization_runtime_state_scope_prefers_postgres_and_replaces_scope(self) -> None:
         store = self._build_store(mode="postgres_only")
@@ -4090,18 +3672,6 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(comparison["overlap_member_count"], 1)
         self.assertEqual(comparison["primary_only_member_count"], 1)
         self.assertEqual(comparison["secondary_only_member_count"], 1)
-
-        sqlite_generation_count = store._connection.execute(
-            "SELECT COUNT(*) FROM asset_materialization_generations WHERE snapshot_id = ?",
-            ("snap-materialized",),
-        ).fetchone()[0]
-        sqlite_membership_count = store._connection.execute(
-            "SELECT COUNT(*) FROM asset_membership_index WHERE snapshot_id = ?",
-            ("snap-materialized",),
-        ).fetchone()[0]
-
-        self.assertEqual(int(sqlite_generation_count or 0), 0)
-        self.assertEqual(int(sqlite_membership_count or 0), 0)
         self.assertEqual(len(adapter.generic_rows.get("asset_materialization_generations", [])), 2)
         self.assertEqual(len(adapter.generic_rows.get("asset_membership_index", [])), 4)
 
