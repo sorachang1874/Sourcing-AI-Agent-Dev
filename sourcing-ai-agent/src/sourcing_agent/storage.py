@@ -42,6 +42,9 @@ from .linkedin_url_normalization import (
     normalize_linkedin_profile_url_list as _normalize_linkedin_profile_url_list,
 )
 from .local_postgres import resolve_control_plane_postgres_dsn
+from .repositories.linkedin_profile_registry import (
+    LINKEDIN_PROFILE_REGISTRY as _LINKEDIN_PROFILE_REGISTRY_DESCRIPTOR,
+)
 from .person_identity import (
     build_person_summary_view as _build_person_summary_view,
 )
@@ -25004,55 +25007,12 @@ class ControlPlaneStore:
         }
 
     def _linkedin_profile_registry_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        source_shards = []
-        source_jobs = []
-        try:
-            source_shards = list(json.loads(_row_value(row, "source_shards_json", "[]") or "[]"))
-        except json.JSONDecodeError:
-            source_shards = []
-        try:
-            source_jobs = list(json.loads(_row_value(row, "source_jobs_json", "[]") or "[]"))
-        except json.JSONDecodeError:
-            source_jobs = []
-        return {
-            "profile_url_key": str(_row_value(row, "profile_url_key") or ""),
-            "profile_url": str(_row_value(row, "profile_url") or ""),
-            "raw_linkedin_url": str(_row_value(row, "raw_linkedin_url") or ""),
-            "sanity_linkedin_url": str(_row_value(row, "sanity_linkedin_url") or ""),
-            "status": str(_row_value(row, "status") or ""),
-            "retry_count": int(_row_value(row, "retry_count", 0) or 0),
-            "last_error": str(_row_value(row, "last_error") or ""),
-            "last_run_id": str(_row_value(row, "last_run_id") or ""),
-            "last_dataset_id": str(_row_value(row, "last_dataset_id") or ""),
-            "last_snapshot_dir": str(_row_value(row, "last_snapshot_dir") or ""),
-            "last_raw_path": str(_row_value(row, "last_raw_path") or ""),
-            "first_queued_at": str(_row_value(row, "first_queued_at") or ""),
-            "last_queued_at": str(_row_value(row, "last_queued_at") or ""),
-            "last_fetched_at": str(_row_value(row, "last_fetched_at") or ""),
-            "last_failed_at": str(_row_value(row, "last_failed_at") or ""),
-            "source_shards": [str(item).strip() for item in source_shards if str(item).strip()],
-            "source_jobs": [str(item).strip() for item in source_jobs if str(item).strip()],
-            "refill_queue_state": str(_row_value(row, "refill_queue_state") or ""),
-            "last_refill_trigger_kind": str(_row_value(row, "last_refill_trigger_kind") or ""),
-            "last_refill_plan_reason": str(_row_value(row, "last_refill_plan_reason") or ""),
-            "last_refill_deferred_reason": str(_row_value(row, "last_refill_deferred_reason") or ""),
-            "last_refill_planned_at": str(_row_value(row, "last_refill_planned_at") or ""),
-            "refill_not_before_at": str(_row_value(row, "refill_not_before_at") or ""),
-            "refill_plan_batch_size": int(_row_value(row, "refill_plan_batch_size", 0) or 0),
-            "refill_plan_batch_count": int(_row_value(row, "refill_plan_batch_count", 0) or 0),
-            "refill_plan_window_url_count": int(_row_value(row, "refill_plan_window_url_count", 0) or 0),
-            "last_refill_attempt_count": int(_row_value(row, "last_refill_attempt_count", 0) or 0),
-            "refill_owner_worker_id": int(_row_value(row, "refill_owner_worker_id", 0) or 0),
-            "refill_owner_run_id": str(_row_value(row, "refill_owner_run_id") or ""),
-            "refill_owner_dataset_id": str(_row_value(row, "refill_owner_dataset_id") or ""),
-            "refill_owner_payload_hash": str(_row_value(row, "refill_owner_payload_hash") or ""),
-            "refill_terminal_status": str(_row_value(row, "refill_terminal_status") or ""),
-            "refill_terminal_at": str(_row_value(row, "refill_terminal_at") or ""),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        # Track B B4.2 (pilot): the row<->dict mapping for this table is now declared once in the typed
+        # table descriptor (repositories/linkedin_profile_registry.py) — the single source of truth that
+        # the B4.2 schema migration flips to jsonb by changing only the column Kind. Verified byte-
+        # equivalent to the former hand-written mapper. Subsequent batches route the reads/writes/callers
+        # through LinkedinProfileRegistryRepository and retire this facade method.
+        return _LINKEDIN_PROFILE_REGISTRY_DESCRIPTOR.from_row(row)
 
     def _linkedin_profile_registry_lease_from_row(self, row: Any) -> dict[str, Any]:
         if row is None:
