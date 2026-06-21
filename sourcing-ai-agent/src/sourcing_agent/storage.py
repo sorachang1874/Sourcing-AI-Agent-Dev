@@ -4621,6 +4621,12 @@ class ControlPlaneStore:
             )
             if result is not None:
                 return
+            if self._control_plane_postgres_should_skip_sqlite_fallback("job_events"):
+                # Track B B4.1b: PG is authoritative. The native append_job_event uses a plain
+                # sequence-id INSERT...RETURNING (no ON CONFLICT) — it returns the row on success and only
+                # raises on error; the sole non-exception None is the deliberate empty/blank job_id
+                # rejection (a no-op). Return (void) rather than fall through to the dead SQLite shadow.
+                return
         event_row: sqlite3.Row | None = None
         summary_row: sqlite3.Row | None = None
         compacted_job_events = False
@@ -6871,6 +6877,16 @@ class ControlPlaneStore:
             )
             if row is not None:
                 return self._plan_review_session_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("plan_review_sessions"):
+                # Track B B4.1b: PG is authoritative. insert_row_with_generated_id uses a plain
+                # sequence-id INSERT...RETURNING (no ON CONFLICT) — it returns the inserted row on
+                # success and only raises on error, so a None here is unreachable for valid input. Fail
+                # closed rather than fall through to the dead SQLite shadow.
+                self._raise_control_plane_postgres_write_failure(
+                    table_name="plan_review_sessions",
+                    method_name="insert_row_with_generated_id",
+                    reason="native insert returned no row under postgres_only",
+                )
         with self._lock, self._connection:
             cursor = self._connection.execute(
                 """
@@ -7041,6 +7057,16 @@ class ControlPlaneStore:
             )
             if row is not None:
                 return self._plan_review_session_from_row(row)
+            if self._control_plane_postgres_should_skip_sqlite_fallback("plan_review_sessions"):
+                # Track B B4.1b: PG is authoritative. update_row_returning returns None only when the
+                # UPDATE matched no row — but `existing` was loaded before this call, so a None here means
+                # the session vanished mid-method (a race). Fail closed rather than fall through to the
+                # dead SQLite shadow.
+                self._raise_control_plane_postgres_write_failure(
+                    table_name="plan_review_sessions",
+                    method_name="update_row_returning",
+                    reason=f"native update returned no row for review_id={review_id} after the session was read",
+                )
         with self._lock, self._connection:
             self._connection.execute(
                 """
