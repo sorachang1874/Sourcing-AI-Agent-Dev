@@ -390,3 +390,18 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   crm_records/events/tasks、serving_projection、operation_run、agent_action 等 —— 列 dict 在 upsert 方法内联,夹杂 created_at/version/compute 逻辑)+
   带 compute 的 separate builder(`_projection_person_search_index_row_payload` 的 indexed_text 组装 + `_normalize_search_index_terms`;
   `_serving_projection_member_row_payload`)。模式已证;每个需把列映射从 upsert 的运行期/compute 逻辑里析出再委托 to_columns。
+- **2026-06-22 B4.2.7/.8/.9 写路径推进 12 张表(commit 7518416, 79644ef, 12a1a85)** —— crm_core(3:crm_records/events/tasks)+
+  serving(3:serving_projections/run_projection_links/collection_authoritative_pointers)+ person_company(6:person/company × asset/evidence/assertion)。
+  **累计 23 张表 read+write 双向单源**(registry + 10 public-web + 上述 12)。全为 inline-upsert 转换:运行期/compute 状态留 upsert
+  (crm_version 自增、`_resolve_person_identity_key`/`resolve_company_alias_key`、resolved workspace_id、normalized_value = x-or-value、
+  `.lower()` state、published_at/occurred_at-or-now、dict-JSON 字段的 `_normalize_json_object_payload`),传 PUBLIC payload(field 键)给 to_columns。
+  按 inline 应用处给 descriptor 列加 WRITE `default`(crm lifecycle/visibility/status/priority、serving projection_version、
+  asset visibility_scope/status/authority/verification)—— write `default` 读安全(from_row 用 read_default;仅 to_columns 读 write default)。
+  **列集 parity 全表成立**(读 mapper 已读每个写列;唯一一次 company_assets parity 疑虑是把它与 public-web 的 company asset mapper 弄混)。
+  验证:写 A/B 各表逐字节(crm 15/0、serving 6/0+12/0、person_company 36/0,含 FLOAT score/BOOL/json-safe/JSON-string/默认/normalized_value/
+  created_at merge);live PG 各域 round-trip 全绿(crm 69、serving 37、asset 42 + enrichment 147)。storage.py 27.0k→26.9k。
+  **剩余:** (i) **workflow_runtime 域 13 表**(operation_runs/acquisition_runs/agent_actions/workflow_activity_runs+attempts/workflow_events/
+  workflow_commands〔含 `_workflow_command_causality_columns_from_payload`〕/workflow_entity_deltas/acquisition_discovery_lanes/operation_events/
+  workflow_current_state/runtime_outbox/workflow_recovery_intents)—— core agent runtime,state-machine/causality 形,最大剩余批;
+  (ii) **bespoke(defer)**:raw_profile_index、candidate_evidence_index、projection_person_search_index、serving_projection_member
+  (indexed_text 组装 + `_normalize_search_index_terms`/`_text` + 条件 source-id 列表)。模式已全证(inline+separate、FLOAT/BOOL、json-safe、列 parity)。
