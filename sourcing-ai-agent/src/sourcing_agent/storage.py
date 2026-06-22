@@ -6425,34 +6425,25 @@ class ControlPlaneStore:
             or f"crmrec_{uuid4().hex}"
         ).strip()
         now = _utc_now_timestamp()
-        row_payload = {
-            "crm_record_id": crm_record_id,
-            "workspace_id": workspace_id,
-            "person_identity_key": person_identity_key,
-            "candidate_identity_key": str(normalized.get("candidate_identity_key") or "").strip(),
-            "collection_id": str(normalized.get("collection_id") or "").strip(),
-            "display_name_cache": str(normalized.get("display_name_cache") or "").strip(),
-            "headline_cache": str(normalized.get("headline_cache") or "").strip(),
-            "primary_company_cache": str(normalized.get("primary_company_cache") or "").strip(),
-            "avatar_asset_id": str(normalized.get("avatar_asset_id") or "").strip(),
-            "lifecycle_status": str(normalized.get("lifecycle_status") or "active").strip() or "active",
-            "visibility_status": str(normalized.get("visibility_status") or "normal").strip() or "normal",
-            "owner_user_id": str(normalized.get("owner_user_id") or "").strip(),
-            "source_projection_id": str(normalized.get("source_projection_id") or "").strip(),
-            "source_run_id": str(normalized.get("source_run_id") or "").strip(),
-            "source_collection_id": str(normalized.get("source_collection_id") or "").strip(),
-            "source_reason": str(normalized.get("source_reason") or "").strip(),
-            "current_engagement_id": str(normalized.get("current_engagement_id") or "").strip(),
-            "crm_version": int((existing or {}).get("crm_version") or normalized.get("crm_version") or 0) + 1
+        crm_version = (
+            int((existing or {}).get("crm_version") or normalized.get("crm_version") or 0) + 1
             if existing
-            else int(normalized.get("crm_version") or 1),
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+            else int(normalized.get("crm_version") or 1)
+        )
+        row_payload = _crm_core_repo.CRM_RECORDS.to_columns(
+            {
+                **normalized,
+                "crm_record_id": crm_record_id,
+                "workspace_id": workspace_id,
+                "person_identity_key": person_identity_key,
+                "crm_version": crm_version,
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "crm_records",
             id_column="crm_record_id",
@@ -6693,29 +6684,19 @@ class ControlPlaneStore:
             return {}
         existing = self.get_crm_task(task_id)
         now = _utc_now_timestamp()
-        row_payload = {
-            "task_id": task_id,
-            "workspace_id": workspace_id,
-            "crm_record_id": str(normalized.get("crm_record_id") or "").strip(),
-            "engagement_id": str(normalized.get("engagement_id") or "").strip(),
-            "person_identity_key": str(normalized.get("person_identity_key") or "").strip(),
-            "title": str(normalized.get("title") or "").strip(),
-            "description": str(normalized.get("description") or "").strip(),
-            "status": str(normalized.get("status") or "open").strip() or "open",
-            "priority": str(normalized.get("priority") or "normal").strip() or "normal",
-            "due_at": str(normalized.get("due_at") or "").strip(),
-            "completed_at": str(normalized.get("completed_at") or "").strip(),
-            "created_by_actor": str(normalized.get("created_by_actor") or "").strip(),
-            "created_by_actor_id": str(normalized.get("created_by_actor_id") or "").strip(),
-            "source_event_id": str(normalized.get("source_event_id") or "").strip(),
-            "idempotency_key": idempotency_key,
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+        row_payload = _crm_core_repo.CRM_TASKS.to_columns(
+            {
+                **normalized,
+                "task_id": task_id,
+                "workspace_id": workspace_id,
+                "idempotency_key": idempotency_key,
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "crm_tasks",
             id_column="task_id",
@@ -6826,27 +6807,22 @@ class ControlPlaneStore:
                 return existing
         event_id = str(normalized.get("event_id") or normalized.get("id") or f"crmevt_{uuid4().hex}").strip()
         now = _utc_now_timestamp()
-        row_payload = {
-            "event_id": event_id,
-            "workspace_id": workspace_id,
-            "crm_record_id": str(normalized.get("crm_record_id") or "").strip(),
-            "engagement_id": str(normalized.get("engagement_id") or "").strip(),
-            "person_identity_key": str(normalized.get("person_identity_key") or "").strip(),
-            "event_type": str(normalized.get("event_type") or "").strip(),
-            "actor_type": str(normalized.get("actor_type") or "").strip(),
-            "actor_id": str(normalized.get("actor_id") or "").strip(),
-            "idempotency_key": idempotency_key,
-            "payload_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("payload") or normalized.get("payload_json")),
-                ensure_ascii=False,
-            ),
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "occurred_at": str(normalized.get("occurred_at") or now).strip(),
-            "created_at": now,
-        }
+        row_payload = _crm_core_repo.CRM_EVENTS.to_columns(
+            {
+                **normalized,
+                "event_id": event_id,
+                "workspace_id": workspace_id,
+                "idempotency_key": idempotency_key,
+                "payload": _normalize_json_object_payload(
+                    normalized.get("payload") or normalized.get("payload_json")
+                ),
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "occurred_at": str(normalized.get("occurred_at") or now).strip(),
+                "created_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "crm_events",
             id_column="event_id",
