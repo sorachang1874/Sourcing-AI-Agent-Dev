@@ -76,14 +76,19 @@ def _decode(col: Column, value: Any) -> Any:
         if not text and col.read_default is not None:
             return str(col.read_default)
         return text
-    if col.kind is Kind.INT:
+    if col.kind is Kind.INT:  # int(value or read_default) — read_default defaults to 0
+        fallback = col.read_default if col.read_default is not None else 0
         try:
-            return int(value or 0)
+            return int(value or fallback)
         except (TypeError, ValueError):
-            return 0
-    if col.kind is Kind.FLOAT:  # == _coerce_public_web_float
+            try:
+                return int(fallback)
+            except (TypeError, ValueError):
+                return 0
+    if col.kind is Kind.FLOAT:  # == _coerce_public_web_float; float(value or read_default), default 0.0
+        fallback = col.read_default if col.read_default is not None else 0.0
         try:
-            return float(value or 0.0)
+            return float(value or fallback)
         except (TypeError, ValueError):
             return 0.0
     if col.kind is Kind.BOOL_INT:

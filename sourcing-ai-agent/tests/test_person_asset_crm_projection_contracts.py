@@ -299,15 +299,17 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         legacy_summary = dict(before["public_summary"])
         legacy_summary.pop("source_projection_id", None)
         legacy_summary.pop("source_run_id", None)
-        with self.store._lock, self.store._connection:  # noqa: SLF001 - migration regression fixture
-            self.store._connection.execute(  # noqa: SLF001
-                """
-                UPDATE serving_projection_members
-                SET public_summary_json = ?
-                WHERE projection_id = ? AND candidate_identity_key = ?
-                """,
-                (json.dumps(legacy_summary), "proj_legacy_summary", "legacy-row-ada"),
-            )
+        # Downgrade the member to the pre-enrichment "legacy" shape directly in Postgres (the SQLite
+        # shadow schema was retired in Track B B4.1), simulating a row written by an older serving
+        # writer that did not stamp source_projection_id / source_run_id.
+        self.store._control_plane_postgres._execute_non_query(  # noqa: SLF001 - migration regression fixture
+            """
+            UPDATE serving_projection_members
+            SET public_summary_json = %s
+            WHERE projection_id = %s AND candidate_identity_key = %s
+            """,
+            (json.dumps(legacy_summary), "proj_legacy_summary", "legacy-row-ada"),
+        )
         backfill = ServingProjectionMigrationBackfill(self.store)
 
         result = backfill.backfill_person_summary_views(projection_ids=["proj_legacy_summary"])

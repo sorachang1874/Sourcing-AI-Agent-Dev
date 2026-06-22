@@ -55,6 +55,10 @@ from .repositories.linkedin_profile_registry import (
     LINKEDIN_PROFILE_REGISTRY_LEASES as _LINKEDIN_PROFILE_REGISTRY_LEASES_DESCRIPTOR,
 )
 from .repositories import public_web as _public_web_repo
+from .repositories import serving_projection as _serving_projection_repo
+from .repositories import workflow_runtime as _workflow_runtime_repo
+from .repositories import person_company_assets as _person_company_assets_repo
+from .repositories import crm_core as _crm_core_repo
 from .person_identity import (
     build_person_summary_view as _build_person_summary_view,
 )
@@ -10606,26 +10610,7 @@ class ControlPlaneStore:
         return self._workflow_recovery_intent_from_row(row)
 
     def _workflow_recovery_intent_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        lease_expires_at = str(_row_value(row, "lease_expires_at", "") or "")
-        return {
-            "job_id": str(_row_value(row, "job_id", "") or ""),
-            "classification": str(_row_value(row, "classification", "") or ""),
-            "status": str(_row_value(row, "status", "") or ""),
-            "requested_at": str(_row_value(row, "requested_at", "") or ""),
-            "requested_by": str(_row_value(row, "requested_by", "") or ""),
-            "params": _loads_json_dict(_row_value(row, "params_json", "{}")),
-            "lease_owner": str(_row_value(row, "lease_owner", "") or ""),
-            "lease_expires_at": lease_expires_at,
-            "claimed_at": str(_row_value(row, "claimed_at", "") or ""),
-            "schema_version": str(
-                _row_value(row, "schema_version", "workflow_recovery_intent_v1")
-                or "workflow_recovery_intent_v1"
-            ),
-            "created_at": str(_row_value(row, "created_at", "") or ""),
-            "updated_at": str(_row_value(row, "updated_at", "") or ""),
-        }
+        return _workflow_runtime_repo.WORKFLOW_RECOVERY_INTENTS.from_row(row)
 
     def append_workflow_event(
         self,
@@ -15508,30 +15493,7 @@ class ControlPlaneStore:
         }
 
     def _serving_projection_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "projection_id": str(_row_value(row, "projection_id") or ""),
-            "projection_type": str(_row_value(row, "projection_type") or ""),
-            "collection_id": str(_row_value(row, "collection_id") or ""),
-            "source_run_id": str(_row_value(row, "source_run_id") or ""),
-            "projection_version": str(_row_value(row, "projection_version") or "serving_projection_v1"),
-            "state": str(_row_value(row, "state") or ""),
-            "scope_label": str(_row_value(row, "scope_label") or ""),
-            "scope_spec": _loads_json_dict(_row_value(row, "scope_spec_json")),
-            "candidate_identity_manifest_ref": str(_row_value(row, "candidate_identity_manifest_ref") or ""),
-            "source_collection_version": str(_row_value(row, "source_collection_version") or ""),
-            "raw_profile_index_watermark": str(_row_value(row, "raw_profile_index_watermark") or ""),
-            "evidence_index_watermark": str(_row_value(row, "evidence_index_watermark") or ""),
-            "counts": _loads_json_dict(_row_value(row, "counts_json")),
-            "readiness": _loads_json_dict(_row_value(row, "readiness_json")),
-            "provenance": _loads_json_dict(_row_value(row, "provenance_json")),
-            "manual_overlay_version": str(_row_value(row, "manual_overlay_version") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "published_at": str(_row_value(row, "published_at") or ""),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _serving_projection_repo.SERVING_PROJECTIONS.from_row(row)
 
     def _serving_projection_member_from_row(self, row: Any) -> dict[str, Any]:
         if row is None:
@@ -15563,27 +15525,7 @@ class ControlPlaneStore:
         }
 
     def _projection_person_search_index_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "projection_id": str(_row_value(row, "projection_id") or ""),
-            "candidate_identity_key": str(_row_value(row, "candidate_identity_key") or ""),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "indexed_text": str(_row_value(row, "indexed_text") or ""),
-            "raw_profile_terms": _loads_json_list(_row_value(row, "raw_profile_terms_json")),
-            "evidence_terms": _loads_json_list(_row_value(row, "evidence_terms_json")),
-            "assertion_terms": _loads_json_list(_row_value(row, "assertion_terms_json")),
-            "indexed_field_sources": _loads_json_dict(_row_value(row, "indexed_field_sources_json")),
-            "raw_profile_index_watermark": str(_row_value(row, "raw_profile_index_watermark") or ""),
-            "evidence_index_watermark": str(_row_value(row, "evidence_index_watermark") or ""),
-            "count_scope": str(_row_value(row, "count_scope") or ""),
-            "profile_fetched_at": str(_row_value(row, "profile_fetched_at") or ""),
-            "profile_indexed_at": str(_row_value(row, "profile_indexed_at") or ""),
-            "evidence_indexed_at": str(_row_value(row, "evidence_indexed_at") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _serving_projection_repo.PROJECTION_PERSON_SEARCH_INDEX.from_row(row)
 
     def _projection_manifest_shard_from_row(self, row: Any) -> dict[str, Any]:
         if row is None:
@@ -15602,36 +15544,10 @@ class ControlPlaneStore:
         }
 
     def _run_projection_link_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "run_id": str(_row_value(row, "run_id") or ""),
-            "projection_id": str(_row_value(row, "projection_id") or ""),
-            "link_type": str(_row_value(row, "link_type") or ""),
-            "projection_type": str(_row_value(row, "projection_type") or ""),
-            "collection_id": str(_row_value(row, "collection_id") or ""),
-            "state": str(_row_value(row, "state") or ""),
-            "created_by": str(_row_value(row, "created_by") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _serving_projection_repo.RUN_PROJECTION_LINKS.from_row(row)
 
     def _collection_authoritative_pointer_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "collection_id": str(_row_value(row, "collection_id") or ""),
-            "active_projection_id": str(_row_value(row, "active_projection_id") or ""),
-            "active_collection_version": str(_row_value(row, "active_collection_version") or ""),
-            "previous_projection_id": str(_row_value(row, "previous_projection_id") or ""),
-            "state": str(_row_value(row, "state") or ""),
-            "writer_id": str(_row_value(row, "writer_id") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "published_at": str(_row_value(row, "published_at") or ""),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _serving_projection_repo.COLLECTION_AUTHORITATIVE_POINTERS.from_row(row)
 
     def upsert_serving_projection(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
@@ -25119,314 +25035,40 @@ class ControlPlaneStore:
         }
 
     def _workflow_event_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "event_id": str(_row_value(row, "event_id", "") or ""),
-            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
-            "operation_id": str(_row_value(row, "operation_id", "") or ""),
-            "command_id": str(_row_value(row, "command_id", "") or ""),
-            "activity_attempt_id": str(_row_value(row, "activity_attempt_id", "") or ""),
-            "event_family": str(_row_value(row, "event_family", "") or ""),
-            "event_type": str(_row_value(row, "event_type", "") or ""),
-            "sequence_number": int(_row_value(row, "sequence_number", 0) or 0),
-            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
-            "occurred_at": str(_row_value(row, "occurred_at", "") or ""),
-            "recorded_at": str(_row_value(row, "recorded_at", "") or ""),
-            "actor": str(_row_value(row, "actor", "") or ""),
-            "source": str(_row_value(row, "source", "") or ""),
-            "payload": _loads_json_dict(_row_value(row, "payload_json", "{}")),
-            "artifact_refs": _loads_json_list(_row_value(row, "artifact_refs_json", "[]")),
-            "schema_version": str(_row_value(row, "schema_version", "workflow_event_v1") or "workflow_event_v1"),
-            "created_at": str(_row_value(row, "created_at", "") or ""),
-        }
+        return _workflow_runtime_repo.WORKFLOW_EVENTS.from_row(row)
 
     def _agent_action_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "action_id": str(_row_value(row, "action_id", "") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
-            "conversation_id": str(_row_value(row, "conversation_id", "") or ""),
-            "action_type": str(_row_value(row, "action_type", "") or ""),
-            "owner_module": str(_row_value(row, "owner_module", "") or ""),
-            "operation_type": str(_row_value(row, "operation_type", "") or ""),
-            "target_ref": _loads_json_dict(_row_value(row, "target_ref_json", "{}")),
-            "input": _loads_json_dict(_row_value(row, "input_json", "{}")),
-            "approval_status": str(_row_value(row, "approval_status", "") or ""),
-            "approval_policy": str(_row_value(row, "approval_policy", "") or ""),
-            "budget": _loads_json_dict(_row_value(row, "budget_json", "{}")),
-            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
-            "status": str(_row_value(row, "status", "") or ""),
-            "result_ref": _loads_json_dict(_row_value(row, "result_ref_json", "{}")),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
-            "created_at": str(_row_value(row, "created_at", "") or ""),
-            "updated_at": str(_row_value(row, "updated_at", "") or ""),
-        }
+        return _workflow_runtime_repo.AGENT_ACTIONS.from_row(row)
 
     def _operation_run_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "operation_run_id": str(_row_value(row, "operation_run_id", "") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
-            "action_id": str(_row_value(row, "action_id", "") or ""),
-            "owner_module": str(_row_value(row, "owner_module", "") or ""),
-            "operation_type": str(_row_value(row, "operation_type", "") or ""),
-            "status": str(_row_value(row, "status", "") or ""),
-            "progress": _loads_json_dict(_row_value(row, "progress_json", "{}")),
-            "workflow_ref": _loads_json_dict(_row_value(row, "workflow_ref_json", "{}")),
-            "cost_budget": _loads_json_dict(_row_value(row, "cost_budget_json", "{}")),
-            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
-            "result_ref": _loads_json_dict(_row_value(row, "result_ref_json", "{}")),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
-            "started_at": str(_row_value(row, "started_at", "") or ""),
-            "completed_at": str(_row_value(row, "completed_at", "") or ""),
-            "created_at": str(_row_value(row, "created_at", "") or ""),
-            "updated_at": str(_row_value(row, "updated_at", "") or ""),
-        }
+        return _workflow_runtime_repo.OPERATION_RUNS.from_row(row)
 
     def _acquisition_run_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "acquisition_run_id": str(_row_value(row, "acquisition_run_id", "") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
-            "operation_run_id": str(_row_value(row, "operation_run_id", "") or ""),
-            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
-            "plan_id": str(_row_value(row, "plan_id", "") or ""),
-            "plan_review_id": int(_row_value(row, "plan_review_id", 0) or 0),
-            "target_company": str(_row_value(row, "target_company", "") or ""),
-            "query": str(_row_value(row, "query", "") or ""),
-            "status": str(_row_value(row, "status", "") or ""),
-            "current_phase": str(_row_value(row, "current_phase", "") or ""),
-            "request": _loads_json_dict(_row_value(row, "request_json", "{}")),
-            "plan": _loads_json_dict(_row_value(row, "plan_json", "{}")),
-            "execution_bundle": _loads_json_dict(_row_value(row, "execution_bundle_json", "{}")),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
-            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
-            "created_at": str(_row_value(row, "created_at", "") or ""),
-            "updated_at": str(_row_value(row, "updated_at", "") or ""),
-        }
+        return _workflow_runtime_repo.ACQUISITION_RUNS.from_row(row)
 
     def _workflow_activity_run_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "activity_run_id": str(_row_value(row, "activity_run_id", "") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
-            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
-            "operation_run_id": str(_row_value(row, "operation_run_id", "") or ""),
-            "acquisition_run_id": str(_row_value(row, "acquisition_run_id", "") or ""),
-            "command_id": str(_row_value(row, "command_id", "") or ""),
-            "parent_activity_run_id": str(_row_value(row, "parent_activity_run_id", "") or ""),
-            "activity_type": str(_row_value(row, "activity_type", "") or ""),
-            "owner": str(_row_value(row, "owner", "") or ""),
-            "status": str(_row_value(row, "status", "") or ""),
-            "phase": str(_row_value(row, "phase", "") or ""),
-            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
-            "provider_ref": _loads_json_dict(_row_value(row, "provider_ref_json", "{}")),
-            "input": _loads_json_dict(_row_value(row, "input_json", "{}")),
-            "output": _loads_json_dict(_row_value(row, "output_json", "{}")),
-            "artifact_refs": _loads_json_list(_row_value(row, "artifact_refs_json", "[]")),
-            "entity_counts": _loads_json_dict(_row_value(row, "entity_counts_json", "{}")),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
-            "created_at": str(_row_value(row, "created_at", "") or ""),
-            "updated_at": str(_row_value(row, "updated_at", "") or ""),
-        }
+        return _workflow_runtime_repo.WORKFLOW_ACTIVITY_RUNS.from_row(row)
 
     def _workflow_activity_attempt_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "attempt_id": str(_row_value(row, "attempt_id", "") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
-            "activity_run_id": str(_row_value(row, "activity_run_id", "") or ""),
-            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
-            "command_id": str(_row_value(row, "command_id", "") or ""),
-            "attempt_number": int(_row_value(row, "attempt_number", 0) or 0),
-            "status": str(_row_value(row, "status", "") or ""),
-            "provider": str(_row_value(row, "provider", "") or ""),
-            "provider_request_ref": str(_row_value(row, "provider_request_ref", "") or ""),
-            "provider_run_ref": str(_row_value(row, "provider_run_ref", "") or ""),
-            "started_at": str(_row_value(row, "started_at", "") or ""),
-            "completed_at": str(_row_value(row, "completed_at", "") or ""),
-            "next_retry_at": str(_row_value(row, "next_retry_at", "") or ""),
-            "rate_limit_ref": _loads_json_dict(_row_value(row, "rate_limit_ref_json", "{}")),
-            "error": _loads_json_dict(_row_value(row, "error_json", "{}")),
-            "input": _loads_json_dict(_row_value(row, "input_json", "{}")),
-            "output": _loads_json_dict(_row_value(row, "output_json", "{}")),
-            "artifact_refs": _loads_json_list(_row_value(row, "artifact_refs_json", "[]")),
-            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
-            "created_at": str(_row_value(row, "created_at", "") or ""),
-            "updated_at": str(_row_value(row, "updated_at", "") or ""),
-        }
+        return _workflow_runtime_repo.WORKFLOW_ACTIVITY_ATTEMPTS.from_row(row)
 
     def _workflow_entity_delta_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "delta_id": str(_row_value(row, "delta_id", "") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
-            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
-            "operation_run_id": str(_row_value(row, "operation_run_id", "") or ""),
-            "command_id": str(_row_value(row, "command_id", "") or ""),
-            "activity_run_id": str(_row_value(row, "activity_run_id", "") or ""),
-            "attempt_id": str(_row_value(row, "attempt_id", "") or ""),
-            "acquisition_run_id": str(_row_value(row, "acquisition_run_id", "") or ""),
-            "entity_type": str(_row_value(row, "entity_type", "") or ""),
-            "entity_key": str(_row_value(row, "entity_key", "") or ""),
-            "delta_kind": str(_row_value(row, "delta_kind", "") or ""),
-            "status": str(_row_value(row, "status", "") or ""),
-            "reason": str(_row_value(row, "reason", "") or ""),
-            "source_ref": _loads_json_dict(_row_value(row, "source_ref_json", "{}")),
-            "entity_payload": _loads_json_dict(_row_value(row, "entity_payload_json", "{}")),
-            "projection_effect": _loads_json_dict(_row_value(row, "projection_effect_json", "{}")),
-            "artifact_refs": _loads_json_list(_row_value(row, "artifact_refs_json", "[]")),
-            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
-            "created_at": str(_row_value(row, "created_at", "") or ""),
-            "updated_at": str(_row_value(row, "updated_at", "") or ""),
-        }
+        return _workflow_runtime_repo.WORKFLOW_ENTITY_DELTAS.from_row(row)
 
     def _acquisition_discovery_lane_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "lane_id": str(_row_value(row, "lane_id", "") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
-            "acquisition_run_id": str(_row_value(row, "acquisition_run_id", "") or ""),
-            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
-            "operation_run_id": str(_row_value(row, "operation_run_id", "") or ""),
-            "source_command_id": str(_row_value(row, "source_command_id", "") or ""),
-            "activity_run_id": str(_row_value(row, "activity_run_id", "") or ""),
-            "target_company": str(_row_value(row, "target_company", "") or ""),
-            "query": str(_row_value(row, "query", "") or ""),
-            "provider": str(_row_value(row, "provider", "") or ""),
-            "status": str(_row_value(row, "status", "") or ""),
-            "phase": str(_row_value(row, "phase", "") or ""),
-            "lane_plan": _loads_json_dict(_row_value(row, "lane_plan_json", "{}")),
-            "provider_ref": _loads_json_dict(_row_value(row, "provider_ref_json", "{}")),
-            "artifact_refs": _loads_json_list(_row_value(row, "artifact_refs_json", "[]")),
-            "entity_counts": _loads_json_dict(_row_value(row, "entity_counts_json", "{}")),
-            "downstream_command_ids": _loads_json_list(_row_value(row, "downstream_command_ids_json", "[]")),
-            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
-            "created_at": str(_row_value(row, "created_at", "") or ""),
-            "updated_at": str(_row_value(row, "updated_at", "") or ""),
-        }
+        return _workflow_runtime_repo.ACQUISITION_DISCOVERY_LANES.from_row(row)
 
     def _operation_event_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "event_id": str(_row_value(row, "event_id", "") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id", "default") or "default"),
-            "event_stream_id": str(_row_value(row, "event_stream_id", "") or ""),
-            "operation_run_id": str(_row_value(row, "operation_run_id", "") or ""),
-            "action_id": str(_row_value(row, "action_id", "") or ""),
-            "event_family": str(_row_value(row, "event_family", "") or ""),
-            "event_type": str(_row_value(row, "event_type", "") or ""),
-            "sequence_number": int(_row_value(row, "sequence_number", 0) or 0),
-            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
-            "occurred_at": str(_row_value(row, "occurred_at", "") or ""),
-            "recorded_at": str(_row_value(row, "recorded_at", "") or ""),
-            "actor": str(_row_value(row, "actor", "") or ""),
-            "source": str(_row_value(row, "source", "") or ""),
-            "payload": _loads_json_dict(_row_value(row, "payload_json", "{}")),
-            "schema_version": str(_row_value(row, "schema_version", "operation_event_v1") or "operation_event_v1"),
-            "created_at": str(_row_value(row, "created_at", "") or ""),
-        }
+        return _workflow_runtime_repo.OPERATION_EVENTS.from_row(row)
 
     def _workflow_current_state_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
-            "operation_id": str(_row_value(row, "operation_id", "") or ""),
-            "workflow_type": str(_row_value(row, "workflow_type", "") or ""),
-            "status": str(_row_value(row, "status", "") or ""),
-            "current_stage_key": str(_row_value(row, "current_stage_key", "") or ""),
-            "completion_proofs": _loads_json_dict(_row_value(row, "completion_proofs_json", "{}")),
-            "active_command_counts": _loads_json_dict(_row_value(row, "active_command_counts_json", "{}")),
-            "terminal_command_counts": _loads_json_dict(_row_value(row, "terminal_command_counts_json", "{}")),
-            "read_model_pointers": _loads_json_dict(_row_value(row, "read_model_pointers_json", "{}")),
-            "migration_status": _loads_json_dict(_row_value(row, "migration_status_json", "{}")),
-            "last_processed_sequence_number": int(_row_value(row, "last_processed_sequence_number", 0) or 0),
-            "reducer_version": str(_row_value(row, "reducer_version", "") or ""),
-            "schema_version": str(
-                _row_value(row, "schema_version", "workflow_current_state_v1") or "workflow_current_state_v1"
-            ),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json", "{}")),
-            "created_at": str(_row_value(row, "created_at", "") or ""),
-            "updated_at": str(_row_value(row, "updated_at", "") or ""),
-        }
+        return _workflow_runtime_repo.WORKFLOW_CURRENT_STATE.from_row(row)
 
     def _workflow_command_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "command_id": str(_row_value(row, "command_id", "") or ""),
-            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
-            "operation_id": str(_row_value(row, "operation_id", "") or ""),
-            "command_type": str(_row_value(row, "command_type", "") or ""),
-            "owner": str(_row_value(row, "owner", "") or ""),
-            "stage_id": str(_row_value(row, "stage_id", "") or ""),
-            "causal_group_id": str(_row_value(row, "causal_group_id", "") or ""),
-            "parent_command_id": str(_row_value(row, "parent_command_id", "") or ""),
-            "source_event_id": str(_row_value(row, "source_event_id", "") or ""),
-            "source_event_type": str(_row_value(row, "source_event_type", "") or ""),
-            "input_artifact_refs": _loads_json_list(_row_value(row, "input_artifact_refs_json", "[]")),
-            "output_artifact_refs": _loads_json_list(_row_value(row, "output_artifact_refs_json", "[]")),
-            "produced_entity_counts": _loads_json_dict(_row_value(row, "produced_entity_counts_json", "{}")),
-            "no_op_reason": str(_row_value(row, "no_op_reason", "") or ""),
-            "readiness_effect": str(_row_value(row, "readiness_effect", "") or ""),
-            "downstream_command_ids": _loads_json_list(_row_value(row, "downstream_command_ids_json", "[]")),
-            "causality_schema_version": str(
-                _row_value(row, "causality_schema_version", "command_causality_v1") or "command_causality_v1"
-            ),
-            "status": str(_row_value(row, "status", "") or ""),
-            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
-            "payload": _loads_json_dict(_row_value(row, "payload_json", "{}")),
-            "artifact_refs": _loads_json_list(_row_value(row, "artifact_refs_json", "[]")),
-            "not_before_at": str(_row_value(row, "not_before_at", "") or ""),
-            "attempt": int(_row_value(row, "attempt", 0) or 0),
-            "max_attempts": int(_row_value(row, "max_attempts", 0) or 0),
-            "retry_policy": _loads_json_dict(_row_value(row, "retry_policy_json", "{}")),
-            "lease_owner": str(_row_value(row, "lease_owner", "") or ""),
-            "lease_expires_at": str(_row_value(row, "lease_expires_at", "") or ""),
-            "heartbeat_at": str(_row_value(row, "heartbeat_at", "") or ""),
-            "last_error": str(_row_value(row, "last_error", "") or ""),
-            "result": _loads_json_dict(_row_value(row, "result_json", "{}")),
-            "schema_version": str(_row_value(row, "schema_version", "workflow_command_v1") or "workflow_command_v1"),
-            "created_at": str(_row_value(row, "created_at", "") or ""),
-            "updated_at": str(_row_value(row, "updated_at", "") or ""),
-        }
+        return _workflow_runtime_repo.WORKFLOW_COMMANDS.from_row(row)
 
     def _runtime_outbox_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "outbox_id": str(_row_value(row, "outbox_id", "") or ""),
-            "workflow_run_id": str(_row_value(row, "workflow_run_id", "") or ""),
-            "operation_id": str(_row_value(row, "operation_id", "") or ""),
-            "command_id": str(_row_value(row, "command_id", "") or ""),
-            "outbox_type": str(_row_value(row, "outbox_type", "") or ""),
-            "status": str(_row_value(row, "status", "") or ""),
-            "idempotency_key": str(_row_value(row, "idempotency_key", "") or ""),
-            "payload": _loads_json_dict(_row_value(row, "payload_json", "{}")),
-            "not_before_at": str(_row_value(row, "not_before_at", "") or ""),
-            "attempt": int(_row_value(row, "attempt", 0) or 0),
-            "max_attempts": int(_row_value(row, "max_attempts", 0) or 0),
-            "lease_owner": str(_row_value(row, "lease_owner", "") or ""),
-            "lease_expires_at": str(_row_value(row, "lease_expires_at", "") or ""),
-            "dispatched_at": str(_row_value(row, "dispatched_at", "") or ""),
-            "last_error": str(_row_value(row, "last_error", "") or ""),
-            "schema_version": str(_row_value(row, "schema_version", "runtime_outbox_v1") or "runtime_outbox_v1"),
-            "created_at": str(_row_value(row, "created_at", "") or ""),
-            "updated_at": str(_row_value(row, "updated_at", "") or ""),
-        }
+        return _workflow_runtime_repo.RUNTIME_OUTBOX.from_row(row)
 
     def _linkedin_profile_registry_backfill_from_row(self, row: Any) -> dict[str, Any]:
         if row is None:
@@ -25572,203 +25214,31 @@ class ControlPlaneStore:
         return _public_web_repo.PERSON_PUBLIC_WEB_SIGNALS.from_row(row)
 
     def _person_asset_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "asset_id": str(_row_value(row, "asset_id") or ""),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "asset_type": str(_row_value(row, "asset_type") or ""),
-            "source_kind": str(_row_value(row, "source_kind") or ""),
-            "source_run_id": str(_row_value(row, "source_run_id") or ""),
-            "source_projection_id": str(_row_value(row, "source_projection_id") or ""),
-            "content_ref": str(_row_value(row, "content_ref") or ""),
-            "content_hash": str(_row_value(row, "content_hash") or ""),
-            "source_url": str(_row_value(row, "source_url") or ""),
-            "fetched_at": str(_row_value(row, "fetched_at") or ""),
-            "visibility_scope": str(_row_value(row, "visibility_scope") or "internal"),
-            "status": str(_row_value(row, "status") or "available"),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _person_company_assets_repo.PERSON_ASSETS.from_row(row)
 
     def _person_evidence_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "evidence_id": str(_row_value(row, "evidence_id") or ""),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "asset_id": str(_row_value(row, "asset_id") or ""),
-            "evidence_type": str(_row_value(row, "evidence_type") or ""),
-            "value": str(_row_value(row, "value") or ""),
-            "normalized_value": str(_row_value(row, "normalized_value") or ""),
-            "source_url": str(_row_value(row, "source_url") or ""),
-            "source_domain": str(_row_value(row, "source_domain") or ""),
-            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
-            "identity_match_score": _coerce_public_web_float(_row_value(row, "identity_match_score", 0.0)),
-            "publishable": bool(_row_value(row, "publishable", 0)),
-            "evidence_excerpt": str(_row_value(row, "evidence_excerpt") or ""),
-            "artifact_refs": _loads_json_dict(_row_value(row, "artifact_refs_json")),
-            "status": str(_row_value(row, "status") or "observed"),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _person_company_assets_repo.PERSON_EVIDENCE.from_row(row)
 
     def _person_assertion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "assertion_id": str(_row_value(row, "assertion_id") or ""),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "assertion_type": str(_row_value(row, "assertion_type") or ""),
-            "value": str(_row_value(row, "value") or ""),
-            "normalized_value": str(_row_value(row, "normalized_value") or ""),
-            "authority": str(_row_value(row, "authority") or "provider_observed"),
-            "verification_status": str(_row_value(row, "verification_status") or "needs_review"),
-            "source_evidence_id": str(_row_value(row, "source_evidence_id") or ""),
-            "source_crm_event_id": str(_row_value(row, "source_crm_event_id") or ""),
-            "source_run_id": str(_row_value(row, "source_run_id") or ""),
-            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
-            "valid_from": str(_row_value(row, "valid_from") or ""),
-            "valid_to": str(_row_value(row, "valid_to") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _person_company_assets_repo.PERSON_ASSERTIONS.from_row(row)
 
     def _company_asset_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "asset_id": str(_row_value(row, "asset_id") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id") or "default") or "default",
-            "company_key": str(_row_value(row, "company_key") or ""),
-            "target_company": str(_row_value(row, "target_company") or ""),
-            "asset_type": str(_row_value(row, "asset_type") or ""),
-            "source_kind": str(_row_value(row, "source_kind") or ""),
-            "source_run_id": str(_row_value(row, "source_run_id") or ""),
-            "source_command_id": str(_row_value(row, "source_command_id") or ""),
-            "activity_run_id": str(_row_value(row, "activity_run_id") or ""),
-            "content_ref": str(_row_value(row, "content_ref") or ""),
-            "content_hash": str(_row_value(row, "content_hash") or ""),
-            "source_url": str(_row_value(row, "source_url") or ""),
-            "fetched_at": str(_row_value(row, "fetched_at") or ""),
-            "visibility_scope": str(_row_value(row, "visibility_scope") or "internal"),
-            "status": str(_row_value(row, "status") or "available"),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _person_company_assets_repo.COMPANY_ASSETS.from_row(row)
 
     def _company_evidence_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "evidence_id": str(_row_value(row, "evidence_id") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id") or "default") or "default",
-            "company_key": str(_row_value(row, "company_key") or ""),
-            "target_company": str(_row_value(row, "target_company") or ""),
-            "asset_id": str(_row_value(row, "asset_id") or ""),
-            "evidence_type": str(_row_value(row, "evidence_type") or ""),
-            "value": str(_row_value(row, "value") or ""),
-            "normalized_value": str(_row_value(row, "normalized_value") or ""),
-            "source_url": str(_row_value(row, "source_url") or ""),
-            "source_domain": str(_row_value(row, "source_domain") or ""),
-            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
-            "evidence_excerpt": str(_row_value(row, "evidence_excerpt") or ""),
-            "artifact_refs": _loads_json_dict(_row_value(row, "artifact_refs_json")),
-            "status": str(_row_value(row, "status") or "observed"),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _person_company_assets_repo.COMPANY_EVIDENCE.from_row(row)
 
     def _company_assertion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "assertion_id": str(_row_value(row, "assertion_id") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id") or "default") or "default",
-            "company_key": str(_row_value(row, "company_key") or ""),
-            "target_company": str(_row_value(row, "target_company") or ""),
-            "assertion_type": str(_row_value(row, "assertion_type") or ""),
-            "value": str(_row_value(row, "value") or ""),
-            "normalized_value": str(_row_value(row, "normalized_value") or ""),
-            "authority": str(_row_value(row, "authority") or "provider_observed"),
-            "verification_status": str(_row_value(row, "verification_status") or "needs_review"),
-            "source_evidence_id": str(_row_value(row, "source_evidence_id") or ""),
-            "source_run_id": str(_row_value(row, "source_run_id") or ""),
-            "source_command_id": str(_row_value(row, "source_command_id") or ""),
-            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
-            "valid_from": str(_row_value(row, "valid_from") or ""),
-            "valid_to": str(_row_value(row, "valid_to") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _person_company_assets_repo.COMPANY_ASSERTIONS.from_row(row)
 
     def _raw_profile_index_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "indexed_text": str(_row_value(row, "indexed_text") or ""),
-            "raw_profile_terms": _loads_json_list(_row_value(row, "raw_profile_terms_json")),
-            "source_asset_ids": _loads_json_list(_row_value(row, "source_asset_ids_json")),
-            "indexed_field_sources": _loads_json_dict(_row_value(row, "indexed_field_sources_json")),
-            "raw_profile_index_watermark": str(_row_value(row, "raw_profile_index_watermark") or ""),
-            "profile_fetched_at": str(_row_value(row, "profile_fetched_at") or ""),
-            "profile_indexed_at": str(_row_value(row, "profile_indexed_at") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _person_company_assets_repo.RAW_PROFILE_INDEX.from_row(row)
 
     def _candidate_evidence_index_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "indexed_text": str(_row_value(row, "indexed_text") or ""),
-            "evidence_terms": _loads_json_list(_row_value(row, "evidence_terms_json")),
-            "assertion_terms": _loads_json_list(_row_value(row, "assertion_terms_json")),
-            "source_evidence_ids": _loads_json_list(_row_value(row, "source_evidence_ids_json")),
-            "source_assertion_ids": _loads_json_list(_row_value(row, "source_assertion_ids_json")),
-            "indexed_field_sources": _loads_json_dict(_row_value(row, "indexed_field_sources_json")),
-            "evidence_index_watermark": str(_row_value(row, "evidence_index_watermark") or ""),
-            "evidence_indexed_at": str(_row_value(row, "evidence_indexed_at") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _person_company_assets_repo.CANDIDATE_EVIDENCE_INDEX.from_row(row)
 
     def _crm_record_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "crm_record_id": str(_row_value(row, "crm_record_id") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id") or "default"),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "candidate_identity_key": str(_row_value(row, "candidate_identity_key") or ""),
-            "collection_id": str(_row_value(row, "collection_id") or ""),
-            "display_name_cache": str(_row_value(row, "display_name_cache") or ""),
-            "headline_cache": str(_row_value(row, "headline_cache") or ""),
-            "primary_company_cache": str(_row_value(row, "primary_company_cache") or ""),
-            "avatar_asset_id": str(_row_value(row, "avatar_asset_id") or ""),
-            "lifecycle_status": str(_row_value(row, "lifecycle_status") or "active"),
-            "visibility_status": str(_row_value(row, "visibility_status") or "normal"),
-            "owner_user_id": str(_row_value(row, "owner_user_id") or ""),
-            "source_projection_id": str(_row_value(row, "source_projection_id") or ""),
-            "source_run_id": str(_row_value(row, "source_run_id") or ""),
-            "source_collection_id": str(_row_value(row, "source_collection_id") or ""),
-            "source_reason": str(_row_value(row, "source_reason") or ""),
-            "current_engagement_id": str(_row_value(row, "current_engagement_id") or ""),
-            "crm_version": int(_row_value(row, "crm_version", 1) or 1),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _crm_core_repo.CRM_RECORDS.from_row(row)
 
     def _crm_engagement_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
         if row is None:
@@ -25794,47 +25264,10 @@ class ControlPlaneStore:
         }
 
     def _crm_event_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "event_id": str(_row_value(row, "event_id") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id") or "default"),
-            "crm_record_id": str(_row_value(row, "crm_record_id") or ""),
-            "engagement_id": str(_row_value(row, "engagement_id") or ""),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "event_type": str(_row_value(row, "event_type") or ""),
-            "actor_type": str(_row_value(row, "actor_type") or ""),
-            "actor_id": str(_row_value(row, "actor_id") or ""),
-            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
-            "payload": _loads_json_dict(_row_value(row, "payload_json")),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "occurred_at": str(_row_value(row, "occurred_at") or ""),
-            "created_at": str(_row_value(row, "created_at") or ""),
-        }
+        return _crm_core_repo.CRM_EVENTS.from_row(row)
 
     def _crm_task_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "task_id": str(_row_value(row, "task_id") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id") or "default"),
-            "crm_record_id": str(_row_value(row, "crm_record_id") or ""),
-            "engagement_id": str(_row_value(row, "engagement_id") or ""),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "title": str(_row_value(row, "title") or ""),
-            "description": str(_row_value(row, "description") or ""),
-            "status": str(_row_value(row, "status") or "open"),
-            "priority": str(_row_value(row, "priority") or "normal"),
-            "due_at": str(_row_value(row, "due_at") or ""),
-            "completed_at": str(_row_value(row, "completed_at") or ""),
-            "created_by_actor": str(_row_value(row, "created_by_actor") or ""),
-            "created_by_actor_id": str(_row_value(row, "created_by_actor_id") or ""),
-            "source_event_id": str(_row_value(row, "source_event_id") or ""),
-            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _crm_core_repo.CRM_TASKS.from_row(row)
 
     def _target_candidate_public_web_promotion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
         return _public_web_repo.TARGET_CANDIDATE_PUBLIC_WEB_PROMOTIONS.from_row(row)
