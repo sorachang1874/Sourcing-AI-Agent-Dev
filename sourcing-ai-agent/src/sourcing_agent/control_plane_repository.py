@@ -25,6 +25,8 @@ from dataclasses import field as dataclass_field
 from enum import Enum
 from typing import Any
 
+from .control_plane_serde import json_safe_payload
+
 
 class Kind(Enum):
     """The typed contract for a control-plane column."""
@@ -124,7 +126,9 @@ def _decode(col: Column, value: Any) -> Any:
 def _encode(col: Column, value: Any, *, strip_text: bool, clamp_int: bool) -> Any:
     if col.kind in (Kind.JSON, Kind.JSON_LIST, Kind.JSON_STR_LIST):
         empty: Any = {} if col.kind is Kind.JSON else []
-        return json.dumps(value if value is not None else empty, ensure_ascii=False)
+        # json_safe_payload mirrors the former hand builders' json.dumps(_json_safe_payload(...)) so the
+        # typed write path is byte-identical (Path/datetime/bytes/to_record/sets coerced before dumps).
+        return json.dumps(json_safe_payload(value) if value is not None else empty, ensure_ascii=False)
     if col.kind is Kind.INT:
         try:
             number = int(value or 0)

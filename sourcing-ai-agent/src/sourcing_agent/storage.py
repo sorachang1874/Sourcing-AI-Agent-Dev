@@ -54,6 +54,7 @@ from .repositories.linkedin_profile_registry import (
 from .repositories.linkedin_profile_registry import (
     LINKEDIN_PROFILE_REGISTRY_LEASES as _LINKEDIN_PROFILE_REGISTRY_LEASES_DESCRIPTOR,
 )
+from .control_plane_serde import json_safe_payload as _control_plane_json_safe_payload
 from .repositories import public_web as _public_web_repo
 from .repositories import serving_projection as _serving_projection_repo
 from .repositories import workflow_runtime as _workflow_runtime_repo
@@ -280,26 +281,9 @@ def _resolve_postgres_only_sqlite_backend(
     return backend, uri, True
 
 
-def _json_safe_payload(value: Any) -> Any:
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if isinstance(value, memoryview):
-        value = value.tobytes()
-    if isinstance(value, (bytes, bytearray)):
-        try:
-            return bytes(value).decode("utf-8")
-        except UnicodeDecodeError:
-            return bytes(value).decode("utf-8", errors="replace")
-    to_record = getattr(value, "to_record", None)
-    if callable(to_record):
-        return _json_safe_payload(to_record())
-    if isinstance(value, dict):
-        return {str(key): _json_safe_payload(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple, set)):
-        return [_json_safe_payload(item) for item in value]
-    return value
+# Extracted to control_plane_serde so the typed repository write path applies the SAME json-safe
+# coercion (re-imported under the legacy private name to keep all internal call sites unchanged).
+_json_safe_payload = _control_plane_json_safe_payload
 
 
 def _workflow_command_causality_columns_from_payload(
@@ -26376,26 +26360,8 @@ def _crm_public_web_batch_row_payload(
     existing: dict[str, Any] | None,
     now: str,
 ) -> dict[str, Any]:
-    return {
-        "batch_id": normalized["batch_id"],
-        "idempotency_key": normalized["idempotency_key"],
-        "workspace_id": normalized["workspace_id"],
-        "status": normalized["status"],
-        "requested_crm_record_ids_json": json.dumps(normalized["requested_crm_record_ids"], ensure_ascii=False),
-        "source_families_json": json.dumps(normalized["source_families"], ensure_ascii=False),
-        "options_json": json.dumps(_json_safe_payload(normalized["options"]), ensure_ascii=False),
-        "run_ids_json": json.dumps(normalized["run_ids"], ensure_ascii=False),
-        "summary_json": json.dumps(_json_safe_payload(normalized["summary"]), ensure_ascii=False),
-        "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
-        "requested_by": normalized["requested_by"],
-        "force_refresh": 1 if normalized["force_refresh"] else 0,
-        "execution_backend": normalized["execution_backend"],
-        "source_target_batch_id": normalized["source_target_batch_id"],
-        "started_at": normalized["started_at"],
-        "completed_at": normalized["completed_at"],
-        "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
-        "updated_at": now,
-    }
+    created_at = str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now
+    return _public_web_repo.CRM_PUBLIC_WEB_BATCHES.to_columns({**normalized, "created_at": created_at, "updated_at": now})
 
 
 def _crm_public_web_run_row_payload(
@@ -26404,40 +26370,8 @@ def _crm_public_web_run_row_payload(
     existing: dict[str, Any] | None,
     now: str,
 ) -> dict[str, Any]:
-    return {
-        "run_id": normalized["run_id"],
-        "batch_id": normalized["batch_id"],
-        "crm_record_id": normalized["crm_record_id"],
-        "workspace_id": normalized["workspace_id"],
-        "candidate_id": normalized["candidate_id"],
-        "candidate_name": normalized["candidate_name"],
-        "current_company": normalized["current_company"],
-        "linkedin_url": normalized["linkedin_url"],
-        "linkedin_url_key": normalized["linkedin_url_key"],
-        "person_identity_key": normalized["person_identity_key"],
-        "idempotency_key": normalized["idempotency_key"],
-        "status": normalized["status"],
-        "phase": normalized["phase"],
-        "source_families_json": json.dumps(normalized["source_families"], ensure_ascii=False),
-        "options_json": json.dumps(_json_safe_payload(normalized["options"]), ensure_ascii=False),
-        "query_manifest_json": json.dumps(_json_safe_payload(normalized["query_manifest"]), ensure_ascii=False),
-        "search_checkpoint_json": json.dumps(_json_safe_payload(normalized["search_checkpoint"]), ensure_ascii=False),
-        "fetch_checkpoint_json": json.dumps(_json_safe_payload(normalized["fetch_checkpoint"]), ensure_ascii=False),
-        "analysis_checkpoint_json": json.dumps(_json_safe_payload(normalized["analysis_checkpoint"]), ensure_ascii=False),
-        "summary_json": json.dumps(_json_safe_payload(normalized["summary"]), ensure_ascii=False),
-        "artifact_root": normalized["artifact_root"],
-        "worker_key": normalized["worker_key"],
-        "lease_owner": normalized["lease_owner"],
-        "lease_expires_at": normalized["lease_expires_at"],
-        "attempt_count": normalized["attempt_count"],
-        "last_error": normalized["last_error"],
-        "execution_backend": normalized["execution_backend"],
-        "source_target_run_id": normalized["source_target_run_id"],
-        "started_at": normalized["started_at"],
-        "completed_at": normalized["completed_at"],
-        "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
-        "updated_at": now,
-    }
+    created_at = str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now
+    return _public_web_repo.CRM_PUBLIC_WEB_RUNS.to_columns({**normalized, "created_at": created_at, "updated_at": now})
 
 
 def _normalize_company_public_web_asset_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -26875,49 +26809,10 @@ def _crm_public_web_promotion_row_payload(
     existing: dict[str, Any] | None,
     now: str,
 ) -> dict[str, Any]:
-    return {
-        "promotion_id": normalized["promotion_id"],
-        "signal_id": normalized["signal_id"],
-        "run_id": normalized["run_id"],
-        "asset_id": normalized["asset_id"],
-        "person_identity_key": normalized["person_identity_key"],
-        "crm_record_id": normalized["crm_record_id"],
-        "workspace_id": normalized["workspace_id"],
-        "candidate_id": normalized["candidate_id"],
-        "candidate_name": normalized["candidate_name"],
-        "current_company": normalized["current_company"],
-        "linkedin_url_key": normalized["linkedin_url_key"],
-        "signal_kind": normalized["signal_kind"],
-        "signal_type": normalized["signal_type"],
-        "email_type": normalized["email_type"],
-        "value": normalized["value"],
-        "normalized_value": normalized["normalized_value"],
-        "url": normalized["url"],
-        "source_url": normalized["source_url"],
-        "source_domain": normalized["source_domain"],
-        "source_family": normalized["source_family"],
-        "source_title": normalized["source_title"],
-        "confidence_label": normalized["confidence_label"],
-        "confidence_score": normalized["confidence_score"],
-        "identity_match_label": normalized["identity_match_label"],
-        "identity_match_score": normalized["identity_match_score"],
-        "publishable": 1 if normalized["publishable"] else 0,
-        "clean_profile_link": 1 if normalized["clean_profile_link"] else 0,
-        "link_shape_warnings_json": json.dumps(normalized["link_shape_warnings"], ensure_ascii=False),
-        "action": normalized["action"],
-        "promotion_status": normalized["promotion_status"],
-        "promoted_field": normalized["promoted_field"],
-        "previous_value": normalized["previous_value"],
-        "new_value": normalized["new_value"],
-        "operator": normalized["operator"],
-        "note": normalized["note"],
-        "evidence_excerpt": normalized["evidence_excerpt"],
-        "execution_backend": normalized["execution_backend"],
-        "source_target_promotion_id": normalized["source_target_promotion_id"],
-        "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
-        "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
-        "updated_at": now,
-    }
+    created_at = str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now
+    return _public_web_repo.CRM_PUBLIC_WEB_PROMOTIONS.to_columns(
+        {**normalized, "created_at": created_at, "updated_at": now}
+    )
 
 
 def _coerce_public_web_float(value: Any) -> float:
