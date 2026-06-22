@@ -6885,23 +6885,10 @@ class ControlPlaneStore:
         normalized = _normalize_target_candidate_public_web_batch_payload(payload)
         existing = self.get_target_candidate_public_web_batch(batch_id=normalized["batch_id"])
         now = _utc_now_timestamp()
-        row_payload = {
-            "batch_id": normalized["batch_id"],
-            "idempotency_key": normalized["idempotency_key"],
-            "status": normalized["status"],
-            "requested_record_ids_json": json.dumps(normalized["requested_record_ids"], ensure_ascii=False),
-            "source_families_json": json.dumps(normalized["source_families"], ensure_ascii=False),
-            "options_json": json.dumps(_json_safe_payload(normalized["options"]), ensure_ascii=False),
-            "run_ids_json": json.dumps(normalized["run_ids"], ensure_ascii=False),
-            "summary_json": json.dumps(_json_safe_payload(normalized["summary"]), ensure_ascii=False),
-            "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
-            "requested_by": normalized["requested_by"],
-            "force_refresh": 1 if normalized["force_refresh"] else 0,
-            "started_at": normalized["started_at"],
-            "completed_at": normalized["completed_at"],
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
-            "updated_at": now,
-        }
+        created_at = str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now
+        row_payload = _public_web_repo.TARGET_CANDIDATE_PUBLIC_WEB_BATCHES.to_columns(
+            {**normalized, "created_at": created_at, "updated_at": now}
+        )
         if self._write_control_plane_row_to_postgres("target_candidate_public_web_batches", row_payload):
             return (
                 self.get_target_candidate_public_web_batch(batch_id=normalized["batch_id"])
@@ -8044,23 +8031,10 @@ class ControlPlaneStore:
         normalized = _normalize_person_public_web_asset_payload(payload)
         existing = self.get_person_public_web_asset(asset_id=normalized["asset_id"])
         now = _utc_now_timestamp()
-        row_payload = {
-            "asset_id": normalized["asset_id"],
-            "person_identity_key": normalized["person_identity_key"],
-            "linkedin_url_key": normalized["linkedin_url_key"],
-            "latest_run_id": normalized["latest_run_id"],
-            "target_candidate_record_id": normalized["target_candidate_record_id"],
-            "candidate_name": normalized["candidate_name"],
-            "current_company": normalized["current_company"],
-            "status": normalized["status"],
-            "summary_json": json.dumps(_json_safe_payload(normalized["summary"]), ensure_ascii=False),
-            "signals_json": json.dumps(_json_safe_payload(normalized["signals"]), ensure_ascii=False),
-            "source_run_ids_json": json.dumps(normalized["source_run_ids"], ensure_ascii=False),
-            "artifact_root": normalized["artifact_root"],
-            "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
-            "updated_at": now,
-        }
+        created_at = str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now
+        row_payload = _public_web_repo.PERSON_PUBLIC_WEB_ASSETS.to_columns(
+            {**normalized, "created_at": created_at, "updated_at": now}
+        )
         if self._write_control_plane_row_to_postgres("person_public_web_assets", row_payload):
             return (
                 self.get_person_public_web_asset(asset_id=normalized["asset_id"])
