@@ -341,3 +341,33 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     101 passed;ruff 仍 18。
   - **B4.1b 剩余(下一批)**:append_job_event(void + compaction)+ 7 个 value-returning upsert(native-None 时正确返值需逐方法定:
     re-read PG 行 vs raise vs {} sentinel)。全部 fail-close 后 → 删 init_schema + shadow(原 B4.1b/e)。
+- **2026-06-22 B4.2.1 foundation 泛化(commit b7588cc)**:typed descriptor 地基补 3 个特性,使 public-web 族可逐字节等价:
+  `Kind.JSON_LIST`(原始 list,== storage `_loads_json_list`:list/tuple passthrough,非-list/解析失败→[];区别于 `JSON_STR_LIST` 的
+  strip+过滤空)、`Kind.JSON` 改为强制 dict(== `_loads_json_dict`;原返 `json.loads` 原值,无 consumer 故收紧安全)、
+  `Column.read_default`(读时空值回退,独立于写 `default`;registry 读 status="" 而 public-web 读 status="queued")。
+  验证:合成电池 + registry/leases 回归 35 passed(live PG)。
+- **2026-06-22 B4.2.2 public-web 读路径转 descriptor(commit ced8fc3)**:10 个 `_*_public_web_*_from_row` 手写 mapper(~270 行
+  逐字段 coercion)→ `repositories/public_web.py` 声明式 TableDescriptor + 一行 `DESCRIPTOR.from_row(row)` 委托;storage.py −288 行。
+  新特性:`Kind.FLOAT`(== `_coerce_public_web_float`)、`derived` 读别名(一列两键:crm_record_id→record_id、
+  requested_crm_record_ids→requested_record_ids)。**范围仅读**:`_*_row_payload` 写 builder + `_normalize_*_payload` 暂留(写路径转换
+  需逐表对账完整列集,留后续)。验证:90 行合成逐字节等价 + 44 passed/0 failed(live PG)。顺手迁移 1 个 B4.1 stale 测
+  (init_schema-source 断言改为断言 normal-schema bootstrap 已整体移除)。
+- **2026-06-22 B4.2.3 再转 28 个 from_row(4 域,commit dc5fc78)**:storage.py −~550 行。新模块:`serving_projection.py`(4)、
+  `workflow_runtime.py`(13)、`person_company_assets.py`(8)、`crm_core.py`(3)。foundation 把 `read_default` 泛化到 INT/FLOAT
+  (`int|float(value or default)`,crm_records.crm_version 默认 1 需用;None→旧 0/0.0 行为,向后兼容)。
+  **方法论(65 候选→安全转 28)**:① 只读分类 workflow(7 并行 agent,wf_9671629d)把剩余 65 个 mapper 编目为
+  descriptor-MECHANICAL(28)vs IRREGULAR(37,留手写)并起草 descriptor spec;② `scripts/_descriptor_equiv_harness.py`(新)为
+  确定性闸门:把每个 spec 重建为内存 descriptor,跨 absent/empty/typical/edge/native-object 逐列电池 diff against 活 mapper,
+  **抓到 1 个真实 mis-spec(crm_version 默认 1)**;③ 28 个方法体经 **AST-精确 end_lineno 替换**(签名保留,非早先失败的启发式截断);
+  ④ 终检:**新委托方法 vs 原手写 mapper(从 pre-edit 备份加载)0 diff**。验证:177 passed/0 failed(serving-projection /
+  operation-runtime / company-asset / person-crm-projection-contracts / recovery-takeover-intent / workflow-event-response,live PG)。
+  顺修 1 个 pre-existing B4.1 stale 测(向已退役 SQLite shadow 表 raw-UPDATE → 改走 PG adapter `_execute_non_query`;控制实验证 pre-existing)。
+  **进度:79 个 from_row mapper 已 40 个转 typed descriptor(registry/leases 2 + public-web 10 + 本批 28)。**
+- **2026-06-22 剩余 37 IRREGULAR 分类(下一波的 directional fork)**:agent 编目保守 —— 多数"IRREGULAR"实为**功能等价但写法不同**:
+  ① 直接 `row["c"]` 下标(对真实全列行 == `_row_value`,仅缺列时 KeyError,真实 SELECT* 不会缺);② inline `json.loads(row["c"] or "{}")`
+  try/except == `_loads_json_dict`/`_loads_json_list`。**真正 hard**:`_normalize_textual_value`(memoryview/bytes 解码 + `b'...'` 解包,超出 STR)、
+  `_normalize_projection_rank_index`(`max(0,int)` 读时 clamp,descriptor INT 仅写时 clamp)、条件计算字段(target_candidate.quality_score
+  float-if-not-None、lease `expired`)、dict-spread merge(confidence_policy_run、criteria_version)、raw passthrough 无 `str()`
+  (agent_runtime_session/trace_span/worker)、从整 dict 派生(agent_worker wait_stage/effective_status)、`_candidate_from_row`(返 Candidate dataclass)。
+  **机械易转的一波已尽**;下一波每个需新 foundation kind(raw-passthrough / clamped-int / normalized-text)或承载真实逐行逻辑 ——
+  属 directional 决策点(更多 from_row vs 转写路径 vs 迁移 caller 到 Repository;后者触 jsonb Contract,已 gated on owner GO)。
