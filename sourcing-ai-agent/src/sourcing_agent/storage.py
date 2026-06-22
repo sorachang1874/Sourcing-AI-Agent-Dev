@@ -41,9 +41,18 @@ from .linkedin_url_normalization import (
 from .linkedin_url_normalization import (
     normalize_linkedin_profile_url_list as _normalize_linkedin_profile_url_list,
 )
+from .control_plane_time import (
+    is_sqlite_timestamp_expired as _is_sqlite_timestamp_expired,
+)
+from .control_plane_time import (
+    parse_sqlite_timestamp as _parse_sqlite_timestamp,
+)
 from .local_postgres import resolve_control_plane_postgres_dsn
 from .repositories.linkedin_profile_registry import (
     LINKEDIN_PROFILE_REGISTRY as _LINKEDIN_PROFILE_REGISTRY_DESCRIPTOR,
+)
+from .repositories.linkedin_profile_registry import (
+    LINKEDIN_PROFILE_REGISTRY_LEASES as _LINKEDIN_PROFILE_REGISTRY_LEASES_DESCRIPTOR,
 )
 from .person_identity import (
     build_person_summary_view as _build_person_summary_view,
@@ -25021,18 +25030,10 @@ class ControlPlaneStore:
         return _LINKEDIN_PROFILE_REGISTRY_DESCRIPTOR.from_row(row)
 
     def _linkedin_profile_registry_lease_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        lease_expires_at = str(row["lease_expires_at"] or "")
-        return {
-            "profile_url_key": str(row["profile_url_key"] or ""),
-            "lease_owner": str(row["lease_owner"] or ""),
-            "lease_token": str(row["lease_token"] or ""),
-            "lease_expires_at": lease_expires_at,
-            "expired": _is_sqlite_timestamp_expired(lease_expires_at),
-            "created_at": str(row["created_at"] or ""),
-            "updated_at": str(row["updated_at"] or ""),
-        }
+        # Track B B4.2: declared once in the leases table descriptor — including the DERIVED `expired`
+        # field (computed from lease_expires_at, not stored). Proves the descriptor's derived-field
+        # support, generalizing the pattern beyond the base registry table.
+        return _LINKEDIN_PROFILE_REGISTRY_LEASES_DESCRIPTOR.from_row(row)
 
     def _build_linkedin_profile_registry_batch_lease_payload(
         self,
@@ -27778,27 +27779,6 @@ def _row_value(row: Any, key: str, default: Any = "") -> Any:
 
 def _utc_now_timestamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-
-
-def _parse_sqlite_timestamp(value: str) -> datetime | None:
-    normalized = str(value or "").strip()
-    if not normalized:
-        return None
-    for format_string in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
-        try:
-            parsed = datetime.strptime(normalized, format_string)
-            return parsed.replace(tzinfo=timezone.utc)
-        except ValueError:
-            continue
-    return None
-
-
-def _is_sqlite_timestamp_expired(value: str, *, now: datetime | None = None) -> bool:
-    parsed = _parse_sqlite_timestamp(value)
-    if parsed is None:
-        return True
-    reference = now or datetime.now(timezone.utc)
-    return parsed <= reference
 
 
 def _milliseconds_between(start_value: str, end_value: str) -> int | None:

@@ -19,6 +19,7 @@ Design notes:
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from enum import Enum
@@ -128,15 +129,21 @@ class TableDescriptor:
     merge: dict[str, str] = dataclass_field(default_factory=dict)  # column -> SQL expr override for DO UPDATE
     strip_text: bool = True  # write-normalize: strip whitespace on text columns (control-plane default)
     clamp_non_negative_int: bool = True  # write-normalize: max(0, int) on integer columns
+    # Derived public fields not backed by a column, computed from the column-mapped dict (e.g. a lease's
+    # `expired` from its expires-at text). Appended after the column mapping; read-only (never persisted).
+    derived: tuple[tuple[str, Callable[[dict[str, Any]], Any]], ...] = ()
 
     def column_names(self) -> list[str]:
         return [c.name for c in self.columns]
 
     def from_row(self, row: Any) -> dict[str, Any]:
-        """Map a DB row to the public dict. Returns {} for a missing row (the inherited sentinel)."""
+        """Map a DB row to the public dict (+ derived fields). Returns {} for a missing row."""
         if row is None:
             return {}
-        return {c.key: _decode(c, _row_value(row, c.name)) for c in self.columns}
+        mapped = {c.key: _decode(c, _row_value(row, c.name)) for c in self.columns}
+        for field_name, compute in self.derived:
+            mapped[field_name] = compute(mapped)
+        return mapped
 
     def from_rows(self, rows: Any) -> list[dict[str, Any]]:
         return [self.from_row(r) for r in (rows or [])]

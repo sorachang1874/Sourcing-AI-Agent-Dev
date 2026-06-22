@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..control_plane_repository import Column, Kind, Repository, TableDescriptor
+from ..control_plane_time import is_sqlite_timestamp_expired
 
 LINKEDIN_PROFILE_REGISTRY = TableDescriptor(
     table="linkedin_profile_registry",
@@ -57,6 +58,24 @@ LINKEDIN_PROFILE_REGISTRY = TableDescriptor(
         Column("refill_terminal_at"),
         Column("created_at"),
         Column("updated_at"),
+    ),
+)
+
+
+LINKEDIN_PROFILE_REGISTRY_LEASES = TableDescriptor(
+    table="linkedin_profile_registry_leases",
+    pk=("profile_url_key",),
+    columns=(
+        Column("profile_url_key"),
+        Column("lease_owner"),
+        Column("lease_token"),
+        Column("lease_expires_at"),
+        Column("created_at"),
+        Column("updated_at"),
+    ),
+    derived=(
+        # `expired` is computed from lease_expires_at, not a stored column — mirrors the former lease mapper.
+        ("expired", lambda mapped: is_sqlite_timestamp_expired(str(mapped.get("lease_expires_at") or ""))),
     ),
 )
 
