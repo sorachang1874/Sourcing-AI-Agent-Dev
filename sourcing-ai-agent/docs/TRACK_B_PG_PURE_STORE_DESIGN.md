@@ -371,3 +371,22 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   (agent_runtime_session/trace_span/worker)、从整 dict 派生(agent_worker wait_stage/effective_status)、`_candidate_from_row`(返 Candidate dataclass)。
   **机械易转的一波已尽**;下一波每个需新 foundation kind(raw-passthrough / clamped-int / normalized-text)或承载真实逐行逻辑 ——
   属 directional 决策点(更多 from_row vs 转写路径 vs 迁移 caller 到 Repository;后者触 jsonb Contract,已 gated on owner GO)。
+- **2026-06-22 owner 决策:走「写路径合并」。**
+- **2026-06-22 B4.2.4 写路径 pilot — crm_public_web row builder 转 descriptor.to_columns(commit 89c407d)**:3 个
+  `_crm_public_web_*_row_payload`(batch/run/promotion)列 builder 改为委托 descriptor.to_columns,使这些表 read+write 双向单源。
+  **foundation**:descriptor JSON kind 现按设计应用 json-safe(== 旧手写 `json.dumps(_json_safe_payload(...))`);把 `_json_safe_payload`
+  从 storage God-class 抽到新 dependency-free `control_plane_serde.json_safe_payload`(Path/datetime/bytes/memoryview/`to_record`/set 强转),
+  storage 以旧私名 re-import(177 处不变),descriptor `_encode` import 它。created_at/now 是运行期/merge 状态(留 builder 算),descriptor 只映射+编码列。
+  **验证**:写 A/B 电池(每个 OLD `_*_row_payload(normalize(raw),existing,now)` vs `to_columns({**normalized,created_at,updated_at})`,
+  含 json-safe 边界:datetime/Path/tuple/set/空格/existing-vs-new created_at)16 对 0 diff;live PG 84 passed/0 failed
+  (含 registry 写回归 —— json-safe 对 registry string-list 列是恒等)。
+- **2026-06-22 B4.2.5 再转 5 个 public-web 写 builder(commit 2932ea7)**:company_public_web_asset_run/asset、
+  target_candidate_public_web_run、person_public_web_signal、target_candidate_public_web_promotion。**8 个 public-web 表现 read+write 双向单源。**
+  caller-side 运行期状态留 builder(created_at/now merge;company_public_web_asset 的 source_run_ids = normalize(existing ∪ incoming) 累积)。
+  验证:写 A/B 28 对 0 diff(含 FLOAT score、BOOL_INT publishable/force_refresh、source_run_ids merge);AST-精确 module-level 替换;
+  live PG 44 passed/0 failed。**storage.py 本会话累计 28.1k→27.0k 行。**
+  **写路径已转(9 builder):** linkedin_profile_registry(B4.2.0)+ crm_public_web batch/run/promotion + 5 above。
+  **剩余写路径(下一批,更 bespoke):** inline upsert-site payload(target_candidate_public_web_batch@~6900、person_public_web_asset、
+  crm_records/events/tasks、serving_projection、operation_run、agent_action 等 —— 列 dict 在 upsert 方法内联,夹杂 created_at/version/compute 逻辑)+
+  带 compute 的 separate builder(`_projection_person_search_index_row_payload` 的 indexed_text 组装 + `_normalize_search_index_terms`;
+  `_serving_projection_member_row_payload`)。模式已证;每个需把列映射从 upsert 的运行期/compute 逻辑里析出再委托 to_columns。
