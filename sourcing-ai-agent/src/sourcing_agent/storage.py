@@ -15490,44 +15490,30 @@ class ControlPlaneStore:
         state = _normalize_serving_projection_state(normalized.get("state"))
         now = _utc_now_timestamp()
         existing = self.get_serving_projection(projection_id)
-        row_payload = {
-            "projection_id": projection_id,
-            "projection_type": projection_type,
-            "collection_id": str(normalized.get("collection_id") or "").strip(),
-            "source_run_id": str(normalized.get("source_run_id") or normalized.get("run_id") or "").strip(),
-            "projection_version": str(normalized.get("projection_version") or "serving_projection_v1").strip()
-            or "serving_projection_v1",
-            "state": state,
-            "scope_label": str(normalized.get("scope_label") or "").strip(),
-            "scope_spec_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("scope_spec") or normalized.get("scope_spec_json")),
-                ensure_ascii=False,
-            ),
-            "candidate_identity_manifest_ref": str(normalized.get("candidate_identity_manifest_ref") or "").strip(),
-            "source_collection_version": str(normalized.get("source_collection_version") or "").strip(),
-            "raw_profile_index_watermark": str(normalized.get("raw_profile_index_watermark") or "").strip(),
-            "evidence_index_watermark": str(normalized.get("evidence_index_watermark") or "").strip(),
-            "counts_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("counts") or normalized.get("counts_json")),
-                ensure_ascii=False,
-            ),
-            "readiness_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("readiness") or normalized.get("readiness_json")),
-                ensure_ascii=False,
-            ),
-            "provenance_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("provenance") or normalized.get("provenance_json")),
-                ensure_ascii=False,
-            ),
-            "manual_overlay_version": str(normalized.get("manual_overlay_version") or "").strip(),
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "published_at": str(normalized.get("published_at") or "").strip(),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+        row_payload = _serving_projection_repo.SERVING_PROJECTIONS.to_columns(
+            {
+                **normalized,
+                "projection_id": projection_id,
+                "projection_type": projection_type,
+                "state": state,
+                "source_run_id": normalized.get("source_run_id") or normalized.get("run_id"),
+                "scope_spec": _normalize_json_object_payload(
+                    normalized.get("scope_spec") or normalized.get("scope_spec_json")
+                ),
+                "counts": _normalize_json_object_payload(normalized.get("counts") or normalized.get("counts_json")),
+                "readiness": _normalize_json_object_payload(
+                    normalized.get("readiness") or normalized.get("readiness_json")
+                ),
+                "provenance": _normalize_json_object_payload(
+                    normalized.get("provenance") or normalized.get("provenance_json")
+                ),
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         if self._write_control_plane_row_to_postgres("serving_projections", row_payload):
             return self.get_serving_projection(projection_id)
         with self._lock, self._connection:
@@ -16906,21 +16892,21 @@ class ControlPlaneStore:
         link_type = str(normalized.get("link_type") or "result").strip() or "result"
         existing = self.get_run_projection_link(run_id, link_type=link_type)
         now = _utc_now_timestamp()
-        row_payload = {
-            "run_id": run_id,
-            "projection_id": projection_id,
-            "link_type": link_type,
-            "projection_type": _normalize_serving_projection_type(normalized.get("projection_type")),
-            "collection_id": str(normalized.get("collection_id") or "").strip(),
-            "state": str(normalized.get("state") or "active").strip().lower() or "active",
-            "created_by": str(normalized.get("created_by") or "").strip(),
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+        row_payload = _serving_projection_repo.RUN_PROJECTION_LINKS.to_columns(
+            {
+                **normalized,
+                "run_id": run_id,
+                "projection_id": projection_id,
+                "link_type": link_type,
+                "projection_type": _normalize_serving_projection_type(normalized.get("projection_type")),
+                "state": str(normalized.get("state") or "active").strip().lower() or "active",
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         if self._write_control_plane_row_to_postgres("run_projection_links", row_payload):
             return self.get_run_projection_link(run_id, link_type=link_type)
         with self._lock, self._connection:
@@ -17047,21 +17033,21 @@ class ControlPlaneStore:
             or ""
         ).strip()
         now = _utc_now_timestamp()
-        row_payload = {
-            "collection_id": collection_id,
-            "active_projection_id": active_projection_id,
-            "active_collection_version": str(normalized.get("active_collection_version") or "").strip(),
-            "previous_projection_id": previous_projection_id,
-            "state": str(normalized.get("state") or "active").strip().lower() or "active",
-            "writer_id": str(normalized.get("writer_id") or "").strip(),
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "published_at": str(normalized.get("published_at") or now).strip(),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+        row_payload = _serving_projection_repo.COLLECTION_AUTHORITATIVE_POINTERS.to_columns(
+            {
+                **normalized,
+                "collection_id": collection_id,
+                "active_projection_id": active_projection_id,
+                "previous_projection_id": previous_projection_id,
+                "state": str(normalized.get("state") or "active").strip().lower() or "active",
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "published_at": str(normalized.get("published_at") or now).strip(),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         if self._write_control_plane_row_to_postgres("collection_authoritative_pointers", row_payload):
             return self.get_collection_authoritative_pointer(collection_id)
         with self._lock, self._connection:

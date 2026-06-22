@@ -18,7 +18,7 @@ SERVING_PROJECTIONS = TableDescriptor(
         Column("projection_type"),
         Column("collection_id"),
         Column("source_run_id"),
-        Column("projection_version", read_default="serving_projection_v1"),
+        Column("projection_version", default="serving_projection_v1", read_default="serving_projection_v1"),
         Column("state"),
         Column("scope_label"),
         Column("scope_spec_json", Kind.JSON, field="scope_spec"),
