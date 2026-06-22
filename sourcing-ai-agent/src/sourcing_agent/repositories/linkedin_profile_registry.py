@@ -26,7 +26,7 @@ LINKEDIN_PROFILE_REGISTRY = TableDescriptor(
         Column("profile_url"),
         Column("raw_linkedin_url"),
         Column("sanity_linkedin_url"),
-        Column("status"),
+        Column("status", default="queued"),
         Column("retry_count", Kind.INT),
         Column("last_error"),
         Column("last_run_id"),

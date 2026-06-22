@@ -59,6 +59,7 @@ class Column:
     name: str
     kind: Kind = Kind.STR
     field: str | None = None
+    default: Any = None  # write default when the (stripped) value is falsy, e.g. status -> "queued"
 
     @property
     def key(self) -> str:
@@ -90,18 +91,24 @@ def _decode(col: Column, value: Any) -> Any:
     return value
 
 
-def _encode(col: Column, value: Any) -> Any:
+def _encode(col: Column, value: Any, *, strip_text: bool, clamp_int: bool) -> Any:
     if col.kind in (Kind.JSON, Kind.JSON_STR_LIST):
-        default: Any = [] if col.kind is Kind.JSON_STR_LIST else {}
-        return json.dumps(value if value is not None else default, ensure_ascii=False)
+        empty: Any = [] if col.kind is Kind.JSON_STR_LIST else {}
+        return json.dumps(value if value is not None else empty, ensure_ascii=False)
     if col.kind is Kind.INT:
         try:
-            return int(value or 0)
+            number = int(value or 0)
         except (TypeError, ValueError):
-            return 0
+            number = 0
+        return max(0, number) if clamp_int else number
     if col.kind is Kind.BOOL_INT:
         return 1 if bool(value) else 0
-    return str(value or "")
+    text = str(value or "")
+    if strip_text:
+        text = text.strip()
+    if not text and col.default is not None:
+        text = str(col.default)
+    return text
 
 
 @dataclass(frozen=True)
@@ -119,6 +126,8 @@ class TableDescriptor:
     columns: tuple[Column, ...]
     pk: tuple[str, ...]
     merge: dict[str, str] = dataclass_field(default_factory=dict)  # column -> SQL expr override for DO UPDATE
+    strip_text: bool = True  # write-normalize: strip whitespace on text columns (control-plane default)
+    clamp_non_negative_int: bool = True  # write-normalize: max(0, int) on integer columns
 
     def column_names(self) -> list[str]:
         return [c.name for c in self.columns]
@@ -133,8 +142,11 @@ class TableDescriptor:
         return [self.from_row(r) for r in (rows or [])]
 
     def to_columns(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Map a public payload to the column->value dict to persist (JSON-encoded, coerced)."""
-        return {c.name: _encode(c, payload.get(c.key)) for c in self.columns}
+        """Map a public payload to the column->value dict to persist (encoded + write-normalized)."""
+        return {
+            c.name: _encode(c, payload.get(c.key), strip_text=self.strip_text, clamp_int=self.clamp_non_negative_int)
+            for c in self.columns
+        }
 
     def upsert_sql(self) -> str:
         cols = self.column_names()
