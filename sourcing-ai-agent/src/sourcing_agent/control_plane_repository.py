@@ -32,8 +32,9 @@ class Kind(Enum):
     STR = "str"  # text column -> str(v or "")
     INT = "int"  # integer column -> int(v or 0)
     BOOL_INT = "bool_int"  # 0/1 integer column <-> bool
-    JSON = "json"  # text column holding a JSON object -> parsed dict (default {})
-    JSON_STR_LIST = "json_str_list"  # text column holding a JSON array -> list[non-empty stripped str]
+    JSON = "json"  # text holding a JSON object -> dict (non-dict/parse-fail -> {}); == _loads_json_dict
+    JSON_LIST = "json_list"  # text holding a JSON array -> list verbatim (non-list/fail -> []); == _loads_json_list
+    JSON_STR_LIST = "json_str_list"  # text holding a JSON array -> list[non-empty stripped str] (filtered)
     # B4.2 schema migration will add: JSONB, TIMESTAMPTZ (same descriptor API, different coercion).
 
 
@@ -60,7 +61,8 @@ class Column:
     name: str
     kind: Kind = Kind.STR
     field: str | None = None
-    default: Any = None  # write default when the (stripped) value is falsy, e.g. status -> "queued"
+    default: Any = None  # WRITE default when the (stripped) value is falsy, e.g. status -> "queued"
+    read_default: Any = None  # READ default when the stored value is falsy (mapper `str(x or "queued")` fallback)
 
     @property
     def key(self) -> str:
@@ -69,7 +71,10 @@ class Column:
 
 def _decode(col: Column, value: Any) -> Any:
     if col.kind is Kind.STR:
-        return str(value or "")
+        text = str(value or "")
+        if not text and col.read_default is not None:
+            return str(col.read_default)
+        return text
     if col.kind is Kind.INT:
         try:
             return int(value or 0)
@@ -80,21 +85,34 @@ def _decode(col: Column, value: Any) -> Any:
             return bool(int(value or 0))
         except (TypeError, ValueError):
             return False
-    if col.kind in (Kind.JSON, Kind.JSON_STR_LIST):
-        empty = "[]" if col.kind is Kind.JSON_STR_LIST else "{}"
+    if col.kind is Kind.JSON:  # == _loads_json_dict: dict passthrough; non-dict/parse-fail -> {}
+        if isinstance(value, dict):
+            return dict(value)
         try:
-            parsed = json.loads(value if value not in (None, "") else empty)
+            parsed = json.loads(str(value or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return {}
+        return dict(parsed) if isinstance(parsed, dict) else {}
+    if col.kind is Kind.JSON_LIST:  # == _loads_json_list: list/tuple passthrough; non-list/fail -> []
+        if isinstance(value, (list, tuple)):
+            return list(value)
+        try:
+            parsed = json.loads(str(value or "[]"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return []
+        return list(parsed) if isinstance(parsed, list) else []
+    if col.kind is Kind.JSON_STR_LIST:
+        try:
+            parsed = json.loads(value if value not in (None, "") else "[]")
         except (json.JSONDecodeError, TypeError):
-            parsed = [] if col.kind is Kind.JSON_STR_LIST else {}
-        if col.kind is Kind.JSON_STR_LIST:
-            return [str(item).strip() for item in (parsed or []) if str(item).strip()]
-        return parsed
+            parsed = []
+        return [str(item).strip() for item in (parsed or []) if str(item).strip()]
     return value
 
 
 def _encode(col: Column, value: Any, *, strip_text: bool, clamp_int: bool) -> Any:
-    if col.kind in (Kind.JSON, Kind.JSON_STR_LIST):
-        empty: Any = [] if col.kind is Kind.JSON_STR_LIST else {}
+    if col.kind in (Kind.JSON, Kind.JSON_LIST, Kind.JSON_STR_LIST):
+        empty: Any = {} if col.kind is Kind.JSON else []
         return json.dumps(value if value is not None else empty, ensure_ascii=False)
     if col.kind is Kind.INT:
         try:
