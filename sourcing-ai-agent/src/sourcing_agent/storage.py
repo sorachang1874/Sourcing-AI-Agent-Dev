@@ -5571,26 +5571,18 @@ class ControlPlaneStore:
         )
         now = _utc_now_timestamp()
         existing = self.get_person_asset(asset_id)
-        row_payload = {
-            "asset_id": asset_id,
-            "person_identity_key": person_identity_key,
-            "asset_type": str(normalized.get("asset_type") or "").strip(),
-            "source_kind": str(normalized.get("source_kind") or "").strip(),
-            "source_run_id": str(normalized.get("source_run_id") or "").strip(),
-            "source_projection_id": str(normalized.get("source_projection_id") or "").strip(),
-            "content_ref": str(normalized.get("content_ref") or "").strip(),
-            "content_hash": str(normalized.get("content_hash") or "").strip(),
-            "source_url": str(normalized.get("source_url") or "").strip(),
-            "fetched_at": str(normalized.get("fetched_at") or "").strip(),
-            "visibility_scope": str(normalized.get("visibility_scope") or "internal").strip() or "internal",
-            "status": str(normalized.get("status") or "available").strip() or "available",
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+        row_payload = _person_company_assets_repo.PERSON_ASSETS.to_columns(
+            {
+                **normalized,
+                "asset_id": asset_id,
+                "person_identity_key": person_identity_key,
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "person_assets",
             id_column="asset_id",
@@ -5716,31 +5708,21 @@ class ControlPlaneStore:
         evidence_id = str(normalized.get("evidence_id") or normalized.get("id") or f"pe_{uuid4().hex}").strip()
         now = _utc_now_timestamp()
         existing = self.get_person_evidence(evidence_id)
-        row_payload = {
-            "evidence_id": evidence_id,
-            "person_identity_key": str(normalized.get("person_identity_key") or "").strip(),
-            "asset_id": str(normalized.get("asset_id") or "").strip(),
-            "evidence_type": str(normalized.get("evidence_type") or "").strip(),
-            "value": str(normalized.get("value") or "").strip(),
-            "normalized_value": str(normalized.get("normalized_value") or normalized.get("value") or "").strip(),
-            "source_url": str(normalized.get("source_url") or "").strip(),
-            "source_domain": str(normalized.get("source_domain") or "").strip(),
-            "confidence_score": _coerce_public_web_float(normalized.get("confidence_score")),
-            "identity_match_score": _coerce_public_web_float(normalized.get("identity_match_score")),
-            "publishable": 1 if bool(normalized.get("publishable")) else 0,
-            "evidence_excerpt": str(normalized.get("evidence_excerpt") or "").strip(),
-            "artifact_refs_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
-                ensure_ascii=False,
-            ),
-            "status": str(normalized.get("status") or "observed").strip() or "observed",
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+        row_payload = _person_company_assets_repo.PERSON_EVIDENCE.to_columns(
+            {
+                **normalized,
+                "evidence_id": evidence_id,
+                "normalized_value": normalized.get("normalized_value") or normalized.get("value"),
+                "artifact_refs": _normalize_json_object_payload(
+                    normalized.get("artifact_refs") or normalized.get("artifact_refs_json")
+                ),
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "person_evidence",
             id_column="evidence_id",
@@ -5819,27 +5801,18 @@ class ControlPlaneStore:
         assertion_id = str(normalized.get("assertion_id") or normalized.get("id") or f"pass_{uuid4().hex}").strip()
         now = _utc_now_timestamp()
         existing = self.get_person_assertion(assertion_id)
-        row_payload = {
-            "assertion_id": assertion_id,
-            "person_identity_key": str(normalized.get("person_identity_key") or "").strip(),
-            "assertion_type": str(normalized.get("assertion_type") or "").strip(),
-            "value": str(normalized.get("value") or "").strip(),
-            "normalized_value": str(normalized.get("normalized_value") or normalized.get("value") or "").strip(),
-            "authority": str(normalized.get("authority") or "provider_observed").strip() or "provider_observed",
-            "verification_status": str(normalized.get("verification_status") or "needs_review").strip() or "needs_review",
-            "source_evidence_id": str(normalized.get("source_evidence_id") or "").strip(),
-            "source_crm_event_id": str(normalized.get("source_crm_event_id") or "").strip(),
-            "source_run_id": str(normalized.get("source_run_id") or "").strip(),
-            "confidence_score": _coerce_public_web_float(normalized.get("confidence_score")),
-            "valid_from": str(normalized.get("valid_from") or "").strip(),
-            "valid_to": str(normalized.get("valid_to") or "").strip(),
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+        row_payload = _person_company_assets_repo.PERSON_ASSERTIONS.to_columns(
+            {
+                **normalized,
+                "assertion_id": assertion_id,
+                "normalized_value": normalized.get("normalized_value") or normalized.get("value"),
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "person_assertions",
             id_column="assertion_id",
@@ -5921,29 +5894,20 @@ class ControlPlaneStore:
         company_key = str(normalized.get("company_key") or "").strip() or resolve_company_alias_key(target_company)
         now = _utc_now_timestamp()
         existing = self.get_company_asset(asset_id)
-        row_payload = {
-            "asset_id": asset_id,
-            "workspace_id": str(normalized.get("workspace_id") or "default").strip() or "default",
-            "company_key": company_key,
-            "target_company": target_company,
-            "asset_type": str(normalized.get("asset_type") or "").strip(),
-            "source_kind": str(normalized.get("source_kind") or "").strip(),
-            "source_run_id": str(normalized.get("source_run_id") or "").strip(),
-            "source_command_id": str(normalized.get("source_command_id") or "").strip(),
-            "activity_run_id": str(normalized.get("activity_run_id") or "").strip(),
-            "content_ref": str(normalized.get("content_ref") or "").strip(),
-            "content_hash": str(normalized.get("content_hash") or "").strip(),
-            "source_url": str(normalized.get("source_url") or "").strip(),
-            "fetched_at": str(normalized.get("fetched_at") or "").strip(),
-            "visibility_scope": str(normalized.get("visibility_scope") or "internal").strip() or "internal",
-            "status": str(normalized.get("status") or "available").strip() or "available",
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+        row_payload = _person_company_assets_repo.COMPANY_ASSETS.to_columns(
+            {
+                **normalized,
+                "asset_id": asset_id,
+                "workspace_id": str(normalized.get("workspace_id") or "default").strip() or "default",
+                "company_key": company_key,
+                "target_company": target_company,
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "company_assets",
             id_column="asset_id",
@@ -6007,31 +5971,24 @@ class ControlPlaneStore:
         company_key = str(normalized.get("company_key") or "").strip() or resolve_company_alias_key(target_company)
         now = _utc_now_timestamp()
         existing = self.get_company_evidence(evidence_id)
-        row_payload = {
-            "evidence_id": evidence_id,
-            "workspace_id": str(normalized.get("workspace_id") or "default").strip() or "default",
-            "company_key": company_key,
-            "target_company": target_company,
-            "asset_id": str(normalized.get("asset_id") or "").strip(),
-            "evidence_type": str(normalized.get("evidence_type") or "").strip(),
-            "value": str(normalized.get("value") or "").strip(),
-            "normalized_value": str(normalized.get("normalized_value") or normalized.get("value") or "").strip(),
-            "source_url": str(normalized.get("source_url") or "").strip(),
-            "source_domain": str(normalized.get("source_domain") or "").strip(),
-            "confidence_score": _coerce_public_web_float(normalized.get("confidence_score")),
-            "evidence_excerpt": str(normalized.get("evidence_excerpt") or "").strip(),
-            "artifact_refs_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
-                ensure_ascii=False,
-            ),
-            "status": str(normalized.get("status") or "observed").strip() or "observed",
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+        row_payload = _person_company_assets_repo.COMPANY_EVIDENCE.to_columns(
+            {
+                **normalized,
+                "evidence_id": evidence_id,
+                "workspace_id": str(normalized.get("workspace_id") or "default").strip() or "default",
+                "company_key": company_key,
+                "target_company": target_company,
+                "normalized_value": normalized.get("normalized_value") or normalized.get("value"),
+                "artifact_refs": _normalize_json_object_payload(
+                    normalized.get("artifact_refs") or normalized.get("artifact_refs_json")
+                ),
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "company_evidence",
             id_column="evidence_id",
@@ -6099,29 +6056,21 @@ class ControlPlaneStore:
         company_key = str(normalized.get("company_key") or "").strip() or resolve_company_alias_key(target_company)
         now = _utc_now_timestamp()
         existing = self.get_company_assertion(assertion_id)
-        row_payload = {
-            "assertion_id": assertion_id,
-            "workspace_id": str(normalized.get("workspace_id") or "default").strip() or "default",
-            "company_key": company_key,
-            "target_company": target_company,
-            "assertion_type": str(normalized.get("assertion_type") or "").strip(),
-            "value": str(normalized.get("value") or "").strip(),
-            "normalized_value": str(normalized.get("normalized_value") or normalized.get("value") or "").strip(),
-            "authority": str(normalized.get("authority") or "provider_observed").strip() or "provider_observed",
-            "verification_status": str(normalized.get("verification_status") or "needs_review").strip() or "needs_review",
-            "source_evidence_id": str(normalized.get("source_evidence_id") or "").strip(),
-            "source_run_id": str(normalized.get("source_run_id") or "").strip(),
-            "source_command_id": str(normalized.get("source_command_id") or "").strip(),
-            "confidence_score": _coerce_public_web_float(normalized.get("confidence_score")),
-            "valid_from": str(normalized.get("valid_from") or "").strip(),
-            "valid_to": str(normalized.get("valid_to") or "").strip(),
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+        row_payload = _person_company_assets_repo.COMPANY_ASSERTIONS.to_columns(
+            {
+                **normalized,
+                "assertion_id": assertion_id,
+                "workspace_id": str(normalized.get("workspace_id") or "default").strip() or "default",
+                "company_key": company_key,
+                "target_company": target_company,
+                "normalized_value": normalized.get("normalized_value") or normalized.get("value"),
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "company_assertions",
             id_column="assertion_id",
