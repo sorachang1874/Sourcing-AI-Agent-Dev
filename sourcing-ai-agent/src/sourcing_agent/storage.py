@@ -54,6 +54,7 @@ from .repositories.linkedin_profile_registry import (
 from .repositories.linkedin_profile_registry import (
     LINKEDIN_PROFILE_REGISTRY_LEASES as _LINKEDIN_PROFILE_REGISTRY_LEASES_DESCRIPTOR,
 )
+from .repositories import public_web as _public_web_repo
 from .person_identity import (
     build_person_summary_view as _build_person_summary_view,
 )
@@ -25553,173 +25554,22 @@ class ControlPlaneStore:
         }
 
     def _target_candidate_public_web_batch_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        return {
-            "batch_id": str(_row_value(row, "batch_id") or ""),
-            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
-            "status": str(_row_value(row, "status") or "queued"),
-            "requested_record_ids": _loads_json_list(_row_value(row, "requested_record_ids_json"), default=[]),
-            "source_families": _loads_json_list(_row_value(row, "source_families_json"), default=[]),
-            "options": _loads_json_dict(_row_value(row, "options_json")),
-            "run_ids": _loads_json_list(_row_value(row, "run_ids_json"), default=[]),
-            "summary": _loads_json_dict(_row_value(row, "summary_json")),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "requested_by": str(_row_value(row, "requested_by") or ""),
-            "force_refresh": bool(_row_value(row, "force_refresh", 0)),
-            "started_at": str(_row_value(row, "started_at") or ""),
-            "completed_at": str(_row_value(row, "completed_at") or ""),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _public_web_repo.TARGET_CANDIDATE_PUBLIC_WEB_BATCHES.from_row(row)
 
     def _target_candidate_public_web_run_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        return {
-            "run_id": str(_row_value(row, "run_id") or ""),
-            "batch_id": str(_row_value(row, "batch_id") or ""),
-            "record_id": str(_row_value(row, "record_id") or ""),
-            "candidate_id": str(_row_value(row, "candidate_id") or ""),
-            "candidate_name": str(_row_value(row, "candidate_name") or ""),
-            "current_company": str(_row_value(row, "current_company") or ""),
-            "linkedin_url": str(_row_value(row, "linkedin_url") or ""),
-            "linkedin_url_key": str(_row_value(row, "linkedin_url_key") or ""),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
-            "status": str(_row_value(row, "status") or "queued"),
-            "phase": str(_row_value(row, "phase") or "queued"),
-            "source_families": _loads_json_list(_row_value(row, "source_families_json"), default=[]),
-            "options": _loads_json_dict(_row_value(row, "options_json")),
-            "query_manifest": _loads_json_list(_row_value(row, "query_manifest_json"), default=[]),
-            "search_checkpoint": _loads_json_dict(_row_value(row, "search_checkpoint_json")),
-            "fetch_checkpoint": _loads_json_dict(_row_value(row, "fetch_checkpoint_json")),
-            "analysis_checkpoint": _loads_json_dict(_row_value(row, "analysis_checkpoint_json")),
-            "summary": _loads_json_dict(_row_value(row, "summary_json")),
-            "artifact_root": str(_row_value(row, "artifact_root") or ""),
-            "worker_key": str(_row_value(row, "worker_key") or ""),
-            "lease_owner": str(_row_value(row, "lease_owner") or ""),
-            "lease_expires_at": str(_row_value(row, "lease_expires_at") or ""),
-            "attempt_count": int(_row_value(row, "attempt_count", 0) or 0),
-            "last_error": str(_row_value(row, "last_error") or ""),
-            "started_at": str(_row_value(row, "started_at") or ""),
-            "completed_at": str(_row_value(row, "completed_at") or ""),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _public_web_repo.TARGET_CANDIDATE_PUBLIC_WEB_RUNS.from_row(row)
 
     def _crm_public_web_batch_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        return {
-            "batch_id": str(_row_value(row, "batch_id") or ""),
-            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
-            "workspace_id": str(_row_value(row, "workspace_id") or "default") or "default",
-            "status": str(_row_value(row, "status") or "queued"),
-            "requested_crm_record_ids": _loads_json_list(_row_value(row, "requested_crm_record_ids_json"), default=[]),
-            "requested_record_ids": _loads_json_list(_row_value(row, "requested_crm_record_ids_json"), default=[]),
-            "source_families": _loads_json_list(_row_value(row, "source_families_json"), default=[]),
-            "options": _loads_json_dict(_row_value(row, "options_json")),
-            "run_ids": _loads_json_list(_row_value(row, "run_ids_json"), default=[]),
-            "summary": _loads_json_dict(_row_value(row, "summary_json")),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "requested_by": str(_row_value(row, "requested_by") or ""),
-            "force_refresh": bool(_row_value(row, "force_refresh", 0)),
-            "execution_backend": str(_row_value(row, "execution_backend") or "crm_public_web_v1"),
-            "source_target_batch_id": str(_row_value(row, "source_target_batch_id") or ""),
-            "started_at": str(_row_value(row, "started_at") or ""),
-            "completed_at": str(_row_value(row, "completed_at") or ""),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _public_web_repo.CRM_PUBLIC_WEB_BATCHES.from_row(row)
 
     def _crm_public_web_run_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        crm_record_id = str(_row_value(row, "crm_record_id") or "")
-        return {
-            "run_id": str(_row_value(row, "run_id") or ""),
-            "batch_id": str(_row_value(row, "batch_id") or ""),
-            "crm_record_id": crm_record_id,
-            "record_id": crm_record_id,
-            "workspace_id": str(_row_value(row, "workspace_id") or "default") or "default",
-            "candidate_id": str(_row_value(row, "candidate_id") or ""),
-            "candidate_name": str(_row_value(row, "candidate_name") or ""),
-            "current_company": str(_row_value(row, "current_company") or ""),
-            "linkedin_url": str(_row_value(row, "linkedin_url") or ""),
-            "linkedin_url_key": str(_row_value(row, "linkedin_url_key") or ""),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
-            "status": str(_row_value(row, "status") or "queued"),
-            "phase": str(_row_value(row, "phase") or "queued"),
-            "source_families": _loads_json_list(_row_value(row, "source_families_json"), default=[]),
-            "options": _loads_json_dict(_row_value(row, "options_json")),
-            "query_manifest": _loads_json_list(_row_value(row, "query_manifest_json"), default=[]),
-            "search_checkpoint": _loads_json_dict(_row_value(row, "search_checkpoint_json")),
-            "fetch_checkpoint": _loads_json_dict(_row_value(row, "fetch_checkpoint_json")),
-            "analysis_checkpoint": _loads_json_dict(_row_value(row, "analysis_checkpoint_json")),
-            "summary": _loads_json_dict(_row_value(row, "summary_json")),
-            "artifact_root": str(_row_value(row, "artifact_root") or ""),
-            "worker_key": str(_row_value(row, "worker_key") or ""),
-            "lease_owner": str(_row_value(row, "lease_owner") or ""),
-            "lease_expires_at": str(_row_value(row, "lease_expires_at") or ""),
-            "attempt_count": int(_row_value(row, "attempt_count", 0) or 0),
-            "last_error": str(_row_value(row, "last_error") or ""),
-            "execution_backend": str(_row_value(row, "execution_backend") or "crm_public_web_v1"),
-            "source_target_run_id": str(_row_value(row, "source_target_run_id") or ""),
-            "started_at": str(_row_value(row, "started_at") or ""),
-            "completed_at": str(_row_value(row, "completed_at") or ""),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _public_web_repo.CRM_PUBLIC_WEB_RUNS.from_row(row)
 
     def _person_public_web_asset_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        return {
-            "asset_id": str(_row_value(row, "asset_id") or ""),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "linkedin_url_key": str(_row_value(row, "linkedin_url_key") or ""),
-            "latest_run_id": str(_row_value(row, "latest_run_id") or ""),
-            "target_candidate_record_id": str(_row_value(row, "target_candidate_record_id") or ""),
-            "candidate_name": str(_row_value(row, "candidate_name") or ""),
-            "current_company": str(_row_value(row, "current_company") or ""),
-            "status": str(_row_value(row, "status") or "completed"),
-            "summary": _loads_json_dict(_row_value(row, "summary_json")),
-            "signals": _loads_json_dict(_row_value(row, "signals_json")),
-            "source_run_ids": _loads_json_list(_row_value(row, "source_run_ids_json"), default=[]),
-            "artifact_root": str(_row_value(row, "artifact_root") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _public_web_repo.PERSON_PUBLIC_WEB_ASSETS.from_row(row)
 
     def _person_public_web_signal_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        return {
-            "signal_id": str(_row_value(row, "signal_id") or ""),
-            "run_id": str(_row_value(row, "run_id") or ""),
-            "asset_id": str(_row_value(row, "asset_id") or ""),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "record_id": str(_row_value(row, "record_id") or ""),
-            "candidate_id": str(_row_value(row, "candidate_id") or ""),
-            "candidate_name": str(_row_value(row, "candidate_name") or ""),
-            "current_company": str(_row_value(row, "current_company") or ""),
-            "linkedin_url_key": str(_row_value(row, "linkedin_url_key") or ""),
-            "signal_kind": str(_row_value(row, "signal_kind") or ""),
-            "signal_type": str(_row_value(row, "signal_type") or ""),
-            "email_type": str(_row_value(row, "email_type") or ""),
-            "value": str(_row_value(row, "value") or ""),
-            "normalized_value": str(_row_value(row, "normalized_value") or ""),
-            "url": str(_row_value(row, "url") or ""),
-            "source_url": str(_row_value(row, "source_url") or ""),
-            "source_domain": str(_row_value(row, "source_domain") or ""),
-            "source_family": str(_row_value(row, "source_family") or ""),
-            "source_title": str(_row_value(row, "source_title") or ""),
-            "confidence_label": str(_row_value(row, "confidence_label") or ""),
-            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
-            "identity_match_label": str(_row_value(row, "identity_match_label") or ""),
-            "identity_match_score": _coerce_public_web_float(_row_value(row, "identity_match_score", 0.0)),
-            "publishable": bool(_row_value(row, "publishable", 0)),
-            "promotion_status": str(_row_value(row, "promotion_status") or ""),
-            "suppression_reason": str(_row_value(row, "suppression_reason") or ""),
-            "evidence_excerpt": str(_row_value(row, "evidence_excerpt") or ""),
-            "artifact_refs": _loads_json_dict(_row_value(row, "artifact_refs_json")),
-            "model_provider": str(_row_value(row, "model_provider") or ""),
-            "model_version": str(_row_value(row, "model_version") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _public_web_repo.PERSON_PUBLIC_WEB_SIGNALS.from_row(row)
 
     def _person_asset_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
         if row is None:
@@ -25987,138 +25837,16 @@ class ControlPlaneStore:
         }
 
     def _target_candidate_public_web_promotion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        return {
-            "promotion_id": str(_row_value(row, "promotion_id") or ""),
-            "signal_id": str(_row_value(row, "signal_id") or ""),
-            "run_id": str(_row_value(row, "run_id") or ""),
-            "asset_id": str(_row_value(row, "asset_id") or ""),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "record_id": str(_row_value(row, "record_id") or ""),
-            "candidate_id": str(_row_value(row, "candidate_id") or ""),
-            "candidate_name": str(_row_value(row, "candidate_name") or ""),
-            "current_company": str(_row_value(row, "current_company") or ""),
-            "linkedin_url_key": str(_row_value(row, "linkedin_url_key") or ""),
-            "signal_kind": str(_row_value(row, "signal_kind") or ""),
-            "signal_type": str(_row_value(row, "signal_type") or ""),
-            "email_type": str(_row_value(row, "email_type") or ""),
-            "value": str(_row_value(row, "value") or ""),
-            "normalized_value": str(_row_value(row, "normalized_value") or ""),
-            "url": str(_row_value(row, "url") or ""),
-            "source_url": str(_row_value(row, "source_url") or ""),
-            "source_domain": str(_row_value(row, "source_domain") or ""),
-            "source_family": str(_row_value(row, "source_family") or ""),
-            "source_title": str(_row_value(row, "source_title") or ""),
-            "confidence_label": str(_row_value(row, "confidence_label") or ""),
-            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
-            "identity_match_label": str(_row_value(row, "identity_match_label") or ""),
-            "identity_match_score": _coerce_public_web_float(_row_value(row, "identity_match_score", 0.0)),
-            "publishable": bool(_row_value(row, "publishable", 0)),
-            "clean_profile_link": bool(_row_value(row, "clean_profile_link", 0)),
-            "link_shape_warnings": _loads_json_list(_row_value(row, "link_shape_warnings_json"), default=[]),
-            "action": str(_row_value(row, "action") or ""),
-            "promotion_status": str(_row_value(row, "promotion_status") or ""),
-            "promoted_field": str(_row_value(row, "promoted_field") or ""),
-            "previous_value": str(_row_value(row, "previous_value") or ""),
-            "new_value": str(_row_value(row, "new_value") or ""),
-            "operator": str(_row_value(row, "operator") or ""),
-            "note": str(_row_value(row, "note") or ""),
-            "evidence_excerpt": str(_row_value(row, "evidence_excerpt") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _public_web_repo.TARGET_CANDIDATE_PUBLIC_WEB_PROMOTIONS.from_row(row)
 
     def _crm_public_web_promotion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        crm_record_id = str(_row_value(row, "crm_record_id") or "")
-        return {
-            "promotion_id": str(_row_value(row, "promotion_id") or ""),
-            "signal_id": str(_row_value(row, "signal_id") or ""),
-            "run_id": str(_row_value(row, "run_id") or ""),
-            "asset_id": str(_row_value(row, "asset_id") or ""),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "crm_record_id": crm_record_id,
-            "record_id": crm_record_id,
-            "workspace_id": str(_row_value(row, "workspace_id") or "default") or "default",
-            "candidate_id": str(_row_value(row, "candidate_id") or ""),
-            "candidate_name": str(_row_value(row, "candidate_name") or ""),
-            "current_company": str(_row_value(row, "current_company") or ""),
-            "linkedin_url_key": str(_row_value(row, "linkedin_url_key") or ""),
-            "signal_kind": str(_row_value(row, "signal_kind") or ""),
-            "signal_type": str(_row_value(row, "signal_type") or ""),
-            "email_type": str(_row_value(row, "email_type") or ""),
-            "value": str(_row_value(row, "value") or ""),
-            "normalized_value": str(_row_value(row, "normalized_value") or ""),
-            "url": str(_row_value(row, "url") or ""),
-            "source_url": str(_row_value(row, "source_url") or ""),
-            "source_domain": str(_row_value(row, "source_domain") or ""),
-            "source_family": str(_row_value(row, "source_family") or ""),
-            "source_title": str(_row_value(row, "source_title") or ""),
-            "confidence_label": str(_row_value(row, "confidence_label") or ""),
-            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
-            "identity_match_label": str(_row_value(row, "identity_match_label") or ""),
-            "identity_match_score": _coerce_public_web_float(_row_value(row, "identity_match_score", 0.0)),
-            "publishable": bool(_row_value(row, "publishable", 0)),
-            "clean_profile_link": bool(_row_value(row, "clean_profile_link", 0)),
-            "link_shape_warnings": _loads_json_list(_row_value(row, "link_shape_warnings_json"), default=[]),
-            "action": str(_row_value(row, "action") or ""),
-            "promotion_status": str(_row_value(row, "promotion_status") or ""),
-            "promoted_field": str(_row_value(row, "promoted_field") or ""),
-            "previous_value": str(_row_value(row, "previous_value") or ""),
-            "new_value": str(_row_value(row, "new_value") or ""),
-            "operator": str(_row_value(row, "operator") or ""),
-            "note": str(_row_value(row, "note") or ""),
-            "evidence_excerpt": str(_row_value(row, "evidence_excerpt") or ""),
-            "execution_backend": str(_row_value(row, "execution_backend") or "crm_public_web_v1"),
-            "source_target_promotion_id": str(_row_value(row, "source_target_promotion_id") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _public_web_repo.CRM_PUBLIC_WEB_PROMOTIONS.from_row(row)
 
     def _company_public_web_asset_run_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        return {
-            "run_id": str(_row_value(row, "run_id") or ""),
-            "target_company": str(_row_value(row, "target_company") or ""),
-            "company_key": str(_row_value(row, "company_key") or ""),
-            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
-            "status": str(_row_value(row, "status") or "queued"),
-            "phase": str(_row_value(row, "phase") or "queued"),
-            "source_families": _loads_json_list(_row_value(row, "source_families_json"), default=[]),
-            "seed_urls": _loads_json_list(_row_value(row, "seed_urls_json"), default=[]),
-            "options": _loads_json_dict(_row_value(row, "options_json")),
-            "discovered_assets": _loads_json_list(_row_value(row, "discovered_assets_json"), default=[]),
-            "summary": _loads_json_dict(_row_value(row, "summary_json")),
-            "artifact_root": str(_row_value(row, "artifact_root") or ""),
-            "requested_by": str(_row_value(row, "requested_by") or ""),
-            "force_refresh": bool(_row_value(row, "force_refresh", 0)),
-            "started_at": str(_row_value(row, "started_at") or ""),
-            "completed_at": str(_row_value(row, "completed_at") or ""),
-            "last_error": str(_row_value(row, "last_error") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _public_web_repo.COMPANY_PUBLIC_WEB_ASSET_RUNS.from_row(row)
 
     def _company_public_web_asset_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
-        return {
-            "asset_id": str(_row_value(row, "asset_id") or ""),
-            "company_key": str(_row_value(row, "company_key") or ""),
-            "target_company": str(_row_value(row, "target_company") or ""),
-            "latest_run_id": str(_row_value(row, "latest_run_id") or ""),
-            "source_family": str(_row_value(row, "source_family") or ""),
-            "asset_kind": str(_row_value(row, "asset_kind") or "company_public_web_asset"),
-            "title": str(_row_value(row, "title") or ""),
-            "url": str(_row_value(row, "url") or ""),
-            "normalized_url_key": str(_row_value(row, "normalized_url_key") or ""),
-            "summary": str(_row_value(row, "summary") or ""),
-            "model_safe_payload": _loads_json_dict(_row_value(row, "model_safe_payload_json")),
-            "source_run_ids": _loads_json_list(_row_value(row, "source_run_ids_json"), default=[]),
-            "artifact_refs": _loads_json_dict(_row_value(row, "artifact_refs_json")),
-            "status": str(_row_value(row, "status") or "active"),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
+        return _public_web_repo.COMPANY_PUBLIC_WEB_ASSETS.from_row(row)
 
     def _asset_default_pointer_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
         return {

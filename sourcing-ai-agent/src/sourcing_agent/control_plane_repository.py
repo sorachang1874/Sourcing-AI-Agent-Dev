@@ -31,6 +31,7 @@ class Kind(Enum):
 
     STR = "str"  # text column -> str(v or "")
     INT = "int"  # integer column -> int(v or 0)
+    FLOAT = "float"  # real column -> float(v or 0.0) (parse-fail -> 0.0); == _coerce_public_web_float
     BOOL_INT = "bool_int"  # 0/1 integer column <-> bool
     JSON = "json"  # text holding a JSON object -> dict (non-dict/parse-fail -> {}); == _loads_json_dict
     JSON_LIST = "json_list"  # text holding a JSON array -> list verbatim (non-list/fail -> []); == _loads_json_list
@@ -80,6 +81,11 @@ def _decode(col: Column, value: Any) -> Any:
             return int(value or 0)
         except (TypeError, ValueError):
             return 0
+    if col.kind is Kind.FLOAT:  # == _coerce_public_web_float
+        try:
+            return float(value or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
     if col.kind is Kind.BOOL_INT:
         try:
             return bool(int(value or 0))
@@ -120,6 +126,11 @@ def _encode(col: Column, value: Any, *, strip_text: bool, clamp_int: bool) -> An
         except (TypeError, ValueError):
             number = 0
         return max(0, number) if clamp_int else number
+    if col.kind is Kind.FLOAT:
+        try:
+            return float(value or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
     if col.kind is Kind.BOOL_INT:
         return 1 if bool(value) else 0
     text = str(value or "")

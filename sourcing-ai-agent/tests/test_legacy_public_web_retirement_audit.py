@@ -47,14 +47,16 @@ class LegacyPublicWebRetirementAuditTest(PGControlPlaneStoreTestMixin, unittest.
         self.assertEqual(self.store.list_target_candidate_public_web_promotions(), [])
 
     def test_sqlite_normal_schema_no_longer_bootstraps_legacy_public_web_tables(self) -> None:
-        init_schema_source = inspect.getsource(ControlPlaneStore.init_schema)
+        # Track B B4.1 removed the SQLite normal-schema bootstrap entirely: there is no longer an
+        # `init_schema` that could create the legacy public-web tables. The only path that still
+        # materializes them is the migration-only helper, on demand.
+        self.assertFalse(
+            hasattr(ControlPlaneStore, "init_schema"),
+            "init_schema (the SQLite normal-schema bootstrap) must stay removed after B4.1",
+        )
         migration_schema_source = inspect.getsource(
             ControlPlaneStore._ensure_legacy_target_public_web_sqlite_tables_for_migration
         )
-
-        self.assertNotIn("CREATE TABLE IF NOT EXISTS target_candidate_public_web_batches", init_schema_source)
-        self.assertNotIn("CREATE TABLE IF NOT EXISTS target_candidate_public_web_runs", init_schema_source)
-        self.assertNotIn("CREATE TABLE IF NOT EXISTS target_candidate_public_web_promotions", init_schema_source)
         self.assertIn(
             "CREATE TABLE IF NOT EXISTS target_candidate_public_web_runs",
             migration_schema_source,
