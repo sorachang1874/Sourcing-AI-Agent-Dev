@@ -3063,32 +3063,10 @@ class ControlPlaneStore:
                 return self._job_materialization_item_from_row(row) or {}
             if self._control_plane_postgres_should_skip_sqlite_fallback("job_materialization_items"):
                 return {}
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE job_materialization_items
-                SET status = 'running',
-                    phase = 'applying',
-                    lease_owner = ?,
-                    lease_expires_at = datetime('now', ?),
-                    attempt_count = attempt_count + 1,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE item_id = ?
-                  AND status IN ('queued', 'deferred', 'failed_retryable', 'waiting_prerequisite', 'running')
-                  AND (not_before_at = '' OR datetime(not_before_at) <= datetime('now'))
-                  AND (lease_expires_at = '' OR datetime(lease_expires_at) <= datetime('now'))
-                """,
-                (normalized_owner, f"+{max(1, int(lease_seconds or 300))} seconds", normalized_item_id),
-            )
-            changed = self._connection.execute("SELECT changes()").fetchone()[0]
-            row = self._connection.execute(
-                "SELECT * FROM job_materialization_items WHERE item_id = ? LIMIT 1",
-                (normalized_item_id,),
-            ).fetchone()
-        if not changed:
-            return {}
-        self._mirror_control_plane_row("job_materialization_items", row)
-        return self._job_materialization_item_from_row(row) or {}
+        raise RuntimeError(
+            "postgres-only invariant violated for job_materialization_items in claim_job_materialization_item: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def mark_job_materialization_item_completed(
         self,
@@ -5034,31 +5012,10 @@ class ControlPlaneStore:
                 # vanished between the read and the update; re-read PG for the current row rather than
                 # fall through to the dead SQLite shadow.
                 return self.get_manual_review_item(review_item_id)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE manual_review_items
-                SET status = ?, summary = ?, candidate_json = ?, evidence_json = ?, metadata_json = ?,
-                    reviewed_by = ?, review_notes = ?, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                WHERE review_item_id = ?
-                """,
-                (
-                    status,
-                    str(existing.get("summary") or ""),
-                    json.dumps(stored_candidate, ensure_ascii=False),
-                    json.dumps(stored_evidence, ensure_ascii=False),
-                    json.dumps(merged_metadata, ensure_ascii=False),
-                    reviewer,
-                    notes,
-                    review_item_id,
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM manual_review_items WHERE review_item_id = ? LIMIT 1",
-                (review_item_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("manual_review_items", row)
-        return self.get_manual_review_item(review_item_id)
+        raise RuntimeError(
+            "postgres-only invariant violated for manual_review_items in review_manual_review_item: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_candidate_review_records(
         self,
@@ -8443,24 +8400,10 @@ class ControlPlaneStore:
                 return self._manual_review_item_from_row(row)
             if self._control_plane_postgres_should_skip_sqlite_fallback("manual_review_items"):
                 return None
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE manual_review_items
-                SET metadata_json = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE review_item_id = ?
-                """,
-                (
-                    json.dumps(merged_metadata, ensure_ascii=False),
-                    review_item_id,
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM manual_review_items WHERE review_item_id = ? LIMIT 1",
-                (review_item_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("manual_review_items", row)
-        return self.get_manual_review_item(review_item_id)
+        raise RuntimeError(
+            "postgres-only invariant violated for manual_review_items in merge_manual_review_item_metadata: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def create_agent_runtime_session(
         self,
@@ -9481,32 +9424,10 @@ class ControlPlaneStore:
                 return self._workflow_recovery_intent_from_row(row)
             if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_recovery_intents"):
                 return {}
-        with self._lock, self._connection:
-            # Consume only the exact row this daemon claimed (status='claimed'
-            # AND lease_owner AND claimed_at). If a newer upsert re-armed the row
-            # to 'pending' between claim and consume, this UPDATE matches nothing
-            # and the fresh intent survives for the next drain (no stale-claim
-            # clobber of a newer same-job intent).
-            self._connection.execute(
-                """
-                UPDATE workflow_recovery_intents
-                SET status = 'consumed',
-                    lease_owner = '',
-                    lease_expires_at = '',
-                    updated_at = ?
-                WHERE job_id = ?
-                  AND status = 'claimed'
-                  AND lease_owner = ?
-                  AND claimed_at = ?
-                """,
-                (_utc_now_timestamp(), normalized_job_id, normalized_lease_owner, normalized_claimed_at),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM workflow_recovery_intents WHERE job_id = ? LIMIT 1",
-                (normalized_job_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("workflow_recovery_intents", row)
-        return self._workflow_recovery_intent_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_recovery_intents in mark_workflow_recovery_intent_consumed: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_workflow_recovery_intent(self, job_id: str) -> dict[str, Any]:
         normalized_job_id = str(job_id or "").strip()
@@ -9590,48 +9511,10 @@ class ControlPlaneStore:
                 return self._workflow_event_from_row(row)
             if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_events"):
                 return {}
-        with self._lock, self._connection:
-            existing = self._connection.execute(
-                """
-                SELECT * FROM workflow_events
-                WHERE workflow_run_id = ? AND idempotency_key = ?
-                LIMIT 1
-                """,
-                (normalized_run_id, normalized_idempotency),
-            ).fetchone()
-            if existing is not None:
-                return self._workflow_event_from_row(existing)
-            next_sequence = int(row_payload["sequence_number"] or 0)
-            if next_sequence <= 0:
-                next_sequence = int(
-                    self._connection.execute(
-                        "SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM workflow_events WHERE workflow_run_id = ?",
-                        (normalized_run_id,),
-                    ).fetchone()[0]
-                    or 1
-                )
-            row_payload["sequence_number"] = next_sequence
-            row_payload["event_id"] = "evt_" + sha1(
-                f"{normalized_run_id}:{next_sequence}:{normalized_idempotency}".encode("utf-8")
-            ).hexdigest()[:24]
-            columns = list(row_payload.keys())
-            self._connection.execute(
-                (
-                    f"INSERT OR IGNORE INTO workflow_events ({', '.join(columns)}) "
-                    f"VALUES ({', '.join(['?'] * len(columns))})"
-                ),
-                tuple(row_payload[column] for column in columns),
-            )
-            row = self._connection.execute(
-                """
-                SELECT * FROM workflow_events
-                WHERE workflow_run_id = ? AND idempotency_key = ?
-                LIMIT 1
-                """,
-                (normalized_run_id, normalized_idempotency),
-            ).fetchone()
-        self._mirror_control_plane_row("workflow_events", row)
-        return self._workflow_event_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_events in append_workflow_event: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def upsert_agent_action(
         self,
@@ -9696,25 +9579,10 @@ class ControlPlaneStore:
                 return self._agent_action_from_row(row)
             if self._control_plane_postgres_should_skip_sqlite_fallback("agent_actions"):
                 return {}
-        with self._lock, self._connection:
-            columns = list(row_payload.keys())
-            self._connection.execute(
-                (
-                    f"INSERT OR IGNORE INTO agent_actions ({', '.join(columns)}) "
-                    f"VALUES ({', '.join(['?'] * len(columns))})"
-                ),
-                tuple(row_payload[column] for column in columns),
-            )
-            row = self._connection.execute(
-                """
-                SELECT * FROM agent_actions
-                WHERE workspace_id = ? AND idempotency_key = ?
-                LIMIT 1
-                """,
-                (normalized_workspace_id, normalized_idempotency),
-            ).fetchone()
-        self._mirror_control_plane_row("agent_actions", row)
-        return self._agent_action_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_actions in upsert_agent_action: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_agent_action(self, action_id: str) -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("agent_actions")
@@ -9856,31 +9724,10 @@ class ControlPlaneStore:
                 return self._agent_action_from_row(row)
             if self._control_plane_postgres_should_skip_sqlite_fallback("agent_actions"):
                 return {}
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE agent_actions
-                SET status = ?,
-                    approval_status = ?,
-                    result_ref_json = ?,
-                    metadata_json = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE action_id = ?
-                """,
-                (
-                    requested_status,
-                    str(approval_status or existing.get("approval_status") or "not_required").strip() or "not_required",
-                    json.dumps(_json_safe_payload(result_ref), ensure_ascii=False),
-                    json.dumps(_json_safe_payload(metadata), ensure_ascii=False),
-                    normalized_action_id,
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM agent_actions WHERE action_id = ? LIMIT 1",
-                (normalized_action_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("agent_actions", row)
-        return self._agent_action_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_actions in update_agent_action_state: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def upsert_operation_run(
         self,
@@ -9943,25 +9790,10 @@ class ControlPlaneStore:
                 return self._operation_run_from_row(row)
             if self._control_plane_postgres_should_skip_sqlite_fallback("operation_runs"):
                 return {}
-        with self._lock, self._connection:
-            columns = list(row_payload.keys())
-            self._connection.execute(
-                (
-                    f"INSERT OR IGNORE INTO operation_runs ({', '.join(columns)}) "
-                    f"VALUES ({', '.join(['?'] * len(columns))})"
-                ),
-                tuple(row_payload[column] for column in columns),
-            )
-            row = self._connection.execute(
-                """
-                SELECT * FROM operation_runs
-                WHERE workspace_id = ? AND idempotency_key = ?
-                LIMIT 1
-                """,
-                (normalized_workspace_id, normalized_idempotency),
-            ).fetchone()
-        self._mirror_control_plane_row("operation_runs", row)
-        return self._operation_run_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for operation_runs in upsert_operation_run: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_operation_run(self, operation_run_id: str) -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("operation_runs")
@@ -10796,48 +10628,10 @@ class ControlPlaneStore:
                 return self._operation_event_from_row(row)
             if self._control_plane_postgres_should_skip_sqlite_fallback("operation_events"):
                 return {}
-        with self._lock, self._connection:
-            existing = self._connection.execute(
-                """
-                SELECT * FROM operation_events
-                WHERE event_stream_id = ? AND idempotency_key = ?
-                LIMIT 1
-                """,
-                (normalized_stream_id, normalized_idempotency),
-            ).fetchone()
-            if existing is not None:
-                return self._operation_event_from_row(existing)
-            next_sequence = int(row_payload["sequence_number"] or 0)
-            if next_sequence <= 0:
-                next_sequence = int(
-                    self._connection.execute(
-                        "SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM operation_events WHERE event_stream_id = ?",
-                        (normalized_stream_id,),
-                    ).fetchone()[0]
-                    or 1
-                )
-            row_payload["sequence_number"] = next_sequence
-            row_payload["event_id"] = "opevt_" + sha1(
-                f"{normalized_stream_id}:{next_sequence}:{normalized_idempotency}".encode("utf-8")
-            ).hexdigest()[:24]
-            columns = list(row_payload.keys())
-            self._connection.execute(
-                (
-                    f"INSERT OR IGNORE INTO operation_events ({', '.join(columns)}) "
-                    f"VALUES ({', '.join(['?'] * len(columns))})"
-                ),
-                tuple(row_payload[column] for column in columns),
-            )
-            row = self._connection.execute(
-                """
-                SELECT * FROM operation_events
-                WHERE event_stream_id = ? AND idempotency_key = ?
-                LIMIT 1
-                """,
-                (normalized_stream_id, normalized_idempotency),
-            ).fetchone()
-        self._mirror_control_plane_row("operation_events", row)
-        return self._operation_event_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for operation_events in append_operation_event: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_operation_events(self, event_stream_id: str, *, limit: int = 1000) -> list[dict[str, Any]]:
         self._require_postgres_for_durable_runtime("operation_events")
@@ -11100,25 +10894,10 @@ class ControlPlaneStore:
                 return self._workflow_command_from_row(row)
             if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_commands"):
                 return {}
-        with self._lock, self._connection:
-            columns = list(row_payload.keys())
-            self._connection.execute(
-                (
-                    f"INSERT OR IGNORE INTO workflow_commands ({', '.join(columns)}) "
-                    f"VALUES ({', '.join(['?'] * len(columns))})"
-                ),
-                tuple(row_payload[column] for column in columns),
-            )
-            row = self._connection.execute(
-                """
-                SELECT * FROM workflow_commands
-                WHERE workflow_run_id = ? AND idempotency_key = ?
-                LIMIT 1
-                """,
-                (normalized_run_id, normalized_idempotency),
-            ).fetchone()
-        self._mirror_control_plane_row("workflow_commands", row)
-        return self._workflow_command_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_commands in upsert_workflow_command: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_workflow_command(self, command_id: str) -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("workflow_commands")
@@ -11163,14 +10942,6 @@ class ControlPlaneStore:
             else str(existing.get("not_before_at") or "").strip()
         )
         next_result = dict(result if result is not None else existing.get("result") or {})
-        causality_columns = _workflow_command_causality_columns_from_payload(
-            next_payload,
-            workflow_run_id=str(existing.get("workflow_run_id") or "").strip(),
-            operation_id=str(existing.get("operation_id") or "").strip(),
-            command_type=str(existing.get("command_type") or "").strip(),
-            owner=str(existing.get("owner") or "").strip(),
-            idempotency_key=str(existing.get("idempotency_key") or "").strip(),
-        )
         if self._control_plane_postgres_should_prefer_read("workflow_commands"):
             row = self._call_control_plane_postgres_native(
                 "update_workflow_command_payload",
@@ -11184,59 +10955,10 @@ class ControlPlaneStore:
                 return self._workflow_command_from_row(row)
             if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_commands"):
                 return {}
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE workflow_commands
-                SET payload_json = ?,
-                    artifact_refs_json = ?,
-                    stage_id = ?,
-                    causal_group_id = ?,
-                    parent_command_id = ?,
-                    source_event_id = ?,
-                    source_event_type = ?,
-                    input_artifact_refs_json = ?,
-                    output_artifact_refs_json = ?,
-                    produced_entity_counts_json = ?,
-                    no_op_reason = ?,
-                    readiness_effect = ?,
-                    downstream_command_ids_json = ?,
-                    causality_schema_version = ?,
-                    not_before_at = ?,
-                    result_json = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE command_id = ?
-                  AND status IN ('queued', 'retry_wait')
-                """,
-                (
-                    json.dumps(_json_safe_payload(next_payload), ensure_ascii=False),
-                    json.dumps(_json_safe_payload(next_artifact_refs), ensure_ascii=False),
-                    causality_columns["stage_id"],
-                    causality_columns["causal_group_id"],
-                    causality_columns["parent_command_id"],
-                    causality_columns["source_event_id"],
-                    causality_columns["source_event_type"],
-                    causality_columns["input_artifact_refs_json"],
-                    causality_columns["output_artifact_refs_json"],
-                    causality_columns["produced_entity_counts_json"],
-                    causality_columns["no_op_reason"],
-                    causality_columns["readiness_effect"],
-                    causality_columns["downstream_command_ids_json"],
-                    causality_columns["causality_schema_version"],
-                    next_not_before,
-                    json.dumps(_json_safe_payload(next_result), ensure_ascii=False),
-                    normalized_command_id,
-                ),
-            )
-            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
-            row = self._connection.execute(
-                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
-                (normalized_command_id,),
-            ).fetchone()
-        if not changed:
-            return {}
-        self._mirror_control_plane_row("workflow_commands", row)
-        return self._workflow_command_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_commands in update_workflow_command_payload: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_workflow_commands(
         self,
@@ -11912,21 +11634,10 @@ class ControlPlaneStore:
                 return self._runtime_outbox_from_row(row)
             if self._control_plane_postgres_should_skip_sqlite_fallback("runtime_outbox"):
                 return {}
-        with self._lock, self._connection:
-            columns = list(row_payload.keys())
-            self._connection.execute(
-                (
-                    f"INSERT OR IGNORE INTO runtime_outbox ({', '.join(columns)}) "
-                    f"VALUES ({', '.join(['?'] * len(columns))})"
-                ),
-                tuple(row_payload[column] for column in columns),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM runtime_outbox WHERE idempotency_key = ? LIMIT 1",
-                (normalized_idempotency,),
-            ).fetchone()
-        self._mirror_control_plane_row("runtime_outbox", row)
-        return self._runtime_outbox_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for runtime_outbox in enqueue_runtime_outbox: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def mark_runtime_outbox_dispatched(self, outbox_id: str) -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("runtime_outbox")
@@ -18431,51 +18142,10 @@ class ControlPlaneStore:
                     "acquired": False,
                     "contended": bool(existing),
                 }
-        with self._lock, self._connection:
-            canonical_key = self._resolve_linkedin_profile_registry_key_locked(normalized_key)
-            cursor = self._connection.execute(
-                """
-                INSERT INTO linkedin_profile_registry_leases (
-                    profile_url_key,
-                    lease_owner,
-                    lease_token,
-                    lease_expires_at
-                ) VALUES (?, ?, ?, datetime('now', ?))
-                ON CONFLICT(profile_url_key) DO UPDATE SET
-                    lease_owner = excluded.lease_owner,
-                    lease_token = excluded.lease_token,
-                    lease_expires_at = excluded.lease_expires_at,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE datetime(linkedin_profile_registry_leases.lease_expires_at) <= datetime('now')
-                   OR linkedin_profile_registry_leases.lease_owner = excluded.lease_owner
-                   OR linkedin_profile_registry_leases.lease_token = excluded.lease_token
-                """,
-                (
-                    canonical_key,
-                    normalized_owner,
-                    normalized_token,
-                    f"+{ttl_seconds} seconds",
-                ),
-            )
-            lease_row = self._connection.execute(
-                """
-                SELECT * FROM linkedin_profile_registry_leases
-                WHERE profile_url_key = ?
-                LIMIT 1
-                """,
-                (canonical_key,),
-            ).fetchone()
-        lease_payload = self._linkedin_profile_registry_lease_from_row(lease_row)
-        return {
-            **lease_payload,
-            "acquired": bool(cursor.rowcount),
-            "contended": bool(
-                lease_payload
-                and lease_payload.get("lease_owner")
-                and str(lease_payload.get("lease_owner")) != normalized_owner
-                and not bool(cursor.rowcount)
-            ),
-        }
+        raise RuntimeError(
+            "postgres-only invariant violated for linkedin_profile_registry_leases in acquire_linkedin_profile_registry_lease: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def acquire_linkedin_profile_registry_leases(
         self,
@@ -18799,27 +18469,10 @@ class ControlPlaneStore:
                         lease_token=normalized_token,
                     )
                 )
-        with self._lock, self._connection:
-            canonical_keys = [
-                self._resolve_linkedin_profile_registry_key_locked(
-                    _normalize_linkedin_profile_url_key(profile_url)
-                )
-                for profile_url in normalized_urls
-            ]
-            placeholders = ",".join("?" for _ in canonical_keys)
-            clauses = [f"profile_url_key IN ({placeholders})"]
-            params: list[Any] = list(canonical_keys)
-            if normalized_owner:
-                clauses.append("lease_owner = ?")
-                params.append(normalized_owner)
-            if normalized_token:
-                clauses.append("lease_token = ?")
-                params.append(normalized_token)
-            cursor = self._connection.execute(
-                f"DELETE FROM linkedin_profile_registry_leases WHERE {' AND '.join(clauses)}",
-                tuple(params),
-            )
-        return int(cursor.rowcount or 0)
+        raise RuntimeError(
+            "postgres-only invariant violated for linkedin_profile_registry_leases in release_linkedin_profile_registry_leases: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def acquire_runtime_provider_limiter_slot(
         self,
@@ -19054,25 +18707,10 @@ class ControlPlaneStore:
                     "db_limiter_enabled": True,
                     "reason": "postgres_native_limiter_status_unavailable",
                 }
-        with self._lock, self._connection:
-            active_count_row = self._connection.execute(
-                """
-                SELECT COUNT(*) AS active_count
-                FROM runtime_provider_limiter_leases
-                WHERE limiter_key = ? AND datetime(lease_expires_at) > datetime('now')
-                """,
-                (normalized_key,),
-            ).fetchone()
-        active_count = int(active_count_row["active_count"] or 0) if active_count_row is not None else 0
-        available_count = max(0, normalized_budget - active_count)
-        return {
-            "limiter_key": normalized_key,
-            "active_count": active_count,
-            "budget": normalized_budget,
-            "available_count": available_count,
-            "available": available_count > 0,
-            "db_limiter_enabled": True,
-        }
+        raise RuntimeError(
+            "postgres-only invariant violated for runtime_provider_limiter_leases in get_runtime_provider_limiter_status: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def release_runtime_provider_limiter_slot(
         self,
@@ -19168,32 +18806,10 @@ class ControlPlaneStore:
                     )
             if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry_events"):
                 return
-        with self._lock, self._connection:
-            canonical_key = self._resolve_linkedin_profile_registry_key_locked(normalized_key)
-            self._connection.execute(
-                """
-                INSERT INTO linkedin_profile_registry_events (
-                    profile_url_key,
-                    event_type,
-                    event_status,
-                    detail,
-                    run_id,
-                    dataset_id,
-                    metadata_json,
-                    duration_ms
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    canonical_key,
-                    str(event_type or "").strip(),
-                    str(event_status or "").strip(),
-                    str(detail or "").strip(),
-                    str(run_id or "").strip(),
-                    str(dataset_id or "").strip(),
-                    json.dumps(metadata or {}, ensure_ascii=False),
-                    int(duration_ms) if duration_ms is not None else None,
-                ),
-            )
+        raise RuntimeError(
+            "postgres-only invariant violated for linkedin_profile_registry_events in record_linkedin_profile_registry_event: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_linkedin_profile_registry_metrics(self, *, lookback_hours: int = 24) -> dict[str, Any]:
         lookback = max(0, int(lookback_hours or 0))
