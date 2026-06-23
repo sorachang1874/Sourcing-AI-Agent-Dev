@@ -11115,39 +11115,28 @@ class ControlPlaneStore:
             return {}
         existing = self.get_acquisition_run(acquisition_run_id)
         now = _utc_now_timestamp()
-        row_payload = {
-            "acquisition_run_id": acquisition_run_id,
-            "workspace_id": workspace_id,
-            "operation_run_id": operation_run_id,
-            "workflow_run_id": workflow_run_id,
-            "plan_id": plan_id,
-            "plan_review_id": plan_review_id,
-            "target_company": target_company,
-            "query": query_text,
-            "status": str(normalized.get("status") or "planned").strip() or "planned",
-            "current_phase": str(normalized.get("current_phase") or "").strip(),
-            "request_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("request") or normalized.get("request_json")),
-                ensure_ascii=False,
-            ),
-            "plan_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("plan") or normalized.get("plan_json")),
-                ensure_ascii=False,
-            ),
-            "execution_bundle_json": json.dumps(
-                _normalize_json_object_payload(
+        row_payload = _workflow_runtime_repo.ACQUISITION_RUNS.to_columns(
+            {
+                **normalized,
+                "acquisition_run_id": acquisition_run_id,
+                "workspace_id": workspace_id,
+                "operation_run_id": operation_run_id,
+                "workflow_run_id": workflow_run_id,
+                "plan_id": plan_id,
+                "plan_review_id": plan_review_id,
+                "target_company": target_company,
+                "query": query_text,
+                "request": _normalize_json_object_payload(normalized.get("request") or normalized.get("request_json")),
+                "plan": _normalize_json_object_payload(normalized.get("plan") or normalized.get("plan_json")),
+                "execution_bundle": _normalize_json_object_payload(
                     normalized.get("execution_bundle") or normalized.get("execution_bundle_json")
                 ),
-                ensure_ascii=False,
-            ),
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "idempotency_key": idempotency_key,
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+                "metadata": _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                "idempotency_key": idempotency_key,
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "acquisition_runs",
             id_column="acquisition_run_id",
@@ -11245,46 +11234,34 @@ class ControlPlaneStore:
             return {}
         existing = self.get_workflow_activity_run(activity_run_id)
         now = _utc_now_timestamp()
-        row_payload = {
-            "activity_run_id": activity_run_id,
-            "workspace_id": workspace_id,
-            "workflow_run_id": workflow_run_id,
-            "operation_run_id": operation_run_id,
-            "acquisition_run_id": acquisition_run_id,
-            "command_id": command_id,
-            "parent_activity_run_id": parent_activity_run_id,
-            "activity_type": activity_type,
-            "owner": owner,
-            "status": str(normalized.get("status") or "planned").strip() or "planned",
-            "phase": phase,
-            "idempotency_key": idempotency_key,
-            "provider_ref_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("provider_ref") or normalized.get("provider_ref_json")),
-                ensure_ascii=False,
-            ),
-            "input_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("input") or normalized.get("input_json")),
-                ensure_ascii=False,
-            ),
-            "output_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("output") or normalized.get("output_json")),
-                ensure_ascii=False,
-            ),
-            "artifact_refs_json": json.dumps(
-                _loads_json_list(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
-                ensure_ascii=False,
-            ),
-            "entity_counts_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("entity_counts") or normalized.get("entity_counts_json")),
-                ensure_ascii=False,
-            ),
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+        row_payload = _workflow_runtime_repo.WORKFLOW_ACTIVITY_RUNS.to_columns(
+            {
+                **normalized,
+                "activity_run_id": activity_run_id,
+                "workspace_id": workspace_id,
+                "workflow_run_id": workflow_run_id,
+                "operation_run_id": operation_run_id,
+                "acquisition_run_id": acquisition_run_id,
+                "command_id": command_id,
+                "parent_activity_run_id": parent_activity_run_id,
+                "activity_type": activity_type,
+                "owner": owner,
+                "phase": phase,
+                "idempotency_key": idempotency_key,
+                "provider_ref": _normalize_json_object_payload(
+                    normalized.get("provider_ref") or normalized.get("provider_ref_json")
+                ),
+                "input": _normalize_json_object_payload(normalized.get("input") or normalized.get("input_json")),
+                "output": _normalize_json_object_payload(normalized.get("output") or normalized.get("output_json")),
+                "artifact_refs": _loads_json_list(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
+                "entity_counts": _normalize_json_object_payload(
+                    normalized.get("entity_counts") or normalized.get("entity_counts_json")
+                ),
+                "metadata": _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "workflow_activity_runs",
             id_column="activity_run_id",
@@ -11376,48 +11353,29 @@ class ControlPlaneStore:
             return {}
         existing = self.get_workflow_activity_attempt(attempt_id)
         now = _utc_now_timestamp()
-        row_payload = {
-            "attempt_id": attempt_id,
-            "workspace_id": workspace_id,
-            "activity_run_id": activity_run_id,
-            "workflow_run_id": workflow_run_id,
-            "command_id": command_id,
-            "attempt_number": attempt_number,
-            "status": str(normalized.get("status") or "planned").strip() or "planned",
-            "provider": provider,
-            "provider_request_ref": str(normalized.get("provider_request_ref") or "").strip(),
-            "provider_run_ref": str(normalized.get("provider_run_ref") or "").strip(),
-            "started_at": str(normalized.get("started_at") or ""),
-            "completed_at": str(normalized.get("completed_at") or ""),
-            "next_retry_at": str(normalized.get("next_retry_at") or ""),
-            "rate_limit_ref_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("rate_limit_ref") or normalized.get("rate_limit_ref_json")),
-                ensure_ascii=False,
-            ),
-            "error_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("error") or normalized.get("error_json")),
-                ensure_ascii=False,
-            ),
-            "input_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("input") or normalized.get("input_json")),
-                ensure_ascii=False,
-            ),
-            "output_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("output") or normalized.get("output_json")),
-                ensure_ascii=False,
-            ),
-            "artifact_refs_json": json.dumps(
-                _loads_json_list(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
-                ensure_ascii=False,
-            ),
-            "idempotency_key": idempotency_key,
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+        row_payload = _workflow_runtime_repo.WORKFLOW_ACTIVITY_ATTEMPTS.to_columns(
+            {
+                **normalized,
+                "attempt_id": attempt_id,
+                "workspace_id": workspace_id,
+                "activity_run_id": activity_run_id,
+                "workflow_run_id": workflow_run_id,
+                "command_id": command_id,
+                "attempt_number": attempt_number,
+                "provider": provider,
+                "rate_limit_ref": _normalize_json_object_payload(
+                    normalized.get("rate_limit_ref") or normalized.get("rate_limit_ref_json")
+                ),
+                "error": _normalize_json_object_payload(normalized.get("error") or normalized.get("error_json")),
+                "input": _normalize_json_object_payload(normalized.get("input") or normalized.get("input_json")),
+                "output": _normalize_json_object_payload(normalized.get("output") or normalized.get("output_json")),
+                "artifact_refs": _loads_json_list(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
+                "idempotency_key": idempotency_key,
+                "metadata": _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "workflow_activity_attempts",
             id_column="attempt_id",
@@ -11509,48 +11467,36 @@ class ControlPlaneStore:
             return {}
         existing = self.get_workflow_entity_delta(delta_id)
         now = _utc_now_timestamp()
-        row_payload = {
-            "delta_id": delta_id,
-            "workspace_id": workspace_id,
-            "workflow_run_id": workflow_run_id,
-            "operation_run_id": operation_run_id,
-            "command_id": command_id,
-            "activity_run_id": activity_run_id,
-            "attempt_id": attempt_id,
-            "acquisition_run_id": acquisition_run_id,
-            "entity_type": entity_type,
-            "entity_key": entity_key,
-            "delta_kind": delta_kind,
-            "status": str(normalized.get("status") or "recorded").strip() or "recorded",
-            "reason": str(normalized.get("reason") or "").strip(),
-            "source_ref_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("source_ref") or normalized.get("source_ref_json")),
-                ensure_ascii=False,
-            ),
-            "entity_payload_json": json.dumps(
-                _normalize_json_object_payload(
+        row_payload = _workflow_runtime_repo.WORKFLOW_ENTITY_DELTAS.to_columns(
+            {
+                **normalized,
+                "delta_id": delta_id,
+                "workspace_id": workspace_id,
+                "workflow_run_id": workflow_run_id,
+                "operation_run_id": operation_run_id,
+                "command_id": command_id,
+                "activity_run_id": activity_run_id,
+                "attempt_id": attempt_id,
+                "acquisition_run_id": acquisition_run_id,
+                "entity_type": entity_type,
+                "entity_key": entity_key,
+                "delta_kind": delta_kind,
+                "source_ref": _normalize_json_object_payload(
+                    normalized.get("source_ref") or normalized.get("source_ref_json")
+                ),
+                "entity_payload": _normalize_json_object_payload(
                     normalized.get("entity_payload") or normalized.get("entity_payload_json")
                 ),
-                ensure_ascii=False,
-            ),
-            "projection_effect_json": json.dumps(
-                _normalize_json_object_payload(
+                "projection_effect": _normalize_json_object_payload(
                     normalized.get("projection_effect") or normalized.get("projection_effect_json")
                 ),
-                ensure_ascii=False,
-            ),
-            "artifact_refs_json": json.dumps(
-                _loads_json_list(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
-                ensure_ascii=False,
-            ),
-            "idempotency_key": idempotency_key,
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+                "artifact_refs": _loads_json_list(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
+                "idempotency_key": idempotency_key,
+                "metadata": _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "workflow_entity_deltas",
             id_column="delta_id",
