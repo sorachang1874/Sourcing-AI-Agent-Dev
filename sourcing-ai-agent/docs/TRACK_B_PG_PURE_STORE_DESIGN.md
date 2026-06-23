@@ -430,3 +430,16 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   —— `baseline_full_company_coverage_proven` 在 `include_population_coverage=False` 下为 True(期望 False)。逻辑在
   `asset_reuse_planning.py::_baseline_full_company_coverage_proven`(~1175,asset-reuse coverage-proof planner,**非 storage**)。git-stash 控制实验
   证 pre-existing(无任何 B4.2.11+ 改动也同样 fail)。需专门的 asset-reuse-planning 排查,勿归因于 descriptor 工作。
+- **2026-06-23 owner 批准路线顺序:① 拆影子/mirror(B4 收尾,现在)→ ② 补 Repository 查询方法 + 按域迁移 caller → ③ jsonb(gated)。**
+- **2026-06-23 B4.3 影子 teardown 启动(commit aa503c3, fd5853a)—— storage.py 26,847 → 25,300(−1,547 行)。**
+  PG 在 postgres_only 下已 authoritative(B3.0),死 SQLite 尾可删。
+  - **B4.3.1(21 个 write-and-mirror 尾)**:`if _write_control_plane_row_to_postgres(T,row): return <pg>` 后的死
+    `with self._lock, self._connection: INSERT...` + `_mirror_*`。该 helper 返 True 或 raise(非空 row 永不返 False)→ 尾死 →
+    换成 fail-closed `_raise_control_plane_postgres_write_failure`。
+  - **B4.3.2(16 个 native-dispatch 尾)**:`if should_prefer_read(T): { native(...); if row: return; if skip: return {} }` 后的死 with。
+    prefer-read 块在 postgres_only 下恒返回 → 尾死 → fail-closed `raise RuntimeError`。顺带删一个只喂死尾的孤儿 causality_columns 计算。
+  - **方法**:AST 精确截断 + 严格模式匹配安全检查(仅当 guard-if 紧跟 `with self._lock, self._connection:` 才截)——非 B4.1 那次破了
+    231 个读方法的盲截。每批验证:import + ruff + live PG 广套(387 / 192 passed;唯一 results-api fail 是 pre-existing lovable contract-drift,控制实验已证)。
+  - **B4.3 余下批次**:(i) 死**读**尾(`pg=select; if pg: return; if skip: return []; <死 with: SELECT>`,~28 个 near + 其它;更杂——读方法在死 with 前建
+    SQLite-only query-builder 局部 clauses/params,删尾后变 unused 须一并删);(ii) 6 个 skipped 写方法(SQLite 块前有中间逻辑);
+    (iii) `_replace_*_from_sqlite`(17)+ mirror helpers 待无引用后删;(iv) 最后删 `self._connection = sqlite3.connect(...)`(:809)+ shadow `_lock` + `import sqlite3`。每批同 AST-safety + 合同 lane 验证。
