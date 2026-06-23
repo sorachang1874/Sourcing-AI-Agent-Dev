@@ -414,3 +414,19 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   status="planned"〕/operation_runs/workflow_commands〔causality〕/runtime_outbox 经 native dispatch;workflow_current_state 经
   `_write_control_plane_row_to_postgres`;均 mut=0,row_payload=to_columns 输出可直接替换)+ 3 个带下游 `row_payload[...]=` sequence/id mutation
   (workflow_events/operation_events/acquisition_discovery_lanes —— to_columns 产列名键,下游 mutation 仍可用,但需谨慎核)+ recovery_intents(native-adapter,defer)。
+- **2026-06-22 B4.2.11/.12 workflow_runtime 收尾 7 表(commit a742490, cf0f03b)—— workflow_runtime 11/13 done,累计 34 表 read+write 单源。**
+  B4.2.11:agent_actions/operation_runs/runtime_outbox(clean kwarg native-dispatch;A/B 9/0)。B4.2.12:workflow_current_state
+  (read-merge-write,merge 留 caller,status default "pending")、acquisition_discovery_lanes(clean;mut=3 是 grep 误报,无下游 mutation;
+  status/phase default "planned")、workflow_events/operation_events(kwarg native-dispatch,event_id="" + SQLite fallback 下游 sequence/event_id
+  mutation —— to_columns 产列名键,mutation 不变)。A/B 6/0+6/0;live PG 116+129 passed。
+  **关键教训(A/B 抓到):** write `default` 仅在值为空时生效;非空 kwarg(status="running")必须传进 public payload —— 省略它而依赖 default
+  会静默强制成默认值。永远传原始 field 值,write default 只兜空值。
+  **写路径基本完成 —— 2 个 workflow_runtime defer + 4 bespoke:** (i) **workflow_commands**:causality 列由 `_workflow_command_causality_columns_from_payload`
+  **预编码**(已 json.dumps)再 `**spread`,过 to_columns 会双重编码;causality 是独立子系统,留手写。(ii) **workflow_recovery_intents**:经 native
+  adapter `_call_control_plane_postgres_native` 写(PG 写在 adapter,无 row_payload)。(iii) **bespoke 手写**:raw_profile_index、candidate_evidence_index、
+  projection_person_search_index、serving_projection_member(indexed_text 组装 + 条件 source-id 列表)。模式已全证(inline/separate/native-dispatch/merge、
+  FLOAT/BOOL/JSON_LIST、json-safe、列 parity、下游 mutation)。
+- **pre-existing 失败(非 Track B,另一子系统,flag 待查):** `test_workflow_explain.py::test_explain_workflow_does_not_use_legacy_standard_bundle_as_hidden_full_coverage_proof`
+  —— `baseline_full_company_coverage_proven` 在 `include_population_coverage=False` 下为 True(期望 False)。逻辑在
+  `asset_reuse_planning.py::_baseline_full_company_coverage_proven`(~1175,asset-reuse coverage-proof planner,**非 storage**)。git-stash 控制实验
+  证 pre-existing(无任何 B4.2.11+ 改动也同样 fail)。需专门的 asset-reuse-planning 排查,勿归因于 descriptor 工作。
