@@ -405,3 +405,12 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   workflow_current_state/runtime_outbox/workflow_recovery_intents)—— core agent runtime,state-machine/causality 形,最大剩余批;
   (ii) **bespoke(defer)**:raw_profile_index、candidate_evidence_index、projection_person_search_index、serving_projection_member
   (indexed_text 组装 + `_normalize_search_index_terms`/`_text` + 条件 source-id 列表)。模式已全证(inline+separate、FLOAT/BOOL、json-safe、列 parity)。
+- **2026-06-22 B4.2.10 workflow_runtime 首 4 表(commit d272874)** —— 13 个 workflow_runtime 写按机制分:**9 个建 `row_payload` dict**(可转);
+  **1 个(recovery_intents)经 native adapter `_call_control_plane_postgres_native` 写**(无 row_payload,DEFER —— PG 写在 adapter)。9 个里
+  **4 个是 clean `_upsert_simple_control_plane_row` 无下游 mutation**:acquisition_runs/workflow_activity_runs/workflow_activity_attempts/
+  workflow_entity_deltas —— 已转(A/B 24/0;status write-default planned/recorded;artifact_refs 是 `_loads_json_list` 的 JSON_LIST;
+  181 tests pass)。**累计 27 表 read+write 双向单源。** storage.py → 26.87k。
+  **剩余 workflow_runtime 8 表:** 5 个 clean-但-native-dispatch(agent_actions〔需 write default approval_status/policy="not_required"、
+  status="planned"〕/operation_runs/workflow_commands〔causality〕/runtime_outbox 经 native dispatch;workflow_current_state 经
+  `_write_control_plane_row_to_postgres`;均 mut=0,row_payload=to_columns 输出可直接替换)+ 3 个带下游 `row_payload[...]=` sequence/id mutation
+  (workflow_events/operation_events/acquisition_discovery_lanes —— to_columns 产列名键,下游 mutation 仍可用,但需谨慎核)+ recovery_intents(native-adapter,defer)。
