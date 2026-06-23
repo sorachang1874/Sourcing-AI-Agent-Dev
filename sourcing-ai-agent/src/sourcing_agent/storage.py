@@ -1858,55 +1858,11 @@ class ControlPlaneStore:
         payload = self._candidate_payload(candidate)
         if self._write_control_plane_row_to_postgres("candidates", payload):
             return self.get_candidate(candidate.candidate_id) or candidate
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO candidates (
-                    candidate_id, name_en, name_zh, display_name, category, target_company,
-                    organization, employment_status, role, team, joined_at, left_at,
-                    current_destination, ethnicity_background, investment_involvement,
-                    focus_areas, education, work_history, notes, linkedin_url, media_url,
-                    source_dataset, source_path, metadata_json
-                ) VALUES (
-                    :candidate_id, :name_en, :name_zh, :display_name, :category, :target_company,
-                    :organization, :employment_status, :role, :team, :joined_at, :left_at,
-                    :current_destination, :ethnicity_background, :investment_involvement,
-                    :focus_areas, :education, :work_history, :notes, :linkedin_url, :media_url,
-                    :source_dataset, :source_path, :metadata_json
-                )
-                ON CONFLICT(candidate_id) DO UPDATE SET
-                    name_en = excluded.name_en,
-                    name_zh = excluded.name_zh,
-                    display_name = excluded.display_name,
-                    category = excluded.category,
-                    target_company = excluded.target_company,
-                    organization = excluded.organization,
-                    employment_status = excluded.employment_status,
-                    role = excluded.role,
-                    team = excluded.team,
-                    joined_at = excluded.joined_at,
-                    left_at = excluded.left_at,
-                    current_destination = excluded.current_destination,
-                    ethnicity_background = excluded.ethnicity_background,
-                    investment_involvement = excluded.investment_involvement,
-                    focus_areas = excluded.focus_areas,
-                    education = excluded.education,
-                    work_history = excluded.work_history,
-                    notes = excluded.notes,
-                    linkedin_url = excluded.linkedin_url,
-                    media_url = excluded.media_url,
-                    source_dataset = excluded.source_dataset,
-                    source_path = excluded.source_path,
-                    metadata_json = excluded.metadata_json
-                """,
-                payload,
-            )
-            row = self._connection.execute(
-                "SELECT * FROM candidates WHERE candidate_id = ? LIMIT 1",
-                (candidate.candidate_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("candidates", row)
-        return self.get_candidate(candidate.candidate_id) or candidate
+        self._raise_control_plane_postgres_write_failure(
+            table_name="candidates",
+            method_name="upsert_candidate",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def list_evidence(self, candidate_id: str) -> list[dict[str, Any]]:
         normalized_candidate_id = str(candidate_id or "").strip()
@@ -2560,54 +2516,11 @@ class ControlPlaneStore:
             return (
                 self.get_job_result_view(job_id=normalized_job_id) or self._job_result_view_from_row(row_payload) or {}
             )
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO job_result_views (
-                    view_id, job_id, target_company, company_key, source_kind, view_kind, snapshot_id, asset_view,
-                    source_path, authoritative_snapshot_id, materialization_generation_key, request_signature,
-                    summary_json, metadata_json
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(job_id) DO UPDATE SET
-                    view_id = excluded.view_id,
-                    target_company = excluded.target_company,
-                    company_key = excluded.company_key,
-                    source_kind = excluded.source_kind,
-                    view_kind = excluded.view_kind,
-                    snapshot_id = excluded.snapshot_id,
-                    asset_view = excluded.asset_view,
-                    source_path = excluded.source_path,
-                    authoritative_snapshot_id = excluded.authoritative_snapshot_id,
-                    materialization_generation_key = excluded.materialization_generation_key,
-                    request_signature = excluded.request_signature,
-                    summary_json = excluded.summary_json,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    view_id,
-                    normalized_job_id,
-                    normalized_target_company,
-                    normalized_company_key,
-                    normalized_source_kind,
-                    normalized_view_kind,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                    normalized_source_path,
-                    normalized_authoritative_snapshot_id,
-                    normalized_generation_key,
-                    normalized_request_signature,
-                    summary_json,
-                    metadata_json,
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM job_result_views WHERE job_id = ?",
-                (normalized_job_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("job_result_views", row)
-        return self._job_result_view_from_row(row)
+        self._raise_control_plane_postgres_write_failure(
+            table_name="job_result_views",
+            method_name="upsert_job_result_view",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_job_result_view(
         self,
@@ -5235,58 +5148,11 @@ class ControlPlaneStore:
                 or self._candidate_review_record_from_row(row_payload)
                 or normalized
             )
-        with self._lock, self._connection:
-            existing = self._connection.execute(
-                "SELECT added_at FROM candidate_review_registry WHERE record_id = ? LIMIT 1",
-                (normalized["record_id"],),
-            ).fetchone()
-            self._connection.execute(
-                """
-                INSERT INTO candidate_review_registry (
-                    record_id, job_id, history_id, candidate_id, candidate_name, headline,
-                    current_company, avatar_url, linkedin_url, primary_email, status, comment,
-                    source, metadata_json, added_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
-                ON CONFLICT(record_id) DO UPDATE SET
-                    job_id = excluded.job_id,
-                    history_id = excluded.history_id,
-                    candidate_id = excluded.candidate_id,
-                    candidate_name = excluded.candidate_name,
-                    headline = excluded.headline,
-                    current_company = excluded.current_company,
-                    avatar_url = excluded.avatar_url,
-                    linkedin_url = excluded.linkedin_url,
-                    primary_email = excluded.primary_email,
-                    status = excluded.status,
-                    comment = excluded.comment,
-                    source = excluded.source,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    normalized["record_id"],
-                    normalized["job_id"],
-                    normalized["history_id"],
-                    normalized["candidate_id"],
-                    normalized["candidate_name"],
-                    normalized["headline"],
-                    normalized["current_company"],
-                    normalized["avatar_url"],
-                    normalized["linkedin_url"],
-                    normalized["primary_email"],
-                    normalized["status"],
-                    normalized["comment"],
-                    normalized["source"],
-                    json.dumps(normalized["metadata"], ensure_ascii=False),
-                    existing["added_at"] if existing is not None else normalized.get("added_at"),
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM candidate_review_registry WHERE record_id = ? LIMIT 1",
-                (normalized["record_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("candidate_review_registry", row)
-        return self.get_candidate_review_record(normalized["record_id"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="candidate_review_registry",
+            method_name="upsert_candidate_review_record",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_candidate_review_record(self, record_id: str) -> dict[str, Any] | None:
         normalized_record_id = str(record_id or "").strip()
@@ -5411,72 +5277,11 @@ class ControlPlaneStore:
                 or self._target_candidate_from_row(row_payload)
                 or normalized
             )
-        with self._lock, self._connection:
-            existing = self._connection.execute(
-                "SELECT added_at FROM target_candidates WHERE record_id = ? LIMIT 1",
-                (normalized["record_id"],),
-            ).fetchone()
-            self._connection.execute(
-                """
-                INSERT INTO target_candidates (
-                    record_id, candidate_id, history_id, job_id, candidate_name, headline,
-                    current_company, avatar_url, linkedin_url, primary_email,
-                    person_identity_key, candidate_identity_key, source_projection_id, source_run_id,
-                    source_collection_id, source_reason, follow_up_status,
-                    quality_score, comment, metadata_json, added_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
-                ON CONFLICT(record_id) DO UPDATE SET
-                    candidate_id = excluded.candidate_id,
-                    history_id = excluded.history_id,
-                    job_id = excluded.job_id,
-                    candidate_name = excluded.candidate_name,
-                    headline = excluded.headline,
-                    current_company = excluded.current_company,
-                    avatar_url = excluded.avatar_url,
-                    linkedin_url = excluded.linkedin_url,
-                    primary_email = excluded.primary_email,
-                    person_identity_key = excluded.person_identity_key,
-                    candidate_identity_key = excluded.candidate_identity_key,
-                    source_projection_id = excluded.source_projection_id,
-                    source_run_id = excluded.source_run_id,
-                    source_collection_id = excluded.source_collection_id,
-                    source_reason = excluded.source_reason,
-                    follow_up_status = excluded.follow_up_status,
-                    quality_score = excluded.quality_score,
-                    comment = excluded.comment,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    normalized["record_id"],
-                    normalized["candidate_id"],
-                    normalized["history_id"],
-                    normalized["job_id"],
-                    normalized["candidate_name"],
-                    normalized["headline"],
-                    normalized["current_company"],
-                    normalized["avatar_url"],
-                    normalized["linkedin_url"],
-                    normalized["primary_email"],
-                    normalized["person_identity_key"],
-                    normalized["candidate_identity_key"],
-                    normalized["source_projection_id"],
-                    normalized["source_run_id"],
-                    normalized["source_collection_id"],
-                    normalized["source_reason"],
-                    normalized["follow_up_status"],
-                    normalized["quality_score"],
-                    normalized["comment"],
-                    json.dumps(normalized["metadata"], ensure_ascii=False),
-                    existing["added_at"] if existing is not None else normalized.get("added_at"),
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM target_candidates WHERE record_id = ? LIMIT 1",
-                (normalized["record_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("target_candidates", row)
-        return self.get_target_candidate(normalized["record_id"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="target_candidates",
+            method_name="upsert_target_candidate",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_target_candidate(self, record_id: str) -> dict[str, Any] | None:
         normalized_record_id = str(record_id or "").strip()
@@ -6819,56 +6624,11 @@ class ControlPlaneStore:
                 self.get_target_candidate_public_web_batch(batch_id=normalized["batch_id"])
                 or self._target_candidate_public_web_batch_from_row(row_payload)
             )
-        with self._lock, self._connection:
-            existing_row = self._connection.execute(
-                "SELECT created_at FROM target_candidate_public_web_batches WHERE batch_id = ? LIMIT 1",
-                (normalized["batch_id"],),
-            ).fetchone()
-            self._connection.execute(
-                """
-                INSERT INTO target_candidate_public_web_batches (
-                    batch_id, idempotency_key, status, requested_record_ids_json, source_families_json,
-                    options_json, run_ids_json, summary_json, metadata_json, requested_by, force_refresh,
-                    started_at, completed_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
-                ON CONFLICT(batch_id) DO UPDATE SET
-                    idempotency_key = excluded.idempotency_key,
-                    status = excluded.status,
-                    requested_record_ids_json = excluded.requested_record_ids_json,
-                    source_families_json = excluded.source_families_json,
-                    options_json = excluded.options_json,
-                    run_ids_json = excluded.run_ids_json,
-                    summary_json = excluded.summary_json,
-                    metadata_json = excluded.metadata_json,
-                    requested_by = excluded.requested_by,
-                    force_refresh = excluded.force_refresh,
-                    started_at = excluded.started_at,
-                    completed_at = excluded.completed_at,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    row_payload["batch_id"],
-                    row_payload["idempotency_key"],
-                    row_payload["status"],
-                    row_payload["requested_record_ids_json"],
-                    row_payload["source_families_json"],
-                    row_payload["options_json"],
-                    row_payload["run_ids_json"],
-                    row_payload["summary_json"],
-                    row_payload["metadata_json"],
-                    row_payload["requested_by"],
-                    row_payload["force_refresh"],
-                    row_payload["started_at"],
-                    row_payload["completed_at"],
-                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM target_candidate_public_web_batches WHERE batch_id = ? LIMIT 1",
-                (normalized["batch_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("target_candidate_public_web_batches", row)
-        return self.get_target_candidate_public_web_batch(batch_id=normalized["batch_id"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="target_candidate_public_web_batches",
+            method_name="upsert_target_candidate_public_web_batch",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_target_candidate_public_web_batch(
         self,
@@ -6948,89 +6708,11 @@ class ControlPlaneStore:
                 self.get_target_candidate_public_web_run(run_id=normalized["run_id"])
                 or self._target_candidate_public_web_run_from_row(row_payload)
             )
-        with self._lock, self._connection:
-            existing_row = self._connection.execute(
-                "SELECT created_at FROM target_candidate_public_web_runs WHERE run_id = ? LIMIT 1",
-                (normalized["run_id"],),
-            ).fetchone()
-            self._connection.execute(
-                """
-                INSERT INTO target_candidate_public_web_runs (
-                    run_id, batch_id, record_id, candidate_id, candidate_name, current_company, linkedin_url,
-                    linkedin_url_key, person_identity_key, idempotency_key, status, phase, source_families_json,
-                    options_json, query_manifest_json, search_checkpoint_json, fetch_checkpoint_json,
-                    analysis_checkpoint_json, summary_json, artifact_root, worker_key, lease_owner,
-                    lease_expires_at, attempt_count, last_error, started_at, completed_at, created_at, updated_at
-                ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP
-                )
-                ON CONFLICT(run_id) DO UPDATE SET
-                    batch_id = excluded.batch_id,
-                    record_id = excluded.record_id,
-                    candidate_id = excluded.candidate_id,
-                    candidate_name = excluded.candidate_name,
-                    current_company = excluded.current_company,
-                    linkedin_url = excluded.linkedin_url,
-                    linkedin_url_key = excluded.linkedin_url_key,
-                    person_identity_key = excluded.person_identity_key,
-                    idempotency_key = excluded.idempotency_key,
-                    status = excluded.status,
-                    phase = excluded.phase,
-                    source_families_json = excluded.source_families_json,
-                    options_json = excluded.options_json,
-                    query_manifest_json = excluded.query_manifest_json,
-                    search_checkpoint_json = excluded.search_checkpoint_json,
-                    fetch_checkpoint_json = excluded.fetch_checkpoint_json,
-                    analysis_checkpoint_json = excluded.analysis_checkpoint_json,
-                    summary_json = excluded.summary_json,
-                    artifact_root = excluded.artifact_root,
-                    worker_key = excluded.worker_key,
-                    lease_owner = excluded.lease_owner,
-                    lease_expires_at = excluded.lease_expires_at,
-                    attempt_count = excluded.attempt_count,
-                    last_error = excluded.last_error,
-                    started_at = excluded.started_at,
-                    completed_at = excluded.completed_at,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    row_payload["run_id"],
-                    row_payload["batch_id"],
-                    row_payload["record_id"],
-                    row_payload["candidate_id"],
-                    row_payload["candidate_name"],
-                    row_payload["current_company"],
-                    row_payload["linkedin_url"],
-                    row_payload["linkedin_url_key"],
-                    row_payload["person_identity_key"],
-                    row_payload["idempotency_key"],
-                    row_payload["status"],
-                    row_payload["phase"],
-                    row_payload["source_families_json"],
-                    row_payload["options_json"],
-                    row_payload["query_manifest_json"],
-                    row_payload["search_checkpoint_json"],
-                    row_payload["fetch_checkpoint_json"],
-                    row_payload["analysis_checkpoint_json"],
-                    row_payload["summary_json"],
-                    row_payload["artifact_root"],
-                    row_payload["worker_key"],
-                    row_payload["lease_owner"],
-                    row_payload["lease_expires_at"],
-                    row_payload["attempt_count"],
-                    row_payload["last_error"],
-                    row_payload["started_at"],
-                    row_payload["completed_at"],
-                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM target_candidate_public_web_runs WHERE run_id = ? LIMIT 1",
-                (normalized["run_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("target_candidate_public_web_runs", row)
-        return self.get_target_candidate_public_web_run(run_id=normalized["run_id"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="target_candidate_public_web_runs",
+            method_name="upsert_target_candidate_public_web_run",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def update_target_candidate_public_web_run(self, run_id: str, patch: dict[str, Any]) -> dict[str, Any] | None:
         self._require_legacy_target_public_web_migration_write("target_candidate_public_web_runs")
@@ -7204,55 +6886,11 @@ class ControlPlaneStore:
                 self.get_crm_public_web_batch(batch_id=normalized["batch_id"])
                 or self._crm_public_web_batch_from_row(row_payload)
             )
-        with self._lock, self._connection:
-            existing_row = self._connection.execute(
-                "SELECT created_at FROM crm_public_web_batches WHERE batch_id = ? LIMIT 1",
-                (normalized["batch_id"],),
-            ).fetchone()
-            row_payload["created_at"] = (
-                str(_row_value(existing_row, "created_at") or row_payload["created_at"] or "").strip()
-                if existing_row is not None
-                else row_payload["created_at"]
-            )
-            self._connection.execute(
-                """
-                INSERT INTO crm_public_web_batches (
-                    batch_id, idempotency_key, workspace_id, status, requested_crm_record_ids_json,
-                    source_families_json, options_json, run_ids_json, summary_json, metadata_json,
-                    requested_by, force_refresh, execution_backend, source_target_batch_id,
-                    started_at, completed_at, created_at, updated_at
-                ) VALUES (
-                    :batch_id, :idempotency_key, :workspace_id, :status, :requested_crm_record_ids_json,
-                    :source_families_json, :options_json, :run_ids_json, :summary_json, :metadata_json,
-                    :requested_by, :force_refresh, :execution_backend, :source_target_batch_id,
-                    :started_at, :completed_at, :created_at, :updated_at
-                )
-                ON CONFLICT(batch_id) DO UPDATE SET
-                    idempotency_key = excluded.idempotency_key,
-                    workspace_id = excluded.workspace_id,
-                    status = excluded.status,
-                    requested_crm_record_ids_json = excluded.requested_crm_record_ids_json,
-                    source_families_json = excluded.source_families_json,
-                    options_json = excluded.options_json,
-                    run_ids_json = excluded.run_ids_json,
-                    summary_json = excluded.summary_json,
-                    metadata_json = excluded.metadata_json,
-                    requested_by = excluded.requested_by,
-                    force_refresh = excluded.force_refresh,
-                    execution_backend = excluded.execution_backend,
-                    source_target_batch_id = excluded.source_target_batch_id,
-                    started_at = excluded.started_at,
-                    completed_at = excluded.completed_at,
-                    updated_at = excluded.updated_at
-                """,
-                row_payload,
-            )
-            row = self._connection.execute(
-                "SELECT * FROM crm_public_web_batches WHERE batch_id = ? LIMIT 1",
-                (normalized["batch_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("crm_public_web_batches", row)
-        return self.get_crm_public_web_batch(batch_id=normalized["batch_id"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="crm_public_web_batches",
+            method_name="upsert_crm_public_web_batch",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_crm_public_web_batch(
         self,
@@ -7334,73 +6972,11 @@ class ControlPlaneStore:
                 self.get_crm_public_web_run(run_id=normalized["run_id"])
                 or self._crm_public_web_run_from_row(row_payload)
             )
-        with self._lock, self._connection:
-            existing_row = self._connection.execute(
-                "SELECT created_at FROM crm_public_web_runs WHERE run_id = ? LIMIT 1",
-                (normalized["run_id"],),
-            ).fetchone()
-            row_payload["created_at"] = (
-                str(_row_value(existing_row, "created_at") or row_payload["created_at"] or "").strip()
-                if existing_row is not None
-                else row_payload["created_at"]
-            )
-            self._connection.execute(
-                """
-                INSERT INTO crm_public_web_runs (
-                    run_id, batch_id, crm_record_id, workspace_id, candidate_id, candidate_name, current_company,
-                    linkedin_url, linkedin_url_key, person_identity_key, idempotency_key, status, phase,
-                    source_families_json, options_json, query_manifest_json, search_checkpoint_json,
-                    fetch_checkpoint_json, analysis_checkpoint_json, summary_json, artifact_root, worker_key,
-                    lease_owner, lease_expires_at, attempt_count, last_error, execution_backend,
-                    source_target_run_id, started_at, completed_at, created_at, updated_at
-                ) VALUES (
-                    :run_id, :batch_id, :crm_record_id, :workspace_id, :candidate_id, :candidate_name,
-                    :current_company, :linkedin_url, :linkedin_url_key, :person_identity_key, :idempotency_key,
-                    :status, :phase, :source_families_json, :options_json, :query_manifest_json,
-                    :search_checkpoint_json, :fetch_checkpoint_json, :analysis_checkpoint_json, :summary_json,
-                    :artifact_root, :worker_key, :lease_owner, :lease_expires_at, :attempt_count, :last_error,
-                    :execution_backend, :source_target_run_id, :started_at, :completed_at, :created_at, :updated_at
-                )
-                ON CONFLICT(run_id) DO UPDATE SET
-                    batch_id = excluded.batch_id,
-                    crm_record_id = excluded.crm_record_id,
-                    workspace_id = excluded.workspace_id,
-                    candidate_id = excluded.candidate_id,
-                    candidate_name = excluded.candidate_name,
-                    current_company = excluded.current_company,
-                    linkedin_url = excluded.linkedin_url,
-                    linkedin_url_key = excluded.linkedin_url_key,
-                    person_identity_key = excluded.person_identity_key,
-                    idempotency_key = excluded.idempotency_key,
-                    status = excluded.status,
-                    phase = excluded.phase,
-                    source_families_json = excluded.source_families_json,
-                    options_json = excluded.options_json,
-                    query_manifest_json = excluded.query_manifest_json,
-                    search_checkpoint_json = excluded.search_checkpoint_json,
-                    fetch_checkpoint_json = excluded.fetch_checkpoint_json,
-                    analysis_checkpoint_json = excluded.analysis_checkpoint_json,
-                    summary_json = excluded.summary_json,
-                    artifact_root = excluded.artifact_root,
-                    worker_key = excluded.worker_key,
-                    lease_owner = excluded.lease_owner,
-                    lease_expires_at = excluded.lease_expires_at,
-                    attempt_count = excluded.attempt_count,
-                    last_error = excluded.last_error,
-                    execution_backend = excluded.execution_backend,
-                    source_target_run_id = excluded.source_target_run_id,
-                    started_at = excluded.started_at,
-                    completed_at = excluded.completed_at,
-                    updated_at = excluded.updated_at
-                """,
-                row_payload,
-            )
-            row = self._connection.execute(
-                "SELECT * FROM crm_public_web_runs WHERE run_id = ? LIMIT 1",
-                (normalized["run_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("crm_public_web_runs", row)
-        return self.get_crm_public_web_run(run_id=normalized["run_id"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="crm_public_web_runs",
+            method_name="upsert_crm_public_web_run",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def update_crm_public_web_run(self, run_id: str, patch: dict[str, Any]) -> dict[str, Any] | None:
         existing = self.get_crm_public_web_run(run_id=run_id)
@@ -7586,67 +7162,11 @@ class ControlPlaneStore:
                 self.get_company_public_web_asset_run(run_id=normalized["run_id"])
                 or self._company_public_web_asset_run_from_row(row_payload)
             )
-        with self._lock, self._connection:
-            existing_row = self._connection.execute(
-                "SELECT created_at FROM company_public_web_asset_runs WHERE run_id = ? LIMIT 1",
-                (normalized["run_id"],),
-            ).fetchone()
-            self._connection.execute(
-                """
-                INSERT INTO company_public_web_asset_runs (
-                    run_id, target_company, company_key, idempotency_key, status, phase, source_families_json,
-                    seed_urls_json, options_json, discovered_assets_json, summary_json, artifact_root,
-                    requested_by, force_refresh, started_at, completed_at, last_error, metadata_json,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
-                ON CONFLICT(run_id) DO UPDATE SET
-                    target_company = excluded.target_company,
-                    company_key = excluded.company_key,
-                    idempotency_key = excluded.idempotency_key,
-                    status = excluded.status,
-                    phase = excluded.phase,
-                    source_families_json = excluded.source_families_json,
-                    seed_urls_json = excluded.seed_urls_json,
-                    options_json = excluded.options_json,
-                    discovered_assets_json = excluded.discovered_assets_json,
-                    summary_json = excluded.summary_json,
-                    artifact_root = excluded.artifact_root,
-                    requested_by = excluded.requested_by,
-                    force_refresh = excluded.force_refresh,
-                    started_at = excluded.started_at,
-                    completed_at = excluded.completed_at,
-                    last_error = excluded.last_error,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    row_payload["run_id"],
-                    row_payload["target_company"],
-                    row_payload["company_key"],
-                    row_payload["idempotency_key"],
-                    row_payload["status"],
-                    row_payload["phase"],
-                    row_payload["source_families_json"],
-                    row_payload["seed_urls_json"],
-                    row_payload["options_json"],
-                    row_payload["discovered_assets_json"],
-                    row_payload["summary_json"],
-                    row_payload["artifact_root"],
-                    row_payload["requested_by"],
-                    row_payload["force_refresh"],
-                    row_payload["started_at"],
-                    row_payload["completed_at"],
-                    row_payload["last_error"],
-                    row_payload["metadata_json"],
-                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM company_public_web_asset_runs WHERE run_id = ? LIMIT 1",
-                (normalized["run_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("company_public_web_asset_runs", row)
-        return self.get_company_public_web_asset_run(run_id=normalized["run_id"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="company_public_web_asset_runs",
+            method_name="upsert_company_public_web_asset_run",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_company_public_web_asset_run(
         self,
@@ -7795,60 +7315,11 @@ class ControlPlaneStore:
                 self.get_company_public_web_asset(asset_id=normalized["asset_id"])
                 or self._company_public_web_asset_from_row(row_payload)
             )
-        with self._lock, self._connection:
-            existing_row = self._connection.execute(
-                "SELECT created_at FROM company_public_web_assets WHERE asset_id = ? LIMIT 1",
-                (normalized["asset_id"],),
-            ).fetchone()
-            self._connection.execute(
-                """
-                INSERT INTO company_public_web_assets (
-                    asset_id, company_key, target_company, latest_run_id, source_family, asset_kind, title, url,
-                    normalized_url_key, summary, model_safe_payload_json, source_run_ids_json, artifact_refs_json,
-                    status, metadata_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
-                ON CONFLICT(asset_id) DO UPDATE SET
-                    company_key = excluded.company_key,
-                    target_company = excluded.target_company,
-                    latest_run_id = excluded.latest_run_id,
-                    source_family = excluded.source_family,
-                    asset_kind = excluded.asset_kind,
-                    title = excluded.title,
-                    url = excluded.url,
-                    normalized_url_key = excluded.normalized_url_key,
-                    summary = excluded.summary,
-                    model_safe_payload_json = excluded.model_safe_payload_json,
-                    source_run_ids_json = excluded.source_run_ids_json,
-                    artifact_refs_json = excluded.artifact_refs_json,
-                    status = excluded.status,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    row_payload["asset_id"],
-                    row_payload["company_key"],
-                    row_payload["target_company"],
-                    row_payload["latest_run_id"],
-                    row_payload["source_family"],
-                    row_payload["asset_kind"],
-                    row_payload["title"],
-                    row_payload["url"],
-                    row_payload["normalized_url_key"],
-                    row_payload["summary"],
-                    row_payload["model_safe_payload_json"],
-                    row_payload["source_run_ids_json"],
-                    row_payload["artifact_refs_json"],
-                    row_payload["status"],
-                    row_payload["metadata_json"],
-                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM company_public_web_assets WHERE asset_id = ? LIMIT 1",
-                (normalized["asset_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("company_public_web_assets", row)
-        return self.get_company_public_web_asset(asset_id=normalized["asset_id"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="company_public_web_assets",
+            method_name="upsert_company_public_web_asset",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_company_public_web_asset(
         self,
@@ -7965,56 +7436,11 @@ class ControlPlaneStore:
                 self.get_person_public_web_asset(asset_id=normalized["asset_id"])
                 or self._person_public_web_asset_from_row(row_payload)
             )
-        with self._lock, self._connection:
-            existing_row = self._connection.execute(
-                "SELECT created_at FROM person_public_web_assets WHERE asset_id = ? LIMIT 1",
-                (normalized["asset_id"],),
-            ).fetchone()
-            self._connection.execute(
-                """
-                INSERT INTO person_public_web_assets (
-                    asset_id, person_identity_key, linkedin_url_key, latest_run_id, target_candidate_record_id,
-                    candidate_name, current_company, status, summary_json, signals_json, source_run_ids_json,
-                    artifact_root, metadata_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
-                ON CONFLICT(asset_id) DO UPDATE SET
-                    person_identity_key = excluded.person_identity_key,
-                    linkedin_url_key = excluded.linkedin_url_key,
-                    latest_run_id = excluded.latest_run_id,
-                    target_candidate_record_id = excluded.target_candidate_record_id,
-                    candidate_name = excluded.candidate_name,
-                    current_company = excluded.current_company,
-                    status = excluded.status,
-                    summary_json = excluded.summary_json,
-                    signals_json = excluded.signals_json,
-                    source_run_ids_json = excluded.source_run_ids_json,
-                    artifact_root = excluded.artifact_root,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    row_payload["asset_id"],
-                    row_payload["person_identity_key"],
-                    row_payload["linkedin_url_key"],
-                    row_payload["latest_run_id"],
-                    row_payload["target_candidate_record_id"],
-                    row_payload["candidate_name"],
-                    row_payload["current_company"],
-                    row_payload["status"],
-                    row_payload["summary_json"],
-                    row_payload["signals_json"],
-                    row_payload["source_run_ids_json"],
-                    row_payload["artifact_root"],
-                    row_payload["metadata_json"],
-                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM person_public_web_assets WHERE asset_id = ? LIMIT 1",
-                (normalized["asset_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("person_public_web_assets", row)
-        return self.get_person_public_web_asset(asset_id=normalized["asset_id"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="person_public_web_assets",
+            method_name="upsert_person_public_web_asset",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_person_public_web_asset(
         self,
@@ -8099,98 +7525,11 @@ class ControlPlaneStore:
                 self.get_person_public_web_signal(signal_id=normalized["signal_id"])
                 or self._person_public_web_signal_from_row(row_payload)
             )
-        with self._lock, self._connection:
-            existing_row = self._connection.execute(
-                "SELECT created_at FROM person_public_web_signals WHERE signal_id = ? LIMIT 1",
-                (normalized["signal_id"],),
-            ).fetchone()
-            self._connection.execute(
-                """
-                INSERT INTO person_public_web_signals (
-                    signal_id, run_id, asset_id, person_identity_key, record_id, candidate_id, candidate_name,
-                    current_company, linkedin_url_key, signal_kind, signal_type, email_type, value,
-                    normalized_value, url, source_url, source_domain, source_family, source_title,
-                    confidence_label, confidence_score, identity_match_label, identity_match_score,
-                    publishable, promotion_status, suppression_reason, evidence_excerpt, artifact_refs_json,
-                    model_provider, model_version, metadata_json, created_at, updated_at
-                ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP
-                )
-                ON CONFLICT(signal_id) DO UPDATE SET
-                    run_id = excluded.run_id,
-                    asset_id = excluded.asset_id,
-                    person_identity_key = excluded.person_identity_key,
-                    record_id = excluded.record_id,
-                    candidate_id = excluded.candidate_id,
-                    candidate_name = excluded.candidate_name,
-                    current_company = excluded.current_company,
-                    linkedin_url_key = excluded.linkedin_url_key,
-                    signal_kind = excluded.signal_kind,
-                    signal_type = excluded.signal_type,
-                    email_type = excluded.email_type,
-                    value = excluded.value,
-                    normalized_value = excluded.normalized_value,
-                    url = excluded.url,
-                    source_url = excluded.source_url,
-                    source_domain = excluded.source_domain,
-                    source_family = excluded.source_family,
-                    source_title = excluded.source_title,
-                    confidence_label = excluded.confidence_label,
-                    confidence_score = excluded.confidence_score,
-                    identity_match_label = excluded.identity_match_label,
-                    identity_match_score = excluded.identity_match_score,
-                    publishable = excluded.publishable,
-                    promotion_status = excluded.promotion_status,
-                    suppression_reason = excluded.suppression_reason,
-                    evidence_excerpt = excluded.evidence_excerpt,
-                    artifact_refs_json = excluded.artifact_refs_json,
-                    model_provider = excluded.model_provider,
-                    model_version = excluded.model_version,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    row_payload["signal_id"],
-                    row_payload["run_id"],
-                    row_payload["asset_id"],
-                    row_payload["person_identity_key"],
-                    row_payload["record_id"],
-                    row_payload["candidate_id"],
-                    row_payload["candidate_name"],
-                    row_payload["current_company"],
-                    row_payload["linkedin_url_key"],
-                    row_payload["signal_kind"],
-                    row_payload["signal_type"],
-                    row_payload["email_type"],
-                    row_payload["value"],
-                    row_payload["normalized_value"],
-                    row_payload["url"],
-                    row_payload["source_url"],
-                    row_payload["source_domain"],
-                    row_payload["source_family"],
-                    row_payload["source_title"],
-                    row_payload["confidence_label"],
-                    row_payload["confidence_score"],
-                    row_payload["identity_match_label"],
-                    row_payload["identity_match_score"],
-                    row_payload["publishable"],
-                    row_payload["promotion_status"],
-                    row_payload["suppression_reason"],
-                    row_payload["evidence_excerpt"],
-                    row_payload["artifact_refs_json"],
-                    row_payload["model_provider"],
-                    row_payload["model_version"],
-                    row_payload["metadata_json"],
-                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM person_public_web_signals WHERE signal_id = ? LIMIT 1",
-                (normalized["signal_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("person_public_web_signals", row)
-        return self.get_person_public_web_signal(signal_id=normalized["signal_id"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="person_public_web_signals",
+            method_name="upsert_person_public_web_signal",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def replace_person_public_web_signals_for_run(
         self,
@@ -8419,108 +7758,11 @@ class ControlPlaneStore:
                 self.get_target_candidate_public_web_promotion(normalized["promotion_id"])
                 or self._target_candidate_public_web_promotion_from_row(row_payload)
             )
-        with self._lock, self._connection:
-            existing_row = self._connection.execute(
-                "SELECT created_at FROM target_candidate_public_web_promotions WHERE promotion_id = ? LIMIT 1",
-                (normalized["promotion_id"],),
-            ).fetchone()
-            self._connection.execute(
-                """
-                INSERT INTO target_candidate_public_web_promotions (
-                    promotion_id, signal_id, run_id, asset_id, person_identity_key, record_id, candidate_id,
-                    candidate_name, current_company, linkedin_url_key, signal_kind, signal_type, email_type,
-                    value, normalized_value, url, source_url, source_domain, source_family, source_title,
-                    confidence_label, confidence_score, identity_match_label, identity_match_score, publishable,
-                    clean_profile_link, link_shape_warnings_json, action, promotion_status, promoted_field,
-                    previous_value, new_value, operator, note, evidence_excerpt, metadata_json, created_at, updated_at
-                ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP
-                )
-                ON CONFLICT(promotion_id) DO UPDATE SET
-                    signal_id = excluded.signal_id,
-                    run_id = excluded.run_id,
-                    asset_id = excluded.asset_id,
-                    person_identity_key = excluded.person_identity_key,
-                    record_id = excluded.record_id,
-                    candidate_id = excluded.candidate_id,
-                    candidate_name = excluded.candidate_name,
-                    current_company = excluded.current_company,
-                    linkedin_url_key = excluded.linkedin_url_key,
-                    signal_kind = excluded.signal_kind,
-                    signal_type = excluded.signal_type,
-                    email_type = excluded.email_type,
-                    value = excluded.value,
-                    normalized_value = excluded.normalized_value,
-                    url = excluded.url,
-                    source_url = excluded.source_url,
-                    source_domain = excluded.source_domain,
-                    source_family = excluded.source_family,
-                    source_title = excluded.source_title,
-                    confidence_label = excluded.confidence_label,
-                    confidence_score = excluded.confidence_score,
-                    identity_match_label = excluded.identity_match_label,
-                    identity_match_score = excluded.identity_match_score,
-                    publishable = excluded.publishable,
-                    clean_profile_link = excluded.clean_profile_link,
-                    link_shape_warnings_json = excluded.link_shape_warnings_json,
-                    action = excluded.action,
-                    promotion_status = excluded.promotion_status,
-                    promoted_field = excluded.promoted_field,
-                    previous_value = excluded.previous_value,
-                    new_value = excluded.new_value,
-                    operator = excluded.operator,
-                    note = excluded.note,
-                    evidence_excerpt = excluded.evidence_excerpt,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    row_payload["promotion_id"],
-                    row_payload["signal_id"],
-                    row_payload["run_id"],
-                    row_payload["asset_id"],
-                    row_payload["person_identity_key"],
-                    row_payload["record_id"],
-                    row_payload["candidate_id"],
-                    row_payload["candidate_name"],
-                    row_payload["current_company"],
-                    row_payload["linkedin_url_key"],
-                    row_payload["signal_kind"],
-                    row_payload["signal_type"],
-                    row_payload["email_type"],
-                    row_payload["value"],
-                    row_payload["normalized_value"],
-                    row_payload["url"],
-                    row_payload["source_url"],
-                    row_payload["source_domain"],
-                    row_payload["source_family"],
-                    row_payload["source_title"],
-                    row_payload["confidence_label"],
-                    row_payload["confidence_score"],
-                    row_payload["identity_match_label"],
-                    row_payload["identity_match_score"],
-                    row_payload["publishable"],
-                    row_payload["clean_profile_link"],
-                    row_payload["link_shape_warnings_json"],
-                    row_payload["action"],
-                    row_payload["promotion_status"],
-                    row_payload["promoted_field"],
-                    row_payload["previous_value"],
-                    row_payload["new_value"],
-                    row_payload["operator"],
-                    row_payload["note"],
-                    row_payload["evidence_excerpt"],
-                    row_payload["metadata_json"],
-                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM target_candidate_public_web_promotions WHERE promotion_id = ? LIMIT 1",
-                (normalized["promotion_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("target_candidate_public_web_promotions", row)
-        return self.get_target_candidate_public_web_promotion(normalized["promotion_id"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="target_candidate_public_web_promotions",
+            method_name="upsert_target_candidate_public_web_promotion",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_target_candidate_public_web_promotion(self, promotion_id: str) -> dict[str, Any] | None:
         normalized_promotion_id = str(promotion_id or "").strip()
@@ -8610,85 +7852,11 @@ class ControlPlaneStore:
                 self.get_crm_public_web_promotion(normalized["promotion_id"])
                 or self._crm_public_web_promotion_from_row(row_payload)
             )
-        with self._lock, self._connection:
-            existing_row = self._connection.execute(
-                "SELECT created_at FROM crm_public_web_promotions WHERE promotion_id = ? LIMIT 1",
-                (normalized["promotion_id"],),
-            ).fetchone()
-            row_payload["created_at"] = (
-                str(_row_value(existing_row, "created_at") or row_payload["created_at"] or "").strip()
-                if existing_row is not None
-                else row_payload["created_at"]
-            )
-            self._connection.execute(
-                """
-                INSERT INTO crm_public_web_promotions (
-                    promotion_id, signal_id, run_id, asset_id, person_identity_key, crm_record_id, workspace_id,
-                    candidate_id, candidate_name, current_company, linkedin_url_key, signal_kind, signal_type,
-                    email_type, value, normalized_value, url, source_url, source_domain, source_family,
-                    source_title, confidence_label, confidence_score, identity_match_label, identity_match_score,
-                    publishable, clean_profile_link, link_shape_warnings_json, action, promotion_status,
-                    promoted_field, previous_value, new_value, operator, note, evidence_excerpt,
-                    execution_backend, source_target_promotion_id, metadata_json, created_at, updated_at
-                ) VALUES (
-                    :promotion_id, :signal_id, :run_id, :asset_id, :person_identity_key, :crm_record_id,
-                    :workspace_id, :candidate_id, :candidate_name, :current_company, :linkedin_url_key,
-                    :signal_kind, :signal_type, :email_type, :value, :normalized_value, :url, :source_url,
-                    :source_domain, :source_family, :source_title, :confidence_label, :confidence_score,
-                    :identity_match_label, :identity_match_score, :publishable, :clean_profile_link,
-                    :link_shape_warnings_json, :action, :promotion_status, :promoted_field, :previous_value,
-                    :new_value, :operator, :note, :evidence_excerpt, :execution_backend,
-                    :source_target_promotion_id, :metadata_json, :created_at, :updated_at
-                )
-                ON CONFLICT(promotion_id) DO UPDATE SET
-                    signal_id = excluded.signal_id,
-                    run_id = excluded.run_id,
-                    asset_id = excluded.asset_id,
-                    person_identity_key = excluded.person_identity_key,
-                    crm_record_id = excluded.crm_record_id,
-                    workspace_id = excluded.workspace_id,
-                    candidate_id = excluded.candidate_id,
-                    candidate_name = excluded.candidate_name,
-                    current_company = excluded.current_company,
-                    linkedin_url_key = excluded.linkedin_url_key,
-                    signal_kind = excluded.signal_kind,
-                    signal_type = excluded.signal_type,
-                    email_type = excluded.email_type,
-                    value = excluded.value,
-                    normalized_value = excluded.normalized_value,
-                    url = excluded.url,
-                    source_url = excluded.source_url,
-                    source_domain = excluded.source_domain,
-                    source_family = excluded.source_family,
-                    source_title = excluded.source_title,
-                    confidence_label = excluded.confidence_label,
-                    confidence_score = excluded.confidence_score,
-                    identity_match_label = excluded.identity_match_label,
-                    identity_match_score = excluded.identity_match_score,
-                    publishable = excluded.publishable,
-                    clean_profile_link = excluded.clean_profile_link,
-                    link_shape_warnings_json = excluded.link_shape_warnings_json,
-                    action = excluded.action,
-                    promotion_status = excluded.promotion_status,
-                    promoted_field = excluded.promoted_field,
-                    previous_value = excluded.previous_value,
-                    new_value = excluded.new_value,
-                    operator = excluded.operator,
-                    note = excluded.note,
-                    evidence_excerpt = excluded.evidence_excerpt,
-                    execution_backend = excluded.execution_backend,
-                    source_target_promotion_id = excluded.source_target_promotion_id,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = excluded.updated_at
-                """,
-                row_payload,
-            )
-            row = self._connection.execute(
-                "SELECT * FROM crm_public_web_promotions WHERE promotion_id = ? LIMIT 1",
-                (normalized["promotion_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("crm_public_web_promotions", row)
-        return self.get_crm_public_web_promotion(normalized["promotion_id"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="crm_public_web_promotions",
+            method_name="upsert_crm_public_web_promotion",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_crm_public_web_promotion(self, promotion_id: str) -> dict[str, Any] | None:
         normalized_promotion_id = str(promotion_id or "").strip()
@@ -8971,54 +8139,11 @@ class ControlPlaneStore:
                 self.get_asset_default_pointer(pointer_key=normalized["pointer_key"])
                 or self._asset_default_pointer_from_row(row_payload)
             )
-        with self._lock, self._connection:
-            existing = self._connection.execute(
-                "SELECT created_at FROM asset_default_pointers WHERE pointer_key = ? LIMIT 1",
-                (normalized["pointer_key"],),
-            ).fetchone()
-            self._connection.execute(
-                """
-                INSERT INTO asset_default_pointers (
-                    pointer_key, company_key, scope_kind, scope_key, asset_kind,
-                    snapshot_id, lifecycle_status, coverage_proof_json, previous_snapshot_id,
-                    promoted_by_job_id, promoted_at, metadata_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
-                ON CONFLICT(pointer_key) DO UPDATE SET
-                    company_key = excluded.company_key,
-                    scope_kind = excluded.scope_kind,
-                    scope_key = excluded.scope_key,
-                    asset_kind = excluded.asset_kind,
-                    snapshot_id = excluded.snapshot_id,
-                    lifecycle_status = excluded.lifecycle_status,
-                    coverage_proof_json = excluded.coverage_proof_json,
-                    previous_snapshot_id = excluded.previous_snapshot_id,
-                    promoted_by_job_id = excluded.promoted_by_job_id,
-                    promoted_at = excluded.promoted_at,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    row_payload["pointer_key"],
-                    row_payload["company_key"],
-                    row_payload["scope_kind"],
-                    row_payload["scope_key"],
-                    row_payload["asset_kind"],
-                    row_payload["snapshot_id"],
-                    row_payload["lifecycle_status"],
-                    row_payload["coverage_proof_json"],
-                    row_payload["previous_snapshot_id"],
-                    row_payload["promoted_by_job_id"],
-                    row_payload["promoted_at"],
-                    row_payload["metadata_json"],
-                    existing["created_at"] if existing is not None else row_payload["created_at"],
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM asset_default_pointers WHERE pointer_key = ? LIMIT 1",
-                (normalized["pointer_key"],),
-            ).fetchone()
-        self._mirror_control_plane_row("asset_default_pointers", row)
-        return self.get_asset_default_pointer(pointer_key=normalized["pointer_key"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="asset_default_pointers",
+            method_name="_upsert_asset_default_pointer",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def _append_asset_default_pointer_history(
         self,
@@ -9052,37 +8177,11 @@ class ControlPlaneStore:
         }
         if self._write_control_plane_row_to_postgres("asset_default_pointer_history", row_payload):
             return self._asset_default_pointer_history_from_row(row_payload)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO asset_default_pointer_history (
-                    history_id, pointer_key, company_key, scope_kind, scope_key, asset_kind,
-                    snapshot_id, lifecycle_status, event_type, payload_json, occurred_at, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
-                ON CONFLICT(history_id) DO UPDATE SET
-                    payload_json = excluded.payload_json
-                """,
-                (
-                    row_payload["history_id"],
-                    row_payload["pointer_key"],
-                    row_payload["company_key"],
-                    row_payload["scope_kind"],
-                    row_payload["scope_key"],
-                    row_payload["asset_kind"],
-                    row_payload["snapshot_id"],
-                    row_payload["lifecycle_status"],
-                    row_payload["event_type"],
-                    row_payload["payload_json"],
-                    row_payload["occurred_at"],
-                    row_payload["created_at"],
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM asset_default_pointer_history WHERE history_id = ? LIMIT 1",
-                (row_payload["history_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("asset_default_pointer_history", row)
-        return self._asset_default_pointer_history_from_row(row)
+        self._raise_control_plane_postgres_write_failure(
+            table_name="asset_default_pointer_history",
+            method_name="_append_asset_default_pointer_history",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_frontend_history_link(self, history_id: str) -> dict[str, Any] | None:
         normalized_history_id = str(history_id or "").strip()
@@ -9202,68 +8301,11 @@ class ControlPlaneStore:
                 or self._frontend_history_link_from_row(row_payload)
                 or normalized
             )
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO frontend_history_links (
-                    history_id, query_text, target_company, review_id, job_id, phase,
-                    request_json, plan_json, metadata_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
-                ON CONFLICT(history_id) DO UPDATE SET
-                    query_text = CASE
-                        WHEN excluded.query_text <> '' THEN excluded.query_text
-                        ELSE frontend_history_links.query_text
-                    END,
-                    target_company = CASE
-                        WHEN excluded.target_company <> '' THEN excluded.target_company
-                        ELSE frontend_history_links.target_company
-                    END,
-                    review_id = CASE
-                        WHEN excluded.review_id > 0 THEN excluded.review_id
-                        ELSE frontend_history_links.review_id
-                    END,
-                    job_id = CASE
-                        WHEN excluded.job_id <> '' THEN excluded.job_id
-                        ELSE frontend_history_links.job_id
-                    END,
-                    phase = CASE
-                        WHEN excluded.phase <> '' THEN excluded.phase
-                        ELSE frontend_history_links.phase
-                    END,
-                    request_json = CASE
-                        WHEN excluded.request_json <> '{}' THEN excluded.request_json
-                        ELSE frontend_history_links.request_json
-                    END,
-                    plan_json = CASE
-                        WHEN excluded.plan_json <> '{}' THEN excluded.plan_json
-                        ELSE frontend_history_links.plan_json
-                    END,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    normalized["history_id"],
-                    normalized["query_text"],
-                    normalized["target_company"],
-                    normalized["review_id"],
-                    normalized["job_id"],
-                    normalized["phase"],
-                    json.dumps(_json_safe_payload(request_payload), ensure_ascii=False),
-                    json.dumps(_json_safe_payload(plan_payload), ensure_ascii=False),
-                    json.dumps(_json_safe_payload(merged_metadata), ensure_ascii=False),
-                    (
-                        str((existing or {}).get("created_at") or "").strip()
-                        or str(normalized.get("created_at") or "").strip()
-                        or None
-                    ),
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM frontend_history_links WHERE history_id = ? LIMIT 1",
-                (normalized["history_id"],),
-            ).fetchone()
-        self._mirror_control_plane_row("frontend_history_links", row)
-        return self.get_frontend_history_link(normalized["history_id"]) or normalized
+        self._raise_control_plane_postgres_write_failure(
+            table_name="frontend_history_links",
+            method_name="upsert_frontend_history_link",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def delete_frontend_history_link(self, history_id: str) -> bool:
         normalized_history_id = str(history_id or "").strip()
@@ -15392,85 +14434,11 @@ class ControlPlaneStore:
         )
         if self._write_control_plane_row_to_postgres("serving_projections", row_payload):
             return self.get_serving_projection(projection_id)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO serving_projections (
-                    projection_id,
-                    projection_type,
-                    collection_id,
-                    source_run_id,
-                    projection_version,
-                    state,
-                    scope_label,
-                    scope_spec_json,
-                    candidate_identity_manifest_ref,
-                    source_collection_version,
-                    raw_profile_index_watermark,
-                    evidence_index_watermark,
-                    counts_json,
-                    readiness_json,
-                    provenance_json,
-                    manual_overlay_version,
-                    metadata_json,
-                    published_at,
-                    created_at,
-                    updated_at
-                ) VALUES (
-                    :projection_id,
-                    :projection_type,
-                    :collection_id,
-                    :source_run_id,
-                    :projection_version,
-                    :state,
-                    :scope_label,
-                    :scope_spec_json,
-                    :candidate_identity_manifest_ref,
-                    :source_collection_version,
-                    :raw_profile_index_watermark,
-                    :evidence_index_watermark,
-                    :counts_json,
-                    :readiness_json,
-                    :provenance_json,
-                    :manual_overlay_version,
-                    :metadata_json,
-                    :published_at,
-                    :created_at,
-                    :updated_at
-                )
-                ON CONFLICT(projection_id) DO UPDATE SET
-                    projection_type = excluded.projection_type,
-                    collection_id = excluded.collection_id,
-                    source_run_id = excluded.source_run_id,
-                    projection_version = excluded.projection_version,
-                    state = excluded.state,
-                    scope_label = excluded.scope_label,
-                    scope_spec_json = excluded.scope_spec_json,
-                    candidate_identity_manifest_ref = excluded.candidate_identity_manifest_ref,
-                    source_collection_version = excluded.source_collection_version,
-                    raw_profile_index_watermark = excluded.raw_profile_index_watermark,
-                    evidence_index_watermark = excluded.evidence_index_watermark,
-                    counts_json = excluded.counts_json,
-                    readiness_json = excluded.readiness_json,
-                    provenance_json = excluded.provenance_json,
-                    manual_overlay_version = excluded.manual_overlay_version,
-                    metadata_json = excluded.metadata_json,
-                    published_at = excluded.published_at,
-                    updated_at = excluded.updated_at
-                """,
-                row_payload,
-            )
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM serving_projections
-                WHERE projection_id = ?
-                LIMIT 1
-                """,
-                (projection_id,),
-            ).fetchone()
-            self._mirror_control_plane_row("serving_projections", row)
-        return self.get_serving_projection(projection_id)
+        self._raise_control_plane_postgres_write_failure(
+            table_name="serving_projections",
+            method_name="upsert_serving_projection",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_serving_projection(self, projection_id: str) -> dict[str, Any]:
         normalized_projection_id = str(projection_id or "").strip()
@@ -16642,55 +15610,11 @@ class ControlPlaneStore:
         }
         if self._write_control_plane_row_to_postgres("projection_manifest_shards", row_payload):
             return self.get_projection_manifest_shard(shard_id)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO projection_manifest_shards (
-                    shard_id,
-                    projection_id,
-                    shard_kind,
-                    shard_index,
-                    manifest_ref,
-                    row_count,
-                    content_signature,
-                    metadata_json,
-                    created_at,
-                    updated_at
-                ) VALUES (
-                    :shard_id,
-                    :projection_id,
-                    :shard_kind,
-                    :shard_index,
-                    :manifest_ref,
-                    :row_count,
-                    :content_signature,
-                    :metadata_json,
-                    :created_at,
-                    :updated_at
-                )
-                ON CONFLICT(shard_id) DO UPDATE SET
-                    projection_id = excluded.projection_id,
-                    shard_kind = excluded.shard_kind,
-                    shard_index = excluded.shard_index,
-                    manifest_ref = excluded.manifest_ref,
-                    row_count = excluded.row_count,
-                    content_signature = excluded.content_signature,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = excluded.updated_at
-                """,
-                row_payload,
-            )
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM projection_manifest_shards
-                WHERE shard_id = ?
-                LIMIT 1
-                """,
-                (shard_id,),
-            ).fetchone()
-            self._mirror_control_plane_row("projection_manifest_shards", row)
-        return self.get_projection_manifest_shard(shard_id)
+        self._raise_control_plane_postgres_write_failure(
+            table_name="projection_manifest_shards",
+            method_name="upsert_projection_manifest_shard",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_projection_manifest_shard(self, shard_id: str) -> dict[str, Any]:
         normalized_shard_id = str(shard_id or "").strip()
@@ -16785,54 +15709,11 @@ class ControlPlaneStore:
         )
         if self._write_control_plane_row_to_postgres("run_projection_links", row_payload):
             return self.get_run_projection_link(run_id, link_type=link_type)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO run_projection_links (
-                    run_id,
-                    projection_id,
-                    link_type,
-                    projection_type,
-                    collection_id,
-                    state,
-                    created_by,
-                    metadata_json,
-                    created_at,
-                    updated_at
-                ) VALUES (
-                    :run_id,
-                    :projection_id,
-                    :link_type,
-                    :projection_type,
-                    :collection_id,
-                    :state,
-                    :created_by,
-                    :metadata_json,
-                    :created_at,
-                    :updated_at
-                )
-                ON CONFLICT(run_id, link_type) DO UPDATE SET
-                    projection_id = excluded.projection_id,
-                    projection_type = excluded.projection_type,
-                    collection_id = excluded.collection_id,
-                    state = excluded.state,
-                    created_by = excluded.created_by,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = excluded.updated_at
-                """,
-                row_payload,
-            )
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM run_projection_links
-                WHERE run_id = ? AND link_type = ?
-                LIMIT 1
-                """,
-                (run_id, link_type),
-            ).fetchone()
-            self._mirror_control_plane_row("run_projection_links", row)
-        return self.get_run_projection_link(run_id, link_type=link_type)
+        self._raise_control_plane_postgres_write_failure(
+            table_name="run_projection_links",
+            method_name="upsert_run_projection_link",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_run_projection_link(self, run_id: str, *, link_type: str = "result") -> dict[str, Any]:
         normalized_run_id = str(run_id or "").strip()
@@ -16926,55 +15807,11 @@ class ControlPlaneStore:
         )
         if self._write_control_plane_row_to_postgres("collection_authoritative_pointers", row_payload):
             return self.get_collection_authoritative_pointer(collection_id)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO collection_authoritative_pointers (
-                    collection_id,
-                    active_projection_id,
-                    active_collection_version,
-                    previous_projection_id,
-                    state,
-                    writer_id,
-                    metadata_json,
-                    published_at,
-                    created_at,
-                    updated_at
-                ) VALUES (
-                    :collection_id,
-                    :active_projection_id,
-                    :active_collection_version,
-                    :previous_projection_id,
-                    :state,
-                    :writer_id,
-                    :metadata_json,
-                    :published_at,
-                    :created_at,
-                    :updated_at
-                )
-                ON CONFLICT(collection_id) DO UPDATE SET
-                    active_projection_id = excluded.active_projection_id,
-                    active_collection_version = excluded.active_collection_version,
-                    previous_projection_id = excluded.previous_projection_id,
-                    state = excluded.state,
-                    writer_id = excluded.writer_id,
-                    metadata_json = excluded.metadata_json,
-                    published_at = excluded.published_at,
-                    updated_at = excluded.updated_at
-                """,
-                row_payload,
-            )
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM collection_authoritative_pointers
-                WHERE collection_id = ?
-                LIMIT 1
-                """,
-                (collection_id,),
-            ).fetchone()
-            self._mirror_control_plane_row("collection_authoritative_pointers", row)
-        return self.get_collection_authoritative_pointer(collection_id)
+        self._raise_control_plane_postgres_write_failure(
+            table_name="collection_authoritative_pointers",
+            method_name="upsert_collection_authoritative_pointer",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_collection_authoritative_pointer(self, collection_id: str) -> dict[str, Any]:
         normalized_collection_id = str(collection_id or "").strip()
