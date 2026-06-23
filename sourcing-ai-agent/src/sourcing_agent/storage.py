@@ -10521,25 +10521,27 @@ class ControlPlaneStore:
         if not normalized_run_id or not normalized_family or not normalized_type or not normalized_idempotency:
             return {}
         now = _utc_now_timestamp()
-        row_payload = {
-            "event_id": "",
-            "workflow_run_id": normalized_run_id,
-            "operation_id": str(operation_id or "").strip(),
-            "command_id": str(command_id or "").strip(),
-            "activity_attempt_id": str(activity_attempt_id or "").strip(),
-            "event_family": normalized_family,
-            "event_type": normalized_type,
-            "sequence_number": max(0, int(sequence_number or 0)),
-            "idempotency_key": normalized_idempotency,
-            "occurred_at": str(occurred_at or now).strip(),
-            "recorded_at": now,
-            "actor": str(actor or "").strip(),
-            "source": str(source or "").strip(),
-            "payload_json": json.dumps(_json_safe_payload(payload or {}), ensure_ascii=False),
-            "artifact_refs_json": json.dumps(_json_safe_payload(list(artifact_refs or [])), ensure_ascii=False),
-            "schema_version": str(schema_version or "workflow_event_v1").strip(),
-            "created_at": now,
-        }
+        row_payload = _workflow_runtime_repo.WORKFLOW_EVENTS.to_columns(
+            {
+                "event_id": "",
+                "workflow_run_id": normalized_run_id,
+                "operation_id": operation_id,
+                "command_id": command_id,
+                "activity_attempt_id": activity_attempt_id,
+                "event_family": normalized_family,
+                "event_type": normalized_type,
+                "sequence_number": max(0, int(sequence_number or 0)),
+                "idempotency_key": normalized_idempotency,
+                "occurred_at": str(occurred_at or now).strip(),
+                "recorded_at": now,
+                "actor": actor,
+                "source": source,
+                "payload": payload or {},
+                "artifact_refs": list(artifact_refs or []),
+                "schema_version": str(schema_version or "workflow_event_v1").strip(),
+                "created_at": now,
+            }
+        )
         if self._control_plane_postgres_should_prefer_read("workflow_events"):
             row = self._call_control_plane_postgres_native("append_workflow_event", row_payload)
             if row is not None:
@@ -11599,49 +11601,38 @@ class ControlPlaneStore:
             return {}
         existing = self.get_acquisition_discovery_lane(lane_id)
         now = _utc_now_timestamp()
-        row_payload = {
-            "lane_id": lane_id,
-            "workspace_id": workspace_id,
-            "acquisition_run_id": acquisition_run_id,
-            "workflow_run_id": workflow_run_id,
-            "operation_run_id": operation_run_id,
-            "source_command_id": source_command_id,
-            "activity_run_id": activity_run_id,
-            "target_company": target_company,
-            "query": query_text,
-            "provider": provider,
-            "status": str(normalized.get("status") or "planned").strip() or "planned",
-            "phase": str(normalized.get("phase") or "planned").strip() or "planned",
-            "lane_plan_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("lane_plan") or normalized.get("lane_plan_json")),
-                ensure_ascii=False,
-            ),
-            "provider_ref_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("provider_ref") or normalized.get("provider_ref_json")),
-                ensure_ascii=False,
-            ),
-            "artifact_refs_json": json.dumps(
-                _loads_json_list(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
-                ensure_ascii=False,
-            ),
-            "entity_counts_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("entity_counts") or normalized.get("entity_counts_json")),
-                ensure_ascii=False,
-            ),
-            "downstream_command_ids_json": json.dumps(
-                _loads_json_list(
+        row_payload = _workflow_runtime_repo.ACQUISITION_DISCOVERY_LANES.to_columns(
+            {
+                **normalized,
+                "lane_id": lane_id,
+                "workspace_id": workspace_id,
+                "acquisition_run_id": acquisition_run_id,
+                "workflow_run_id": workflow_run_id,
+                "operation_run_id": operation_run_id,
+                "source_command_id": source_command_id,
+                "activity_run_id": activity_run_id,
+                "target_company": target_company,
+                "query": query_text,
+                "provider": provider,
+                "lane_plan": _normalize_json_object_payload(
+                    normalized.get("lane_plan") or normalized.get("lane_plan_json")
+                ),
+                "provider_ref": _normalize_json_object_payload(
+                    normalized.get("provider_ref") or normalized.get("provider_ref_json")
+                ),
+                "artifact_refs": _loads_json_list(normalized.get("artifact_refs") or normalized.get("artifact_refs_json")),
+                "entity_counts": _normalize_json_object_payload(
+                    normalized.get("entity_counts") or normalized.get("entity_counts_json")
+                ),
+                "downstream_command_ids": _loads_json_list(
                     normalized.get("downstream_command_ids") or normalized.get("downstream_command_ids_json")
                 ),
-                ensure_ascii=False,
-            ),
-            "idempotency_key": idempotency_key,
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
+                "idempotency_key": idempotency_key,
+                "metadata": _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
         return self._upsert_simple_control_plane_row(
             "acquisition_discovery_lanes",
             id_column="lane_id",
@@ -11737,24 +11728,26 @@ class ControlPlaneStore:
         if not normalized_stream_id or not normalized_family or not normalized_type or not normalized_idempotency:
             return {}
         now = _utc_now_timestamp()
-        row_payload = {
-            "event_id": "",
-            "workspace_id": normalized_workspace_id,
-            "event_stream_id": normalized_stream_id,
-            "operation_run_id": str(operation_run_id or "").strip(),
-            "action_id": str(action_id or "").strip(),
-            "event_family": normalized_family,
-            "event_type": normalized_type,
-            "sequence_number": max(0, int(sequence_number or 0)),
-            "idempotency_key": normalized_idempotency,
-            "occurred_at": str(occurred_at or now).strip(),
-            "recorded_at": now,
-            "actor": str(actor or "").strip(),
-            "source": str(source or "").strip(),
-            "payload_json": json.dumps(_json_safe_payload(payload or {}), ensure_ascii=False),
-            "schema_version": str(schema_version or "operation_event_v1").strip(),
-            "created_at": now,
-        }
+        row_payload = _workflow_runtime_repo.OPERATION_EVENTS.to_columns(
+            {
+                "event_id": "",
+                "workspace_id": normalized_workspace_id,
+                "event_stream_id": normalized_stream_id,
+                "operation_run_id": operation_run_id,
+                "action_id": action_id,
+                "event_family": normalized_family,
+                "event_type": normalized_type,
+                "sequence_number": max(0, int(sequence_number or 0)),
+                "idempotency_key": normalized_idempotency,
+                "occurred_at": str(occurred_at or now).strip(),
+                "recorded_at": now,
+                "actor": actor,
+                "source": source,
+                "payload": payload or {},
+                "schema_version": str(schema_version or "operation_event_v1").strip(),
+                "created_at": now,
+            }
+        )
         if self._control_plane_postgres_should_prefer_read("operation_events"):
             row = self._call_control_plane_postgres_native("append_operation_event", row_payload)
             if row is not None:
@@ -11920,57 +11913,43 @@ class ControlPlaneStore:
             return {}
         now = _utc_now_timestamp()
         existing = self.get_workflow_current_state(normalized_run_id) or {}
-        row_payload = {
-            "workflow_run_id": normalized_run_id,
-            "operation_id": str(operation_id or existing.get("operation_id") or "").strip(),
-            "workflow_type": str(workflow_type or existing.get("workflow_type") or "").strip(),
-            "status": str(status or existing.get("status") or "pending").strip() or "pending",
-            "current_stage_key": str(current_stage_key or existing.get("current_stage_key") or "").strip(),
-            "completion_proofs_json": json.dumps(
-                _json_safe_payload(completion_proofs if completion_proofs is not None else existing.get("completion_proofs") or {}),
-                ensure_ascii=False,
-            ),
-            "active_command_counts_json": json.dumps(
-                _json_safe_payload(
+        row_payload = _workflow_runtime_repo.WORKFLOW_CURRENT_STATE.to_columns(
+            {
+                "workflow_run_id": normalized_run_id,
+                "operation_id": operation_id or existing.get("operation_id"),
+                "workflow_type": workflow_type or existing.get("workflow_type"),
+                "status": status or existing.get("status"),
+                "current_stage_key": current_stage_key or existing.get("current_stage_key"),
+                "completion_proofs": (
+                    completion_proofs if completion_proofs is not None else existing.get("completion_proofs") or {}
+                ),
+                "active_command_counts": (
                     active_command_counts
                     if active_command_counts is not None
                     else existing.get("active_command_counts") or {}
                 ),
-                ensure_ascii=False,
-            ),
-            "terminal_command_counts_json": json.dumps(
-                _json_safe_payload(
+                "terminal_command_counts": (
                     terminal_command_counts
                     if terminal_command_counts is not None
                     else existing.get("terminal_command_counts") or {}
                 ),
-                ensure_ascii=False,
-            ),
-            "read_model_pointers_json": json.dumps(
-                _json_safe_payload(
-                    read_model_pointers
-                    if read_model_pointers is not None
-                    else existing.get("read_model_pointers") or {}
+                "read_model_pointers": (
+                    read_model_pointers if read_model_pointers is not None else existing.get("read_model_pointers") or {}
                 ),
-                ensure_ascii=False,
-            ),
-            "migration_status_json": json.dumps(
-                _json_safe_payload(migration_status if migration_status is not None else existing.get("migration_status") or {}),
-                ensure_ascii=False,
-            ),
-            "last_processed_sequence_number": max(
-                int(existing.get("last_processed_sequence_number") or 0),
-                int(last_processed_sequence_number or 0),
-            ),
-            "reducer_version": str(reducer_version or existing.get("reducer_version") or "").strip(),
-            "schema_version": "workflow_current_state_v1",
-            "metadata_json": json.dumps(
-                _json_safe_payload(metadata if metadata is not None else existing.get("metadata") or {}),
-                ensure_ascii=False,
-            ),
-            "created_at": str(existing.get("created_at") or now).strip() or now,
-            "updated_at": now,
-        }
+                "migration_status": (
+                    migration_status if migration_status is not None else existing.get("migration_status") or {}
+                ),
+                "last_processed_sequence_number": max(
+                    int(existing.get("last_processed_sequence_number") or 0),
+                    int(last_processed_sequence_number or 0),
+                ),
+                "reducer_version": reducer_version or existing.get("reducer_version"),
+                "schema_version": "workflow_current_state_v1",
+                "metadata": metadata if metadata is not None else existing.get("metadata") or {},
+                "created_at": str(existing.get("created_at") or now).strip() or now,
+                "updated_at": now,
+            }
+        )
         if self._write_control_plane_row_to_postgres("workflow_current_state", row_payload):
             return self.get_workflow_current_state(normalized_run_id) or self._workflow_current_state_from_row(row_payload)
         columns = list(row_payload.keys())
