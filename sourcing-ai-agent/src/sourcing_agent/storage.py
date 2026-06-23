@@ -10625,25 +10625,27 @@ class ControlPlaneStore:
         ):
             return {}
         now = _utc_now_timestamp()
-        row_payload = {
-            "action_id": normalized_action_id,
-            "workspace_id": normalized_workspace_id,
-            "conversation_id": str(conversation_id or "").strip(),
-            "action_type": normalized_type,
-            "owner_module": normalized_owner,
-            "operation_type": normalized_operation_type,
-            "target_ref_json": json.dumps(_json_safe_payload(target_ref or {}), ensure_ascii=False),
-            "input_json": json.dumps(_json_safe_payload(input_payload or {}), ensure_ascii=False),
-            "approval_status": str(approval_status or "not_required").strip() or "not_required",
-            "approval_policy": str(approval_policy or "not_required").strip() or "not_required",
-            "budget_json": json.dumps(_json_safe_payload(budget or {}), ensure_ascii=False),
-            "idempotency_key": normalized_idempotency,
-            "status": str(status or "planned").strip() or "planned",
-            "result_ref_json": json.dumps(_json_safe_payload(result_ref or {}), ensure_ascii=False),
-            "metadata_json": json.dumps(_json_safe_payload(metadata or {}), ensure_ascii=False),
-            "created_at": now,
-            "updated_at": now,
-        }
+        row_payload = _workflow_runtime_repo.AGENT_ACTIONS.to_columns(
+            {
+                "action_id": normalized_action_id,
+                "workspace_id": normalized_workspace_id,
+                "conversation_id": conversation_id,
+                "action_type": normalized_type,
+                "owner_module": normalized_owner,
+                "operation_type": normalized_operation_type,
+                "target_ref": target_ref or {},
+                "input": input_payload or {},
+                "approval_status": approval_status,
+                "approval_policy": approval_policy,
+                "budget": budget or {},
+                "idempotency_key": normalized_idempotency,
+                "status": status,
+                "result_ref": result_ref or {},
+                "metadata": metadata or {},
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
         if self._control_plane_postgres_should_prefer_read("agent_actions"):
             row = self._call_control_plane_postgres_native("upsert_agent_action", row_payload)
             if row is not None:
@@ -10871,24 +10873,26 @@ class ControlPlaneStore:
         ):
             return {}
         now = _utc_now_timestamp()
-        row_payload = {
-            "operation_run_id": normalized_operation_id,
-            "workspace_id": normalized_workspace_id,
-            "action_id": normalized_action_id,
-            "owner_module": normalized_owner,
-            "operation_type": normalized_operation_type,
-            "status": str(status or "queued").strip() or "queued",
-            "progress_json": json.dumps(_json_safe_payload(progress or {}), ensure_ascii=False),
-            "workflow_ref_json": json.dumps(_json_safe_payload(workflow_ref or {}), ensure_ascii=False),
-            "cost_budget_json": json.dumps(_json_safe_payload(cost_budget or {}), ensure_ascii=False),
-            "idempotency_key": normalized_idempotency,
-            "result_ref_json": json.dumps(_json_safe_payload(result_ref or {}), ensure_ascii=False),
-            "metadata_json": json.dumps(_json_safe_payload(metadata or {}), ensure_ascii=False),
-            "started_at": str(started_at or "").strip(),
-            "completed_at": str(completed_at or "").strip(),
-            "created_at": now,
-            "updated_at": now,
-        }
+        row_payload = _workflow_runtime_repo.OPERATION_RUNS.to_columns(
+            {
+                "operation_run_id": normalized_operation_id,
+                "workspace_id": normalized_workspace_id,
+                "action_id": normalized_action_id,
+                "owner_module": normalized_owner,
+                "operation_type": normalized_operation_type,
+                "status": status,
+                "progress": progress or {},
+                "workflow_ref": workflow_ref or {},
+                "cost_budget": cost_budget or {},
+                "idempotency_key": normalized_idempotency,
+                "result_ref": result_ref or {},
+                "metadata": metadata or {},
+                "started_at": started_at,
+                "completed_at": completed_at,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
         if self._control_plane_postgres_should_prefer_read("operation_runs"):
             row = self._call_control_plane_postgres_native("upsert_operation_run", row_payload)
             if row is not None:
@@ -12863,26 +12867,24 @@ class ControlPlaneStore:
         if not normalized_type or not normalized_idempotency:
             return {}
         now = _utc_now_timestamp()
-        row_payload = {
-            "outbox_id": "out_" + sha1(normalized_idempotency.encode("utf-8")).hexdigest()[:24],
-            "workflow_run_id": str(workflow_run_id or "").strip(),
-            "operation_id": str(operation_id or "").strip(),
-            "command_id": str(command_id or "").strip(),
-            "outbox_type": normalized_type,
-            "status": "queued",
-            "idempotency_key": normalized_idempotency,
-            "payload_json": json.dumps(_json_safe_payload(payload or {}), ensure_ascii=False),
-            "not_before_at": str(not_before_at or "").strip(),
-            "attempt": 0,
-            "max_attempts": max(1, int(max_attempts or 5)),
-            "lease_owner": "",
-            "lease_expires_at": "",
-            "dispatched_at": "",
-            "last_error": "",
-            "schema_version": "runtime_outbox_v1",
-            "created_at": now,
-            "updated_at": now,
-        }
+        row_payload = _workflow_runtime_repo.RUNTIME_OUTBOX.to_columns(
+            {
+                "outbox_id": "out_" + sha1(normalized_idempotency.encode("utf-8")).hexdigest()[:24],
+                "workflow_run_id": workflow_run_id,
+                "operation_id": operation_id,
+                "command_id": command_id,
+                "outbox_type": normalized_type,
+                "status": "queued",
+                "idempotency_key": normalized_idempotency,
+                "payload": payload or {},
+                "not_before_at": not_before_at,
+                "attempt": 0,
+                "max_attempts": max(1, int(max_attempts or 5)),
+                "schema_version": "runtime_outbox_v1",
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
         if self._control_plane_postgres_should_prefer_read("runtime_outbox"):
             row = self._call_control_plane_postgres_native("enqueue_runtime_outbox", row_payload)
             if row is not None:
