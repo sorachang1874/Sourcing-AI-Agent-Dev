@@ -1815,16 +1815,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("candidates"):
-            return None
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM candidates WHERE candidate_id = ? LIMIT 1",
-                (normalized_candidate_id,),
-            ).fetchone()
-        if row is None:
-            return None
-        return self._candidate_from_row(row)
+        return None
 
     def find_candidate_by_name(self, *, target_company: str, name_en: str) -> Candidate | None:
         normalized_name = str(name_en or "").strip()
@@ -2689,14 +2680,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("job_board_visible_patches"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM job_board_visible_patches WHERE patch_id = ? LIMIT 1",
-                (normalized_patch_id,),
-            ).fetchone()
-        return self._job_board_visible_patch_from_row(row) or {}
+        return {}
 
     def list_job_board_visible_patches(
         self,
@@ -4011,7 +3995,7 @@ class ControlPlaneStore:
         if normalized_stale_after > 0:
             clauses.append("datetime(updated_at) <= datetime('now', ?)")
             params.append(f"-{normalized_stale_after} seconds")
-        query = f"SELECT * FROM jobs WHERE {' AND '.join(clauses)} ORDER BY updated_at ASC, created_at ASC LIMIT ?"
+        f"SELECT * FROM jobs WHERE {' AND '.join(clauses)} ORDER BY updated_at ASC, created_at ASC LIMIT ?"
         params.append(max(1, int(limit or 100)))
         postgres_jobs = self._select_control_plane_job_rows(
             where_sql=" AND ".join(
@@ -4048,11 +4032,7 @@ class ControlPlaneStore:
                 filtered_jobs.append(job)
             if filtered_jobs:
                 return filtered_jobs[: max(1, int(limit or 100))]
-        if self._control_plane_postgres_should_skip_sqlite_fallback("jobs"):
-            return []
-        with self._lock:
-            rows = self._connection.execute(query, tuple(params)).fetchall()
-        return [self._job_from_row(row) for row in rows]
+        return []
 
     def list_stale_workflow_jobs_in_queue(
         self,
@@ -4070,7 +4050,7 @@ class ControlPlaneStore:
         if normalized_stale_after > 0:
             clauses.append("datetime(updated_at) <= datetime('now', ?)")
             params.append(f"-{normalized_stale_after} seconds")
-        query = f"SELECT * FROM jobs WHERE {' AND '.join(clauses)} ORDER BY updated_at ASC, created_at ASC LIMIT ?"
+        f"SELECT * FROM jobs WHERE {' AND '.join(clauses)} ORDER BY updated_at ASC, created_at ASC LIMIT ?"
         params.append(max(1, int(limit or 100)))
         postgres_jobs = self._select_control_plane_job_rows(
             where_sql=" AND ".join(
@@ -4107,11 +4087,7 @@ class ControlPlaneStore:
                 filtered_jobs.append(job)
             if filtered_jobs:
                 return filtered_jobs[: max(1, int(limit or 100))]
-        if self._control_plane_postgres_should_skip_sqlite_fallback("jobs"):
-            return []
-        with self._lock:
-            rows = self._connection.execute(query, tuple(params)).fetchall()
-        return [self._job_from_row(row) for row in rows]
+        return []
 
     def _job_result_record_from_row(
         self,
@@ -5123,16 +5099,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("candidate_review_registry"):
-            return None
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM candidate_review_registry WHERE record_id = ? LIMIT 1",
-                (normalized_record_id,),
-            ).fetchone()
-        if row is None:
-            return None
-        return self._candidate_review_record_from_row(row)
+        return None
 
     def list_target_candidates(
         self,
@@ -5252,16 +5219,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidates"):
-            return None
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM target_candidates WHERE record_id = ? LIMIT 1",
-                (normalized_record_id,),
-            ).fetchone()
-        if row is None:
-            return None
-        return self._target_candidate_from_row(row)
+        return None
 
     def _upsert_simple_control_plane_row(
         self,
@@ -5364,14 +5322,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("person_assets"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM person_assets WHERE asset_id = ? LIMIT 1",
-                (normalized_asset_id,),
-            ).fetchone()
-        return self._person_asset_from_row(row)
+        return {}
 
     def list_person_assets(
         self,
@@ -5451,19 +5402,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("person_assets"):
-            return []
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM person_assets
-                WHERE {where_sqlite}
-                ORDER BY person_identity_key ASC, updated_at DESC, asset_id DESC
-                LIMIT ?
-                """,
-                (*params, normalized_limit),
-            ).fetchall()
-        return [self._person_asset_from_row(row) for row in rows]
+        return []
 
     def upsert_person_evidence(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
@@ -5504,14 +5443,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("person_evidence"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM person_evidence WHERE evidence_id = ? LIMIT 1",
-                (normalized_evidence_id,),
-            ).fetchone()
-        return self._person_evidence_from_row(row)
+        return {}
 
     def list_person_evidence(
         self,
@@ -5594,14 +5526,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("person_assertions"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM person_assertions WHERE assertion_id = ? LIMIT 1",
-                (normalized_assertion_id,),
-            ).fetchone()
-        return self._person_assertion_from_row(row)
+        return {}
 
     def list_person_assertions(
         self,
@@ -5948,14 +5873,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("raw_profile_index"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM raw_profile_index WHERE person_identity_key = ? LIMIT 1",
-                (normalized_person_key,),
-            ).fetchone()
-        return self._raw_profile_index_from_row(row)
+        return {}
 
     def list_raw_profile_indexes(
         self,
@@ -6069,14 +5987,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("candidate_evidence_index"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM candidate_evidence_index WHERE person_identity_key = ? LIMIT 1",
-                (normalized_person_key,),
-            ).fetchone()
-        return self._candidate_evidence_index_from_row(row)
+        return {}
 
     def list_candidate_evidence_indexes(
         self,
@@ -6174,14 +6085,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_records"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM crm_records WHERE crm_record_id = ? LIMIT 1",
-                (normalized_record_id,),
-            ).fetchone()
-        return self._crm_record_from_row(row)
+        return {}
 
     def get_crm_record_by_person_identity(
         self,
@@ -6201,18 +6105,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_records"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT * FROM crm_records
-                WHERE workspace_id = ? AND person_identity_key = ?
-                LIMIT 1
-                """,
-                (normalized_workspace_id, normalized_person_key),
-            ).fetchone()
-        return self._crm_record_from_row(row)
+        return {}
 
     def list_crm_records_by_person_identity_keys(
         self,
@@ -6224,7 +6117,7 @@ class ControlPlaneStore:
         keys = _dedupe_preserve_order([str(key or "").strip() for key in list(person_identity_keys or []) if str(key or "").strip()])
         if not keys:
             return {}
-        placeholders_sqlite = ", ".join("?" for _ in keys)
+        ", ".join("?" for _ in keys)
         postgres_rows = self._select_control_plane_rows(
             "crm_records",
             row_builder=self._crm_record_from_row,
@@ -6239,22 +6132,7 @@ class ControlPlaneStore:
                 for row in postgres_rows
                 if str(row.get("person_identity_key") or "").strip()
             }
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_records"):
-            return {}
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM crm_records
-                WHERE workspace_id = ? AND person_identity_key IN ({placeholders_sqlite})
-                ORDER BY updated_at DESC
-                """,
-                (normalized_workspace_id, *keys),
-            ).fetchall()
-        return {
-            str(row_payload.get("person_identity_key") or "").strip(): row_payload
-            for row_payload in [self._crm_record_from_row(row) for row in rows]
-            if str(row_payload.get("person_identity_key") or "").strip()
-        }
+        return {}
 
     def list_crm_records(
         self,
@@ -6283,19 +6161,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_records"):
-            return []
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM crm_records
-                WHERE {where_sqlite}
-                ORDER BY updated_at DESC, crm_record_id DESC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 100))),
-            ).fetchall()
-        return [self._crm_record_from_row(row) for row in rows]
+        return []
 
     def upsert_crm_engagement(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
@@ -6343,14 +6209,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_engagements"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM crm_engagements WHERE engagement_id = ? LIMIT 1",
-                (normalized_engagement_id,),
-            ).fetchone()
-        return self._crm_engagement_from_row(row)
+        return {}
 
     def list_crm_engagements(self, *, crm_record_id: str, limit: int = 50) -> list[dict[str, Any]]:
         normalized_record_id = str(crm_record_id or "").strip()
@@ -6366,19 +6225,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_engagements"):
-            return []
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT * FROM crm_engagements
-                WHERE crm_record_id = ?
-                ORDER BY updated_at DESC, engagement_id DESC
-                LIMIT ?
-                """,
-                (normalized_record_id, max(1, int(limit or 50))),
-            ).fetchall()
-        return [self._crm_engagement_from_row(row) for row in rows]
+        return []
 
     def upsert_crm_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("crm_tasks")
@@ -6428,14 +6275,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_tasks"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM crm_tasks WHERE task_id = ? LIMIT 1",
-                (normalized_task_id,),
-            ).fetchone()
-        return self._crm_task_from_row(row)
+        return {}
 
     def get_crm_task_by_idempotency(self, idempotency_key: str, *, workspace_id: str = "default") -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("crm_tasks")
@@ -6451,18 +6291,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_tasks"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT * FROM crm_tasks
-                WHERE workspace_id = ? AND idempotency_key = ?
-                LIMIT 1
-                """,
-                (normalized_workspace_id, normalized_key),
-            ).fetchone()
-        return self._crm_task_from_row(row)
+        return {}
 
     def list_crm_tasks(
         self,
@@ -6494,19 +6323,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_tasks"):
-            return []
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM crm_tasks
-                WHERE {where_sqlite}
-                ORDER BY due_at ASC, updated_at DESC, task_id DESC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 100))),
-            ).fetchall()
-        return [self._crm_task_from_row(row) for row in rows]
+        return []
 
     def append_crm_event(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
@@ -6554,18 +6371,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_events"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT * FROM crm_events
-                WHERE workspace_id = ? AND idempotency_key = ?
-                LIMIT 1
-                """,
-                (normalized_workspace_id, normalized_key),
-            ).fetchone()
-        return self._crm_event_from_row(row)
+        return {}
 
     def upsert_target_candidate_public_web_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_legacy_target_public_web_migration_write("target_candidate_public_web_batches")
@@ -6598,7 +6404,6 @@ class ControlPlaneStore:
         if not normalized_batch_id and not normalized_idempotency_key:
             return None
         where_sql = "batch_id = %s" if normalized_batch_id else "idempotency_key = %s"
-        where_sqlite = "batch_id = ?" if normalized_batch_id else "idempotency_key = ?"
         value = normalized_batch_id or normalized_idempotency_key
         postgres_row = self._select_control_plane_row(
             "target_candidate_public_web_batches",
@@ -6608,16 +6413,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_batches"):
-            return None
-        with self._lock:
-            if not self._sqlite_table_exists_locked("target_candidate_public_web_batches"):
-                return None
-            row = self._connection.execute(
-                f"SELECT * FROM target_candidate_public_web_batches WHERE {where_sqlite} LIMIT 1",
-                (value,),
-            ).fetchone()
-        return self._target_candidate_public_web_batch_from_row(row) if row is not None else None
+        return None
 
     def list_target_candidate_public_web_batches(
         self,
@@ -6701,7 +6497,6 @@ class ControlPlaneStore:
         if not normalized_run_id and not normalized_idempotency_key:
             return None
         where_sql = "run_id = %s" if normalized_run_id else "idempotency_key = %s"
-        where_sqlite = "run_id = ?" if normalized_run_id else "idempotency_key = ?"
         value = normalized_run_id or normalized_idempotency_key
         postgres_row = self._select_control_plane_row(
             "target_candidate_public_web_runs",
@@ -6711,16 +6506,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_runs"):
-            return None
-        with self._lock:
-            if not self._sqlite_table_exists_locked("target_candidate_public_web_runs"):
-                return None
-            row = self._connection.execute(
-                f"SELECT * FROM target_candidate_public_web_runs WHERE {where_sqlite} LIMIT 1",
-                (value,),
-            ).fetchone()
-        return self._target_candidate_public_web_run_from_row(row) if row is not None else None
+        return None
 
     def list_target_candidate_public_web_runs(
         self,
@@ -6860,7 +6646,6 @@ class ControlPlaneStore:
         if not normalized_batch_id and not normalized_idempotency_key:
             return None
         where_sql = "batch_id = %s" if normalized_batch_id else "idempotency_key = %s"
-        where_sqlite = "batch_id = ?" if normalized_batch_id else "idempotency_key = ?"
         value = normalized_batch_id or normalized_idempotency_key
         postgres_row = self._select_control_plane_row(
             "crm_public_web_batches",
@@ -6870,14 +6655,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_batches"):
-            return None
-        with self._lock:
-            row = self._connection.execute(
-                f"SELECT * FROM crm_public_web_batches WHERE {where_sqlite} LIMIT 1",
-                (value,),
-            ).fetchone()
-        return self._crm_public_web_batch_from_row(row) if row is not None else None
+        return None
 
     def list_crm_public_web_batches(
         self,
@@ -6905,19 +6683,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_batches"):
-            return []
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM crm_public_web_batches
-                WHERE {" AND ".join(clauses_sqlite)}
-                ORDER BY updated_at DESC, created_at DESC, batch_id DESC
-                LIMIT ?
-                """,
-                (*params, limit),
-            ).fetchall()
-        return [self._crm_public_web_batch_from_row(row) for row in rows]
+        return []
 
     def upsert_crm_public_web_run(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = _normalize_crm_public_web_run_payload(payload)
@@ -6965,7 +6731,6 @@ class ControlPlaneStore:
         if not normalized_run_id and not normalized_idempotency_key:
             return None
         where_sql = "run_id = %s" if normalized_run_id else "idempotency_key = %s"
-        where_sqlite = "run_id = ?" if normalized_run_id else "idempotency_key = ?"
         value = normalized_run_id or normalized_idempotency_key
         postgres_row = self._select_control_plane_row(
             "crm_public_web_runs",
@@ -6975,14 +6740,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_runs"):
-            return None
-        with self._lock:
-            row = self._connection.execute(
-                f"SELECT * FROM crm_public_web_runs WHERE {where_sqlite} LIMIT 1",
-                (value,),
-            ).fetchone()
-        return self._crm_public_web_run_from_row(row) if row is not None else None
+        return None
 
     def list_crm_public_web_runs(
         self,
@@ -7086,28 +6844,7 @@ class ControlPlaneStore:
                 if record_id and record_id not in latest_by_record:
                     latest_by_record[record_id] = parsed
             return list(latest_by_record.values())[: max(1, int(limit or 1000))]
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_runs"):
-            return []
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM (
-	                    SELECT *,
-	                           ROW_NUMBER() OVER (
-	                               PARTITION BY crm_record_id
-	                               ORDER BY created_at DESC, run_id DESC
-	                           ) AS public_web_run_rank
-	                    FROM crm_public_web_runs
-	                    WHERE {" AND ".join(clauses_sqlite)}
-	                )
-	                WHERE public_web_run_rank = 1
-	                ORDER BY created_at DESC, run_id DESC
-	                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 1000))),
-            ).fetchall()
-        return [self._crm_public_web_run_from_row(row) for row in rows]
+        return []
 
     def upsert_company_public_web_asset_run(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = _normalize_company_public_web_asset_run_payload(payload)
@@ -7136,7 +6873,6 @@ class ControlPlaneStore:
         if not normalized_run_id and not normalized_idempotency_key:
             return None
         where_sql = "run_id = %s" if normalized_run_id else "idempotency_key = %s"
-        where_sqlite = "run_id = ?" if normalized_run_id else "idempotency_key = ?"
         value = normalized_run_id or normalized_idempotency_key
         postgres_row = self._select_control_plane_row(
             "company_public_web_asset_runs",
@@ -7146,14 +6882,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("company_public_web_asset_runs"):
-            return None
-        with self._lock:
-            row = self._connection.execute(
-                f"SELECT * FROM company_public_web_asset_runs WHERE {where_sqlite} LIMIT 1",
-                (value,),
-            ).fetchone()
-        return self._company_public_web_asset_run_from_row(row) if row is not None else None
+        return None
 
     def list_company_public_web_asset_runs(
         self,
@@ -7290,15 +7019,15 @@ class ControlPlaneStore:
         normalized_url = str(normalized_url_key or "").strip()
         params: list[Any]
         if normalized_asset_id:
-            where_sql, where_sqlite, params = "asset_id = %s", "asset_id = ?", [normalized_asset_id]
+            where_sql, _where_sqlite, params = "asset_id = %s", "asset_id = ?", [normalized_asset_id]
         elif normalized_company_key and normalized_url:
-            where_sql, where_sqlite, params = (
+            where_sql, _where_sqlite, params = (
                 "company_key = %s AND normalized_url_key = %s",
                 "company_key = ? AND normalized_url_key = ?",
                 [normalized_company_key, normalized_url],
             )
         elif normalized_url:
-            where_sql, where_sqlite, params = "normalized_url_key = %s", "normalized_url_key = ?", [normalized_url]
+            where_sql, _where_sqlite, params = "normalized_url_key = %s", "normalized_url_key = ?", [normalized_url]
         else:
             return None
         postgres_row = self._select_control_plane_row(
@@ -7310,14 +7039,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("company_public_web_assets"):
-            return None
-        with self._lock:
-            row = self._connection.execute(
-                f"SELECT * FROM company_public_web_assets WHERE {where_sqlite} ORDER BY updated_at DESC LIMIT 1",
-                tuple(params),
-            ).fetchone()
-        return self._company_public_web_asset_from_row(row) if row is not None else None
+        return None
 
     def list_company_public_web_assets(
         self,
@@ -7410,15 +7132,15 @@ class ControlPlaneStore:
         normalized_person_identity_key = str(person_identity_key or "").strip()
         normalized_linkedin_url_key = str(linkedin_url_key or "").strip()
         if normalized_asset_id:
-            where_sql, where_sqlite, value = "asset_id = %s", "asset_id = ?", normalized_asset_id
+            where_sql, _where_sqlite, value = "asset_id = %s", "asset_id = ?", normalized_asset_id
         elif normalized_person_identity_key:
-            where_sql, where_sqlite, value = (
+            where_sql, _where_sqlite, value = (
                 "person_identity_key = %s",
                 "person_identity_key = ?",
                 normalized_person_identity_key,
             )
         elif normalized_linkedin_url_key:
-            where_sql, where_sqlite, value = "linkedin_url_key = %s", "linkedin_url_key = ?", normalized_linkedin_url_key
+            where_sql, _where_sqlite, value = "linkedin_url_key = %s", "linkedin_url_key = ?", normalized_linkedin_url_key
         else:
             return None
         postgres_row = self._select_control_plane_row(
@@ -7430,14 +7152,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("person_public_web_assets"):
-            return None
-        with self._lock:
-            row = self._connection.execute(
-                f"SELECT * FROM person_public_web_assets WHERE {where_sqlite} ORDER BY updated_at DESC LIMIT 1",
-                (value,),
-            ).fetchone()
-        return self._person_public_web_asset_from_row(row) if row is not None else None
+        return None
 
     def list_person_public_web_assets(
         self,
@@ -7637,14 +7352,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("person_public_web_signals"):
-            return None
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM person_public_web_signals WHERE signal_id = ? LIMIT 1",
-                (normalized_signal_id,),
-            ).fetchone()
-        return self._person_public_web_signal_from_row(row) if row is not None else None
+        return None
 
     def list_person_public_web_signals(
         self,
@@ -7733,16 +7441,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_promotions"):
-            return None
-        with self._lock:
-            if not self._sqlite_table_exists_locked("target_candidate_public_web_promotions"):
-                return None
-            row = self._connection.execute(
-                "SELECT * FROM target_candidate_public_web_promotions WHERE promotion_id = ? LIMIT 1",
-                (normalized_promotion_id,),
-            ).fetchone()
-        return self._target_candidate_public_web_promotion_from_row(row) if row is not None else None
+        return None
 
     def list_target_candidate_public_web_promotions(
         self,
@@ -7827,14 +7526,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_promotions"):
-            return None
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM crm_public_web_promotions WHERE promotion_id = ? LIMIT 1",
-                (normalized_promotion_id,),
-            ).fetchone()
-        return self._crm_public_web_promotion_from_row(row) if row is not None else None
+        return None
 
     def list_crm_public_web_promotions(
         self,
@@ -7923,16 +7615,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("asset_default_pointers"):
-            return None
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM asset_default_pointers WHERE pointer_key = ? LIMIT 1",
-                (normalized_pointer_key,),
-            ).fetchone()
-        if row is None:
-            return None
-        return self._asset_default_pointer_from_row(row)
+        return None
 
     def list_asset_default_pointers(
         self,
@@ -8008,19 +7691,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("asset_default_pointer_history"):
-            return []
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT * FROM asset_default_pointer_history
-                WHERE pointer_key = ?
-                ORDER BY occurred_at DESC, created_at DESC, history_id DESC
-                LIMIT ?
-                """,
-                (normalized_pointer_key, max(1, int(limit or 1))),
-            ).fetchall()
-        return [self._asset_default_pointer_history_from_row(row) for row in rows]
+        return []
 
     def promote_asset_default_pointer(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = normalize_default_asset_pointer_payload(payload)
@@ -9597,14 +9268,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("agent_actions"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM agent_actions WHERE action_id = ? LIMIT 1",
-                (normalized_action_id,),
-            ).fetchone()
-        return self._agent_action_from_row(row)
+        return {}
 
     def list_agent_actions(
         self,
@@ -9808,14 +9472,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("operation_runs"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM operation_runs WHERE operation_run_id = ? LIMIT 1",
-                (normalized_operation_id,),
-            ).fetchone()
-        return self._operation_run_from_row(row)
+        return {}
 
     def list_operation_runs(
         self,
@@ -10820,14 +10477,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_current_state"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM workflow_current_state WHERE workflow_run_id = ? LIMIT 1",
-                (normalized_run_id,),
-            ).fetchone()
-        return self._workflow_current_state_from_row(row)
+        return {}
 
     def upsert_workflow_command(
         self,
@@ -12662,16 +12312,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("query_dispatches"):
-            return None
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM query_dispatches WHERE dispatch_id = ? LIMIT 1",
-                (dispatch_id,),
-            ).fetchone()
-        if row is None:
-            return None
-        return self._query_dispatch_from_row(row)
+        return None
 
     def list_query_dispatches(
         self,
@@ -14163,19 +13804,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projections"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM serving_projections
-                WHERE projection_id = ?
-                LIMIT 1
-                """,
-                (normalized_projection_id,),
-            ).fetchone()
-        return self._serving_projection_from_row(row)
+        return {}
 
     def list_serving_projections(
         self,
@@ -15339,19 +14968,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("projection_manifest_shards"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM projection_manifest_shards
-                WHERE shard_id = ?
-                LIMIT 1
-                """,
-                (normalized_shard_id,),
-            ).fetchone()
-        return self._projection_manifest_shard_from_row(row)
+        return {}
 
     def list_projection_manifest_shards(
         self,
@@ -15379,20 +14996,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("projection_manifest_shards"):
-            return []
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM projection_manifest_shards
-                WHERE {where_sqlite}
-                ORDER BY shard_kind ASC, shard_index ASC, shard_id ASC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 1000))),
-            ).fetchall()
-        return [self._projection_manifest_shard_from_row(row) for row in rows]
+        return []
 
     def upsert_run_projection_link(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
@@ -15439,19 +15043,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("run_projection_links"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM run_projection_links
-                WHERE run_id = ? AND link_type = ?
-                LIMIT 1
-                """,
-                (normalized_run_id, normalized_link_type),
-            ).fetchone()
-        return self._run_projection_link_from_row(row)
+        return {}
 
     def list_run_projection_links(self, run_id: str, *, limit: int = 20) -> list[dict[str, Any]]:
         normalized_run_id = str(run_id or "").strip()
@@ -15467,20 +15059,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("run_projection_links"):
-            return []
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT *
-                FROM run_projection_links
-                WHERE run_id = ?
-                ORDER BY updated_at DESC, link_type ASC
-                LIMIT ?
-                """,
-                (normalized_run_id, max(1, int(limit or 20))),
-            ).fetchall()
-        return [self._run_projection_link_from_row(row) for row in rows]
+        return []
 
     def upsert_collection_authoritative_pointer(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
@@ -15536,19 +15115,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("collection_authoritative_pointers"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM collection_authoritative_pointers
-                WHERE collection_id = ?
-                LIMIT 1
-                """,
-                (normalized_collection_id,),
-            ).fetchone()
-        return self._collection_authoritative_pointer_from_row(row)
+        return {}
 
     def list_collection_authoritative_pointers(
         self,
@@ -15603,19 +15170,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("asset_membership_index"):
-            return []
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT *
-                FROM asset_membership_index
-                WHERE generation_key = ?
-                ORDER BY member_key ASC
-                """,
-                (normalized_generation_key,),
-            ).fetchall()
-        return [self._asset_membership_index_from_row(row) for row in rows]
+        return []
 
     def _get_asset_materialization_generation_by_key(self, generation_key: str) -> dict[str, Any]:
         normalized_generation_key = str(generation_key or "").strip()
@@ -15629,19 +15184,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("asset_materialization_generations"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM asset_materialization_generations
-                WHERE generation_key = ?
-                LIMIT 1
-                """,
-                (normalized_generation_key,),
-            ).fetchone()
-        return self._asset_materialization_generation_from_row(row)
+        return {}
 
     def _resolve_asset_membership_rows_for_generation(
         self,
@@ -16336,33 +15879,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("asset_materialization_generations"):
-            return {}
-        with self._lock:
-            company_scope_clause, company_scope_params = _company_scope_predicate(
-                normalized_target_company,
-                normalized_company_key,
-            )
-            row = self._connection.execute(
-                f"""
-                SELECT *
-                FROM asset_materialization_generations
-                WHERE {company_scope_clause}
-                  AND snapshot_id = ?
-                  AND asset_view = ?
-                  AND artifact_kind = ?
-                  AND artifact_key = ?
-                LIMIT 1
-                """,
-                (
-                    *company_scope_params,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                    normalized_artifact_kind,
-                    normalized_artifact_key,
-                ),
-            ).fetchone()
-        return self._asset_materialization_generation_from_row(row)
+        return {}
 
     def summarize_asset_membership_index(
         self,
@@ -16985,31 +16502,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("candidate_materialization_state"):
-            return {}
-        with self._lock:
-            company_scope_clause, company_scope_params = _company_scope_predicate(
-                normalized_target_company,
-                normalized_company_key,
-            )
-            row = self._connection.execute(
-                f"""
-                SELECT *
-                FROM candidate_materialization_state
-                WHERE {company_scope_clause}
-                  AND snapshot_id = ?
-                  AND asset_view = ?
-                  AND candidate_id = ?
-                LIMIT 1
-                """,
-                (
-                    *company_scope_params,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                    normalized_candidate_id,
-                ),
-            ).fetchone()
-        return self._candidate_materialization_state_from_row(row)
+        return {}
 
     def list_candidate_materialization_states(
         self,
@@ -17042,29 +16535,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("candidate_materialization_state"):
-            return []
-        with self._lock:
-            company_scope_clause, company_scope_params = _company_scope_predicate(
-                normalized_target_company,
-                normalized_company_key,
-            )
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM candidate_materialization_state
-                WHERE {company_scope_clause}
-                  AND snapshot_id = ?
-                  AND asset_view = ?
-                ORDER BY list_page ASC, candidate_id ASC
-                """,
-                (
-                    *company_scope_params,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                ),
-            ).fetchall()
-        return [self._candidate_materialization_state_from_row(row) for row in rows]
+        return []
 
     def prune_candidate_materialization_states(
         self,
@@ -17312,19 +16783,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("snapshot_materialization_runs"):
-            return {}
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM snapshot_materialization_runs
-                WHERE run_id = ?
-                LIMIT 1
-                """,
-                (normalized_run_id,),
-            ).fetchone()
-        return self._snapshot_materialization_run_from_row(row)
+        return {}
 
     def compare_asset_membership_generations(
         self,
