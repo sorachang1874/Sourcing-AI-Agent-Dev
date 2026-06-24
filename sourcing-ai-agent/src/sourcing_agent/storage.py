@@ -2648,25 +2648,11 @@ class ControlPlaneStore:
         }
         if self._write_control_plane_row_to_postgres("job_board_visible_patches", row_payload):
             return self.get_job_board_visible_patch(normalized_patch_id) or self._job_board_visible_patch_from_row(row_payload)
-        columns = list(row_payload.keys())
-        placeholders = ", ".join(["?"] * len(columns))
-        update_columns = [column for column in columns if column not in {"patch_id", "created_at"}]
-        update_clause = ", ".join(f"{column} = excluded.{column}" for column in update_columns)
-        with self._lock, self._connection:
-            self._connection.execute(
-                (
-                    f"INSERT INTO job_board_visible_patches ({', '.join(columns)}) "
-                    f"VALUES ({placeholders}) "
-                    f"ON CONFLICT(patch_id) DO UPDATE SET {update_clause}, updated_at = excluded.updated_at"
-                ),
-                tuple(row_payload[column] for column in columns),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM job_board_visible_patches WHERE patch_id = ?",
-                (normalized_patch_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("job_board_visible_patches", row)
-        return self._job_board_visible_patch_from_row(row) or {}
+        self._raise_control_plane_postgres_write_failure(
+            table_name="job_board_visible_patches",
+            method_name="upsert_job_board_visible_patch",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_job_board_visible_patch(self, patch_id: str) -> dict[str, Any]:
         normalized_patch_id = str(patch_id or "").strip()
@@ -2907,25 +2893,11 @@ class ControlPlaneStore:
                 or self._job_materialization_item_from_row(row_payload)
                 or {}
             )
-        columns = list(row_payload.keys())
-        placeholders = ", ".join(["?"] * len(columns))
-        update_columns = [column for column in columns if column not in {"item_id", "created_at"}]
-        update_clause = ", ".join(f"{column} = excluded.{column}" for column in update_columns)
-        with self._lock, self._connection:
-            self._connection.execute(
-                (
-                    f"INSERT INTO job_materialization_items ({', '.join(columns)}) "
-                    f"VALUES ({placeholders}) "
-                    f"ON CONFLICT(item_id) DO UPDATE SET {update_clause}, updated_at = excluded.updated_at"
-                ),
-                tuple(row_payload[column] for column in columns),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM job_materialization_items WHERE item_id = ? LIMIT 1",
-                (normalized_item_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("job_materialization_items", row)
-        return self._job_materialization_item_from_row(row) or {}
+        self._raise_control_plane_postgres_write_failure(
+            table_name="job_materialization_items",
+            method_name="upsert_job_materialization_item",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_job_materialization_item(self, item_id: str) -> dict[str, Any]:
         normalized_item_id = str(item_id or "").strip()
@@ -3913,22 +3885,11 @@ class ControlPlaneStore:
         }
         if self._write_control_plane_row_to_postgres("job_result_lifecycle", row_payload):
             return self.get_job_result_lifecycle(normalized_job_id) or self._job_result_lifecycle_from_row(row_payload) or {}
-        columns = list(row_payload.keys())
-        placeholders = ", ".join(["?"] * len(columns))
-        update_columns = [c for c in columns if c not in {"job_id", "created_at"}]
-        update_clause = ", ".join(f"{c} = excluded.{c}" for c in update_columns)
-        sql = (
-            f"INSERT INTO job_result_lifecycle ({', '.join(columns)}) VALUES ({placeholders}) "
-            f"ON CONFLICT(job_id) DO UPDATE SET {update_clause}, updated_at = excluded.updated_at"
+        self._raise_control_plane_postgres_write_failure(
+            table_name="job_result_lifecycle",
+            method_name="upsert_job_result_lifecycle",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
         )
-        with self._lock, self._connection:
-            self._connection.execute(sql, tuple(row_payload[c] for c in columns))
-            row = self._connection.execute(
-                "SELECT * FROM job_result_lifecycle WHERE job_id = ?",
-                (normalized_job_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("job_result_lifecycle", row)
-        return self._job_result_lifecycle_from_row(row) or {}
 
     def _job_result_lifecycle_from_row(
         self, row: sqlite3.Row | dict[str, Any] | None
@@ -5240,40 +5201,14 @@ class ControlPlaneStore:
                 params=[row_id],
             )
             return postgres_row or row_builder(row_payload)
-        if (
-            self._control_plane_postgres_should_skip_sqlite_fallback(table_name)
-            or (
-                str(table_name or "").strip() in _DURABLE_RUNTIME_TABLES
-                and self.control_plane_postgres_is_postgres_only()
-            )
-        ):
-            self._raise_control_plane_postgres_write_failure(
-                table_name=table_name,
-                method_name="_upsert_simple_control_plane_row",
-                reason="Postgres authoritative upsert did not complete; SQLite fallback is forbidden",
-            )
-        columns = list(row_payload.keys())
-        insert_columns = ", ".join(columns)
-        insert_params = ", ".join(f":{column}" for column in columns)
-        update_assignments = ", ".join(
-            f"{column} = excluded.{column}" for column in columns if column != id_column and column != "created_at"
+        # postgres-only (B3.0): _write_control_plane_row_to_postgres returns True or raises; reaching here
+        # means the authoritative write returned no confirmation, which is forbidden. The legacy SQLite
+        # upsert + mirror tail is retired (B4).
+        self._raise_control_plane_postgres_write_failure(
+            table_name=table_name,
+            method_name="_upsert_simple_control_plane_row",
+            reason="postgres-only: authoritative upsert returned no confirmation; SQLite fallback retired (B4)",
         )
-        with self._lock, self._connection:
-            self._connection.execute(
-                f"""
-                INSERT INTO {table_name} ({insert_columns})
-                VALUES ({insert_params})
-                ON CONFLICT({id_column}) DO UPDATE SET
-                    {update_assignments}
-                """,
-                row_payload,
-            )
-            row = self._connection.execute(
-                f"SELECT * FROM {table_name} WHERE {id_column} = ? LIMIT 1",
-                (row_id,),
-            ).fetchone()
-            self._mirror_control_plane_row(table_name, row)
-        return row_builder(row) if row is not None else row_builder(row_payload)
 
     def upsert_person_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
@@ -10445,24 +10380,11 @@ class ControlPlaneStore:
         )
         if self._write_control_plane_row_to_postgres("workflow_current_state", row_payload):
             return self.get_workflow_current_state(normalized_run_id) or self._workflow_current_state_from_row(row_payload)
-        columns = list(row_payload.keys())
-        update_columns = [column for column in columns if column not in {"workflow_run_id", "created_at"}]
-        with self._lock, self._connection:
-            self._connection.execute(
-                (
-                    f"INSERT INTO workflow_current_state ({', '.join(columns)}) "
-                    f"VALUES ({', '.join(['?'] * len(columns))}) "
-                    "ON CONFLICT(workflow_run_id) DO UPDATE SET "
-                    + ", ".join(f"{column} = excluded.{column}" for column in update_columns)
-                ),
-                tuple(row_payload[column] for column in columns),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM workflow_current_state WHERE workflow_run_id = ? LIMIT 1",
-                (normalized_run_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("workflow_current_state", row)
-        return self._workflow_current_state_from_row(row)
+        self._raise_control_plane_postgres_write_failure(
+            table_name="workflow_current_state",
+            method_name="upsert_workflow_current_state",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def get_workflow_current_state(self, workflow_run_id: str) -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("workflow_current_state")
