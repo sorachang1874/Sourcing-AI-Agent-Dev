@@ -443,3 +443,18 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   - **B4.3 余下批次**:(i) 死**读**尾(`pg=select; if pg: return; if skip: return []; <死 with: SELECT>`,~28 个 near + 其它;更杂——读方法在死 with 前建
     SQLite-only query-builder 局部 clauses/params,删尾后变 unused 须一并删);(ii) 6 个 skipped 写方法(SQLite 块前有中间逻辑);
     (iii) `_replace_*_from_sqlite`(17)+ mirror helpers 待无引用后删;(iv) 最后删 `self._connection = sqlite3.connect(...)`(:809)+ shadow `_lock` + `import sqlite3`。每批同 AST-safety + 合同 lane 验证。
+- **2026-06-24 B4.3.3(52 死读尾,commit e184422)**:`pg=select; if pg: return pg; if skip: return <X>; <死 with self._lock: SELECT>` ——
+  should_skip 在 B3.0 后恒 True,故把 `if skip: return <X>` + 死尾**塌缩成直接 `return <X>`**(顺带退役恒真 skip-guard)。AST-safe(skip-guard 单 return 紧跟 lock-with);
+  哨兵保真(24 `{}` / 15 `None` / 13 `[]`)。再 `ruff F841 --fix` 删 14 个孤儿 SQLite-only query-builder 局部(where_sqlite/placeholders_sqlite/query + 级联 clauses/params;
+  PG 路径仍用的 where_sqlite 经 `.replace("?","%s")` 保留)。−541 行;550 passed。
+- **B4.3.4(5 个 irregular 写尾含 GENERIC helper,commit 61f7bcb)**:`_upsert_simple_control_plane_row`(~15 个 upsert 共用)——把
+  `if (skip OR durable&pg): raise` 条件 guard + 死 SQLite upsert/mirror 塌缩成一个无条件 fail-closed raise(skip 恒 True,guard 本就恒 raise),清干净共享写路径。
+  + upsert_workflow_current_state / job_board_visible_patch / job_materialization_item / job_result_lifecycle(各:`if write_pg: return` 后 SQLite-only
+  columns/placeholders 局部 + 死 with → fail-closed raise)。−78 行;565 passed。**DEFER:upsert_acquisition_shard_registry**(其 `if not existing:` 新-shard 分支是 gated shadow SELECT,非干净死尾)。
+- **B4.3 进度:storage.py 26,847 → 24,681(−2,166 行,批 1-4)。** 已删掉绝大多数干净的死双路径尾(write-and-mirror / native-dispatch / read / generic-helper / irregular-write)。
+  每批那 1 个 results-api fail 都是 pre-existing 的 lovable_board_visible_patches contract-drift(非 teardown)。
+- **B4.3 余下(异质「213 irregular」尾,需逐方法 live-vs-dead 分类)**:仍 ~160 个 `with self._lock[, self._connection]:`。类别:(a) **LIVE 遗留迁移 SQLite —— 保留**
+  (`_ensure_legacy_target_public_web_sqlite_tables_for_migration`、`seed_legacy_*`、retirement-audit、若仍被迁移路径调用的 `_replace_*_from_sqlite` bulk-loader);
+  (b) advisory-lock SQLite fallback(死,另一形态);(c) 更深嵌套的死尾(剩 ~33 个 `if write_pg` + if-nested);(d) acquisition_shard_registry;
+  (e) mirror/replace helpers 待无引用后删(mirror 调用 74→36);(f) 最后 `self._connection`(:809)+ `_lock` + `import sqlite3`,待无 live 触及影子
+  (剩 327 `self._connection.execute`,但多为 LIVE 迁移用 —— 须先分清)。每批先分类 live-vs-dead(迁移子系统确实用 SQLite),再 AST-safe + 合同 lane 验证。
