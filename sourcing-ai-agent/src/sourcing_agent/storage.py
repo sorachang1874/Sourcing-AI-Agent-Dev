@@ -2698,23 +2698,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("job_board_visible_patches"):
-            return []
-        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
-        query = (
-            f"SELECT * FROM job_board_visible_patches WHERE {' AND '.join(clauses)} "
-            f"ORDER BY sequence_index ASC, published_at ASC, created_at ASC{limit_sql}"
-        )
-        sqlite_params = [*params]
-        if int(limit or 0) > 0:
-            sqlite_params.append(max(1, int(limit or 0)))
-        with self._lock:
-            rows = self._connection.execute(query, tuple(sqlite_params)).fetchall()
-        return [
-            payload
-            for row in rows
-            if (payload := self._job_board_visible_patch_from_row(row))
-        ]
+        return []
 
     def next_job_board_visible_patch_sequence(self, *, job_id: str, snapshot_id: str = "") -> int:
         patches = self.list_job_board_visible_patches(job_id=job_id, snapshot_id=snapshot_id, limit=0)
@@ -4632,31 +4616,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("manual_review_items"):
-            return []
-        clauses: list[str] = []
-        params: list[Any] = []
-        if target_company:
-            clauses.append("lower(target_company) = lower(?)")
-            params.append(target_company)
-        if status:
-            clauses.append("status = ?")
-            params.append(status)
-        if job_id:
-            clauses.append("job_id = ?")
-            params.append(job_id)
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM manual_review_items
-                {where_clause}
-                ORDER BY updated_at DESC, review_item_id DESC
-                LIMIT ?
-                """,
-                (*params, limit),
-            ).fetchall()
-        return [self._manual_review_item_from_row(row) for row in rows]
+        return []
 
     def count_manual_review_items(
         self,
@@ -4685,26 +4645,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return len(postgres_rows)
-        if self._control_plane_postgres_should_skip_sqlite_fallback("manual_review_items"):
-            return 0
-        clauses: list[str] = []
-        params: list[Any] = []
-        if target_company:
-            clauses.append("lower(target_company) = lower(?)")
-            params.append(target_company)
-        if status:
-            clauses.append("status = ?")
-            params.append(status)
-        if job_id:
-            clauses.append("job_id = ?")
-            params.append(job_id)
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        with self._lock:
-            row = self._connection.execute(
-                f"SELECT COUNT(*) AS row_count FROM manual_review_items {where_clause}",
-                tuple(params),
-            ).fetchone()
-        return int((row["row_count"] if row is not None else 0) or 0)
+        return 0
 
     def cleanup_manual_review_items(
         self,
@@ -4999,20 +4940,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("candidate_review_registry"):
-            return []
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM candidate_review_registry
-                {where_clause}
-                ORDER BY updated_at DESC, added_at DESC, record_id DESC
-                LIMIT ?
-                """,
-                (*params, limit),
-            ).fetchall()
-        return [self._candidate_review_record_from_row(row) for row in rows]
+        return []
 
     def upsert_candidate_review_record(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = _normalize_candidate_review_record_payload(payload)
@@ -5113,20 +5041,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidates"):
-            return []
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM target_candidates
-                {where_clause}
-                ORDER BY updated_at DESC, added_at DESC, record_id DESC
-                LIMIT ?
-                """,
-                (*params, limit),
-            ).fetchall()
-        return [self._target_candidate_from_row(row) for row in rows]
+        return []
 
     def upsert_target_candidate(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = _normalize_target_candidate_payload(payload)
@@ -5289,20 +5204,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("person_assets"):
-            return []
-        where_clause = f"WHERE {where_sqlite}" if where_sqlite else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM person_assets
-                {where_clause}
-                ORDER BY updated_at DESC, asset_id DESC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 100))),
-            ).fetchall()
-        return [self._person_asset_from_row(row) for row in rows]
+        return []
 
     def list_person_assets_for_person_keys(
         self,
@@ -5410,20 +5312,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("person_evidence"):
-            return []
-        where_clause = f"WHERE {where_sqlite}" if where_sqlite else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM person_evidence
-                {where_clause}
-                ORDER BY updated_at DESC, evidence_id DESC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 100))),
-            ).fetchall()
-        return [self._person_evidence_from_row(row) for row in rows]
+        return []
 
     def upsert_person_assertion(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
@@ -5493,20 +5382,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("person_assertions"):
-            return []
-        where_clause = f"WHERE {where_sqlite}" if where_sqlite else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM person_assertions
-                {where_clause}
-                ORDER BY updated_at DESC, assertion_id DESC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 100))),
-            ).fetchall()
-        return [self._person_assertion_from_row(row) for row in rows]
+        return []
 
     def upsert_company_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("company_assets")
@@ -5832,24 +5708,7 @@ class ControlPlaneStore:
                 for row in postgres_rows
                 if str(row.get("person_identity_key") or "").strip()
             }
-        if self._control_plane_postgres_should_skip_sqlite_fallback("raw_profile_index"):
-            return {}
-        sqlite_placeholders = ", ".join(["?"] * len(normalized_keys))
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM raw_profile_index
-                WHERE person_identity_key IN ({sqlite_placeholders})
-                """,
-                tuple(normalized_keys),
-            ).fetchall()
-        payloads = [self._raw_profile_index_from_row(row) for row in rows]
-        return {
-            str(row.get("person_identity_key") or "").strip(): row
-            for row in payloads
-            if str(row.get("person_identity_key") or "").strip()
-        }
+        return {}
 
     def upsert_candidate_evidence_index(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
@@ -5946,24 +5805,7 @@ class ControlPlaneStore:
                 for row in postgres_rows
                 if str(row.get("person_identity_key") or "").strip()
             }
-        if self._control_plane_postgres_should_skip_sqlite_fallback("candidate_evidence_index"):
-            return {}
-        sqlite_placeholders = ", ".join(["?"] * len(normalized_keys))
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM candidate_evidence_index
-                WHERE person_identity_key IN ({sqlite_placeholders})
-                """,
-                tuple(normalized_keys),
-            ).fetchall()
-        payloads = [self._candidate_evidence_index_from_row(row) for row in rows]
-        return {
-            str(row.get("person_identity_key") or "").strip(): row
-            for row in payloads
-            if str(row.get("person_identity_key") or "").strip()
-        }
+        return {}
 
     def upsert_crm_record(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
@@ -6367,23 +6209,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_batches"):
-            return []
-        where_clause = "WHERE status = ?" if normalized_status else ""
-        params = (normalized_status, limit) if normalized_status else (limit,)
-        with self._lock:
-            if not self._sqlite_table_exists_locked("target_candidate_public_web_batches"):
-                return []
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM target_candidate_public_web_batches
-                {where_clause}
-                ORDER BY updated_at DESC, created_at DESC, batch_id DESC
-                LIMIT ?
-                """,
-                params,
-            ).fetchall()
-        return [self._target_candidate_public_web_batch_from_row(row) for row in rows]
+        return []
 
     def upsert_target_candidate_public_web_run(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_legacy_target_public_web_migration_write("target_candidate_public_web_runs")
@@ -6483,22 +6309,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_runs"):
-            return []
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        with self._lock:
-            if not self._sqlite_table_exists_locked("target_candidate_public_web_runs"):
-                return []
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM target_candidate_public_web_runs
-                {where_clause}
-                ORDER BY updated_at DESC, created_at DESC, run_id DESC
-                LIMIT ?
-                """,
-                (*params, limit),
-            ).fetchall()
-        return [self._target_candidate_public_web_run_from_row(row) for row in rows]
+        return []
 
     def list_latest_target_candidate_public_web_runs_by_record_ids(
         self,
@@ -6523,36 +6334,7 @@ class ControlPlaneStore:
                 for row in list(native_rows or [])
                 if isinstance(row, dict)
             ]
-        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_runs"):
-            return []
-        sqlite_placeholders = ", ".join(["?"] * len(normalized_record_ids))
-        clauses = [f"record_id IN ({sqlite_placeholders})"]
-        params: list[Any] = [*normalized_record_ids]
-        if normalized_status:
-            clauses.append("status = ?")
-            params.append(normalized_status)
-        with self._lock:
-            if not self._sqlite_table_exists_locked("target_candidate_public_web_runs"):
-                return []
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM (
-                    SELECT *,
-                           ROW_NUMBER() OVER (
-                               PARTITION BY record_id
-                               ORDER BY updated_at DESC, created_at DESC, run_id DESC
-                           ) AS public_web_run_rank
-                    FROM target_candidate_public_web_runs
-                    WHERE {" AND ".join(clauses)}
-                )
-                WHERE public_web_run_rank = 1
-                ORDER BY updated_at DESC, created_at DESC, run_id DESC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 1000))),
-            ).fetchall()
-        return [self._target_candidate_public_web_run_from_row(row) for row in rows]
+        return []
 
     def upsert_crm_public_web_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = _normalize_crm_public_web_batch_payload(payload)
@@ -6728,20 +6510,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_runs"):
-            return []
-        where_clause = f"WHERE {' AND '.join(clauses_sqlite)}" if clauses_sqlite else ""
-        with self._lock:
-            rows = self._connection.execute(
-	                f"""
-	                SELECT * FROM crm_public_web_runs
-	                {where_clause}
-	                ORDER BY {order_by_sql}
-	                LIMIT ?
-	                """,
-                (*params, limit),
-            ).fetchall()
-        return [self._crm_public_web_run_from_row(row) for row in rows]
+        return []
 
     def list_latest_crm_public_web_runs_by_record_ids(
         self,
@@ -6859,20 +6628,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("company_public_web_asset_runs"):
-            return []
-        where_clause = f"WHERE {' AND '.join(clauses_sqlite)}" if clauses_sqlite else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM company_public_web_asset_runs
-                {where_clause}
-                ORDER BY updated_at DESC, created_at DESC, run_id DESC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 100))),
-            ).fetchall()
-        return [self._company_public_web_asset_run_from_row(row) for row in rows]
+        return []
 
     def list_latest_company_public_web_asset_runs_by_company_keys(
         self,
@@ -6897,34 +6653,7 @@ class ControlPlaneStore:
                 for row in list(native_rows or [])
                 if isinstance(row, dict)
             ]
-        if self._control_plane_postgres_should_skip_sqlite_fallback("company_public_web_asset_runs"):
-            return []
-        sqlite_placeholders = ", ".join(["?"] * len(normalized_company_keys))
-        clauses = [f"company_key IN ({sqlite_placeholders})"]
-        params: list[Any] = [*normalized_company_keys]
-        if normalized_status:
-            clauses.append("status = ?")
-            params.append(normalized_status)
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM (
-                    SELECT *,
-                           ROW_NUMBER() OVER (
-                               PARTITION BY company_key
-                               ORDER BY updated_at DESC, created_at DESC, run_id DESC
-                           ) AS company_public_web_run_rank
-                    FROM company_public_web_asset_runs
-                    WHERE {" AND ".join(clauses)}
-                )
-                WHERE company_public_web_run_rank = 1
-                ORDER BY updated_at DESC, created_at DESC, run_id DESC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 1000))),
-            ).fetchall()
-        return [self._company_public_web_asset_run_from_row(row) for row in rows]
+        return []
 
     def upsert_company_public_web_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = _normalize_company_public_web_asset_payload(payload)
@@ -7022,20 +6751,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("company_public_web_assets"):
-            return []
-        where_clause = f"WHERE {' AND '.join(clauses_sqlite)}" if clauses_sqlite else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM company_public_web_assets
-                {where_clause}
-                ORDER BY updated_at DESC, created_at DESC, asset_id DESC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 500))),
-            ).fetchall()
-        return [self._company_public_web_asset_from_row(row) for row in rows]
+        return []
 
     def upsert_person_public_web_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = _normalize_person_public_web_asset_payload(payload)
@@ -7106,21 +6822,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("person_public_web_assets"):
-            return []
-        where_clause = "WHERE linkedin_url_key = ?" if normalized_linkedin_url_key else ""
-        params = (normalized_linkedin_url_key, limit) if normalized_linkedin_url_key else (limit,)
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM person_public_web_assets
-                {where_clause}
-                ORDER BY updated_at DESC, created_at DESC
-                LIMIT ?
-                """,
-                params,
-            ).fetchall()
-        return [self._person_public_web_asset_from_row(row) for row in rows]
+        return []
 
     def upsert_person_public_web_signal(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = _normalize_person_public_web_signal_payload(payload)
@@ -7329,23 +7031,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("person_public_web_signals"):
-            return []
-        where_clause = f"WHERE {' AND '.join(clauses_sqlite)}" if clauses_sqlite else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM person_public_web_signals
-                {where_clause}
-                ORDER BY updated_at DESC,
-                    CASE signal_kind WHEN 'email_candidate' THEN 0 WHEN 'profile_link' THEN 1 ELSE 2 END,
-                    confidence_score DESC,
-                    signal_id DESC
-                LIMIT ?
-                """,
-                (*params, limit),
-            ).fetchall()
-        return [self._person_public_web_signal_from_row(row) for row in rows]
+        return []
 
     def upsert_target_candidate_public_web_promotion(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_legacy_target_public_web_migration_write("target_candidate_public_web_promotions")
@@ -7416,22 +7102,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_promotions"):
-            return []
-        where_clause = f"WHERE {' AND '.join(clauses_sqlite)}" if clauses_sqlite else ""
-        with self._lock:
-            if not self._sqlite_table_exists_locked("target_candidate_public_web_promotions"):
-                return []
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM target_candidate_public_web_promotions
-                {where_clause}
-                ORDER BY updated_at DESC, created_at DESC, promotion_id DESC
-                LIMIT ?
-                """,
-                (*params, limit),
-            ).fetchall()
-        return [self._target_candidate_public_web_promotion_from_row(row) for row in rows]
+        return []
 
     def upsert_crm_public_web_promotion(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = _normalize_crm_public_web_promotion_payload(payload)
@@ -7507,20 +7178,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("crm_public_web_promotions"):
-            return []
-        where_clause = f"WHERE {' AND '.join(clauses_sqlite)}" if clauses_sqlite else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM crm_public_web_promotions
-                {where_clause}
-                ORDER BY updated_at DESC, created_at DESC, promotion_id DESC
-                LIMIT ?
-                """,
-                (*params, limit),
-            ).fetchall()
-        return [self._crm_public_web_promotion_from_row(row) for row in rows]
+        return []
 
     def get_asset_default_pointer(
         self,
@@ -7592,20 +7250,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("asset_default_pointers"):
-            return []
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM asset_default_pointers
-                {where_clause}
-                ORDER BY updated_at DESC, pointer_key ASC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 1))),
-            ).fetchall()
-        return [self._asset_default_pointer_from_row(row) for row in rows]
+        return []
 
     def list_asset_default_pointer_history(
         self,
@@ -9268,25 +8913,7 @@ class ControlPlaneStore:
         )
         if pg_rows:
             return pg_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("agent_actions"):
-            return []
-        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
-        offset_sql = " OFFSET ?" if int(offset or 0) > 0 and int(limit or 0) > 0 else ""
-        sqlite_params = list(params)
-        if int(limit or 0) > 0:
-            sqlite_params.append(max(1, int(limit or 0)))
-        if int(offset or 0) > 0 and int(limit or 0) > 0:
-            sqlite_params.append(max(0, int(offset or 0)))
-        with self._lock:
-            rows = self._connection.execute(
-                (
-                    "SELECT * FROM agent_actions "
-                    f"{where_sql} ORDER BY updated_at DESC, created_at DESC{limit_sql}{offset_sql}"
-                ),
-                tuple(sqlite_params),
-            ).fetchall()
-        return [payload for row in rows if (payload := self._agent_action_from_row(row))]
+        return []
 
     def update_agent_action_state(
         self,
@@ -9472,25 +9099,7 @@ class ControlPlaneStore:
         )
         if pg_rows:
             return pg_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("operation_runs"):
-            return []
-        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
-        offset_sql = " OFFSET ?" if int(offset or 0) > 0 and int(limit or 0) > 0 else ""
-        sqlite_params = list(params)
-        if int(limit or 0) > 0:
-            sqlite_params.append(max(1, int(limit or 0)))
-        if int(offset or 0) > 0 and int(limit or 0) > 0:
-            sqlite_params.append(max(0, int(offset or 0)))
-        with self._lock:
-            rows = self._connection.execute(
-                (
-                    "SELECT * FROM operation_runs "
-                    f"{where_sql} ORDER BY updated_at DESC, created_at DESC{limit_sql}{offset_sql}"
-                ),
-                tuple(sqlite_params),
-            ).fetchall()
-        return [payload for row in rows if (payload := self._operation_run_from_row(row))]
+        return []
 
     def update_operation_run_state(
         self,
@@ -10240,21 +9849,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("operation_events"):
-            return []
-        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
-        params: list[Any] = [normalized_stream_id]
-        if int(limit or 0) > 0:
-            params.append(max(1, int(limit or 0)))
-        with self._lock:
-            rows = self._connection.execute(
-                (
-                    "SELECT * FROM operation_events WHERE event_stream_id = ? "
-                    f"ORDER BY sequence_number ASC{limit_sql}"
-                ),
-                tuple(params),
-            ).fetchall()
-        return [payload for row in rows if (payload := self._operation_event_from_row(row))]
+        return []
 
     def list_operation_events_for_action(self, action_id: str, *, limit: int = 1000) -> list[dict[str, Any]]:
         self._require_postgres_for_durable_runtime("operation_events")
@@ -10271,21 +9866,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("operation_events"):
-            return []
-        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
-        params: list[Any] = [normalized_action_id]
-        if int(limit or 0) > 0:
-            params.append(max(1, int(limit or 0)))
-        with self._lock:
-            rows = self._connection.execute(
-                (
-                    "SELECT * FROM operation_events WHERE action_id = ? "
-                    f"ORDER BY recorded_at ASC, event_stream_id ASC, sequence_number ASC{limit_sql}"
-                ),
-                tuple(params),
-            ).fetchall()
-        return [payload for row in rows if (payload := self._operation_event_from_row(row))]
+        return []
 
     def list_workflow_events(self, workflow_run_id: str, *, limit: int = 1000) -> list[dict[str, Any]]:
         self._require_postgres_for_durable_runtime("workflow_events")
@@ -10302,21 +9883,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_events"):
-            return []
-        limit_sql = " LIMIT ?" if int(limit or 0) > 0 else ""
-        params: list[Any] = [normalized_run_id]
-        if int(limit or 0) > 0:
-            params.append(max(1, int(limit or 0)))
-        with self._lock:
-            rows = self._connection.execute(
-                (
-                    "SELECT * FROM workflow_events WHERE workflow_run_id = ? "
-                    f"ORDER BY sequence_number ASC{limit_sql}"
-                ),
-                tuple(params),
-            ).fetchall()
-        return [payload for row in rows if (payload := self._workflow_event_from_row(row))]
+        return []
 
     def upsert_workflow_current_state(
         self,
@@ -11531,33 +11098,7 @@ class ControlPlaneStore:
         )
         if postgres_jobs:
             return postgres_jobs
-        if self._control_plane_postgres_should_skip_sqlite_fallback("jobs"):
-            return []
-        clauses: list[str] = []
-        params: list[Any] = []
-        if job_type:
-            clauses.append("job_type = ?")
-            params.append(job_type)
-        normalized_statuses = [
-            str(item or "").strip().lower() for item in list(statuses or []) if str(item or "").strip()
-        ]
-        if normalized_statuses:
-            placeholders = ",".join("?" for _ in normalized_statuses)
-            clauses.append(f"lower(status) IN ({placeholders})")
-            params.extend(normalized_statuses)
-        normalized_stages = [str(item or "").strip().lower() for item in list(stages or []) if str(item or "").strip()]
-        if normalized_stages:
-            placeholders = ",".join("?" for _ in normalized_stages)
-            clauses.append(f"lower(stage) IN ({placeholders})")
-            params.extend(normalized_stages)
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        query = (
-            f"SELECT * FROM jobs {where_clause} ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC LIMIT ?"
-        )
-        params.append(max(1, int(limit or 100)))
-        with self._lock:
-            rows = self._connection.execute(query, tuple(params)).fetchall()
-        return [self._job_from_row(row) for row in rows]
+        return []
 
     def summarize_jobs(
         self,
@@ -11613,47 +11154,7 @@ class ControlPlaneStore:
                 "by_stage": by_stage,
                 "by_status_stage": by_status_stage,
             }
-        if self._control_plane_postgres_should_skip_sqlite_fallback("jobs"):
-            return {
-                "total": 0,
-                "by_status": {},
-                "by_stage": {},
-                "by_status_stage": {},
-            }
-        if normalized_statuses:
-            placeholders = ",".join("?" for _ in normalized_statuses)
-            clauses.append(f"lower(status) IN ({placeholders})")
-            params.extend(normalized_statuses)
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        query = (
-            "SELECT lower(status) AS status, lower(stage) AS stage, COUNT(*) AS count "
-            f"FROM jobs {where_clause} "
-            "GROUP BY lower(status), lower(stage)"
-        )
-        with self._lock:
-            rows = self._connection.execute(query, tuple(params)).fetchall()
-        by_status: dict[str, int] = {}
-        by_stage: dict[str, int] = {}
-        by_status_stage: dict[str, int] = {}
-        total = 0
-        for row in rows:
-            status_value = str(row["status"] or "").strip()
-            stage_value = str(row["stage"] or "").strip()
-            count_value = int(row["count"] or 0)
-            total += count_value
-            if status_value:
-                by_status[status_value] = int(by_status.get(status_value) or 0) + count_value
-            if stage_value:
-                by_stage[stage_value] = int(by_stage.get(stage_value) or 0) + count_value
-            key = f"{status_value}:{stage_value}".strip(":")
-            if key:
-                by_status_stage[key] = int(by_status_stage.get(key) or 0) + count_value
-        return {
-            "total": total,
-            "by_status": by_status,
-            "by_stage": by_stage,
-            "by_status_stage": by_status_stage,
-        }
+        return {'total': 0, 'by_status': {}, 'by_stage': {}, 'by_status_stage': {}}
 
     def find_latest_completed_job(
         self,
@@ -12275,20 +11776,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("query_dispatches"):
-            return []
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM query_dispatches
-                {where_clause}
-                ORDER BY updated_at DESC, dispatch_id DESC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 100))),
-            ).fetchall()
-        return [self._query_dispatch_from_row(row) for row in rows]
+        return []
 
     def upsert_organization_asset_registry(
         self,
@@ -13762,21 +13250,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projections"):
-            return []
-        where_clause = f"WHERE {where_sqlite}" if where_sqlite else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM serving_projections
-                {where_clause}
-                ORDER BY updated_at DESC, projection_id DESC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 100))),
-            ).fetchall()
-        return [self._serving_projection_from_row(row) for row in rows]
+        return []
 
     def _serving_projection_member_row_payload(
         self,
@@ -15062,21 +14536,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("collection_authoritative_pointers"):
-            return []
-        where_clause = f"WHERE {where_sqlite}" if where_sqlite else ""
-        with self._lock:
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM collection_authoritative_pointers
-                {where_clause}
-                ORDER BY updated_at DESC, collection_id ASC
-                LIMIT ?
-                """,
-                (*params, max(1, int(limit or 250))),
-            ).fetchall()
-        return [self._collection_authoritative_pointer_from_row(row) for row in rows]
+        return []
 
     def _select_asset_membership_rows_for_generation(self, generation_key: str) -> list[dict[str, Any]]:
         normalized_generation_key = str(generation_key or "").strip()
