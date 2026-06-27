@@ -451,10 +451,32 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   `if (skip OR durable&pg): raise` 条件 guard + 死 SQLite upsert/mirror 塌缩成一个无条件 fail-closed raise(skip 恒 True,guard 本就恒 raise),清干净共享写路径。
   + upsert_workflow_current_state / job_board_visible_patch / job_materialization_item / job_result_lifecycle(各:`if write_pg: return` 后 SQLite-only
   columns/placeholders 局部 + 死 with → fail-closed raise)。−78 行;565 passed。**DEFER:upsert_acquisition_shard_registry**(其 `if not existing:` 新-shard 分支是 gated shadow SELECT,非干净死尾)。
-- **B4.3 进度:storage.py 26,847 → 24,681(−2,166 行,批 1-4)。** 已删掉绝大多数干净的死双路径尾(write-and-mirror / native-dispatch / read / generic-helper / irregular-write)。
-  每批那 1 个 results-api fail 都是 pre-existing 的 lovable_board_visible_patches contract-drift(非 teardown)。
-- **B4.3 余下(异质「213 irregular」尾,需逐方法 live-vs-dead 分类)**:仍 ~160 个 `with self._lock[, self._connection]:`。类别:(a) **LIVE 遗留迁移 SQLite —— 保留**
+- **2026-06-24 B4.3.5(32 死读尾含中间 query-builder 局部,commit 6e39121)**:把 batch-3 的读尾塌缩扩到 list_*/count_*/summarize_* —— 死 SQLite 块前
+  夹着 where_clause/clauses/params 等中间局部(batch-3 的严格邻接检查漏掉)。安全点同 batch-3:`should_skip` 在 B3.0 后恒 True,故 `if skip: return X` 恒返回 →
+  其后一切(含中间局部)皆死,与中间语句无关。迁移 helper 因无 skip-guard 不匹配。AST-safe(skip-guard body 单 return + 尾内有 `with self._lock:`);
+  `if skip: return X` + 死尾塌缩成直接 `return X`(哨兵保真:多为 [],另 {} / 0 / summarize_jobs 空 dict)。再 `ruff F841 --fix` 删孤儿 SQLite-only 局部。
+  −540 行;550 passed(唯一 fail 是 pre-existing lovable_board_visible_patches contract-drift)。残留(非阻塞):个别方法(如 summarize_jobs)仍 `.append()` 建
+  now-unused clauses/params(ruff F841 标不到),影子 SELECT/with/connection 已删,留待后续 sweep。
+- **2026-06-27 B4.3.6(26 死 native-dispatch 写/读尾含中间局部,commit 9ca66f4)**:把 batch-2 的 native-dispatch 尾退役扩到那 26 个——
+  死 `with self._lock[, self._connection]:` 前夹中间局部(skip-guard 与死块间的 gap,batch-2 严格邻接漏掉),正与 batch-5 之于 batch-3 同构。
+  安全点同 batch-2:方法 live 路径 gated 于 `if should_prefer_read(T):`,块末为 `if should_skip_sqlite_fallback(T): return X`;B3.0 后两 gate 在 postgres_only
+  (唯一受支持的生产/合同 lane)恒 True → prefer-read 块恒进恒返(row-path 或 skip-path)→ 其后(中间局部 + SQLite with + mirror + 尾 return)皆死,与中间语句无关。
+  死尾仅在「PG-preferred-but-not-authoritative」配置可达(B3.0 已退役),换成与 batch-2 同的 fail-closed `raise RuntimeError("postgres-only invariant violated …
+  legacy SQLite tail retired (B4)")`。迁移 helper 不匹配(无 skip-guard,SQLite 无条件用)。AST-safe(prefer-read 块末是单-return skip-guard If + prefer/skip 表名相同
+  + 尾内有 `with self._lock`);在 prefer-read 块尾截断方法体并补 fail-closed raise。26 法:save_job、append_job_event、get_job(_progress_event_summary/_result_view/
+  _result_lifecycle)、mark_job_materialization_item_{completed,failed,waiting_prerequisite,partial_progress}、reawaken_waiting_prerequisite_{job_materialization_items,
+  workflow_commands}、get_plan_review_session、{upsert,claim,get}_workflow_recovery_intent、update_operation_run_state、{get,list}_organization_execution_profile(s)、
+  get_authoritative_/list_organization_asset_registry、list_acquisition_shard_registry、summarize_asset_membership_index、list_cloud_asset_operations、
+  acquire_runtime_provider_limiter_slot、get_linkedin_profile_registry_backfill_run。哨兵保真({}/[]/None/0/limiter+summary dict)。再删 1 孤儿局部(append_job_event 的
+  payload_json;PG native 路径用 payload_dict)。−770 行;550 passed。**验证升级**:除 import/ruff + Testcontainers 合同 lane + control-plane-live(authoritative 存储
+  读写合同)全 PASS 外,首次对 test_pipeline materialization/registry focus 做 **clean-DB postgres_only A/B**(DROP/CREATE public schema 后 HEAD vs 本批各跑一遍,
+  unittest 字母序确定)→ 两边**逐字相同的 17-fail 集**(pre-existing 共享-schema 污染;这些 test 缺 per-test PG 隔离)→ **零回归**。
+- **B4.3 进度:storage.py 26,847 → 23,371(−3,476 行,批 1-6)。** 已删掉绝大多数干净的死双路径尾(write-and-mirror / native-dispatch / read / generic-helper / irregular-write,
+  含 batch-3/5 的读尾与 batch-2/6 的 native-dispatch 尾的「中间局部」变体)。每批那 1 个 results-api fail 都是 pre-existing 的 lovable_board_visible_patches contract-drift(非 teardown)。
+- **B4.3 余下(异质 irregular 尾,需逐方法 live-vs-dead 分类)**:仍 ~102 个 `with self._lock[, self._connection]:`(批 5-6 后 128→102)。类别:(a) **LIVE 遗留迁移 SQLite —— 保留**
   (`_ensure_legacy_target_public_web_sqlite_tables_for_migration`、`seed_legacy_*`、retirement-audit、若仍被迁移路径调用的 `_replace_*_from_sqlite` bulk-loader);
-  (b) advisory-lock SQLite fallback(死,另一形态);(c) 更深嵌套的死尾(剩 ~33 个 `if write_pg` + if-nested);(d) acquisition_shard_registry;
-  (e) mirror/replace helpers 待无引用后删(mirror 调用 74→36);(f) 最后 `self._connection`(:809)+ `_lock` + `import sqlite3`,待无 live 触及影子
-  (剩 327 `self._connection.execute`,但多为 LIVE 迁移用 —— 须先分清)。每批先分类 live-vs-dead(迁移子系统确实用 SQLite),再 AST-safe + 合同 lane 验证。
+  (b) advisory-lock SQLite fallback(死,另一形态);(c) **native-dispatch 尾的 `skip@None` 变体(~65 个,下一批主目标)**:有 `should_prefer_read` + `_call_..._native`
+  + `with self._lock` 但方法体内无 `should_skip_sqlite_fallback`(本批 AST 探测要求 skip-guard 为 prefer-read 块末单-return,故不匹配)——须逐方法看 prefer-read 块的实际控制流
+  (native 返 None 时是落到死 with 还是别处),非干净同构尾;(d) acquisition_shard_registry;(e) mirror/replace helpers 待无引用后删(mirror 调用 74→**24**);
+  (f) 最后 `self._connection`(:809)+ `_lock` + `import sqlite3`,待无 live 触及影子(剩 **246** `self._connection.execute`,但多为 LIVE 迁移用 —— 须先分清)。
+  每批先分类 live-vs-dead(迁移子系统确实用 SQLite),再 AST-safe + 合同 lane 验证。
