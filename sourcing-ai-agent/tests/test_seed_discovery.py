@@ -43,6 +43,22 @@ from sourcing_agent.seed_discovery import (
 
 
 class SeedDiscoveryTest(unittest.TestCase):
+    def setUp(self) -> None:
+        # Provider-mode default is now fail-closed (simulate). The live seed-discovery
+        # dispatch tests here run with the network mocked, so opt into live + the
+        # non-production dual-confirm. Non-live tests override the mode themselves.
+        _live = mock.patch.dict(
+            os.environ,
+            {
+                "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+                "SOURCING_LIVE_PROVIDER_CONFIRM": "1",
+                "SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS": "1",
+            },
+            clear=False,
+        )
+        _live.start()
+        self.addCleanup(_live.stop)
+
     def _write_seed_catalog(
         self,
         *,

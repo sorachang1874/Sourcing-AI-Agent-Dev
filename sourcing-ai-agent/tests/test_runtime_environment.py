@@ -8,6 +8,8 @@ from sourcing_agent.runtime_environment import (
     ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS_ENV,
     LIVE_PROVIDER_ACCESS_DISABLED_ENV,
     LIVE_PROVIDER_CONFIRM_ENV,
+    NON_LIVE_PROVIDER_MODES,
+    SAFE_DEFAULT_PROVIDER_MODE,
     LiveProviderAccessError,
     assert_live_provider_access_allowed,
     current_runtime_environment,
@@ -24,9 +26,17 @@ from sourcing_agent.runtime_environment import (
 
 
 class RuntimeEnvironmentTest(unittest.TestCase):
-    def test_provider_mode_normalization_uses_live_by_default(self) -> None:
+    def test_provider_mode_normalization_fails_closed_to_non_live_by_default(self) -> None:
+        # Fail-closed: an unset/blank/unknown provider mode must NOT default to live,
+        # so a bare process cannot make billed external calls without explicit opt-in.
         with patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(normalize_provider_mode(), "live")
+            self.assertEqual(normalize_provider_mode(), SAFE_DEFAULT_PROVIDER_MODE)
+            self.assertIn(normalize_provider_mode(), NON_LIVE_PROVIDER_MODES)
+        self.assertEqual(normalize_provider_mode(""), SAFE_DEFAULT_PROVIDER_MODE)
+        self.assertEqual(normalize_provider_mode("totally-unknown-mode"), SAFE_DEFAULT_PROVIDER_MODE)
+        # Live is still reachable, but only by explicit opt-in.
+        self.assertEqual(normalize_provider_mode("live"), "live")
+        self.assertEqual(normalize_provider_mode("production"), "live")
         self.assertEqual(normalize_provider_mode("fixture"), "scripted")
         self.assertEqual(normalize_provider_mode("offline"), "replay")
 
@@ -214,6 +224,22 @@ class RuntimeEnvironmentTest(unittest.TestCase):
         self.assertEqual(overrides["DATAFORSEO_LOGIN"], "")
         self.assertEqual(overrides["SERPER_API_KEY"], "")
 
+    def test_default_unset_environment_isolation_is_fail_closed(self) -> None:
+        # Regression guard for the 2026-06-27 incident: a bare process / detached
+        # subprocess with NO provider env set must resolve to a fail-closed isolation
+        # contract (live access disabled + every paid token blanked), so an
+        # auto-spawned workflow runner inheriting this env cannot make billed calls.
+        with patch.dict(os.environ, {}, clear=True):
+            overrides = provider_isolation_env_overrides()
+            contract = provider_isolation_contract()
+        self.assertTrue(contract.live_provider_access_disabled)
+        self.assertFalse(contract.live_provider_access_allowed)
+        self.assertEqual(overrides[LIVE_PROVIDER_ACCESS_DISABLED_ENV], "1")
+        self.assertEqual(overrides["APIFY_API_TOKEN"], "")
+        self.assertEqual(overrides["HARVEST_PROFILE_SEARCH_API_TOKEN"], "")
+        self.assertEqual(overrides["DATAFORSEO_LOGIN"], "")
+        self.assertEqual(overrides["SERPER_API_KEY"], "")
+
     def test_live_provider_boundary_rejects_non_live_mode(self) -> None:
         with self.assertRaises(LiveProviderAccessError):
             assert_live_provider_access_allowed(
@@ -234,13 +260,33 @@ class RuntimeEnvironmentTest(unittest.TestCase):
                 )
 
     def test_live_provider_boundary_rejects_synthetic_fixture_inputs_even_in_live_mode(self) -> None:
-        with patch.dict(os.environ, {}, clear=True):
+        # Dual-confirm set so we get past the confirm gate and specifically exercise
+        # the synthetic/scripted-fixture marker rejection.
+        with patch.dict(
+            os.environ,
+            {LIVE_PROVIDER_CONFIRM_ENV: "1", ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS_ENV: "1"},
+            clear=True,
+        ):
             with self.assertRaises(LiveProviderAccessError):
                 assert_live_provider_access_allowed(
                     provider_name="harvest_apify",
                     operation="submit_actor_run",
                     provider_mode="live",
                     payload={"urls": ["https://www.linkedin.com/in/openai-agent-current-0087/"]},
+                )
+
+    def test_live_provider_boundary_rejects_local_dev_live_without_confirm(self) -> None:
+        # Regression guard for the 2026-06-27 accidental-billing incident: a default
+        # local_dev process in live mode (e.g. a detached workflow runner) must NOT be
+        # able to reach a real provider call without the explicit dual-confirm.
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(LiveProviderAccessError):
+                assert_live_provider_access_allowed(
+                    provider_name="harvest_apify",
+                    operation="submit_actor_run",
+                    provider_mode="live",
+                    runtime_environment="local_dev",
+                    payload={"urls": ["https://www.linkedin.com/in/real-person-example/"]},
                 )
 
 
