@@ -3834,6 +3834,19 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
 
 
 class LiveControlPlanePostgresRetryTest(unittest.TestCase):
+    def setUp(self) -> None:
+        # These are pure unit tests with FAKE psycopg connections/cursors driven by a
+        # fixed list of outcomes. Pin the control-plane schema to "public" so the
+        # per-test schema-isolation fixture (SOURCING_TEST_PG_ISOLATED_SCHEMA) is a
+        # no-op here — otherwise configure_control_plane_postgres_session would emit
+        # CREATE SCHEMA / SET search_path against the fake cursor and consume its
+        # scripted outcomes.
+        _pin = mock.patch.dict(
+            os.environ, {"SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "public"}, clear=False
+        )
+        _pin.start()
+        self.addCleanup(_pin.stop)
+
     def test_postgres_only_generic_reads_return_empty_for_missing_table_without_bootstrap(self) -> None:
         class _MissingTableCursor:
             rowcount = 0
