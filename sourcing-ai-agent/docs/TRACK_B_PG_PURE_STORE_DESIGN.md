@@ -505,6 +505,35 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   (idempotent 0!=1、lovable_board)。
 - **B4.3 完成度:storage.py 26,847 → 19,978(−6,869 行,批 1-8);Track B 全程 30,658 → 19,978。** SQLite 残余(全部有意保留):3 个 lock-with
   (close/_configure_connection/legacy-migration ensure)+ 50 个 conn.execute(LIVE 遗留 target-public-web 迁移子系统 + infra)。
-- **B4.3 最终一步 (f)(尚未做,须先决策遗留迁移子系统去留)**:`self._connection` + `_lock` + `import sqlite3` 的物理删除,取决于
-  `_ensure_legacy_target_public_web_sqlite_tables_for_migration`/`seed_legacy_*`/retirement-audit 这套 LIVE 遗留迁移是否仍需支持
-  (它在影子连接上按需建遗留表)。若 owner 决定退役遗留迁移路径,(f) 一并收口;否则影子连接为它长期保留。
+- **2026-07-02 B4.3(f) 影子物理删除 —— B4.3 100% 完成(owner 批准退役遗留 SQLite 迁移子系统;commit 本条)。storage.py 零 sqlite3/零 _connection/零 _lock,19,187 行。**
+  三层工作流映射(31 法分类+对抗校验、遗留子系统/影子 infra/sqlite3.Row 注解/测试消费者 4 份映射)后执行:
+  - **关键解耦(映射的核心发现)**:PG 遗留表(target_candidate_public_web_batches/runs/promotions,不在 0001_baseline —— 迁移上下文专用)的 DDL 一直是
+    **从 SQLite 影子生成的**(adapter `_ensure_legacy_target_public_web_migration_table_schema` → `sync_runtime_control_plane_to_postgres(sqlite_path=影子)`)。
+    重写为 **adapter 内字面原生 PG DDL**(`_LEGACY_TARGET_PUBLIC_WEB_MIGRATION_TABLE_DDL`,与旧 sync 产物零漂移:TEXT/BIGINT/DOUBLE PRECISION、保 NOT NULL、
+    无 DEFAULT、PK-only、无 idempotency UNIQUE;含 8 个二级索引,索引名与既有 PG 侧 ensure 幂等)。**迁移功能语义完整保留**(seed→PG、read→PG、archive/drop→PG);
+    丢失的只是「首次迁移写时从影子隐式回填历史行」——按批准立场,遗留行已是物理 PG 行。
+  - **31 个无锁 SQLite fallback 法塌缩**(criteria/confidence 读家族、candidates 计数、plan-review/job-events 读、find_best_completed_job_match 等 ——
+    无 `with self._lock` 故历批 AST 探测全部漏掉)+ 8 个孤儿 `_locked` helper 与 `_insert_candidates_and_evidence`(executemany,又一探测盲区)、
+    `_manual_review_item_from_row_payload` 整体删除。0 KEEP(除 3 个 infra/迁移项,现全删)。
+  - **infra 删除**:`self._connection`(connect/row_factory/_configure_connection)、`self._lock`、`_resolve_postgres_only_sqlite_backend`
+    (SOURCING_PG_ONLY_SQLITE_BACKEND 现为无效 env,插件面后续清)、`_ensure_legacy_..._sqlite_tables_for_migration` + `_sqlite_table_exists_locked` +
+    `_drop_empty_...` + `_legacy_target_public_web_table_names`、adapter `replace_table_from_sqlite`/`_bootstrap_schema_from_sqlite_source`(零调用)、
+    adapter `sqlite_path` 参数改可选。`close()` 收窄为纯 adapter-pool 处置。shadow accessors 保留为惰性标签(backend="retired"/connect_target="")。
+    **两个影子时代 sync 遗迹退役**:orchestrator hosted-watchdog 的影子→PG sync(B4.1 后一直在同步空内存库,truncate_first 配置下甚至有破坏性)→
+    静态 `{"status":"retired"}`;job_result_lifecycle_backfill 的建表 sync → `ensure_bootstrapped()`(表在 83 表基线内)。
+  - **sqlite3.Row 注解清扫**(~54 处 → dict[str, Any],纯注解零运行时影响;live 调用点全部传 PG dict,由映射 agent 验证)→ `import sqlite3` 删除。
+  - **legacy_public_web_storage PG-only 化**:删 `_list_sqlite_rows`/`_drop_sqlite_legacy_tables`/`_sqlite_table_exists`/`_should_skip_sqlite` + drop 结果的
+    `"sqlite"` 键;`_list_rows` 直返 PG 腿(fail-closed-to-empty 语义在 `_list_postgres_rows` 的 except 保留)。retirement_audit 模块零改动(自动 PG-only)。
+  - **测试面**:retirement-audit 4 法重写为 PG 断言(fresh-schema pg_tables 检查/adapter DDL 源断言/PG DROP/物理删表证明);operation_runtime 64 处 +
+    results_api 4 处 `_connection.close()`→`store.close()`;pg_durable_runtime fixture 改 store.close();pool/live_postgres 影子语义测试改写(disk-refusal
+    测试随 resolver 删除);test_pipeline PRAGMA 测试与 watchdog sync 测试改写为退役断言;worker_recovery_daemon 去掉对 storage 侧已删 re-import 的 patch;
+    fake adapter sqlite_path 改可选。**顺手修复一个 pre-existing 静默坏了 10 天的守卫**:test_pg_onconflict_guard 自 B4.1 删 init_schema 起 unique_sets
+    的 step-1(重放 storage.py 字面 DDL)失源、全表 unknown(不在合同 lane 无人发现)—— 重寄到 `migrations/0001_baseline.sql` 解析
+    (ALTER TABLE PK + 非 partial CREATE UNIQUE INDEX)+ live 模块字面 DDL,守卫比原来更诚实。scripts/sync_latest_snapshot_from_registry.py 的
+    `store._connection` 读(本已坏)改走 store API。
+  - **验证**:retirement audit 7/7(seed→原生 DDL→读/归档/删 端到端);合同 lane 181 全 PASS 0 skip;core 组 145+21、consumer 组 250、results_api/enrichment 431
+    全过;3 个失败全部 stash-控制实验证明 pre-existing(lovable_board、settings 命名、snapshot idempotent 属早前批)。**残留披露**:test_pipeline 里 ~33 处直写
+    影子的测试(2404+ 等)本就在 postgres_only 下失败(no-such-table),现变 AttributeError —— 同一 pre-existing 失败集,非 lane;SOURCING_PG_ONLY_SQLITE_BACKEND
+    env 插件面(Makefile/scripts/service_daemon/scripted_test_runtime)现为惰性 no-op,后续专批清理;`orchestrator.py:41719` 的 `except sqlite3.OperationalError`
+    重试挂钩现永不匹配(psycopg 错误直穿),后续清理;`control_plane_postgres.py` 的独立 on-disk-SQLite 导入/导出工具(自带 sqlite3.connect)是合法的
+    SQLite→PG 迁移工具,独立退役决策。
