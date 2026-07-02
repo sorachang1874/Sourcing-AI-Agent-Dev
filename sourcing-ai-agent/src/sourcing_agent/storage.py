@@ -1316,22 +1316,6 @@ class ControlPlaneStore:
             and callable(getattr(self._control_plane_postgres, "acquire_workflow_job_lease", None))
         )
 
-    def _mirror_control_plane_row(self, table_name: str, row: sqlite3.Row | dict[str, Any] | None) -> None:
-        if row is None or not self._control_plane_postgres.should_mirror(table_name):
-            return
-        try:
-            self._control_plane_postgres.upsert_row(table_name, dict(row))
-        except Exception:
-            return
-
-    def _replace_control_plane_table_from_sqlite(self, table_name: str) -> None:
-        if not self._control_plane_postgres.should_mirror(table_name):
-            return
-        try:
-            self._control_plane_postgres.replace_table_from_sqlite(table_name)
-        except Exception:
-            return
-
     def _write_control_plane_row_to_postgres(self, table_name: str, row: dict[str, Any] | None) -> bool:
         if row is None or not self._control_plane_postgres_should_prefer_read(table_name):
             return False
@@ -1446,18 +1430,14 @@ class ControlPlaneStore:
         ):
             self._bootstrap_candidate_store_loaded = True
             return
-        with self._lock, self._connection:
-            self._connection.execute("DELETE FROM evidence")
-            self._connection.execute("DELETE FROM candidates")
-            self._insert_candidates_and_evidence(candidates, evidence)
-        self._replace_control_plane_table_from_sqlite("candidates")
-        self._replace_control_plane_table_from_sqlite("evidence")
-        self._bootstrap_candidate_store_loaded = True
+        raise RuntimeError(
+            "postgres-only invariant violated for candidates/evidence in replace_bootstrap_data: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def replace_company_data(
         self, target_company: str, candidates: list[Candidate], evidence: list[EvidenceRecord]
     ) -> None:
-        company_key = target_company.strip().lower()
         if self._replace_candidates_and_evidence_in_postgres(
             current_candidate_rows=self._select_postgres_candidate_rows(
                 where_sql="lower(target_company) = lower(%s)",
@@ -1468,25 +1448,10 @@ class ControlPlaneStore:
             evidence=evidence,
         ):
             return
-        with self._lock, self._connection:
-            rows = self._connection.execute(
-                "SELECT candidate_id FROM candidates WHERE lower(target_company) = ?",
-                (company_key,),
-            ).fetchall()
-            candidate_ids = [row["candidate_id"] for row in rows]
-            if candidate_ids:
-                placeholders = ",".join("?" for _ in candidate_ids)
-                self._connection.execute(
-                    f"DELETE FROM evidence WHERE candidate_id IN ({placeholders})",
-                    candidate_ids,
-                )
-            self._connection.execute(
-                "DELETE FROM candidates WHERE lower(target_company) = ?",
-                (company_key,),
-            )
-            self._insert_candidates_and_evidence(candidates, evidence)
-        self._replace_control_plane_table_from_sqlite("candidates")
-        self._replace_control_plane_table_from_sqlite("evidence")
+        raise RuntimeError(
+            "postgres-only invariant violated for candidates/evidence in replace_company_data: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def replace_company_candidate_data(
         self,
@@ -1526,19 +1491,10 @@ class ControlPlaneStore:
             conflict_candidate_ids=normalized_candidate_ids,
         ):
             return
-        placeholders = ",".join("?" for _ in normalized_candidate_ids)
-        with self._lock, self._connection:
-            self._connection.execute(
-                f"DELETE FROM evidence WHERE candidate_id IN ({placeholders})",
-                normalized_candidate_ids,
-            )
-            self._connection.execute(
-                f"DELETE FROM candidates WHERE candidate_id IN ({placeholders})",
-                normalized_candidate_ids,
-            )
-            self._insert_candidates_and_evidence(filtered_candidates, filtered_evidence)
-        self._replace_control_plane_table_from_sqlite("candidates")
-        self._replace_control_plane_table_from_sqlite("evidence")
+        raise RuntimeError(
+            "postgres-only invariant violated for candidates in replace_company_candidate_data: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def replace_company_category_data(
         self,
@@ -1547,8 +1503,6 @@ class ControlPlaneStore:
         candidates: list[Candidate],
         evidence: list[EvidenceRecord],
     ) -> None:
-        company_key = target_company.strip().lower()
-        category_key = category.strip().lower()
         incoming_candidate_ids = _dedupe_preserve_order(
             [str(candidate.candidate_id or "").strip() for candidate in list(candidates or [])]
         )
@@ -1563,39 +1517,10 @@ class ControlPlaneStore:
             conflict_candidate_ids=incoming_candidate_ids,
         ):
             return
-        with self._lock, self._connection:
-            rows = self._connection.execute(
-                """
-                SELECT candidate_id FROM candidates
-                WHERE lower(target_company) = ? AND lower(category) = ?
-                """,
-                (company_key, category_key),
-            ).fetchall()
-            candidate_ids = [row["candidate_id"] for row in rows]
-            incoming_conflict_ids = [candidate_id for candidate_id in incoming_candidate_ids if candidate_id not in candidate_ids]
-            if candidate_ids:
-                placeholders = ",".join("?" for _ in candidate_ids)
-                self._connection.execute(
-                    f"DELETE FROM evidence WHERE candidate_id IN ({placeholders})",
-                    candidate_ids,
-                )
-            if incoming_conflict_ids:
-                placeholders = ",".join("?" for _ in incoming_conflict_ids)
-                self._connection.execute(
-                    f"DELETE FROM evidence WHERE candidate_id IN ({placeholders})",
-                    incoming_conflict_ids,
-                )
-                self._connection.execute(
-                    f"DELETE FROM candidates WHERE candidate_id IN ({placeholders})",
-                    incoming_conflict_ids,
-                )
-            self._connection.execute(
-                "DELETE FROM candidates WHERE lower(target_company) = ? AND lower(category) = ?",
-                (company_key, category_key),
-            )
-            self._insert_candidates_and_evidence(candidates, evidence)
-        self._replace_control_plane_table_from_sqlite("candidates")
-        self._replace_control_plane_table_from_sqlite("evidence")
+        raise RuntimeError(
+            "postgres-only invariant violated for candidates in replace_company_category_data: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def _replace_candidates_and_evidence_in_postgres(
         self,
@@ -1759,17 +1684,10 @@ class ControlPlaneStore:
             params=[target_company],
             limit=0,
         )
-        if postgres_rows or self._control_plane_postgres_should_skip_sqlite_fallback("candidates"):
-            return sorted(
-                [self._candidate_from_row(row) for row in postgres_rows],
-                key=lambda candidate: str(candidate.name_en or "").lower(),
-            )
-        with self._lock:
-            rows = self._connection.execute(
-                "SELECT * FROM candidates WHERE lower(target_company) = lower(?) ORDER BY name_en",
-                (target_company,),
-            ).fetchall()
-        return [self._candidate_from_row(row) for row in rows]
+        return sorted(
+            [self._candidate_from_row(row) for row in postgres_rows],
+            key=lambda candidate: str(candidate.name_en or "").lower(),
+        )
 
     def find_candidate_by_linkedin_url(self, linkedin_url: str) -> Candidate | None:
         normalized_key = _normalize_linkedin_profile_url_key(linkedin_url)
@@ -1790,15 +1708,6 @@ class ControlPlaneStore:
         candidates: list[Candidate] = []
         if postgres_rows:
             candidates = [self._candidate_from_row(row) for row in postgres_rows]
-        elif not self._control_plane_postgres_should_skip_sqlite_fallback("candidates"):
-            with self._lock:
-                rows = self._connection.execute(
-                    "SELECT * FROM candidates WHERE lower(linkedin_url) IN ("
-                    + ", ".join(["?"] * len(lookup_values))
-                    + ")",
-                    tuple(lookup_values),
-                ).fetchall()
-            candidates = [self._candidate_from_row(row) for row in rows]
         if not candidates:
             return None
         return max(candidates, key=_candidate_richness_score_for_store_match)
@@ -1862,16 +1771,10 @@ class ControlPlaneStore:
             params=[normalized_candidate_id],
             limit=0,
         )
-        if postgres_rows or self._control_plane_postgres_should_skip_sqlite_fallback("evidence"):
-            return sorted(
-                [self._evidence_payload_from_row(row, include_candidate_id=False) for row in postgres_rows],
-                key=lambda row: (str(row.get("title") or ""), str(row.get("evidence_id") or "")),
-            )
-        with self._lock:
-            rows = self._connection.execute(
-                "SELECT * FROM evidence WHERE candidate_id = ? ORDER BY title", (normalized_candidate_id,)
-            ).fetchall()
-        return [self._evidence_payload_from_row(row, include_candidate_id=False) for row in rows]
+        return sorted(
+            [self._evidence_payload_from_row(row, include_candidate_id=False) for row in postgres_rows],
+            key=lambda row: (str(row.get("title") or ""), str(row.get("evidence_id") or "")),
+        )
 
     def list_evidence_for_company(self, target_company: str) -> list[dict[str, Any]]:
         company_candidates = self.list_candidates_for_company(target_company)
@@ -1909,35 +1812,11 @@ class ControlPlaneStore:
         evidence_payloads = [self._evidence_payload(item) for item in evidence]
         if all(self._write_control_plane_row_to_postgres("evidence", payload) for payload in evidence_payloads):
             return self.list_evidence(evidence[0].candidate_id)
-        with self._lock, self._connection:
-            self._connection.executemany(
-                """
-                INSERT INTO evidence (
-                    evidence_id, candidate_id, source_type, title, url, summary,
-                    source_dataset, source_path, metadata_json
-                ) VALUES (
-                    :evidence_id, :candidate_id, :source_type, :title, :url, :summary,
-                    :source_dataset, :source_path, :metadata_json
-                )
-                ON CONFLICT(evidence_id) DO UPDATE SET
-                    candidate_id = excluded.candidate_id,
-                    source_type = excluded.source_type,
-                    title = excluded.title,
-                    url = excluded.url,
-                    summary = excluded.summary,
-                    source_dataset = excluded.source_dataset,
-                    source_path = excluded.source_path,
-                    metadata_json = excluded.metadata_json
-                """,
-                evidence_payloads,
-            )
-            rows = self._connection.execute(
-                "SELECT * FROM evidence WHERE candidate_id = ? ORDER BY title",
-                (evidence[0].candidate_id,),
-            ).fetchall()
-        for row in rows:
-            self._mirror_control_plane_row("evidence", row)
-        return self.list_evidence(evidence[0].candidate_id)
+        self._raise_control_plane_postgres_write_failure(
+            table_name="evidence",
+            method_name="upsert_evidence_records",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
 
     def save_job(
         self,
@@ -2255,32 +2134,10 @@ class ControlPlaneStore:
             if all(self._write_control_plane_row_to_postgres("job_results", payload) for payload in row_payloads):
                 if self._control_plane_postgres_should_skip_sqlite_fallback("job_results"):
                     return
-        with self._lock, self._connection:
-            self._connection.execute("DELETE FROM job_results WHERE job_id = ?", (normalized_job_id,))
-            self._connection.executemany(
-                """
-                INSERT INTO job_results (
-                    job_id, candidate_id, rank_index, score, confidence_label, confidence_score, confidence_reason, explanation, matched_fields_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                [
-                    (
-                        payload["job_id"],
-                        payload["candidate_id"],
-                        payload["rank_index"],
-                        payload["score"],
-                        payload["confidence_label"],
-                        payload["confidence_score"],
-                        payload["confidence_reason"],
-                        payload["explanation"],
-                        payload["matched_fields_json"],
-                    )
-                    for payload in row_payloads
-                ],
-            )
-            rows = self._connection.execute("SELECT * FROM job_results WHERE job_id = ?", (normalized_job_id,)).fetchall()
-        for row in rows:
-            self._mirror_control_plane_row("job_results", row)
+        raise RuntimeError(
+            "postgres-only invariant violated for job_results in replace_job_results: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_job(self, job_id: str) -> dict[str, Any] | None:
         normalized_job_id = str(job_id or "").strip()
@@ -3864,40 +3721,10 @@ class ControlPlaneStore:
                     method_name="insert_row_with_generated_id",
                     reason="native insert returned no row under postgres_only",
                 )
-        with self._lock, self._connection:
-            cursor = self._connection.execute(
-                """
-                INSERT INTO plan_review_sessions (
-                    target_company, request_signature, request_family_signature,
-                    matching_request_signature, matching_request_family_signature,
-                    status, risk_level, required_before_execution,
-                    request_json, plan_json, gate_json, execution_bundle_json, matching_request_json, decision_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    target_company,
-                    request_signature(request_payload),
-                    request_family_signature(request_payload),
-                    str(matching_bundle.get("matching_request_signature") or ""),
-                    str(matching_bundle.get("matching_request_family_signature") or ""),
-                    status,
-                    str(gate_payload.get("risk_level") or "medium"),
-                    1 if bool(gate_payload.get("required_before_execution")) else 0,
-                    json.dumps(request_payload, ensure_ascii=False),
-                    json.dumps(plan_payload, ensure_ascii=False),
-                    json.dumps(gate_payload, ensure_ascii=False),
-                    json.dumps(_json_safe_payload(execution_bundle_value), ensure_ascii=False),
-                    json.dumps(_json_safe_payload(matching_bundle), ensure_ascii=False),
-                    json.dumps({}, ensure_ascii=False),
-                ),
-            )
-            review_id = int(cursor.lastrowid)
-            row = self._connection.execute(
-                "SELECT * FROM plan_review_sessions WHERE review_id = ? LIMIT 1",
-                (review_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("plan_review_sessions", row)
-        return self._plan_review_session_from_row(row) if row is not None else {}
+        raise RuntimeError(
+            "postgres-only invariant violated for plan_review_sessions in create_plan_review_session: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_plan_review_session(self, review_id: int) -> dict[str, Any] | None:
         if review_id <= 0:
@@ -4040,47 +3867,10 @@ class ControlPlaneStore:
                     method_name="update_row_returning",
                     reason=f"native update returned no row for review_id={review_id} after the session was read",
                 )
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE plan_review_sessions
-                SET target_company = ?, request_signature = ?, request_family_signature = ?,
-                    matching_request_signature = ?, matching_request_family_signature = ?,
-                    status = ?, reviewer = ?, review_notes = ?, decision_json = ?, request_json = ?, plan_json = ?,
-                    execution_bundle_json = CASE
-                        WHEN ? <> '{}' THEN ?
-                        ELSE execution_bundle_json
-                    END,
-                    matching_request_json = ?,
-                    approved_at = CASE WHEN ? = 'approved' THEN CURRENT_TIMESTAMP ELSE approved_at END,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE review_id = ?
-                """,
-                (
-                    final_target_company,
-                    request_signature(final_request_payload),
-                    request_family_signature(final_request_payload),
-                    str(matching_bundle.get("matching_request_signature") or ""),
-                    str(matching_bundle.get("matching_request_family_signature") or ""),
-                    status,
-                    reviewer,
-                    notes,
-                    json.dumps(decision_payload or {}, ensure_ascii=False),
-                    json.dumps(final_request_payload, ensure_ascii=False),
-                    json.dumps(final_plan_payload, ensure_ascii=False),
-                    execution_bundle_json,
-                    execution_bundle_json,
-                    json.dumps(_json_safe_payload(matching_bundle), ensure_ascii=False),
-                    status,
-                    review_id,
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM plan_review_sessions WHERE review_id = ? LIMIT 1",
-                (review_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("plan_review_sessions", row)
-        return self._plan_review_session_from_row(row) if row is not None else None
+        raise RuntimeError(
+            "postgres-only invariant violated for plan_review_sessions in review_plan_session: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def replace_manual_review_items(self, job_id: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         normalized_items = _prepare_manual_review_items(items)
@@ -6359,104 +6149,10 @@ class ControlPlaneStore:
                         reason=f"{type(exc).__name__}: {exc}",
                         error=exc,
                     )
-        with self._lock, self._connection:
-            self._connection.execute(
-                "DELETE FROM person_public_web_signals WHERE run_id = ?",
-                (normalized_run_id,),
-            )
-            for row_payload in row_payloads:
-                self._connection.execute(
-                    """
-                    INSERT INTO person_public_web_signals (
-                        signal_id, run_id, asset_id, person_identity_key, record_id, candidate_id, candidate_name,
-                        current_company, linkedin_url_key, signal_kind, signal_type, email_type, value,
-                        normalized_value, url, source_url, source_domain, source_family, source_title,
-                        confidence_label, confidence_score, identity_match_label, identity_match_score,
-                        publishable, promotion_status, suppression_reason, evidence_excerpt, artifact_refs_json,
-                        model_provider, model_version, metadata_json, created_at, updated_at
-                    ) VALUES (
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                    )
-                    ON CONFLICT(signal_id) DO UPDATE SET
-                        run_id = excluded.run_id,
-                        asset_id = excluded.asset_id,
-                        person_identity_key = excluded.person_identity_key,
-                        record_id = excluded.record_id,
-                        candidate_id = excluded.candidate_id,
-                        candidate_name = excluded.candidate_name,
-                        current_company = excluded.current_company,
-                        linkedin_url_key = excluded.linkedin_url_key,
-                        signal_kind = excluded.signal_kind,
-                        signal_type = excluded.signal_type,
-                        email_type = excluded.email_type,
-                        value = excluded.value,
-                        normalized_value = excluded.normalized_value,
-                        url = excluded.url,
-                        source_url = excluded.source_url,
-                        source_domain = excluded.source_domain,
-                        source_family = excluded.source_family,
-                        source_title = excluded.source_title,
-                        confidence_label = excluded.confidence_label,
-                        confidence_score = excluded.confidence_score,
-                        identity_match_label = excluded.identity_match_label,
-                        identity_match_score = excluded.identity_match_score,
-                        publishable = excluded.publishable,
-                        promotion_status = excluded.promotion_status,
-                        suppression_reason = excluded.suppression_reason,
-                        evidence_excerpt = excluded.evidence_excerpt,
-                        artifact_refs_json = excluded.artifact_refs_json,
-                        model_provider = excluded.model_provider,
-                        model_version = excluded.model_version,
-                        metadata_json = excluded.metadata_json,
-                        updated_at = CURRENT_TIMESTAMP
-                    """,
-                    (
-                        row_payload["signal_id"],
-                        row_payload["run_id"],
-                        row_payload["asset_id"],
-                        row_payload["person_identity_key"],
-                        row_payload["record_id"],
-                        row_payload["candidate_id"],
-                        row_payload["candidate_name"],
-                        row_payload["current_company"],
-                        row_payload["linkedin_url_key"],
-                        row_payload["signal_kind"],
-                        row_payload["signal_type"],
-                        row_payload["email_type"],
-                        row_payload["value"],
-                        row_payload["normalized_value"],
-                        row_payload["url"],
-                        row_payload["source_url"],
-                        row_payload["source_domain"],
-                        row_payload["source_family"],
-                        row_payload["source_title"],
-                        row_payload["confidence_label"],
-                        row_payload["confidence_score"],
-                        row_payload["identity_match_label"],
-                        row_payload["identity_match_score"],
-                        row_payload["publishable"],
-                        row_payload["promotion_status"],
-                        row_payload["suppression_reason"],
-                        row_payload["evidence_excerpt"],
-                        row_payload["artifact_refs_json"],
-                        row_payload["model_provider"],
-                        row_payload["model_version"],
-                        row_payload["metadata_json"],
-                    ),
-                )
-        if self._control_plane_postgres.should_mirror("person_public_web_signals"):
-            try:
-                self._control_plane_postgres.delete_rows(
-                    table_name="person_public_web_signals",
-                    where_sql="run_id = %s",
-                    params=[normalized_run_id],
-                )
-                if row_payloads:
-                    self._control_plane_postgres.bulk_upsert_rows("person_public_web_signals", row_payloads)
-            except Exception:
-                pass
-        return len(row_payloads)
+        raise RuntimeError(
+            "postgres-only invariant violated for person_public_web_signals in replace_person_public_web_signals_for_run: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_person_public_web_signal(self, *, signal_id: str = "") -> dict[str, Any] | None:
         normalized_signal_id = str(signal_id or "").strip()
@@ -7018,12 +6714,10 @@ class ControlPlaneStore:
                 deleted_count = 0
             if deleted_count or self._control_plane_postgres_should_skip_sqlite_fallback("frontend_history_links"):
                 return bool(deleted_count)
-        with self._lock, self._connection:
-            cursor = self._connection.execute(
-                "DELETE FROM frontend_history_links WHERE history_id = ?",
-                (normalized_history_id,),
-            )
-        return int(cursor.rowcount or 0) > 0
+        raise RuntimeError(
+            "postgres-only invariant violated for frontend_history_links in delete_frontend_history_link: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def resolve_frontend_history_link(self, history_id: str) -> dict[str, Any] | None:
         normalized_history_id = str(history_id or "").strip()
@@ -7171,42 +6865,10 @@ class ControlPlaneStore:
                     method_name="create_agent_runtime_session_row",
                     reason="native writer returned no row",
                 )
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO agent_runtime_sessions (
-                    job_id, target_company, request_signature, request_family_signature, runtime_mode, status, lanes_json, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(job_id) DO UPDATE SET
-                    target_company = excluded.target_company,
-                    request_signature = excluded.request_signature,
-                    request_family_signature = excluded.request_family_signature,
-                    runtime_mode = excluded.runtime_mode,
-                    status = excluded.status,
-                    lanes_json = excluded.lanes_json,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    job_id,
-                    target_company,
-                    request_signature(canonical_request),
-                    request_family_signature(canonical_request),
-                    runtime_mode,
-                    "running",
-                    json.dumps(lanes, ensure_ascii=False),
-                    json.dumps(metadata or {"plan": plan_payload}, ensure_ascii=False),
-                ),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM agent_runtime_sessions WHERE job_id = ? LIMIT 1",
-                (job_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("agent_runtime_sessions", row)
-        session = self.get_agent_runtime_session(job_id=job_id)
-        if session is None:
-            raise RuntimeError(f"Failed to create agent runtime session for {job_id}")
-        return session
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_runtime_sessions in create_agent_runtime_session: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_agent_runtime_session(self, *, job_id: str = "", session_id: int = 0) -> dict[str, Any] | None:
         if session_id > 0:
@@ -7231,22 +6893,12 @@ class ControlPlaneStore:
                 return postgres_row
             if self._control_plane_postgres_should_skip_sqlite_fallback("agent_runtime_sessions"):
                 return None
-        with self._lock:
-            if session_id > 0:
-                row = self._connection.execute(
-                    "SELECT * FROM agent_runtime_sessions WHERE session_id = ? LIMIT 1",
-                    (session_id,),
-                ).fetchone()
-            elif job_id:
-                row = self._connection.execute(
-                    "SELECT * FROM agent_runtime_sessions WHERE job_id = ? LIMIT 1",
-                    (job_id,),
-                ).fetchone()
-            else:
-                return None
-        if row is None:
-            return None
-        return self._agent_runtime_session_from_row(row)
+        if session_id > 0 or job_id:
+            raise RuntimeError(
+                "postgres-only invariant violated for agent_runtime_sessions in get_agent_runtime_session: should_prefer_read "
+                "returned False; legacy SQLite tail retired (B4)"
+            )
+        return None
 
     def create_agent_trace_span(
         self,
@@ -7304,21 +6956,10 @@ class ControlPlaneStore:
                     method_name="update_agent_runtime_session_status",
                     reason="native writer returned no row",
                 )
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE agent_runtime_sessions
-                SET status = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE job_id = ?
-                """,
-                (status, job_id),
-            )
-            row = self._connection.execute(
-                "SELECT * FROM agent_runtime_sessions WHERE job_id = ? LIMIT 1",
-                (job_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("agent_runtime_sessions", row)
-        return self.get_agent_runtime_session(job_id=job_id)
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_runtime_sessions in update_agent_runtime_session_status: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def complete_agent_trace_span(
         self,
@@ -10483,174 +10124,10 @@ class ControlPlaneStore:
                     method_name="upsert_organization_asset_registry",
                     reason="native upsert returned no row under postgres_only",
                 )
-        company_lookup_clause, company_lookup_params = _company_identity_lookup_predicate(
-            normalized_target_company,
-            normalized_company_key,
+        raise RuntimeError(
+            "postgres-only invariant violated for organization_asset_registry in upsert_organization_asset_registry: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
         )
-        with self._lock:
-            existing_rows = self._connection.execute(
-                """
-                SELECT * FROM organization_asset_registry
-                WHERE """
-                + company_lookup_clause
-                + """ AND asset_view = ?
-                ORDER BY authoritative DESC, updated_at DESC, registry_id DESC
-                """,
-                (*company_lookup_params, asset_view),
-            ).fetchall()
-        existing_snapshot_row = next(
-            (
-                self._organization_asset_registry_from_row(row)
-                for row in existing_rows
-                if str(row["snapshot_id"] or "").strip() == snapshot_id
-            ),
-            {},
-        )
-        storage_target_company = _resolve_storage_target_company(
-            requested_target_company=normalized_target_company,
-            company_key=normalized_company_key,
-            existing_rows=[self._organization_asset_registry_from_row(row) for row in existing_rows],
-            id_column="registry_id",
-        )
-        if authoritative:
-            with self._lock, self._connection:
-                self._connection.execute(
-                    """
-                    UPDATE organization_asset_registry
-                    SET authoritative = 0, updated_at = CURRENT_TIMESTAMP
-                    WHERE """
-                    + company_lookup_clause
-                    + """ AND asset_view = ?
-                    """,
-                    (*company_lookup_params, asset_view),
-                )
-        with self._lock, self._connection:
-            update_payload = (
-                storage_target_company,
-                normalized_company_key,
-                snapshot_id,
-                asset_view,
-                _normalized_payload_text(payload, "status", default="ready") or "ready",
-                1
-                if authoritative or bool(payload.get("authoritative")) or bool(existing_snapshot_row.get("authoritative"))
-                else 0,
-                int(payload.get("candidate_count") or 0),
-                int(payload.get("evidence_count") or 0),
-                int(payload.get("profile_detail_count") or 0),
-                int(payload.get("explicit_profile_capture_count") or 0),
-                int(payload.get("missing_linkedin_count") or 0),
-                int(payload.get("manual_review_backlog_count") or 0),
-                int(payload.get("profile_completion_backlog_count") or 0),
-                int(payload.get("source_snapshot_count") or 0),
-                float(payload.get("completeness_score") or 0.0),
-                _normalized_payload_text(payload, "completeness_band", default="low") or "low",
-                json.dumps(_json_safe_payload(payload.get("current_lane_coverage") or {}), ensure_ascii=False),
-                json.dumps(_json_safe_payload(payload.get("former_lane_coverage") or {}), ensure_ascii=False),
-                int(payload.get("current_lane_effective_candidate_count") or 0),
-                int(payload.get("former_lane_effective_candidate_count") or 0),
-                1 if bool(payload.get("current_lane_effective_ready")) else 0,
-                1 if bool(payload.get("former_lane_effective_ready")) else 0,
-                json.dumps(_json_safe_payload(payload.get("source_snapshot_selection") or {}), ensure_ascii=False),
-                json.dumps(_json_safe_payload(payload.get("selected_snapshot_ids") or []), ensure_ascii=False),
-                _normalized_payload_text(payload, "source_path"),
-                _normalized_payload_text(payload, "source_job_id"),
-                _normalized_payload_text(payload, "materialization_generation_key"),
-                int(payload.get("materialization_generation_sequence") or 0),
-                _normalized_payload_text(payload, "materialization_watermark"),
-                json.dumps(_json_safe_payload(payload.get("summary") or {}), ensure_ascii=False),
-            )
-            if existing_snapshot_row and str(existing_snapshot_row.get("target_company") or "").strip() != storage_target_company:
-                self._connection.execute(
-                    """
-                    UPDATE organization_asset_registry
-                    SET target_company = ?, company_key = ?, snapshot_id = ?, asset_view = ?, status = ?, authoritative = ?,
-                        candidate_count = ?, evidence_count = ?, profile_detail_count = ?, explicit_profile_capture_count = ?,
-                        missing_linkedin_count = ?, manual_review_backlog_count = ?, profile_completion_backlog_count = ?,
-                        source_snapshot_count = ?, completeness_score = ?, completeness_band = ?,
-                        current_lane_coverage_json = ?, former_lane_coverage_json = ?,
-                        current_lane_effective_candidate_count = ?, former_lane_effective_candidate_count = ?,
-                        current_lane_effective_ready = ?, former_lane_effective_ready = ?,
-                        source_snapshot_selection_json = ?, selected_snapshot_ids_json = ?,
-                        source_path = ?, source_job_id = ?,
-                        materialization_generation_key = ?, materialization_generation_sequence = ?, materialization_watermark = ?,
-                        summary_json = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE registry_id = ?
-                    """,
-                    (*update_payload, int(existing_snapshot_row.get("registry_id") or 0)),
-                )
-            else:
-                self._connection.execute(
-                    """
-                    INSERT INTO organization_asset_registry (
-                        target_company, company_key, snapshot_id, asset_view, status, authoritative,
-                        candidate_count, evidence_count, profile_detail_count, explicit_profile_capture_count,
-                        missing_linkedin_count, manual_review_backlog_count, profile_completion_backlog_count,
-                        source_snapshot_count, completeness_score, completeness_band,
-                        current_lane_coverage_json, former_lane_coverage_json,
-                        current_lane_effective_candidate_count, former_lane_effective_candidate_count,
-                        current_lane_effective_ready, former_lane_effective_ready,
-                        source_snapshot_selection_json, selected_snapshot_ids_json,
-                        source_path, source_job_id,
-                        materialization_generation_key, materialization_generation_sequence, materialization_watermark,
-                        summary_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(target_company, snapshot_id, asset_view) DO UPDATE SET
-                        company_key = excluded.company_key,
-                        status = excluded.status,
-                        authoritative = CASE
-                            WHEN excluded.authoritative = 1 THEN 1
-                            ELSE organization_asset_registry.authoritative
-                        END,
-                        candidate_count = excluded.candidate_count,
-                        evidence_count = excluded.evidence_count,
-                        profile_detail_count = excluded.profile_detail_count,
-                        explicit_profile_capture_count = excluded.explicit_profile_capture_count,
-                        missing_linkedin_count = excluded.missing_linkedin_count,
-                        manual_review_backlog_count = excluded.manual_review_backlog_count,
-                        profile_completion_backlog_count = excluded.profile_completion_backlog_count,
-                        source_snapshot_count = excluded.source_snapshot_count,
-                        completeness_score = excluded.completeness_score,
-                        completeness_band = excluded.completeness_band,
-                        current_lane_coverage_json = excluded.current_lane_coverage_json,
-                        former_lane_coverage_json = excluded.former_lane_coverage_json,
-                        current_lane_effective_candidate_count = excluded.current_lane_effective_candidate_count,
-                        former_lane_effective_candidate_count = excluded.former_lane_effective_candidate_count,
-                        current_lane_effective_ready = excluded.current_lane_effective_ready,
-                        former_lane_effective_ready = excluded.former_lane_effective_ready,
-                        source_snapshot_selection_json = excluded.source_snapshot_selection_json,
-                        selected_snapshot_ids_json = excluded.selected_snapshot_ids_json,
-                        source_path = excluded.source_path,
-                        source_job_id = excluded.source_job_id,
-                        materialization_generation_key = excluded.materialization_generation_key,
-                        materialization_generation_sequence = excluded.materialization_generation_sequence,
-                        materialization_watermark = excluded.materialization_watermark,
-                        summary_json = excluded.summary_json,
-                        updated_at = CURRENT_TIMESTAMP
-                    """,
-                    update_payload,
-                )
-            row = self._connection.execute(
-                """
-                SELECT * FROM organization_asset_registry
-                WHERE """
-                + company_lookup_clause
-                + """ AND snapshot_id = ? AND asset_view = ?
-                LIMIT 1
-                """,
-                (*company_lookup_params, snapshot_id, asset_view),
-            ).fetchone()
-            companion_rows = self._connection.execute(
-                """
-                SELECT * FROM organization_asset_registry
-                WHERE """
-                + company_lookup_clause
-                + """ AND asset_view = ?
-                """,
-                (*company_lookup_params, asset_view),
-            ).fetchall()
-        for companion_row in companion_rows:
-            self._mirror_control_plane_row("organization_asset_registry", companion_row)
-        return self._organization_asset_registry_from_row(row)
 
     def upsert_organization_execution_profile(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized_target_company, normalized_company_key = _normalized_company_scope(
@@ -10797,144 +10274,10 @@ class ControlPlaneStore:
                     method_name="upsert_organization_execution_profile",
                     reason="native upsert returned no row under postgres_only",
                 )
-        company_lookup_clause, company_lookup_params = _company_identity_lookup_predicate(
-            normalized_target_company,
-            normalized_company_key,
+        raise RuntimeError(
+            "postgres-only invariant violated for organization_execution_profiles in upsert_organization_execution_profile: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
         )
-        with self._lock:
-            existing_rows = self._connection.execute(
-                """
-                SELECT * FROM organization_execution_profiles
-                WHERE """
-                + company_lookup_clause
-                + """ AND asset_view = ?
-                ORDER BY updated_at DESC, profile_id DESC
-                """,
-                (*company_lookup_params, asset_view),
-            ).fetchall()
-        existing_profile_row = next(
-            (self._organization_execution_profile_from_row(row) for row in existing_rows),
-            {},
-        )
-        storage_target_company = _resolve_storage_target_company(
-            requested_target_company=normalized_target_company,
-            company_key=normalized_company_key,
-            existing_rows=[self._organization_execution_profile_from_row(row) for row in existing_rows],
-            id_column="profile_id",
-        )
-        with self._lock, self._connection:
-            update_payload = (
-                storage_target_company,
-                normalized_company_key,
-                asset_view,
-                int(payload.get("source_registry_id") or 0),
-                _normalized_payload_text(payload, "source_snapshot_id"),
-                _normalized_payload_text(payload, "source_job_id"),
-                _normalized_payload_text(payload, "source_generation_key"),
-                int(payload.get("source_generation_sequence") or 0),
-                _normalized_payload_text(payload, "source_generation_watermark"),
-                _normalized_payload_text(payload, "status", default="ready") or "ready",
-                _normalized_payload_text(payload, "org_scale_band", default="unknown") or "unknown",
-                _normalized_payload_text(payload, "default_acquisition_mode", default="full_company_roster")
-                or "full_company_roster",
-                1 if bool(payload.get("prefer_delta_from_baseline")) else 0,
-                _normalized_payload_text(payload, "current_lane_default", default="live_acquisition")
-                or "live_acquisition",
-                _normalized_payload_text(payload, "former_lane_default", default="live_acquisition")
-                or "live_acquisition",
-                int(payload.get("baseline_candidate_count") or 0),
-                int(payload.get("current_lane_effective_candidate_count") or 0),
-                int(payload.get("former_lane_effective_candidate_count") or 0),
-                float(payload.get("completeness_score") or 0.0),
-                _normalized_payload_text(payload, "completeness_band", default="low") or "low",
-                float(payload.get("profile_detail_ratio") or 0.0),
-                int(payload.get("company_employee_shard_count") or 0),
-                int(payload.get("current_profile_search_shard_count") or 0),
-                int(payload.get("former_profile_search_shard_count") or 0),
-                int(payload.get("company_employee_cap_hit_count") or 0),
-                int(payload.get("profile_search_cap_hit_count") or 0),
-                json.dumps(_json_safe_payload(payload.get("reason_codes") or []), ensure_ascii=False),
-                json.dumps(_json_safe_payload(payload.get("explanation") or {}), ensure_ascii=False),
-                json.dumps(_json_safe_payload(payload.get("summary") or {}), ensure_ascii=False),
-            )
-            if existing_profile_row and str(existing_profile_row.get("target_company") or "").strip() != storage_target_company:
-                self._connection.execute(
-                    """
-                    UPDATE organization_execution_profiles
-                    SET target_company = ?, company_key = ?, asset_view = ?, source_registry_id = ?,
-                        source_snapshot_id = ?, source_job_id = ?, source_generation_key = ?,
-                        source_generation_sequence = ?, source_generation_watermark = ?,
-                        status = ?, org_scale_band = ?, default_acquisition_mode = ?, prefer_delta_from_baseline = ?,
-                        current_lane_default = ?, former_lane_default = ?,
-                        baseline_candidate_count = ?, current_lane_effective_candidate_count = ?,
-                        former_lane_effective_candidate_count = ?, completeness_score = ?, completeness_band = ?,
-                        profile_detail_ratio = ?, company_employee_shard_count = ?, current_profile_search_shard_count = ?,
-                        former_profile_search_shard_count = ?, company_employee_cap_hit_count = ?,
-                        profile_search_cap_hit_count = ?, reason_codes_json = ?, explanation_json = ?,
-                        summary_json = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE profile_id = ?
-                    """,
-                    (*update_payload, int(existing_profile_row.get("profile_id") or 0)),
-                )
-            else:
-                self._connection.execute(
-                    """
-                    INSERT INTO organization_execution_profiles (
-                        target_company, company_key, asset_view, source_registry_id, source_snapshot_id, source_job_id,
-                        source_generation_key, source_generation_sequence, source_generation_watermark,
-                        status, org_scale_band, default_acquisition_mode, prefer_delta_from_baseline,
-                        current_lane_default, former_lane_default,
-                        baseline_candidate_count, current_lane_effective_candidate_count, former_lane_effective_candidate_count,
-                        completeness_score, completeness_band, profile_detail_ratio,
-                        company_employee_shard_count, current_profile_search_shard_count, former_profile_search_shard_count,
-                        company_employee_cap_hit_count, profile_search_cap_hit_count,
-                        reason_codes_json, explanation_json, summary_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(target_company, asset_view) DO UPDATE SET
-                        company_key = excluded.company_key,
-                        source_registry_id = excluded.source_registry_id,
-                        source_snapshot_id = excluded.source_snapshot_id,
-                        source_job_id = excluded.source_job_id,
-                        source_generation_key = excluded.source_generation_key,
-                        source_generation_sequence = excluded.source_generation_sequence,
-                        source_generation_watermark = excluded.source_generation_watermark,
-                        status = excluded.status,
-                        org_scale_band = excluded.org_scale_band,
-                        default_acquisition_mode = excluded.default_acquisition_mode,
-                        prefer_delta_from_baseline = excluded.prefer_delta_from_baseline,
-                        current_lane_default = excluded.current_lane_default,
-                        former_lane_default = excluded.former_lane_default,
-                        baseline_candidate_count = excluded.baseline_candidate_count,
-                        current_lane_effective_candidate_count = excluded.current_lane_effective_candidate_count,
-                        former_lane_effective_candidate_count = excluded.former_lane_effective_candidate_count,
-                        completeness_score = excluded.completeness_score,
-                        completeness_band = excluded.completeness_band,
-                        profile_detail_ratio = excluded.profile_detail_ratio,
-                        company_employee_shard_count = excluded.company_employee_shard_count,
-                        current_profile_search_shard_count = excluded.current_profile_search_shard_count,
-                        former_profile_search_shard_count = excluded.former_profile_search_shard_count,
-                        company_employee_cap_hit_count = excluded.company_employee_cap_hit_count,
-                        profile_search_cap_hit_count = excluded.profile_search_cap_hit_count,
-                        reason_codes_json = excluded.reason_codes_json,
-                        explanation_json = excluded.explanation_json,
-                        summary_json = excluded.summary_json,
-                        updated_at = CURRENT_TIMESTAMP
-                    """,
-                    update_payload,
-                )
-            row = self._connection.execute(
-                """
-                SELECT * FROM organization_execution_profiles
-                WHERE """
-                + company_lookup_clause
-                + """ AND asset_view = ?
-                ORDER BY updated_at DESC, profile_id DESC
-                LIMIT 1
-                """,
-                (*company_lookup_params, asset_view),
-            ).fetchone()
-        self._mirror_control_plane_row("organization_execution_profiles", row)
-        return self._organization_execution_profile_from_row(row)
 
     def get_organization_execution_profile(
         self,
@@ -11105,18 +10448,6 @@ class ControlPlaneStore:
                 params.append(normalized_asset_view)
             return " ".join(clauses), params
 
-        def _sqlite_where_clause() -> tuple[str, list[Any]]:
-            clauses = ["(lower(target_company) = lower(?)"]
-            params: list[Any] = [normalized_target_company]
-            if normalized_company_key:
-                clauses.append(" OR company_key = ?")
-                params.append(normalized_company_key)
-            clauses.append(")")
-            if normalized_asset_view:
-                clauses.append("AND asset_view = ?")
-                params.append(normalized_asset_view)
-            return " ".join(clauses), params
-
         def _row_sort_key(row: sqlite3.Row | dict[str, Any]) -> tuple[int, int, str, int]:
             return (
                 1 if bool(row["authoritative"]) else 0,
@@ -11164,16 +10495,6 @@ class ControlPlaneStore:
                         )
                         if updated_row is not None:
                             updated_rows += 1
-                    else:
-                        self._connection.execute(
-                            """
-                            UPDATE organization_asset_registry
-                            SET target_company = ?, authoritative = ?, updated_at = CURRENT_TIMESTAMP
-                            WHERE registry_id = ?
-                            """,
-                            (normalized_target_company, 1 if authoritative else 0, keeper_id),
-                        )
-                        updated_rows += 1
                 extra_ids = [
                     int(candidate_row["registry_id"] or 0)
                     for candidate_row in group_rows
@@ -11192,13 +10513,6 @@ class ControlPlaneStore:
                             )
                             or 0
                         )
-                    else:
-                        placeholders = ",".join("?" for _ in extra_ids)
-                        self._connection.execute(
-                            f"DELETE FROM organization_asset_registry WHERE registry_id IN ({placeholders})",
-                            extra_ids,
-                        )
-                        deleted_rows += len(extra_ids)
                     merged_groups += 1
             if normalized_asset_view and any(bool(row["authoritative"]) for row in rows):
                 if use_postgres:
@@ -11231,27 +10545,6 @@ class ControlPlaneStore:
                             )
                             if updated_row is not None:
                                 updated_rows += 1
-                else:
-                    authoritative_row = self._connection.execute(
-                        """
-                        SELECT registry_id FROM organization_asset_registry
-                        WHERE lower(target_company) = lower(?) AND asset_view = ? AND authoritative = 1
-                        ORDER BY updated_at DESC, registry_id DESC
-                        LIMIT 1
-                        """,
-                        (normalized_target_company, normalized_asset_view),
-                    ).fetchone()
-                    authoritative_id = int(authoritative_row["registry_id"]) if authoritative_row else 0
-                    if authoritative_id:
-                        self._connection.execute(
-                            """
-                            UPDATE organization_asset_registry
-                            SET authoritative = CASE WHEN registry_id = ? THEN 1 ELSE 0 END,
-                                updated_at = CURRENT_TIMESTAMP
-                            WHERE lower(target_company) = lower(?) AND asset_view = ?
-                            """,
-                            (authoritative_id, normalized_target_company, normalized_asset_view),
-                        )
             return {
                 "target_company": normalized_target_company,
                 "asset_view": normalized_asset_view or "",
@@ -11272,20 +10565,10 @@ class ControlPlaneStore:
             )
             if postgres_rows or self._control_plane_postgres_should_skip_sqlite_fallback("organization_asset_registry"):
                 return _apply_registry_canonicalization(postgres_rows, use_postgres=True)
-
-        sqlite_where_clause, sqlite_params = _sqlite_where_clause()
-        with self._lock, self._connection:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM organization_asset_registry
-                WHERE {sqlite_where_clause}
-                ORDER BY snapshot_id, asset_view, registry_id DESC
-                """,
-                sqlite_params,
-            ).fetchall()
-            result = _apply_registry_canonicalization(list(rows), use_postgres=False)
-        self._replace_control_plane_table_from_sqlite("organization_asset_registry")
-        return result
+        raise RuntimeError(
+            "postgres-only invariant violated for organization_asset_registry in canonicalize_organization_asset_registry_target_company: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def upsert_acquisition_shard_registry(self, payload: dict[str, Any]) -> dict[str, Any]:
         shard_key = _normalized_payload_text(payload, "shard_key")
@@ -11303,21 +10586,6 @@ class ControlPlaneStore:
             where_sql="shard_key = %s",
             params=[shard_key],
         )
-        if not existing and not self._control_plane_postgres_should_skip_sqlite_fallback(
-            "acquisition_shard_registry"
-        ):
-            # Track B B4.1b: PG is authoritative. A missing PG row means a new shard; the downstream
-            # (existing or {}) carry-over already handles None, so skip this dead SQLite shadow re-read.
-            with self._lock:
-                existing_row = self._connection.execute(
-                    """
-                    SELECT * FROM acquisition_shard_registry
-                    WHERE shard_key = ?
-                    LIMIT 1
-                    """,
-                    (shard_key,),
-                ).fetchone()
-            existing = self._acquisition_shard_registry_from_row(existing_row)
         now = _utc_now_timestamp()
         row_payload = {
             "shard_key": shard_key,
@@ -11366,97 +10634,13 @@ class ControlPlaneStore:
                 where_sql="shard_key = %s",
                 params=[shard_key],
             ) or self._acquisition_shard_registry_from_row(row_payload)
-        if self._control_plane_postgres_should_skip_sqlite_fallback("acquisition_shard_registry"):
-            # Track B B4.1b: PG is authoritative. _write_control_plane_row_to_postgres returns True or
-            # raises under postgres_only, so this is a fail-closed assertion — never the dead SQLite tail.
-            self._raise_control_plane_postgres_write_failure(
-                table_name="acquisition_shard_registry",
-                method_name="upsert_acquisition_shard_registry",
-                reason="native write did not confirm under postgres_only",
-            )
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO acquisition_shard_registry (
-                    shard_key, target_company, company_key, snapshot_id, asset_view, lane, status, employment_scope,
-                    strategy_type, shard_id, shard_title, search_query, query_signature,
-                    company_scope_json, locations_json, function_ids_json,
-                    result_count, estimated_total_count, provider_cap_hit,
-                    source_path, source_job_id,
-                    materialization_generation_key, materialization_generation_sequence, materialization_watermark,
-                    metadata_json, first_seen_at, last_completed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?)
-                ON CONFLICT(shard_key) DO UPDATE SET
-                    target_company = excluded.target_company,
-                    company_key = excluded.company_key,
-                    snapshot_id = excluded.snapshot_id,
-                    asset_view = excluded.asset_view,
-                    lane = excluded.lane,
-                    status = excluded.status,
-                    employment_scope = excluded.employment_scope,
-                    strategy_type = excluded.strategy_type,
-                    shard_id = excluded.shard_id,
-                    shard_title = excluded.shard_title,
-                    search_query = excluded.search_query,
-                    query_signature = excluded.query_signature,
-                    company_scope_json = excluded.company_scope_json,
-                    locations_json = excluded.locations_json,
-                    function_ids_json = excluded.function_ids_json,
-                    result_count = excluded.result_count,
-                    estimated_total_count = excluded.estimated_total_count,
-                    provider_cap_hit = excluded.provider_cap_hit,
-                    source_path = excluded.source_path,
-                    source_job_id = excluded.source_job_id,
-                    materialization_generation_key = excluded.materialization_generation_key,
-                    materialization_generation_sequence = excluded.materialization_generation_sequence,
-                    materialization_watermark = excluded.materialization_watermark,
-                    metadata_json = excluded.metadata_json,
-                    last_completed_at = CASE
-                        WHEN excluded.last_completed_at <> '' THEN excluded.last_completed_at
-                        ELSE acquisition_shard_registry.last_completed_at
-                    END,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    shard_key,
-                    target_company,
-                    _normalized_payload_text(payload, "company_key"),
-                    snapshot_id,
-                    _normalized_payload_text(payload, "asset_view", default="canonical_merged") or "canonical_merged",
-                    _normalized_payload_text(payload, "lane"),
-                    status,
-                    _normalized_payload_text(payload, "employment_scope", default="all") or "all",
-                    _normalized_payload_text(payload, "strategy_type"),
-                    _normalized_payload_text(payload, "shard_id"),
-                    _normalized_payload_text(payload, "shard_title"),
-                    _normalized_payload_text(payload, "search_query"),
-                    _normalized_payload_text(payload, "query_signature"),
-                    json.dumps(_json_safe_payload(payload.get("company_scope") or []), ensure_ascii=False),
-                    json.dumps(_json_safe_payload(payload.get("locations") or []), ensure_ascii=False),
-                    json.dumps(_json_safe_payload(payload.get("function_ids") or []), ensure_ascii=False),
-                    int(payload.get("result_count") or 0),
-                    int(payload.get("estimated_total_count") or 0),
-                    1 if bool(payload.get("provider_cap_hit")) else 0,
-                    _normalized_payload_text(payload, "source_path"),
-                    _normalized_payload_text(payload, "source_job_id"),
-                    _normalized_payload_text(payload, "materialization_generation_key"),
-                    int(payload.get("materialization_generation_sequence") or 0),
-                    _normalized_payload_text(payload, "materialization_watermark"),
-                    json.dumps(_json_safe_payload(payload.get("metadata") or {}), ensure_ascii=False),
-                    _normalized_payload_text(payload, "first_seen_at"),
-                    completed_at,
-                ),
-            )
-            row = self._connection.execute(
-                """
-                SELECT * FROM acquisition_shard_registry
-                WHERE shard_key = ?
-                LIMIT 1
-                """,
-                (shard_key,),
-            ).fetchone()
-        self._mirror_control_plane_row("acquisition_shard_registry", row)
-        return self._acquisition_shard_registry_from_row(row)
+        # Track B B4.1b: PG is authoritative. _write_control_plane_row_to_postgres returns True or
+        # raises under postgres_only, so this is a fail-closed assertion — never the dead SQLite tail.
+        self._raise_control_plane_postgres_write_failure(
+            table_name="acquisition_shard_registry",
+            method_name="upsert_acquisition_shard_registry",
+            reason="native write did not confirm under postgres_only",
+        )
 
     def list_acquisition_shard_registry(
         self,
@@ -11863,12 +11047,10 @@ class ControlPlaneStore:
                         reason=f"{type(exc).__name__}: {exc}",
                         error=exc,
                     )
-        with self._lock, self._connection:
-            self._connection.execute(
-                "DELETE FROM serving_projection_members WHERE projection_id = ?",
-                (normalized_projection_id,),
-            )
-        return self.upsert_serving_projection_members(normalized_projection_id, members)
+        raise RuntimeError(
+            "postgres-only invariant violated for serving_projection_members in replace_serving_projection_members: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_serving_projection_members(
         self,
@@ -12095,21 +11277,10 @@ class ControlPlaneStore:
                         reason=f"{type(exc).__name__}: {exc}",
                         error=exc,
                     )
-        with self._lock, self._connection:
-            self._connection.execute(
-                "DELETE FROM projection_person_search_index WHERE projection_id = ?",
-                (normalized_projection_id,),
-            )
-        return {
-            "status": "deleted",
-            "projection_id": normalized_projection_id,
-            "deleted": True,
-            "read_contract": {
-                "source": "projection_person_search_index",
-                "fallback_used": False,
-                "fail_closed": True,
-            },
-        }
+        raise RuntimeError(
+            "postgres-only invariant violated for projection_person_search_index in delete_projection_person_search_index: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def upsert_projection_person_search_index_rows(
         self,
@@ -12155,77 +11326,10 @@ class ControlPlaneStore:
                         reason=f"{type(exc).__name__}: {exc}",
                         error=exc,
                     )
-        with self._lock, self._connection:
-            if normalized_rows:
-                self._connection.executemany(
-                    """
-                    INSERT INTO projection_person_search_index (
-                        projection_id,
-                        candidate_identity_key,
-                        person_identity_key,
-                        indexed_text,
-                        raw_profile_terms_json,
-                        evidence_terms_json,
-                        assertion_terms_json,
-                        indexed_field_sources_json,
-                        raw_profile_index_watermark,
-                        evidence_index_watermark,
-                        count_scope,
-                        profile_fetched_at,
-                        profile_indexed_at,
-                        evidence_indexed_at,
-                        metadata_json,
-                        created_at,
-                        updated_at
-                    ) VALUES (
-                        :projection_id,
-                        :candidate_identity_key,
-                        :person_identity_key,
-                        :indexed_text,
-                        :raw_profile_terms_json,
-                        :evidence_terms_json,
-                        :assertion_terms_json,
-                        :indexed_field_sources_json,
-                        :raw_profile_index_watermark,
-                        :evidence_index_watermark,
-                        :count_scope,
-                        :profile_fetched_at,
-                        :profile_indexed_at,
-                        :evidence_indexed_at,
-                        :metadata_json,
-                        :created_at,
-                        :updated_at
-                    )
-                    ON CONFLICT(projection_id, candidate_identity_key) DO UPDATE SET
-                        person_identity_key = excluded.person_identity_key,
-                        indexed_text = excluded.indexed_text,
-                        raw_profile_terms_json = excluded.raw_profile_terms_json,
-                        evidence_terms_json = excluded.evidence_terms_json,
-                        assertion_terms_json = excluded.assertion_terms_json,
-                        indexed_field_sources_json = excluded.indexed_field_sources_json,
-                        raw_profile_index_watermark = excluded.raw_profile_index_watermark,
-                        evidence_index_watermark = excluded.evidence_index_watermark,
-                        count_scope = excluded.count_scope,
-                        profile_fetched_at = excluded.profile_fetched_at,
-                        profile_indexed_at = excluded.profile_indexed_at,
-                        evidence_indexed_at = excluded.evidence_indexed_at,
-                        metadata_json = excluded.metadata_json,
-                        updated_at = excluded.updated_at
-                    """,
-                    normalized_rows,
-                )
-                for row_payload in normalized_rows:
-                    self._mirror_control_plane_row("projection_person_search_index", row_payload)
-        return {
-            "status": "indexed",
-            "projection_id": normalized_projection_id,
-            "indexed_count": len(normalized_rows),
-            "read_contract": {
-                "source": "projection_person_search_index",
-                "fallback_used": False,
-                "fail_closed": True,
-            },
-        }
+        raise RuntimeError(
+            "postgres-only invariant violated for projection_person_search_index in upsert_projection_person_search_index_rows: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def update_projection_person_search_index_scope(
         self,
@@ -12279,36 +11383,10 @@ class ControlPlaneStore:
                         reason=f"{type(exc).__name__}: {exc}",
                         error=exc,
                     )
-        assignments = ["count_scope = ?", "updated_at = ?"]
-        params: list[Any] = [normalized_count_scope, now]
-        if raw_watermark:
-            assignments.append("raw_profile_index_watermark = ?")
-            params.append(raw_watermark)
-        if evidence_watermark:
-            assignments.append("evidence_index_watermark = ?")
-            params.append(evidence_watermark)
-        params.append(normalized_projection_id)
-        with self._lock, self._connection:
-            cursor = self._connection.execute(
-                f"""
-                UPDATE projection_person_search_index
-                SET {", ".join(assignments)}
-                WHERE projection_id = ?
-                """,
-                tuple(params),
-            )
-            updated_count = int(cursor.rowcount or 0)
-        return {
-            "status": "updated",
-            "projection_id": normalized_projection_id,
-            "updated_count": updated_count,
-            "count_scope": normalized_count_scope,
-            "read_contract": {
-                "source": "projection_person_search_index",
-                "fallback_used": False,
-                "fail_closed": True,
-            },
-        }
+        raise RuntimeError(
+            "postgres-only invariant violated for projection_person_search_index in update_projection_person_search_index_scope: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def count_projection_person_search_index(self, projection_id: str) -> int:
         normalized_projection_id = str(projection_id or "").strip()
@@ -13500,84 +12578,18 @@ class ControlPlaneStore:
                     asset_view=normalized_asset_view,
                     candidate_id=normalized_candidate_id,
                 )
-        with self._lock, self._connection:
-            company_scope_clause, company_scope_params = _company_scope_predicate(
-                normalized_target_company,
-                normalized_company_key,
+            # postgres-only (B4): _write_control_plane_row_to_postgres returns True or raises; reaching
+            # here means the authoritative write returned no confirmation, which is forbidden. The
+            # legacy SQLite upsert/read-back tail below was retired (B4).
+            self._raise_control_plane_postgres_write_failure(
+                table_name="candidate_materialization_state",
+                method_name="upsert_candidate_materialization_state",
+                reason="postgres-only: authoritative upsert returned no confirmation; SQLite fallback retired (B4)",
             )
-            existing = self._connection.execute(
-                f"""
-                SELECT target_company
-                FROM candidate_materialization_state
-                WHERE {company_scope_clause}
-                  AND snapshot_id = ?
-                  AND asset_view = ?
-                  AND candidate_id = ?
-                LIMIT 1
-                """,
-                (
-                    *company_scope_params,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                    normalized_candidate_id,
-                ),
-            ).fetchone()
-            if existing is not None:
-                normalized_target_company = str(existing["target_company"] or normalized_target_company).strip()
-            self._connection.execute(
-                """
-                INSERT INTO candidate_materialization_state (
-                    target_company,
-                    company_key,
-                    snapshot_id,
-                    asset_view,
-                    candidate_id,
-                    fingerprint,
-                    shard_path,
-                    list_page,
-                    dirty_reason,
-                    materialized_at,
-                    metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(target_company, snapshot_id, asset_view, candidate_id) DO UPDATE SET
-                    company_key = excluded.company_key,
-                    fingerprint = excluded.fingerprint,
-                    shard_path = excluded.shard_path,
-                    list_page = excluded.list_page,
-                    dirty_reason = excluded.dirty_reason,
-                    materialized_at = excluded.materialized_at,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    normalized_target_company,
-                    normalized_company_key,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                    normalized_candidate_id,
-                    normalized_fingerprint,
-                    str(shard_path or "").strip(),
-                    max(0, int(list_page or 0)),
-                    str(dirty_reason or "").strip(),
-                    str(materialized_at or datetime.now(timezone.utc).isoformat()),
-                    json.dumps(_json_safe_payload(metadata or {}), ensure_ascii=False),
-                ),
-            )
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM candidate_materialization_state
-                WHERE target_company = ? AND snapshot_id = ? AND asset_view = ? AND candidate_id = ?
-                LIMIT 1
-                """,
-                (
-                    normalized_target_company,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                    normalized_candidate_id,
-                ),
-            ).fetchone()
-        return self._candidate_materialization_state_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for candidate_materialization_state in upsert_candidate_materialization_state: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def bulk_upsert_candidate_materialization_states(
         self,
@@ -13942,53 +12954,18 @@ class ControlPlaneStore:
             }
             if self._write_control_plane_row_to_postgres("snapshot_materialization_runs", row_payload):
                 return self.get_snapshot_materialization_run(normalized_run_id)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO snapshot_materialization_runs (
-                    run_id,
-                    target_company,
-                    company_key,
-                    snapshot_id,
-                    asset_view,
-                    status,
-                    dirty_candidate_count,
-                    completed_candidate_count,
-                    reused_candidate_count,
-                    summary_json
-                ) VALUES (?, ?, ?, ?, ?, 'running', 0, 0, 0, ?)
-                ON CONFLICT(run_id) DO UPDATE SET
-                    target_company = excluded.target_company,
-                    company_key = excluded.company_key,
-                    snapshot_id = excluded.snapshot_id,
-                    asset_view = excluded.asset_view,
-                    status = 'running',
-                    dirty_candidate_count = 0,
-                    completed_candidate_count = 0,
-                    reused_candidate_count = 0,
-                    summary_json = excluded.summary_json,
-                    completed_at = NULL,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    normalized_run_id,
-                    normalized_target_company,
-                    normalized_company_key,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                    json.dumps(_json_safe_payload(summary or {}), ensure_ascii=False),
-                ),
+            # postgres-only (B4): _write_control_plane_row_to_postgres returns True or raises; reaching
+            # here means the authoritative write returned no confirmation, which is forbidden. The
+            # legacy SQLite upsert/read-back tail below was retired (B4).
+            self._raise_control_plane_postgres_write_failure(
+                table_name="snapshot_materialization_runs",
+                method_name="start_snapshot_materialization_run",
+                reason="postgres-only: authoritative upsert returned no confirmation; SQLite fallback retired (B4)",
             )
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM snapshot_materialization_runs
-                WHERE run_id = ?
-                LIMIT 1
-                """,
-                (normalized_run_id,),
-            ).fetchone()
-        return self._snapshot_materialization_run_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for snapshot_materialization_runs in start_snapshot_materialization_run: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def complete_snapshot_materialization_run(
         self,
@@ -14025,38 +13002,18 @@ class ControlPlaneStore:
             }
             if self._write_control_plane_row_to_postgres("snapshot_materialization_runs", row_payload):
                 return self.get_snapshot_materialization_run(normalized_run_id)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE snapshot_materialization_runs
-                SET status = ?,
-                    dirty_candidate_count = ?,
-                    completed_candidate_count = ?,
-                    reused_candidate_count = ?,
-                    summary_json = ?,
-                    completed_at = CURRENT_TIMESTAMP,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE run_id = ?
-                """,
-                (
-                    str(status or "completed").strip() or "completed",
-                    max(0, int(dirty_candidate_count or 0)),
-                    max(0, int(completed_candidate_count or 0)),
-                    max(0, int(reused_candidate_count or 0)),
-                    json.dumps(_json_safe_payload(summary or {}), ensure_ascii=False),
-                    normalized_run_id,
-                ),
+            # postgres-only (B4): _write_control_plane_row_to_postgres returns True or raises; reaching
+            # here means the authoritative write returned no confirmation, which is forbidden. The
+            # legacy SQLite update/read-back tail below was retired (B4).
+            self._raise_control_plane_postgres_write_failure(
+                table_name="snapshot_materialization_runs",
+                method_name="complete_snapshot_materialization_run",
+                reason="postgres-only: authoritative upsert returned no confirmation; SQLite fallback retired (B4)",
             )
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM snapshot_materialization_runs
-                WHERE run_id = ?
-                LIMIT 1
-                """,
-                (normalized_run_id,),
-            ).fetchone()
-        return self._snapshot_materialization_run_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for snapshot_materialization_runs in complete_snapshot_materialization_run: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_snapshot_materialization_run(self, run_id: str) -> dict[str, Any]:
         normalized_run_id = str(run_id or "").strip()
@@ -14198,41 +13155,10 @@ class ControlPlaneStore:
                     method_name="insert_row_with_generated_id",
                     reason="native insert returned no row under postgres_only",
                 )
-        with self._lock, self._connection:
-            cursor = self._connection.execute(
-                """
-                INSERT INTO cloud_asset_operation_ledger (
-                    operation_type, bundle_kind, bundle_id, sync_run_id, status,
-                    manifest_path, target_runtime_dir, target_db_path,
-                    scoped_companies_json, scoped_snapshot_id, summary_json, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    str(operation_type or "").strip(),
-                    str(bundle_kind or "").strip(),
-                    str(bundle_id or "").strip(),
-                    str(sync_run_id or "").strip(),
-                    str(status or "").strip(),
-                    str(manifest_path or "").strip(),
-                    str(target_runtime_dir or "").strip(),
-                    str(target_db_path or "").strip(),
-                    json.dumps(_json_safe_payload(scoped_companies or []), ensure_ascii=False),
-                    str(scoped_snapshot_id or "").strip(),
-                    json.dumps(_json_safe_payload(summary or {}), ensure_ascii=False),
-                    json.dumps(_json_safe_payload(metadata or {}), ensure_ascii=False),
-                ),
-            )
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM cloud_asset_operation_ledger
-                WHERE ledger_id = ?
-                LIMIT 1
-                """,
-                (int(cursor.lastrowid or 0),),
-            ).fetchone()
-        self._mirror_control_plane_row("cloud_asset_operation_ledger", row)
-        return self._cloud_asset_operation_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for cloud_asset_operation_ledger in record_cloud_asset_operation: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_cloud_asset_operations(
         self,
@@ -14317,8 +13243,10 @@ class ControlPlaneStore:
                     break
                 current_key = mapped_key
             return current_key or normalized_key
-        with self._lock:
-            return self._resolve_linkedin_profile_registry_key_locked(normalized_key)
+        raise RuntimeError(
+            "postgres-only invariant violated for linkedin_profile_registry_aliases in _resolve_linkedin_profile_registry_key: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def _resolve_linkedin_profile_registry_keys_bulk(
         self,
@@ -14376,11 +13304,10 @@ class ControlPlaneStore:
                         next_unresolved.append(mapped_key)
                 unresolved_keys = next_unresolved
             return resolved_by_original
-        with self._lock:
-            return {
-                key: self._resolve_linkedin_profile_registry_key_locked(key)
-                for key in normalized_keys
-            }
+        raise RuntimeError(
+            "postgres-only invariant violated for linkedin_profile_registry_aliases in _resolve_linkedin_profile_registry_keys_bulk: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def _list_linkedin_profile_alias_urls(self, canonical_key: str) -> list[str]:
         normalized_canonical_key = str(canonical_key or "").strip()
@@ -14404,8 +13331,10 @@ class ControlPlaneStore:
                     if alias_url and alias_url not in aliases:
                         aliases.append(alias_url)
                 return aliases
-        with self._lock:
-            return self._list_linkedin_profile_alias_urls_locked(normalized_canonical_key)
+        raise RuntimeError(
+            "postgres-only invariant violated for linkedin_profile_registry_aliases in _list_linkedin_profile_alias_urls: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def _linkedin_profile_registry_row_payload(
         self,
@@ -14635,9 +13564,10 @@ class ControlPlaneStore:
             aliases = self._list_linkedin_profile_alias_urls(canonical_key)
             if aliases or self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry_aliases"):
                 return aliases
-        with self._lock:
-            canonical_key = self._resolve_linkedin_profile_registry_key_locked(key)
-            return self._list_linkedin_profile_alias_urls_locked(canonical_key)
+        raise RuntimeError(
+            "postgres-only invariant violated for linkedin_profile_registry_aliases in get_linkedin_profile_registry_aliases: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def upsert_linkedin_profile_registry_aliases(
         self,
@@ -14708,44 +13638,10 @@ class ControlPlaneStore:
                 ):
                     upserted += 1
             return upserted
-        with self._lock, self._connection:
-            canonical_key = self._resolve_linkedin_profile_registry_key_locked(profile_key) if profile_key else ""
-            if not canonical_key and normalized_alias_urls:
-                canonical_key = _normalize_linkedin_profile_url_key(normalized_alias_urls[0])
-            if not canonical_key:
-                return 0
-            existing = self._connection.execute(
-                """
-                SELECT profile_url FROM linkedin_profile_registry
-                WHERE profile_url_key = ?
-                LIMIT 1
-                """,
-                (canonical_key,),
-            ).fetchone()
-            canonical_profile_url = str(existing["profile_url"] or "").strip() if existing is not None else ""
-            if not canonical_profile_url:
-                canonical_profile_url = normalized_profile_url or canonical_key
-                self._connection.execute(
-                    """
-                    INSERT INTO linkedin_profile_registry (
-                        profile_url_key,
-                        profile_url,
-                        status,
-                        retry_count,
-                        source_shards_json,
-                        source_jobs_json
-                    ) VALUES (?, ?, 'queued', 0, '[]', '[]')
-                    ON CONFLICT(profile_url_key) DO NOTHING
-                    """,
-                    (canonical_key, canonical_profile_url),
-                )
-            all_alias_urls = _normalize_linkedin_profile_url_list([canonical_profile_url, *normalized_alias_urls])
-            return self._upsert_linkedin_profile_registry_aliases_locked(
-                canonical_key=canonical_key,
-                canonical_profile_url=canonical_profile_url,
-                alias_urls=all_alias_urls,
-                alias_kind=alias_kind,
-            )
+        raise RuntimeError(
+            "postgres-only invariant violated for linkedin_profile_registry_aliases in upsert_linkedin_profile_registry_aliases: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def acquire_linkedin_profile_registry_lease(
         self,
@@ -14960,62 +13856,9 @@ class ControlPlaneStore:
                     lease_owner=normalized_owner,
                     lease_token=normalized_token,
                 )
-        now = _utc_now_timestamp()
-        with self._lock, self._connection:
-            canonical_keys_by_url = {
-                profile_url: self._resolve_linkedin_profile_registry_key_locked(
-                    _normalize_linkedin_profile_url_key(profile_url)
-                )
-                for profile_url in normalized_urls
-            }
-            rows_by_key: dict[str, dict[str, Any]] = {}
-            for profile_url, canonical_key in canonical_keys_by_url.items():
-                self._connection.execute(
-                    """
-                    INSERT INTO linkedin_profile_registry_leases (
-                        profile_url_key,
-                        lease_owner,
-                        lease_token,
-                        lease_expires_at,
-                        created_at,
-                        updated_at
-                    ) VALUES (?, ?, ?, datetime('now', ?), ?, ?)
-                    ON CONFLICT(profile_url_key) DO UPDATE SET
-                        lease_owner = excluded.lease_owner,
-                        lease_token = excluded.lease_token,
-                        lease_expires_at = excluded.lease_expires_at,
-                        updated_at = excluded.updated_at
-                    WHERE datetime(linkedin_profile_registry_leases.lease_expires_at) <= datetime('now')
-                       OR linkedin_profile_registry_leases.lease_owner = excluded.lease_owner
-                       OR linkedin_profile_registry_leases.lease_token = excluded.lease_token
-                    """,
-                    (
-                        canonical_key,
-                        normalized_owner,
-                        normalized_token,
-                        f"+{ttl_seconds} seconds",
-                        now,
-                        now,
-                    ),
-                )
-            placeholders = ",".join("?" for _ in canonical_keys_by_url.values())
-            lease_rows = self._connection.execute(
-                f"""
-                SELECT * FROM linkedin_profile_registry_leases
-                WHERE profile_url_key IN ({placeholders})
-                """,
-                tuple(canonical_keys_by_url.values()),
-            ).fetchall()
-            rows_by_key = {
-                str(row["profile_url_key"] or ""): self._linkedin_profile_registry_lease_from_row(row)
-                for row in lease_rows
-            }
-        return self._build_linkedin_profile_registry_batch_lease_payload(
-            normalized_urls=normalized_urls,
-            canonical_keys_by_url=canonical_keys_by_url,
-            rows_by_key=rows_by_key,
-            lease_owner=normalized_owner,
-            lease_token=normalized_token,
+        raise RuntimeError(
+            "postgres-only invariant violated for linkedin_profile_registry_leases in acquire_linkedin_profile_registry_leases: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
         )
 
     def get_linkedin_profile_registry_lease(self, profile_url: str) -> dict[str, Any] | None:
@@ -15077,41 +13920,10 @@ class ControlPlaneStore:
                 "linkedin_profile_registry_leases"
             ):
                 return bool(deleted_count)
-        with self._lock, self._connection:
-            canonical_key = self._resolve_linkedin_profile_registry_key_locked(normalized_key)
-            if normalized_owner and normalized_token:
-                cursor = self._connection.execute(
-                    """
-                    DELETE FROM linkedin_profile_registry_leases
-                    WHERE profile_url_key = ? AND lease_owner = ? AND lease_token = ?
-                    """,
-                    (canonical_key, normalized_owner, normalized_token),
-                )
-            elif normalized_owner:
-                cursor = self._connection.execute(
-                    """
-                    DELETE FROM linkedin_profile_registry_leases
-                    WHERE profile_url_key = ? AND lease_owner = ?
-                    """,
-                    (canonical_key, normalized_owner),
-                )
-            elif normalized_token:
-                cursor = self._connection.execute(
-                    """
-                    DELETE FROM linkedin_profile_registry_leases
-                    WHERE profile_url_key = ? AND lease_token = ?
-                    """,
-                    (canonical_key, normalized_token),
-                )
-            else:
-                cursor = self._connection.execute(
-                    """
-                    DELETE FROM linkedin_profile_registry_leases
-                    WHERE profile_url_key = ?
-                    """,
-                    (canonical_key,),
-                )
-        return bool(cursor.rowcount)
+        raise RuntimeError(
+            "postgres-only invariant violated for linkedin_profile_registry_leases in release_linkedin_profile_registry_lease: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def release_linkedin_profile_registry_leases(
         self,
@@ -15362,20 +14174,10 @@ class ControlPlaneStore:
                     "runtime_provider_limiter_leases"
                 ):
                     return bool(deleted)
-        clauses = ["lease_token = ?"]
-        params: list[Any] = [normalized_token]
-        if normalized_key:
-            clauses.append("limiter_key = ?")
-            params.append(normalized_key)
-        if normalized_owner:
-            clauses.append("lease_owner = ?")
-            params.append(normalized_owner)
-        with self._lock, self._connection:
-            cursor = self._connection.execute(
-                f"DELETE FROM runtime_provider_limiter_leases WHERE {' AND '.join(clauses)}",
-                tuple(params),
-            )
-        return bool(cursor.rowcount)
+        raise RuntimeError(
+            "postgres-only invariant violated for runtime_provider_limiter_leases in release_runtime_provider_limiter_slot: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def record_linkedin_profile_registry_event(
         self,
@@ -15427,11 +14229,6 @@ class ControlPlaneStore:
 
     def get_linkedin_profile_registry_metrics(self, *, lookback_hours: int = 24) -> dict[str, Any]:
         lookback = max(0, int(lookback_hours or 0))
-        where_clause = ""
-        params: list[Any] = []
-        if lookback > 0:
-            where_clause = "WHERE datetime(created_at) >= datetime('now', ?)"
-            params.append(f"-{lookback} hours")
         if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry_events"):
             if lookback > 0:
                 pg_rows = self._select_control_plane_rows(
@@ -15468,41 +14265,15 @@ class ControlPlaneStore:
                     status_counts[status] = int(status_counts.get(status) or 0) + 1
                 status_row = [{"status": status, "count": count} for status, count in status_counts.items()]
             else:
-                with self._lock:
-                    rows = self._connection.execute(
-                        f"""
-                        SELECT event_type, event_status, detail, metadata_json, duration_ms, created_at
-                        FROM linkedin_profile_registry_events
-                        {where_clause}
-                        ORDER BY event_id ASC
-                        """,
-                        tuple(params),
-                    ).fetchall()
-                    status_row = self._connection.execute(
-                        """
-                        SELECT status, COUNT(*) AS count
-                        FROM linkedin_profile_registry
-                        GROUP BY status
-                        """
-                    ).fetchall()
+                raise RuntimeError(
+                    "postgres-only invariant violated for linkedin_profile_registry_events in get_linkedin_profile_registry_metrics: should_prefer_read "
+                    "returned False; legacy SQLite tail retired (B4)"
+                )
         else:
-            with self._lock:
-                rows = self._connection.execute(
-                    f"""
-                    SELECT event_type, event_status, detail, metadata_json, duration_ms, created_at
-                    FROM linkedin_profile_registry_events
-                    {where_clause}
-                    ORDER BY event_id ASC
-                    """,
-                    tuple(params),
-                ).fetchall()
-                status_row = self._connection.execute(
-                    """
-                    SELECT status, COUNT(*) AS count
-                    FROM linkedin_profile_registry
-                    GROUP BY status
-                    """
-                ).fetchall()
+            raise RuntimeError(
+                "postgres-only invariant violated for linkedin_profile_registry_events in get_linkedin_profile_registry_metrics: should_prefer_read "
+                "returned False; legacy SQLite tail retired (B4)"
+            )
         total_events = len(rows)
         lookup_attempts = 0
         cache_hits = 0
@@ -15628,45 +14399,10 @@ class ControlPlaneStore:
             }
             self._write_control_plane_row_to_postgres("linkedin_profile_registry_backfill_runs", row_payload)
             return self.get_linkedin_profile_registry_backfill_run(normalized_run_key)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO linkedin_profile_registry_backfill_runs (
-                    run_key,
-                    scope_company,
-                    scope_snapshot_id,
-                    checkpoint_json,
-                    summary_json,
-                    status
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(run_key) DO UPDATE SET
-                    scope_company = excluded.scope_company,
-                    scope_snapshot_id = excluded.scope_snapshot_id,
-                    checkpoint_json = excluded.checkpoint_json,
-                    summary_json = excluded.summary_json,
-                    status = excluded.status,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    normalized_run_key,
-                    str(scope_company or "").strip(),
-                    str(scope_snapshot_id or "").strip(),
-                    json.dumps(checkpoint_payload, ensure_ascii=False),
-                    json.dumps(summary_payload, ensure_ascii=False),
-                    str(status or "running").strip() or "running",
-                ),
-            )
-            row = self._connection.execute(
-                """
-                SELECT * FROM linkedin_profile_registry_backfill_runs
-                WHERE run_key = ?
-                LIMIT 1
-                """,
-                (normalized_run_key,),
-            ).fetchone()
-        if row is None:
-            return None
-        return self._linkedin_profile_registry_backfill_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for linkedin_profile_registry_backfill_runs in upsert_linkedin_profile_registry_backfill_run: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def mark_linkedin_profile_registry_queued(
         self,
@@ -16482,224 +15218,10 @@ class ControlPlaneStore:
                         reason=f"{type(exc).__name__}: {exc}",
                         error=exc,
                     )
-
-        def _record(url: str, *, queue_state: str, reason: str, not_before_at: str) -> str:
-            payload = self._upsert_linkedin_profile_registry(
-                profile_url=url,
-                status="",
-                source_shards=_source_shards_for(url),
-                source_jobs=normalized_source_jobs,
-                snapshot_dir=snapshot_dir,
-                preserve_unrecoverable=True,
-            )
-            canonical_url = str(dict(payload or {}).get("profile_url") or url).strip()
-            canonical_key = _normalize_linkedin_profile_url_key(canonical_url or url)
-            if not canonical_key:
-                return "skipped"
-            current = self.get_linkedin_profile_registry(canonical_url or url) or {}
-            current_status = str(current.get("status") or "").strip().lower()
-            if current_status in {"fetched", "unrecoverable"}:
-                return "terminal_skipped"
-            current_refill_queue_state = str(current.get("refill_queue_state") or "").strip()
-            current_owner = (
-                max(0, int(current.get("refill_owner_worker_id") or 0)),
-                str(current.get("refill_owner_run_id") or "").strip(),
-                str(current.get("refill_owner_dataset_id") or "").strip(),
-                str(current.get("refill_owner_payload_hash") or "").strip(),
-            )
-            next_owner = (
-                normalized_active_owner_worker_id,
-                normalized_active_owner_run_id,
-                normalized_active_owner_dataset_id,
-                normalized_active_owner_payload_hash,
-            )
-            owner_changed = any(next_owner) and next_owner != current_owner
-            attempt_count = max(0, int(current.get("last_refill_attempt_count") or 0)) + (
-                1
-                if queue_state == "planned_dispatch"
-                and (current_refill_queue_state != "planned_dispatch" or owner_changed)
-                else 0
-            )
-            owner_worker_id = max(0, int(current.get("refill_owner_worker_id") or 0))
-            owner_run_id = str(current.get("refill_owner_run_id") or "").strip()
-            owner_dataset_id = str(current.get("refill_owner_dataset_id") or "").strip()
-            owner_payload_hash = str(current.get("refill_owner_payload_hash") or "").strip()
-            terminal_status = str(current.get("refill_terminal_status") or "").strip()
-            terminal_at = str(current.get("refill_terminal_at") or "").strip()
-            if queue_state == "planned_dispatch":
-                if normalized_active_owner_worker_id > 0:
-                    owner_worker_id = normalized_active_owner_worker_id
-                if normalized_active_owner_run_id:
-                    owner_run_id = normalized_active_owner_run_id
-                if normalized_active_owner_dataset_id:
-                    owner_dataset_id = normalized_active_owner_dataset_id
-                if normalized_active_owner_payload_hash:
-                    owner_payload_hash = normalized_active_owner_payload_hash
-                terminal_status = ""
-                terminal_at = ""
-            elif queue_state in {"dispatch_reserved", "dispatch_claimed"}:
-                owner_worker_id = normalized_active_owner_worker_id
-                owner_run_id = normalized_active_owner_run_id
-                owner_dataset_id = normalized_active_owner_dataset_id
-                owner_payload_hash = normalized_active_owner_payload_hash
-                terminal_status = ""
-                terminal_at = ""
-            elif queue_state in {
-                "deferred_budget",
-                "deferred_coalescing",
-            }:
-                owner_worker_id = 0
-                owner_run_id = ""
-                owner_dataset_id = ""
-                owner_payload_hash = ""
-                terminal_status = ""
-                terminal_at = ""
-            row_update = {
-                "refill_queue_state": queue_state,
-                "last_refill_trigger_kind": str(trigger_kind or "").strip(),
-                "last_refill_plan_reason": str(plan_reason or "").strip(),
-                "last_refill_deferred_reason": str(reason or "").strip(),
-                "last_refill_planned_at": planned_at,
-                "refill_not_before_at": "" if queue_state == "planned_dispatch" else str(not_before_at or "").strip(),
-                "refill_plan_batch_size": normalized_refill_plan_batch_size,
-                "refill_plan_batch_count": normalized_refill_plan_batch_count,
-                "refill_plan_window_url_count": normalized_refill_plan_window_url_count,
-                "last_refill_attempt_count": attempt_count,
-                "refill_owner_worker_id": owner_worker_id,
-                "refill_owner_run_id": owner_run_id,
-                "refill_owner_dataset_id": owner_dataset_id,
-                "refill_owner_payload_hash": owner_payload_hash,
-                "refill_terminal_status": terminal_status,
-                "refill_terminal_at": terminal_at,
-                "updated_at": planned_at,
-            }
-            if queue_state == "deferred_coalescing":
-                row_update["status"] = "deferred_coalescing"
-            if self._control_plane_postgres_should_prefer_read("linkedin_profile_registry"):
-                try:
-                    self._control_plane_postgres.update_row_returning(
-                        table_name="linkedin_profile_registry",
-                        id_column="profile_url_key",
-                        id_value=canonical_key,
-                        row=row_update,
-                    )
-                except Exception as exc:
-                    if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
-                        self._raise_control_plane_postgres_write_failure(
-                            table_name="linkedin_profile_registry",
-                            method_name="update_row_returning",
-                            reason=f"{type(exc).__name__}: {exc}",
-                            error=exc,
-                        )
-                    else:
-                        return "skipped"
-                if self._control_plane_postgres_should_skip_sqlite_fallback("linkedin_profile_registry"):
-                    return "recorded"
-            with self._lock, self._connection:
-                resolved_key = self._resolve_linkedin_profile_registry_key_locked(canonical_key)
-                status_assignment = ", status = ?" if queue_state == "deferred_coalescing" else ""
-                self._connection.execute(
-                    f"""
-                    UPDATE linkedin_profile_registry
-                    SET refill_queue_state = ?,
-                        last_refill_trigger_kind = ?,
-                        last_refill_plan_reason = ?,
-                        last_refill_deferred_reason = ?,
-                        last_refill_planned_at = ?,
-                        refill_not_before_at = ?,
-                        refill_plan_batch_size = ?,
-                        refill_plan_batch_count = ?,
-                        refill_plan_window_url_count = ?,
-                        last_refill_attempt_count = ?,
-                        refill_owner_worker_id = ?,
-                        refill_owner_run_id = ?,
-                        refill_owner_dataset_id = ?,
-                        refill_owner_payload_hash = ?,
-                        refill_terminal_status = ?,
-                        refill_terminal_at = ?,
-                        updated_at = CURRENT_TIMESTAMP
-                        {status_assignment}
-                    WHERE profile_url_key = ?
-                    """,
-                    (
-                        queue_state,
-                        str(trigger_kind or "").strip(),
-                        str(plan_reason or "").strip(),
-                        str(reason or "").strip(),
-                        planned_at,
-                        "" if queue_state == "planned_dispatch" else str(not_before_at or "").strip(),
-                        normalized_refill_plan_batch_size,
-                        normalized_refill_plan_batch_count,
-                        normalized_refill_plan_window_url_count,
-                        attempt_count,
-                        owner_worker_id,
-                        owner_run_id,
-                        owner_dataset_id,
-                        owner_payload_hash,
-                        terminal_status,
-                        terminal_at,
-                        *(("deferred_coalescing",) if queue_state == "deferred_coalescing" else ()),
-                        resolved_key,
-                    ),
-                )
-            return "recorded"
-
-        resolved_active_reason = str(active_reason or plan_reason or "ready_to_dispatch").strip()
-        recorded_active_count = 0
-        for profile_url in active_urls:
-            record_status = _record(
-                profile_url,
-                queue_state=normalized_active_queue_state,
-                reason="" if normalized_active_queue_state == "planned_dispatch" else resolved_active_reason,
-                not_before_at=normalized_active_refill_not_before_at,
-            )
-            if record_status == "recorded":
-                recorded_active_count += 1
-            elif record_status == "terminal_skipped":
-                terminal_skipped_active_count += 1
-        resolved_deferred_reason = str(deferred_reason or plan_reason or "worker_budget_deferred").strip()
-        recorded_deferred_count = 0
-        for profile_url in deferred_urls:
-            record_status = _record(
-                profile_url,
-                queue_state=normalized_deferred_queue_state,
-                reason=resolved_deferred_reason,
-                not_before_at=normalized_refill_not_before_at,
-            )
-            if record_status == "recorded":
-                recorded_deferred_count += 1
-            elif record_status == "terminal_skipped":
-                terminal_skipped_deferred_count += 1
-        recorded_item_count = recorded_active_count + recorded_deferred_count
-        terminal_skipped_count = terminal_skipped_active_count + terminal_skipped_deferred_count
-        return {
-            "status": "recorded" if recorded_item_count > 0 else "skipped",
-            "reason": "" if recorded_item_count > 0 else "terminal_items_already_closed",
-            "item_store": "linkedin_profile_registry",
-            "active_item_count": recorded_active_count,
-            "deferred_item_count": recorded_deferred_count,
-            "requested_active_item_count": len(active_urls),
-            "requested_deferred_item_count": len(deferred_urls),
-            "terminal_skipped_item_count": terminal_skipped_count,
-            "terminal_skipped_active_item_count": terminal_skipped_active_count,
-            "terminal_skipped_deferred_item_count": terminal_skipped_deferred_count,
-            "trigger_kind": str(trigger_kind or "").strip(),
-            "plan_reason": str(plan_reason or "").strip(),
-            "active_queue_state": normalized_active_queue_state,
-            "active_reason": resolved_active_reason,
-            "active_refill_not_before_at": normalized_active_refill_not_before_at,
-            "active_owner_worker_id": normalized_active_owner_worker_id,
-            "active_owner_run_id": normalized_active_owner_run_id,
-            "active_owner_dataset_id": normalized_active_owner_dataset_id,
-            "active_owner_payload_hash": normalized_active_owner_payload_hash,
-            "deferred_reason": resolved_deferred_reason,
-            "deferred_queue_state": normalized_deferred_queue_state,
-            "planned_at": planned_at,
-            "refill_not_before_at": normalized_refill_not_before_at,
-            "refill_plan_batch_size": normalized_refill_plan_batch_size,
-            "refill_plan_batch_count": normalized_refill_plan_batch_count,
-            "refill_plan_window_url_count": normalized_refill_plan_window_url_count,
-        }
+        raise RuntimeError(
+            "postgres-only invariant violated for linkedin_profile_registry in record_linkedin_profile_refill_plan_items: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_linkedin_profile_refill_queue_items(
         self,
@@ -17447,167 +15969,10 @@ class ControlPlaneStore:
                 alias_kind=alias_kind,
             )
             return self.get_linkedin_profile_registry(canonical_profile_url or normalized_key)
-        with self._lock, self._connection:
-            canonical_key = self._resolve_linkedin_profile_registry_key_locked(normalized_key)
-            existing = self._connection.execute(
-                """
-                SELECT * FROM linkedin_profile_registry
-                WHERE profile_url_key = ?
-                LIMIT 1
-                """,
-                (canonical_key,),
-            ).fetchone()
-            existing_payload = self._linkedin_profile_registry_from_row(existing) if existing is not None else {}
-            effective_payload = self._compose_linkedin_profile_registry_effective_payload(
-                existing_payload=existing_payload,
-                normalized_status=normalized_status,
-                normalized_profile_url=normalized_profile_url,
-                normalized_raw_linkedin_url=normalized_raw_linkedin_url,
-                normalized_sanity_linkedin_url=normalized_sanity_linkedin_url,
-                normalized_alias_urls=normalized_alias_urls,
-                normalized_run_id=normalized_run_id,
-                normalized_dataset_id=normalized_dataset_id,
-                normalized_snapshot_dir=normalized_snapshot_dir,
-                normalized_raw_path=normalized_raw_path,
-                normalized_source_shards=normalized_source_shards,
-                normalized_source_jobs=normalized_source_jobs,
-                retry_count=retry_count,
-                increment_retry=increment_retry,
-                last_error=last_error,
-                preserve_unrecoverable=preserve_unrecoverable,
-                now_timestamp=now_timestamp,
-            )
-
-            self._connection.execute(
-                """
-                INSERT INTO linkedin_profile_registry (
-                    profile_url_key,
-                    profile_url,
-                    raw_linkedin_url,
-                    sanity_linkedin_url,
-                    status,
-                    retry_count,
-                    last_error,
-                    last_run_id,
-                    last_dataset_id,
-                    last_snapshot_dir,
-                    last_raw_path,
-                    first_queued_at,
-                    last_queued_at,
-                    last_fetched_at,
-                    last_failed_at,
-                    source_shards_json,
-                    source_jobs_json,
-                    refill_queue_state,
-                    last_refill_trigger_kind,
-                    last_refill_plan_reason,
-                    last_refill_deferred_reason,
-                    last_refill_planned_at,
-                    refill_not_before_at,
-                    refill_plan_batch_size,
-                    refill_plan_batch_count,
-                    refill_plan_window_url_count,
-                    last_refill_attempt_count,
-                    refill_owner_worker_id,
-                    refill_owner_run_id,
-                    refill_owner_dataset_id,
-                    refill_owner_payload_hash,
-                    refill_terminal_status,
-                    refill_terminal_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(profile_url_key) DO UPDATE SET
-                    profile_url = excluded.profile_url,
-                    raw_linkedin_url = excluded.raw_linkedin_url,
-                    sanity_linkedin_url = excluded.sanity_linkedin_url,
-                    status = excluded.status,
-                    retry_count = excluded.retry_count,
-                    last_error = excluded.last_error,
-                    last_run_id = excluded.last_run_id,
-                    last_dataset_id = excluded.last_dataset_id,
-                    last_snapshot_dir = excluded.last_snapshot_dir,
-                    last_raw_path = excluded.last_raw_path,
-                    first_queued_at = excluded.first_queued_at,
-                    last_queued_at = excluded.last_queued_at,
-                    last_fetched_at = excluded.last_fetched_at,
-                    last_failed_at = excluded.last_failed_at,
-                    source_shards_json = excluded.source_shards_json,
-                    source_jobs_json = excluded.source_jobs_json,
-                    refill_queue_state = excluded.refill_queue_state,
-                    last_refill_trigger_kind = excluded.last_refill_trigger_kind,
-                    last_refill_plan_reason = excluded.last_refill_plan_reason,
-                    last_refill_deferred_reason = excluded.last_refill_deferred_reason,
-                    last_refill_planned_at = excluded.last_refill_planned_at,
-                    refill_not_before_at = excluded.refill_not_before_at,
-                    refill_plan_batch_size = excluded.refill_plan_batch_size,
-                    refill_plan_batch_count = excluded.refill_plan_batch_count,
-                    refill_plan_window_url_count = excluded.refill_plan_window_url_count,
-                    last_refill_attempt_count = excluded.last_refill_attempt_count,
-                    refill_owner_worker_id = excluded.refill_owner_worker_id,
-                    refill_owner_run_id = excluded.refill_owner_run_id,
-                    refill_owner_dataset_id = excluded.refill_owner_dataset_id,
-                    refill_owner_payload_hash = excluded.refill_owner_payload_hash,
-                    refill_terminal_status = excluded.refill_terminal_status,
-                    refill_terminal_at = excluded.refill_terminal_at,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    canonical_key,
-                    str(effective_payload.get("profile_url") or ""),
-                    str(effective_payload.get("raw_linkedin_url") or ""),
-                    str(effective_payload.get("sanity_linkedin_url") or ""),
-                    str(effective_payload.get("status") or "queued"),
-                    int(effective_payload.get("retry_count") or 0),
-                    str(effective_payload.get("last_error") or ""),
-                    str(effective_payload.get("last_run_id") or ""),
-                    str(effective_payload.get("last_dataset_id") or ""),
-                    str(effective_payload.get("last_snapshot_dir") or ""),
-                    str(effective_payload.get("last_raw_path") or ""),
-                    str(effective_payload.get("first_queued_at") or ""),
-                    str(effective_payload.get("last_queued_at") or ""),
-                    str(effective_payload.get("last_fetched_at") or ""),
-                    str(effective_payload.get("last_failed_at") or ""),
-                    json.dumps(list(effective_payload.get("source_shards") or []), ensure_ascii=False),
-                    json.dumps(list(effective_payload.get("source_jobs") or []), ensure_ascii=False),
-                    str(effective_payload.get("refill_queue_state") or ""),
-                    str(effective_payload.get("last_refill_trigger_kind") or ""),
-                    str(effective_payload.get("last_refill_plan_reason") or ""),
-                    str(effective_payload.get("last_refill_deferred_reason") or ""),
-                    str(effective_payload.get("last_refill_planned_at") or ""),
-                    str(effective_payload.get("refill_not_before_at") or ""),
-                    int(effective_payload.get("refill_plan_batch_size") or 0),
-                    int(effective_payload.get("refill_plan_batch_count") or 0),
-                    int(effective_payload.get("refill_plan_window_url_count") or 0),
-                    int(effective_payload.get("last_refill_attempt_count") or 0),
-                    int(effective_payload.get("refill_owner_worker_id") or 0),
-                    str(effective_payload.get("refill_owner_run_id") or ""),
-                    str(effective_payload.get("refill_owner_dataset_id") or ""),
-                    str(effective_payload.get("refill_owner_payload_hash") or ""),
-                    str(effective_payload.get("refill_terminal_status") or ""),
-                    str(effective_payload.get("refill_terminal_at") or ""),
-                ),
-            )
-            canonical_profile_url = str(effective_payload.get("profile_url") or canonical_key)
-            self._upsert_linkedin_profile_registry_aliases_locked(
-                canonical_key=canonical_key,
-                canonical_profile_url=canonical_profile_url,
-                alias_urls=list(effective_payload.get("alias_urls") or normalized_alias_urls),
-                alias_kind=alias_kind,
-            )
-            row = self._connection.execute(
-                """
-                SELECT * FROM linkedin_profile_registry
-                WHERE profile_url_key = ?
-                LIMIT 1
-                """,
-                (canonical_key,),
-            ).fetchone()
-        if row is None:
-            return None
-        payload = self._linkedin_profile_registry_from_row(row)
-        payload["alias_urls"] = self.get_linkedin_profile_registry_aliases(
-            payload.get("profile_url") or payload.get("profile_url_key") or ""
+        raise RuntimeError(
+            "postgres-only invariant violated for linkedin_profile_registry in _upsert_linkedin_profile_registry: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
         )
-        return payload
 
     def _resolve_linkedin_profile_registry_key_locked(self, profile_url_key: str) -> str:
         normalized_key = str(profile_url_key or "").strip()

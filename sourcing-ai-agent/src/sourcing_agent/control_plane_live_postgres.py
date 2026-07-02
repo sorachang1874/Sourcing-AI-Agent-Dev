@@ -886,26 +886,6 @@ class LiveControlPlanePostgresAdapter:
         self._ensure_control_plane_writer_schema()
         self._ensure_runtime_coordination_schema()
 
-    def replace_table_from_sqlite(self, table_name: str) -> None:
-        normalized_table = _normalize_postgres_identifier(table_name)
-        if not self.should_mirror(normalized_table):
-            return
-        self.ensure_bootstrapped()
-        sync_runtime_control_plane_to_postgres(
-            runtime_dir=self.runtime_dir,
-            sqlite_path=self.sqlite_path,
-            dsn=self.dsn,
-            schema=self.schema,
-            tables=[normalized_table],
-            min_interval_seconds=0.0,
-            force=True,
-        )
-        if normalized_table in _RUNTIME_COORDINATION_TABLES:
-            self._runtime_schema_ready = False
-            self._ensure_runtime_coordination_schema()
-            if normalized_table in {"job_events", "agent_runtime_sessions", "job_progress_event_summaries"}:
-                self._control_plane_writer_schema_ready = False
-            self._ensure_control_plane_writer_schema()
 
     def _ensure_legacy_target_public_web_migration_table_schema(self, table_name: str) -> None:
         normalized_table = _normalize_postgres_identifier(table_name)
