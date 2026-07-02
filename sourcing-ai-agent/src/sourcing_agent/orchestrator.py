@@ -78,7 +78,6 @@ from .confidence_policy import apply_policy_control, build_confidence_policy
 from .connectors import CompanyIdentity, CompanyRosterSnapshot, resolve_company_identity
 from .control_plane_postgres import (
     load_control_plane_postgres_sync_state,
-    sync_runtime_control_plane_to_postgres,
 )
 from .criteria_evolution import CriteriaEvolutionEngine
 from .crm_migration import CRMTargetCandidateMigrationBackfill
@@ -3137,15 +3136,13 @@ class SourcingOrchestrator:
                 continue
             hosted_dispatch.append(self._start_hosted_workflow_thread(job_id, source=hosted_source))
 
-        control_plane_postgres_sync = sync_runtime_control_plane_to_postgres(
-            runtime_dir=self.runtime_dir,
-            sqlite_path=self.store.compatibility_shadow_connect_target(),
-            dsn=str(payload.get("control_plane_postgres_dsn") or ""),
-            tables=list(payload.get("control_plane_postgres_tables") or []),
-            truncate_first=bool(payload.get("control_plane_postgres_truncate_first")),
-            min_interval_seconds=float(payload.get("control_plane_postgres_sync_min_interval_seconds") or 0.0),
-            force=bool(payload.get("control_plane_postgres_sync_force")),
-        )
+        # B4.3f: the shadow-sourced watchdog sync is retired — since B4.1 it mirrored an
+        # empty in-memory DB (a no-op at best, destructive under truncate_first). PG is
+        # authoritative; schema is owned by the migration runner and writes land in PG.
+        control_plane_postgres_sync = {
+            "status": "retired",
+            "reason": "sqlite_shadow_retired_b4_3f",
+        }
         hot_cache_governance = run_hot_cache_governance_cycle(
             runtime_dir=self.runtime_dir,
             store=self.store,

@@ -2,6 +2,7 @@ import inspect
 import tempfile
 import unittest
 
+from sourcing_agent import control_plane_live_postgres
 from sourcing_agent.legacy_public_web_retirement_audit import audit_legacy_public_web_retirement
 from sourcing_agent.legacy_public_web_storage import (
     archive_legacy_target_public_web_tables,
@@ -13,7 +14,7 @@ from sourcing_agent.legacy_public_web_storage import (
 )
 from sourcing_agent.storage import ControlPlaneStore
 
-from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin, pg_backed_control_plane_store
 
 
 class LegacyPublicWebRetirementAuditTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
@@ -25,41 +26,48 @@ class LegacyPublicWebRetirementAuditTest(PGControlPlaneStoreTestMixin, unittest.
     def tearDown(self) -> None:
         self.tempdir.cleanup()
 
-    def test_new_sqlite_shadow_does_not_bootstrap_empty_legacy_public_web_tables(self) -> None:
-        with self.store._lock, self.store._connection:
-            rows = self.store._connection.execute(
-                """
-                SELECT name
-                FROM sqlite_master
-                WHERE type = 'table'
-                  AND name IN (
-                    'target_candidate_public_web_batches',
-                    'target_candidate_public_web_runs',
-                    'target_candidate_public_web_promotions'
-                  )
-                ORDER BY name
-                """
-            ).fetchall()
+    @staticmethod
+    def _legacy_pg_table_names(store: ControlPlaneStore) -> list[str]:
+        adapter = store._control_plane_postgres
+        with adapter._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT tablename
+                    FROM pg_tables
+                    WHERE schemaname = current_schema()
+                      AND tablename LIKE 'target_candidate_public_web_%'
+                    ORDER BY tablename
+                    """
+                )
+                return [str(row["tablename"]) for row in cursor.fetchall()]
 
-        self.assertEqual([row["name"] for row in rows], [])
-        self.assertEqual(self.store.list_target_candidate_public_web_batches(), [])
-        self.assertEqual(self.store.list_target_candidate_public_web_runs(), [])
-        self.assertEqual(self.store.list_target_candidate_public_web_promotions(), [])
+    def test_fresh_store_does_not_bootstrap_empty_legacy_public_web_tables(self) -> None:
+        # B4.3f: the legacy tables must exist neither in PG (fresh schema) nor via any
+        # SQLite shadow (deleted). Uses a per-test schema because the class mixin shares
+        # one schema and sibling tests create the legacy PG tables via seed_*.
+        with pg_backed_control_plane_store(schema_label="legacy_audit_fresh") as store:
+            self.assertFalse(hasattr(store, "_connection"))
+            self.assertEqual(self._legacy_pg_table_names(store), [])
+            self.assertEqual(store.list_target_candidate_public_web_batches(), [])
+            self.assertEqual(store.list_target_candidate_public_web_runs(), [])
+            self.assertEqual(store.list_target_candidate_public_web_promotions(), [])
 
-    def test_sqlite_normal_schema_no_longer_bootstraps_legacy_public_web_tables(self) -> None:
-        # Track B B4.1 removed the SQLite normal-schema bootstrap entirely: there is no longer an
-        # `init_schema` that could create the legacy public-web tables. The only path that still
-        # materializes them is the migration-only helper, on demand.
+    def test_sqlite_migration_schema_helper_stays_removed(self) -> None:
+        # Track B B4.1 removed the SQLite normal-schema bootstrap; B4.3f removed the
+        # migration-only SQLite ensure helper too. The legacy tables' only DDL owner is
+        # the adapter's native PG DDL, applied on demand inside the migration context.
         self.assertFalse(
             hasattr(ControlPlaneStore, "init_schema"),
             "init_schema (the SQLite normal-schema bootstrap) must stay removed after B4.1",
         )
-        migration_schema_source = inspect.getsource(
-            ControlPlaneStore._ensure_legacy_target_public_web_sqlite_tables_for_migration
+        self.assertFalse(
+            hasattr(ControlPlaneStore, "_ensure_legacy_target_public_web_sqlite_tables_for_migration"),
+            "the migration-only SQLite ensure helper must stay removed after B4.3f",
         )
         self.assertIn(
             "CREATE TABLE IF NOT EXISTS target_candidate_public_web_runs",
-            migration_schema_source,
+            inspect.getsource(control_plane_live_postgres),
         )
 
     def test_audit_allows_deletion_when_only_crm_owner_rows_exist(self) -> None:
@@ -176,8 +184,10 @@ class LegacyPublicWebRetirementAuditTest(PGControlPlaneStoreTestMixin, unittest.
         )
 
     def test_migration_only_reader_returns_empty_when_legacy_table_is_absent(self) -> None:
-        with self.store._lock, self.store._connection:
-            self.store._connection.execute("DROP TABLE IF EXISTS target_candidate_public_web_runs")
+        adapter = self.store._control_plane_postgres
+        with adapter._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("DROP TABLE IF EXISTS target_candidate_public_web_runs")
 
         self.assertEqual(list_legacy_target_public_web_runs(self.store, limit=10), [])
         report = audit_legacy_public_web_retirement(store=self.store)
@@ -233,16 +243,8 @@ class LegacyPublicWebRetirementAuditTest(PGControlPlaneStoreTestMixin, unittest.
         self.assertEqual(result["pre_drop"]["row_count"], 2)
         self.assertEqual(report["status"], "ready_for_physical_deletion")
         self.assertEqual(list_legacy_target_public_web_runs(self.store, limit=10), [])
-        with self.store._lock, self.store._connection:
-            rows = self.store._connection.execute(
-                """
-                SELECT name
-                FROM sqlite_master
-                WHERE type = 'table'
-                  AND name LIKE 'target_candidate_public_web_%'
-                """
-            ).fetchall()
-        self.assertEqual(rows, [])
+        # B4.3f: prove _drop_postgres_legacy_tables physically dropped the PG tables.
+        self.assertEqual(self._legacy_pg_table_names(self.store), [])
 
 
 if __name__ == "__main__":

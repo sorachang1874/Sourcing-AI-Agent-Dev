@@ -10242,11 +10242,11 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(result["hosted_runtime_watchdog"]["status"], "scheduled")
         self.assertEqual(result["workflow_runner_control"]["status"], "started")
 
-    def test_sqlite_store_enables_wal_and_busy_timeout(self) -> None:
-        journal_mode = self.store._connection.execute("PRAGMA journal_mode").fetchone()[0]
-        busy_timeout = self.store._connection.execute("PRAGMA busy_timeout").fetchone()[0]
-        self.assertEqual(str(journal_mode).lower(), "wal")
-        self.assertGreaterEqual(int(busy_timeout), 60000)
+    def test_store_has_no_sqlite_shadow_connection(self) -> None:
+        # B4.3f: the SQLite compatibility shadow (and its WAL/busy-timeout PRAGMAs) is deleted;
+        # PostgreSQL is the sole control-plane backend.
+        self.assertFalse(hasattr(self.store, "_connection"))
+        self.assertTrue(self.store.control_plane_postgres_is_postgres_only())
 
     def test_job_progress_classifies_blocked_acquisition_workers(self) -> None:
         request_payload = {
@@ -12714,12 +12714,10 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(result["mode"], "hosted")
         hosted_mock.assert_called_once()
 
-    def test_hosted_runtime_watchdog_uses_store_compatibility_shadow_target_for_pg_sync(self) -> None:
-        shadow_target = "file:sourcing-agent-shadow-test?mode=memory&cache=shared"
-        self.orchestrator.store.compatibility_shadow_connect_target = unittest.mock.Mock(  # type: ignore[method-assign]
-            return_value=shadow_target
-        )
-
+    def test_hosted_runtime_watchdog_reports_retired_shadow_pg_sync(self) -> None:
+        # B4.3f: the shadow-sourced watchdog sync is retired — since B4.1 it mirrored an
+        # empty in-memory DB. The watchdog must report the retired status and never call
+        # the SQLite->PG sync routine.
         with unittest.mock.patch.object(
             self.orchestrator,
             "run_worker_recovery_once",
@@ -12728,16 +12726,16 @@ class PipelineTest(unittest.TestCase):
             self.orchestrator,
             "_refresh_runtime_metrics_snapshot",
             return_value={"status": "ok", "observed_at": "2026-04-21T00:00:00Z"},
-        ), unittest.mock.patch(
-            "sourcing_agent.orchestrator.sync_runtime_control_plane_to_postgres",
-            return_value={"status": "disabled"},
-        ) as sync_mock:
+        ):
             result = self.orchestrator.run_hosted_runtime_watchdog_once(
                 {"control_plane_postgres_dsn": "postgresql://demo/demo"}
             )
 
         self.assertEqual(result["status"], "completed")
-        self.assertEqual(sync_mock.call_args.kwargs["sqlite_path"], shadow_target)
+        self.assertEqual(
+            result["control_plane_postgres_sync"],
+            {"status": "retired", "reason": "sqlite_shadow_retired_b4_3f"},
+        )
 
     def test_read_service_status_marks_process_not_alive_as_stale(self) -> None:
         runtime_dir = Path(self.tempdir.name) / "runtime_service_status"

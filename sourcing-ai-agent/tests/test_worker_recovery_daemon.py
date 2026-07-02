@@ -951,8 +951,8 @@ class PersistentWorkerRecoveryDaemonTest(PGControlPlaneStoreTestMixin, unittest.
         self.assertIsNotNone(claimed_a)
 
         with (
-            mock.patch("sourcing_agent.storage.worker_lease_owner_is_dead_local_process", return_value=True),
-            # The PG-native list path binds its own reference to the helper.
+            # B4.3f: storage.py no longer re-imports the helper (its dead SQLite leg is
+            # deleted); the PG-native path binds its own reference in the live module.
             mock.patch(
                 "sourcing_agent.control_plane_live_postgres.worker_lease_owner_is_dead_local_process",
                 return_value=True,

@@ -4,7 +4,6 @@ import ast
 import json
 import os
 import re
-import sqlite3
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -26,9 +25,6 @@ from .control_plane_job_progress import (
 )
 from .control_plane_job_progress import (
     merge_progress_event_metrics as _cp_merge_progress_event_metrics,
-)
-from .control_plane_job_progress import (
-    update_job_progress_event_summary as _cp_update_job_progress_event_summary,
 )
 from .control_plane_live_postgres import (
     LiveControlPlanePostgresAdapter,
@@ -84,7 +80,6 @@ from .request_matching import (
     request_family_signature,
     request_signature,
 )
-from .runtime_lease_utils import worker_lease_owner_is_dead_local_process
 from .worker_scheduler import effective_worker_status, wait_stage
 
 _RESULT_VIEW_SERVING_ARTIFACT_FILENAMES = (
@@ -258,27 +253,6 @@ def _legacy_materialization_write_is_migration(metadata: dict[str, Any] | None, 
         or source_text in {"durable_runtime_migration_adapter", "legacy_materialization_adapter"}
     )
 
-
-def _resolve_postgres_only_sqlite_backend(
-    *,
-    db_path: Path,
-    control_plane_postgres_mode: str,
-) -> tuple[str, str, bool]:
-    normalized_mode = str(control_plane_postgres_mode or "").strip().lower()
-    configured_backend = str(os.getenv("SOURCING_PG_ONLY_SQLITE_BACKEND") or "").strip().lower()
-    if configured_backend == "memory":
-        configured_backend = "shared_memory"
-    if normalized_mode != "postgres_only":
-        return "disk", str(db_path), False
-    backend = configured_backend or "shared_memory"
-    if backend != "shared_memory":
-        raise RuntimeError(
-            "postgres_only control-plane mode refuses disk-backed SQLite shadow storage. "
-            "Use SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory."
-        )
-    seed = str(db_path.expanduser())
-    uri = f"file:sourcing-agent-shadow-{sha1(seed.encode('utf-8')).hexdigest()[:16]}?mode=memory&cache=shared"
-    return backend, uri, True
 
 
 # Extracted to control_plane_serde so the typed repository write path applies the SAME json-safe
@@ -757,7 +731,6 @@ class ControlPlaneStore:
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
         self._profile_prefetch_scheduler_lock_guard = threading.Lock()
         self._profile_prefetch_scheduler_locks: dict[str, threading.RLock] = {}
         self._board_visible_patch_publication_lock_guard = threading.Lock()
@@ -771,18 +744,10 @@ class ControlPlaneStore:
             os.getenv("SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE")
             or ("postgres_only" if control_plane_postgres_dsn else "disabled")
         )
-        self._sqlite_backend_mode, self._sqlite_connect_target, self._sqlite_connect_uri = (
-            _resolve_postgres_only_sqlite_backend(
-                db_path=self.db_path,
-                control_plane_postgres_mode=control_plane_postgres_mode,
-            )
-        )
         # Track B B3: SQLite-authoritative control-plane storage is no longer supported. Every
         # ControlPlaneStore — serving, CLI, local-dev, scripted, tests — requires a resolved
         # Postgres DSN and postgres_only live mode, so PostgreSQL is the sole authoritative
-        # backend and should_prefer_read / should_skip_sqlite_fallback are always True. The
-        # SQLite connection survives ONLY as the ephemeral shared_memory compatibility shadow
-        # (removed entirely in B4). This generalizes the former production-/flag-only guard.
+        # backend and should_prefer_read / should_skip_sqlite_fallback are always True.
         if not control_plane_postgres_dsn:
             raise RuntimeError(
                 "ControlPlaneStore requires a resolved control-plane Postgres DSN "
@@ -795,30 +760,15 @@ class ControlPlaneStore:
                 f"(resolved mode={control_plane_postgres_mode!r}). The 'disabled', 'mirror', and "
                 "'prefer_postgres' control-plane modes are no longer supported."
             )
-        if self._sqlite_backend_mode == "disk":
-            raise RuntimeError(
-                "postgres_only control-plane storage refuses a disk-backed SQLite shadow; "
-                "use the default shared_memory shadow backend."
-            )
         self._control_plane_postgres = LiveControlPlanePostgresAdapter(
             runtime_dir=runtime_dir,
-            sqlite_path=self._sqlite_connect_target,
             dsn=control_plane_postgres_dsn,
             mode=control_plane_postgres_mode,
         )
-        self._connection = sqlite3.connect(
-            self._sqlite_connect_target,
-            check_same_thread=False,
-            timeout=60.0,
-            uri=self._sqlite_connect_uri,
-        )
-        self._connection.row_factory = sqlite3.Row
-        self._configure_connection()
-        # Track B B4.1 (shadow removal): the in-memory SQLite shadow is no longer built. Under
-        # postgres_only every read/write routes to PG and the dead SQLite fallbacks/tails are all
-        # unreachable (B3.2 + B4.1b), so the shadow schema is never consulted. The PG schema is created by
-        # the versioned migration runner via the adapter's ensure_bootstrapped(). The empty shadow
-        # connection survives only until B4.1d/e delete the last dead self._connection references.
+        # Track B B4.3f (shadow deleted): the SQLite compatibility connection is gone. Every
+        # read/write routes to PG; the PG schema is created by the versioned migration runner via
+        # the adapter's ensure_bootstrapped(), and the legacy target-public-web migration tables
+        # by the adapter's native DDL inside the migration table context.
 
     def control_plane_postgres_live_mode(self) -> str:
         return str(getattr(self._control_plane_postgres, "mode", "disabled") or "disabled")
@@ -826,25 +776,27 @@ class ControlPlaneStore:
     def control_plane_postgres_is_postgres_only(self) -> bool:
         return self.control_plane_postgres_live_mode() == "postgres_only"
 
+    # B4.3f: the SQLite compatibility shadow is deleted. These accessors survive as inert
+    # status labels for CLI/status surfaces; nothing may treat the return values as a
+    # connectable SQLite target.
     def compatibility_shadow_backend(self) -> str:
-        return str(self._sqlite_backend_mode or "disk")
+        return "retired"
 
     def compatibility_shadow_connect_target(self) -> str:
-        return str(self._sqlite_connect_target or self.db_path)
+        return ""
 
     def compatibility_shadow_seed_path(self) -> str:
         return str(self.db_path)
 
     def compatibility_shadow_is_ephemeral(self) -> bool:
-        return self.compatibility_shadow_backend() != "disk"
+        return True
 
     def close(self) -> None:
         """Dispose persistent control-plane handles (idempotent teardown hook).
 
-        Closes the live Postgres adapter's connection pool when present, then
-        the SQLite compatibility connection under the store lock. Safe to call
-        repeatedly; multi-runtime processes (test harnesses, scripted runtimes)
-        must call this so adapter pools do not accumulate per runtime.
+        Closes the live Postgres adapter's connection pool when present. Safe
+        to call repeatedly; multi-runtime processes (test harnesses, scripted
+        runtimes) must call this so adapter pools do not accumulate per runtime.
         """
 
         adapter = getattr(self, "_control_plane_postgres", None)
@@ -852,14 +804,6 @@ class ControlPlaneStore:
         if callable(adapter_close):
             try:
                 adapter_close()
-            except Exception:
-                pass
-        connection = getattr(self, "_connection", None)
-        if connection is None:
-            return
-        with self._lock:
-            try:
-                connection.close()
             except Exception:
                 pass
 
@@ -902,7 +846,6 @@ class ControlPlaneStore:
 
     def _require_legacy_target_public_web_migration_write(self, table_name: str) -> None:
         if int(getattr(self, "_legacy_target_public_web_migration_write_depth", 0) or 0) > 0:
-            self._ensure_legacy_target_public_web_sqlite_tables_for_migration()
             return
         raise RuntimeError(
             "legacy_target_candidate_public_web_write_retired: "
@@ -910,159 +853,6 @@ class ControlPlaneStore:
             "storage and workflow_commands. Seed historical rows through legacy_public_web_storage.seed_* "
             "or a reviewed migration write context."
         )
-
-    @staticmethod
-    def _legacy_target_public_web_table_names() -> tuple[str, ...]:
-        return (
-            "target_candidate_public_web_promotions",
-            "target_candidate_public_web_runs",
-            "target_candidate_public_web_batches",
-        )
-
-    def _sqlite_table_exists_locked(self, table_name: str) -> bool:
-        row = self._connection.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
-            (str(table_name or "").strip(),),
-        ).fetchone()
-        return row is not None
-
-    def _drop_empty_legacy_target_public_web_sqlite_tables(self) -> None:
-        """Remove empty retired target-candidate Public Web tables from new SQLite shadows.
-
-        Existing historical rows are preserved for reviewed cold-backup/migration
-        reads. Empty tables from schema bootstrap are dropped so new runtimes do
-        not keep legacy Public Web tables as an implied normal path.
-        """
-
-        for table_name in self._legacy_target_public_web_table_names():
-            if not self._sqlite_table_exists_locked(table_name):
-                continue
-            row = self._connection.execute(f"SELECT COUNT(*) AS row_count FROM {table_name}").fetchone()
-            if int(_row_value(row, "row_count", 0) or 0) == 0:
-                self._connection.execute(f"DROP TABLE IF EXISTS {table_name}")
-
-    def _ensure_legacy_target_public_web_sqlite_tables_for_migration(self) -> None:
-        """Create retired target-candidate Public Web tables only for explicit migration writes."""
-
-        with self._lock, self._connection:
-            self._connection.executescript(
-                """
-                CREATE TABLE IF NOT EXISTS target_candidate_public_web_batches (
-                    batch_id TEXT PRIMARY KEY,
-                    idempotency_key TEXT NOT NULL UNIQUE,
-                    status TEXT NOT NULL DEFAULT 'queued',
-                    requested_record_ids_json TEXT NOT NULL DEFAULT '[]',
-                    source_families_json TEXT NOT NULL DEFAULT '[]',
-                    options_json TEXT NOT NULL DEFAULT '{}',
-                    run_ids_json TEXT NOT NULL DEFAULT '[]',
-                    summary_json TEXT NOT NULL DEFAULT '{}',
-                    metadata_json TEXT NOT NULL DEFAULT '{}',
-                    requested_by TEXT NOT NULL DEFAULT '',
-                    force_refresh INTEGER NOT NULL DEFAULT 0,
-                    started_at TEXT,
-                    completed_at TEXT,
-                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-                );
-
-                CREATE TABLE IF NOT EXISTS target_candidate_public_web_runs (
-                    run_id TEXT PRIMARY KEY,
-                    batch_id TEXT NOT NULL DEFAULT '',
-                    record_id TEXT NOT NULL DEFAULT '',
-                    candidate_id TEXT NOT NULL DEFAULT '',
-                    candidate_name TEXT NOT NULL DEFAULT '',
-                    current_company TEXT NOT NULL DEFAULT '',
-                    linkedin_url TEXT NOT NULL DEFAULT '',
-                    linkedin_url_key TEXT NOT NULL DEFAULT '',
-                    person_identity_key TEXT NOT NULL DEFAULT '',
-                    idempotency_key TEXT NOT NULL UNIQUE,
-                    status TEXT NOT NULL DEFAULT 'queued',
-                    phase TEXT NOT NULL DEFAULT 'queued',
-                    source_families_json TEXT NOT NULL DEFAULT '[]',
-                    options_json TEXT NOT NULL DEFAULT '{}',
-                    query_manifest_json TEXT NOT NULL DEFAULT '[]',
-                    search_checkpoint_json TEXT NOT NULL DEFAULT '{}',
-                    fetch_checkpoint_json TEXT NOT NULL DEFAULT '{}',
-                    analysis_checkpoint_json TEXT NOT NULL DEFAULT '{}',
-                    summary_json TEXT NOT NULL DEFAULT '{}',
-                    artifact_root TEXT NOT NULL DEFAULT '',
-                    worker_key TEXT NOT NULL DEFAULT '',
-                    lease_owner TEXT NOT NULL DEFAULT '',
-                    lease_expires_at TEXT,
-                    attempt_count INTEGER NOT NULL DEFAULT 0,
-                    last_error TEXT NOT NULL DEFAULT '',
-                    started_at TEXT,
-                    completed_at TEXT,
-                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-                );
-
-                CREATE TABLE IF NOT EXISTS target_candidate_public_web_promotions (
-                    promotion_id TEXT PRIMARY KEY,
-                    signal_id TEXT NOT NULL DEFAULT '',
-                    run_id TEXT NOT NULL DEFAULT '',
-                    asset_id TEXT NOT NULL DEFAULT '',
-                    person_identity_key TEXT NOT NULL DEFAULT '',
-                    record_id TEXT NOT NULL DEFAULT '',
-                    candidate_id TEXT NOT NULL DEFAULT '',
-                    candidate_name TEXT NOT NULL DEFAULT '',
-                    current_company TEXT NOT NULL DEFAULT '',
-                    linkedin_url_key TEXT NOT NULL DEFAULT '',
-                    signal_kind TEXT NOT NULL DEFAULT '',
-                    signal_type TEXT NOT NULL DEFAULT '',
-                    email_type TEXT NOT NULL DEFAULT '',
-                    value TEXT NOT NULL DEFAULT '',
-                    normalized_value TEXT NOT NULL DEFAULT '',
-                    url TEXT NOT NULL DEFAULT '',
-                    source_url TEXT NOT NULL DEFAULT '',
-                    source_domain TEXT NOT NULL DEFAULT '',
-                    source_family TEXT NOT NULL DEFAULT '',
-                    source_title TEXT NOT NULL DEFAULT '',
-                    confidence_label TEXT NOT NULL DEFAULT '',
-                    confidence_score REAL NOT NULL DEFAULT 0,
-                    identity_match_label TEXT NOT NULL DEFAULT '',
-                    identity_match_score REAL NOT NULL DEFAULT 0,
-                    publishable INTEGER NOT NULL DEFAULT 0,
-                    clean_profile_link INTEGER NOT NULL DEFAULT 0,
-                    link_shape_warnings_json TEXT NOT NULL DEFAULT '[]',
-                    action TEXT NOT NULL DEFAULT 'promote',
-                    promotion_status TEXT NOT NULL DEFAULT 'manually_promoted',
-                    promoted_field TEXT NOT NULL DEFAULT '',
-                    previous_value TEXT NOT NULL DEFAULT '',
-                    new_value TEXT NOT NULL DEFAULT '',
-                    operator TEXT NOT NULL DEFAULT '',
-                    note TEXT NOT NULL DEFAULT '',
-                    evidence_excerpt TEXT NOT NULL DEFAULT '',
-                    metadata_json TEXT NOT NULL DEFAULT '{}',
-                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_batches_updated
-                    ON target_candidate_public_web_batches (updated_at, status);
-
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_batch
-                    ON target_candidate_public_web_runs (batch_id, updated_at);
-
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_record
-                    ON target_candidate_public_web_runs (record_id, updated_at);
-
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_status
-                    ON target_candidate_public_web_runs (status, updated_at);
-
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_identity
-                    ON target_candidate_public_web_runs (linkedin_url_key, updated_at);
-
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_record
-                    ON target_candidate_public_web_promotions (record_id, updated_at);
-
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_signal
-                    ON target_candidate_public_web_promotions (signal_id, updated_at);
-
-                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_run
-                    ON target_candidate_public_web_promotions (run_id, updated_at);
-                """
-            )
 
     # Legacy aliases kept until the last sqlite_* debug/test call sites are removed.
     def sqlite_shadow_backend(self) -> str:
@@ -1415,13 +1205,6 @@ class ControlPlaneStore:
             return None
         return row_builder(row)
 
-    def _configure_connection(self) -> None:
-        with self._lock:
-            self._connection.execute("PRAGMA journal_mode=WAL")
-            self._connection.execute("PRAGMA synchronous=NORMAL")
-            self._connection.execute("PRAGMA busy_timeout = 60000")
-            self._connection.execute("PRAGMA foreign_keys = ON")
-
     def replace_bootstrap_data(self, candidates: list[Candidate], evidence: list[EvidenceRecord]) -> None:
         if self._replace_candidates_and_evidence_in_postgres(
             current_candidate_rows=self._select_postgres_candidate_rows(limit=0),
@@ -1651,8 +1434,10 @@ class ControlPlaneStore:
         postgres_rows = self._select_postgres_candidate_rows(limit=0)
         if postgres_rows or self._control_plane_postgres_should_skip_sqlite_fallback("candidates"):
             return len(postgres_rows)
-        row = self._connection.execute("SELECT COUNT(*) AS count FROM candidates").fetchone()
-        return int(row["count"])
+        raise RuntimeError(
+            "postgres-only invariant violated for candidates in candidate_count: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def candidate_count_for_company(self, target_company: str) -> int:
         postgres_rows = self._select_postgres_candidate_rows(
@@ -1662,11 +1447,10 @@ class ControlPlaneStore:
         )
         if postgres_rows or self._control_plane_postgres_should_skip_sqlite_fallback("candidates"):
             return len(postgres_rows)
-        row = self._connection.execute(
-            "SELECT COUNT(*) AS count FROM candidates WHERE lower(target_company) = lower(?)",
-            (target_company,),
-        ).fetchone()
-        return int(row["count"])
+        raise RuntimeError(
+            "postgres-only invariant violated for candidates in candidate_count_for_company: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_candidates(self) -> list[Candidate]:
         postgres_rows = self._select_postgres_candidate_rows(limit=0)
@@ -1675,8 +1459,10 @@ class ControlPlaneStore:
                 [self._candidate_from_row(row) for row in postgres_rows],
                 key=lambda candidate: str(candidate.name_en or "").lower(),
             )
-        rows = self._connection.execute("SELECT * FROM candidates ORDER BY name_en").fetchall()
-        return [self._candidate_from_row(row) for row in rows]
+        raise RuntimeError(
+            "postgres-only invariant violated for candidates in list_candidates: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_candidates_for_company(self, target_company: str) -> list[Candidate]:
         postgres_rows = self._select_postgres_candidate_rows(
@@ -1741,18 +1527,10 @@ class ControlPlaneStore:
             return postgres_row
         if self._control_plane_postgres_should_skip_sqlite_fallback("candidates"):
             return None
-        row = self._connection.execute(
-            """
-            SELECT * FROM candidates
-            WHERE lower(target_company) = lower(?) AND lower(name_en) = lower(?)
-            ORDER BY candidate_id
-            LIMIT 1
-            """,
-            (normalized_company, normalized_name),
-        ).fetchone()
-        if row is None:
-            return None
-        return self._candidate_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for candidates in find_candidate_by_name: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def upsert_candidate(self, candidate: Candidate) -> Candidate:
         payload = self._candidate_payload(candidate)
@@ -1794,17 +1572,10 @@ class ControlPlaneStore:
                 [self._evidence_payload_from_row(row, include_candidate_id=True) for row in postgres_rows],
                 key=lambda row: (str(row.get("candidate_id") or ""), str(row.get("title") or "")),
             )
-        rows = self._connection.execute(
-            """
-            SELECT e.*
-            FROM evidence e
-            JOIN candidates c ON c.candidate_id = e.candidate_id
-            WHERE lower(c.target_company) = lower(?)
-            ORDER BY e.candidate_id, e.title
-            """,
-            (target_company,),
-        ).fetchall()
-        return [self._evidence_payload_from_row(row, include_candidate_id=True) for row in rows]
+        raise RuntimeError(
+            "postgres-only invariant violated for evidence in list_evidence_for_company: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def upsert_evidence_records(self, evidence: list[EvidenceRecord]) -> list[dict[str, Any]]:
         if not evidence:
@@ -1919,174 +1690,6 @@ class ControlPlaneStore:
             "postgres-only invariant violated for job_events in append_job_event: should_prefer_read "
             "returned False; legacy SQLite tail retired (B4)"
         )
-
-    def _compact_runtime_job_events_locked(self, *, job_id: str, stage: str, payload: dict[str, Any]) -> bool:
-        normalized_job_id = str(job_id or "").strip()
-        normalized_stage = str(stage or "").strip()
-        if not normalized_job_id or normalized_stage not in {"runtime_heartbeat", "runtime_control"}:
-            return False
-        grouping_key_name = "source" if normalized_stage == "runtime_heartbeat" else "control"
-        keep_latest = 12 if normalized_stage == "runtime_heartbeat" else 8
-        grouping_value = str(payload.get(grouping_key_name) or "").strip()
-        rows = self._connection.execute(
-            """
-            SELECT event_id, payload_json
-            FROM job_events
-            WHERE job_id = ? AND stage = ?
-            ORDER BY event_id DESC
-            """,
-            (normalized_job_id, normalized_stage),
-        ).fetchall()
-        matched_ids: list[int] = []
-        for row in rows:
-            try:
-                row_payload = dict(json.loads(row["payload_json"] or "{}"))
-            except (TypeError, ValueError, json.JSONDecodeError):
-                row_payload = {}
-            row_grouping_value = str(row_payload.get(grouping_key_name) or "").strip()
-            if row_grouping_value != grouping_value:
-                continue
-            matched_ids.append(int(row["event_id"] or 0))
-        if len(matched_ids) <= keep_latest:
-            return False
-        delete_ids = matched_ids[keep_latest:]
-        self._connection.executemany(
-            "DELETE FROM job_events WHERE event_id = ?",
-            [(event_id,) for event_id in delete_ids if event_id > 0],
-        )
-        self._hydrate_job_progress_event_summary_locked(normalized_job_id)
-        return True
-
-    def _upsert_job_progress_event_summary_locked(
-        self,
-        *,
-        job_id: str,
-        summary: dict[str, Any],
-    ) -> sqlite3.Row | None:
-        normalized_job_id = str(job_id or "").strip()
-        if not normalized_job_id:
-            return None
-        self._connection.execute(
-            """
-            INSERT INTO job_progress_event_summaries (
-                job_id, event_count, latest_event_json, stage_sequence_json, stage_stats_json, latest_metrics_json
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(job_id) DO UPDATE SET
-                event_count = excluded.event_count,
-                latest_event_json = excluded.latest_event_json,
-                stage_sequence_json = excluded.stage_sequence_json,
-                stage_stats_json = excluded.stage_stats_json,
-                latest_metrics_json = excluded.latest_metrics_json,
-                updated_at = CURRENT_TIMESTAMP
-            """,
-            (
-                normalized_job_id,
-                int(summary.get("event_count") or 0),
-                json.dumps(_json_safe_payload(summary.get("latest_event") or {}), ensure_ascii=False),
-                json.dumps(_json_safe_payload(summary.get("stage_sequence") or []), ensure_ascii=False),
-                json.dumps(_json_safe_payload(summary.get("stage_stats") or {}), ensure_ascii=False),
-                json.dumps(_json_safe_payload(summary.get("latest_metrics") or {}), ensure_ascii=False),
-            ),
-        )
-        return self._connection.execute(
-            """
-            SELECT *
-            FROM job_progress_event_summaries
-            WHERE job_id = ?
-            LIMIT 1
-            """,
-            (normalized_job_id,),
-        ).fetchone()
-
-    def _hydrate_job_progress_event_summary_locked(self, job_id: str) -> dict[str, Any]:
-        normalized_job_id = str(job_id or "").strip()
-        if not normalized_job_id:
-            return {}
-        rows = self._connection.execute(
-            """
-            SELECT event_id, stage, status, detail, payload_json, created_at
-            FROM job_events
-            WHERE job_id = ?
-            ORDER BY event_id ASC
-            """,
-            (normalized_job_id,),
-        ).fetchall()
-        events: list[dict[str, Any]] = []
-        for row in rows:
-            try:
-                payload = dict(json.loads(row["payload_json"] or "{}"))
-            except (TypeError, ValueError, json.JSONDecodeError):
-                payload = {}
-            events.append(
-                {
-                    "event_id": int(row["event_id"] or 0),
-                    "stage": str(row["stage"] or ""),
-                    "status": str(row["status"] or ""),
-                    "detail": str(row["detail"] or ""),
-                    "payload": payload,
-                    "created_at": str(row["created_at"] or ""),
-                }
-            )
-        summary = _build_job_progress_event_summary(events)
-        if rows:
-            self._upsert_job_progress_event_summary_locked(job_id=normalized_job_id, summary=summary)
-        else:
-            self._connection.execute(
-                "DELETE FROM job_progress_event_summaries WHERE job_id = ?",
-                (normalized_job_id,),
-            )
-        return {
-            "job_id": normalized_job_id,
-            **summary,
-        }
-
-    def _update_job_progress_event_summary_locked(self, *, job_id: str, event: dict[str, Any]) -> None:
-        normalized_job_id = str(job_id or "").strip()
-        if not normalized_job_id:
-            return
-        row = self._connection.execute(
-            """
-            SELECT *
-            FROM job_progress_event_summaries
-            WHERE job_id = ?
-            LIMIT 1
-            """,
-            (normalized_job_id,),
-        ).fetchone()
-        if row is None:
-            summary = {
-                "event_count": 0,
-                "latest_event": {},
-                "stage_sequence": [],
-                "stage_stats": {},
-                "latest_metrics": {},
-            }
-        else:
-            summary = {
-                "event_count": int(row["event_count"] or 0),
-                "latest_event": {},
-                "stage_sequence": [],
-                "stage_stats": {},
-                "latest_metrics": {},
-            }
-            try:
-                summary["latest_event"] = dict(json.loads(row["latest_event_json"] or "{}"))
-            except (TypeError, ValueError, json.JSONDecodeError):
-                summary["latest_event"] = {}
-            try:
-                summary["stage_sequence"] = list(json.loads(row["stage_sequence_json"] or "[]"))
-            except (TypeError, ValueError, json.JSONDecodeError):
-                summary["stage_sequence"] = []
-            try:
-                summary["stage_stats"] = dict(json.loads(row["stage_stats_json"] or "{}"))
-            except (TypeError, ValueError, json.JSONDecodeError):
-                summary["stage_stats"] = {}
-            try:
-                summary["latest_metrics"] = dict(json.loads(row["latest_metrics_json"] or "{}"))
-            except (TypeError, ValueError, json.JSONDecodeError):
-                summary["latest_metrics"] = {}
-        summary = _cp_update_job_progress_event_summary(summary, event=event)
-        self._upsert_job_progress_event_summary_locked(job_id=normalized_job_id, summary=summary)
 
     def get_job_progress_event_summary(self, job_id: str, *, hydrate_if_missing: bool = True) -> dict[str, Any]:
         normalized_job_id = str(job_id or "").strip()
@@ -2419,7 +2022,7 @@ class ControlPlaneStore:
 
     def _job_board_visible_patch_from_row(
         self,
-        row: sqlite3.Row | dict[str, Any] | None,
+        row: dict[str, Any] | None,
     ) -> dict[str, Any]:
         if row is None:
             return {}
@@ -2930,7 +2533,7 @@ class ControlPlaneStore:
 
     def _job_materialization_item_from_row(
         self,
-        row: sqlite3.Row | dict[str, Any] | None,
+        row: dict[str, Any] | None,
     ) -> dict[str, Any]:
         if row is None:
             return {}
@@ -3359,7 +2962,7 @@ class ControlPlaneStore:
         )
 
     def _job_result_lifecycle_from_row(
-        self, row: sqlite3.Row | dict[str, Any] | None
+        self, row: dict[str, Any] | None
     ) -> dict[str, Any] | None:
         if row is None:
             return None
@@ -3771,25 +3374,10 @@ class ControlPlaneStore:
                 return [self._plan_review_session_from_row(row) for row in rows]
             if self._control_plane_postgres_should_skip_sqlite_fallback("plan_review_sessions"):
                 return []
-        clauses: list[str] = []
-        params: list[Any] = []
-        if target_company:
-            clauses.append("lower(target_company) = lower(?)")
-            params.append(target_company)
-        if status:
-            clauses.append("status = ?")
-            params.append(status)
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        rows = self._connection.execute(
-            f"""
-            SELECT * FROM plan_review_sessions
-            {where_clause}
-            ORDER BY updated_at DESC, review_id DESC
-            LIMIT ?
-            """,
-            (*params, limit),
-        ).fetchall()
-        return [self._plan_review_session_from_row(row) for row in rows]
+        raise RuntimeError(
+            "postgres-only invariant violated for plan_review_sessions in list_plan_review_sessions: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def review_plan_session(
         self,
@@ -6793,13 +6381,10 @@ class ControlPlaneStore:
             return postgres_row
         if self._control_plane_postgres_should_skip_sqlite_fallback("manual_review_items"):
             return None
-        row = self._connection.execute(
-            "SELECT * FROM manual_review_items WHERE review_item_id = ? LIMIT 1",
-            (review_item_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        return self._manual_review_item_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for manual_review_items in get_manual_review_item: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def merge_manual_review_item_metadata(
         self,
@@ -9288,19 +8873,10 @@ class ControlPlaneStore:
             return postgres_rows
         if self._control_plane_postgres_should_skip_sqlite_fallback("job_events"):
             return []
-        clauses = ["job_id = ?"]
-        params: list[Any] = [job_id]
-        if stage:
-            clauses.append("stage = ?")
-            params.append(stage)
-        order = "DESC" if descending else "ASC"
-        query = f"SELECT * FROM job_events WHERE {' AND '.join(clauses)} ORDER BY event_id {order}"
-        normalized_limit = int(limit or 0)
-        if normalized_limit > 0:
-            query += " LIMIT ?"
-            params.append(normalized_limit)
-        rows = self._connection.execute(query, tuple(params)).fetchall()
-        return [self._job_event_from_row(row) for row in rows]
+        raise RuntimeError(
+            "postgres-only invariant violated for job_events in list_job_events: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_jobs(
         self,
@@ -9412,18 +8988,10 @@ class ControlPlaneStore:
         elif self._control_plane_postgres_should_skip_sqlite_fallback("jobs"):
             return None
         else:
-            rows = [
-                self._job_from_row(row)
-                for row in self._connection.execute(
-                    """
-                    SELECT * FROM jobs
-                    WHERE status = 'completed'
-                    ORDER BY updated_at DESC, created_at DESC
-                    LIMIT ?
-                    """,
-                    (limit,),
-                ).fetchall()
-            ]
+            raise RuntimeError(
+                "postgres-only invariant violated for jobs in find_latest_completed_job: should_prefer_read "
+                "returned False; legacy SQLite tail retired (B4)"
+            )
         allowed = set(job_types or ["retrieval", "workflow", "retrieval_rerun"])
         for row in rows:
             job_id = str(row.get("job_id") or "")
@@ -9457,18 +9025,10 @@ class ControlPlaneStore:
         elif self._control_plane_postgres_should_skip_sqlite_fallback("jobs"):
             return None
         else:
-            rows = [
-                self._job_from_row(row)
-                for row in self._connection.execute(
-                    """
-                    SELECT * FROM jobs
-                    WHERE status = 'completed'
-                    ORDER BY updated_at DESC, created_at DESC
-                    LIMIT ?
-                    """,
-                    (limit,),
-                ).fetchall()
-            ]
+            raise RuntimeError(
+                "postgres-only invariant violated for jobs in find_best_completed_job_match: should_prefer_read "
+                "returned False; legacy SQLite tail retired (B4)"
+            )
         allowed = set(job_types or ["retrieval", "workflow", "retrieval_rerun"])
         request_matching = _matching_bundle_payload(request_payload)
         best_job: dict[str, Any] | None = None
@@ -10448,7 +10008,7 @@ class ControlPlaneStore:
                 params.append(normalized_asset_view)
             return " ".join(clauses), params
 
-        def _row_sort_key(row: sqlite3.Row | dict[str, Any]) -> tuple[int, int, str, int]:
+        def _row_sort_key(row: dict[str, Any]) -> tuple[int, int, str, int]:
             return (
                 1 if bool(row["authoritative"]) else 0,
                 int(row["candidate_count"] or 0),
@@ -10456,11 +10016,11 @@ class ControlPlaneStore:
                 int(row["registry_id"] or 0),
             )
 
-        def _apply_registry_canonicalization(rows: list[sqlite3.Row | dict[str, Any]], *, use_postgres: bool) -> dict[str, Any]:
+        def _apply_registry_canonicalization(rows: list[dict[str, Any]], *, use_postgres: bool) -> dict[str, Any]:
             updated_rows = 0
             deleted_rows = 0
             merged_groups = 0
-            grouped: dict[tuple[str, str], list[sqlite3.Row | dict[str, Any]]] = {}
+            grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
             for row in rows:
                 key = (str(row["snapshot_id"] or ""), str(row["asset_view"] or "canonical_merged"))
                 grouped.setdefault(key, []).append(row)
@@ -15974,93 +15534,6 @@ class ControlPlaneStore:
             "returned False; legacy SQLite tail retired (B4)"
         )
 
-    def _resolve_linkedin_profile_registry_key_locked(self, profile_url_key: str) -> str:
-        normalized_key = str(profile_url_key or "").strip()
-        if not normalized_key:
-            return ""
-        current_key = normalized_key
-        seen: set[str] = set()
-        while current_key and current_key not in seen:
-            seen.add(current_key)
-            row = self._connection.execute(
-                """
-                SELECT profile_url_key
-                FROM linkedin_profile_registry_aliases
-                WHERE alias_url_key = ?
-                LIMIT 1
-                """,
-                (current_key,),
-            ).fetchone()
-            if row is None:
-                break
-            mapped_key = str(row["profile_url_key"] or "").strip()
-            if not mapped_key or mapped_key == current_key:
-                break
-            current_key = mapped_key
-        return current_key or normalized_key
-
-    def _list_linkedin_profile_alias_urls_locked(self, canonical_key: str) -> list[str]:
-        normalized_canonical_key = str(canonical_key or "").strip()
-        if not normalized_canonical_key:
-            return []
-        rows = self._connection.execute(
-            """
-            SELECT alias_url
-            FROM linkedin_profile_registry_aliases
-            WHERE profile_url_key = ?
-            ORDER BY updated_at DESC
-            """,
-            (normalized_canonical_key,),
-        ).fetchall()
-        aliases: list[str] = []
-        for row in rows:
-            alias_url = str(row["alias_url"] or "").strip()
-            if alias_url and alias_url not in aliases:
-                aliases.append(alias_url)
-        return aliases
-
-    def _upsert_linkedin_profile_registry_aliases_locked(
-        self,
-        *,
-        canonical_key: str,
-        canonical_profile_url: str,
-        alias_urls: list[str],
-        alias_kind: str = "observed",
-    ) -> int:
-        normalized_canonical_key = str(canonical_key or "").strip()
-        if not normalized_canonical_key:
-            return 0
-        normalized_alias_kind = str(alias_kind or "observed").strip() or "observed"
-        normalized_alias_urls = _normalize_linkedin_profile_url_list([canonical_profile_url, *list(alias_urls or [])])
-        upserted = 0
-        for alias_url in normalized_alias_urls:
-            alias_key = _normalize_linkedin_profile_url_key(alias_url)
-            if not alias_key:
-                continue
-            self._connection.execute(
-                """
-                INSERT INTO linkedin_profile_registry_aliases (
-                    alias_url_key,
-                    profile_url_key,
-                    alias_url,
-                    alias_kind
-                ) VALUES (?, ?, ?, ?)
-                ON CONFLICT(alias_url_key) DO UPDATE SET
-                    profile_url_key = excluded.profile_url_key,
-                    alias_url = excluded.alias_url,
-                    alias_kind = excluded.alias_kind,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    alias_key,
-                    normalized_canonical_key,
-                    alias_url,
-                    normalized_alias_kind,
-                ),
-            )
-            upserted += 1
-        return upserted
-
     def find_pending_plan_review_session(
         self,
         *,
@@ -16087,23 +15560,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("plan_review_sessions"):
-            return None
-        row = self._connection.execute(
-            """
-            SELECT * FROM plan_review_sessions
-            WHERE lower(target_company) = lower(?) AND status = 'pending' AND (
-                matching_request_signature = ?
-                OR (coalesce(matching_request_signature, '') = '' AND request_signature = ?)
-            )
-            ORDER BY updated_at DESC, review_id DESC
-            LIMIT 1
-            """,
-            (target, request_sig, request_sig),
-        ).fetchone()
-        if row is None:
-            return None
-        return self._plan_review_session_from_row(row)
+        return None
 
     def record_criteria_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
         target_company, metadata = self._prepare_feedback_context(payload)
@@ -16160,22 +15617,10 @@ class ControlPlaneStore:
         )
         if postgres_rows or self._control_plane_postgres_should_skip_sqlite_fallback("criteria_feedback"):
             return postgres_rows
-        if target_company:
-            rows = self._connection.execute(
-                """
-                SELECT * FROM criteria_feedback
-                WHERE lower(target_company) = lower(?)
-                ORDER BY feedback_id DESC
-                LIMIT ?
-                """,
-                (target_company, limit),
-            ).fetchall()
-        else:
-            rows = self._connection.execute(
-                "SELECT * FROM criteria_feedback ORDER BY feedback_id DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
-        return [self._criteria_feedback_from_row(row) for row in rows]
+        raise RuntimeError(
+            "postgres-only invariant violated for criteria_feedback in list_criteria_feedback: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_criteria_feedback(self, feedback_id: int) -> dict[str, Any] | None:
         if feedback_id <= 0:
@@ -16190,13 +15635,10 @@ class ControlPlaneStore:
             return postgres_row
         if self._control_plane_postgres_should_skip_sqlite_fallback("criteria_feedback"):
             return None
-        row = self._connection.execute(
-            "SELECT * FROM criteria_feedback WHERE feedback_id = ? LIMIT 1",
-            (feedback_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        return self._criteria_feedback_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for criteria_feedback in get_criteria_feedback: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_criteria_patterns(
         self,
@@ -16206,18 +15648,6 @@ class ControlPlaneStore:
         pattern_type: str = "",
         limit: int = 200,
     ) -> list[dict[str, Any]]:
-        clauses: list[str] = []
-        params: list[Any] = []
-        if target_company:
-            clauses.append("(lower(target_company) = lower(?) OR target_company = '')")
-            params.append(target_company)
-        if status:
-            clauses.append("status = ?")
-            params.append(status)
-        if pattern_type:
-            clauses.append("pattern_type = ?")
-            params.append(pattern_type)
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         postgres_where_clauses: list[str] = []
         postgres_params: list[Any] = []
         if target_company:
@@ -16239,16 +15669,10 @@ class ControlPlaneStore:
         )
         if postgres_rows or self._control_plane_postgres_should_skip_sqlite_fallback("criteria_patterns"):
             return postgres_rows
-        rows = self._connection.execute(
-            f"""
-            SELECT * FROM criteria_patterns
-            {where_clause}
-            ORDER BY updated_at DESC, pattern_id DESC
-            LIMIT ?
-            """,
-            (*params, limit),
-        ).fetchall()
-        return [self._criteria_pattern_from_row(row) for row in rows]
+        raise RuntimeError(
+            "postgres-only invariant violated for criteria_patterns in list_criteria_patterns: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def record_pattern_suggestions(self, suggestions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not suggestions:
@@ -16364,18 +15788,6 @@ class ControlPlaneStore:
         source_feedback_id: int = 0,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        clauses: list[str] = []
-        params: list[Any] = []
-        if target_company:
-            clauses.append("lower(target_company) = lower(?)")
-            params.append(target_company)
-        if status:
-            clauses.append("status = ?")
-            params.append(status)
-        if source_feedback_id:
-            clauses.append("source_feedback_id = ?")
-            params.append(source_feedback_id)
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         postgres_rows = self._select_control_plane_rows(
             "criteria_pattern_suggestions",
             row_builder=self._criteria_pattern_suggestion_from_row,
@@ -16396,16 +15808,10 @@ class ControlPlaneStore:
         )
         if postgres_rows or self._control_plane_postgres_should_skip_sqlite_fallback("criteria_pattern_suggestions"):
             return postgres_rows
-        rows = self._connection.execute(
-            f"""
-            SELECT * FROM criteria_pattern_suggestions
-            {where_clause}
-            ORDER BY updated_at DESC, suggestion_id DESC
-            LIMIT ?
-            """,
-            (*params, limit),
-        ).fetchall()
-        return [self._criteria_pattern_suggestion_from_row(row) for row in rows]
+        raise RuntimeError(
+            "postgres-only invariant violated for criteria_pattern_suggestions in list_pattern_suggestions: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_pattern_suggestion(self, suggestion_id: int) -> dict[str, Any] | None:
         if suggestion_id <= 0:
@@ -16420,13 +15826,10 @@ class ControlPlaneStore:
             return postgres_row
         if self._control_plane_postgres_should_skip_sqlite_fallback("criteria_pattern_suggestions"):
             return None
-        row = self._connection.execute(
-            "SELECT * FROM criteria_pattern_suggestions WHERE suggestion_id = ? LIMIT 1",
-            (suggestion_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        return self._criteria_pattern_suggestion_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for criteria_pattern_suggestions in get_pattern_suggestion: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def review_pattern_suggestion(
         self,
@@ -16608,24 +16011,7 @@ class ControlPlaneStore:
             order_by_sql="policy_run_id DESC",
             limit=limit,
         )
-        if postgres_rows or self._control_plane_postgres_should_skip_sqlite_fallback("confidence_policy_runs"):
-            return postgres_rows
-        if target_company:
-            rows = self._connection.execute(
-                """
-                SELECT * FROM confidence_policy_runs
-                WHERE lower(target_company) = lower(?)
-                ORDER BY policy_run_id DESC
-                LIMIT ?
-                """,
-                (target_company, limit),
-            ).fetchall()
-        else:
-            rows = self._connection.execute(
-                "SELECT * FROM confidence_policy_runs ORDER BY policy_run_id DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
-        return [self._confidence_policy_run_from_row(row) for row in rows]
+        return postgres_rows
 
     def create_confidence_policy_control(
         self,
@@ -16793,15 +16179,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("confidence_policy_controls"):
-            return None
-        row = self._connection.execute(
-            "SELECT * FROM confidence_policy_controls WHERE control_id = ? LIMIT 1",
-            (control_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        return self._confidence_policy_control_from_row(row)
+        return None
 
     def list_confidence_policy_controls(
         self,
@@ -16810,14 +16188,6 @@ class ControlPlaneStore:
         status: str = "",
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        clauses: list[str] = []
-        params: list[Any] = []
-        if target_company:
-            clauses.append("lower(target_company) = lower(?)")
-            params.append(target_company)
-        if status:
-            clauses.append("status = ?")
-            params.append(status)
         postgres_rows = self._select_control_plane_rows(
             "confidence_policy_controls",
             row_builder=self._confidence_policy_control_from_row,
@@ -16836,19 +16206,7 @@ class ControlPlaneStore:
         )
         if postgres_rows:
             return postgres_rows
-        if self._control_plane_postgres_should_skip_sqlite_fallback("confidence_policy_controls"):
-            return []
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        rows = self._connection.execute(
-            f"""
-            SELECT * FROM confidence_policy_controls
-            {where_clause}
-            ORDER BY updated_at DESC, control_id DESC
-            LIMIT ?
-            """,
-            (*params, limit),
-        ).fetchall()
-        return [self._confidence_policy_control_from_row(row) for row in rows]
+        return []
 
     def deactivate_confidence_policy_control(
         self,
@@ -16954,24 +16312,7 @@ class ControlPlaneStore:
             order_by_sql="diff_id DESC",
             limit=limit,
         )
-        if postgres_rows or self._control_plane_postgres_should_skip_sqlite_fallback("criteria_result_diffs"):
-            return postgres_rows
-        if target_company:
-            rows = self._connection.execute(
-                """
-                SELECT * FROM criteria_result_diffs
-                WHERE lower(target_company) = lower(?)
-                ORDER BY diff_id DESC
-                LIMIT ?
-                """,
-                (target_company, limit),
-            ).fetchall()
-        else:
-            rows = self._connection.execute(
-                "SELECT * FROM criteria_result_diffs ORDER BY diff_id DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
-        return [self._criteria_result_diff_from_row(row) for row in rows]
+        return postgres_rows
 
     def create_criteria_version(
         self,
@@ -17074,24 +16415,7 @@ class ControlPlaneStore:
             order_by_sql="version_id DESC",
             limit=limit,
         )
-        if postgres_rows or self._control_plane_postgres_should_skip_sqlite_fallback("criteria_versions"):
-            return postgres_rows
-        if target_company:
-            rows = self._connection.execute(
-                """
-                SELECT * FROM criteria_versions
-                WHERE lower(target_company) = lower(?)
-                ORDER BY version_id DESC
-                LIMIT ?
-                """,
-                (target_company, limit),
-            ).fetchall()
-        else:
-            rows = self._connection.execute(
-                "SELECT * FROM criteria_versions ORDER BY version_id DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
-        return [self._criteria_version_from_row(row) for row in rows]
+        return postgres_rows
 
     def get_criteria_version(self, version_id: int) -> dict[str, Any] | None:
         if version_id <= 0:
@@ -17104,15 +16428,7 @@ class ControlPlaneStore:
         )
         if postgres_row is not None:
             return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("criteria_versions"):
-            return None
-        row = self._connection.execute(
-            "SELECT * FROM criteria_versions WHERE version_id = ?",
-            (version_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        return self._criteria_version_from_row(row)
+        return None
 
     def list_criteria_compiler_runs(
         self, version_id: int = 0, target_company: str = "", limit: int = 100
@@ -17159,34 +16475,10 @@ class ControlPlaneStore:
                 )
                 if postgres_rows or self._control_plane_postgres_should_skip_sqlite_fallback("criteria_compiler_runs"):
                     return postgres_rows
-        if version_id:
-            rows = self._connection.execute(
-                """
-                SELECT * FROM criteria_compiler_runs
-                WHERE version_id = ?
-                ORDER BY compiler_run_id DESC
-                LIMIT ?
-                """,
-                (version_id, limit),
-            ).fetchall()
-        elif target_company:
-            rows = self._connection.execute(
-                """
-                SELECT ccr.*
-                FROM criteria_compiler_runs ccr
-                JOIN criteria_versions cv ON cv.version_id = ccr.version_id
-                WHERE lower(cv.target_company) = lower(?)
-                ORDER BY ccr.compiler_run_id DESC
-                LIMIT ?
-                """,
-                (target_company, limit),
-            ).fetchall()
-        else:
-            rows = self._connection.execute(
-                "SELECT * FROM criteria_compiler_runs ORDER BY compiler_run_id DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
-        return [self._criteria_compiler_run_from_row(row) for row in rows]
+        raise RuntimeError(
+            "postgres-only invariant violated for criteria_compiler_runs in list_criteria_compiler_runs: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_latest_criteria_version(self, target_company: str = "") -> dict[str, Any] | None:
         versions = self.list_criteria_versions(target_company=target_company, limit=1)
@@ -17398,7 +16690,7 @@ class ControlPlaneStore:
             "created_at": _row_value(row, "created_at"),
         }
 
-    def _confidence_policy_control_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _confidence_policy_control_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
             "control_id": row["control_id"],
             "target_company": row["target_company"],
@@ -17418,7 +16710,7 @@ class ControlPlaneStore:
             "updated_at": row["updated_at"],
         }
 
-    def _job_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _job_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         request_payload = {}
         plan_payload = {}
         execution_bundle_payload = {}
@@ -17466,7 +16758,7 @@ class ControlPlaneStore:
             "updated_at": row["updated_at"],
         }
 
-    def _job_result_view_from_row(self, row: sqlite3.Row | None) -> dict[str, Any] | None:
+    def _job_result_view_from_row(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
         if row is None:
             return None
         summary_payload = {}
@@ -17498,7 +16790,7 @@ class ControlPlaneStore:
             "updated_at": row["updated_at"],
         }
 
-    def _query_dispatch_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _query_dispatch_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         payload = {}
         matching_request_payload = {}
         try:
@@ -17529,7 +16821,7 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] or ""),
         }
 
-    def _job_progress_event_summary_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+    def _job_progress_event_summary_from_row(self, row: dict[str, Any] | None) -> dict[str, Any]:
         if row is None:
             return {}
         latest_event = {}
@@ -17563,7 +16855,7 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] or ""),
         }
 
-    def _job_event_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _job_event_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         try:
             payload = dict(json.loads(row["payload_json"] or "{}"))
         except (TypeError, ValueError, json.JSONDecodeError):
@@ -17578,7 +16870,7 @@ class ControlPlaneStore:
             "created_at": str(row["created_at"] or ""),
         }
 
-    def _asset_materialization_generation_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+    def _asset_materialization_generation_from_row(self, row: dict[str, Any] | None) -> dict[str, Any]:
         if row is None:
             return {}
         summary = {}
@@ -17616,7 +16908,7 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] or ""),
         }
 
-    def _candidate_materialization_state_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+    def _candidate_materialization_state_from_row(self, row: dict[str, Any] | None) -> dict[str, Any]:
         if row is None:
             return {}
         metadata = {}
@@ -17640,7 +16932,7 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] or ""),
         }
 
-    def _snapshot_materialization_run_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+    def _snapshot_materialization_run_from_row(self, row: dict[str, Any] | None) -> dict[str, Any]:
         if row is None:
             return {}
         summary = {}
@@ -17665,7 +16957,7 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] or ""),
         }
 
-    def _cloud_asset_operation_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+    def _cloud_asset_operation_from_row(self, row: dict[str, Any] | None) -> dict[str, Any]:
         if row is None:
             return {}
         scoped_companies = []
@@ -17701,7 +16993,7 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] or ""),
         }
 
-    def _organization_execution_profile_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+    def _organization_execution_profile_from_row(self, row: dict[str, Any] | None) -> dict[str, Any]:
         if row is None:
             return {}
         reason_codes = []
@@ -17758,7 +17050,7 @@ class ControlPlaneStore:
             "updated_at": _normalize_textual_value(row["updated_at"]),
         }
 
-    def _organization_asset_registry_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+    def _organization_asset_registry_from_row(self, row: dict[str, Any] | None) -> dict[str, Any]:
         if row is None:
             return {}
         source_snapshot_selection = {}
@@ -17826,7 +17118,7 @@ class ControlPlaneStore:
             "updated_at": _normalize_textual_value(row["updated_at"]),
         }
 
-    def _acquisition_shard_registry_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+    def _acquisition_shard_registry_from_row(self, row: dict[str, Any] | None) -> dict[str, Any]:
         if row is None:
             return {}
         company_scope = []
@@ -17963,7 +17255,7 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] or ""),
         }
 
-    def _workflow_job_lease_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+    def _workflow_job_lease_from_row(self, row: dict[str, Any] | None) -> dict[str, Any]:
         if row is None:
             return {}
         lease_expires_at = str(row["lease_expires_at"] or "")
@@ -18037,7 +17329,7 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] or ""),
         }
 
-    def _plan_review_session_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _plan_review_session_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         execution_bundle = {}
         matching_request = {}
         try:
@@ -18071,7 +17363,7 @@ class ControlPlaneStore:
             "updated_at": _normalize_textual_value(row["updated_at"]),
         }
 
-    def _manual_review_item_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _manual_review_item_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
             "review_item_id": row["review_item_id"],
             "job_id": row["job_id"],
@@ -18091,7 +17383,7 @@ class ControlPlaneStore:
             "updated_at": row["updated_at"],
         }
 
-    def _candidate_review_record_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _candidate_review_record_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
             "id": row["record_id"],
             "job_id": row["job_id"],
@@ -18111,7 +17403,7 @@ class ControlPlaneStore:
             "updated_at": row["updated_at"],
         }
 
-    def _target_candidate_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _target_candidate_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         quality_score = row["quality_score"]
         return {
             "id": row["record_id"],
@@ -18138,52 +17430,52 @@ class ControlPlaneStore:
             "updated_at": row["updated_at"],
         }
 
-    def _target_candidate_public_web_batch_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _target_candidate_public_web_batch_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _public_web_repo.TARGET_CANDIDATE_PUBLIC_WEB_BATCHES.from_row(row)
 
-    def _target_candidate_public_web_run_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _target_candidate_public_web_run_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _public_web_repo.TARGET_CANDIDATE_PUBLIC_WEB_RUNS.from_row(row)
 
-    def _crm_public_web_batch_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _crm_public_web_batch_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _public_web_repo.CRM_PUBLIC_WEB_BATCHES.from_row(row)
 
-    def _crm_public_web_run_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _crm_public_web_run_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _public_web_repo.CRM_PUBLIC_WEB_RUNS.from_row(row)
 
-    def _person_public_web_asset_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _person_public_web_asset_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _public_web_repo.PERSON_PUBLIC_WEB_ASSETS.from_row(row)
 
-    def _person_public_web_signal_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _person_public_web_signal_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _public_web_repo.PERSON_PUBLIC_WEB_SIGNALS.from_row(row)
 
-    def _person_asset_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _person_asset_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _person_company_assets_repo.PERSON_ASSETS.from_row(row)
 
-    def _person_evidence_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _person_evidence_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _person_company_assets_repo.PERSON_EVIDENCE.from_row(row)
 
-    def _person_assertion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _person_assertion_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _person_company_assets_repo.PERSON_ASSERTIONS.from_row(row)
 
-    def _company_asset_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _company_asset_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _person_company_assets_repo.COMPANY_ASSETS.from_row(row)
 
-    def _company_evidence_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _company_evidence_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _person_company_assets_repo.COMPANY_EVIDENCE.from_row(row)
 
-    def _company_assertion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _company_assertion_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _person_company_assets_repo.COMPANY_ASSERTIONS.from_row(row)
 
-    def _raw_profile_index_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _raw_profile_index_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _person_company_assets_repo.RAW_PROFILE_INDEX.from_row(row)
 
-    def _candidate_evidence_index_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _candidate_evidence_index_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _person_company_assets_repo.CANDIDATE_EVIDENCE_INDEX.from_row(row)
 
-    def _crm_record_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _crm_record_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _crm_core_repo.CRM_RECORDS.from_row(row)
 
-    def _crm_engagement_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _crm_engagement_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         if row is None:
             return {}
         quality_score = _row_value(row, "quality_score")
@@ -18206,25 +17498,25 @@ class ControlPlaneStore:
             "updated_at": str(_row_value(row, "updated_at") or ""),
         }
 
-    def _crm_event_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _crm_event_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _crm_core_repo.CRM_EVENTS.from_row(row)
 
-    def _crm_task_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _crm_task_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _crm_core_repo.CRM_TASKS.from_row(row)
 
-    def _target_candidate_public_web_promotion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _target_candidate_public_web_promotion_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _public_web_repo.TARGET_CANDIDATE_PUBLIC_WEB_PROMOTIONS.from_row(row)
 
-    def _crm_public_web_promotion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _crm_public_web_promotion_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _public_web_repo.CRM_PUBLIC_WEB_PROMOTIONS.from_row(row)
 
-    def _company_public_web_asset_run_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _company_public_web_asset_run_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _public_web_repo.COMPANY_PUBLIC_WEB_ASSET_RUNS.from_row(row)
 
-    def _company_public_web_asset_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _company_public_web_asset_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return _public_web_repo.COMPANY_PUBLIC_WEB_ASSETS.from_row(row)
 
-    def _asset_default_pointer_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _asset_default_pointer_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
             "pointer_key": str(row["pointer_key"] or ""),
             "company_key": str(row["company_key"] or ""),
@@ -18242,7 +17534,7 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] or ""),
         }
 
-    def _asset_default_pointer_history_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _asset_default_pointer_history_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
             "history_id": str(row["history_id"] or ""),
             "pointer_key": str(row["pointer_key"] or ""),
@@ -18258,7 +17550,7 @@ class ControlPlaneStore:
             "created_at": str(row["created_at"] or ""),
         }
 
-    def _frontend_history_link_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _frontend_history_link_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
             "history_id": str(row["history_id"] or ""),
             "query_text": str(row["query_text"] or ""),
@@ -18273,7 +17565,7 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] or ""),
         }
 
-    def _agent_runtime_session_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _agent_runtime_session_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
             "session_id": row["session_id"],
             "job_id": row["job_id"],
@@ -18288,7 +17580,7 @@ class ControlPlaneStore:
             "updated_at": row["updated_at"],
         }
 
-    def _agent_trace_span_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _agent_trace_span_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
             "span_id": row["span_id"],
             "session_id": row["session_id"],
@@ -18308,7 +17600,7 @@ class ControlPlaneStore:
             "created_at": row["created_at"],
         }
 
-    def _agent_worker_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _agent_worker_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         worker = {
             "worker_id": row["worker_id"],
             "session_id": row["session_id"],
@@ -18380,74 +17672,6 @@ class ControlPlaneStore:
         raise RuntimeError(
             "postgres-only invariant violated for criteria_patterns in upsert_criteria_pattern: should_prefer_read "
             "returned False; legacy SQLite tail retired (B4)"
-        )
-
-    def _get_criteria_pattern(
-        self, target_company: str, pattern_type: str, subject: str, value: str
-    ) -> dict[str, Any] | None:
-        postgres_row = self._select_control_plane_row(
-            "criteria_patterns",
-            row_builder=self._criteria_pattern_from_row,
-            where_sql="target_company = %s AND pattern_type = %s AND subject = %s AND value = %s",
-            params=[target_company, pattern_type, subject, value],
-        )
-        if postgres_row is not None:
-            return postgres_row
-        if self._control_plane_postgres_should_skip_sqlite_fallback("criteria_patterns"):
-            return None
-        row = self._connection.execute(
-            """
-            SELECT * FROM criteria_patterns
-            WHERE target_company = ? AND pattern_type = ? AND subject = ? AND value = ?
-            LIMIT 1
-            """,
-            (target_company, pattern_type, subject, value),
-        ).fetchone()
-        if row is None:
-            return None
-        return self._criteria_pattern_from_row(row)
-
-    def _insert_candidates_and_evidence(self, candidates: list[Candidate], evidence: list[EvidenceRecord]) -> None:
-        candidate_payloads = self._dedupe_candidate_payloads(candidates)
-        evidence_payloads = self._dedupe_evidence_payloads(evidence)
-        self._connection.executemany(
-            """
-            INSERT INTO candidates (
-                candidate_id, name_en, name_zh, display_name, category, target_company,
-                organization, employment_status, role, team, joined_at, left_at,
-                current_destination, ethnicity_background, investment_involvement,
-                focus_areas, education, work_history, notes, linkedin_url, media_url,
-                source_dataset, source_path, metadata_json
-            ) VALUES (
-                :candidate_id, :name_en, :name_zh, :display_name, :category, :target_company,
-                :organization, :employment_status, :role, :team, :joined_at, :left_at,
-                :current_destination, :ethnicity_background, :investment_involvement,
-                :focus_areas, :education, :work_history, :notes, :linkedin_url, :media_url,
-                :source_dataset, :source_path, :metadata_json
-            )
-            """,
-            candidate_payloads,
-        )
-        self._connection.executemany(
-            """
-            INSERT INTO evidence (
-                evidence_id, candidate_id, source_type, title, url, summary,
-                source_dataset, source_path, metadata_json
-            ) VALUES (
-                :evidence_id, :candidate_id, :source_type, :title, :url, :summary,
-                :source_dataset, :source_path, :metadata_json
-            )
-            ON CONFLICT(evidence_id) DO UPDATE SET
-                candidate_id = excluded.candidate_id,
-                source_type = excluded.source_type,
-                title = excluded.title,
-                url = excluded.url,
-                summary = excluded.summary,
-                source_dataset = excluded.source_dataset,
-                source_path = excluded.source_path,
-                metadata_json = excluded.metadata_json
-            """,
-            evidence_payloads,
         )
 
     def _candidate_payload(self, candidate: Candidate) -> dict[str, Any]:
@@ -19821,7 +19045,7 @@ def _job_matches_dispatch_scope(
     return False
 
 
-def _job_match_sort_key(match: dict[str, Any], row: sqlite3.Row | None) -> tuple[float, str, str]:
+def _job_match_sort_key(match: dict[str, Any], row: dict[str, Any] | None) -> tuple[float, str, str]:
     created_at = ""
     updated_at = ""
     if row is not None:
@@ -19910,21 +19134,6 @@ def _snapshot_id_from_path(value: str) -> str:
     snapshot_ref = extract_company_snapshot_ref(normalized)
     return str(snapshot_ref[1] if snapshot_ref is not None else "")
 
-
-def _manual_review_item_from_row_payload(row: sqlite3.Row) -> dict[str, Any]:
-    return {
-        "review_item_id": row["review_item_id"],
-        "job_id": row["job_id"],
-        "candidate_id": row["candidate_id"],
-        "target_company": row["target_company"],
-        "review_type": row["review_type"],
-        "priority": row["priority"],
-        "status": row["status"],
-        "summary": row["summary"],
-        "candidate": json.loads(row["candidate_json"] or "{}"),
-        "evidence": json.loads(row["evidence_json"] or "[]"),
-        "metadata": json.loads(row["metadata_json"] or "{}"),
-    }
 
 
 def _append_review_note(existing_notes: Any, message: str) -> str:

@@ -8,7 +8,6 @@ They fail closed to empty lists when legacy tables no longer exist.
 from __future__ import annotations
 
 import json
-import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -277,7 +276,6 @@ def drop_legacy_target_public_web_tables(
             "reason": "archive_required_before_non_empty_legacy_public_web_drop",
             "pre_drop": pre_drop,
         }
-    sqlite_drop = _drop_sqlite_legacy_tables(store)
     postgres_drop = _drop_postgres_legacy_tables(store, reason=reason)
     return {
         "status": "dropped",
@@ -286,7 +284,6 @@ def drop_legacy_target_public_web_tables(
         "reason": str(reason or "").strip() or LEGACY_PUBLIC_WEB_STORAGE_PHASE,
         "archive": archive_result,
         "pre_drop": pre_drop,
-        "sqlite": sqlite_drop,
         "postgres": postgres_drop,
     }
 
@@ -306,19 +303,7 @@ def _list_rows(
     if row_builder is None:
         row_builder = lambda row: dict(row or {})
 
-    pg_rows = _list_postgres_rows(
-        store,
-        table_name=table_name,
-        row_builder=row_builder,
-        where_columns=where_columns,
-        order_by_sql=order_by_sql,
-        limit=normalized_limit,
-    )
-    if pg_rows:
-        return pg_rows
-    if _should_skip_sqlite(store, table_name):
-        return []
-    return _list_sqlite_rows(
+    return _list_postgres_rows(
         store,
         table_name=table_name,
         row_builder=row_builder,
@@ -362,53 +347,6 @@ def _list_postgres_rows(
     return [dict(row) for row in list(rows or []) if isinstance(row, dict)]
 
 
-def _list_sqlite_rows(
-    store: Any,
-    *,
-    table_name: str,
-    row_builder: Any,
-    where_columns: dict[str, str],
-    order_by_sql: str,
-    limit: int,
-) -> list[dict[str, Any]]:
-    connection = getattr(store, "_connection", None)
-    lock = getattr(store, "_lock", None)
-    if connection is None or lock is None:
-        return []
-    clauses = [f"{column_name} = ?" for column_name in where_columns]
-    where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    query = f"""
-        SELECT *
-        FROM {table_name}
-        {where_clause}
-        ORDER BY {order_by_sql}
-        LIMIT ?
-    """
-    try:
-        with lock:
-            if not _sqlite_table_exists(connection, table_name):
-                return []
-            rows = connection.execute(query, (*where_columns.values(), limit)).fetchall()
-    except sqlite3.Error:
-        return []
-    return [row_builder(row) for row in rows]
-
-
-def _drop_sqlite_legacy_tables(store: Any) -> dict[str, Any]:
-    connection = getattr(store, "_connection", None)
-    lock = getattr(store, "_lock", None)
-    if connection is None or lock is None:
-        return {"status": "skipped", "reason": "sqlite_connection_unavailable", "tables": []}
-    dropped: list[str] = []
-    with lock, connection:
-        for table_name in LEGACY_TARGET_PUBLIC_WEB_TABLES:
-            if not _sqlite_table_exists(connection, table_name):
-                continue
-            connection.execute(f"DROP TABLE IF EXISTS {table_name}")
-            dropped.append(table_name)
-    return {"status": "dropped", "tables": dropped, "table_count": len(dropped)}
-
-
 def _drop_postgres_legacy_tables(store: Any, *, reason: str = "") -> dict[str, Any]:
     adapter = getattr(store, "_control_plane_postgres", None)
     if adapter is None or not bool(getattr(adapter, "enabled", False)):
@@ -433,26 +371,8 @@ def _drop_postgres_legacy_tables(store: Any, *, reason: str = "") -> dict[str, A
     return {"status": "dropped", "tables": dropped, "table_count": len(dropped)}
 
 
-def _sqlite_table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
-    row = connection.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
-        (table_name,),
-    ).fetchone()
-    return row is not None
-
-
 def _quote_identifier(identifier: str) -> str:
     return '"' + str(identifier or "").replace('"', '""') + '"'
-
-
-def _should_skip_sqlite(store: Any, table_name: str) -> bool:
-    should_skip = getattr(store, "_control_plane_postgres_should_skip_sqlite_fallback", None)
-    if should_skip is None:
-        return False
-    try:
-        return bool(should_skip(table_name))
-    except Exception:
-        return False
 
 
 def _migration_payload(payload: dict[str, Any]) -> dict[str, Any]:

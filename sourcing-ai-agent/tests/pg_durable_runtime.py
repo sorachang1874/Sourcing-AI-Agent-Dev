@@ -55,8 +55,8 @@ def _resolve_test_postgres_dsn() -> tuple[str, object | None]:
 
 def _close_store_connection(test_case: unittest.TestCase) -> None:
     store = getattr(test_case, "store", None)
-    connection = getattr(store, "_connection", None)
-    close = getattr(connection, "close", None)
+    # B4.3f: the SQLite shadow is gone; store.close() disposes the PG adapter pool.
+    close = getattr(store, "close", None)
     if callable(close):
         try:
             close()

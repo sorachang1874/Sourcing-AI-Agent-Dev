@@ -17,7 +17,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from .control_plane_postgres import sync_runtime_control_plane_to_postgres
 from .orchestrator import SourcingOrchestrator
 
 _TEXT_FIELDS = {
@@ -98,19 +97,16 @@ def _ensure_job_result_lifecycle_schema(orchestrator: SourcingOrchestrator) -> d
     mode = str(getattr(store, "control_plane_postgres_live_mode", lambda: "disabled")() or "disabled")
     if mode == "disabled":
         return {"status": "skipped", "reason": "postgres_disabled"}
+    # B4.3f: the SQLite-shadow-sourced sync is retired. job_result_lifecycle is part of the
+    # versioned-migration baseline, so the adapter's bootstrap is the schema guarantee.
     try:
-        summary = sync_runtime_control_plane_to_postgres(
-            runtime_dir=orchestrator.runtime_dir,
-            sqlite_path=getattr(store, "compatibility_shadow_connect_target", lambda: "")(),
-            tables=["job_result_lifecycle"],
-            truncate_first=False,
-            min_interval_seconds=0.0,
-            force=True,
-            validate_postgres=True,
-        )
+        adapter = getattr(store, "_control_plane_postgres", None)
+        ensure_bootstrapped = getattr(adapter, "ensure_bootstrapped", None)
+        if callable(ensure_bootstrapped):
+            ensure_bootstrapped()
     except Exception as exc:
         return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
-    return dict(summary or {})
+    return {"status": "completed", "mechanism": "migration_runner_bootstrap"}
 
 
 def _coerce_int(value: Any) -> int:

@@ -40,13 +40,14 @@ def _iter_authoritative_rows(
     companies: set[str],
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    distinct_companies = [
-        str(row[0] or "").strip()
-        for row in store._connection.execute(
-            "SELECT DISTINCT target_company FROM organization_asset_registry WHERE asset_view = 'canonical_merged'"
-        ).fetchall()
-        if str(row[0] or "").strip()
-    ]
+    # B4.3f: PG is the sole backend; enumerate companies through the store API.
+    distinct_companies = sorted(
+        {
+            str(row.get("target_company") or "").strip()
+            for row in store.list_organization_asset_registry(asset_view="canonical_merged", limit=0)
+            if str(row.get("target_company") or "").strip()
+        }
+    )
     for target_company in sorted(distinct_companies, key=str.lower):
         normalized_company = normalize_company_key(target_company)
         if companies and normalized_company not in companies:

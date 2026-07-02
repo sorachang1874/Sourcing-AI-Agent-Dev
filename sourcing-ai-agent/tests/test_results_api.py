@@ -245,7 +245,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
     def _run_with_pg_durable_runtime(self, schema_label: str, callback: Any) -> Any:
         self._join_runtime_owned_threads_for_test()
-        self.store._connection.close()  # noqa: SLF001
+        self.store.close()
         with pg_durable_runtime_env(
             runtime_dir=Path(self.tempdir.name),
             schema_label=schema_label,
@@ -8963,7 +8963,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
     def test_workflow_completed_ui_status_requires_typed_completion_proof_for_terminal_paths(self) -> None:
         self._join_runtime_owned_threads_for_test()
-        self.store._connection.close()  # noqa: SLF001
+        self.store.close()
         with pg_durable_runtime_env(
             runtime_dir=Path(self.tempdir.name),
             schema_label="workflow_completed_requires_typed_terminal",
@@ -9058,7 +9058,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
     def test_workflow_supervisor_does_not_exit_on_completed_ui_status_without_typed_proof(self) -> None:
         self._join_runtime_owned_threads_for_test()
-        self.store._connection.close()  # noqa: SLF001
+        self.store.close()
         with pg_durable_runtime_env(
             runtime_dir=Path(self.tempdir.name),
             schema_label="workflow_supervisor_requires_typed_terminal",
@@ -24283,7 +24283,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
     def test_job_materialization_items_api_exposes_queue_diagnostics(self) -> None:
         self._join_runtime_owned_threads_for_test()
-        self.store._connection.close()  # noqa: SLF001
+        self.store.close()
         with pg_durable_runtime_env(
             runtime_dir=Path(self.tempdir.name),
             schema_label="results_materialization_items_api",

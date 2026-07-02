@@ -362,9 +362,7 @@ class ControlPlanePostgresPoolTest(unittest.TestCase):
         self.assertEqual(int(row["one"]), 1)
         self.assertGreaterEqual(calls["count"], 2)
 
-    def test_control_plane_store_close_disposes_pool_and_sqlite(self) -> None:
-        import sqlite3
-
+    def test_control_plane_store_close_disposes_pool(self) -> None:
         from sourcing_agent.storage import ControlPlaneStore
 
         schema = self._new_schema("store_close")
@@ -387,8 +385,8 @@ class ControlPlanePostgresPoolTest(unittest.TestCase):
 
         self.assertTrue(getattr(pool, "closed", False))
         self.assertIsNone(adapter._pool)
-        with self.assertRaises(sqlite3.ProgrammingError):
-            store._connection.execute("SELECT 1")
+        # B4.3f: the SQLite compatibility shadow no longer exists on the store.
+        self.assertFalse(hasattr(store, "_connection"))
         # Idempotent: a second close (and adapter close) must not raise.
         store.close()
         adapter.close()

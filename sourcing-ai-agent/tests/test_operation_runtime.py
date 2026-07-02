@@ -1232,7 +1232,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
             self.assertNotIn("batch_id", queue_commands[0]["payload"])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_public_web_detail_returns_durable_promotions_without_latest_run(self) -> None:
         settings = AppSettings(
@@ -1306,7 +1306,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(len(detail["promotions"]), 1)
             self.assertEqual(detail["promotions"][0]["promotion_status"], "manually_promoted")
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_public_web_retry_without_nonce_joins_existing_child_run(self) -> None:
         settings = AppSettings(
@@ -1407,7 +1407,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(len(queue_commands), 1)
             self.assertEqual(queue_commands[0]["result"]["batch_id"], first["batch"]["batch_id"])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_public_web_action_run_ids_fail_closed_on_workspace_mismatch(self) -> None:
         settings = AppSettings(
@@ -1537,7 +1537,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(api_store.get_crm_public_web_run(run_id=queued_run["run_id"])["status"], "queued")
             self.assertEqual(api_store.get_crm_public_web_run(run_id=failed_run["run_id"])["status"], "failed")
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_public_web_path_reads_use_record_workspace_and_keep_promotions_across_empty_retry(self) -> None:
         settings = AppSettings(
@@ -1650,7 +1650,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(detail["promotion_summary"]["promoted_count"], 1)
             self.assertEqual(detail["promotion_summary"]["promoted_link_count"], 1)
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_running_crm_public_web_queue_batch_cancel_blocks_after_phase_command_planned(self) -> None:
         settings = AppSettings(
@@ -2289,7 +2289,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(run_list["operation_runs"][0]["display_contract"]["display_category"], "export")
             self.assertFalse(dispatched["module_state_mutated"])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_projection_export_command_owner_records_activity_spine(self) -> None:
         settings = AppSettings(
@@ -2371,7 +2371,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(deltas[0]["delta_kind"], "projection_export_generated")
             self.assertEqual(deltas[0]["status"], "recorded")
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_projection_export_running_cancel_prevents_artifact_publish(self) -> None:
         settings = AppSettings(
@@ -2457,7 +2457,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(len(deltas), 1)
             self.assertEqual(deltas[0]["status"], "cancelled")
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_public_web_export_command_owner_records_activity_spine(self) -> None:
         settings = AppSettings(
@@ -2541,7 +2541,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(deltas[0]["delta_kind"], "crm_public_web_export_generated")
             self.assertEqual(deltas[0]["status"], "recorded")
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_excel_intake_command_thread_records_activity_spine(self) -> None:
         settings = AppSettings(
@@ -2651,7 +2651,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(deltas[0]["delta_kind"], "excel_intake_started")
             self.assertEqual(deltas[0]["reason"], "excel_intake_run_completed")
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_excel_intake_running_cancel_prevents_thread_success_terminalization(self) -> None:
         settings = AppSettings(
@@ -2779,7 +2779,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "cancelled",
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_projection_filter_operation_dispatch_completes_read_only_without_workflow_command(self) -> None:
         settings = AppSettings(
@@ -2867,7 +2867,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(retried["status"], "queued")
             self.assertNotEqual(retried["operation_run"]["operation_run_id"], missing_operation_id)
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_public_web_enrichment_operation_dispatch_leaves_batch_creation_to_command_owner(self) -> None:
         settings = AppSettings(
@@ -3189,7 +3189,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertIn("OperationCommandSucceeded", [event["event_type"] for event in operation_events])
             self.assertFalse(dispatched["module_state_mutated"])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_public_web_operation_full_phase_lifecycle_uses_typed_commands(self) -> None:
         settings = AppSettings(
@@ -3523,7 +3523,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "succeeded",
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_public_web_record_poll_latest_runs_match_detail_contract(self) -> None:
         settings = AppSettings(
@@ -3641,7 +3641,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     latest_by_record[record["crm_record_id"]],
                 )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_public_web_adjudication_phase_commands_drain_with_bounded_parallelism(self) -> None:
         settings = AppSettings(
@@ -3796,7 +3796,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 1,
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_workflow_command_cancel_control_updates_linked_operation(self) -> None:
         settings = AppSettings(
@@ -3958,7 +3958,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
             self.assertEqual(export_resumed["workflow_entity_delta"]["status"], "queued")
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_public_web_running_phase_command_cancel_uses_owner_specific_control(self) -> None:
         settings = AppSettings(
@@ -4040,7 +4040,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(deltas[0]["status"], "cancelled")
             self.assertEqual(deltas[0]["reason"], "crm_public_web_run_cancelled_by_command_control")
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_public_web_poll_phase_defer_and_resume_uses_workflow_command_state(self) -> None:
         settings = AppSettings(
@@ -4220,7 +4220,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "crm_public_web_phase_command_resumed_by_command_control",
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_orchestration_running_resume_requeues_without_inline_owner_execution(self) -> None:
         settings = AppSettings(
@@ -4301,7 +4301,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 forced_resume["workflow_entity_delta"]["projection_effect"]["orchestration_requeued"]
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_provider_attempt_running_resume_requeues_without_provider_call(self) -> None:
         settings = AppSettings(
@@ -4386,7 +4386,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 forced_resume["workflow_entity_delta"]["projection_effect"]["provider_attempt_requeued"]
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_provider_attempt_running_cancel_marks_activity_before_provider_attempt(self) -> None:
         settings = AppSettings(
@@ -4460,7 +4460,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(cancelled_activity["phase"], "cancelled")
             self.assertEqual(api_store.list_workflow_activity_attempts(activity_run_id=activity["activity_run_id"]), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_provider_attempt_running_cancel_poll_stops_after_provider_attempt_started(self) -> None:
         settings = AppSettings(
@@ -4558,7 +4558,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "cancelled_remote_ignored",
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_provider_attempt_running_cancel_blocks_after_entity_delta_recorded(self) -> None:
         settings = AppSettings(
@@ -4656,7 +4656,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "running",
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_operation_native_profile_provider_partial_success_uses_bucketed_retry_wave(self) -> None:
         settings = AppSettings(
@@ -4839,7 +4839,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(retry_delta["status"], "retry_wait")
             self.assertEqual(retry_delta["entity_payload"]["profile_url"], profile_urls[1])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_domain_mutation_running_resume_requeues_without_request_path_write(self) -> None:
         settings = AppSettings(
@@ -4927,7 +4927,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 0,
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_domain_mutation_running_cancel_marks_activity_before_attempt(self) -> None:
         settings = AppSettings(
@@ -5004,7 +5004,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(cancelled_activity["phase"], "cancelled")
             self.assertEqual(api_store.count_projection_person_search_index(projection_id="proj-domain-cancel"), 0)
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_domain_mutation_running_cancel_blocks_after_attempt_started(self) -> None:
         settings = AppSettings(
@@ -5090,7 +5090,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 0,
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_excel_intake_running_resume_requeues_without_thread_start(self) -> None:
         settings = AppSettings(
@@ -5166,7 +5166,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 forced_resume["workflow_entity_delta"]["projection_effect"]["excel_intake_requeued"]
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_public_web_phase_command_noops_stale_superseded_batch(self) -> None:
         settings = AppSettings(
@@ -5559,7 +5559,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "crm_public_web_signal_person_asset_sync_v1",
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_public_web_signal_person_asset_backfill_is_explicit_and_dry_run_first(self) -> None:
         settings = AppSettings(
@@ -5693,7 +5693,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(person_evidence[0]["normalized_value"], "historical@example.com")
             self.assertTrue(person_evidence[0]["publishable"])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_public_web_documents_fetch_phase_records_document_entity_deltas(self) -> None:
         settings = AppSettings(
@@ -5797,7 +5797,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "public_web_document_fetched_not_projection_membership",
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_fetch_profile_sample_operation_plans_profile_fetch_activity_command_only(self) -> None:
         settings = AppSettings(
@@ -5863,7 +5863,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertFalse(dispatched["module_state_mutated"])
             self.assertEqual(api_store.list_jobs(), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_start_acquisition_operation_plans_root_acquisition_run_command_only(self) -> None:
         settings = AppSettings(
@@ -6625,7 +6625,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(rejected_dispatch["reason"], "unsupported_agent_callable_workflow_command_type")
             self.assertEqual(len(api_store.list_workflow_commands(limit=100)), 16)
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_run_scope_projection_finalize_records_activity_spine_evidence(self) -> None:
         settings = AppSettings(
@@ -6732,7 +6732,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 ACTIVITY_SPINE_REQUIRED,
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_projection_facet_layering_command_records_activity_spine_evidence(self) -> None:
         settings = AppSettings(
@@ -6835,7 +6835,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 ACTIVITY_SPINE_REQUIRED,
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_snapshot_compaction_command_records_activity_spine_evidence(self) -> None:
         settings = AppSettings(
@@ -6924,7 +6924,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 ACTIVITY_SPINE_REQUIRED,
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_board_visible_patch_command_records_activity_spine_evidence(self) -> None:
         settings = AppSettings(
@@ -7013,7 +7013,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 ACTIVITY_SPINE_REQUIRED,
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_local_profile_delta_apply_command_records_activity_spine_evidence(self) -> None:
         settings = AppSettings(
@@ -7106,7 +7106,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 ACTIVITY_SPINE_REQUIRED,
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_profile_refill_submit_command_records_activity_spine_evidence(self) -> None:
         settings = AppSettings(
@@ -7211,7 +7211,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 ACTIVITY_SPINE_REQUIRED,
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_profile_url_terminal_record_command_records_activity_spine_evidence(self) -> None:
         settings = AppSettings(
@@ -7346,7 +7346,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 ACTIVITY_SPINE_REQUIRED,
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_continue_acquisition_rejects_commands_outside_action_registry_allowlist(self) -> None:
         settings = AppSettings(
@@ -7393,7 +7393,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(dispatched["reason"], "unsupported_agent_callable_workflow_command_type")
             self.assertEqual(api_store.list_workflow_commands(limit=0), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_add_to_crm_operation_dispatch_leaves_crm_writes_to_command_owner(self) -> None:
         settings = AppSettings(
@@ -7507,7 +7507,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(crm_record_deltas[0]["delta_kind"], "crm_record_added_from_projection")
             self.assertEqual(crm_record_deltas[0]["entity_key"], record["crm_record_id"])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_sensitive_crm_stage_operation_requires_approval_before_command_planning(self) -> None:
         settings = AppSettings(
@@ -7575,7 +7575,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(engagement["stage"], "do_not_contact")
             self.assertEqual(api_store.get_operation_run(operation_run_id)["status"], "completed")
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_create_crm_task_operation_materializes_task_only_in_command_owner(self) -> None:
         settings = AppSettings(
@@ -7666,7 +7666,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(task_deltas[0]["delta_kind"], "crm_task_created")
             self.assertEqual(task_deltas[0]["entity_key"], tasks[0]["task_id"])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_writer_running_resume_requeues_without_direct_crm_write(self) -> None:
         settings = AppSettings(
@@ -7757,7 +7757,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
             self.assertEqual(api_store.list_crm_tasks(crm_record_id=record["crm_record_id"]), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_writer_running_cancel_marks_activity_before_mutation_attempt(self) -> None:
         settings = AppSettings(
@@ -7840,7 +7840,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(cancelled_activity["phase"], "cancelled")
             self.assertEqual(api_store.list_crm_tasks(crm_record_id=record["crm_record_id"]), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_crm_writer_running_cancel_blocks_after_mutation_attempt_started(self) -> None:
         settings = AppSettings(
@@ -7929,7 +7929,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(api_store.get_workflow_activity_run(activity["activity_run_id"])["status"], "running")
             self.assertEqual(api_store.list_crm_tasks(crm_record_id=record["crm_record_id"]), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_company_public_web_operation_refreshes_company_assets_only_in_command_owner(self) -> None:
         settings = AppSettings(
@@ -8088,7 +8088,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(asset_deltas[0]["delta_kind"], "company_asset_synced_from_public_web")
             self.assertEqual(api_store.get_operation_run(operation_run_id)["status"], "completed")
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_company_public_web_source_collect_running_resume_requeues_without_asset_sync(self) -> None:
         settings = AppSettings(
@@ -8168,7 +8168,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(forced_resume["workflow_entity_delta"]["status"], "queued")
             self.assertEqual(api_store.list_company_assets(company_key="openai"), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_company_public_web_source_collect_running_cancel_marks_activity_before_provider_attempt(self) -> None:
         settings = AppSettings(
@@ -8247,7 +8247,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(cancelled_activity["phase"], "cancelled")
             self.assertEqual(api_store.list_company_assets(company_key="openai"), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_company_public_web_assets_materialize_running_resume_requeues_without_asset_sync(self) -> None:
         settings = AppSettings(
@@ -8329,7 +8329,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(forced_resume["workflow_entity_delta"]["status"], "queued")
             self.assertEqual(api_store.list_company_assets(company_key="openai"), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_company_public_web_assets_materialize_running_cancel_marks_activity_before_sync(self) -> None:
         settings = AppSettings(
@@ -8410,7 +8410,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(cancelled_activity["phase"], "cancelled")
             self.assertEqual(api_store.list_company_assets(company_key="openai"), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_company_public_web_assets_materialize_running_cancel_blocks_after_sync_started(self) -> None:
         settings = AppSettings(
@@ -8497,7 +8497,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(api_store.get_workflow_activity_run(activity["activity_run_id"])["status"], "running")
             self.assertEqual(api_store.list_company_assets(company_key="openai"), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_media_asset_cache_command_materializes_stable_person_and_company_assets(self) -> None:
         settings = AppSettings(
@@ -8636,7 +8636,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(len(company_deltas), 1)
             self.assertEqual(company_deltas[0]["entity_key"], company_assets[0]["asset_id"])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_media_asset_cache_running_resume_requeues_without_request_path_fetch(self) -> None:
         settings = AppSettings(
@@ -8722,7 +8722,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 [],
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_media_asset_cache_running_cancel_marks_activity_before_fetch_upload_attempt(self) -> None:
         settings = AppSettings(
@@ -8810,7 +8810,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 [],
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_media_asset_cache_running_cancel_blocks_after_fetch_upload_attempt_started(self) -> None:
         settings = AppSettings(
@@ -8901,7 +8901,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 [],
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_person_avatar_media_backfill_plans_media_cache_commands_only(self) -> None:
         settings = AppSettings(
@@ -9025,7 +9025,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 [],
             )
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_company_logo_media_backfill_plans_media_cache_commands_only(self) -> None:
         settings = AppSettings(
@@ -9112,7 +9112,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(commands[0]["payload"]["source_url"], "https://static.example.com/openai-logo.png")
             self.assertEqual(api_store.list_company_assets(company_key="openai", asset_type="logo_media"), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_profile_experience_company_logo_plans_evidence_and_media_cache(self) -> None:
         settings = AppSettings(
@@ -9208,7 +9208,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertTrue(commands[0]["payload"]["source_evidence_id"].startswith("ce_profile_logo_"))
             self.assertEqual(api_store.list_company_assets(company_key="openai", asset_type="logo_media"), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_profile_experience_company_logo_skips_existing_or_expired_sources(self) -> None:
         settings = AppSettings(
@@ -9293,7 +9293,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(api_store.list_company_evidence(company_key="expiredco", evidence_type="logo_url"), [])
             self.assertEqual(api_store.list_workflow_commands(workflow_run_id="wf-profile-logo-expired"), [])
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_harvest_local_apply_queues_nonblocking_profile_logo_discovery_owner(self) -> None:
         settings = AppSettings(
@@ -9389,7 +9389,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(media_commands[0]["command_type"], MEDIA_ASSET_CACHE_COMMAND_TYPE)
             self.assertEqual(media_commands[0]["payload"]["source_kind"], "profile_experience_company_logo")
         finally:
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
     def test_operation_http_api_submit_query_approve_cancel(self) -> None:
         settings = AppSettings(
@@ -9857,7 +9857,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
-            api_store._connection.close()  # noqa: SLF001
+            api_store.close()
 
 
 if __name__ == "__main__":

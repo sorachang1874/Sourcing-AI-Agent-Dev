@@ -289,7 +289,7 @@ class _FakeLiveControlPlanePostgresAdapter:
         self,
         *,
         runtime_dir: str | Path,
-        sqlite_path: str | Path,
+        sqlite_path: str | Path = "",
         dsn: str = "",
         mode: str = "disabled",
         tables: tuple[str, ...] = (),
@@ -2248,16 +2248,18 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
         self.assertEqual(adapter.mode, "postgres_only")
 
-    def test_postgres_only_uses_ephemeral_sqlite_shadow_and_disables_legacy_fallbacks(self) -> None:
+    def test_postgres_only_has_no_sqlite_shadow_and_disables_legacy_fallbacks(self) -> None:
         store = self._build_store(mode="postgres_only")
 
-        self.assertEqual(store.compatibility_shadow_backend(), "shared_memory")
+        # B4.3f: the SQLite compatibility shadow is deleted; accessors are inert labels.
+        self.assertFalse(hasattr(store, "_connection"))
+        self.assertEqual(store.compatibility_shadow_backend(), "retired")
         self.assertTrue(store.compatibility_shadow_is_ephemeral())
-        self.assertTrue(store.compatibility_shadow_connect_target().startswith("file:sourcing-agent-shadow-"))
+        self.assertEqual(store.compatibility_shadow_connect_target(), "")
         self.assertEqual(store.compatibility_shadow_seed_path(), str(self.db_path))
-        self.assertEqual(store.sqlite_shadow_backend(), "shared_memory")
+        self.assertEqual(store.sqlite_shadow_backend(), "retired")
         self.assertTrue(store.sqlite_shadow_is_ephemeral())
-        self.assertTrue(store.sqlite_shadow_connect_target().startswith("file:sourcing-agent-shadow-"))
+        self.assertEqual(store.sqlite_shadow_connect_target(), "")
         self.assertFalse(self.db_path.exists())
         self.assertFalse(store.bootstrap_candidate_store_enabled())
         self.assertFalse(store.candidate_documents_fallback_enabled())
@@ -2292,26 +2294,16 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "no longer supported"):
                     ControlPlaneStore(self.db_path)
 
-    def test_postgres_only_rejects_disk_backed_shadow_even_without_require_flag(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "postgres_only control-plane mode refuses disk-backed SQLite shadow"):
-            self._build_store(
-                mode="postgres_only",
-                extra_env={
-                    "SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES": "0",
-                    "SOURCING_PG_ONLY_SQLITE_BACKEND": "disk",
-                },
-            )
-
-    def test_postgres_only_session_status_update_does_not_fallback_to_closed_sqlite(self) -> None:
+    def test_postgres_only_session_status_update_has_no_sqlite_fallback(self) -> None:
         store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
         adapter.update_agent_runtime_session_status = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
-        store._connection.close()
+        # B4.3f: no SQLite shadow exists to fall back to.
+        self.assertFalse(hasattr(store, "_connection"))
 
         # Missing session row: SQLite-parity no-op — returns None without
-        # raising and without touching the closed SQLite connection
-        # (legacy/recovered jobs have no session row).
+        # raising (legacy/recovered jobs have no session row).
         with mock.patch.object(store, "get_agent_runtime_session", return_value=None):
             self.assertIsNone(store.update_agent_runtime_session_status("job-missing", "failed"))
 

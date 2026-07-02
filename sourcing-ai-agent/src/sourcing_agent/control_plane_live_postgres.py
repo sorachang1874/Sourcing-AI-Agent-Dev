@@ -24,7 +24,6 @@ from .control_plane_postgres import (
     _ensure_control_plane_unique_indexes,
     _import_psycopg,
     ensure_acquisition_shard_registry_split_schema,
-    sync_runtime_control_plane_to_postgres,
     upsert_acquisition_shard_registry_rows,
 )
 from .local_postgres import (
@@ -227,6 +226,150 @@ _JOB_RESULT_LIFECYCLE_STAGE1_MONOTONIC_INT_FIELDS = {
     "stage1_deduped_profile_url_count",
     "stage1_profile_fetch_required_count",
     "stage1_profile_fetched_count",
+}
+
+# B4.3f: native PG DDL for the retired target-candidate Public Web tables,
+# created on demand only inside the legacy-migration table context. Drift-free
+# port of the sync-generated schema (SQLite shadow DDL -> TEXT/BIGINT/DOUBLE
+# PRECISION, NOT NULL kept, no defaults, PK-only conflict target, no UNIQUE on
+# idempotency_key). Deliberately NOT in migrations/0001_baseline.sql: these are
+# migration-context-only tables, invisible to the normal runtime schema.
+_LEGACY_TARGET_PUBLIC_WEB_MIGRATION_TABLE_DDL: dict[str, tuple[str, ...]] = {
+    "target_candidate_public_web_batches": (
+        """
+        CREATE TABLE IF NOT EXISTS target_candidate_public_web_batches (
+            batch_id TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            status TEXT NOT NULL,
+            requested_record_ids_json TEXT NOT NULL,
+            source_families_json TEXT NOT NULL,
+            options_json TEXT NOT NULL,
+            run_ids_json TEXT NOT NULL,
+            summary_json TEXT NOT NULL,
+            metadata_json TEXT NOT NULL,
+            requested_by TEXT NOT NULL,
+            force_refresh BIGINT NOT NULL,
+            started_at TEXT,
+            completed_at TEXT,
+            created_at TEXT,
+            updated_at TEXT,
+            PRIMARY KEY (batch_id)
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_batches_updated
+            ON target_candidate_public_web_batches (updated_at, status)
+        """,
+    ),
+    "target_candidate_public_web_runs": (
+        """
+        CREATE TABLE IF NOT EXISTS target_candidate_public_web_runs (
+            run_id TEXT NOT NULL,
+            batch_id TEXT NOT NULL,
+            record_id TEXT NOT NULL,
+            candidate_id TEXT NOT NULL,
+            candidate_name TEXT NOT NULL,
+            current_company TEXT NOT NULL,
+            linkedin_url TEXT NOT NULL,
+            linkedin_url_key TEXT NOT NULL,
+            person_identity_key TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            status TEXT NOT NULL,
+            phase TEXT NOT NULL,
+            source_families_json TEXT NOT NULL,
+            options_json TEXT NOT NULL,
+            query_manifest_json TEXT NOT NULL,
+            search_checkpoint_json TEXT NOT NULL,
+            fetch_checkpoint_json TEXT NOT NULL,
+            analysis_checkpoint_json TEXT NOT NULL,
+            summary_json TEXT NOT NULL,
+            artifact_root TEXT NOT NULL,
+            worker_key TEXT NOT NULL,
+            lease_owner TEXT NOT NULL,
+            lease_expires_at TEXT,
+            attempt_count BIGINT NOT NULL,
+            last_error TEXT NOT NULL,
+            started_at TEXT,
+            completed_at TEXT,
+            created_at TEXT,
+            updated_at TEXT,
+            PRIMARY KEY (run_id)
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_batch
+            ON target_candidate_public_web_runs (batch_id, updated_at)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_record
+            ON target_candidate_public_web_runs (record_id, updated_at)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_status
+            ON target_candidate_public_web_runs (status, updated_at)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_identity
+            ON target_candidate_public_web_runs (linkedin_url_key, updated_at)
+        """,
+    ),
+    "target_candidate_public_web_promotions": (
+        """
+        CREATE TABLE IF NOT EXISTS target_candidate_public_web_promotions (
+            promotion_id TEXT NOT NULL,
+            signal_id TEXT NOT NULL,
+            run_id TEXT NOT NULL,
+            asset_id TEXT NOT NULL,
+            person_identity_key TEXT NOT NULL,
+            record_id TEXT NOT NULL,
+            candidate_id TEXT NOT NULL,
+            candidate_name TEXT NOT NULL,
+            current_company TEXT NOT NULL,
+            linkedin_url_key TEXT NOT NULL,
+            signal_kind TEXT NOT NULL,
+            signal_type TEXT NOT NULL,
+            email_type TEXT NOT NULL,
+            value TEXT NOT NULL,
+            normalized_value TEXT NOT NULL,
+            url TEXT NOT NULL,
+            source_url TEXT NOT NULL,
+            source_domain TEXT NOT NULL,
+            source_family TEXT NOT NULL,
+            source_title TEXT NOT NULL,
+            confidence_label TEXT NOT NULL,
+            confidence_score DOUBLE PRECISION NOT NULL,
+            identity_match_label TEXT NOT NULL,
+            identity_match_score DOUBLE PRECISION NOT NULL,
+            publishable BIGINT NOT NULL,
+            clean_profile_link BIGINT NOT NULL,
+            link_shape_warnings_json TEXT NOT NULL,
+            action TEXT NOT NULL,
+            promotion_status TEXT NOT NULL,
+            promoted_field TEXT NOT NULL,
+            previous_value TEXT NOT NULL,
+            new_value TEXT NOT NULL,
+            operator TEXT NOT NULL,
+            note TEXT NOT NULL,
+            evidence_excerpt TEXT NOT NULL,
+            metadata_json TEXT NOT NULL,
+            created_at TEXT,
+            updated_at TEXT,
+            PRIMARY KEY (promotion_id)
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_record
+            ON target_candidate_public_web_promotions (record_id, updated_at)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_signal
+            ON target_candidate_public_web_promotions (signal_id, updated_at)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_run
+            ON target_candidate_public_web_promotions (run_id, updated_at)
+        """,
+    ),
 }
 
 _READ_PREFERRED_MODES = {"prefer_postgres", "postgres_only"}
@@ -440,7 +583,7 @@ class LiveControlPlanePostgresAdapter:
         self,
         *,
         runtime_dir: str | Path,
-        sqlite_path: str | Path,
+        sqlite_path: str | Path = "",
         dsn: str = "",
         mode: str = "disabled",
         tables: tuple[str, ...] = CONTROL_PLANE_LIVE_TABLES,
@@ -853,53 +996,28 @@ class LiveControlPlanePostgresAdapter:
                     except Exception:
                         pass
 
-    def _bootstrap_schema_from_sqlite_source(self) -> None:
-        """LEGACY (Track B, pre-B4): build the PG schema by generating it from the SQLite
-        shadow (sqlite_master-derived) plus the hand-maintained writer/coordination ensures.
-
-        This is NO LONGER the live bootstrap path — ``ensure_bootstrapped`` now applies
-        versioned migrations. It is retained ONLY so the baseline generator
-        (``scripts/capture_pg_schema_baseline.py``) and the migration-runner drift guard can
-        validate ``migrations/0001_baseline.sql`` against the ``init_schema``-defined source of
-        truth until B4 deletes the SQLite shadow. Do not call from serving paths.
-        """
-        bootstrap_tables = list(self.tables)
-        if int(getattr(self, "_legacy_target_public_web_migration_table_depth", 0) or 0) > 0:
-            bootstrap_tables.extend(
-                table_name
-                for table_name in LEGACY_TARGET_PUBLIC_WEB_TABLES
-                if table_name not in bootstrap_tables
-            )
-        sync_runtime_control_plane_to_postgres(
-            runtime_dir=self.runtime_dir,
-            sqlite_path=self.sqlite_path,
-            dsn=self.dsn,
-            schema=self.schema,
-            tables=bootstrap_tables,
-            min_interval_seconds=0.0,
-            force=False,
-        )
-        # Mark bootstrapped so the writer/coordination ensures (which call ensure_bootstrapped,
-        # now the migration runner) do not re-enter and create the schema_migrations ledger —
-        # this path must yield ONLY the SQLite-derived application schema.
-        self._bootstrapped = True
-        self._ensure_control_plane_writer_schema()
-        self._ensure_runtime_coordination_schema()
-
 
     def _ensure_legacy_target_public_web_migration_table_schema(self, table_name: str) -> None:
+        """Create the retired target-candidate Public Web table for explicit migration writes.
+
+        Native PG DDL (B4.3f): the SQLite shadow that historically served as the
+        DDL source for these three tables is retired. Column set/order, types
+        (TEXT/BIGINT/DOUBLE PRECISION), NOT NULL flags, and the PK-only conflict
+        target are drift-free against the sync-generated physical tables; the
+        legacy tables stay outside migrations/0001_baseline.sql by design
+        (migration-context-only surface).
+        """
         normalized_table = _normalize_postgres_identifier(table_name)
         if not self._legacy_target_public_web_migration_table_enabled(normalized_table):
             return
-        sync_runtime_control_plane_to_postgres(
-            runtime_dir=self.runtime_dir,
-            sqlite_path=self.sqlite_path,
-            dsn=self.dsn,
-            schema=self.schema,
-            tables=[normalized_table],
-            min_interval_seconds=0.0,
-            force=True,
-        )
+        ddl = _LEGACY_TARGET_PUBLIC_WEB_MIGRATION_TABLE_DDL.get(normalized_table)
+        if not ddl:
+            return
+        self.ensure_bootstrapped()
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                for statement in ddl:
+                    cursor.execute(statement)
 
     def _ensure_table_write_schema(self, table_name: str) -> None:
         normalized_table = str(table_name or "").strip()

@@ -44,7 +44,6 @@ from __future__ import annotations
 
 import ast
 import re
-import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -107,33 +106,36 @@ def _extract_balanced_create_table_blocks(source: str) -> list[tuple[str, str]]:
     return blocks
 
 
-def derive_sqlite_table_schemas() -> dict[str, dict[str, object]]:
-    """Execute every literal CREATE TABLE from storage.py in scratch SQLite.
+_BASELINE_SQL_PATH = Path(control_plane_live_postgres.__file__).parent / "migrations" / "0001_baseline.sql"
+_BASELINE_PK_RE = re.compile(
+    r"ALTER TABLE ONLY\s+\"?(\w+)\"?\s+ADD CONSTRAINT\s+\w+\s+PRIMARY KEY\s*\(([^)]+)\)",
+    re.IGNORECASE | re.DOTALL,
+)
+_BASELINE_UNIQUE_INDEX_RE = re.compile(
+    r"CREATE UNIQUE INDEX\s+\w+\s+ON\s+\"?(\w+)\"?\s+USING\s+\w+\s*\(([^)]+)\)(\s*WHERE)?",
+    re.IGNORECASE,
+)
 
-    This is the same source of truth the PG bootstrap uses:
-    ``_build_create_table_sql`` derives the Postgres schema from SQLite
-    ``PRAGMA table_info`` pk positions. Executing the literal DDL (instead of
-    instantiating a store) also captures legacy tables that a fresh store
-    drops when empty (e.g. target_candidate_public_web_*).
+
+def derive_baseline_unique_sets() -> dict[str, set[frozenset[str]]]:
+    """table -> unique column sets from migrations/0001_baseline.sql.
+
+    B4.3f: storage.py carries no SQLite DDL anymore — the versioned migration
+    baseline is the sole schema source for the normal runtime tables, so the
+    guard derives primary keys and (non-partial) unique indexes directly from
+    it. Legacy migration-only tables live as literal CREATE TABLE DDL in
+    control_plane_live_postgres.py and are picked up separately.
     """
 
-    source = STORAGE_PATH.read_text(encoding="utf-8")
-    connection = sqlite3.connect(":memory:")
-    schemas: dict[str, dict[str, object]] = {}
-    for table_name, body in _extract_balanced_create_table_blocks(source):
-        try:
-            connection.execute(f"CREATE TABLE IF NOT EXISTS {table_name} ({body})")
-        except sqlite3.OperationalError as exc:  # pragma: no cover - extraction bug
-            raise AssertionError(
-                f"Could not replay storage.py DDL for {table_name}: {exc}. "
-                "Fix the extraction in tests/test_pg_onconflict_guard.py."
-            ) from exc
-    for (table_name,) in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'"):
-        info = list(connection.execute(f"PRAGMA table_info({table_name})"))
-        pk_columns = tuple(row[1] for row in sorted((r for r in info if r[5] > 0), key=lambda r: r[5]))
-        schemas[str(table_name)] = {"pk": pk_columns, "columns": tuple(row[1] for row in info)}
-    connection.close()
-    return schemas
+    source = _BASELINE_SQL_PATH.read_text(encoding="utf-8")
+    unique_sets: dict[str, set[frozenset[str]]] = {}
+    for match in _BASELINE_PK_RE.finditer(source):
+        unique_sets.setdefault(match.group(1), set()).add(frozenset(_split_columns(match.group(2))))
+    for match in _BASELINE_UNIQUE_INDEX_RE.finditer(source):
+        if match.group(3):
+            continue  # partial index cannot serve a plain ON CONFLICT (cols)
+        unique_sets.setdefault(match.group(1), set()).add(frozenset(_split_columns(match.group(2))))
+    return unique_sets
 
 
 def extract_literal_on_conflict_targets(source: str, label: str) -> list[tuple[str, int, str, tuple[str, ...]]]:
@@ -209,16 +211,17 @@ def extract_simple_upsert_targets() -> list[tuple[int, str, tuple[str, ...]]]:
 def derive_pg_bootstrap_unique_sets() -> dict[str, set[frozenset[str]]]:
     """table -> set of column sets with a unique constraint after PG bootstrap."""
 
-    sqlite_schemas = derive_sqlite_table_schemas()
     unique_sets: dict[str, set[frozenset[str]]] = {}
 
     def add(table_name: str, columns: tuple[str, ...] | frozenset[str]) -> None:
         if columns:
             unique_sets.setdefault(table_name, set()).add(frozenset(columns))
 
-    # 1. SQLite primary keys, carried over by _build_create_table_sql.
-    for table_name, schema in sqlite_schemas.items():
-        add(table_name, tuple(schema["pk"]))  # type: ignore[arg-type]
+    # 1. Primary keys + non-partial unique indexes from the versioned migration
+    #    baseline (B4.3f: the sole schema source for the normal runtime tables).
+    for table_name, column_sets in derive_baseline_unique_sets().items():
+        for columns in column_sets:
+            add(table_name, columns)
 
     # 2. Bootstrap unique indexes (non-partial only).
     for table_name, entries in _CONTROL_PLANE_UNIQUE_INDEXES.items():
@@ -234,10 +237,9 @@ def derive_pg_bootstrap_unique_sets() -> dict[str, set[frozenset[str]]]:
                 continue  # partial index cannot serve a plain ON CONFLICT (cols)
             add(match.group(2), _split_columns(match.group(3)))
 
-    # 4. Literal CREATE TABLE primary keys in the live module. The bootstrap
-    #    sync creates SQLite-synced tables first, so the live CREATE TABLE
-    #    IF NOT EXISTS PK only applies when it cannot be pre-empted by a
-    #    differing SQLite-derived schema.
+    # 4. Literal CREATE TABLE primary keys in the live module (runtime
+    #    coordination + writer schema + the legacy migration-only tables,
+    #    all created by native PG DDL post-B4.3f).
     live_source = CONTROL_PLANE_LIVE_PATH.read_text(encoding="utf-8")
     for table_name, body in _extract_balanced_create_table_blocks(live_source):
         pk_clause = _PK_CLAUSE_RE.search(body)
@@ -247,9 +249,6 @@ def derive_pg_bootstrap_unique_sets() -> dict[str, set[frozenset[str]]]:
             inline = _PK_INLINE_RE.search(body)
             pk_columns = (inline.group(1),) if inline else ()
         if not pk_columns:
-            continue
-        sqlite_pk = tuple(sqlite_schemas.get(table_name, {}).get("pk") or ())
-        if table_name in sqlite_schemas and frozenset(sqlite_pk) != frozenset(pk_columns):
             continue
         add(table_name, pk_columns)
 
