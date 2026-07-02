@@ -471,12 +471,27 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   payload_json;PG native 路径用 payload_dict)。−770 行;550 passed。**验证升级**:除 import/ruff + Testcontainers 合同 lane + control-plane-live(authoritative 存储
   读写合同)全 PASS 外,首次对 test_pipeline materialization/registry focus 做 **clean-DB postgres_only A/B**(DROP/CREATE public schema 后 HEAD vs 本批各跑一遍,
   unittest 字母序确定)→ 两边**逐字相同的 17-fail 集**(pre-existing 共享-schema 污染;这些 test 缺 per-test PG 隔离)→ **零回归**。
-- **B4.3 进度:storage.py 26,847 → 23,371(−3,476 行,批 1-6)。** 已删掉绝大多数干净的死双路径尾(write-and-mirror / native-dispatch / read / generic-helper / irregular-write,
-  含 batch-3/5 的读尾与 batch-2/6 的 native-dispatch 尾的「中间局部」变体)。每批那 1 个 results-api fail 都是 pre-existing 的 lovable_board_visible_patches contract-drift(非 teardown)。
-- **B4.3 余下(异质 irregular 尾,需逐方法 live-vs-dead 分类)**:仍 ~102 个 `with self._lock[, self._connection]:`(批 5-6 后 128→102)。类别:(a) **LIVE 遗留迁移 SQLite —— 保留**
+- **2026-07-01 B4.3.7(53 个 skip@None native-dispatch 尾;首个「分类工作流 + 逐方法对抗校验」批)**:AST 扫描出 52 个候选(有 `should_prefer_read` +
+  `_call_..._native` + `with self._lock` 但体内无 skip-guard;doc 原估 ~65 偏高)。ultracode 工作流(11 组分类 agent → 每方法 1 个独立对抗校验 agent,共 63 agent)
+  逐方法判定 prefer-read 块控制流:**38 个 A 形态**(块内无条件 return,native-None 内联处理如 `return X if row is not None else None` —— 尾纯死,截断 + 标准
+  fail-closed raise);**7 个 B 形态 fall-through(潜在 "no such table" 崩溃点!)**:块不 return、靠块后 `if id <= 0:`/`if reviewed is None:` 落 SQLite
+  (record_query_dispatch、record_criteria_feedback、review_pattern_suggestion、record_criteria_result_diff、record_confidence_policy_run、create_criteria_version、
+  record_criteria_compiler_run + corrected 的 upsert_criteria_pattern)—— 塌缩时把 None 路径改为显式 `_raise_control_plane_postgres_write_failure`(insert 型;
+  sequence-resolution 异常才可能触发)或哨兵 return(review_pattern_suggestion 返 `{"suggestion": None,...}`,与 postgres_only 遗留可观察行为等价),成功路径逐字保留;
+  **6 个 C 形态复杂法**(多 gate/多 dispatch:supersede_workflow_job 三重 AND gate、register/patch_asset_materialization 复合 gate + write-gate、
+  deactivate_confidence_policy_control 双 gate 双死尾 —— replacement 重建 branch-2 全部活代码、replace_candidate_materialization_state_scope gate-1 死 else 单独手工塌缩、
+  create_confidence_policy_control)。52 法全 COLLAPSE、0 DEFER(对抗校验 51 confirm + 1 corrected)。应用 = 自底向上行拼接 + 独立 AST 安全闸
+  (方法 span 与分类清单精确匹配 / 删除区必含死 `with self._lock` / 保留区必含 prefer-gate / 全文件重解析 / 后置无残留 lock 块)。
+  另修 1 个 pre-existing 守卫漂移:test_crm_public_web_runtime_boundary::latest_run_selection 断言 storage 法体内的 SQLite `ORDER BY` 字面量(batch-5 已删)——
+  改为断言 storage 路由到 native reader + adapter SQL 保有 `ORDER BY created_at DESC, run_id DESC`/`PARTITION BY crm_record_id`(不变量链保持),并清掉该法
+  batch-5 残留死局部(placeholders_sqlite/clauses_sqlite/params)。−1,758 行。验证:import/ruff 0 新增;Testcontainers 合同 lane 181 全 PASS(修守卫后);
+  local-PG postgres_only + per-test schema 隔离(SOURCING_TEST_PG_ISOLATED_SCHEMA=1,首批使用):durable/worker/manual_review 123 + criteria/confidence/serving/
+  materialization 30 + results_api/operation_runtime 389 + recovery/cancel-resume/dedup 52 全过;仅 2 个 stash-控制实验证明的 pre-existing
+  (snapshot_materialization idempotent 0!=1;lovable_board_visible_patches)。
+- **B4.3 进度:storage.py 26,847 → 21,613(−5,234 行,批 1-7)。** 已删掉全部干净死双路径尾 + skip@None 变体。每批那 1 个 results-api fail 都是 pre-existing 的
+  lovable_board_visible_patches contract-drift(非 teardown)。
+- **B4.3 余下(批 7 后:`with self._lock[, self._connection]:` 102→48;mirror 调用 24→12;`self._connection.execute` 246→133)**:(a) **LIVE 遗留迁移 SQLite —— 保留**
   (`_ensure_legacy_target_public_web_sqlite_tables_for_migration`、`seed_legacy_*`、retirement-audit、若仍被迁移路径调用的 `_replace_*_from_sqlite` bulk-loader);
-  (b) advisory-lock SQLite fallback(死,另一形态);(c) **native-dispatch 尾的 `skip@None` 变体(~65 个,下一批主目标)**:有 `should_prefer_read` + `_call_..._native`
-  + `with self._lock` 但方法体内无 `should_skip_sqlite_fallback`(本批 AST 探测要求 skip-guard 为 prefer-read 块末单-return,故不匹配)——须逐方法看 prefer-read 块的实际控制流
-  (native 返 None 时是落到死 with 还是别处),非干净同构尾;(d) acquisition_shard_registry;(e) mirror/replace helpers 待无引用后删(mirror 调用 74→**24**);
-  (f) 最后 `self._connection`(:809)+ `_lock` + `import sqlite3`,待无 live 触及影子(剩 **246** `self._connection.execute`,但多为 LIVE 迁移用 —— 须先分清)。
+  (b) advisory-lock SQLite fallback(死,另一形态);(d) acquisition_shard_registry(gated 影子 SELECT,非干净尾);(e) mirror/replace helpers 待无引用后删;
+  (f) 最后 `self._connection`(:809)+ `_lock` + `import sqlite3`,待无 live 触及影子(剩余 conn.execute 多为 LIVE 迁移用 —— 须先分清)。
   每批先分类 live-vs-dead(迁移子系统确实用 SQLite),再 AST-safe + 合同 lane 验证。
