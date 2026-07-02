@@ -490,8 +490,21 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   (snapshot_materialization idempotent 0!=1;lovable_board_visible_patches)。
 - **B4.3 进度:storage.py 26,847 → 21,613(−5,234 行,批 1-7)。** 已删掉全部干净死双路径尾 + skip@None 变体。每批那 1 个 results-api fail 都是 pre-existing 的
   lovable_board_visible_patches contract-drift(非 teardown)。
-- **B4.3 余下(批 7 后:`with self._lock[, self._connection]:` 102→48;mirror 调用 24→12;`self._connection.execute` 246→133)**:(a) **LIVE 遗留迁移 SQLite —— 保留**
-  (`_ensure_legacy_target_public_web_sqlite_tables_for_migration`、`seed_legacy_*`、retirement-audit、若仍被迁移路径调用的 `_replace_*_from_sqlite` bulk-loader);
-  (b) advisory-lock SQLite fallback(死,另一形态);(d) acquisition_shard_registry(gated 影子 SELECT,非干净尾);(e) mirror/replace helpers 待无引用后删;
-  (f) 最后 `self._connection`(:809)+ `_lock` + `import sqlite3`,待无 live 触及影子(剩余 conn.execute 多为 LIVE 迁移用 —— 须先分清)。
-  每批先分类 live-vs-dead(迁移子系统确实用 SQLite),再 AST-safe + 合同 lane 验证。
+- **2026-07-02 B4.3.8(终局 live-vs-dead 分类批;40 法 49 区域塌缩 + mirror 机器整体删除)**:对剩余 48 个 lock-with 的 43 个宿主方法跑第二轮
+  「分类工作流 + 逐方法对抗校验」(9 组分类 + 43 校验;首轮 17 个校验被会话限额打断,resumeFromRunId 断点续跑,缓存命中其余)。判定:**40 法 COLLAPSE
+  (全部校验 CONFIRM、0 修正)+ 3 保留**(`close`/`_configure_connection` = infra,随 (f) 最终影子删除退休;`_ensure_legacy_target_public_web_sqlite_tables_for_migration`
+  = LIVE 遗留迁移子系统)。新形态覆盖:bulk-loader 家族(replace_bootstrap/company/candidate/category_data —— `_replace_candidates_and_evidence_in_postgres`
+  post-B3.0 只返 True 或 raise,fall-through 死)、candidates/evidence 读、plan-review 双法、agent_runtime_sessions 三法、org registry/execution-profile、
+  canonicalize_organization_asset_registry_target_company(5 个不相交死区域)、acquisition_shard_registry(gated 影子 SELECT + 写尾,原 (d) 项)、
+  search-index 三法、materialization state/runs、cloud asset ops、linkedin registry 全家(keys/aliases/leases/metrics/backfill/refill 218 行死尾/
+  _upsert 161 行死尾)、provider limiter、advisory-lock fallback(原 (b) 项)。区域级应用脚本升级:区域两两不相交 + 每方法 lock-with 全覆盖 +
+  编辑后无残留 lock 校验。随后删除零引用的 mirror 机器:storage `_mirror_control_plane_row` + `_replace_control_plane_table_from_sqlite` 定义、
+  adapter `replace_table_from_sqlite`(原 (e) 项;`should_mirror` 在 adapter 内仍承重保留)。−1,635 行(21,613→19,978,**首破 2 万**)。
+  验证:合同 lane 181 全 PASS(0 skip;首跑因 Docker daemon 宕导致批量 skip 判无效,重启 Docker+local-pg 后重跑);local-PG postgres_only + 隔离 flag:
+  registry/durable/serving 148 + candidates/operation/materialization/recovery 180 + enrichment/results_api 431;仅 2 个已证 pre-existing
+  (idempotent 0!=1、lovable_board)。
+- **B4.3 完成度:storage.py 26,847 → 19,978(−6,869 行,批 1-8);Track B 全程 30,658 → 19,978。** SQLite 残余(全部有意保留):3 个 lock-with
+  (close/_configure_connection/legacy-migration ensure)+ 50 个 conn.execute(LIVE 遗留 target-public-web 迁移子系统 + infra)。
+- **B4.3 最终一步 (f)(尚未做,须先决策遗留迁移子系统去留)**:`self._connection` + `_lock` + `import sqlite3` 的物理删除,取决于
+  `_ensure_legacy_target_public_web_sqlite_tables_for_migration`/`seed_legacy_*`/retirement-audit 这套 LIVE 遗留迁移是否仍需支持
+  (它在影子连接上按需建遗留表)。若 owner 决定退役遗留迁移路径,(f) 一并收口;否则影子连接为它长期保留。
