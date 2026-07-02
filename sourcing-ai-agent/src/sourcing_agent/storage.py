@@ -4151,64 +4151,10 @@ class ControlPlaneStore:
                     },
                 )
             return self.list_manual_review_items(job_id=job_id, status="", limit=max(len(normalized_items), 1))
-        with self._lock, self._connection:
-            self._connection.execute("DELETE FROM manual_review_items WHERE job_id = ?", (job_id,))
-            if legacy_scope_keys:
-                rows = self._connection.execute(
-                    """
-                    SELECT * FROM manual_review_items
-                    WHERE status = 'open'
-                    """,
-                ).fetchall()
-                stale_review_item_ids: list[int] = []
-                for row in rows:
-                    row_scope = _manual_review_scope_key(_manual_review_item_from_row_payload(row))
-                    row_legacy_scope = _manual_review_scope_key(
-                        _manual_review_item_from_row_payload(row),
-                        include_snapshot=False,
-                    )
-                    if row["job_id"] == job_id:
-                        continue
-                    if row_scope in scope_keys or row_legacy_scope in legacy_scope_keys:
-                        stale_review_item_ids.append(int(row["review_item_id"]))
-                for review_item_id in stale_review_item_ids:
-                    self._connection.execute(
-                        """
-                        UPDATE manual_review_items
-                        SET status = 'superseded',
-                            review_notes = CASE
-                                WHEN trim(coalesce(review_notes, '')) = '' THEN 'Superseded by a newer manual-review queue item.'
-                                WHEN instr(review_notes, 'Superseded by a newer manual-review queue item.') > 0 THEN review_notes
-                                ELSE review_notes || ' | Superseded by a newer manual-review queue item.'
-                            END,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE review_item_id = ?
-                        """,
-                        (review_item_id,),
-                    )
-            for item in normalized_items:
-                self._connection.execute(
-                    """
-                    INSERT INTO manual_review_items (
-                        job_id, candidate_id, target_company, review_type, priority, status, summary,
-                        candidate_json, evidence_json, metadata_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        job_id,
-                        str(item.get("candidate_id") or ""),
-                        str(item.get("target_company") or ""),
-                        str(item.get("review_type") or ""),
-                        str(item.get("priority") or "medium"),
-                        str(item.get("status") or "open"),
-                        str(item.get("summary") or ""),
-                        json.dumps(item.get("candidate") or {}, ensure_ascii=False),
-                        json.dumps(item.get("evidence") or [], ensure_ascii=False),
-                        json.dumps(item.get("metadata") or {}, ensure_ascii=False),
-                    ),
-                )
-        self._replace_control_plane_table_from_sqlite("manual_review_items")
-        return self.list_manual_review_items(job_id=job_id, status="", limit=max(len(normalized_items), 1))
+        raise RuntimeError(
+            "postgres-only invariant violated for manual_review_items in replace_manual_review_items: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_manual_review_items(
         self,
@@ -4357,91 +4303,10 @@ class ControlPlaneStore:
                 "superseded_count": superseded_count,
                 "out_of_scope_count": out_of_scope_count,
             }
-        clauses: list[str] = []
-        params: list[Any] = []
-        if target_company:
-            clauses.append("lower(target_company) = lower(?)")
-            params.append(target_company)
-        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-
-        metadata_updated = 0
-        superseded_count = 0
-        out_of_scope_count = 0
-        with self._lock, self._connection:
-            rows = self._connection.execute(
-                f"""
-                SELECT * FROM manual_review_items
-                {where_clause}
-                ORDER BY updated_at DESC, review_item_id DESC
-                """,
-                params,
-            ).fetchall()
-
-            latest_open_by_scope: dict[tuple[str, str, str], int] = {}
-            for row in rows:
-                payload = _manual_review_item_from_row_payload(row)
-                metadata = dict(payload.get("metadata") or {})
-                inferred_snapshot_id = _infer_manual_review_snapshot_id(payload)
-                if inferred_snapshot_id and str(metadata.get("snapshot_id") or "").strip() != inferred_snapshot_id:
-                    metadata["snapshot_id"] = inferred_snapshot_id
-                    self._connection.execute(
-                        "UPDATE manual_review_items SET metadata_json = ?, updated_at = CURRENT_TIMESTAMP WHERE review_item_id = ?",
-                        (json.dumps(metadata, ensure_ascii=False), int(row["review_item_id"])),
-                    )
-                    payload["metadata"] = metadata
-                    metadata_updated += 1
-
-                row_snapshot_id = str(metadata.get("snapshot_id") or "").strip()
-                if str(row["status"] or "") != "open":
-                    continue
-                if snapshot_id and row_snapshot_id and row_snapshot_id != snapshot_id:
-                    self._connection.execute(
-                        """
-                        UPDATE manual_review_items
-                        SET status = 'out_of_scope',
-                            review_notes = CASE
-                                WHEN trim(coalesce(review_notes, '')) = '' THEN 'Marked out of scope for the active snapshot.'
-                                WHEN instr(review_notes, 'Marked out of scope for the active snapshot.') > 0 THEN review_notes
-                                ELSE review_notes || ' | Marked out of scope for the active snapshot.'
-                            END,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE review_item_id = ?
-                        """,
-                        (int(row["review_item_id"]),),
-                    )
-                    out_of_scope_count += 1
-                    continue
-
-                scope_key = _manual_review_scope_key(payload, include_snapshot=False)
-                if not scope_key:
-                    continue
-                if scope_key in latest_open_by_scope:
-                    self._connection.execute(
-                        """
-                        UPDATE manual_review_items
-                        SET status = 'superseded',
-                            review_notes = CASE
-                                WHEN trim(coalesce(review_notes, '')) = '' THEN 'Superseded by a newer manual-review queue item.'
-                                WHEN instr(review_notes, 'Superseded by a newer manual-review queue item.') > 0 THEN review_notes
-                                ELSE review_notes || ' | Superseded by a newer manual-review queue item.'
-                            END,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE review_item_id = ?
-                        """,
-                        (int(row["review_item_id"]),),
-                    )
-                    superseded_count += 1
-                    continue
-                latest_open_by_scope[scope_key] = int(row["review_item_id"])
-        self._replace_control_plane_table_from_sqlite("manual_review_items")
-
-        return {
-            "target_company": target_company,
-            "snapshot_id": snapshot_id,
-            "metadata_updated_count": metadata_updated,
-            "superseded_count": superseded_count,
-            "out_of_scope_count": out_of_scope_count,
-        }
+        raise RuntimeError(
+            "postgres-only invariant violated for manual_review_items in cleanup_manual_review_items: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def review_manual_review_item(
         self,
@@ -6147,12 +6012,6 @@ class ControlPlaneStore:
             return []
         normalized_workspace_id = str(workspace_id or "default").strip() or "default"
         normalized_status = _normalize_target_candidate_public_web_status(status, default="")
-        placeholders_sqlite = ", ".join(["?"] * len(normalized_record_ids))
-        clauses_sqlite = ["workspace_id = ?", f"crm_record_id IN ({placeholders_sqlite})"]
-        params: list[Any] = [normalized_workspace_id, *normalized_record_ids]
-        if normalized_status:
-            clauses_sqlite.append("status = ?")
-            params.append(normalized_status)
         native_rows = self._call_control_plane_postgres_native(
             "list_latest_crm_public_web_runs_by_record_ids",
             normalized_record_ids,
@@ -7420,34 +7279,10 @@ class ControlPlaneStore:
             if row is None:
                 raise RuntimeError(f"Failed to create agent trace span for {job_id}:{lane_id}:{span_name}")
             return self._agent_trace_span_from_row(row)
-        with self._lock, self._connection:
-            cursor = self._connection.execute(
-                """
-                INSERT INTO agent_trace_spans (
-                    session_id, job_id, parent_span_id, lane_id, handoff_from_lane, handoff_to_lane,
-                    span_name, stage, status, input_json, output_json, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    session_id,
-                    job_id,
-                    parent_span_id or None,
-                    lane_id,
-                    handoff_from_lane,
-                    handoff_to_lane,
-                    span_name,
-                    stage,
-                    "running",
-                    json.dumps(input_payload or {}, ensure_ascii=False),
-                    json.dumps({}, ensure_ascii=False),
-                    json.dumps(metadata or {}, ensure_ascii=False),
-                ),
-            )
-            span_id = int(cursor.lastrowid)
-        span = self.get_agent_trace_span(span_id)
-        if span is None:
-            raise RuntimeError(f"Failed to create agent trace span for {job_id}:{lane_id}:{span_name}")
-        return span
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_trace_spans in create_agent_trace_span: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def update_agent_runtime_session_status(self, job_id: str, status: str) -> dict[str, Any] | None:
         if self._control_plane_postgres_should_prefer_read("agent_runtime_sessions"):
@@ -7504,39 +7339,19 @@ class ControlPlaneStore:
             if row is None:
                 raise RuntimeError(f"Failed to complete agent trace span {span_id}")
             return self._agent_trace_span_from_row(row)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE agent_trace_spans
-                SET status = ?, output_json = ?, handoff_to_lane = CASE WHEN ? <> '' THEN ? ELSE handoff_to_lane END,
-                    completed_at = CURRENT_TIMESTAMP
-                WHERE span_id = ?
-                """,
-                (
-                    status,
-                    json.dumps(output_payload or {}, ensure_ascii=False),
-                    handoff_to_lane,
-                    handoff_to_lane,
-                    span_id,
-                ),
-            )
-        span = self.get_agent_trace_span(span_id)
-        if span is None:
-            raise RuntimeError(f"Failed to complete agent trace span {span_id}")
-        return span
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_trace_spans in complete_agent_trace_span: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_agent_trace_span(self, span_id: int) -> dict[str, Any] | None:
         if self._control_plane_postgres_should_prefer_read("agent_trace_spans"):
             row = self._call_control_plane_postgres_native("get_agent_trace_span", span_id)
             return self._agent_trace_span_from_row(row) if row is not None else None
-        with self._lock:
-            row = self._connection.execute(
-                "SELECT * FROM agent_trace_spans WHERE span_id = ? LIMIT 1",
-                (span_id,),
-            ).fetchone()
-        if row is None:
-            return None
-        return self._agent_trace_span_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_trace_spans in get_agent_trace_span: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_agent_trace_spans(self, *, job_id: str = "", session_id: int = 0) -> list[dict[str, Any]]:
         if self._control_plane_postgres_should_prefer_read("agent_trace_spans"):
@@ -7546,20 +7361,10 @@ class ControlPlaneStore:
                 session_id=session_id,
             )
             return [self._agent_trace_span_from_row(row) for row in list(rows or [])]
-        with self._lock:
-            if session_id > 0:
-                rows = self._connection.execute(
-                    "SELECT * FROM agent_trace_spans WHERE session_id = ? ORDER BY span_id",
-                    (session_id,),
-                ).fetchall()
-            elif job_id:
-                rows = self._connection.execute(
-                    "SELECT * FROM agent_trace_spans WHERE job_id = ? ORDER BY span_id",
-                    (job_id,),
-                ).fetchall()
-            else:
-                return []
-        return [self._agent_trace_span_from_row(row) for row in rows]
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_trace_spans in list_agent_trace_spans: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def create_or_resume_agent_worker(
         self,
@@ -7588,61 +7393,19 @@ class ControlPlaneStore:
             if row is None:
                 raise RuntimeError(f"Failed to create agent worker {job_id}:{lane_id}:{worker_key}")
             return self._agent_worker_from_row(row)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO agent_worker_runs (
-                    session_id, job_id, span_id, lane_id, worker_key, status, interrupt_requested,
-                    budget_json, checkpoint_json, input_json, output_json, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(job_id, lane_id, worker_key) DO UPDATE SET
-                    session_id = excluded.session_id,
-                    span_id = excluded.span_id,
-                    status = CASE
-                        WHEN agent_worker_runs.status = 'completed' THEN agent_worker_runs.status
-                        WHEN agent_worker_runs.status = 'interrupted' THEN 'queued'
-                        ELSE excluded.status
-                    END,
-                    budget_json = excluded.budget_json,
-                    input_json = excluded.input_json,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    session_id,
-                    job_id,
-                    span_id,
-                    lane_id,
-                    worker_key,
-                    "queued",
-                    0,
-                    json.dumps(budget_payload or {}, ensure_ascii=False),
-                    json.dumps({}, ensure_ascii=False),
-                    json.dumps(input_payload or {}, ensure_ascii=False),
-                    json.dumps({}, ensure_ascii=False),
-                    json.dumps(metadata or {}, ensure_ascii=False),
-                ),
-            )
-        worker = self.get_agent_worker(job_id=job_id, lane_id=lane_id, worker_key=worker_key)
-        if worker is None:
-            raise RuntimeError(f"Failed to create agent worker {job_id}:{lane_id}:{worker_key}")
-        return worker
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in create_or_resume_agent_worker: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def mark_agent_worker_running(self, worker_id: int) -> dict[str, Any] | None:
         if self._control_plane_postgres_should_prefer_read("agent_worker_runs"):
             row = self._call_control_plane_postgres_native("mark_agent_worker_running", worker_id)
             return self._agent_worker_from_row(row) if row is not None else None
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE agent_worker_runs
-                SET status = CASE WHEN status = 'completed' THEN status ELSE 'running' END,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE worker_id = ?
-                """,
-                (worker_id,),
-            )
-        return self.get_agent_worker(worker_id=worker_id)
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in mark_agent_worker_running: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def checkpoint_agent_worker(
         self,
@@ -7661,21 +7424,10 @@ class ControlPlaneStore:
                 status=status,
             )
             return self._agent_worker_from_row(row) if row is not None else None
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE agent_worker_runs
-                SET status = ?, checkpoint_json = ?, output_json = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE worker_id = ?
-                """,
-                (
-                    status,
-                    json.dumps(checkpoint_payload or {}, ensure_ascii=False),
-                    json.dumps(output_payload or {}, ensure_ascii=False),
-                    worker_id,
-                ),
-            )
-        return self.get_agent_worker(worker_id=worker_id)
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in checkpoint_agent_worker: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def complete_agent_worker(
         self,
@@ -7694,22 +7446,10 @@ class ControlPlaneStore:
                 output_payload=output_payload or {},
             )
             return self._agent_worker_from_row(row) if row is not None else None
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE agent_worker_runs
-                SET status = ?, checkpoint_json = ?, output_json = ?, lease_owner = NULL, lease_expires_at = NULL,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE worker_id = ?
-                """,
-                (
-                    status,
-                    json.dumps(checkpoint_payload or {}, ensure_ascii=False),
-                    json.dumps(output_payload or {}, ensure_ascii=False),
-                    worker_id,
-                ),
-            )
-        return self.get_agent_worker(worker_id=worker_id)
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in complete_agent_worker: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_recoverable_agent_workers(
         self,
@@ -7728,45 +7468,10 @@ class ControlPlaneStore:
                 job_id=job_id,
             )
             return [self._agent_worker_from_row(row) for row in list(rows or [])]
-        clauses = [
-            "("
-            "(status IN ('queued', 'interrupted', 'failed')) "
-            "OR (status = 'running' AND json_extract(checkpoint_json, '$.stage') IN ('submitting_remote_search', 'submitting_remote_harvest', 'waiting_remote_search', 'waiting_remote_harvest', 'persisting_terminal_harvest_profiles')) "
-            "OR (status = 'running' AND datetime(updated_at) <= datetime('now', ?))"
-            ")",
-        ]
-        params: list[Any] = [f"-{max(1, int(stale_after_seconds or 300))} seconds"]
-        if job_id:
-            clauses.append("job_id = ?")
-            params.append(job_id)
-        if lane_id:
-            clauses.append("lane_id = ?")
-            params.append(lane_id)
-        query = (
-            "SELECT * FROM agent_worker_runs WHERE "
-            + " AND ".join(clauses)
-            + " ORDER BY updated_at ASC, worker_id ASC LIMIT ?"
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in list_recoverable_agent_workers: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
         )
-        params.append(max(1, int(limit or 100)))
-        with self._lock:
-            rows = self._connection.execute(query, tuple(params)).fetchall()
-        workers = []
-        for row in rows:
-            worker = self._agent_worker_from_row(row)
-            checkpoint_stage = str(dict(worker.get("checkpoint") or {}).get("stage") or "").strip()
-            if checkpoint_stage == "waiting_profile_coalescing":
-                continue
-            lease_expires_at = str(worker.get("lease_expires_at") or "").strip()
-            lease_owner = str(worker.get("lease_owner") or "").strip()
-            if (
-                not lease_expires_at
-                or _is_sqlite_timestamp_expired(lease_expires_at)
-                or worker_lease_owner_is_dead_local_process(lease_owner)
-            ):
-                workers.append(worker)
-                if len(workers) >= max(1, int(limit or 100)):
-                    break
-        return workers
 
     def retire_agent_workers(
         self,
@@ -7785,67 +7490,10 @@ class ControlPlaneStore:
                 cleanup_metadata=cleanup_metadata or {},
             )
             return [self._agent_worker_from_row(row) for row in list(rows or [])]
-        normalized_worker_ids = [int(worker_id) for worker_id in list(worker_ids or []) if int(worker_id or 0) > 0]
-        if not normalized_worker_ids:
-            return []
-        normalized_status = str(status or "cancelled").strip().lower() or "cancelled"
-        normalized_reason = str(reason or "").strip()
-        cleanup_metadata = dict(cleanup_metadata or {})
-        immutable_terminal_statuses = {"completed", "cancelled", "canceled", "superseded"}
-
-        refreshed_ids: list[int] = []
-        with self._lock, self._connection:
-            for worker_id in normalized_worker_ids:
-                row = self._connection.execute(
-                    "SELECT * FROM agent_worker_runs WHERE worker_id = ? LIMIT 1",
-                    (worker_id,),
-                ).fetchone()
-                if row is None:
-                    continue
-                current = self._agent_worker_from_row(row)
-                current_status = str(current.get("status") or "").strip().lower()
-                if current_status in immutable_terminal_statuses:
-                    refreshed_ids.append(worker_id)
-                    continue
-
-                metadata = dict(current.get("metadata") or {})
-                cleanup_payload = dict(metadata.get("cleanup") or {})
-                cleanup_payload.update(
-                    {
-                        "reason": normalized_reason,
-                        "status": normalized_status,
-                        "cleaned_at": datetime.now(timezone.utc).isoformat(),
-                    }
-                )
-                cleanup_payload.update(cleanup_metadata)
-                metadata["cleanup"] = cleanup_payload
-
-                output = dict(current.get("output") or {})
-                output["cleanup"] = cleanup_payload
-
-                self._connection.execute(
-                    """
-                    UPDATE agent_worker_runs
-                    SET status = ?,
-                        output_json = ?,
-                        metadata_json = ?,
-                        lease_owner = NULL,
-                        lease_expires_at = NULL,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE worker_id = ?
-                    """,
-                    (
-                        normalized_status,
-                        json.dumps(output, ensure_ascii=False),
-                        json.dumps(metadata, ensure_ascii=False),
-                        worker_id,
-                    ),
-                )
-                refreshed_ids.append(worker_id)
-
-        return [
-            worker for worker_id in refreshed_ids if (worker := self.get_agent_worker(worker_id=worker_id)) is not None
-        ]
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in retire_agent_workers: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def claim_agent_worker(
         self,
@@ -7862,54 +7510,10 @@ class ControlPlaneStore:
                 lease_seconds=lease_seconds,
             )
             return self._agent_worker_from_row(row) if row is not None else None
-        with self._lock, self._connection:
-            current = self._connection.execute(
-                "SELECT * FROM agent_worker_runs WHERE worker_id = ? LIMIT 1",
-                (worker_id,),
-            ).fetchone()
-            if current is not None:
-                current_worker = self._agent_worker_from_row(current)
-                current_lease_owner = str(current_worker.get("lease_owner") or "").strip()
-                current_lease_expires_at = str(current_worker.get("lease_expires_at") or "").strip()
-                if (
-                    current_lease_owner
-                    and current_lease_expires_at
-                    and not _is_sqlite_timestamp_expired(current_lease_expires_at)
-                    and worker_lease_owner_is_dead_local_process(current_lease_owner)
-                ):
-                    self._connection.execute(
-                        """
-                        UPDATE agent_worker_runs
-                        SET lease_owner = NULL,
-                            lease_expires_at = NULL,
-                            last_error = ?,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE worker_id = ? AND lease_owner = ?
-                        """,
-                        (
-                            f"Released dead local worker lease owner {current_lease_owner}",
-                            worker_id,
-                            current_lease_owner,
-                        ),
-                    )
-            self._connection.execute(
-                """
-                UPDATE agent_worker_runs
-                SET lease_owner = ?, lease_expires_at = datetime('now', ?), attempt_count = attempt_count + 1,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE worker_id = ?
-                  AND (lease_expires_at IS NULL OR datetime(lease_expires_at) <= datetime('now'))
-                """,
-                (
-                    lease_owner,
-                    f"+{max(1, int(lease_seconds or 60))} seconds",
-                    worker_id,
-                ),
-            )
-            changed = self._connection.execute("SELECT changes()").fetchone()[0]
-        if not changed:
-            return None
-        return self.get_agent_worker(worker_id=worker_id)
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in claim_agent_worker: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def acquire_workflow_job_lease(
         self,
@@ -7951,50 +7555,10 @@ class ControlPlaneStore:
                     and str(payload.get("lease_token") or "") == normalized_token
                 ),
             }
-        ttl_seconds = max(5, int(lease_seconds or 0))
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO workflow_job_leases (
-                    job_id,
-                    lease_owner,
-                    lease_token,
-                    lease_expires_at
-                ) VALUES (?, ?, ?, datetime('now', ?))
-                ON CONFLICT(job_id) DO UPDATE SET
-                    lease_owner = excluded.lease_owner,
-                    lease_token = excluded.lease_token,
-                    lease_expires_at = excluded.lease_expires_at,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE datetime(workflow_job_leases.lease_expires_at) <= datetime('now')
-                   OR workflow_job_leases.lease_owner = excluded.lease_owner
-                   OR workflow_job_leases.lease_token = excluded.lease_token
-                """,
-                (
-                    normalized_job_id,
-                    normalized_owner,
-                    normalized_token,
-                    f"+{ttl_seconds} seconds",
-                ),
-            )
-            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
-            lease_row = self._connection.execute(
-                """
-                SELECT * FROM workflow_job_leases
-                WHERE job_id = ?
-                """,
-                (normalized_job_id,),
-            ).fetchone()
-        payload = self._workflow_job_lease_from_row(lease_row)
-        return {
-            **payload,
-            "acquired": bool(
-                changed
-                and payload
-                and str(payload.get("lease_owner") or "") == normalized_owner
-                and str(payload.get("lease_token") or "") == normalized_token
-            ),
-        }
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_job_leases in acquire_workflow_job_lease: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_workflow_job_lease(self, job_id: str) -> dict[str, Any] | None:
         normalized_job_id = str(job_id or "").strip()
@@ -8003,17 +7567,10 @@ class ControlPlaneStore:
         if self._control_plane_postgres_should_prefer_read("workflow_job_leases"):
             row = self._call_control_plane_postgres_native("get_workflow_job_lease", normalized_job_id)
             return self._workflow_job_lease_from_row(row) if row is not None else None
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT * FROM workflow_job_leases
-                WHERE job_id = ?
-                """,
-                (normalized_job_id,),
-            ).fetchone()
-        if row is None:
-            return None
-        return self._workflow_job_lease_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_job_leases in get_workflow_job_lease: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def renew_workflow_job_lease(
         self,
@@ -8039,22 +7596,10 @@ class ControlPlaneStore:
             if row is not None:
                 return self._workflow_job_lease_from_row(row)
             return None
-        clauses = ["job_id = ?", "lease_owner = ?"]
-        params: list[Any] = [f"+{max(5, int(lease_seconds or 0))} seconds", normalized_job_id, normalized_owner]
-        if normalized_token:
-            clauses.append("lease_token = ?")
-            params.append(normalized_token)
-        with self._lock, self._connection:
-            self._connection.execute(
-                f"""
-                UPDATE workflow_job_leases
-                SET lease_expires_at = datetime('now', ?),
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE {" AND ".join(clauses)}
-                """,
-                tuple(params),
-            )
-        return self.get_workflow_job_lease(normalized_job_id)
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_job_leases in renew_workflow_job_lease: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def release_workflow_job_lease(
         self,
@@ -8076,41 +7621,10 @@ class ControlPlaneStore:
                 lease_token=normalized_token,
             )
             return
-        with self._lock, self._connection:
-            if normalized_owner and normalized_token:
-                self._connection.execute(
-                    """
-                    DELETE FROM workflow_job_leases
-                    WHERE job_id = ? AND lease_owner = ? AND lease_token = ?
-                    """,
-                    (normalized_job_id, normalized_owner, normalized_token),
-                )
-                return
-            if normalized_owner:
-                self._connection.execute(
-                    """
-                    DELETE FROM workflow_job_leases
-                    WHERE job_id = ? AND lease_owner = ?
-                    """,
-                    (normalized_job_id, normalized_owner),
-                )
-                return
-            if normalized_token:
-                self._connection.execute(
-                    """
-                    DELETE FROM workflow_job_leases
-                    WHERE job_id = ? AND lease_token = ?
-                    """,
-                    (normalized_job_id, normalized_token),
-                )
-                return
-            self._connection.execute(
-                """
-                DELETE FROM workflow_job_leases
-                WHERE job_id = ?
-                """,
-                (normalized_job_id,),
-            )
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_job_leases in release_workflow_job_lease: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def upsert_workflow_recovery_intent(
         self,
@@ -9724,41 +9238,10 @@ class ControlPlaneStore:
                 reclaim_claimed=bool(reclaim_claimed),
             )
             return self._workflow_command_from_row(row) if row is not None else {}
-        # reclaim_claimed (opt-in, currently export-only) lets a new owner reclaim an
-        # expired-lease claim left by a worker that crashed before
-        # mark_workflow_command_running; the lease-expiry clause still protects
-        # active claims. See list_ready_workflow_commands for the scoping rationale.
-        claim_status_in = (
-            "('queued', 'retry_wait', 'running', 'claimed')"
-            if reclaim_claimed
-            else "('queued', 'retry_wait', 'running')"
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_commands in claim_workflow_command: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
         )
-        with self._lock, self._connection:
-            self._connection.execute(
-                f"""
-                UPDATE workflow_commands
-                SET status = 'claimed',
-                    lease_owner = ?,
-                    lease_expires_at = datetime('now', ?),
-                    attempt = attempt + 1,
-                    heartbeat_at = CURRENT_TIMESTAMP,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE command_id = ?
-                  AND status IN {claim_status_in}
-                  AND (not_before_at = '' OR datetime(not_before_at) <= datetime('now'))
-                  AND (lease_expires_at = '' OR datetime(lease_expires_at) <= datetime('now'))
-                """,
-                (normalized_owner, f"+{max(1, int(lease_seconds or 300))} seconds", normalized_command_id),
-            )
-            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
-            row = self._connection.execute(
-                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
-                (normalized_command_id,),
-            ).fetchone()
-        if not changed:
-            return {}
-        self._mirror_control_plane_row("workflow_commands", row)
-        return self._workflow_command_from_row(row)
 
     def mark_workflow_command_running(self, command_id: str, *, lease_owner: str = "") -> dict[str, Any]:
         self._require_postgres_for_durable_runtime("workflow_commands")
@@ -9772,32 +9255,10 @@ class ControlPlaneStore:
                 lease_owner=lease_owner,
             )
             return self._workflow_command_from_row(row) if row is not None else {}
-        clauses = ["command_id = ?", "status = 'claimed'"]
-        params: list[Any] = [normalized_command_id]
-        normalized_owner = str(lease_owner or "").strip()
-        if normalized_owner:
-            clauses.append("lease_owner = ?")
-            params.append(normalized_owner)
-        with self._lock, self._connection:
-            self._connection.execute(
-                f"""
-                UPDATE workflow_commands
-                SET status = 'running',
-                    heartbeat_at = CURRENT_TIMESTAMP,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE {' AND '.join(clauses)}
-                """,
-                tuple(params),
-            )
-            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
-            row = self._connection.execute(
-                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
-                (normalized_command_id,),
-            ).fetchone()
-        if not changed:
-            return {}
-        self._mirror_control_plane_row("workflow_commands", row)
-        return self._workflow_command_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_commands in mark_workflow_command_running: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def mark_workflow_command_succeeded(
         self,
@@ -9816,31 +9277,10 @@ class ControlPlaneStore:
                 result=result or {},
             )
             return self._workflow_command_from_row(row) if row is not None else {}
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE workflow_commands
-                SET status = 'succeeded',
-                    lease_owner = '',
-                    lease_expires_at = '',
-                    heartbeat_at = CURRENT_TIMESTAMP,
-                    last_error = '',
-                    result_json = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE command_id = ?
-                  AND status IN ('claimed', 'running')
-                """,
-                (json.dumps(_json_safe_payload(result or {}), ensure_ascii=False), normalized_command_id),
-            )
-            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
-            row = self._connection.execute(
-                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
-                (normalized_command_id,),
-            ).fetchone()
-        if not changed:
-            return {}
-        self._mirror_control_plane_row("workflow_commands", row)
-        return self._workflow_command_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_commands in mark_workflow_command_succeeded: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def mark_workflow_command_failed(
         self,
@@ -9863,44 +9303,10 @@ class ControlPlaneStore:
                 retry_delay_seconds=retry_delay_seconds,
             )
             return self._workflow_command_from_row(row) if row is not None else {}
-        existing = self.get_workflow_command(normalized_command_id)
-        if not existing:
-            return {}
-        should_retry = bool(retryable) and int(existing.get("attempt") or 0) < max(1, int(existing.get("max_attempts") or 5))
-        next_status = "retry_wait" if should_retry else "failed_terminal"
-        next_not_before = (
-            (
-                datetime.now(timezone.utc).replace(microsecond=0)
-                + timedelta(seconds=max(1, int(retry_delay_seconds or 30)))
-            ).strftime("%Y-%m-%d %H:%M:%S")
-            if should_retry
-            else ""
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_commands in mark_workflow_command_failed: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
         )
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE workflow_commands
-                SET status = ?,
-                    lease_owner = '',
-                    lease_expires_at = '',
-                    heartbeat_at = CURRENT_TIMESTAMP,
-                    not_before_at = ?,
-                    last_error = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE command_id = ?
-                  AND status IN ('claimed', 'running')
-                """,
-                (next_status, next_not_before, str(error_text or "").strip(), normalized_command_id),
-            )
-            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
-            row = self._connection.execute(
-                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
-                (normalized_command_id,),
-            ).fetchone()
-        if not changed:
-            return {}
-        self._mirror_control_plane_row("workflow_commands", row)
-        return self._workflow_command_from_row(row)
 
     def mark_workflow_command_partial_progress(
         self,
@@ -9919,41 +9325,10 @@ class ControlPlaneStore:
                 result=result or {},
             )
             return self._workflow_command_from_row(row) if row is not None else {}
-        existing = self.get_workflow_command(normalized_command_id)
-        if not existing:
-            return {}
-        attempt = max(0, int(existing.get("attempt") or 0) - 1)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE workflow_commands
-                SET status = 'queued',
-                    lease_owner = '',
-                    lease_expires_at = '',
-                    heartbeat_at = CURRENT_TIMESTAMP,
-                    not_before_at = '',
-                    attempt = ?,
-                    last_error = '',
-                    result_json = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE command_id = ?
-                  AND status IN ('claimed', 'running')
-                """,
-                (
-                    attempt,
-                    json.dumps(_json_safe_payload(result or {}), ensure_ascii=False),
-                    normalized_command_id,
-                ),
-            )
-            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
-            row = self._connection.execute(
-                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
-                (normalized_command_id,),
-            ).fetchone()
-        if not changed:
-            return {}
-        self._mirror_control_plane_row("workflow_commands", row)
-        return self._workflow_command_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_commands in mark_workflow_command_partial_progress: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def mark_workflow_command_waiting_prerequisite(
         self,
@@ -9976,55 +9351,10 @@ class ControlPlaneStore:
                 from_statuses=list(from_statuses or []),
             )
             return self._workflow_command_from_row(row) if row is not None else {}
-        existing = self.get_workflow_command(normalized_command_id)
-        if not existing:
-            return {}
-        attempt = max(0, int(existing.get("attempt") or 0) - 1)
-        clamped_delay = min(30, max(1, int(retry_delay_seconds or 8)))
-        next_not_before = (
-            datetime.now(timezone.utc).replace(microsecond=0) + timedelta(seconds=clamped_delay)
-        ).strftime("%Y-%m-%d %H:%M:%S")
-        allowed_statuses = [
-            str(status or "").strip()
-            for status in list(from_statuses or ("claimed", "running"))
-            if str(status or "").strip()
-        ]
-        if not allowed_statuses:
-            allowed_statuses = ["claimed", "running"]
-        placeholders = ", ".join(["?"] * len(allowed_statuses))
-        with self._lock, self._connection:
-            self._connection.execute(
-                f"""
-                UPDATE workflow_commands
-                SET status = 'retry_wait',
-                    lease_owner = '',
-                    lease_expires_at = '',
-                    heartbeat_at = CURRENT_TIMESTAMP,
-                    not_before_at = ?,
-                    attempt = ?,
-                    last_error = '',
-                    result_json = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE command_id = ?
-                  AND status IN ({placeholders})
-                """,
-                (
-                    next_not_before,
-                    attempt,
-                    json.dumps(_json_safe_payload(result or {}), ensure_ascii=False),
-                    normalized_command_id,
-                    *allowed_statuses,
-                ),
-            )
-            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
-            row = self._connection.execute(
-                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
-                (normalized_command_id,),
-            ).fetchone()
-        if not changed:
-            return {}
-        self._mirror_control_plane_row("workflow_commands", row)
-        return self._workflow_command_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_commands in mark_workflow_command_waiting_prerequisite: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def cancel_workflow_command(
         self,
@@ -10057,55 +9387,10 @@ class ControlPlaneStore:
                 from_statuses=list(from_statuses or []),
             )
             return self._workflow_command_from_row(row) if row is not None else {}
-        existing = self.get_workflow_command(normalized_command_id)
-        if not existing:
-            return {}
-        next_result = {
-            **dict(existing.get("result") or {}),
-            **dict(result or {}),
-            "control_action": "cancel",
-            "control_reason": str(reason or "").strip(),
-            "control_actor": str(actor or "").strip(),
-        }
-        allowed_statuses = [
-            str(status or "").strip()
-            for status in list(from_statuses or ("queued", "retry_wait"))
-            if str(status or "").strip()
-        ]
-        if not allowed_statuses:
-            allowed_statuses = ["queued", "retry_wait"]
-        placeholders = ", ".join(["?"] * len(allowed_statuses))
-        with self._lock, self._connection:
-            self._connection.execute(
-                f"""
-                UPDATE workflow_commands
-                SET status = 'cancelled',
-                    lease_owner = '',
-                    lease_expires_at = '',
-                    heartbeat_at = CURRENT_TIMESTAMP,
-                    not_before_at = '',
-                    last_error = ?,
-                    result_json = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE command_id = ?
-                  AND status IN ({placeholders})
-                """,
-                (
-                    str(reason or "cancelled_by_command_control").strip() or "cancelled_by_command_control",
-                    json.dumps(_json_safe_payload(next_result), ensure_ascii=False),
-                    normalized_command_id,
-                    *allowed_statuses,
-                ),
-            )
-            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
-            row = self._connection.execute(
-                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
-                (normalized_command_id,),
-            ).fetchone()
-        if not changed:
-            return {}
-        self._mirror_control_plane_row("workflow_commands", row)
-        return self._workflow_command_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_commands in cancel_workflow_command: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def retry_workflow_command(
         self,
@@ -10128,46 +9413,10 @@ class ControlPlaneStore:
                 result=result or {},
             )
             return self._workflow_command_from_row(row) if row is not None else {}
-        existing = self.get_workflow_command(normalized_command_id)
-        if not existing:
-            return {}
-        next_result = {
-            **dict(existing.get("result") or {}),
-            **dict(result or {}),
-            "control_action": "retry",
-            "control_reason": str(reason or "").strip(),
-            "control_actor": str(actor or "").strip(),
-        }
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE workflow_commands
-                SET status = 'queued',
-                    lease_owner = '',
-                    lease_expires_at = '',
-                    heartbeat_at = '',
-                    not_before_at = '',
-                    attempt = 0,
-                    last_error = '',
-                    result_json = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE command_id = ?
-                  AND status IN ('failed_terminal', 'cancelled')
-                """,
-                (
-                    json.dumps(_json_safe_payload(next_result), ensure_ascii=False),
-                    normalized_command_id,
-                ),
-            )
-            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
-            row = self._connection.execute(
-                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
-                (normalized_command_id,),
-            ).fetchone()
-        if not changed:
-            return {}
-        self._mirror_control_plane_row("workflow_commands", row)
-        return self._workflow_command_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_commands in retry_workflow_command: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def resume_workflow_command(
         self,
@@ -10190,48 +9439,10 @@ class ControlPlaneStore:
                 result=result or {},
             )
             return self._workflow_command_from_row(row) if row is not None else {}
-        existing = self.get_workflow_command(normalized_command_id)
-        if not existing:
-            return {}
-        attempt = max(0, int(existing.get("attempt") or 0) - 1)
-        next_result = {
-            **dict(existing.get("result") or {}),
-            **dict(result or {}),
-            "control_action": "resume",
-            "control_reason": str(reason or "").strip(),
-            "control_actor": str(actor or "").strip(),
-        }
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE workflow_commands
-                SET status = 'queued',
-                    lease_owner = '',
-                    lease_expires_at = '',
-                    heartbeat_at = '',
-                    not_before_at = '',
-                    attempt = ?,
-                    last_error = '',
-                    result_json = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE command_id = ?
-                  AND status = 'retry_wait'
-                """,
-                (
-                    attempt,
-                    json.dumps(_json_safe_payload(next_result), ensure_ascii=False),
-                    normalized_command_id,
-                ),
-            )
-            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
-            row = self._connection.execute(
-                "SELECT * FROM workflow_commands WHERE command_id = ? LIMIT 1",
-                (normalized_command_id,),
-            ).fetchone()
-        if not changed:
-            return {}
-        self._mirror_control_plane_row("workflow_commands", row)
-        return self._workflow_command_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for workflow_commands in resume_workflow_command: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def enqueue_runtime_outbox(
         self,
@@ -10288,31 +9499,10 @@ class ControlPlaneStore:
         if self._control_plane_postgres_should_prefer_read("runtime_outbox"):
             row = self._call_control_plane_postgres_native("mark_runtime_outbox_dispatched", normalized_outbox_id)
             return self._runtime_outbox_from_row(row) if row is not None else {}
-        now = _utc_now_timestamp()
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE runtime_outbox
-                SET status = 'dispatched',
-                    dispatched_at = ?,
-                    lease_owner = '',
-                    lease_expires_at = '',
-                    last_error = '',
-                    updated_at = ?
-                WHERE outbox_id = ?
-                  AND status IN ('queued', 'claimed', 'running')
-                """,
-                (now, now, normalized_outbox_id),
-            )
-            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
-            row = self._connection.execute(
-                "SELECT * FROM runtime_outbox WHERE outbox_id = ? LIMIT 1",
-                (normalized_outbox_id,),
-            ).fetchone()
-        if not changed:
-            return {}
-        self._mirror_control_plane_row("runtime_outbox", row)
-        return self._runtime_outbox_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for runtime_outbox in mark_runtime_outbox_dispatched: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def renew_agent_worker_lease(
         self,
@@ -10329,20 +9519,10 @@ class ControlPlaneStore:
                 lease_seconds=lease_seconds,
             )
             return self._agent_worker_from_row(row) if row is not None else None
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE agent_worker_runs
-                SET lease_expires_at = datetime('now', ?), updated_at = CURRENT_TIMESTAMP
-                WHERE worker_id = ? AND lease_owner = ?
-                """,
-                (
-                    f"+{max(1, int(lease_seconds or 60))} seconds",
-                    worker_id,
-                    lease_owner,
-                ),
-            )
-        return self.get_agent_worker(worker_id=worker_id)
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in renew_agent_worker_lease: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def release_agent_worker_lease(
         self,
@@ -10359,60 +9539,28 @@ class ControlPlaneStore:
                 error_text=error_text,
             )
             return self._agent_worker_from_row(row) if row is not None else None
-        with self._lock, self._connection:
-            if lease_owner:
-                self._connection.execute(
-                    """
-                    UPDATE agent_worker_runs
-                    SET lease_owner = NULL, lease_expires_at = NULL,
-                        last_error = CASE WHEN ? <> '' THEN ? ELSE last_error END,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE worker_id = ? AND lease_owner = ?
-                    """,
-                    (error_text, error_text, worker_id, lease_owner),
-                )
-            else:
-                self._connection.execute(
-                    """
-                    UPDATE agent_worker_runs
-                    SET lease_owner = NULL, lease_expires_at = NULL,
-                        last_error = CASE WHEN ? <> '' THEN ? ELSE last_error END,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE worker_id = ?
-                    """,
-                    (error_text, error_text, worker_id),
-                )
-        return self.get_agent_worker(worker_id=worker_id)
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in release_agent_worker_lease: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def request_interrupt_agent_worker(self, worker_id: int) -> dict[str, Any] | None:
         if self._control_plane_postgres_should_prefer_read("agent_worker_runs"):
             row = self._call_control_plane_postgres_native("request_interrupt_agent_worker", worker_id)
             return self._agent_worker_from_row(row) if row is not None else None
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE agent_worker_runs
-                SET interrupt_requested = 1, updated_at = CURRENT_TIMESTAMP
-                WHERE worker_id = ?
-                """,
-                (worker_id,),
-            )
-        return self.get_agent_worker(worker_id=worker_id)
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in request_interrupt_agent_worker: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def clear_interrupt_agent_worker(self, worker_id: int) -> dict[str, Any] | None:
         if self._control_plane_postgres_should_prefer_read("agent_worker_runs"):
             row = self._call_control_plane_postgres_native("clear_interrupt_agent_worker", worker_id)
             return self._agent_worker_from_row(row) if row is not None else None
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE agent_worker_runs
-                SET interrupt_requested = 0, updated_at = CURRENT_TIMESTAMP
-                WHERE worker_id = ?
-                """,
-                (worker_id,),
-            )
-        return self.get_agent_worker(worker_id=worker_id)
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in clear_interrupt_agent_worker: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_agent_worker(
         self,
@@ -10431,26 +9579,10 @@ class ControlPlaneStore:
                 worker_key=worker_key,
             )
             return self._agent_worker_from_row(row) if row is not None else None
-        with self._lock:
-            if worker_id > 0:
-                row = self._connection.execute(
-                    "SELECT * FROM agent_worker_runs WHERE worker_id = ? LIMIT 1",
-                    (worker_id,),
-                ).fetchone()
-            elif job_id and lane_id and worker_key:
-                row = self._connection.execute(
-                    """
-                    SELECT * FROM agent_worker_runs
-                    WHERE job_id = ? AND lane_id = ? AND worker_key = ?
-                    LIMIT 1
-                    """,
-                    (job_id, lane_id, worker_key),
-                ).fetchone()
-            else:
-                return None
-        if row is None:
-            return None
-        return self._agent_worker_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in get_agent_worker: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_agent_workers(self, *, job_id: str = "", session_id: int = 0, lane_id: str = "") -> list[dict[str, Any]]:
         if self._control_plane_postgres_should_prefer_read("agent_worker_runs"):
@@ -10461,23 +9593,10 @@ class ControlPlaneStore:
                 lane_id=lane_id,
             )
             return [self._agent_worker_from_row(row) for row in list(rows or [])]
-        clauses: list[str] = []
-        params: list[Any] = []
-        if job_id:
-            clauses.append("job_id = ?")
-            params.append(job_id)
-        if session_id > 0:
-            clauses.append("session_id = ?")
-            params.append(session_id)
-        if lane_id:
-            clauses.append("lane_id = ?")
-            params.append(lane_id)
-        if not clauses:
-            return []
-        query = "SELECT * FROM agent_worker_runs WHERE " + " AND ".join(clauses) + " ORDER BY worker_id"
-        with self._lock:
-            rows = self._connection.execute(query, tuple(params)).fetchall()
-        return [self._agent_worker_from_row(row) for row in rows]
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in list_agent_workers: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_agent_workers_by_remote_provider_identifiers(
         self,
@@ -10498,35 +9617,10 @@ class ControlPlaneStore:
                 limit=limit,
             )
             return [self._agent_worker_from_row(row) for row in list(rows or [])]
-        clauses: list[str] = []
-        params: list[Any] = []
-        if normalized_run_id:
-            clauses.append(
-                "("
-                "json_extract(checkpoint_json, '$.run_id') = ? "
-                "OR json_extract(checkpoint_json, '$.actor_run_id') = ? "
-                "OR json_extract(checkpoint_json, '$.actorRunId') = ?"
-                ")"
-            )
-            params.extend([normalized_run_id, normalized_run_id, normalized_run_id])
-        if normalized_dataset_id:
-            clauses.append(
-                "("
-                "json_extract(checkpoint_json, '$.dataset_id') = ? "
-                "OR json_extract(checkpoint_json, '$.default_dataset_id') = ? "
-                "OR json_extract(checkpoint_json, '$.defaultDatasetId') = ?"
-                ")"
-            )
-            params.extend([normalized_dataset_id, normalized_dataset_id, normalized_dataset_id])
-        query = (
-            "SELECT * FROM agent_worker_runs WHERE "
-            + " OR ".join(clauses)
-            + " ORDER BY updated_at DESC, worker_id DESC LIMIT ?"
+        raise RuntimeError(
+            "postgres-only invariant violated for agent_worker_runs in list_agent_workers_by_remote_provider_identifiers: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
         )
-        params.append(max(1, int(limit or 50)))
-        with self._lock:
-            rows = self._connection.execute(query, tuple(params)).fetchall()
-        return [self._agent_worker_from_row(row) for row in rows]
 
     def list_job_events(
         self,
@@ -11039,36 +10133,10 @@ class ControlPlaneStore:
             superseded_worker_count = int(runtime_state.get("superseded_worker_count") or 0)
             superseded_trace_count = int(runtime_state.get("superseded_trace_count") or 0)
         else:
-            with self._lock, self._connection:
-                worker_cursor = self._connection.execute(
-                    """
-                    UPDATE agent_worker_runs
-                    SET status = 'superseded',
-                        lease_owner = NULL,
-                        lease_expires_at = NULL,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE job_id = ?
-                      AND status IN ('queued', 'running', 'interrupted', 'failed')
-                    """,
-                    (str(job_id),),
-                )
-                superseded_worker_count = int(worker_cursor.rowcount or 0)
-                trace_cursor = self._connection.execute(
-                    """
-                    UPDATE agent_trace_spans
-                    SET status = CASE WHEN status = 'running' THEN 'superseded' ELSE status END
-                    WHERE job_id = ?
-                    """,
-                    (str(job_id),),
-                )
-                superseded_trace_count = int(trace_cursor.rowcount or 0)
-                self._connection.execute(
-                    """
-                    DELETE FROM workflow_job_leases
-                    WHERE job_id = ?
-                    """,
-                    (str(job_id),),
-                )
+            raise RuntimeError(
+                "postgres-only invariant violated for agent_worker_runs in supersede_workflow_job: should_prefer_read "
+                "returned False; legacy SQLite tail retired (B4)"
+            )
         refreshed = self.get_job(job_id)
         if refreshed is None:
             return None
@@ -11181,50 +10249,18 @@ class ControlPlaneStore:
             )
             if row is not None:
                 return self._query_dispatch_from_row(row)
-        with self._lock, self._connection:
-            cursor = self._connection.execute(
-                """
-                INSERT INTO query_dispatches (
-                    target_company,
-                    request_signature,
-                    request_family_signature,
-                    matching_request_signature,
-                    matching_request_family_signature,
-                    requester_id,
-                    tenant_id,
-                    idempotency_key,
-                    strategy,
-                    status,
-                    source_job_id,
-                    created_job_id,
-                    matching_request_json,
-                    payload_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    normalized_target_company,
-                    request_sig,
-                    request_family_sig,
-                    str(matching_bundle.get("matching_request_signature") or ""),
-                    str(matching_bundle.get("matching_request_family_signature") or ""),
-                    requester_id_value,
-                    tenant_id_value,
-                    idempotency_key_value,
-                    str(strategy or "").strip(),
-                    str(status or "").strip(),
-                    str(source_job_id or "").strip(),
-                    str(created_job_id or "").strip(),
-                    json.dumps(_json_safe_payload(matching_bundle), ensure_ascii=False),
-                    json.dumps(_json_safe_payload(dispatch_payload), ensure_ascii=False),
-                ),
+            # postgres-only (B4): insert_row_with_generated_id returns the inserted row or raises via
+            # strict-no-fallback; a non-exception None means the authoritative insert returned no
+            # confirmation, which is forbidden. The legacy SQLite tail below was retired (B4).
+            self._raise_control_plane_postgres_write_failure(
+                table_name="query_dispatches",
+                method_name="record_query_dispatch",
+                reason="postgres-only: authoritative insert returned no confirmation; SQLite fallback retired (B4)",
             )
-            dispatch_id = int(cursor.lastrowid)
-            row = self._connection.execute(
-                "SELECT * FROM query_dispatches WHERE dispatch_id = ? LIMIT 1",
-                (dispatch_id,),
-            ).fetchone()
-        self._mirror_control_plane_row("query_dispatches", row)
-        return self.get_query_dispatch(dispatch_id) or {}
+        raise RuntimeError(
+            "postgres-only invariant violated for query_dispatches in record_query_dispatch: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_query_dispatch(self, dispatch_id: int) -> dict[str, Any] | None:
         if dispatch_id <= 0:
@@ -12797,115 +11833,10 @@ class ControlPlaneStore:
                 )
                 or 0
             )
-        with self._lock, self._connection:
-            member_keys = list(normalized_by_key.keys())
-            existing_rows = []
-            chunk_size = 500
-            for offset in range(0, len(member_keys), chunk_size):
-                chunk = member_keys[offset : offset + chunk_size]
-                placeholders = ",".join("?" for _ in chunk)
-                existing_rows.extend(
-                    self._connection.execute(
-                        f"""
-                        SELECT *
-                        FROM serving_projection_members
-                        WHERE projection_id = ? AND candidate_identity_key IN ({placeholders})
-                        """,
-                        (normalized_projection_id, *chunk),
-                    ).fetchall()
-                )
-            existing_by_key = {
-                str(row["candidate_identity_key"] or "").strip(): self._serving_projection_member_from_row(row)
-                for row in existing_rows
-                if str(row["candidate_identity_key"] or "").strip()
-            }
-            row_payloads = [
-                self._serving_projection_member_row_payload(
-                    normalized_projection_id,
-                    member,
-                    existing=existing_by_key.get(candidate_identity_key),
-                    now=now,
-                )
-                for candidate_identity_key, member in normalized_by_key.items()
-            ]
-            self._connection.executemany(
-                """
-                INSERT INTO serving_projection_members (
-                    projection_id,
-                    candidate_identity_key,
-                    person_identity_key,
-                    profile_url_key,
-                    candidate_id,
-                    rank_index,
-                    rank_key,
-                    lane,
-                    employment_scope,
-                    source_shard_key,
-                    source_run_id,
-                    row_readiness,
-                    profile_readiness,
-                    card_readiness,
-                    visibility_state,
-                    public_summary_json,
-                    projection_metrics_json,
-                    crm_overlay_summary_json,
-                    provenance_json,
-                    metadata_json,
-                    published_at,
-                    created_at,
-                    updated_at
-                ) VALUES (
-                    :projection_id,
-                    :candidate_identity_key,
-                    :person_identity_key,
-                    :profile_url_key,
-                    :candidate_id,
-                    :rank_index,
-                    :rank_key,
-                    :lane,
-                    :employment_scope,
-                    :source_shard_key,
-                    :source_run_id,
-                    :row_readiness,
-                    :profile_readiness,
-                    :card_readiness,
-                    :visibility_state,
-                    :public_summary_json,
-                    :projection_metrics_json,
-                    :crm_overlay_summary_json,
-                    :provenance_json,
-                    :metadata_json,
-                    :published_at,
-                    :created_at,
-                    :updated_at
-                )
-                ON CONFLICT(projection_id, candidate_identity_key) DO UPDATE SET
-                    person_identity_key = excluded.person_identity_key,
-                    profile_url_key = excluded.profile_url_key,
-                    candidate_id = excluded.candidate_id,
-                    rank_index = excluded.rank_index,
-                    rank_key = excluded.rank_key,
-                    lane = excluded.lane,
-                    employment_scope = excluded.employment_scope,
-                    source_shard_key = excluded.source_shard_key,
-                    source_run_id = excluded.source_run_id,
-                    row_readiness = excluded.row_readiness,
-                    profile_readiness = excluded.profile_readiness,
-                    card_readiness = excluded.card_readiness,
-                    visibility_state = excluded.visibility_state,
-                    public_summary_json = excluded.public_summary_json,
-                    projection_metrics_json = excluded.projection_metrics_json,
-                    crm_overlay_summary_json = excluded.crm_overlay_summary_json,
-                    provenance_json = excluded.provenance_json,
-                    metadata_json = excluded.metadata_json,
-                    published_at = excluded.published_at,
-                    updated_at = excluded.updated_at
-                """,
-                row_payloads,
-            )
-            for row_payload in row_payloads:
-                self._mirror_control_plane_row("serving_projection_members", row_payload)
-        return len(normalized_by_key)
+        raise RuntimeError(
+            "postgres-only invariant violated for serving_projection_members in upsert_serving_projection_members: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def replace_serving_projection_members(
         self,
@@ -14170,127 +13101,18 @@ class ControlPlaneStore:
                     artifact_kind=normalized_artifact_kind,
                     artifact_key=normalized_artifact_key,
                 )
-        with self._lock, self._connection:
-            company_scope_clause, company_scope_params = _company_scope_predicate(
-                normalized_target_company,
-                normalized_company_key,
+            # postgres-only (B4): _write_control_plane_row_to_postgres returns True or raises; reaching
+            # here means the authoritative write returned no confirmation, which is forbidden. The
+            # legacy SQLite generation/membership tail below was retired (B4).
+            self._raise_control_plane_postgres_write_failure(
+                table_name="asset_materialization_generations",
+                method_name="register_asset_materialization",
+                reason="postgres-only: authoritative upsert returned no confirmation; SQLite fallback retired (B4)",
             )
-            existing = self._connection.execute(
-                f"""
-                SELECT target_company, generation_key, generation_sequence
-                FROM asset_materialization_generations
-                WHERE {company_scope_clause}
-                  AND snapshot_id = ?
-                  AND asset_view = ?
-                  AND artifact_kind = ?
-                  AND artifact_key = ?
-                LIMIT 1
-                """,
-                (
-                    *company_scope_params,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                    normalized_artifact_kind,
-                    normalized_artifact_key,
-                ),
-            ).fetchone()
-            if existing is not None:
-                normalized_target_company = str(existing["target_company"] or normalized_target_company).strip()
-            previous_generation_key = str(existing["generation_key"] or "").strip() if existing is not None else ""
-            previous_sequence = int(existing["generation_sequence"] or 0) if existing is not None else 0
-            generation_sequence = (
-                previous_sequence if previous_generation_key == generation_key else previous_sequence + 1
-            )
-            if generation_sequence <= 0:
-                generation_sequence = 1
-            self._connection.execute(
-                """
-                INSERT INTO asset_materialization_generations (
-                    target_company, company_key, snapshot_id, asset_view, artifact_kind, artifact_key,
-                    generation_key, generation_sequence, source_path,
-                    payload_signature, member_signature, member_count, summary_json, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(target_company, snapshot_id, asset_view, artifact_kind, artifact_key) DO UPDATE SET
-                    company_key = excluded.company_key,
-                    generation_key = excluded.generation_key,
-                    generation_sequence = excluded.generation_sequence,
-                    source_path = excluded.source_path,
-                    payload_signature = excluded.payload_signature,
-                    member_signature = excluded.member_signature,
-                    member_count = excluded.member_count,
-                    summary_json = excluded.summary_json,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    normalized_target_company,
-                    normalized_company_key,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                    normalized_artifact_kind,
-                    normalized_artifact_key,
-                    generation_key,
-                    generation_sequence,
-                    str(source_path or "").strip(),
-                    payload_signature,
-                    member_signature,
-                    len(normalized_members),
-                    json.dumps(summary_payload, ensure_ascii=False),
-                    json.dumps(metadata_payload, ensure_ascii=False),
-                ),
-            )
-            if previous_generation_key and previous_generation_key != generation_key:
-                self._connection.execute(
-                    "DELETE FROM asset_membership_index WHERE generation_key = ?",
-                    (previous_generation_key,),
-                )
-            self._connection.execute(
-                "DELETE FROM asset_membership_index WHERE generation_key = ?",
-                (generation_key,),
-            )
-            if normalized_members:
-                self._connection.executemany(
-                    """
-                    INSERT INTO asset_membership_index (
-                        generation_key, target_company, snapshot_id, asset_view, artifact_kind, artifact_key,
-                        lane, employment_scope, member_key, member_key_kind, candidate_id, profile_url_key, metadata_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    [
-                        (
-                            generation_key,
-                            normalized_target_company,
-                            normalized_snapshot_id,
-                            normalized_asset_view,
-                            normalized_artifact_kind,
-                            normalized_artifact_key,
-                            str(item.get("lane") or "").strip(),
-                            _normalize_employment_scope(item.get("employment_scope")),
-                            str(item.get("member_key") or "").strip(),
-                            str(item.get("member_key_kind") or "candidate_fallback").strip() or "candidate_fallback",
-                            str(item.get("candidate_id") or "").strip(),
-                            str(item.get("profile_url_key") or "").strip(),
-                            json.dumps(_json_safe_payload(item.get("metadata") or {}), ensure_ascii=False),
-                        )
-                        for item in normalized_members
-                    ],
-                )
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM asset_materialization_generations
-                WHERE target_company = ? AND snapshot_id = ? AND asset_view = ? AND artifact_kind = ? AND artifact_key = ?
-                LIMIT 1
-                """,
-                (
-                    normalized_target_company,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                    normalized_artifact_kind,
-                    normalized_artifact_key,
-                ),
-            ).fetchone()
-        return self._asset_materialization_generation_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for asset_materialization_generations in register_asset_materialization: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def patch_asset_materialization(
         self,
@@ -14493,132 +13315,18 @@ class ControlPlaneStore:
                     artifact_kind=normalized_artifact_kind,
                     artifact_key=normalized_artifact_key,
                 )
-
-        with self._lock, self._connection:
-            company_scope_clause, company_scope_params = _company_scope_predicate(
-                normalized_target_company,
-                normalized_company_key,
+            # postgres-only (B4): _write_control_plane_row_to_postgres returns True or raises; reaching
+            # here means the authoritative write returned no confirmation, which is forbidden. The
+            # legacy SQLite generation/membership tail below was retired (B4).
+            self._raise_control_plane_postgres_write_failure(
+                table_name="asset_materialization_generations",
+                method_name="patch_asset_materialization",
+                reason="postgres-only: authoritative upsert returned no confirmation; SQLite fallback retired (B4)",
             )
-            existing = self._connection.execute(
-                f"""
-                SELECT target_company, generation_key, generation_sequence
-                FROM asset_materialization_generations
-                WHERE {company_scope_clause}
-                  AND snapshot_id = ?
-                  AND asset_view = ?
-                  AND artifact_kind = ?
-                  AND artifact_key = ?
-                LIMIT 1
-                """,
-                (
-                    *company_scope_params,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                    normalized_artifact_kind,
-                    normalized_artifact_key,
-                ),
-            ).fetchone()
-            if existing is not None:
-                normalized_target_company = str(existing["target_company"] or normalized_target_company).strip()
-            previous_generation_key = str(existing["generation_key"] or "").strip() if existing is not None else ""
-            previous_sequence = int(existing["generation_sequence"] or 0) if existing is not None else 0
-            generation_sequence = (
-                previous_sequence if previous_generation_key == generation_key else previous_sequence + 1
-            )
-            if generation_sequence <= 0:
-                generation_sequence = 1
-            self._connection.execute(
-                """
-                INSERT INTO asset_materialization_generations (
-                    target_company, company_key, snapshot_id, asset_view, artifact_kind, artifact_key,
-                    generation_key, generation_sequence, source_path,
-                    payload_signature, member_signature, member_count, summary_json, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(target_company, snapshot_id, asset_view, artifact_kind, artifact_key) DO UPDATE SET
-                    company_key = excluded.company_key,
-                    generation_key = excluded.generation_key,
-                    generation_sequence = excluded.generation_sequence,
-                    source_path = excluded.source_path,
-                    payload_signature = excluded.payload_signature,
-                    member_signature = excluded.member_signature,
-                    member_count = excluded.member_count,
-                    summary_json = excluded.summary_json,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    normalized_target_company,
-                    normalized_company_key,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                    normalized_artifact_kind,
-                    normalized_artifact_key,
-                    generation_key,
-                    generation_sequence,
-                    str(source_path or "").strip(),
-                    payload_signature,
-                    patch_signature,
-                    len(effective_rows),
-                    json.dumps(summary_payload, ensure_ascii=False),
-                    json.dumps(metadata_payload, ensure_ascii=False),
-                ),
-            )
-            if (
-                previous_generation_key
-                and previous_generation_key != generation_key
-                and previous_generation_key != normalized_base_generation_key
-            ):
-                self._connection.execute(
-                    "DELETE FROM asset_membership_index WHERE generation_key = ?",
-                    (previous_generation_key,),
-                )
-            self._connection.execute(
-                "DELETE FROM asset_membership_index WHERE generation_key = ?",
-                (generation_key,),
-            )
-            if normalized_members:
-                self._connection.executemany(
-                    """
-                    INSERT INTO asset_membership_index (
-                        generation_key, target_company, snapshot_id, asset_view, artifact_kind, artifact_key,
-                        lane, employment_scope, member_key, member_key_kind, candidate_id, profile_url_key, metadata_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    [
-                        (
-                            generation_key,
-                            normalized_target_company,
-                            normalized_snapshot_id,
-                            normalized_asset_view,
-                            normalized_artifact_kind,
-                            normalized_artifact_key,
-                            str(item.get("lane") or "").strip(),
-                            _normalize_employment_scope(item.get("employment_scope")),
-                            str(item.get("member_key") or "").strip(),
-                            str(item.get("member_key_kind") or "candidate_fallback").strip() or "candidate_fallback",
-                            str(item.get("candidate_id") or "").strip(),
-                            str(item.get("profile_url_key") or "").strip(),
-                            json.dumps(_json_safe_payload(item.get("metadata") or {}), ensure_ascii=False),
-                        )
-                        for item in normalized_members
-                    ],
-                )
-            row = self._connection.execute(
-                """
-                SELECT *
-                FROM asset_materialization_generations
-                WHERE target_company = ? AND snapshot_id = ? AND asset_view = ? AND artifact_kind = ? AND artifact_key = ?
-                LIMIT 1
-                """,
-                (
-                    normalized_target_company,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                    normalized_artifact_kind,
-                    normalized_artifact_key,
-                ),
-            ).fetchone()
-        return self._asset_materialization_generation_from_row(row)
+        raise RuntimeError(
+            "postgres-only invariant violated for asset_materialization_generations in patch_asset_materialization: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def get_asset_materialization_generation(
         self,
@@ -14966,80 +13674,10 @@ class ControlPlaneStore:
                     or 0
                 )
             return 0
-
-        total_written = 0
-        with self._lock, self._connection:
-            for (normalized_target_company, normalized_company_key, normalized_snapshot_id, normalized_asset_view), grouped_rows in grouped_states.items():
-                company_scope_clause, company_scope_params = _company_scope_predicate(
-                    normalized_target_company,
-                    normalized_company_key,
-                )
-                existing_rows = self._connection.execute(
-                    f"""
-                    SELECT target_company, candidate_id
-                    FROM candidate_materialization_state
-                    WHERE {company_scope_clause}
-                      AND snapshot_id = ?
-                      AND asset_view = ?
-                    """,
-                    (
-                        *company_scope_params,
-                        normalized_snapshot_id,
-                        normalized_asset_view,
-                    ),
-                ).fetchall()
-                existing_target_company_by_candidate_id = {
-                    str(item["candidate_id"] or "").strip(): str(item["target_company"] or normalized_target_company).strip()
-                    for item in existing_rows
-                    if str(item["candidate_id"] or "").strip()
-                }
-                rows_to_upsert = [
-                    (
-                        existing_target_company_by_candidate_id.get(candidate_id, normalized_target_company),
-                        normalized_company_key,
-                        normalized_snapshot_id,
-                        normalized_asset_view,
-                        candidate_id,
-                        str(grouped_row.get("fingerprint") or "").strip(),
-                        str(grouped_row.get("shard_path") or "").strip(),
-                        max(0, int(grouped_row.get("list_page") or 0)),
-                        str(grouped_row.get("dirty_reason") or "").strip(),
-                        str(grouped_row.get("materialized_at") or datetime.now(timezone.utc).isoformat()),
-                        str(grouped_row.get("metadata_json") or "{}"),
-                    )
-                    for candidate_id, grouped_row in grouped_rows.items()
-                ]
-                if not rows_to_upsert:
-                    continue
-                self._connection.executemany(
-                    """
-                    INSERT INTO candidate_materialization_state (
-                        target_company,
-                        company_key,
-                        snapshot_id,
-                        asset_view,
-                        candidate_id,
-                        fingerprint,
-                        shard_path,
-                        list_page,
-                        dirty_reason,
-                        materialized_at,
-                        metadata_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(target_company, snapshot_id, asset_view, candidate_id) DO UPDATE SET
-                        company_key = excluded.company_key,
-                        fingerprint = excluded.fingerprint,
-                        shard_path = excluded.shard_path,
-                        list_page = excluded.list_page,
-                        dirty_reason = excluded.dirty_reason,
-                        materialized_at = excluded.materialized_at,
-                        metadata_json = excluded.metadata_json,
-                        updated_at = CURRENT_TIMESTAMP
-                    """,
-                    rows_to_upsert,
-                )
-                total_written += len(rows_to_upsert)
-        return total_written
+        raise RuntimeError(
+            "postgres-only invariant violated for candidate_materialization_state in bulk_upsert_candidate_materialization_states: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def replace_candidate_materialization_state_scope(
         self,
@@ -15097,27 +13735,11 @@ class ControlPlaneStore:
                     limit=0,
                 )
             else:
-                company_scope_clause, company_scope_params = _company_scope_predicate(
-                    normalized_target_company,
-                    normalized_company_key,
+                raise RuntimeError(
+                    "postgres-only invariant violated for candidate_materialization_state in "
+                    "replace_candidate_materialization_state_scope: should_prefer_read "
+                    "returned False; legacy SQLite tail retired (B4)"
                 )
-                with self._lock:
-                    rows = self._connection.execute(
-                        f"""
-                        SELECT *
-                        FROM candidate_materialization_state
-                        WHERE {company_scope_clause}
-                          AND snapshot_id = ?
-                          AND asset_view = ?
-                        ORDER BY candidate_id ASC
-                        """,
-                        (
-                            *company_scope_params,
-                            normalized_snapshot_id,
-                            normalized_asset_view,
-                        ),
-                    ).fetchall()
-                existing_rows = [self._candidate_materialization_state_from_row(row) for row in rows]
             normalized_existing_states = {
                 str(item.get("candidate_id") or "").strip(): item
                 for item in existing_rows
@@ -15160,65 +13782,10 @@ class ControlPlaneStore:
                 )
                 or 0
             )
-
-        company_scope_clause, company_scope_params = _company_scope_predicate(
-            normalized_target_company,
-            normalized_company_key,
+        raise RuntimeError(
+            "postgres-only invariant violated for candidate_materialization_state in replace_candidate_materialization_state_scope: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
         )
-        rows_to_insert = [
-            (
-                str(normalized_existing_states.get(candidate_id, {}).get("target_company") or normalized_target_company),
-                normalized_company_key,
-                normalized_snapshot_id,
-                normalized_asset_view,
-                candidate_id,
-                str(grouped_row.get("fingerprint") or "").strip(),
-                str(grouped_row.get("shard_path") or "").strip(),
-                max(0, int(grouped_row.get("list_page") or 0)),
-                str(grouped_row.get("dirty_reason") or "").strip(),
-                str(grouped_row.get("materialized_at") or datetime.now(timezone.utc).isoformat()),
-                str(grouped_row.get("metadata_json") or "{}"),
-                str(normalized_existing_states.get(candidate_id, {}).get("created_at") or now),
-                now,
-            )
-            for candidate_id, grouped_row in grouped_rows.items()
-        ]
-        with self._lock, self._connection:
-            self._connection.execute(
-                f"""
-                DELETE FROM candidate_materialization_state
-                WHERE {company_scope_clause}
-                  AND snapshot_id = ?
-                  AND asset_view = ?
-                """,
-                (
-                    *company_scope_params,
-                    normalized_snapshot_id,
-                    normalized_asset_view,
-                ),
-            )
-            if rows_to_insert:
-                self._connection.executemany(
-                    """
-                    INSERT INTO candidate_materialization_state (
-                        target_company,
-                        company_key,
-                        snapshot_id,
-                        asset_view,
-                        candidate_id,
-                        fingerprint,
-                        shard_path,
-                        list_page,
-                        dirty_reason,
-                        materialized_at,
-                        metadata_json,
-                        created_at,
-                        updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    rows_to_insert,
-                )
-        return len(rows_to_insert)
 
     def get_candidate_materialization_state(
         self,
@@ -15335,42 +13902,10 @@ class ControlPlaneStore:
                     params=params,
                 )
             return rows
-        company_scope_clause, company_scope_params = _company_scope_predicate(
-            normalized_target_company,
-            normalized_company_key,
+        raise RuntimeError(
+            "postgres-only invariant violated for candidate_materialization_state in prune_candidate_materialization_states: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
         )
-        clauses = [
-            company_scope_clause,
-            "snapshot_id = ?",
-            "asset_view = ?",
-        ]
-        params: list[Any] = [
-            *company_scope_params,
-            normalized_snapshot_id,
-            normalized_asset_view,
-        ]
-        if active_ids:
-            placeholders = ",".join("?" for _ in active_ids)
-            clauses.append(f"candidate_id NOT IN ({placeholders})")
-            params.extend(active_ids)
-        with self._lock, self._connection:
-            rows = self._connection.execute(
-                f"""
-                SELECT *
-                FROM candidate_materialization_state
-                WHERE {" AND ".join(clauses)}
-                """,
-                tuple(params),
-            ).fetchall()
-            if rows:
-                self._connection.execute(
-                    f"""
-                    DELETE FROM candidate_materialization_state
-                    WHERE {" AND ".join(clauses)}
-                    """,
-                    tuple(params),
-                )
-        return [self._candidate_materialization_state_from_row(row) for row in rows]
 
     def start_snapshot_materialization_run(
         self,
@@ -19235,26 +17770,10 @@ class ControlPlaneStore:
             )
             feedback_id = int((row or {}).get("feedback_id") or 0)
         if feedback_id <= 0:
-            with self._lock, self._connection:
-                cursor = self._connection.execute(
-                    """
-                    INSERT INTO criteria_feedback (
-                        job_id, candidate_id, target_company, feedback_type, subject, value, reviewer, notes, payload_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        job_id,
-                        candidate_id,
-                        target_company,
-                        feedback_type,
-                        subject,
-                        value,
-                        reviewer,
-                        notes,
-                        payload_json,
-                    ),
-                )
-                feedback_id = int(cursor.lastrowid)
+            raise RuntimeError(
+                "postgres-only invariant violated for criteria_feedback in record_criteria_feedback: should_prefer_read "
+                "returned False or native insert returned no feedback_id; legacy SQLite tail retired (B4)"
+            )
         derived_patterns = self._derive_patterns_from_feedback(
             feedback_id,
             {
@@ -19467,166 +17986,10 @@ class ControlPlaneStore:
             if not source_feedback_ids:
                 return []
             return self.list_pattern_suggestions(source_feedback_id=max(source_feedback_ids), limit=20)
-        with self._lock, self._connection:
-            for item in suggestions:
-                target_company = str(item.get("target_company") or "")
-                request_sig = str(item.get("request_signature") or "")
-                request_family_sig = str(item.get("request_family_signature") or "")
-                matching_request_sig = str(item.get("matching_request_signature") or request_sig or "")
-                matching_request_family_sig = str(
-                    item.get("matching_request_family_signature") or request_family_sig or ""
-                )
-                source_feedback_id = int(item.get("source_feedback_id") or 0) or None
-                source_job_id = str(item.get("source_job_id") or "")
-                candidate_id = str(item.get("candidate_id") or "")
-                pattern_type = str(item.get("pattern_type") or "")
-                subject = str(item.get("subject") or "")
-                value = str(item.get("value") or "")
-                status = str(item.get("status") or "suggested")
-                confidence = str(item.get("confidence") or "medium")
-                rationale = str(item.get("rationale") or "")
-                evidence_json = json.dumps(item.get("evidence") or {}, ensure_ascii=False)
-                metadata_json = json.dumps(item.get("metadata") or {}, ensure_ascii=False)
-                existing_row = self._connection.execute(
-                    """
-                    SELECT suggestion_id
-                    FROM criteria_pattern_suggestions
-                    WHERE lower(target_company) = lower(?)
-                      AND candidate_id = ?
-                      AND pattern_type = ?
-                      AND subject = ?
-                      AND value = ?
-                      AND (
-                        matching_request_family_signature = ?
-                        OR (
-                            coalesce(matching_request_family_signature, '') = ''
-                            AND request_family_signature = ?
-                        )
-                      )
-                    LIMIT 1
-                    """,
-                    (
-                        target_company,
-                        candidate_id,
-                        pattern_type,
-                        subject,
-                        value,
-                        matching_request_family_sig,
-                        request_family_sig,
-                    ),
-                ).fetchone()
-                if existing_row is not None:
-                    self._connection.execute(
-                        """
-                        UPDATE criteria_pattern_suggestions
-                        SET request_signature = ?,
-                            request_family_signature = ?,
-                            matching_request_signature = ?,
-                            matching_request_family_signature = ?,
-                            source_feedback_id = ?,
-                            source_job_id = ?,
-                            status = ?,
-                            confidence = ?,
-                            rationale = ?,
-                            evidence_json = ?,
-                            metadata_json = ?,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE suggestion_id = ?
-                        """,
-                        (
-                            request_sig,
-                            request_family_sig,
-                            matching_request_sig,
-                            matching_request_family_sig,
-                            source_feedback_id,
-                            source_job_id,
-                            status,
-                            confidence,
-                            rationale,
-                            evidence_json,
-                            metadata_json,
-                            int(existing_row["suggestion_id"] or 0),
-                        ),
-                    )
-                    continue
-                try:
-                    self._connection.execute(
-                        """
-                        INSERT INTO criteria_pattern_suggestions (
-                            target_company, request_signature, request_family_signature,
-                            matching_request_signature, matching_request_family_signature,
-                            source_feedback_id, source_job_id, candidate_id,
-                            pattern_type, subject, value, status, confidence, rationale, evidence_json, metadata_json
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            target_company,
-                            request_sig,
-                            request_family_sig,
-                            matching_request_sig,
-                            matching_request_family_sig,
-                            source_feedback_id,
-                            source_job_id,
-                            candidate_id,
-                            pattern_type,
-                            subject,
-                            value,
-                            status,
-                            confidence,
-                            rationale,
-                            evidence_json,
-                            metadata_json,
-                        ),
-                    )
-                except sqlite3.IntegrityError:
-                    self._connection.execute(
-                        """
-                        UPDATE criteria_pattern_suggestions
-                        SET request_signature = ?,
-                            request_family_signature = ?,
-                            matching_request_signature = ?,
-                            matching_request_family_signature = ?,
-                            source_feedback_id = ?,
-                            source_job_id = ?,
-                            status = ?,
-                            confidence = ?,
-                            rationale = ?,
-                            evidence_json = ?,
-                            metadata_json = ?,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE lower(target_company) = lower(?)
-                          AND request_family_signature = ?
-                          AND candidate_id = ?
-                          AND pattern_type = ?
-                          AND subject = ?
-                          AND value = ?
-                        """,
-                        (
-                            request_sig,
-                            request_family_sig,
-                            matching_request_sig,
-                            matching_request_family_sig,
-                            source_feedback_id,
-                            source_job_id,
-                            status,
-                            confidence,
-                            rationale,
-                            evidence_json,
-                            metadata_json,
-                            target_company,
-                            request_family_sig,
-                            candidate_id,
-                            pattern_type,
-                            subject,
-                            value,
-                        ),
-                    )
-        source_feedback_ids = [
-            int(item.get("source_feedback_id") or 0) for item in suggestions if int(item.get("source_feedback_id") or 0)
-        ]
-        if not source_feedback_ids:
-            return []
-        return self.list_pattern_suggestions(source_feedback_id=max(source_feedback_ids), limit=20)
+        raise RuntimeError(
+            "postgres-only invariant violated for criteria_pattern_suggestions in record_pattern_suggestions: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_pattern_suggestions(
         self,
@@ -19759,29 +18122,18 @@ class ControlPlaneStore:
             )
             if updated_row is not None:
                 reviewed = self._criteria_pattern_suggestion_from_row(updated_row)
-        if reviewed is None:
-            with self._lock, self._connection:
-                self._connection.execute(
-                    """
-                    UPDATE criteria_pattern_suggestions
-                    SET status = ?, reviewed_by = ?, review_notes = ?, applied_pattern_id = ?, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                    WHERE suggestion_id = ?
-                    """,
-                    (
-                        status,
-                        reviewer,
-                        notes,
-                        applied_pattern_id or None,
-                        suggestion_id,
-                    ),
-                )
-            reviewed = self.get_pattern_suggestion(suggestion_id)
-        return {
-            "suggestion": reviewed,
-            "applied_pattern": applied_pattern,
-            "action": normalized_action or status,
-            "status": status,
-        }
+            # update_row_returning None == suggestion row absent; surface {"suggestion": None}
+            # (the retired SQLite tail's re-read would find nothing under postgres-only either).
+            return {
+                "suggestion": reviewed,
+                "applied_pattern": applied_pattern,
+                "action": normalized_action or status,
+                "status": status,
+            }
+        raise RuntimeError(
+            "postgres-only invariant violated for criteria_pattern_suggestions in review_pattern_suggestion: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def record_criteria_result_diff(
         self,
@@ -19813,28 +18165,20 @@ class ControlPlaneStore:
                 },
             )
             diff_id = int((row or {}).get("diff_id") or 0)
-        if diff_id <= 0:
-            with self._lock, self._connection:
-                cursor = self._connection.execute(
-                    """
-                    INSERT INTO criteria_result_diffs (
-                        target_company, trigger_feedback_id, criteria_version_id, baseline_job_id, rerun_job_id,
-                        summary_json, diff_json, artifact_path
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        target_company,
-                        trigger_feedback_id or None,
-                        criteria_version_id or None,
-                        baseline_job_id,
-                        rerun_job_id,
-                        json.dumps(summary_payload, ensure_ascii=False),
-                        json.dumps(diff_payload, ensure_ascii=False),
-                        artifact_path,
-                    ),
+            if diff_id <= 0:
+                # Track B B4: insert_row_with_generated_id returns None (no exception) only for
+                # sequence-resolution anomalies; fail closed instead of falling through to the
+                # retired SQLite shadow tail.
+                self._raise_control_plane_postgres_write_failure(
+                    table_name="criteria_result_diffs",
+                    method_name="insert_row_with_generated_id",
+                    reason="native insert returned no generated id under postgres_only",
                 )
-                diff_id = int(cursor.lastrowid)
-        return {"diff_id": diff_id}
+            return {"diff_id": diff_id}
+        raise RuntimeError(
+            "postgres-only invariant violated for criteria_result_diffs in record_criteria_result_diff: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def record_confidence_policy_run(
         self,
@@ -19875,44 +18219,20 @@ class ControlPlaneStore:
                 row=row_payload,
             )
             policy_run_id = int((row or {}).get("policy_run_id") or 0)
-        if policy_run_id <= 0:
-            with self._lock, self._connection:
-                cursor = self._connection.execute(
-                    """
-                    INSERT INTO confidence_policy_runs (
-                        target_company, job_id, criteria_version_id, trigger_feedback_id,
-                        request_signature, request_family_signature,
-                        matching_request_signature, matching_request_family_signature,
-                        scope_kind,
-                        high_threshold, medium_threshold, summary_json, policy_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        target_company,
-                        job_id,
-                        criteria_version_id or None,
-                        trigger_feedback_id or None,
-                        str(policy_payload.get("request_signature") or ""),
-                        str(policy_payload.get("request_family_signature") or ""),
-                        str(
-                            policy_payload.get("matching_request_signature")
-                            or policy_payload.get("request_signature")
-                            or ""
-                        ),
-                        str(
-                            policy_payload.get("matching_request_family_signature")
-                            or policy_payload.get("request_family_signature")
-                            or ""
-                        ),
-                        str(policy_payload.get("scope_kind") or "company"),
-                        float(policy_payload.get("high_threshold") or 0.0),
-                        float(policy_payload.get("medium_threshold") or 0.0),
-                        json.dumps(policy_payload.get("summary") or {}, ensure_ascii=False),
-                        json.dumps(policy_payload, ensure_ascii=False),
-                    ),
+            if policy_run_id <= 0:
+                # Track B B4: insert_row_with_generated_id returns None (no exception) only for
+                # sequence-resolution anomalies; fail closed instead of falling through to the
+                # retired SQLite shadow tail.
+                self._raise_control_plane_postgres_write_failure(
+                    table_name="confidence_policy_runs",
+                    method_name="insert_row_with_generated_id",
+                    reason="native insert returned no generated id under postgres_only",
                 )
-                policy_run_id = int(cursor.lastrowid)
-        return {"policy_run_id": policy_run_id}
+            return {"policy_run_id": policy_run_id}
+        raise RuntimeError(
+            "postgres-only invariant violated for confidence_policy_runs in record_confidence_policy_run: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_confidence_policy_runs(self, target_company: str = "", limit: int = 50) -> list[dict[str, Any]]:
         postgres_rows = self._select_control_plane_rows(
@@ -20031,42 +18351,18 @@ class ControlPlaneStore:
             )
             if row is not None:
                 return self._confidence_policy_control_from_row(row)
-        with self._lock, self._connection:
-            self._connection.execute(
-                f"""
-                UPDATE confidence_policy_controls
-                SET status = 'inactive', updated_at = CURRENT_TIMESTAMP
-                WHERE {" AND ".join(clauses)}
-                """,
-                tuple(deactivation_params),
+            # Track B B4: insert_row_with_generated_id returns None (no exception) only for
+            # sequence-resolution anomalies; fail closed instead of falling through to the
+            # retired SQLite shadow tail.
+            self._raise_control_plane_postgres_write_failure(
+                table_name="confidence_policy_controls",
+                method_name="insert_row_with_generated_id",
+                reason="native insert returned no row under postgres_only",
             )
-            cursor = self._connection.execute(
-                """
-                INSERT INTO confidence_policy_controls (
-                    target_company, request_signature, request_family_signature,
-                    matching_request_signature, matching_request_family_signature,
-                    scope_kind, control_mode, status,
-                    high_threshold, medium_threshold, reviewer, notes, locked_policy_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
-                """,
-                (
-                    target_company,
-                    request_sig,
-                    request_family_sig,
-                    matching_request_sig,
-                    matching_request_family_sig,
-                    normalized_scope,
-                    str(control_mode or "override"),
-                    float(high_threshold),
-                    float(medium_threshold),
-                    reviewer,
-                    notes,
-                    json.dumps(locked_policy or {}, ensure_ascii=False),
-                ),
-            )
-            control_id = int(cursor.lastrowid)
-        self._replace_control_plane_table_from_sqlite("confidence_policy_controls")
-        return self.get_confidence_policy_control(control_id) or {}
+        raise RuntimeError(
+            "postgres-only invariant violated for confidence_policy_controls in create_confidence_policy_control: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def find_active_confidence_policy_control(
         self,
@@ -20210,17 +18506,10 @@ class ControlPlaneStore:
                     },
                 )
                 return {"deactivated_count": 1 if row is not None else 0}
-            with self._lock, self._connection:
-                self._connection.execute(
-                    """
-                    UPDATE confidence_policy_controls
-                    SET status = 'inactive', updated_at = CURRENT_TIMESTAMP
-                    WHERE control_id = ?
-                    """,
-                    (control_id,),
-                )
-            self._replace_control_plane_table_from_sqlite("confidence_policy_controls")
-            return {"deactivated_count": 1 if self.get_confidence_policy_control(control_id) else 0}
+            raise RuntimeError(
+                "postgres-only invariant violated for confidence_policy_controls in deactivate_confidence_policy_control: should_prefer_read "
+                "returned False; legacy SQLite tail retired (B4)"
+            )
         clauses = ["lower(target_company) = lower(?)", "status = 'active'"]
         params: list[Any] = [target_company]
         normalized_scope = str(scope_kind or "request_family").strip() or "request_family"
@@ -20286,17 +18575,10 @@ class ControlPlaneStore:
                 if row is not None:
                     deactivated_count += 1
             return {"deactivated_count": deactivated_count}
-        with self._lock, self._connection:
-            cursor = self._connection.execute(
-                f"""
-                UPDATE confidence_policy_controls
-                SET status = 'inactive', updated_at = CURRENT_TIMESTAMP
-                WHERE {" AND ".join(clauses)}
-                """,
-                tuple(params),
-            )
-        self._replace_control_plane_table_from_sqlite("confidence_policy_controls")
-        return {"deactivated_count": int(cursor.rowcount or 0)}
+        raise RuntimeError(
+            "postgres-only invariant violated for confidence_policy_controls in deactivate_confidence_policy_control: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_criteria_result_diffs(self, target_company: str = "", limit: int = 50) -> list[dict[str, Any]]:
         postgres_rows = self._select_control_plane_rows(
@@ -20361,30 +18643,17 @@ class ControlPlaneStore:
                 row=row_payload,
             )
             version_id = int((row or {}).get("version_id") or 0)
-        if version_id <= 0:
-            with self._lock, self._connection:
-                cursor = self._connection.execute(
-                    """
-                    INSERT INTO criteria_versions (
-                        target_company, request_signature, source_kind, parent_version_id, trigger_feedback_id,
-                        evolution_stage, request_json, plan_json, patterns_json, notes
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        target_company,
-                        request_signature,
-                        source_kind,
-                        parent_version_id or None,
-                        trigger_feedback_id or None,
-                        evolution_stage,
-                        json.dumps(request_payload, ensure_ascii=False),
-                        json.dumps(plan_payload, ensure_ascii=False),
-                        json.dumps(patterns, ensure_ascii=False),
-                        notes,
-                    ),
-                )
-                version_id = int(cursor.lastrowid)
-        return {"version_id": version_id, "request_signature": request_signature}
+            if version_id > 0:
+                return {"version_id": version_id, "request_signature": request_signature}
+            self._raise_control_plane_postgres_write_failure(
+                table_name="criteria_versions",
+                method_name="insert_row_with_generated_id",
+                reason="native insert returned no generated version_id under postgres_only",
+            )
+        raise RuntimeError(
+            "postgres-only invariant violated for criteria_versions in create_criteria_version: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def record_criteria_compiler_run(
         self,
@@ -20419,28 +18688,17 @@ class ControlPlaneStore:
                 row=row_payload,
             )
             compiler_run_id = int((row or {}).get("compiler_run_id") or 0)
-        if compiler_run_id <= 0:
-            with self._lock, self._connection:
-                cursor = self._connection.execute(
-                    """
-                    INSERT INTO criteria_compiler_runs (
-                        version_id, job_id, trigger_feedback_id, provider_name, compiler_kind, status, input_json, output_json, notes
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        version_id,
-                        job_id,
-                        trigger_feedback_id or None,
-                        provider_name,
-                        compiler_kind,
-                        status,
-                        json.dumps(input_payload, ensure_ascii=False),
-                        json.dumps(output_payload, ensure_ascii=False),
-                        notes,
-                    ),
-                )
-                compiler_run_id = int(cursor.lastrowid)
-        return {"compiler_run_id": compiler_run_id}
+            if compiler_run_id > 0:
+                return {"compiler_run_id": compiler_run_id}
+            self._raise_control_plane_postgres_write_failure(
+                table_name="criteria_compiler_runs",
+                method_name="insert_row_with_generated_id",
+                reason="native insert returned no generated compiler_run_id under postgres_only",
+            )
+        raise RuntimeError(
+            "postgres-only invariant violated for criteria_compiler_runs in record_criteria_compiler_run: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def list_criteria_versions(self, target_company: str = "", limit: int = 50) -> list[dict[str, Any]]:
         postgres_rows = self._select_control_plane_rows(
@@ -21749,31 +20007,15 @@ class ControlPlaneStore:
             )
             if row is not None:
                 return self._criteria_pattern_from_row(row)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO criteria_patterns (
-                    target_company, pattern_type, subject, value, status, confidence, source_feedback_id, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(target_company, pattern_type, subject, value) DO UPDATE SET
-                    status = excluded.status,
-                    confidence = excluded.confidence,
-                    source_feedback_id = excluded.source_feedback_id,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    target_company,
-                    pattern_type,
-                    subject,
-                    value,
-                    status,
-                    confidence,
-                    source_feedback_id or None,
-                    json.dumps(metadata or {}, ensure_ascii=False),
-                ),
+            self._raise_control_plane_postgres_write_failure(
+                table_name="criteria_patterns",
+                method_name="upsert_criteria_pattern",
+                reason="native upsert returned no row under postgres_only",
             )
-        return self._get_criteria_pattern(target_company, pattern_type, subject, value)
+        raise RuntimeError(
+            "postgres-only invariant violated for criteria_patterns in upsert_criteria_pattern: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
 
     def _get_criteria_pattern(
         self, target_company: str, pattern_type: str, subject: str, value: str

@@ -738,10 +738,15 @@ def test_crm_public_web_latest_run_selection_is_not_updated_at_owned() -> None:
     )
     find_class_method("create_agent_trace_span", class_name="LiveControlPlanePostgresAdapter")
 
-    for block in (storage_latest_block, live_crm_latest_block):
-        assert "ORDER BY created_at DESC, run_id DESC" in block
-        assert "PARTITION BY crm_record_id" in block
-        assert "ORDER BY updated_at DESC, created_at DESC, run_id DESC" not in block
+    # Post-B4 (PG-pure store) the storage method carries no SQL: the latest-run
+    # ordering invariant lives in the adapter's SQL, and the storage method must
+    # route through that native reader (its first-seen dedup preserves adapter order).
+    assert "_call_control_plane_postgres_native(" in storage_latest_block
+    assert '"list_latest_crm_public_web_runs_by_record_ids"' in storage_latest_block
+    assert "ORDER BY updated_at" not in storage_latest_block
+    assert "ORDER BY created_at DESC, run_id DESC" in live_crm_latest_block
+    assert "PARTITION BY crm_record_id" in live_crm_latest_block
+    assert "ORDER BY updated_at DESC, created_at DESC, run_id DESC" not in live_crm_latest_block
     assert "ORDER BY updated_at DESC, created_at DESC, run_id DESC" not in storage_company_upsert_block
     live_latest_blocks = {
         "target_candidate_public_web_runs": live_target_latest_block,
