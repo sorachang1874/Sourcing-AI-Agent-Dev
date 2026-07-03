@@ -279,7 +279,8 @@
 
 ### `storage.py`
 
-- SQLite schema
+- PostgreSQL control-plane schema（PG-pure：SQLite 双路径与 in-memory compatibility shadow 已退役；schema 仅由 `migrations/0001_baseline.sql` + `migration_runner.py` 版本化迁移创建）
+- `ControlPlaneStore` 要求 resolved PG DSN 且 `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only`
 - candidate / evidence / job / job_result 持久化
 - 支持按 `target_company` 替换单家公司 snapshot，而不覆盖其他公司数据
 - 已新增 criteria feedback / criteria pattern 持久化
@@ -555,7 +556,7 @@ User Request
 
 ## 8. 存储策略
 
-- 当前：执行日志、raw page、snapshot manifest、candidate artifacts 与 control-plane/result stores 全部落在本地 runtime
+- 当前：执行日志、raw page、snapshot manifest、candidate artifacts 落在本地 runtime；control-plane/result stores 落在 PostgreSQL（postgres_only，schema 由版本化迁移创建）
 - 当前 raw-first / compact-context 规则：
   - 外部 API 返回默认先落盘，再做解析或模型分析
   - 模型消费 `analysis_input` 这类压缩资产，而不是直接读取完整 raw payload

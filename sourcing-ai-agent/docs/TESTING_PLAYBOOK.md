@@ -178,7 +178,7 @@ make asset-media-backfill-apply \
   ASSET_MEDIA_BACKFILL_APPLY_OUTPUT_JSON="output/asset_media_backfill_apply.json"
 ```
 
-Both targets delegate to `scripts/backfill_person_company_asset_media.py`. The script enforces PG-only runtime (`SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only`, `SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1`, `SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory`) and defaults to dry-run. `asset-media-backfill-apply` is blocked unless `ASSET_MEDIA_BACKFILL_REVIEWED=1`, and the script still requires `--reviewed`.
+Both targets delegate to `scripts/backfill_person_company_asset_media.py`. The script enforces PG-only runtime (`SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only`, `SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1`; its preflight also still expects the legacy token `SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory`, which is now an inert no-op — storage is PG-pure and no SQLite shadow exists) and defaults to dry-run. `asset-media-backfill-apply` is blocked unless `ASSET_MEDIA_BACKFILL_REVIEWED=1`, and the script still requires `--reviewed`.
 
 Optional knobs:
 
@@ -199,7 +199,7 @@ bash ./scripts/run_python_quality.sh all
 PYTHONPATH=src ./.venv-tests/bin/python scripts/run_pytest_matrix.py --mode changed --changed-path src/sourcing_agent/public_web_search.py --dry-run
 PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_projection_crm_api_contracts.py tests/test_results_api.py -k 'legacy_target_candidate_public_web_endpoints_retire_by_default or crm_public_web or target_candidate_public_web or public_web_api or promotion'
 PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_target_candidate_public_web.py tests/test_public_web_search.py tests/test_public_web_quality.py tests/test_linkedin_url_normalization.py
-PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_control_plane_live_postgres.py -k 'target_candidate_public_web_state_is_postgres_authoritative or postgres_only_uses_ephemeral_sqlite_shadow or postgres_only_skips_sqlite_fallback'
+PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_control_plane_live_postgres.py -k 'target_candidate_public_web_state_is_postgres_authoritative or postgres_only_skips_sqlite_fallback'
 (cd frontend-demo && npm run build)
 SOURCING_RUN_FRONTEND_BROWSER_E2E=1 PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_frontend_browser_e2e.py -k 'target_candidate_public_web_selection_trigger_and_polling or target_candidate_public_web_promotion_and_export'
 ```
@@ -286,7 +286,7 @@ When the selected `CRMRecord` ids come from the current local authoritative asse
 SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA=public LIVE_CONFIRM=1 make test-env-backend-live
 ```
 
-Do not rely on SQLite fallback or ambient runtime inheritance. The live backend target must inject `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only`, `SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1`, and `SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory`; a startup failure here is a contract failure, not a reason to bypass PG-only durable runtime.
+Do not rely on SQLite fallback or ambient runtime inheritance. The live backend target must inject `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only` and `SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1` (it still exports the legacy `SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory` token, which is now an inert no-op — storage is PG-pure); a startup failure here is a contract failure, not a reason to bypass PG-only durable runtime.
 
 Set `CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1` when validating a model/provider metadata contract change, so the live pass regenerates Public Web artifacts instead of reusing already-terminal runs.
 
@@ -445,7 +445,7 @@ PYTHONPATH=src ./.venv-tests/bin/python scripts/run_explain_dry_run_matrix.py \
 - `--runtime-dir`
   - 脚本会自起一个 in-process backend，并把 `SOURCING_RUNTIME_DIR` 指向该目录
   - 若未显式传 `--runtime-env-file`，脚本会在该 runtime 下生成 `.scripted-local-postgres.env`
-  - 该 env file 必须解析到可连接 Postgres，并固定 `postgres_only + shared_memory`
+  - 该 env file 必须解析到可连接 Postgres，并固定 `postgres_only`（env file 仍会写入遗留的 `SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory`，该变量现已是 inert no-op，不再选择任何 SQLite backend）
   - 缺 PG DSN、PG 不可连接、schema 不安全，脚本必须 fail closed；workflow confidence 不再回退到 SQLite
 - 推荐使用 `./.venv-tests/bin/python`
   - 避免系统 `python3` 与 repo 依赖、`dataclass(slots=True)` 兼容性、`requests/psycopg` 安装状态不一致
@@ -789,7 +789,7 @@ PYTHONPATH=src ./.venv-tests/bin/python scripts/check_service_gate_coverage.py -
 截至 2026-05-11，本地 service-gate manifest 已经收口到 `29/29` required tags 覆盖；`--require-before-ecs-sync` 不应再因 planned tags 失败。后续如果新增历史事故形态，必须先加入 manifest，再通过本地 scripted/browser hard gate 晋升为 `required_now`。
 - 对 webhook/watcher 场景设置 `max_remote_provider_event_lag_ms`。`service_metrics.remote_provider_events` 会报告 `provider_webhook` / `local_provider_event_watcher` 来源、`received` / `received_late` / `received_in_flight` 状态、late duplicate 数量、全量 `remote_to_local_event_lag_ms`、可触发 recovery 的 `actionable_remote_to_local_event_lag_ms`、以及 `late_duplicate_remote_to_local_event_lag_ms`。late duplicate 只代表幂等/延迟观测，不应作为 recovery backlog 或 actionable wakeup SLO 失败；真正需要失败的是超过环境 SLO 的 actionable terminal event wakeup lag。该指标只在 provider-backed case 中要求存在；full-local-reuse / no-provider case 可以配置同一矩阵默认值但不因缺少 remote event 报告单独失败。
 - 本地 `configs/scripted/*smoke_matrix.json` 默认必须带 `max_remote_provider_event_lag_ms`，当前基线为 `30000`。如果某个 hosted/live 环境暂时需要更宽松阈值，应该在对应环境矩阵中显式记录原因，而不是删除这个 SLO。
-- 对 profile-scraper 乱序覆盖场景设置 `min_out_of_order_profile_completion_count`。`service_metrics.worker_timeline.out_of_order_completion.profile_batch_inversion_count` 会把 later-started-but-earlier-finished 的 profile batch 计数出来；如果一个矩阵标了 out-of-order 但没有观察到 inversion，就说明 fixture / scheduler 退化成了顺序完成，应该失败而不是默默通过。时间源优先级是 `remote_provider_event`、scripted-only `scripted_remote_ready_epoch_ms`、最后才是 worker terminal marker；同一秒提交的 worker 用 `worker_id` 作为稳定提交顺序，避免 SQLite 秒级时间戳隐藏真实的远端完成倒序。
+- 对 profile-scraper 乱序覆盖场景设置 `min_out_of_order_profile_completion_count`。`service_metrics.worker_timeline.out_of_order_completion.profile_batch_inversion_count` 会把 later-started-but-earlier-finished 的 profile batch 计数出来；如果一个矩阵标了 out-of-order 但没有观察到 inversion，就说明 fixture / scheduler 退化成了顺序完成，应该失败而不是默默通过。时间源优先级是 `remote_provider_event`、scripted-only `scripted_remote_ready_epoch_ms`、最后才是 worker terminal marker；同一秒提交的 worker 用 `worker_id` 作为稳定提交顺序，避免秒级时间戳粒度隐藏真实的远端完成倒序。
 - Scripted Apify webhook fixtures must preserve actor-completion semantics: `eventData.finishedAt` represents the remote actor completion time, not the local time when the smoke runner posts the webhook. For scripted remote-wait workers, the driver derives `finishedAt` from `checkpoint.scripted_remote_ready_epoch_ms`; otherwise late webhook delivery can overwrite true remote completion ordering and make an out-of-order fixture look ordered.
 - 对 batch-efficiency / actor-slot 利用场景设置 `min_profile_batch_envelope_count`、`min_profile_prefetch_batch_plan_count`、`require_no_profile_scheduler_contract_violation=true`、`max_profile_unexplained_tiny_batch_count`、`max_provider_slot_underuse_with_backlog_count`。它们来自 `provider_case_report.event_level_efficiency.profile_batch_envelopes` 和 `profile_scheduler_contract`，并且在配置后要求 event-level efficiency report 必须存在。当前 workflow hard gate 的业务语义是“不出现无理由 tiny live batch、不在有 normal backlog 时空置 actor slot、scheduler contract 无违规”；真正的 tiny-tail coalescing 细节由单元/效率测试覆盖，除非某个 fixture 专门制造近 ready tiny chunks，否则不要在主流程矩阵强制 `min_profile_tiny_batch_coalesced_count`。
 - Large-late-shard 场景必须用独立 PG-backed scripted matrix 覆盖，而不能只依赖单元契约。`configs/scripted/openai_agent_large_late_shard_smoke_matrix.json` 使用 `force_fresh_run=true` 的 OpenAI no-baseline scoped search，制造 90 人 early shard 后再到达 600 人 late shard；gate 必须同时设置 `min_profile_batch_size_max` 和 `max_profile_batch_size_max`，证明 late ready set 没有回退到 50-url fallback，也没有被无限放大。1600-URL late shard 仍由单元契约覆盖，用于验证纯 scheduler 公式而不把 service smoke 变成大规模物化压测。
@@ -1411,9 +1411,9 @@ CRM Public Web live validation has an additional cache contract:
 
 额外实践说明：
 
-- `hosted_workflow_smoke` 这类会起后台线程、临时 server、隔离 runtime/SQLite shadow 的套件，在 macOS 上做 durations/profile 时，优先单独起一个 pytest 进程。
+- `hosted_workflow_smoke` 这类会起后台线程、临时 server、隔离 runtime 的套件，在 macOS 上做 durations/profile 时，优先单独起一个 pytest 进程。
 - 不建议把它和 `results_api / frontend_history / asset_paths / supplement` 等其它高信号套件硬拼到同一个长命令里跑 durations。
-  - 这样虽然表面更省命令数，但更容易在 teardown 阶段引入线程/SQLite shadow 噪声，污染真实的慢测与失败信号。
+  - 这样虽然表面更省命令数，但更容易在 teardown 阶段引入线程噪声，污染真实的慢测与失败信号。
 
 ## 2. 外部 Provider 模式
 

@@ -1,8 +1,12 @@
-# Track B B4.2 — Forward-looking PG-native typed store (DESIGN, awaiting owner ratification)
+# Track B B4.2 — Forward-looking PG-native typed store (DESIGN — RATIFIED; execution in progress)
 
-> Status: **PROPOSAL — needs owner sign-off before any prod schema/data migration.** Owner pre-ratified
-> direction 2026-06-21: "cleanup now + B4.2 design in parallel" and **full jsonb + timestamptz**. This doc
-> is the design to ratify. Builds on the completed B4.1 (shadow schema removed, commit d6f6f1a) and the
+> Status: **RATIFIED by owner (2026-06-21/23); execution in progress.** Roadmap: ① dead-shadow/mirror
+> teardown — executed as **B4.3, 100% complete 2026-07-02** (`storage.py` is PG-pure; mirror machinery
+> deleted) → ② repository query methods + per-domain caller migration — **current round**, execution entry
+> doc: `docs/TRACK_B_REPOSITORY_MIGRATION_HANDBOOK.md` → ③ jsonb/timestamptz data migration — **still
+> owner-gated** (explicit GO + full-stop window). Ratified deltas vs. this doc's recommendations:
+> repositories become the PUBLIC API (callers migrate directly; no permanent facade); pilot domain =
+> `linkedin_profile_registry`. Builds on the completed B4.1 (shadow schema removed, commit d6f6f1a) and the
 > deficiency assessment in [[track_b_pg_pure_store]] (workflow wf_c0a3b7c3).
 
 ## §0 Why B4.2 (recap of the deficiencies)
@@ -19,15 +23,21 @@ SQLite-shaped, non-specialist design. The six structural deficiencies (located, 
    `_SERIAL_SEQUENCE_NAMES`, and the DDL. Every schema change touches 4+ places.
 3. **Untyped string dispatch.** `getattr(adapter, method_name)` by string (109 sites) + `row_builder: Any`
    (197 sites) + raw `where_sql` string fragments throw away every static guarantee.
-4. **Double-write-then-mirror** (now dead under postgres_only, but still physically present as ~274 dead
+4. **Double-write-then-mirror** (at design time ~274 dead
    SQLite tails + `_mirror_control_plane_row` ×73 + `_replace_control_plane_table_from_sqlite` ×16).
+   **RESOLVED by B4.3 (100% complete 2026-07-02): all deleted; `storage.py` is PG-pure.**
 5. **Schema source-of-truth inversion** — **RESOLVED in B4.1a/B4.1**: migrations are now the sole source.
 6. **Routing scaffolding all constant-true** post-B3.0 yet evaluated on the hot path; three parallel
    registries (`CONTROL_PLANE_LIVE_TABLES` / `_CONTROL_PLANE_POSTGRES_NATIVE_TABLES` /
-   `_NATIVE_READ_METHODS`) hand-synced and **already drifted** (`target_candidate_public_web_runs` — a
-   logical table that silently never reads PG; a latent bug to fix here).
+   `_NATIVE_READ_METHODS`) hand-synced and **had drifted** (`target_candidate_public_web_runs` — a
+   logical table that silently never read PG). Moot since B4.3: the SQLite path no longer exists, so all
+   reads are PG-native.
 
 ## §1 The dead-tail cleanup is part of B4.2, not a separable sweep (empirical finding 2026-06-21)
+
+> **Superseded:** the cleanup was in fact executed as its own batched sweep — the **B4.3 shadow teardown**
+> (using exactly the per-method, sentinel-preserving collapse described below) — and is **100% complete
+> 2026-07-02**: `storage.py` contains zero SQLite code. Kept as historical rationale.
 
 The ~274 dead SQLite tails cannot be removed by a blind deletion. A blanket AST truncation (cut each method
 at its dead `with self._lock, self._connection:`) **broke 231 methods**: many read methods return their
@@ -104,6 +114,12 @@ change is one or a few new migrations:
 
 ## §5 Sequencing (incremental strangler, each step verifiable)
 
+> **Progress (2026-07-02):** foundations B4.2.0–.12 landed (`control_plane_repository.py` typed
+> descriptor layer + `src/sourcing_agent/repositories/`; pilot = `linkedin_profile_registry`; 34 tables
+> read/write single-source). The dead-tail cleanup completed separately as B4.3, and the
+> `target_candidate_public_web_runs` drift is moot (no SQLite path remains). Per-domain execution is now
+> tracked in `docs/TRACK_B_REPOSITORY_MIGRATION_HANDBOOK.md`.
+
 1. **B4.2.0 — typed primitive layer + first descriptor.** Build the descriptor + typed-mapper + typed
    query primitives; convert ONE small cohesive domain (e.g. `frontend_history_links` or
    `plan_review_sessions`) end-to-end as the pilot — dead SQLite tail dropped, typed methods, repository
@@ -114,9 +130,11 @@ change is one or a few new migrations:
    repository, contract-lane verify. Fix the drifted `target_candidate_public_web_runs` registry here.
 3. **B4.2.S — schema migration (jsonb/timestamptz).** After (or interleaved with) the typed mapper landing
    the tolerant read, apply the §4 migration in the deploy window.
-4. **B4.2.F — finalize.** Delete the mirror machinery + `self._conn`/`_configure_connection` + the
-   constant-true routing scaffolding + the shadow accessors + the adapter's `replace_table_from_sqlite` /
-   `sync_runtime_control_plane_to_postgres`; collapse `ControlPlaneStore` to the thin repository facade.
+4. **B4.2.F — finalize.** *Largely done by B4.3:* the mirror machinery, `self._conn`/`_configure_connection`,
+   and the adapter's `replace_table_from_sqlite` / `sync_runtime_control_plane_to_postgres` are already
+   deleted; the shadow accessors survive only as inert retired labels. Remaining: delete the constant-true
+   routing scaffolding and retire `ControlPlaneStore` in favor of repositories as the public API (ratified
+   endstate — callers migrate directly; no permanent facade).
 
 ## §6 Risks & non-negotiables
 
@@ -131,6 +149,12 @@ change is one or a few new migrations:
   and the agent-native direction.
 
 ## §7 Decisions needed from the owner
+
+> **All decided (owner 2026-06-21/23):** 1) data migration ratified as roadmap step ③, execution still gated
+> on an explicit GO + full-stop window; 2) repositories become the **PUBLIC API** — callers migrate directly
+> and the God-class facade retires (not the facade-first recommendation); 3) pilot domain =
+> `linkedin_profile_registry` (not the candidates recommended below); 4) typed/tolerant-read code first,
+> schema migration deferred to gated step ③ after the ② repository round.
 
 1. **Ratify the data migration** (jsonb + timestamptz) per §4 — the Contract change.
 2. **Repository decomposition shape:** thin `ControlPlaneStore` facade composing repositories (preserve

@@ -17,7 +17,7 @@
 
 - **Track A 分解**：Phase 0 测试前置修缮 → Phase 1 CommandKernel 提取（~30 个 store-only 协议方法）→ Phase 2 CommandSpec registry → Phase 3 逐域提取（crm_public_web → excel_intake → profile_fetch → acquisition 仅 command 层；facade 保留全部公私方法名）→ Phase 4 纠缠核心重设计（`run_worker_recovery_once` 注册式 phase 分发；projection/candidate_source/asset_population 网随 M3–M5 拆解）。
 - **M1 重定义**：M1 不再是"从 monolith 提取 manifest"，而是"在 `durable_runtime` 建 CommandSpec registry（合并 owner/stage/readiness/display 四张字典、activity-spine 与 running-control policy set 族、metrics 表、orchestrator 的 per-type 映射），workflow/command manifest 与 Agent tool spec 是它的导出物"。这避免把 monolith 的偶然结构固化进外部契约。
-- **Track B 存储/测试**："先删 SQLite fallback"被审计否决（默认测试套件跑在 SQLite 上；postgres_only 模式仍依赖内存 SQLite 影子作为执行基底）。正确顺序：测试环境契约 v2（PG schema-per-run + teardown + TTL + symlink seed）→ 51 个 SQLite 直连测试文件迁共享 PG fixture → 按表组 PG-pure 重写双路径方法 → 删影子与 SQLite DDL。Mac 本地 PG 用 Docker（`local_postgres.py` 现为 Linux 专用）；正式 migration 机制替代手工双份 DDL。
+- **Track B 存储/测试**："先删 SQLite fallback"被审计否决（当时默认测试套件跑在 SQLite 上；postgres_only 模式当时仍依赖内存 SQLite 影子作为执行基底）。正确顺序：测试环境契约 v2（PG schema-per-run + teardown + TTL + symlink seed）→ 51 个 SQLite 直连测试文件迁共享 PG fixture → 按表组 PG-pure 重写双路径方法 → 删影子与 SQLite DDL。Mac 本地 PG 用 Docker（`local_postgres.py` 现为 Linux 专用）；正式 migration 机制替代手工双份 DDL。（状态更新 2026-07：该顺序已全部执行完毕——`storage.py` 已 PG-pure（零 sqlite3），内存 SQLite 影子与镜像机制已删除，PG schema 由 `migrations/0001_baseline.sql` + migration runner 唯一创建，`SOURCING_PG_ONLY_SQLITE_BACKEND` 已是无操作的遗留环境变量；剩余为 B4.2 ② repository 查询方法迁移与 ③ jsonb/timestamptz。详见 `TRACK_B_PG_PURE_STORE_DESIGN.md`。）
 - **Track C Serving Runtime（新增轨道，目标 ~20 并发用户）**：psycopg_pool 连接池 → 重活（plan compile / job 执行 / 导出）统一出请求线程走 enqueue+poll → worker 与 API 进程分离 → 最小鉴权与用户身份（`requester_id/tenant_id` 列转为认证产物）→ FastAPI/uvicorn 重写 api.py（已批准；pydantic→OpenAPI 成为前端 contract 生成源）+ SSE → 对象存储读穿。明确不引入 Redis 与 LISTEN/NOTIFY（当前规模收益为负）。
 - **Track D 强 Agent 化**：ModelClient 升级（streaming + tool-calling；现为 14 个单发方法）→ Agent Session 契约（服务端 agentic loop，工具面 = M1 manifest 导出 + 只读上下文工具 + `model_native_search` 转正；效果全部走 typed AgentAction）→ 第一垂直切片为公司身份自验证 loop（替代 PlanCard 手动修正 LinkedIn URL）→ plan review 对话化、intent→plan 前门流式化。外脑（OpenClaw/Claude/自建）可插拔；护城河 = typed sourcing 工具 + 证据裁决 + durable 执行 + 预算审批。
 - **M2 新增设计约束**：provider 级并发预算属于 Provider Task Runtime——HarvestAPI profile-fetch 有 ~8 并发 actor 的隐性限制（旧 8 槽 API 信号量的真实由来）；需 per-provider+key 信号量/令牌桶、API key 池化、batch 粒度治理；该保护就位后 HTTP 入口并发上限才可放开。
@@ -58,7 +58,7 @@
 
 - 结果服务仍然隐式依赖整包 JSON。
 - 新 query 仍会把资产语义和 runtime 目录强耦合。
-- SQLite 还混合承担 control plane 和 blob transport 职责。
+- SQLite 还混合承担 control plane 和 blob transport 职责。（已解决：Track B PG-pure 完成后 control plane 全面 PG-only，SQLite 路径已整体删除。）
 - query-time 结果视图和 company-level authoritative asset 没有完全分层。
 - 部分能力仍不是 AI-first，而是靠规则、路径约定和后置补丁兜底。
 
@@ -208,9 +208,9 @@ Branching decision:
 
 当前 job 有时直接绑定 query-specific snapshot，有时又绑定 company baseline，但两者都通过 `candidate_source` 和 runtime path 约定来表达，缺少明确的“结果视图层”。
 
-### 4. SQLite is overloaded
+### 4. SQLite is overloaded（已解决：Track B PG-pure 完成，SQLite 已删除）
 
-SQLite 现在同时承担：
+历史状态——SQLite 曾同时承担：
 
 - job state
 - review state
@@ -377,7 +377,7 @@ full-reuse query 的正确姿势应是：
 
 - control plane DB
   - PG-only in local, hosted, production, and Agent-callable normal paths
-  - SQLite/shadow storage is historical, migration-only, or explicit test compatibility; it is not a service-grade target and must not be exposed through OpenClaw/Codex adapters
+  - SQLite/shadow storage has been deleted entirely (Track B B4.3 complete: `storage.py` is PG-pure; the PG schema is created solely by the versioned migration runner); it must not be reintroduced or exposed through OpenClaw/Codex adapters
 - object storage
   - OSS / R2 / S3-compatible
   - raw assets

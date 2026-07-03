@@ -70,7 +70,6 @@ Environment=SOURCING_RUNTIME_ENVIRONMENT=production
 Environment=SOURCING_EXTERNAL_PROVIDER_MODE=live
 Environment=SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only
 Environment=SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1
-Environment=SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory
 Environment=SOURCING_API_ALLOWED_ORIGINS=https://demo.111874.xyz,https://api.111874.xyz
 Environment=SOURCING_API_MAX_PARALLEL_REQUESTS=8
 Environment=SOURCING_API_LIGHT_REQUEST_RESERVED=2
@@ -80,6 +79,8 @@ RestartSec=5
 ```
 
 `/etc/sourcing-ai-agent.env` should contain secret-bearing values such as `SOURCING_CONTROL_PLANE_POSTGRES_DSN`, provider tokens, and `SOURCING_PROVIDER_WEBHOOK_TOKEN`. Do not keep adding secrets directly to the unit file.
+
+`SOURCING_PG_ONLY_SQLITE_BACKEND` is now an inert no-op: the in-memory SQLite compatibility shadow was retired (Track B B4.3f) and the env var no longer changes any behavior. Existing units that still set it are harmless; do not add it to new units.
 
 ## Registry Promotion After Asset Copy
 
@@ -252,7 +253,7 @@ Expected:
 
 - runtime is `production`
 - provider mode is `live`
-- control plane is `postgres_only + shared_memory`
+- control plane is `postgres_only` (the SQLite compatibility shadow is retired; `show-control-plane-runtime` reports `compatibility_shadow_backend: retired`)
 - hosted Apify webhook route returns `202` for the preflight probe
 - no disk-backed SQLite file is authoritative
 

@@ -1,6 +1,6 @@
 # PG-Only Cutover Tracker
 
-> Status: Living tracker. Use the latest entries as the source of truth, and assume older bullets may describe superseded intermediate states.
+> **Status: HISTORICAL — cutover COMPLETE and superseded (retired 2026-07-02).** This tracker records the finished PG-only cutover era. Since then, Track B B4.3 removed the in-memory SQLite compatibility shadow entirely (`storage.py` is PG-pure; `ControlPlaneStore` requires a resolved PG DSN + `postgres_only`), `SOURCING_PG_ONLY_SQLITE_BACKEND` became an inert no-op, and PG schema is created solely by the versioned migration runner. Do not follow env-var or shadow instructions below. Current source of truth: `docs/TRACK_B_PG_PURE_STORE_DESIGN.md`.
 
 
 ## Goal

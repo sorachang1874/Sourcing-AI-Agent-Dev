@@ -14,6 +14,8 @@
 
 ## Current Stage Checkpoint (2026-06-11)
 
+> Update (2026-07-02)：本节保留为 2026-06-11 规划快照。其后已完成：Track A Phase 0–4、Track C C1+C2、M2 全部、Track B B1/B2/B3/B4.1/B4.2 写路径/B4.3（`storage.py` 已 PG-pure，SQLite 影子已删除；PG schema 单源为 `migrations/` 版本化 SQL + migration runner）。当前进度与下一步（B4.2 ② repository query methods）以 `../PROGRESS.md`、`NEXT_TODO.md`、`TRACK_B_PG_PURE_STORE_DESIGN.md` 为准。
+
 - 2026-06-11 起，重构按五条轨道推进（详见 `SERVICE_GRADE_ARCHITECTURE_PLAN.md` 的 2026-06-11 revision 与 `NEXT_TODO.md`）：
   - **A 分解**：orchestrator god class（87k 行）按 Phase 0（测试前置修缮）→ CommandKernel → CommandSpec registry（= 重定义后的 M1）→ 逐域提取 → 纠缠核心重设计。
   - **B 存储/测试**：测试环境契约 v2（PG schema-per-run + teardown + TTL），51 个 SQLite 测试文件迁 PG，按表组 PG-pure 重写后删除 SQLite 影子；Mac 本地 PG 用 Docker。
@@ -64,9 +66,9 @@
 
 - [RUNTIME_PREFLIGHT.md](RUNTIME_PREFLIGHT.md) — 启动任何本地/scripted/hosted 工作流前的统一 preflight 入口。
 - [TESTING_PLAYBOOK.md](TESTING_PLAYBOOK.md) — 测试分层、simulate/scripted/live 用法与 regression 规则。
-- [TEST_ENVIRONMENT.md](TEST_ENVIRONMENT.md) — 隔离测试环境启动运维（测试环境契约 v2 落地后需同步更新）。
+- [TEST_ENVIRONMENT.md](TEST_ENVIRONMENT.md) — 隔离测试环境启动运维（测试环境契约 v2 已落地，文内含 2026-06-11 revision 注记）。
 - [WORKFLOW_OPERATIONS_PLAYBOOK.md](WORKFLOW_OPERATIONS_PLAYBOOK.md) / [TERMINAL_WORKFLOW.md](TERMINAL_WORKFLOW.md) — CLI/API 操作手册。
-- [LOCAL_POSTGRES_CONTROL_PLANE.md](LOCAL_POSTGRES_CONTROL_PLANE.md) — 本地 PG 自动发现/启动、DSN 优先级（注意：当前实现 Linux 专用；Mac 走 Docker 的方案在轨道 B 落地）。
+- [LOCAL_POSTGRES_CONTROL_PLANE.md](LOCAL_POSTGRES_CONTROL_PLANE.md) — 本地 PG 自动发现/启动、DSN 优先级（Mac 的 Docker 路径已落地：`make local-pg-up`，见文内 2026-06-11 revision；`pg_ctl` 段落为 Linux/WSL 路径）。
 - [RUNTIME_ASSET_RETENTION_GOVERNANCE.md](RUNTIME_ASSET_RETENTION_GOVERNANCE.md) — 资产保留治理（2026-06-11 起范围收窄，见文内 revision 注记）。
 - [DATA_ASSET_GOVERNANCE.md](DATA_ASSET_GOVERNANCE.md) — snapshot/scope/promotion 治理。
 - [INDEPENDENT_REVIEW_GATE.md](INDEPENDENT_REVIEW_GATE.md) / [INDEPENDENT_REVIEW_BRIEF.md](INDEPENDENT_REVIEW_BRIEF.md) — 独立审查门（适用范围 2026-06-11 收窄）。
@@ -79,12 +81,12 @@
 ## Tier 3 — Plans & Trackers
 
 - [SERVICE_GRADE_ARCHITECTURE_PLAN.md](SERVICE_GRADE_ARCHITECTURE_PLAN.md) — 服务级重构计划（含 2026-06-11 五轨道 revision）。
-- [PHASE4_ENTANGLED_CORE_DESIGN.md](PHASE4_ENTANGLED_CORE_DESIGN.md) — Phase 4 纠缠核心重设计提案（2026-06-12，待 owner 审定 §4 决策点）。
+- [PHASE4_ENTANGLED_CORE_DESIGN.md](PHASE4_ENTANGLED_CORE_DESIGN.md) — Phase 4 纠缠核心重设计提案（2026-06-12 设计稿；Phase 4 已收官，保留为设计记录）。
 - [PROFILE_PREFETCH_SCHEDULER_CONTRACT.md](PROFILE_PREFETCH_SCHEDULER_CONTRACT.md) — Profile-Prefetch 调度器契约（2026-06-12，Phase 4 Step 0；envelope/coalescing/wave + storeless fail-closed）。
 - [SERVING_MESH_OWNERSHIP_BOUNDARY.md](SERVING_MESH_OWNERSHIP_BOUNDARY.md) — Serving mesh 所有权边界冻结（2026-06-14，Phase 4 Step 4；四块切分 + resolver 接口 + 双向环解法,代码随 M3-M5 搬）。
-- [RECOVERY_DRIVING_REDESIGN_STUDY.md](RECOVERY_DRIVING_REDESIGN_STUDY.md) — recovery 驱动机制事件化重设计研究（2026-06-14，重定义 Phase 4 Step 5；待 owner 审定 §6 决策点）。
+- [RECOVERY_DRIVING_REDESIGN_STUDY.md](RECOVERY_DRIVING_REDESIGN_STUDY.md) — recovery 驱动机制事件化重设计研究（2026-06-14，重定义 Phase 4 Step 5；决策已定、Phase 4 已收官，保留为设计研究记录；后续设计见 RECOVERY_TAKEOVER_INTENT_DESIGN）。
 - [RECOVERY_TAKEOVER_INTENT_DESIGN.md](RECOVERY_TAKEOVER_INTENT_DESIGN.md) — Option B 设计：durable per-job 接管意图表（2026-06-14，owner 审定；分离 notification 与 intent，解决 5e 两次 NO-GO 的 F1 注入 / F2 clobber）。
-- [TRACK_C_SERVING_RUNTIME_PLAN.md](TRACK_C_SERVING_RUNTIME_PLAN.md) — Track C serving runtime 排序计划（2026-06-15，待 owner 审定 §4 决策点；C1 重活出线程 → C2 鉴权 → C3 进程分离+5d → C4 OpenAPI+SSE → C5 并入 Track D → C6 later）。
+- [TRACK_C_SERVING_RUNTIME_PLAN.md](TRACK_C_SERVING_RUNTIME_PLAN.md) — Track C serving runtime 排序计划（2026-06-15，已批准执行；C1+C2 已完成，C3 起未动；顺序：C1 重活出线程 → C2 鉴权 → C3 进程分离+5d → C4 OpenAPI+SSE → C5 并入 Track D → C6 later）。
 - [NEXT_TODO.md](NEXT_TODO.md) — 活跃待办（滚动文件）。
 - [../PROGRESS.md](../PROGRESS.md) — 进展日志（滚动文件，月度归档于 `archive/progress/`）。
 - [PG_ONLY_CUTOVER_TRACKER.md](PG_ONLY_CUTOVER_TRACKER.md) — PG-only cutover 尾巴。

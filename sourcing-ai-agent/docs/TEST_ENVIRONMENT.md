@@ -11,7 +11,7 @@
 
 ## 目标
 
-- 独立 `runtime` / shadow db / `jobs` / `company_assets`
+- 独立 `runtime` / per-runtime PG schema / `jobs` / `company_assets`
 - 独立 object storage prefix
 - 默认走 `simulate`，避免测试时误触发真实 provider
 - 可按需切换到 `scripted`
@@ -215,7 +215,7 @@ make test-env-seed-assets TEST_ENV_SEED_COMPANIES="anthropic"
 
 ## Control Plane 默认约定
 
-- 轻量单元测试仍可使用 ephemeral SQLite shadow，但 workflow confidence 不再用 SQLite control-plane 做服务级验证。
+- SQLite compatibility shadow 已随 Track B B4.3 全量退役：`ControlPlaneStore` 是 PG-pure，轻量单元测试与 workflow confidence 一律走 PG-only control plane（per-test 隔离使用专属 PG schema，而非 SQLite）。
 - `scripts/dev_backend.sh` 会在普通 `test/simulate/scripted/replay` runtime 下自动写入：
   - `runtime/test_env/.isolated-local-postgres.env`
 - 这个空 sentinel 会阻断 repo-level PG fallback，避免测试 job / assets / registry 写进本地或生产 PG namespace
@@ -224,7 +224,7 @@ make test-env-seed-assets TEST_ENV_SEED_COMPANIES="anthropic"
   - 自动生成 runtime 专属 `.scripted-local-postgres.env`
   - 固定 `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only`
   - 固定 `SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1`
-  - 固定 `SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory`
+  - helper 仍会写入 `SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory`，但该变量自 B4.3 起是 inert no-op（SQLite shadow 与其 resolver 已删除），不影响任何行为
 - 如果要让某个 workflow confidence runtime 使用特定 PG，必须显式提供 runtime 专属 env file：
   - `SOURCING_LOCAL_POSTGRES_ENV_FILE=/path/to/test-postgres.env`
 - 不建议用共享 repo PG 做测试；临时排障需要显式设置：
@@ -485,7 +485,7 @@ make test-live-large-org-manual LIVE_CONFIRM=1
 - `make test-env-backend-live`
   - 启一个独立 `runtime/test_env_live` + `http://localhost:8777` 的 live backend
   - 使用 `SOURCING_RUNTIME_ENVIRONMENT=test`，不共享 production provider cache / PG namespace
-  - 启动命令固定注入 `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only`、`SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1`、`SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory`，不能回退 SQLite durable runtime
+  - 启动命令固定注入 `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only`、`SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1`；SQLite durable runtime 已在 B4.3 整体删除，本就不存在回退路径（Makefile 仍注入的 `SOURCING_PG_ONLY_SQLITE_BACKEND` 是 inert no-op）
   - 默认使用 test schema；如果要基于当前本地 authoritative assets / CRM records 做人工 reviewed live validation，必须显式传 `SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA=public`
   - 明确需要 `LIVE_CONFIRM=1`
   - Makefile 会同时注入 `SOURCING_LIVE_PROVIDER_CONFIRM=1` 和 `SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS=1`；只设置 `SOURCING_EXTERNAL_PROVIDER_MODE=live` 仍会被 runtime contract 拦截。
@@ -526,7 +526,7 @@ make test-live-large-org-manual LIVE_CONFIRM=1
 - `SOURCING_SECRETS_FILE`
   - 可显式指定 provider secrets 文件
 - `SOURCING_DB_PATH`
-  - 可显式指定本地 compatibility-shadow 路径
+  - 可显式指定 control-plane 状态锚点路径（`db_path`）；其父目录决定 runtime dir 与 PG DSN 解析。SQLite compatibility shadow 已退役，该路径不再对应任何 SQLite 文件
 - `SOURCING_JOBS_DIR`
   - 可显式指定 jobs 目录
 - `SOURCING_COMPANY_ASSETS_DIR`

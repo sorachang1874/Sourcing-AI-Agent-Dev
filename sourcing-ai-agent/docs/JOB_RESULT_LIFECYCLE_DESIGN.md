@@ -18,7 +18,7 @@ This design retires the rebuild-per-request path and routes every public reader 
 
 ## Storage shape
 
-New table `job_result_lifecycle`, owned by the workflow writer. PG-first, SQLite mirror handled by the existing `_write_control_plane_row_to_postgres` / `_mirror_control_plane_row` machinery.
+New table `job_result_lifecycle`, owned by the workflow writer. PG-only via `_write_control_plane_row_to_postgres`(Track B B4.3 后 SQLite mirror 机器已删除;写路径 fail-closed 到 PG)。
 
 | column | type | notes |
 | --- | --- | --- |
@@ -111,7 +111,7 @@ This slice retires:
 
 ## Migration
 
-1. Create the table; the SQLite migration writes the schema and the live PG migration mirrors it.
+1. Create the table(现状:表在 `migrations/0001_baseline.sql` 基线内,由 migration runner / `ensure_bootstrapped()` 建;backfill 入口的建表保障已改走 `ensure_bootstrapped()`,B4.3f)。
 2. `backfill-job-result-lifecycle` migrates only existing serialized canonical evidence from `job_result_views.metadata.result_view_lifecycle` or `jobs.summary.result_view_lifecycle` into the new row and marks the row `validated`.
 3. `_load_job_result_lifecycle` never falls back to in-flight rebuild. Missing or unvalidated rows are explicit repair-required states that must be handled by event-time writers or the backfill/repair command.
 4. Jobs without serialized lifecycle evidence are reported as repair-required; they are not synthesized into validated rows from mixed legacy sources.

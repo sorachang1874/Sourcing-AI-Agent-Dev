@@ -1,5 +1,7 @@
 # Recovery Takeover Intent — Durable 设计（Option B）
 
+> **HISTORICAL — IMPLEMENTED（已落地，勿按本文操作）**：Option B 已实现——`workflow_recovery_intents` 表由版本化迁移 `src/sourcing_agent/migrations/0001_baseline.sql` 创建，typed store 方法在 `storage.py` / `control_plane_live_postgres.py`，`workflow_takeover_intent_drain` phase 在 `orchestrator.py`（已 pin 进 `tests/test_recovery_tick_characterization.py`）。§2/§6/§7 的 dual-path 实施机制（storage.py SQLite literal DDL、guard replay）已随 Track B B4.3 退役：storage.py 现为 PG-pure，schema 唯一来源是版本化迁移 runner。当前事实以代码为准。
+>
 > Status: Design for owner-ratified Option B (2026-06-14). Phase 4 Step 5e read-path takeover via a durable recovery-takeover-intent.
 
 适用分支 `governance-phase0-ttl-20260611` @ `62e0149`。本文件只是设计稿（READ-ONLY 调查产物），不含任何代码改动。所有 file:line 引用基于 `src/sourcing_agent/` 当前快照。
