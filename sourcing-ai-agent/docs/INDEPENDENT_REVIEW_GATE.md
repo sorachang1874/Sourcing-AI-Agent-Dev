@@ -91,12 +91,12 @@ pre-declared decision. Both `AGENTS.md` files point here; do not fork per-file c
 | Recon / scout (read-only fan-out) | execution-dense | author-session model | author family, lighter tier (e.g. Sonnet) | degrade to fallback; resume, don't rerun survivors |
 | Mechanical edit fan-out | execution-dense | author family, lighter tier | author-session model | degrade |
 | Adversarial verification / synthesis | reasoning-dense | author-session model | author family, deepest available | degrade |
-| **Independent review (this gate)** | reasoning-dense | `gpt-5.5` (xhigh, fast tier) | another **non-author-family** model | **defer visibly — never substitute the author family** |
+| **Independent review (this gate)** | reasoning-dense | Claude (deepest available) | another **non-GPT-family** model | **defer visibly — never substitute the author family** |
 
 Constraints:
 
 - The review lane is the independence lane: primary and fallback must both resolve outside the
-  author's model family (today the author family is Claude; the reviewer family is GPT/Codex).
+  author's model family (today the author family is GPT/Codex; the reviewer family is Claude).
 - Every fired fallback or deferred gate is recorded in the review artifact metadata (and the
   residual ledger for deferrals), so a silent downgrade cannot become a hidden fallback.
 - Interrupted fan-outs resume from their run id (re-dispatch only unfinished lanes); a completed
