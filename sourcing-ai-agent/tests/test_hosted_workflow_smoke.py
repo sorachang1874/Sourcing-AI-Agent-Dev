@@ -9,6 +9,7 @@ from pathlib import Path
 from sourcing_agent.asset_reuse_planning import build_acquisition_shard_registry_record
 from sourcing_agent.company_registry import resolve_company_alias_key
 from sourcing_agent.domain import JobRequest
+from sourcing_agent.linkedin_url_normalization import normalize_linkedin_profile_url_key
 from sourcing_agent.organization_execution_profile import ensure_organization_execution_profile
 from sourcing_agent.scripted_provider_scenario import load_scripted_provider_invocations
 from sourcing_agent.scripted_test_runtime import (
@@ -611,10 +612,10 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
                     "artifact_key": artifact_key,
                     "lane": lane,
                     "employment_scope": str(spec.get("employment_status") or employment_scope or "current"),
-                    "member_key": harness.store.normalize_linkedin_profile_url(linkedin_url),
+                    "member_key": normalize_linkedin_profile_url_key(linkedin_url),
                     "member_key_kind": "profile_url_key",
                     "candidate_id": f"{company_key}-{artifact_key}-{index}",
-                    "profile_url_key": harness.store.normalize_linkedin_profile_url(linkedin_url),
+                    "profile_url_key": normalize_linkedin_profile_url_key(linkedin_url),
                     "metadata": {
                         "display_name": str(spec.get("name") or f"{target_company} Candidate {index}"),
                         "role": str(spec.get("role") or ""),

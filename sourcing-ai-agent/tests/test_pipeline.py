@@ -38,6 +38,7 @@ from sourcing_agent.durable_runtime import (
 )
 from sourcing_agent.enrichment import MultiSourceEnrichmentResult
 from sourcing_agent.harvest_connectors import HarvestExecutionResult
+from sourcing_agent.linkedin_url_normalization import normalize_linkedin_profile_url_key
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import (
     SourcingOrchestrator,
@@ -284,7 +285,7 @@ class PipelineTest(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             profile_url,
             raw_path=str(raw_path),
             source_jobs=["test-harvest-prefetch"],
@@ -472,7 +473,7 @@ class PipelineTest(unittest.TestCase):
         for candidate in list(candidates or []):
             candidate_id = str(candidate.get("candidate_id") or "").strip()
             linkedin_url = str(candidate.get("linkedin_url") or "").strip()
-            profile_url_key = self.store.normalize_linkedin_profile_url(linkedin_url) if linkedin_url else ""
+            profile_url_key = normalize_linkedin_profile_url_key(linkedin_url) if linkedin_url else ""
             member_key = profile_url_key or candidate_id
             if not member_key:
                 continue
@@ -12163,8 +12164,8 @@ class PipelineTest(unittest.TestCase):
             scoped_snapshot_id=snapshot_id,
             summary={"imported_snapshot_id": snapshot_id},
         )
-        self.store.mark_linkedin_profile_registry_queued("https://www.linkedin.com/in/demo-profile")
-        self.store.record_linkedin_profile_registry_event(
+        self.store.repos.linkedin_profile_registry.mark_queued("https://www.linkedin.com/in/demo-profile")
+        self.store.repos.linkedin_profile_registry.record_event(
             "https://www.linkedin.com/in/demo-profile",
             event_type="lookup_attempt",
             event_status="requested",
@@ -12843,7 +12844,7 @@ class PipelineTest(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             profile_url,
             raw_path=str(raw_path),
             source_jobs=["job-registry-bootstrap"],
@@ -12858,7 +12859,7 @@ class PipelineTest(unittest.TestCase):
 
         self.assertIn(profile_url, prefetched)
         self.assertEqual(prefetched[profile_url]["parsed"]["full_name"], "Cached Infra")
-        registry_entry = self.store.get_linkedin_profile_registry(profile_url) or {}
+        registry_entry = self.store.repos.linkedin_profile_registry.get(profile_url) or {}
         self.assertEqual(str(registry_entry.get("status") or ""), "fetched")
         self.assertEqual(str(registry_entry.get("last_raw_path") or ""), str(raw_path))
 
@@ -13452,14 +13453,14 @@ class PipelineTest(unittest.TestCase):
             lease_token="test-running-owner-token",
         )
         self.assertTrue(bool(lease.get("acquired")))
-        self.store.mark_linkedin_profile_registry_queued(
+        self.store.repos.linkedin_profile_registry.mark_queued(
             "https://www.linkedin.com/in/provider-owned-tail/",
             source_jobs=[job_id],
             run_id="run-provider-owned",
             dataset_id="dataset-provider-owned",
             snapshot_dir=snapshot_dir,
         )
-        self.store.record_linkedin_profile_refill_plan_items(
+        self.store.repos.linkedin_profile_registry.record_refill_plan_items(
             active_profile_urls=["https://www.linkedin.com/in/provider-owned-tail/"],
             source_jobs=[job_id],
             snapshot_dir=snapshot_dir,
@@ -13471,12 +13472,12 @@ class PipelineTest(unittest.TestCase):
             active_owner_dataset_id="dataset-provider-owned",
             active_owner_payload_hash="provider-owned-payload",
         )
-        self.store.mark_linkedin_profile_registry_queued(
+        self.store.repos.linkedin_profile_registry.mark_queued(
             "https://www.linkedin.com/in/actionable-tail/",
             source_jobs=[job_id],
             snapshot_dir=snapshot_dir,
         )
-        self.store.record_linkedin_profile_refill_plan_items(
+        self.store.repos.linkedin_profile_registry.record_refill_plan_items(
             deferred_profile_urls=["https://www.linkedin.com/in/actionable-tail/"],
             source_jobs=[job_id],
             snapshot_dir=snapshot_dir,
@@ -13523,14 +13524,14 @@ class PipelineTest(unittest.TestCase):
                 }
             },
         )
-        self.store.mark_linkedin_profile_registry_queued(
+        self.store.repos.linkedin_profile_registry.mark_queued(
             "https://www.linkedin.com/in/provider-owned-only-tail/",
             source_jobs=[job_id],
             run_id="run-provider-owned-only",
             dataset_id="dataset-provider-owned-only",
             snapshot_dir=snapshot_dir,
         )
-        self.store.record_linkedin_profile_refill_plan_items(
+        self.store.repos.linkedin_profile_registry.record_refill_plan_items(
             active_profile_urls=["https://www.linkedin.com/in/provider-owned-only-tail/"],
             source_jobs=[job_id],
             snapshot_dir=snapshot_dir,
@@ -28619,7 +28620,7 @@ class PipelineTest(unittest.TestCase):
             },
             summary_payload={},
         )
-        self.store.record_linkedin_profile_refill_plan_items(
+        self.store.repos.linkedin_profile_registry.record_refill_plan_items(
             deferred_profile_urls=[deferred_url],
             source_jobs=[job_id],
             snapshot_dir=str(snapshot_dir),
@@ -28631,7 +28632,7 @@ class PipelineTest(unittest.TestCase):
         def _fake_profile_prefetch(**kwargs: object) -> dict[str, object]:
             dispatched.append(dict(kwargs))
             self.assertTrue(kwargs.get("nonblocking_submit"))
-            self.store.record_linkedin_profile_refill_plan_items(
+            self.store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=[deferred_url],
                 source_jobs=[job_id],
                 snapshot_dir=str(snapshot_dir),
@@ -28685,7 +28686,7 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(refill["refill_item_limit"], 200)
         group = dict(list(refill.get("groups") or [])[0])
         self.assertEqual(group["refill_item_limit"], 200)
-        registry_entry = self.store.get_linkedin_profile_registry(deferred_url) or {}
+        registry_entry = self.store.repos.linkedin_profile_registry.get(deferred_url) or {}
         self.assertEqual(registry_entry["refill_queue_state"], "planned_dispatch")
         event_payloads = [
             dict(event.get("payload") or {})
@@ -28722,7 +28723,7 @@ class PipelineTest(unittest.TestCase):
             },
             summary_payload={},
         )
-        self.store.record_linkedin_profile_refill_plan_items(
+        self.store.repos.linkedin_profile_registry.record_refill_plan_items(
             deferred_profile_urls=[deferred_url],
             source_jobs=[job_id],
             snapshot_dir=str(snapshot_dir),
@@ -28741,8 +28742,8 @@ class PipelineTest(unittest.TestCase):
         try:
             with (
                 unittest.mock.patch.object(
-                    self.store,
-                    "list_linkedin_profile_refill_queue_groups",
+                    self.store.repos.linkedin_profile_registry,
+                    "list_refill_queue_groups",
                     side_effect=AssertionError("provider-full refill must not scan registry groups"),
                 ) as list_groups_mock,
                 unittest.mock.patch.object(
@@ -28805,7 +28806,7 @@ class PipelineTest(unittest.TestCase):
             },
             summary_payload={},
         )
-        self.store.record_linkedin_profile_refill_plan_items(
+        self.store.repos.linkedin_profile_registry.record_refill_plan_items(
             deferred_profile_urls=deferred_urls,
             source_jobs=[job_id],
             snapshot_dir=str(snapshot_dir),
@@ -28891,7 +28892,7 @@ class PipelineTest(unittest.TestCase):
             },
             summary_payload={},
         )
-        self.store.record_linkedin_profile_refill_plan_items(
+        self.store.repos.linkedin_profile_registry.record_refill_plan_items(
             deferred_profile_urls=deferred_urls,
             source_jobs=[job_id],
             snapshot_dir=str(snapshot_dir),
@@ -28902,7 +28903,7 @@ class PipelineTest(unittest.TestCase):
             refill_plan_window_url_count=len(deferred_urls),
         )
         observed_group_limits: list[int] = []
-        original_list_groups = self.store.list_linkedin_profile_refill_queue_groups
+        original_list_groups = self.store.repos.linkedin_profile_registry.list_refill_queue_groups
         dispatched: list[dict[str, object]] = []
 
         def _list_groups_with_limit_capture(**kwargs: object) -> list[dict[str, object]]:
@@ -28936,8 +28937,8 @@ class PipelineTest(unittest.TestCase):
 
         with (
             unittest.mock.patch.object(
-                self.store,
-                "list_linkedin_profile_refill_queue_groups",
+                self.store.repos.linkedin_profile_registry,
+                "list_refill_queue_groups",
                 side_effect=_list_groups_with_limit_capture,
             ),
             unittest.mock.patch.object(
@@ -29053,7 +29054,7 @@ class PipelineTest(unittest.TestCase):
             }
         )
         owner = dict(recovery.get("profile_url_terminal_record_command_owner") or {})
-        registry = self.store.get_linkedin_profile_registry(profile_url) or {}
+        registry = self.store.repos.linkedin_profile_registry.get(profile_url) or {}
         phases = dict(recovery.get("recovery_phase_metrics") or {})
 
         self.assertEqual(owner["status"], "active")
@@ -29166,7 +29167,7 @@ class PipelineTest(unittest.TestCase):
             },
             summary_payload={},
         )
-        self.store.record_linkedin_profile_refill_plan_items(
+        self.store.repos.linkedin_profile_registry.record_refill_plan_items(
             deferred_profile_urls=[future_url],
             source_jobs=[job_id],
             snapshot_dir=str(snapshot_dir),
@@ -29199,7 +29200,7 @@ class PipelineTest(unittest.TestCase):
             [],
         )
 
-        self.store.record_linkedin_profile_refill_plan_items(
+        self.store.repos.linkedin_profile_registry.record_refill_plan_items(
             deferred_profile_urls=[ready_url],
             source_jobs=[job_id],
             snapshot_dir=str(snapshot_dir),
@@ -29214,7 +29215,7 @@ class PipelineTest(unittest.TestCase):
         def _fake_profile_prefetch(**kwargs: object) -> dict[str, object]:
             dispatched.append(dict(kwargs))
             self.assertIs(kwargs.get("execute_profile_refill_submit_commands"), False)
-            self.store.record_linkedin_profile_refill_plan_items(
+            self.store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=[ready_url],
                 source_jobs=[job_id],
                 snapshot_dir=str(snapshot_dir),
@@ -29289,8 +29290,8 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(owner["executed_command_count"], 1)
         self.assertEqual(owner["dispatched_url_count"], 1)
         self.assertEqual(owner["queued_worker_count"], 1)
-        ready_entry = self.store.get_linkedin_profile_registry(ready_url) or {}
-        future_entry = self.store.get_linkedin_profile_registry(future_url) or {}
+        ready_entry = self.store.repos.linkedin_profile_registry.get(ready_url) or {}
+        future_entry = self.store.repos.linkedin_profile_registry.get(future_url) or {}
         self.assertEqual(ready_entry["refill_queue_state"], "planned_dispatch")
         self.assertEqual(future_entry["refill_queue_state"], "deferred_coalescing")
         self.assertEqual(
@@ -29324,7 +29325,7 @@ class PipelineTest(unittest.TestCase):
             },
             summary_payload={},
         )
-        self.store.mark_linkedin_profile_registry_failed(
+        self.store.repos.linkedin_profile_registry.mark_failed(
             future_url,
             error="temporary provider timeout",
             retryable=True,
@@ -29332,7 +29333,7 @@ class PipelineTest(unittest.TestCase):
             source_jobs=[job_id],
             snapshot_dir=str(snapshot_dir),
         )
-        self.store.mark_linkedin_profile_registry_failed(
+        self.store.repos.linkedin_profile_registry.mark_failed(
             ready_url,
             error="temporary provider timeout",
             retryable=True,
@@ -29340,7 +29341,7 @@ class PipelineTest(unittest.TestCase):
             source_jobs=[job_id],
             snapshot_dir=str(snapshot_dir),
         )
-        self.store.record_linkedin_profile_refill_plan_items(
+        self.store.repos.linkedin_profile_registry.record_refill_plan_items(
             deferred_profile_urls=[ready_url],
             source_jobs=[job_id],
             snapshot_dir=str(snapshot_dir),
@@ -29355,7 +29356,7 @@ class PipelineTest(unittest.TestCase):
         def _fake_profile_prefetch(**kwargs: object) -> dict[str, object]:
             dispatched.append(dict(kwargs))
             self.assertIs(kwargs.get("execute_profile_refill_submit_commands"), False)
-            self.store.record_linkedin_profile_refill_plan_items(
+            self.store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=[ready_url],
                 source_jobs=[job_id],
                 snapshot_dir=str(snapshot_dir),
@@ -29426,8 +29427,8 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(owner["status"], "active")
         self.assertEqual(owner["executed_command_count"], 1)
         self.assertEqual(owner["dispatched_url_count"], 1)
-        ready_entry = self.store.get_linkedin_profile_registry(ready_url) or {}
-        future_entry = self.store.get_linkedin_profile_registry(future_url) or {}
+        ready_entry = self.store.repos.linkedin_profile_registry.get(ready_url) or {}
+        future_entry = self.store.repos.linkedin_profile_registry.get(future_url) or {}
         self.assertEqual(ready_entry["refill_queue_state"], "planned_dispatch")
         self.assertEqual(future_entry["refill_queue_state"], "retry_wait")
         self.assertEqual(future_entry["status"], "failed_retryable")
@@ -29458,7 +29459,7 @@ class PipelineTest(unittest.TestCase):
             },
             summary_payload={},
         )
-        self.store.record_linkedin_profile_refill_plan_items(
+        self.store.repos.linkedin_profile_registry.record_refill_plan_items(
             active_profile_urls=[normal_url],
             source_jobs=[job_id],
             snapshot_dir=str(snapshot_dir),
@@ -29468,7 +29469,7 @@ class PipelineTest(unittest.TestCase):
             active_reason="provider_submit_claimed",
             active_refill_not_before_at="2999-01-01 00:00:00",
         )
-        self.store.mark_linkedin_profile_registry_failed(
+        self.store.repos.linkedin_profile_registry.mark_failed(
             retry_url,
             error="temporary provider timeout",
             retryable=True,
@@ -29476,7 +29477,7 @@ class PipelineTest(unittest.TestCase):
             source_jobs=[job_id],
             snapshot_dir=str(snapshot_dir),
         )
-        self.store.record_linkedin_profile_refill_plan_items(
+        self.store.repos.linkedin_profile_registry.record_refill_plan_items(
             deferred_profile_urls=[retry_url],
             source_jobs=[job_id],
             snapshot_dir=str(snapshot_dir),
@@ -29608,8 +29609,8 @@ class PipelineTest(unittest.TestCase):
         }
 
         with unittest.mock.patch.object(
-            self.store,
-            "mark_linkedin_profile_registry_fetched",
+            self.store.repos.linkedin_profile_registry,
+            "mark_fetched",
             side_effect=AssertionError("materialization must not re-upsert already-terminal fetched URLs"),
         ):
             result = self.orchestrator.snapshot_materializer.apply_harvest_profile_workers_to_snapshot(
@@ -29679,7 +29680,7 @@ class PipelineTest(unittest.TestCase):
             current_company="OpenAI",
             experience=[{"companyName": "OpenAI", "title": "Agent Engineer", "current": True}],
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             profile_url,
             raw_path=str(raw_path),
             source_jobs=[job_id],
@@ -39078,10 +39079,10 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(feedback_result["recompile"]["status"], "recompiled")
         self.assertEqual(feedback_result["recompile"]["base_version_id"], plan_result["criteria_version_id"])
         self.assertGreater(feedback_result["recompile"]["criteria_version_id"], plan_result["criteria_version_id"])
-        versions = self.store.list_criteria_versions(target_company="xAI", limit=2)
+        versions = self.store.repos.criteria_confidence.list_versions(target_company="xAI", limit=2)
         self.assertEqual(versions[0]["evolution_stage"], "feedback_recompiled")
         self.assertEqual(versions[0]["parent_version_id"], plan_result["criteria_version_id"])
-        runs = self.store.list_criteria_compiler_runs(target_company="xAI", limit=2)
+        runs = self.store.repos.criteria_confidence.list_compiler_runs(target_company="xAI", limit=2)
         self.assertEqual(runs[0]["compiler_kind"], "feedback_recompile")
 
     def test_feedback_rerun_produces_result_diff(self) -> None:
@@ -39149,7 +39150,7 @@ class PipelineTest(unittest.TestCase):
             "Entered results because",
             feedback_result["rerun"]["diff"]["candidate_impacts"]["items"][0]["attribution_explanation"],
         )
-        diffs = self.store.list_criteria_result_diffs(target_company="TestCo", limit=5)
+        diffs = self.store.repos.criteria_confidence.list_result_diffs(target_company="TestCo", limit=5)
         self.assertEqual(len(diffs), 1)
         self.assertEqual(diffs[0]["baseline_job_id"], initial["job_id"])
         self.assertEqual(diffs[0]["summary"]["added_pattern_count"], 1)
@@ -39313,11 +39314,11 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(feedback_result["rerun"]["diff"]["moved"][0]["new_confidence_label"], "high")
         self.assertGreaterEqual(feedback_result["rerun"]["rerun_result"]["confidence_policy"]["high_threshold"], 0.63)
         self.assertEqual(feedback_result["rerun"]["rerun_result"]["confidence_policy"]["scope_kind"], "request_family")
-        feedback_rows = self.store.list_criteria_feedback(target_company="ConfCo", limit=5)
+        feedback_rows = self.store.repos.criteria_confidence.list_feedback(target_company="ConfCo", limit=5)
         self.assertTrue(feedback_rows[0]["metadata"].get("request_family_signature"))
         self.assertTrue(feedback_rows[0]["metadata"].get("matching_request_family_signature"))
         self.assertTrue(feedback_rows[0]["metadata"].get("request_matching"))
-        runs = self.store.list_confidence_policy_runs(target_company="ConfCo", limit=5)
+        runs = self.store.repos.criteria_confidence.list_policy_runs(target_company="ConfCo", limit=5)
         self.assertGreaterEqual(len(runs), 2)
         self.assertEqual(runs[0]["job_id"], feedback_result["rerun"]["rerun_job_id"])
         self.assertEqual(runs[0]["scope_kind"], "request_family")
@@ -39383,7 +39384,7 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(review_result["applied_pattern"]["pattern_type"], "must_signal")
         self.assertEqual(review_result["recompile"]["status"], "recompiled")
         self.assertEqual(review_result["rerun"]["status"], "completed")
-        active_patterns = self.store.list_criteria_patterns(target_company="ReviewCo", status="active", limit=50)
+        active_patterns = self.store.repos.criteria_confidence.list_patterns(target_company="ReviewCo", status="active", limit=50)
         self.assertTrue(
             any(item["pattern_id"] == review_result["applied_pattern"]["pattern_id"] for item in active_patterns)
         )
@@ -40271,13 +40272,13 @@ class PipelineTest(unittest.TestCase):
         raw_path = str(
             self.settings.company_assets_dir / "reflectionai" / "registry-preserve" / "harvest_profiles" / "cached.json"
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             profile_url,
             raw_path=raw_path,
             snapshot_dir=str(self.settings.company_assets_dir / "reflectionai" / "registry-preserve"),
         )
 
-        updated = self.store.mark_linkedin_profile_registry_queued(
+        updated = self.store.repos.linkedin_profile_registry.mark_queued(
             profile_url,
             snapshot_dir=str(self.settings.company_assets_dir / "reflectionai" / "queued-overwrite-attempt"),
         )

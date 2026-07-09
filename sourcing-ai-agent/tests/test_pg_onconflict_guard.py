@@ -11,6 +11,9 @@ This module mechanically re-derives the complete ON CONFLICT target list from
 
 - ``sourcing_agent/storage.py`` (literal SQL, ``upsert_row_with_generated_id``
   call sites, ``_upsert_simple_control_plane_row`` call sites),
+- ``sourcing_agent/repositories/*.py`` (Track B ②: literal SQL — none expected
+  by write discipline — and ``upsert_row_with_generated_id`` call sites routed
+  through the repository ``_call_native_write`` primitive),
 - ``sourcing_agent/control_plane_postgres.py`` and
   ``sourcing_agent/control_plane_live_postgres.py`` (literal SQL and the
   ``_PRIMARY_KEY_COLUMNS`` conflict-target map used by ``upsert_row`` /
@@ -68,6 +71,13 @@ from tests.pg_durable_runtime import psycopg
 STORAGE_PATH = Path(storage_module.__file__)
 CONTROL_PLANE_PATH = Path(control_plane_postgres.__file__)
 CONTROL_PLANE_LIVE_PATH = Path(control_plane_live_postgres.__file__)
+REPOSITORIES_DIR = STORAGE_PATH.parent / "repositories"
+
+
+def _repository_paths() -> list[Path]:
+    """Every per-domain repository module (Track B ②) — scanned like storage.py."""
+
+    return sorted(REPOSITORIES_DIR.glob("*.py"))
 
 _ON_CONFLICT_RE = re.compile(r"ON CONFLICT\s*\(([^)]*)\)", re.IGNORECASE)
 _INSERT_INTO_RE = re.compile(r"INSERT (?:OR \w+ )?INTO\s+([A-Za-z_{][\w{}]*)", re.IGNORECASE)
@@ -158,29 +168,36 @@ def extract_literal_on_conflict_targets(source: str, label: str) -> list[tuple[s
     return targets
 
 
-def extract_generated_id_upsert_targets() -> list[tuple[int, str, tuple[str, ...]]]:
-    """(line, table, conflict_columns) for every upsert_row_with_generated_id call."""
+def extract_generated_id_upsert_targets() -> list[tuple[str, int, str, tuple[str, ...]]]:
+    """(label, line, table, conflict_columns) for every upsert_row_with_generated_id call.
 
-    tree = ast.parse(STORAGE_PATH.read_text(encoding="utf-8"))
-    targets: list[tuple[int, str, tuple[str, ...]]] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or not node.args:
-            continue
-        first = node.args[0]
-        if not (isinstance(first, ast.Constant) and first.value == "upsert_row_with_generated_id"):
-            continue
-        keywords = {keyword.arg: keyword.value for keyword in node.keywords}
-        table_node = keywords.get("table_name")
-        columns_node = keywords.get("conflict_columns")
-        if not isinstance(table_node, ast.Constant) or not isinstance(columns_node, (ast.List, ast.Tuple)):
-            raise AssertionError(
-                f"storage.py line {node.lineno}: upsert_row_with_generated_id must pass literal "
-                "table_name and conflict_columns so this guard can verify the unique index."
+    Scans storage.py AND every repositories/*.py module (Track B ②): the repositories route the
+    call through ``self._call_native_write("upsert_row_with_generated_id", table_name=..., ...)``,
+    which is the same first-positional-constant shape this matcher keys on.
+    """
+
+    targets: list[tuple[str, int, str, tuple[str, ...]]] = []
+    for path in (STORAGE_PATH, *_repository_paths()):
+        label = path.name if path.parent != REPOSITORIES_DIR else f"repositories/{path.name}"
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not node.args:
+                continue
+            first = node.args[0]
+            if not (isinstance(first, ast.Constant) and first.value == "upsert_row_with_generated_id"):
+                continue
+            keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+            table_node = keywords.get("table_name")
+            columns_node = keywords.get("conflict_columns")
+            if not isinstance(table_node, ast.Constant) or not isinstance(columns_node, (ast.List, ast.Tuple)):
+                raise AssertionError(
+                    f"{label} line {node.lineno}: upsert_row_with_generated_id must pass literal "
+                    "table_name and conflict_columns so this guard can verify the unique index."
+                )
+            columns = tuple(
+                element.value for element in columns_node.elts if isinstance(element, ast.Constant)
             )
-        columns = tuple(
-            element.value for element in columns_node.elts if isinstance(element, ast.Constant)
-        )
-        targets.append((node.lineno, str(table_node.value), columns))
+            targets.append((label, node.lineno, str(table_node.value), columns))
     return targets
 
 
@@ -270,6 +287,7 @@ def collect_all_conflict_targets() -> list[tuple[str, str, tuple[str, ...]]]:
     targets: list[tuple[str, str, tuple[str, ...]]] = []
     for path, label in (
         (STORAGE_PATH, "storage.py"),
+        *((path, f"repositories/{path.name}") for path in _repository_paths()),
         (CONTROL_PLANE_PATH, "control_plane_postgres.py"),
         (CONTROL_PLANE_LIVE_PATH, "control_plane_live_postgres.py"),
     ):
@@ -277,8 +295,8 @@ def collect_all_conflict_targets() -> list[tuple[str, str, tuple[str, ...]]]:
             path.read_text(encoding="utf-8"), label
         ):
             targets.append((f"{file_label}:{line_number}", table_name, columns))
-    for line_number, table_name, columns in extract_generated_id_upsert_targets():
-        targets.append((f"storage.py:{line_number} (upsert_row_with_generated_id)", table_name, columns))
+    for label, line_number, table_name, columns in extract_generated_id_upsert_targets():
+        targets.append((f"{label}:{line_number} (upsert_row_with_generated_id)", table_name, columns))
     for line_number, table_name, columns in extract_simple_upsert_targets():
         targets.append((f"storage.py:{line_number} (_upsert_simple_control_plane_row)", table_name, columns))
     for table_name, pk_columns in _PRIMARY_KEY_COLUMNS.items():

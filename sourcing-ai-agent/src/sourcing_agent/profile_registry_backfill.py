@@ -47,7 +47,7 @@ def backfill_linkedin_profile_registry(
     all_files = list(_iter_harvest_profile_files(runtime_dir=runtime_dir, scope=scope))
     total_files = len(all_files)
 
-    persisted_run = store.get_linkedin_profile_registry_backfill_run(scope.run_key) if resume else None
+    persisted_run = store.repos.linkedin_profile_registry.get_backfill_run(scope.run_key) if resume else None
     checkpoint = dict((persisted_run or {}).get("checkpoint") or {})
     summary = dict((persisted_run or {}).get("summary") or {})
     last_processed_path = str(checkpoint.get("last_processed_path") or "").strip() if resume else ""
@@ -103,7 +103,7 @@ def backfill_linkedin_profile_registry(
             "total_files_in_scope": total_files,
             "remaining_files": max(0, total_files - (cumulative_processed + counters["processed"])),
         }
-        store.upsert_linkedin_profile_registry_backfill_run(
+        store.repos.linkedin_profile_registry.upsert_backfill_run(
             scope.run_key,
             scope_company=scope.company,
             scope_snapshot_id=scope.snapshot_id,
@@ -144,7 +144,7 @@ def backfill_linkedin_profile_registry(
         nonlocal pending_entries
         if not pending_entries:
             return
-        store.backfill_linkedin_profile_registry_batch(pending_entries)
+        store.repos.linkedin_profile_registry.backfill_batch(pending_entries)
         pending_entries = []
 
     for index, path in enumerate(files_to_process, start=1):

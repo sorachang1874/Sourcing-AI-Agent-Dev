@@ -12,6 +12,7 @@ from sourcing_agent.api import create_server
 from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.asset_reuse_planning import build_acquisition_shard_registry_record
 from sourcing_agent.company_registry import resolve_company_alias_key
+from sourcing_agent.linkedin_url_normalization import normalize_linkedin_profile_url_key
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.semantic_provider import LocalSemanticProvider
@@ -254,10 +255,10 @@ class WorkflowExplainTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     "artifact_key": "canonical_merged",
                     "lane": "baseline",
                     "employment_scope": "current",
-                    "member_key": self.store.normalize_linkedin_profile_url(linkedin_url),
+                    "member_key": normalize_linkedin_profile_url_key(linkedin_url),
                     "member_key_kind": "profile_url_key",
                     "candidate_id": f"{company_key}-{index}",
-                    "profile_url_key": self.store.normalize_linkedin_profile_url(linkedin_url),
+                    "profile_url_key": normalize_linkedin_profile_url_key(linkedin_url),
                 }
             )
         return self.store.register_asset_materialization(

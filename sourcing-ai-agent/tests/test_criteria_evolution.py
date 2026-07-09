@@ -16,7 +16,7 @@ class CriteriaEvolutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.store = self.make_pg_store(f"{self.tempdir.name}/test.db")
 
     def test_feedback_persists_alias_pattern(self) -> None:
-        result = self.store.record_criteria_feedback(
+        result = self.store.repos.criteria_confidence.record_feedback(
             {
                 "target_company": "xAI",
                 "feedback_type": "accepted_alias",
@@ -27,12 +27,12 @@ class CriteriaEvolutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             }
         )
         self.assertGreaterEqual(result["feedback_id"], 1)
-        patterns = self.store.list_criteria_patterns(target_company="xAI", pattern_type="alias")
+        patterns = self.store.repos.criteria_confidence.list_patterns(target_company="xAI", pattern_type="alias")
         self.assertEqual(len(patterns), 1)
         self.assertEqual(patterns[0]["subject"], "RL")
 
     def test_must_have_feedback_persists_confidence_boost_patterns(self) -> None:
-        result = self.store.record_criteria_feedback(
+        result = self.store.repos.criteria_confidence.record_feedback(
             {
                 "target_company": "xAI",
                 "feedback_type": "must_have_signal",
@@ -44,14 +44,15 @@ class CriteriaEvolutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(pattern_types, {"must_signal", "confidence_boost"})
 
     def test_criteria_version_and_compiler_run_persist(self) -> None:
-        version = self.store.create_criteria_version(
+        repo = self.store.repos.criteria_confidence
+        version = repo.create_version(
             target_company="xAI",
             request_payload={"target_company": "xAI", "keywords": ["RL"]},
             plan_payload={"retrieval_plan": {"strategy": "hybrid"}},
             patterns=[],
             source_kind="plan",
         )
-        compiler_run = self.store.record_criteria_compiler_run(
+        compiler_run = repo.record_compiler_run(
             version_id=version["version_id"],
             job_id="job123",
             provider_name="deterministic",
@@ -62,13 +63,13 @@ class CriteriaEvolutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         )
         self.assertGreaterEqual(version["version_id"], 1)
         self.assertGreaterEqual(compiler_run["compiler_run_id"], 1)
-        versions = self.store.list_criteria_versions(target_company="xAI")
-        runs = self.store.list_criteria_compiler_runs(version_id=version["version_id"])
+        versions = repo.list_versions(target_company="xAI")
+        runs = repo.list_compiler_runs(version_id=version["version_id"])
         self.assertEqual(len(versions), 1)
         self.assertEqual(len(runs), 1)
 
     def test_alias_pattern_affects_scoring(self) -> None:
-        self.store.record_criteria_feedback(
+        self.store.repos.criteria_confidence.record_feedback(
             {
                 "target_company": "xAI",
                 "feedback_type": "accepted_alias",
@@ -88,7 +89,7 @@ class CriteriaEvolutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             focus_areas="reinforcement learning systems",
         )
         request = JobRequest(target_company="xAI", keywords=["RL"])
-        patterns = self.store.list_criteria_patterns(target_company="xAI")
+        patterns = self.store.repos.criteria_confidence.list_patterns(target_company="xAI")
         scored = score_candidates([candidate], request, criteria_patterns=patterns)
         self.assertEqual(len(scored), 1)
         self.assertGreater(scored[0].score, 0)
@@ -111,7 +112,7 @@ class CriteriaEvolutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         baseline = score_candidates([candidate], request, criteria_patterns=[])
         self.assertEqual(baseline[0].confidence_label, "high")
 
-        self.store.record_criteria_feedback(
+        self.store.repos.criteria_confidence.record_feedback(
             {
                 "target_company": "xAI",
                 "feedback_type": "false_positive_pattern",
@@ -119,7 +120,7 @@ class CriteriaEvolutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "value": "distributed systems",
             }
         )
-        patterns = self.store.list_criteria_patterns(target_company="xAI")
+        patterns = self.store.repos.criteria_confidence.list_patterns(target_company="xAI")
         scored = score_candidates([candidate], request, criteria_patterns=patterns)
         self.assertEqual(len(scored), 1)
         self.assertEqual(scored[0].confidence_label, "medium")
@@ -143,7 +144,7 @@ class CriteriaEvolutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         baseline = score_candidates([candidate], request, criteria_patterns=[])
         self.assertEqual(baseline[0].confidence_label, "medium")
 
-        self.store.record_criteria_feedback(
+        self.store.repos.criteria_confidence.record_feedback(
             {
                 "target_company": "xAI",
                 "feedback_type": "must_have_signal",
@@ -151,7 +152,7 @@ class CriteriaEvolutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "value": "research engineer",
             }
         )
-        patterns = self.store.list_criteria_patterns(target_company="xAI")
+        patterns = self.store.repos.criteria_confidence.list_patterns(target_company="xAI")
         scored = score_candidates([candidate], request, criteria_patterns=patterns)
         self.assertEqual(len(scored), 1)
         self.assertEqual(scored[0].confidence_label, "high")
@@ -183,8 +184,8 @@ class CriteriaEvolutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             {"target_company": "xAI", "feedback_type": "false_negative_pattern", "subject": "platform", "value": "systems platform"},
             {"target_company": "xAI", "feedback_type": "confidence_boost_signal", "subject": "systems", "value": "platform"},
         ]:
-            self.store.record_criteria_feedback(payload)
-        feedback = self.store.list_criteria_feedback(target_company="xAI")
+            self.store.repos.criteria_confidence.record_feedback(payload)
+        feedback = self.store.repos.criteria_confidence.list_feedback(target_company="xAI")
         policy = build_confidence_policy(target_company="xAI", feedback_items=feedback)
         scored = score_candidates([candidate], request, criteria_patterns=[], confidence_policy=policy)
         self.assertLess(policy["high_threshold"], 0.75)

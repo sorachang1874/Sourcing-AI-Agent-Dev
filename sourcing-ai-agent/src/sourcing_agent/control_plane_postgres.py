@@ -123,8 +123,8 @@ _CONTROL_PLANE_UNIQUE_INDEXES: dict[str, tuple[tuple[str, tuple[str, ...], str],
     "crm_public_web_runs": (
         ("idx_crm_public_web_runs_idempotency_unique", ("idempotency_key",), "idempotency_key <> ''"),
     ),
-    # ON CONFLICT (target_company, pattern_type, subject, value) — storage.upsert_criteria_pattern
-    # (SQLite mirrors this with UNIQUE(target_company, pattern_type, subject, value)).
+    # ON CONFLICT (target_company, pattern_type, subject, value) —
+    # repositories.criteria_confidence.CriteriaConfidenceRepository.upsert_pattern (Track B ②.1).
     "criteria_patterns": (
         (
             "idx_criteria_patterns_identity_unique",

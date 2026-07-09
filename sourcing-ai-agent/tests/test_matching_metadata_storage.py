@@ -35,7 +35,7 @@ class MatchingMetadataStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCas
         self.tempdir.cleanup()
 
     def test_confidence_policy_control_matches_equivalent_request_family(self) -> None:
-        control = self.store.create_confidence_policy_control(
+        control = self.store.repos.criteria_confidence.create_policy_control(
             target_company="Google",
             request_payload=RAW_GEMINI_PM_REQUEST,
             scope_kind="request_family",
@@ -44,7 +44,7 @@ class MatchingMetadataStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCas
             medium_threshold=0.4,
             reviewer="human",
         )
-        matched = self.store.find_active_confidence_policy_control(
+        matched = self.store.repos.criteria_confidence.find_active_policy_control(
             target_company="Google",
             request_payload=STRUCTURED_GEMINI_PM_REQUEST,
         )
@@ -71,7 +71,7 @@ class MatchingMetadataStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCas
             "evidence": {"field": "focus_areas"},
             "metadata": {"signal_field": "focus_areas"},
         }
-        self.store.record_pattern_suggestions(
+        self.store.repos.criteria_confidence.record_suggestions(
             [
                 {
                     **suggestion_key,
@@ -83,7 +83,7 @@ class MatchingMetadataStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCas
                 }
             ]
         )
-        self.store.record_pattern_suggestions(
+        self.store.repos.criteria_confidence.record_suggestions(
             [
                 {
                     **suggestion_key,
@@ -96,7 +96,7 @@ class MatchingMetadataStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCas
             ]
         )
 
-        suggestions = self.store.list_pattern_suggestions(target_company="Google", limit=10)
+        suggestions = self.store.repos.criteria_confidence.list_suggestions(target_company="Google", limit=10)
         self.assertEqual(len(suggestions), 1)
         self.assertEqual(suggestions[0]["source_job_id"], "job-structured")
         self.assertEqual(

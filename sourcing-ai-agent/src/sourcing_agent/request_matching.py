@@ -71,6 +71,61 @@ def request_family_signature(payload: dict[str, Any]) -> str:
     return sha1(serialized.encode("utf-8")).hexdigest()[:16]
 
 
+def matching_bundle_payload(
+    request_payload: dict[str, Any],
+    *,
+    execution_bundle_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    # Moved verbatim from storage._matching_bundle_payload (Track B ②.1): prefer the execution bundle's
+    # persisted request_matching (backfilling its signatures) over recomputing from the raw payload.
+    execution_bundle_payload = dict(execution_bundle_payload or {})
+    request_matching = dict(execution_bundle_payload.get("request_matching") or {})
+    if request_matching:
+        matching_request = dict(request_matching.get("matching_request") or {})
+        matching_family_request = dict(request_matching.get("matching_family_request") or {})
+        if matching_request and matching_family_request:
+            request_matching["matching_request"] = matching_request
+            request_matching["matching_family_request"] = matching_family_request
+            request_matching.setdefault(
+                "matching_request_signature",
+                matching_request_signature(request_payload),
+            )
+            request_matching.setdefault(
+                "matching_request_family_signature",
+                matching_request_family_signature(request_payload),
+            )
+            return request_matching
+    return build_request_matching_bundle(request_payload)
+
+
+def request_signature_context(
+    request_payload: dict[str, Any],
+    *,
+    execution_bundle_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    # Moved verbatim from storage._request_signature_context (Track B ②.1).
+    normalized_request = dict(request_payload or {})
+    if not normalized_request:
+        return {
+            "request_signature": "",
+            "request_family_signature": "",
+            "matching_request_signature": "",
+            "matching_request_family_signature": "",
+            "request_matching": {},
+        }
+    matching_bundle = matching_bundle_payload(
+        normalized_request,
+        execution_bundle_payload=execution_bundle_payload,
+    )
+    return {
+        "request_signature": request_signature(normalized_request),
+        "request_family_signature": request_family_signature(normalized_request),
+        "matching_request_signature": str(matching_bundle.get("matching_request_signature") or ""),
+        "matching_request_family_signature": str(matching_bundle.get("matching_request_family_signature") or ""),
+        "request_matching": matching_bundle,
+    }
+
+
 def request_family_score(
     left: dict[str, Any],
     right: dict[str, Any],

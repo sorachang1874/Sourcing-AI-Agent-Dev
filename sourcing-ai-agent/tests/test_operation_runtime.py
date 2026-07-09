@@ -6409,7 +6409,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 {delta["delta_kind"] for delta in final_profile_deltas},
                 {"profile_fetch_required", "profile_provider_fetched"},
             )
-            fetched_registry = api_store.get_linkedin_profile_registry("https://www.linkedin.com/in/ada-lovelace/")
+            fetched_registry = api_store.repos.linkedin_profile_registry.get("https://www.linkedin.com/in/ada-lovelace/")
             self.assertEqual(fetched_registry["status"], "fetched")
             self.assertIn("operation_activities", fetched_registry["last_raw_path"])
             provider_operation = api_store.get_operation_run(approved_continue["operation_run"]["operation_run_id"])
@@ -7325,7 +7325,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "projection_effect"
                 ]["profile_terminal_recorded"]
             )
-            registry_rows = api_store.get_linkedin_profile_registry_bulk(
+            registry_rows = api_store.repos.linkedin_profile_registry.get_bulk(
                 [
                     "https://www.linkedin.com/in/ada-lovelace/",
                     "https://www.linkedin.com/in/grace-hopper/",

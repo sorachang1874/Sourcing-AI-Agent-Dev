@@ -59,12 +59,14 @@ class ProfileRegistryBackfillTest(PGControlPlaneStoreTestMixin, unittest.TestCas
         self.assertEqual(result["files_processed_this_run"], 2)
         self.assertGreaterEqual(len(progress_updates), 1)
 
-        fetched_entry = self.store.get_linkedin_profile_registry("https://www.linkedin.com/in/fetched-user/")
+        fetched_entry = self.store.repos.linkedin_profile_registry.get("https://www.linkedin.com/in/fetched-user/")
         self.assertIsNotNone(fetched_entry)
         assert fetched_entry is not None
         self.assertEqual(fetched_entry["status"], "fetched")
 
-        restricted_entry = self.store.get_linkedin_profile_registry("https://www.linkedin.com/in/restricted-user/")
+        restricted_entry = self.store.repos.linkedin_profile_registry.get(
+            "https://www.linkedin.com/in/restricted-user/"
+        )
         self.assertIsNotNone(restricted_entry)
         assert restricted_entry is not None
         self.assertEqual(restricted_entry["status"], "unrecoverable")
@@ -110,7 +112,7 @@ class ProfileRegistryBackfillTest(PGControlPlaneStoreTestMixin, unittest.TestCas
             resume=True,
         )
         self.assertEqual(second_run["files_processed_this_run"], 1)
-        second_entry = self.store.get_linkedin_profile_registry("https://www.linkedin.com/in/second-user/")
+        second_entry = self.store.repos.linkedin_profile_registry.get("https://www.linkedin.com/in/second-user/")
         self.assertIsNotNone(second_entry)
 
     def test_backfill_scans_hot_cache_harvest_profiles(self) -> None:
@@ -138,7 +140,7 @@ class ProfileRegistryBackfillTest(PGControlPlaneStoreTestMixin, unittest.TestCas
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["files_processed_this_run"], 1)
-        entry = self.store.get_linkedin_profile_registry("https://www.linkedin.com/in/hot-cache-user/")
+        entry = self.store.repos.linkedin_profile_registry.get("https://www.linkedin.com/in/hot-cache-user/")
         self.assertIsNotNone(entry)
         assert entry is not None
         self.assertEqual(entry["status"], "fetched")

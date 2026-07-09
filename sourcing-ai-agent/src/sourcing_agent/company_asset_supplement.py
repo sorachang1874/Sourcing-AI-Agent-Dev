@@ -733,8 +733,8 @@ class CompanyAssetSupplementManager:
             alias_urls = list(alias_metadata.get("alias_urls") or [])
             sanity_linkedin_url = str(alias_metadata.get("sanity_linkedin_url") or "").strip()
             existing_entry = (
-                self.store.get_linkedin_profile_registry(raw_linkedin_url)
-                or (self.store.get_linkedin_profile_registry(sanity_linkedin_url) if sanity_linkedin_url else None)
+                self.store.repos.linkedin_profile_registry.get(raw_linkedin_url)
+                or (self.store.repos.linkedin_profile_registry.get(sanity_linkedin_url) if sanity_linkedin_url else None)
                 or {}
             )
             canonical_profile_url = (
@@ -752,7 +752,7 @@ class CompanyAssetSupplementManager:
             if source_shard_id:
                 source_labels.append(f"source_shard:{source_shard_id}")
 
-            self.store.mark_linkedin_profile_registry_fetched(
+            self.store.repos.linkedin_profile_registry.mark_fetched(
                 canonical_profile_url,
                 raw_path=str(match.get("raw_path") or ""),
                 source_shards=source_labels,

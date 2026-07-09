@@ -375,6 +375,7 @@ from .remote_provider_events import (
     normalize_remote_provider_event,
     remote_provider_event_matches_worker,
 )
+from .repositories import linkedin_profile_registry_repo
 from .request_matching import (
     MATCH_THRESHOLD,
     baseline_selection_reason,
@@ -5637,7 +5638,9 @@ class SourcingOrchestrator:
         if not profile_url_by_candidate_id:
             return [dict(record) for record in records]
         try:
-            registry_rows = self.store.get_linkedin_profile_registry_bulk(list(profile_url_by_candidate_id.values()))
+            registry_rows = self.store.repos.linkedin_profile_registry.get_bulk(
+                list(profile_url_by_candidate_id.values())
+            )
         except Exception:
             registry_rows = {}
         if not registry_rows:
@@ -32515,7 +32518,7 @@ class SourcingOrchestrator:
             }
         registry_entries: dict[str, dict[str, Any]] = {}
         try:
-            registry_entries = self.store.get_linkedin_profile_registry_bulk(profile_urls)
+            registry_entries = self.store.repos.linkedin_profile_registry.get_bulk(profile_urls)
         except Exception:
             registry_entries = {}
         for profile_url in profile_urls:
@@ -32986,7 +32989,7 @@ class SourcingOrchestrator:
         registry_entries: dict[str, dict[str, Any]] = {}
         if business_required_urls:
             try:
-                registry_entries = self.store.get_linkedin_profile_registry_bulk(business_required_urls)
+                registry_entries = self.store.repos.linkedin_profile_registry.get_bulk(business_required_urls)
             except Exception:
                 registry_entries = {}
         for url in business_required_urls:
@@ -35890,7 +35893,7 @@ class SourcingOrchestrator:
                 payload=payload,
                 metadata=metadata,
                 source_path=source_path,
-                registry_row=self.store.get_linkedin_profile_registry(profile_url),
+                registry_row=self.store.repos.linkedin_profile_registry.get(profile_url),
             )
         if experience_lines and not resolved.get("experience_lines"):
             resolved["experience_lines"] = experience_lines
@@ -41344,7 +41347,7 @@ class SourcingOrchestrator:
             )
 
         object_sync = self._collect_object_sync_progress(limit=object_sync_limit)
-        profile_registry = self.store.get_linkedin_profile_registry_metrics(
+        profile_registry = self.store.repos.linkedin_profile_registry.get_metrics(
             lookback_hours=profile_registry_lookback_hours,
         )
         cloud_asset_operations = self.store.list_cloud_asset_operations(
@@ -42373,7 +42376,8 @@ class SourcingOrchestrator:
 
         profile_refill_open_items: list[dict[str, Any]] = []
         profile_refill_ready_items: list[dict[str, Any]] = []
-        list_profile_items = getattr(self.store, "list_linkedin_profile_refill_queue_items", None)
+        registry_repo = linkedin_profile_registry_repo(self.store)
+        list_profile_items = getattr(registry_repo, "list_refill_queue_items", None)
         if callable(list_profile_items):
             try:
                 profile_refill_open_items = list(
@@ -50590,9 +50594,13 @@ class SourcingOrchestrator:
         rerun_results = self.store.get_job_results(rerun_job_id)
         baseline_version = _criteria_like_version_from_job(
             baseline_job,
-            patterns=self.store.list_criteria_patterns(target_company=request.target_company, status=""),
+            patterns=self.store.repos.criteria_confidence.list_patterns(
+                target_company=request.target_company, status=""
+            ),
         )
-        rerun_version = self.store.get_criteria_version(int(criteria_artifacts.get("criteria_version_id") or 0))
+        rerun_version = self.store.repos.criteria_confidence.get_version(
+            int(criteria_artifacts.get("criteria_version_id") or 0)
+        )
         diff = build_result_diff(
             baseline_results,
             rerun_results,
@@ -50616,7 +50624,7 @@ class SourcingOrchestrator:
         }
         diff_artifact_path = self.jobs_dir / f"criteria_diff_refinement_{baseline_job_id or 'none'}_{rerun_job_id}.json"
         diff_artifact_path.write_text(json.dumps(diff_artifact, ensure_ascii=False, indent=2))
-        stored = self.store.record_criteria_result_diff(
+        stored = self.store.repos.criteria_confidence.record_result_diff(
             target_company=request.target_company,
             trigger_feedback_id=0,
             criteria_version_id=int(criteria_artifacts.get("criteria_version_id") or 0),
@@ -52134,7 +52142,7 @@ class SourcingOrchestrator:
             result_payload.get("linkedin_url"),
             payload.get("linkedin_url"),
         )
-        registry_row = self.store.get_linkedin_profile_registry(linkedin_url) if linkedin_url else None
+        registry_row = self.store.repos.linkedin_profile_registry.get(linkedin_url) if linkedin_url else None
         export_name = _first_non_empty_text(
             combined_payload.get("display_name"),
             combined_payload.get("name_en"),
@@ -52434,7 +52442,7 @@ class SourcingOrchestrator:
         return response
 
     def record_criteria_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
-        feedback = self.store.record_criteria_feedback(payload)
+        feedback = self.store.repos.criteria_confidence.record_feedback(payload)
         suggestions = self._suggest_patterns_from_feedback(int(feedback.get("feedback_id") or 0))
         recompile = self.criteria_evolution.recompile_after_feedback(payload, int(feedback["feedback_id"]))
         rerun = self._rerun_after_recompile_if_requested(payload, feedback, recompile)
@@ -52464,7 +52472,7 @@ class SourcingOrchestrator:
         if not target_company:
             return {"status": "invalid", "reason": "target_company is required"}
         if action in {"clear", "disable", "deactivate"}:
-            result = self.store.deactivate_confidence_policy_control(
+            result = self.store.repos.criteria_confidence.deactivate_policy_control(
                 control_id=int(payload.get("control_id") or 0),
                 target_company=target_company,
                 request_payload=request_payload,
@@ -52473,13 +52481,15 @@ class SourcingOrchestrator:
             return {"status": "cleared", **result}
 
         if action in {"freeze", "freeze_current"}:
-            feedback_items = self.store.list_criteria_feedback(target_company=target_company, limit=500)
+            feedback_items = self.store.repos.criteria_confidence.list_feedback(
+                target_company=target_company, limit=500
+            )
             auto_policy = build_confidence_policy(
                 target_company=target_company,
                 feedback_items=feedback_items,
                 request_payload=request_payload,
             )
-            control = self.store.create_confidence_policy_control(
+            control = self.store.repos.criteria_confidence.create_policy_control(
                 target_company=target_company,
                 request_payload=request_payload,
                 scope_kind=scope_kind,
@@ -52493,7 +52503,7 @@ class SourcingOrchestrator:
             return {"status": "configured", "control": control, "source_policy": auto_policy}
 
         if action in {"override", "set"}:
-            control = self.store.create_confidence_policy_control(
+            control = self.store.repos.criteria_confidence.create_policy_control(
                 target_company=target_company,
                 request_payload=request_payload,
                 scope_kind=scope_kind,
@@ -52510,7 +52520,7 @@ class SourcingOrchestrator:
     def review_pattern_suggestion(self, payload: dict[str, Any]) -> dict[str, Any]:
         suggestion_id = int(payload.get("suggestion_id") or 0)
         action = str(payload.get("action") or payload.get("status") or "").strip()
-        review = self.store.review_pattern_suggestion(
+        review = self.store.repos.criteria_confidence.review_suggestion(
             suggestion_id=suggestion_id,
             action=action,
             reviewer=str(payload.get("reviewer") or "").strip(),
@@ -52529,7 +52539,9 @@ class SourcingOrchestrator:
 
         suggestion = dict(review.get("suggestion") or {})
         source_feedback_id = int(suggestion.get("source_feedback_id") or 0)
-        source_feedback = self.store.get_criteria_feedback(source_feedback_id) if source_feedback_id else {}
+        source_feedback = (
+            self.store.repos.criteria_confidence.get_feedback(source_feedback_id) if source_feedback_id else {}
+        )
         recompile_payload = {
             "target_company": str(suggestion.get("target_company") or payload.get("target_company") or ""),
             "job_id": str(suggestion.get("source_job_id") or (source_feedback or {}).get("job_id") or ""),
@@ -52567,14 +52579,22 @@ class SourcingOrchestrator:
 
     def list_criteria_patterns(self, target_company: str = "") -> dict[str, Any]:
         return {
-            "patterns": self.store.list_criteria_patterns(target_company=target_company),
-            "suggestions": self.store.list_pattern_suggestions(target_company=target_company, limit=100),
-            "feedback": self.store.list_criteria_feedback(target_company=target_company, limit=50),
-            "versions": self.store.list_criteria_versions(target_company=target_company, limit=20),
-            "compiler_runs": self.store.list_criteria_compiler_runs(target_company=target_company, limit=50),
-            "result_diffs": self.store.list_criteria_result_diffs(target_company=target_company, limit=50),
-            "confidence_policy_runs": self.store.list_confidence_policy_runs(target_company=target_company, limit=50),
-            "confidence_policy_controls": self.store.list_confidence_policy_controls(
+            "patterns": self.store.repos.criteria_confidence.list_patterns(target_company=target_company),
+            "suggestions": self.store.repos.criteria_confidence.list_suggestions(
+                target_company=target_company, limit=100
+            ),
+            "feedback": self.store.repos.criteria_confidence.list_feedback(target_company=target_company, limit=50),
+            "versions": self.store.repos.criteria_confidence.list_versions(target_company=target_company, limit=20),
+            "compiler_runs": self.store.repos.criteria_confidence.list_compiler_runs(
+                target_company=target_company, limit=50
+            ),
+            "result_diffs": self.store.repos.criteria_confidence.list_result_diffs(
+                target_company=target_company, limit=50
+            ),
+            "confidence_policy_runs": self.store.repos.criteria_confidence.list_policy_runs(
+                target_company=target_company, limit=50
+            ),
+            "confidence_policy_controls": self.store.repos.criteria_confidence.list_policy_controls(
                 target_company=target_company, limit=50
             ),
         }
@@ -69641,14 +69661,16 @@ class SourcingOrchestrator:
         candidates = list(candidate_source.get("candidates") or [])
         candidate_count = len(candidates)
         snapshot_id = str(candidate_source.get("snapshot_id") or "").strip()
-        criteria_patterns = self.store.list_criteria_patterns(target_company=request.target_company)
-        confidence_feedback = self.store.list_criteria_feedback(target_company=request.target_company, limit=500)
+        criteria_patterns = self.store.repos.criteria_confidence.list_patterns(target_company=request.target_company)
+        confidence_feedback = self.store.repos.criteria_confidence.list_feedback(
+            target_company=request.target_company, limit=500
+        )
         confidence_policy = build_confidence_policy(
             target_company=request.target_company,
             feedback_items=confidence_feedback,
             request_payload=effective_request.to_record(),
         )
-        control = self.store.find_active_confidence_policy_control(
+        control = self.store.repos.criteria_confidence.find_active_policy_control(
             target_company=request.target_company,
             request_payload=effective_request.to_record(),
         )
@@ -70087,7 +70109,7 @@ class SourcingOrchestrator:
                 applied_filter["filtered_candidate_count"] = len(candidates)
             outreach_layering_context["applied_filter"] = applied_filter
         source_evidence_lookup = dict(candidate_source.get("evidence_lookup") or {})
-        criteria_patterns = self.store.list_criteria_patterns(target_company=request.target_company)
+        criteria_patterns = self.store.repos.criteria_confidence.list_patterns(target_company=request.target_company)
         retrieval_strategy = _plan_retrieval_strategy(plan)
         semantic_hits = {}
         semantic_enabled = _env_bool("SOURCING_RETRIEVAL_ENABLE_SEMANTIC", False)
@@ -70105,13 +70127,15 @@ class SourcingOrchestrator:
                 limit=effective_request.semantic_rerank_limit,
                 semantic_provider=self.semantic_provider,
             )
-        confidence_feedback = self.store.list_criteria_feedback(target_company=request.target_company, limit=500)
+        confidence_feedback = self.store.repos.criteria_confidence.list_feedback(
+            target_company=request.target_company, limit=500
+        )
         confidence_policy = build_confidence_policy(
             target_company=request.target_company,
             feedback_items=confidence_feedback,
             request_payload=effective_request.to_record(),
         )
-        control = self.store.find_active_confidence_policy_control(
+        control = self.store.repos.criteria_confidence.find_active_policy_control(
             target_company=request.target_company,
             request_payload=effective_request.to_record(),
         )
@@ -70530,7 +70554,7 @@ class SourcingOrchestrator:
                     },
                     handoff_to_lane="review_specialist",
                 )
-            policy_run = self.store.record_confidence_policy_run(
+            policy_run = self.store.repos.criteria_confidence.record_policy_run(
                 target_company=request.target_company,
                 job_id=job_id,
                 criteria_version_id=int((criteria_artifacts or {}).get("criteria_version_id") or 0),
@@ -70645,8 +70669,8 @@ class SourcingOrchestrator:
         rerun_results = self.store.get_job_results(rerun_artifact["job_id"])
         baseline_version_id = int(recompile.get("base_version_id") or 0)
         rerun_version_id = int(recompile.get("criteria_version_id") or 0)
-        baseline_version = self.store.get_criteria_version(baseline_version_id)
-        rerun_version = self.store.get_criteria_version(rerun_version_id)
+        baseline_version = self.store.repos.criteria_confidence.get_version(baseline_version_id)
+        rerun_version = self.store.repos.criteria_confidence.get_version(rerun_version_id)
         trigger_feedback = {
             "feedback_id": int(feedback.get("feedback_id") or 0),
             "feedback_type": str(payload.get("feedback_type") or feedback.get("feedback_type") or ""),
@@ -70676,7 +70700,7 @@ class SourcingOrchestrator:
             self.jobs_dir / f"criteria_diff_{baseline_job_id or 'none'}_{rerun_artifact['job_id']}.json"
         )
         diff_artifact_path.write_text(json.dumps(diff_artifact, ensure_ascii=False, indent=2))
-        stored = self.store.record_criteria_result_diff(
+        stored = self.store.repos.criteria_confidence.record_result_diff(
             target_company=target_company,
             trigger_feedback_id=int(feedback.get("feedback_id") or 0),
             criteria_version_id=int(recompile.get("criteria_version_id") or 0),
@@ -70707,8 +70731,8 @@ class SourcingOrchestrator:
         compiler_kind: str,
         job_id: str,
     ) -> dict[str, Any]:
-        patterns = self.store.list_criteria_patterns(target_company=request.target_company, status="")
-        version = self.store.create_criteria_version(
+        patterns = self.store.repos.criteria_confidence.list_patterns(target_company=request.target_company, status="")
+        version = self.store.repos.criteria_confidence.create_version(
             target_company=request.target_company,
             request_payload=request.to_record(),
             plan_payload=plan_payload,
@@ -70717,7 +70741,7 @@ class SourcingOrchestrator:
             evolution_stage="planned",
             notes="Planning artifacts persisted for auditability and future criteria evolution.",
         )
-        compiler_run = self.store.record_criteria_compiler_run(
+        compiler_run = self.store.repos.criteria_confidence.record_compiler_run(
             version_id=version["version_id"],
             job_id=job_id,
             provider_name=self.model_client.provider_name(),
@@ -70734,7 +70758,7 @@ class SourcingOrchestrator:
         }
 
     def _suggest_patterns_from_feedback(self, feedback_id: int) -> list[dict[str, Any]]:
-        feedback = self.store.get_criteria_feedback(feedback_id)
+        feedback = self.store.repos.criteria_confidence.get_feedback(feedback_id)
         if feedback is None:
             return []
         candidate_id = str(feedback.get("candidate_id") or "").strip()
@@ -70746,7 +70770,7 @@ class SourcingOrchestrator:
                 if str(item.get("candidate_id") or "") == candidate_id:
                     job_result = item
                     break
-        existing_patterns = self.store.list_criteria_patterns(
+        existing_patterns = self.store.repos.criteria_confidence.list_patterns(
             target_company=str(feedback.get("target_company") or ""),
             status="",
             limit=500,
@@ -70757,7 +70781,7 @@ class SourcingOrchestrator:
             job_result=job_result,
             existing_patterns=existing_patterns,
         )
-        return self.store.record_pattern_suggestions(suggestions)
+        return self.store.repos.criteria_confidence.record_suggestions(suggestions)
 
 
 def _first_non_empty_text(*values: Any) -> str:

@@ -3907,7 +3907,7 @@ def _build_profile_timeline_registry_rows(
         ]
         if profile_url
     ]
-    bulk_rows = store.get_linkedin_profile_registry_bulk(profile_urls)
+    bulk_rows = store.repos.linkedin_profile_registry.get_bulk(profile_urls)
     resolved: dict[str, dict[str, Any]] = dict(bulk_rows)
     for profile_url in profile_urls:
         normalized_key = normalize_linkedin_profile_url_key(profile_url)

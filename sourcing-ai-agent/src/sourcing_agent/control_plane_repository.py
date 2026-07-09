@@ -212,11 +212,17 @@ class TableDescriptor:
 
 
 class Repository:
-    """Base per-domain repository over the PG adapter primitives + a descriptor.
+    """Base per-domain repository over the PG adapter primitives + descriptors.
 
-    ``adapter`` is the ``LiveControlPlanePostgresAdapter``; this layer issues descriptor-generated SQL
-    through it (``select_one``/``select_many`` and ``_execute_returning_one``) and maps rows through the
-    descriptor. No SQLite, no row_builder indirection, no getattr-by-string dispatch.
+    ``adapter`` is the ``LiveControlPlanePostgresAdapter``. The public surface of a domain repository is
+    its typed domain methods ONLY; the protected primitives below are the fail-closed adapter plumbing,
+    ported 1:1 from the retired ``ControlPlaneStore`` wrappers so every migrated method keeps the exact
+    authority/error semantics (raise on authoritative failure, sentinel on non-authoritative miss).
+
+    Write discipline (②.0 protocol): repository writes route through the adapter primitives
+    (``upsert_row``/``bulk_upsert_rows``/``insert_row_with_generated_id``/``delete_rows``) whose conflict
+    targets are covered by the pg-onconflict guard via ``_PRIMARY_KEY_COLUMNS``. Literal ``ON CONFLICT``
+    SQL must not live in ``repositories/`` — the guard's literal-SQL scan does not cover this package.
     """
 
     descriptor: TableDescriptor
@@ -224,32 +230,165 @@ class Repository:
     def __init__(self, adapter: Any) -> None:
         self._adapter = adapter
 
-    def get(self, *, where_sql: str, params: list[Any]) -> dict[str, Any] | None:
-        row = self._adapter.select_one(self.descriptor.table, where_sql=where_sql, params=params)
-        return self.descriptor.from_row(row) if row is not None else None
+    # --- authority predicates (== the retired ControlPlaneStore wrappers, over the adapter) ---
 
-    def select(
+    def _should_prefer_read(self, table_name: str) -> bool:
+        return bool(self._adapter.should_prefer_read(table_name))
+
+    def _is_authoritative(self, table_name: str) -> bool:
+        predicate = getattr(self._adapter, "is_authoritative", None)
+        if not callable(predicate):
+            return False
+        try:
+            return bool(predicate(table_name))
+        except Exception:
+            return False
+
+    def _strict_authoritative(self, table_name: str) -> bool:
+        # == ControlPlaneStore._control_plane_postgres_should_skip_sqlite_fallback
+        return bool(self._should_prefer_read(table_name) and self._is_authoritative(table_name))
+
+    # --- fail-closed error surface (message format preserved byte-identically) ---
+
+    def _raise_write_failure(
         self,
         *,
-        where_sql: str = "",
-        params: list[Any] | None = None,
+        table_name: str,
+        method_name: str,
+        reason: str,
+        error: Exception | None = None,
+    ) -> None:
+        message = f"Postgres authoritative write failed for {table_name} via {method_name}: {reason}"
+        if error is not None:
+            raise RuntimeError(message) from error
+        raise RuntimeError(message)
+
+    def _raise_read_failure(
+        self,
+        *,
+        table_name: str,
+        method_name: str,
+        reason: str,
+        error: Exception | None = None,
+    ) -> None:
+        message = f"Postgres authoritative read failed for {table_name} via {method_name}: {reason}"
+        if error is not None:
+            raise RuntimeError(message) from error
+        raise RuntimeError(message)
+
+    def _raise_postgres_only_invariant(self, *, table_name: str, method_name: str) -> None:
+        raise RuntimeError(
+            f"postgres-only invariant violated for {table_name} in {method_name}: should_prefer_read "
+            "returned False; legacy SQLite tail retired (B4)"
+        )
+
+    # --- fail-closed read/write primitives (== _select_control_plane_row(s) / _write_control_plane_row_to_postgres) ---
+
+    def _select_row(
+        self,
+        table_name: str,
+        *,
+        row_builder: Any,
+        where_sql: str,
+        params: list[Any] | tuple[Any, ...],
         order_by_sql: str = "",
-        limit: int = 0,
+    ) -> dict[str, Any] | None:
+        if not self._should_prefer_read(table_name):
+            return None
+        try:
+            row = self._adapter.select_one(
+                table_name,
+                where_sql=where_sql,
+                params=list(params),
+                order_by_sql=order_by_sql,
+            )
+        except Exception as exc:
+            if self._strict_authoritative(table_name):
+                self._raise_read_failure(
+                    table_name=table_name,
+                    method_name="select_one",
+                    reason=f"{type(exc).__name__}: {exc}",
+                    error=exc,
+                )
+            return None
+        if row is None:
+            return None
+        return row_builder(row)
+
+    def _select_rows(
+        self,
+        table_name: str,
+        *,
+        row_builder: Any,
+        where_sql: str = "",
+        params: list[Any] | tuple[Any, ...] = (),
+        order_by_sql: str = "",
+        limit: int = 100,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        rows = self._adapter.select_many(
-            self.descriptor.table,
-            where_sql=where_sql,
-            params=list(params or []),
-            order_by_sql=order_by_sql,
-            limit=limit,
-            offset=offset,
-        )
-        return self.descriptor.from_rows(rows)
+        if not self._should_prefer_read(table_name):
+            return []
+        try:
+            rows = self._adapter.select_many(
+                table_name,
+                where_sql=where_sql,
+                params=list(params),
+                order_by_sql=order_by_sql,
+                limit=limit,
+                offset=offset,
+            )
+        except Exception as exc:
+            if self._strict_authoritative(table_name):
+                self._raise_read_failure(
+                    table_name=table_name,
+                    method_name="select_many",
+                    reason=f"{type(exc).__name__}: {exc}",
+                    error=exc,
+                )
+            return []
+        if not rows:
+            return []
+        return [row_builder(row) for row in rows]
 
-    def upsert(self, payload: dict[str, Any]) -> dict[str, Any]:
-        row = self._adapter._execute_returning_one(  # noqa: SLF001 — repository owns the adapter
-            self.descriptor.upsert_sql(),
-            self.descriptor.upsert_params(payload),
-        )
-        return self.descriptor.from_row(row)
+    def _write_row(self, table_name: str, row: dict[str, Any] | None) -> bool:
+        if row is None or not self._should_prefer_read(table_name):
+            return False
+        try:
+            self._adapter.upsert_row(table_name, dict(row))
+        except Exception as exc:
+            if self._strict_authoritative(table_name):
+                self._raise_write_failure(
+                    table_name=table_name,
+                    method_name="upsert_row",
+                    reason=f"{type(exc).__name__}: {exc}",
+                    error=exc,
+                )
+            return False
+        return True
+
+    def _call_native_write(self, method_name: str, /, *, table_name: str, **kwargs: Any) -> Any:
+        # == ControlPlaneStore._call_control_plane_postgres_native restricted to native WRITERS with an
+        # explicit table_name (insert_row_with_generated_id / update_row_returning /
+        # upsert_row_with_generated_id): swallow to None when non-authoritative, raise when strict.
+        # Native reads in repositories/ go through _select_row(s); there is no read branch here.
+        strict_no_fallback = bool(table_name and self._strict_authoritative(table_name))
+        method = getattr(self._adapter, method_name, None)
+        if method is None:
+            if strict_no_fallback:
+                self._raise_write_failure(
+                    table_name=table_name,
+                    method_name=method_name,
+                    reason="native writer is unavailable",
+                )
+            return None
+        try:
+            return method(table_name=table_name, **kwargs)
+        except Exception as exc:
+            if strict_no_fallback:
+                self._raise_write_failure(
+                    table_name=table_name,
+                    method_name=method_name,
+                    reason=f"{type(exc).__name__}: {exc}",
+                    error=exc,
+                )
+            return None

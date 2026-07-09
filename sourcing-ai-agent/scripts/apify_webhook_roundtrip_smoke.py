@@ -152,7 +152,7 @@ def _registry_entry(orchestrator: Any, profile_url: str) -> dict[str, Any]:
     if store is None:
         return {}
     key = normalize_linkedin_profile_url_key(profile_url)
-    entries = store.get_linkedin_profile_registry_bulk([profile_url])
+    entries = store.repos.linkedin_profile_registry.get_bulk([profile_url])
     return dict(entries.get(key) or {})
 
 

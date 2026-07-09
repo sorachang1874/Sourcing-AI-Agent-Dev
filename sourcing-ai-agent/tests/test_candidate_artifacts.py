@@ -510,7 +510,7 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             "https://www.linkedin.com/in/carol-baseline/",
             raw_path=str(carol_profile_path),
             snapshot_dir=str(self.runtime_dir / "company_assets" / "acme" / "20260406T120000"),
@@ -806,7 +806,7 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             encoding="utf-8",
         )
 
-        self.assertIsNone(self.store.get_linkedin_profile_registry(requested_url))
+        self.assertIsNone(self.store.repos.linkedin_profile_registry.get(requested_url))
 
         result = build_company_candidate_artifacts(
             runtime_dir=self.runtime_dir,
@@ -818,8 +818,8 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
         self.assertEqual(result["status"], "built")
         self.assertEqual(result["sync_status"]["profile_registry_backfill"]["status"], "completed")
-        requested_registry = self.store.get_linkedin_profile_registry(requested_url) or {}
-        canonical_registry = self.store.get_linkedin_profile_registry(canonical_url) or {}
+        requested_registry = self.store.repos.linkedin_profile_registry.get(requested_url) or {}
+        canonical_registry = self.store.repos.linkedin_profile_registry.get(canonical_url) or {}
         self.assertEqual(requested_registry.get("status"), "fetched")
         self.assertEqual(canonical_registry.get("status"), "fetched")
         loaded = self._load_artifact_view()
@@ -2193,7 +2193,7 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 }
             },
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             "https://www.linkedin.com/in/signal-candidate/",
             raw_path=str(raw_profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -3944,7 +3944,7 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             "https://www.linkedin.com/in/timeline-candidate/",
             raw_path=str(profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -4254,7 +4254,7 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             "https://www.linkedin.com/in/rewrite-candidate/",
             raw_path=str(profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -4593,7 +4593,7 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             "https://www.linkedin.com/in/bootstrap-candidate/",
             raw_path=str(profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -4693,7 +4693,7 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             "https://www.linkedin.com/in/skip-registry-candidate/",
             raw_path=str(profile_path),
             snapshot_dir=str(snapshot_dir),

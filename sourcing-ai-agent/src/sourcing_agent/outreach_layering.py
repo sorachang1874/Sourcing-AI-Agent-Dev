@@ -840,7 +840,7 @@ def _load_registry_raw_paths_for_candidates(
         return {}
     if store is not None:
         try:
-            store_registry_rows = store.get_linkedin_profile_registry_bulk(keys)
+            store_registry_rows = store.repos.linkedin_profile_registry.get_bulk(keys)
         except Exception:
             store_registry_rows = {}
         resolved_from_store: dict[str, str] = {}

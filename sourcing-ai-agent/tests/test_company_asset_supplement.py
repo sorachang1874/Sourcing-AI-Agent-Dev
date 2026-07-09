@@ -641,7 +641,7 @@ class CompanyAssetSupplementTest(PGControlPlaneStoreTestMixin, unittest.TestCase
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["repaired_count"], 1)
-        registry_by_raw = self.store.get_linkedin_profile_registry(raw_member_url)
+        registry_by_raw = self.store.repos.linkedin_profile_registry.get(raw_member_url)
         assert registry_by_raw is not None
         self.assertEqual(registry_by_raw["status"], "fetched")
         self.assertEqual(registry_by_raw["profile_url"], vanity_url)
@@ -650,7 +650,7 @@ class CompanyAssetSupplementTest(PGControlPlaneStoreTestMixin, unittest.TestCase
         self.assertEqual(Path(registry_by_raw["last_raw_path"]).resolve(), raw_profile_path.resolve())
         self.assertIn(raw_member_url, registry_by_raw.get("alias_urls") or [])
         self.assertIn(vanity_url, registry_by_raw.get("alias_urls") or [])
-        registry_by_vanity = self.store.get_linkedin_profile_registry(vanity_url)
+        registry_by_vanity = self.store.repos.linkedin_profile_registry.get(vanity_url)
         assert registry_by_vanity is not None
         self.assertEqual(registry_by_vanity["profile_url"], vanity_url)
         self.assertTrue(Path(result["summary_path"]).exists())

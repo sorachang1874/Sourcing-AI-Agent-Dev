@@ -3710,7 +3710,7 @@ def main() -> None:
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return
         if args.command == "show-linkedin-profile-registry-metrics":
-            metrics = store.get_linkedin_profile_registry_metrics(lookback_hours=max(0, int(args.lookback_hours or 0)))
+            metrics = store.repos.linkedin_profile_registry.get_metrics(lookback_hours=max(0, int(args.lookback_hours or 0)))
             print(json.dumps(metrics, ensure_ascii=False, indent=2))
             return
 

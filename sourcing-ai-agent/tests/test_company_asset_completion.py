@@ -415,7 +415,7 @@ class CompanyAssetCompletionTest(PGControlPlaneStoreTestMixin, unittest.TestCase
             ),
             encoding="utf-8",
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             profile_url,
             raw_path=str(raw_path),
             source_shards=source_shards or ["test_cached_profile"],
@@ -752,7 +752,7 @@ class CompanyAssetCompletionTest(PGControlPlaneStoreTestMixin, unittest.TestCase
                 for error in result["profile_completion"]["errors"]
             )
         )
-        groups = self.store.list_linkedin_profile_refill_queue_groups(
+        groups = self.store.repos.linkedin_profile_registry.list_refill_queue_groups(
             states=["deferred_budget"],
             source_job=result["profile_scheduler_job_id"],
             limit=10,
@@ -795,7 +795,7 @@ class CompanyAssetCompletionTest(PGControlPlaneStoreTestMixin, unittest.TestCase
             )
         self.assertEqual(connector.batch_calls, [])
         self.assertTrue(result["profile_scheduler_job_id"])
-        canonical_entry = self.store.get_linkedin_profile_registry("https://www.linkedin.com/in/former-example")
+        canonical_entry = self.store.repos.linkedin_profile_registry.get("https://www.linkedin.com/in/former-example")
         self.assertIsNotNone(canonical_entry)
         assert canonical_entry is not None
         self.assertEqual(canonical_entry["refill_queue_state"], "deferred_budget")
@@ -982,7 +982,7 @@ class CompanyAssetCompletionTest(PGControlPlaneStoreTestMixin, unittest.TestCase
         self.assertEqual(fetched, {})
         self.assertEqual(errors, ["profile_completion_scheduler_queued:250"])
         self.assertEqual(connector.batch_calls, [])
-        groups = self.store.list_linkedin_profile_refill_queue_groups(
+        groups = self.store.repos.linkedin_profile_registry.list_refill_queue_groups(
             states=["deferred_budget"],
             source_job="job_profile_batch_scheduler",
             limit=10,
@@ -1044,7 +1044,7 @@ class CompanyAssetCompletionTest(PGControlPlaneStoreTestMixin, unittest.TestCase
         self.assertEqual(fetched, {})
         self.assertEqual(errors, ["profile_completion_scheduler_queued:240"])
         self.assertEqual(connector.batch_calls, [])
-        registry_entry = self.store.get_linkedin_profile_registry(urls[0])
+        registry_entry = self.store.repos.linkedin_profile_registry.get(urls[0])
         self.assertIsNotNone(registry_entry)
         assert registry_entry is not None
         self.assertIn("harvest_company_employees_visible", registry_entry["source_shards"])
@@ -1080,7 +1080,7 @@ class CompanyAssetCompletionTest(PGControlPlaneStoreTestMixin, unittest.TestCase
                 ensure_ascii=False,
             )
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             profile_url,
             raw_path=str(raw_path),
             source_shards=["test_seed"],
@@ -1145,7 +1145,7 @@ class CompanyAssetCompletionTest(PGControlPlaneStoreTestMixin, unittest.TestCase
         self.assertEqual(errors, [])
         self.assertIn(profile_url, fetched)
         self.assertEqual(connector.batch_calls, [])
-        registry_entry = self.store.get_linkedin_profile_registry(profile_url)
+        registry_entry = self.store.repos.linkedin_profile_registry.get(profile_url)
         self.assertIsNotNone(registry_entry)
         assert registry_entry is not None
         self.assertEqual(registry_entry["status"], "fetched")
@@ -1172,7 +1172,7 @@ class CompanyAssetCompletionTest(PGControlPlaneStoreTestMixin, unittest.TestCase
 
         self.assertEqual(result["status"], "completed")
         profile_url = "https://www.linkedin.com/in/current-snapshot"
-        registry_entry = self.store.get_linkedin_profile_registry(profile_url)
+        registry_entry = self.store.repos.linkedin_profile_registry.get(profile_url)
         self.assertIsNotNone(registry_entry)
         assert registry_entry is not None
         self.assertEqual(registry_entry["refill_queue_state"], "deferred_budget")
@@ -1202,13 +1202,13 @@ class CompanyAssetCompletionTest(PGControlPlaneStoreTestMixin, unittest.TestCase
         )
 
         profile_url = "https://www.linkedin.com/in/current-snapshot"
-        registry_entry = self.store.get_linkedin_profile_registry(profile_url)
+        registry_entry = self.store.repos.linkedin_profile_registry.get(profile_url)
         self.assertIsNotNone(registry_entry)
         assert registry_entry is not None
         self.assertTrue(result["profile_scheduler_job_id"])
         self.assertEqual(registry_entry["refill_queue_state"], "deferred_budget")
         self.assertIn(result["profile_scheduler_job_id"], registry_entry["source_jobs"])
-        groups = self.store.list_linkedin_profile_refill_queue_groups(
+        groups = self.store.repos.linkedin_profile_registry.list_refill_queue_groups(
             states=["deferred_budget"],
             source_job=result["profile_scheduler_job_id"],
             limit=10,

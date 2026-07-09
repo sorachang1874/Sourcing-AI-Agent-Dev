@@ -818,7 +818,7 @@ class ExcelIntakeTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             profile_url,
             raw_path=str(raw_path),
             alias_urls=[profile_url],

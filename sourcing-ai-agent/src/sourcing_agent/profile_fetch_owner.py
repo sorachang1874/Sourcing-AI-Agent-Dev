@@ -46,6 +46,7 @@ from .durable_runtime import (
     LINKEDIN_PROFILE_TERMINAL_ADMIT_COMMAND_TYPE,
 )
 from .linkedin_url_normalization import normalize_linkedin_profile_url_key
+from .repositories import linkedin_profile_registry_repo
 from .runtime_environment import runtime_namespace_ownership_for_path
 from .runtime_tuning import resolved_harvest_profile_actor_global_inflight
 from .seed_discovery import SearchSeedSnapshot
@@ -632,7 +633,8 @@ class ProfileFetchOwner:
             }
         )
         registry_entries = {}
-        get_registry_bulk = getattr(self.store, "get_linkedin_profile_registry_bulk", None)
+        registry_repo = linkedin_profile_registry_repo(self.store)
+        get_registry_bulk = getattr(registry_repo, "get_bulk", None)
         if callable(get_registry_bulk):
             try:
                 registry_entries = dict(get_registry_bulk(profile_urls) or {})
@@ -1026,6 +1028,7 @@ class ProfileFetchOwner:
         artifact_refs: list[dict[str, Any]] = []
         fetched_delta_ids: list[str] = []
         errors: list[dict[str, str]] = []
+        registry_repo = linkedin_profile_registry_repo(self.store)
         for profile_url in profile_urls:
             profile_key = normalize_linkedin_profile_url_key(profile_url)
             slug = self._operation_native_profile_slug(profile_url)
@@ -1050,7 +1053,7 @@ class ProfileFetchOwner:
                 continue
             fetched_urls.append(profile_url)
             artifact_refs.append({"profile_url": profile_url, "raw_path": raw_path})
-            mark_fetched = getattr(self.store, "mark_linkedin_profile_registry_fetched", None)
+            mark_fetched = getattr(registry_repo, "mark_fetched", None)
             if callable(mark_fetched):
                 mark_fetched(
                     profile_url,
@@ -2289,7 +2292,8 @@ class ProfileFetchOwner:
                 "dispatched_url_count": 0,
                 "queued_worker_count": 0,
             }
-        list_groups = getattr(self.store, "list_linkedin_profile_refill_queue_groups", None)
+        registry_repo = linkedin_profile_registry_repo(self.store)
+        list_groups = getattr(registry_repo, "list_refill_queue_groups", None)
         if not callable(list_groups):
             return {
                 "status": "skipped",

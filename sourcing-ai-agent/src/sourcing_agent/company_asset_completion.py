@@ -846,7 +846,7 @@ class CompanyAssetCompletionManager:
                 continue
             canonical_urls_by_candidate[candidate_id] = resolved_urls
             primary_urls = _candidate_profile_urls(candidate)
-            self.store.upsert_linkedin_profile_registry_sources(
+            self.store.repos.linkedin_profile_registry.upsert_sources(
                 resolved_urls[0],
                 source_shards=list(source_shards_by_candidate.get(candidate_id) or []),
                 alias_urls=[*primary_urls, *resolved_urls],
@@ -876,7 +876,7 @@ class CompanyAssetCompletionManager:
             if str(profile_url or "").strip()
         }
         normalized_source_jobs = _dedupe_strings(list(source_jobs or []))
-        registry_entries = self.store.get_linkedin_profile_registry_bulk(normalized_urls)
+        registry_entries = self.store.repos.linkedin_profile_registry.get_bulk(normalized_urls)
         scheduler_required_urls: list[str] = []
 
         def _record_event(
@@ -888,7 +888,7 @@ class CompanyAssetCompletionManager:
             metadata: dict[str, Any] | None = None,
             duration_ms: int | None = None,
         ) -> None:
-            self.store.record_linkedin_profile_registry_event(
+            self.store.repos.linkedin_profile_registry.record_event(
                 profile_url,
                 event_type=event_type,
                 event_status=event_status,
@@ -904,7 +904,7 @@ class CompanyAssetCompletionManager:
         ) -> dict[str, Any] | None:
             deadline = time.monotonic() + _PROFILE_REGISTRY_LEASE_WAIT_SECONDS
             while time.monotonic() < deadline:
-                registry_entry = self.store.get_linkedin_profile_registry(profile_url) or {}
+                registry_entry = self.store.repos.linkedin_profile_registry.get(profile_url) or {}
                 registry_status = str(registry_entry.get("status") or "").strip().lower()
                 if registry_status == "fetched":
                     cached_payload = _load_harvest_profile_from_raw_path(str(registry_entry.get("last_raw_path") or ""))
@@ -938,7 +938,7 @@ class CompanyAssetCompletionManager:
                 if cached is not None:
                     fetched[profile_url] = cached
                     alias_metadata = _profile_registry_alias_metadata(profile_url, cached)
-                    self.store.upsert_linkedin_profile_registry_sources(
+                    self.store.repos.linkedin_profile_registry.upsert_sources(
                         profile_url,
                         source_shards=source_shards,
                         source_jobs=normalized_source_jobs,
@@ -948,7 +948,7 @@ class CompanyAssetCompletionManager:
                     )
                     _record_event(profile_url, event_type="cache_hit_registry")
                     continue
-                self.store.mark_linkedin_profile_registry_failed(
+                self.store.repos.linkedin_profile_registry.mark_failed(
                     profile_url,
                     error="registry_cached_raw_missing_or_invalid",
                     retryable=True,
@@ -963,7 +963,7 @@ class CompanyAssetCompletionManager:
                     _record_event(profile_url, event_type="cache_hit_lease_wait")
                     continue
             if use_cache and registry_status == "unrecoverable":
-                self.store.upsert_linkedin_profile_registry_sources(
+                self.store.repos.linkedin_profile_registry.upsert_sources(
                     profile_url,
                     source_shards=source_shards,
                     source_jobs=normalized_source_jobs,
@@ -980,7 +980,7 @@ class CompanyAssetCompletionManager:
                 if local_cached is not None:
                     fetched[profile_url] = local_cached
                     alias_metadata = _profile_registry_alias_metadata(profile_url, local_cached)
-                    self.store.mark_linkedin_profile_registry_fetched(
+                    self.store.repos.linkedin_profile_registry.mark_fetched(
                         profile_url,
                         raw_path=str(local_cached.get("raw_path") or ""),
                         source_shards=source_shards,
@@ -1004,7 +1004,7 @@ class CompanyAssetCompletionManager:
                     fetched[profile_url] = waited
                     _record_event(profile_url, event_type="cache_hit_lease_wait")
                     continue
-            self.store.upsert_linkedin_profile_registry_sources(
+            self.store.repos.linkedin_profile_registry.upsert_sources(
                 profile_url,
                 source_shards=source_shards,
                 source_jobs=normalized_source_jobs,
@@ -1018,7 +1018,7 @@ class CompanyAssetCompletionManager:
             )
         if scheduler_required_urls:
             if normalized_source_jobs:
-                self.store.record_linkedin_profile_refill_plan_items(
+                self.store.repos.linkedin_profile_registry.record_refill_plan_items(
                     deferred_profile_urls=scheduler_required_urls,
                     source_shards_by_url={
                         profile_url: list(source_shards_by_url.get(profile_url) or [])

@@ -27,6 +27,7 @@ from .profile_timeline import normalized_text_lines as _normalized_profile_timel
 from .profile_timeline import profile_capture_kind_has_profile_detail as _profile_capture_kind_has_profile_detail
 from .profile_timeline import profile_snapshot_from_source_path as _profile_snapshot_from_source_path
 from .profile_timeline import timeline_has_complete_profile_detail as _timeline_has_complete_profile_detail
+from .repositories import linkedin_profile_registry_repo
 from .runtime_tuning import resolved_materialization_global_writer_budget, runtime_inflight_slot
 from .search_seed_registry import project_search_seed_snapshot_to_candidate_documents
 from .seed_discovery import SearchSeedSnapshot
@@ -590,7 +591,7 @@ class SnapshotMaterializer:
 
         registry_entries: dict[str, dict[str, Any]] = {}
         if self.store is not None:
-            registry_entries = self.store.get_linkedin_profile_registry_bulk(requested_profile_urls)
+            registry_entries = self.store.repos.linkedin_profile_registry.get_bulk(requested_profile_urls)
         registry_loaded_at = time.perf_counter()
 
         applied_worker_ids: list[int] = []
@@ -792,13 +793,14 @@ class SnapshotMaterializer:
         profile_delta_merged_at = time.perf_counter()
 
         registry_terminal_backfill_count = 0
+        registry_repo = linkedin_profile_registry_repo(self.store)
         if self.store is not None and registry_terminal_backfill_entries:
-            backfill_batch = getattr(self.store, "backfill_linkedin_profile_registry_batch", None)
+            backfill_batch = getattr(registry_repo, "backfill_batch", None)
             if callable(backfill_batch):
                 registry_terminal_backfill_count = int(backfill_batch(registry_terminal_backfill_entries) or 0)
             else:
                 for entry in registry_terminal_backfill_entries:
-                    self.store.mark_linkedin_profile_registry_fetched(
+                    self.store.repos.linkedin_profile_registry.mark_fetched(
                         str(entry.get("profile_url") or ""),
                         raw_path=str(entry.get("raw_path") or ""),
                         source_shards=list(entry.get("source_shards") or []),
@@ -873,7 +875,7 @@ class SnapshotMaterializer:
         registry_terminal_summary: dict[str, Any] = {}
         normalized_source_job = str(source_job or "").strip()
         if normalized_source_job and self.store is not None:
-            summarize_registry_scope = getattr(self.store, "summarize_linkedin_profile_registry_scope", None)
+            summarize_registry_scope = getattr(registry_repo, "summarize_scope", None)
             if callable(summarize_registry_scope):
                 try:
                     registry_terminal_summary = dict(

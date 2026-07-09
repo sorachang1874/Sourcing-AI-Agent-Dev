@@ -1420,7 +1420,7 @@ def _load_registry_cached_profile_payloads_for_contacts(
             source_shards_by_key.setdefault(normalized_key, []).append(f"excel_intake:{row_key}")
     if not urls_by_key:
         return {}
-    registry_entries = store.get_linkedin_profile_registry_bulk(list(urls_by_key.values()))
+    registry_entries = store.repos.linkedin_profile_registry.get_bulk(list(urls_by_key.values()))
     cached_payloads: dict[str, dict[str, Any]] = {}
     for normalized_key, profile_url in urls_by_key.items():
         registry_entry = dict(registry_entries.get(normalized_key) or {})
@@ -1431,7 +1431,7 @@ def _load_registry_cached_profile_payloads_for_contacts(
             continue
         cached_payloads[normalized_key] = cached_payload
         alias_metadata = dict(cached_payload.get("profile_registry_aliases") or {})
-        store.upsert_linkedin_profile_registry_sources(
+        store.repos.linkedin_profile_registry.upsert_sources(
             profile_url,
             source_shards=list(source_shards_by_key.get(normalized_key) or []),
             alias_urls=list(alias_metadata.get("alias_urls") or []),

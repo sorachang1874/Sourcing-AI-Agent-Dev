@@ -55,6 +55,7 @@ from .profile_registry_utils import (
     harvest_profile_payload_has_usable_content,
     profile_cache_path_candidates,
 )
+from .repositories import linkedin_profile_registry_repo
 from .runtime_environment import (
     assert_live_provider_access_allowed,
     external_provider_mode,
@@ -1569,7 +1570,8 @@ def _record_profile_prefetch_batch_plan_items(
 ) -> dict[str, Any]:
     if store is None:
         return {"status": "skipped", "reason": "store_unavailable"}
-    recorder = getattr(store, "record_linkedin_profile_refill_plan_items", None)
+    registry_repo = linkedin_profile_registry_repo(store)
+    recorder = getattr(registry_repo, "record_refill_plan_items", None)
     if not callable(recorder):
         return {"status": "skipped", "reason": "refill_item_recorder_unavailable"}
     active_chunks = (
@@ -1719,7 +1721,8 @@ def _mark_profile_prefetch_urls_dispatch_claimed(
 ) -> dict[str, Any]:
     if store is None:
         return {"status": "skipped", "reason": "store_unavailable"}
-    recorder = getattr(store, "record_linkedin_profile_refill_plan_items", None)
+    registry_repo = linkedin_profile_registry_repo(store)
+    recorder = getattr(registry_repo, "record_refill_plan_items", None)
     if not callable(recorder):
         return {"status": "skipped", "reason": "refill_item_recorder_unavailable"}
     normalized_urls = [
@@ -1762,7 +1765,8 @@ def _mark_profile_prefetch_urls_deferred_for_dispatch_retry(
 ) -> dict[str, Any]:
     if store is None:
         return {"status": "skipped", "reason": "store_unavailable"}
-    recorder = getattr(store, "record_linkedin_profile_refill_plan_items", None)
+    registry_repo = linkedin_profile_registry_repo(store)
+    recorder = getattr(registry_repo, "record_refill_plan_items", None)
     if not callable(recorder):
         return {"status": "skipped", "reason": "refill_item_recorder_unavailable"}
     normalized_urls = [
@@ -1804,7 +1808,8 @@ def _mark_profile_prefetch_urls_dispatch_owned(
 
     if store is None:
         return {"status": "skipped", "reason": "store_unavailable"}
-    recorder = getattr(store, "record_linkedin_profile_refill_plan_items", None)
+    registry_repo = linkedin_profile_registry_repo(store)
+    recorder = getattr(registry_repo, "record_refill_plan_items", None)
     if not callable(recorder):
         return {"status": "skipped", "reason": "refill_item_recorder_unavailable"}
     normalized_urls = [
@@ -2879,7 +2884,8 @@ class MultiSourceEnricher:
         fetched_count = 0
         failed_count = 0
         try:
-            batch_writer = getattr(self.store, "backfill_linkedin_profile_registry_batch", None)
+            registry_repo = linkedin_profile_registry_repo(self.store)
+            batch_writer = getattr(registry_repo, "backfill_batch", None)
             if callable(batch_writer):
                 recorded_count = int(batch_writer(entries) or 0)
                 fetched_count = sum(1 for entry in entries if str(entry.get("status") or "") == "fetched")
@@ -2891,7 +2897,7 @@ class MultiSourceEnricher:
                     if not profile_url:
                         continue
                     if str(entry.get("status") or "").strip() == "fetched":
-                        self.store.mark_linkedin_profile_registry_fetched(
+                        self.store.repos.linkedin_profile_registry.mark_fetched(
                             profile_url,
                             raw_path=str(entry.get("raw_path") or ""),
                             source_shards=list(entry.get("source_shards") or []),
@@ -2905,7 +2911,7 @@ class MultiSourceEnricher:
                         )
                         fetched_count += 1
                     else:
-                        self.store.mark_linkedin_profile_registry_failed(
+                        self.store.repos.linkedin_profile_registry.mark_failed(
                             profile_url,
                             error=str(entry.get("error") or ""),
                             retryable=bool(entry.get("retryable")),
@@ -3591,7 +3597,8 @@ class MultiSourceEnricher:
 
         if self.store is None or not str(job_id or "").strip():
             return 0
-        list_items = getattr(self.store, "list_linkedin_profile_refill_queue_items", None)
+        registry_repo = linkedin_profile_registry_repo(self.store)
+        list_items = getattr(registry_repo, "list_refill_queue_items", None)
         if not callable(list_items):
             return 0
         try:
@@ -3870,7 +3877,8 @@ class MultiSourceEnricher:
     ) -> None:
         if profile_url not in already_queued_urls:
             already_queued_urls.append(profile_url)
-        upsert_sources = getattr(self.store, "upsert_linkedin_profile_registry_sources", None)
+        registry_repo = linkedin_profile_registry_repo(self.store)
+        upsert_sources = getattr(registry_repo, "upsert_sources", None)
         if callable(upsert_sources):
             source_shards = list(dict(source_shards_by_url or {}).get(profile_url) or [])
             upsert_sources(
@@ -3911,7 +3919,8 @@ class MultiSourceEnricher:
         if self.store is None or not normalized_job_id:
             gate["reason"] = "retry_gate_scope_unavailable"
             return gate
-        list_refill_items = getattr(self.store, "list_linkedin_profile_refill_queue_items", None)
+        registry_repo = linkedin_profile_registry_repo(self.store)
+        list_refill_items = getattr(registry_repo, "list_refill_queue_items", None)
         if not callable(list_refill_items):
             gate["reason"] = "refill_queue_selector_unavailable"
             return gate
@@ -4021,7 +4030,8 @@ class MultiSourceEnricher:
     ) -> None:
         if self.store is None:
             return
-        record_event = getattr(self.store, "record_linkedin_profile_registry_event", None)
+        registry_repo = linkedin_profile_registry_repo(self.store)
+        record_event = getattr(registry_repo, "record_event", None)
         if not callable(record_event):
             return
         record_event(
@@ -4045,7 +4055,7 @@ class MultiSourceEnricher:
             return True
         registry_entries: dict[str, dict[str, Any]] = {}
         if self.store is not None:
-            registry_entries = self.store.get_linkedin_profile_registry_bulk(normalized_urls)
+            registry_entries = self.store.repos.linkedin_profile_registry.get_bulk(normalized_urls)
         for profile_url in normalized_urls:
             registry_key = normalize_linkedin_profile_url_key(profile_url)
             registry_entry = dict(registry_entries.get(registry_key) or {})
@@ -4273,7 +4283,7 @@ class MultiSourceEnricher:
         ]
         if self.store is None or not normalized_urls:
             return normalized_urls, []
-        registry_entries = self.store.get_linkedin_profile_registry_bulk(normalized_urls)
+        registry_entries = self.store.repos.linkedin_profile_registry.get_bulk(normalized_urls)
         dispatch_urls: list[str] = []
         already_queued_urls: list[str] = []
         normalized_source_jobs = [
@@ -4985,7 +4995,7 @@ class MultiSourceEnricher:
         }
         registry_entries: dict[str, dict[str, Any]] = {}
         if self.store is not None:
-            registry_entries = self.store.get_linkedin_profile_registry_bulk(normalized_urls)
+            registry_entries = self.store.repos.linkedin_profile_registry.get_bulk(normalized_urls)
 
         cached_profiles: dict[str, dict[str, Any]] = {}
         for profile_url in normalized_urls:
@@ -5011,7 +5021,7 @@ class MultiSourceEnricher:
             if self.store is None:
                 continue
             alias_metadata = _profile_registry_alias_metadata(profile_url, cached)
-            self.store.mark_linkedin_profile_registry_fetched(
+            self.store.repos.linkedin_profile_registry.mark_fetched(
                 profile_url,
                 raw_path=str(cached.get("raw_path") or ""),
                 source_shards=list(source_shards_by_url.get(profile_url) or []),
@@ -5090,7 +5100,8 @@ class MultiSourceEnricher:
             max(1, min(10000, int(refill_item_limit or 0))) if refill_item_limit is not None else 5000
         )
         if self.store is not None and str(job_id or "").strip():
-            list_refill_items = getattr(self.store, "list_linkedin_profile_refill_queue_items", None)
+            registry_repo = linkedin_profile_registry_repo(self.store)
+            list_refill_items = getattr(registry_repo, "list_refill_queue_items", None)
             if callable(list_refill_items):
                 try:
                     if append_trigger_replan:
@@ -5268,7 +5279,7 @@ class MultiSourceEnricher:
             if self.store is None:
                 return {}
             try:
-                return dict(self.store.get_linkedin_profile_registry_bulk(normalized_urls) or {})
+                return dict(self.store.repos.linkedin_profile_registry.get_bulk(normalized_urls) or {})
             except Exception:
                 return {}
 
@@ -6226,7 +6237,7 @@ class MultiSourceEnricher:
 
         if failed_urls and self.store is not None:
             for profile_url in failed_urls:
-                self.store.mark_linkedin_profile_registry_failed(
+                self.store.repos.linkedin_profile_registry.mark_failed(
                     profile_url,
                     error="background_prefetch_dispatch_failed",
                     retryable=True,
@@ -6393,6 +6404,7 @@ class MultiSourceEnricher:
         if not normalized_urls:
             return {"worker_status": "completed", "summary": {"requested_url_count": 0, "status": "completed"}}
 
+        registry_repo = linkedin_profile_registry_repo(self.store)
         resume_payload_hash = sha1(json.dumps(sorted(normalized_urls), ensure_ascii=False).encode("utf-8")).hexdigest()[
             :16
         ]
@@ -6521,7 +6533,9 @@ class MultiSourceEnricher:
             dispatch_registry_entries: dict[str, dict[str, Any]] = {}
             if self.store is not None and dispatch_urls:
                 try:
-                    dispatch_registry_entries = dict(self.store.get_linkedin_profile_registry_bulk(dispatch_urls) or {})
+                    dispatch_registry_entries = dict(
+                        self.store.repos.linkedin_profile_registry.get_bulk(dispatch_urls) or {}
+                    )
                 except Exception:
                     dispatch_registry_entries = {}
             oldest_deferred_coalescing_age_ms = _profile_prefetch_oldest_deferred_coalescing_age_ms(
@@ -6564,7 +6578,7 @@ class MultiSourceEnricher:
                 ).strftime("%Y-%m-%d %H:%M:%S")
                 coalescing_refill_items: dict[str, Any] = {}
                 if self.store is not None:
-                    recorder = getattr(self.store, "record_linkedin_profile_refill_plan_items", None)
+                    recorder = getattr(registry_repo, "record_refill_plan_items", None)
                     if callable(recorder):
                         coalescing_refill_items = dict(
                             recorder(
@@ -6584,9 +6598,7 @@ class MultiSourceEnricher:
                             or {}
                         )
                     else:
-                        mark_deferred = getattr(
-                            self.store, "mark_linkedin_profile_registry_deferred_for_coalescing", None
-                        )
+                        mark_deferred = getattr(registry_repo, "mark_deferred_for_coalescing", None)
                         if callable(mark_deferred):
                             for profile_url in dispatch_urls:
                                 mark_deferred(
@@ -6629,7 +6641,7 @@ class MultiSourceEnricher:
                 )
                 lease_payloads_by_url: dict[str, dict[str, Any]] = {}
                 batch_lease_payload: dict[str, Any] | None = None
-                batch_acquire = getattr(self.store, "acquire_linkedin_profile_registry_leases", None)
+                batch_acquire = getattr(registry_repo, "acquire_leases", None)
                 if callable(batch_acquire):
                     try:
                         batch_lease_payload = dict(
@@ -6668,7 +6680,7 @@ class MultiSourceEnricher:
                     if contended_profile_urls:
                         try:
                             contended_registry_entries = dict(
-                                self.store.get_linkedin_profile_registry_bulk(contended_profile_urls) or {}
+                                self.store.repos.linkedin_profile_registry.get_bulk(contended_profile_urls) or {}
                             )
                         except Exception:
                             contended_registry_entries = {}
@@ -6693,12 +6705,12 @@ class MultiSourceEnricher:
                         if normalized_profile_url not in already_queued_urls:
                             already_queued_urls.append(normalized_profile_url)
                         if provider_owned_same_scope:
-                            self.store.upsert_linkedin_profile_registry_sources(
+                            self.store.repos.linkedin_profile_registry.upsert_sources(
                                 normalized_profile_url,
                                 source_shards=["enrichment_background_prefetch"],
                                 source_jobs=[job_id] if str(job_id or "").strip() else [],
                             )
-                            self.store.record_linkedin_profile_registry_event(
+                            self.store.repos.linkedin_profile_registry.record_event(
                                 normalized_profile_url,
                                 event_type="provider_owned_lease_contention_skip",
                                 event_status=str(registry_entry.get("refill_owner_run_id") or ""),
@@ -6707,12 +6719,12 @@ class MultiSourceEnricher:
                             continue
                         if normalized_profile_url not in claim_contended_urls:
                             claim_contended_urls.append(normalized_profile_url)
-                        self.store.upsert_linkedin_profile_registry_sources(
+                        self.store.repos.linkedin_profile_registry.upsert_sources(
                             normalized_profile_url,
                             source_shards=["enrichment_background_prefetch"],
                             source_jobs=[job_id] if str(job_id or "").strip() else [],
                         )
-                        self.store.record_linkedin_profile_registry_event(
+                        self.store.repos.linkedin_profile_registry.record_event(
                             normalized_profile_url,
                             event_type="lease_contended_skip",
                             event_status=str(
@@ -6722,7 +6734,7 @@ class MultiSourceEnricher:
                         )
                 else:
                     for profile_url in dispatch_urls:
-                        lease_payload = self.store.acquire_linkedin_profile_registry_lease(
+                        lease_payload = self.store.repos.linkedin_profile_registry.acquire_lease(
                             profile_url,
                             lease_owner=lease_owner,
                             lease_seconds=PROFILE_REGISTRY_LEASE_SECONDS,
@@ -6738,12 +6750,12 @@ class MultiSourceEnricher:
                         lease_payload = dict(lease_payloads_by_url.get(profile_url) or {})
                         already_queued_urls.append(profile_url)
                         claim_contended_urls.append(profile_url)
-                        self.store.upsert_linkedin_profile_registry_sources(
+                        self.store.repos.linkedin_profile_registry.upsert_sources(
                             profile_url,
                             source_shards=["enrichment_background_prefetch"],
                             source_jobs=[job_id] if str(job_id or "").strip() else [],
                         )
-                        self.store.record_linkedin_profile_registry_event(
+                        self.store.repos.linkedin_profile_registry.record_event(
                             profile_url,
                             event_type="lease_contended_skip",
                             event_status=str(lease_payload.get("lease_owner") or ""),
@@ -6753,7 +6765,7 @@ class MultiSourceEnricher:
                 if dispatch_urls:
                     try:
                         post_lease_registry_entries = dict(
-                            self.store.get_linkedin_profile_registry_bulk(dispatch_urls) or {}
+                            self.store.repos.linkedin_profile_registry.get_bulk(dispatch_urls) or {}
                         )
                     except Exception:
                         post_lease_registry_entries = {}
@@ -6786,7 +6798,7 @@ class MultiSourceEnricher:
                             lease_owner_value = str(lease_payload.get("lease_owner") or "")
                             lease_token_value = str(lease_payload.get("lease_token") or "")
                             if lease_owner_value or lease_token_value:
-                                self.store.release_linkedin_profile_registry_lease(
+                                self.store.repos.linkedin_profile_registry.release_lease(
                                     profile_url,
                                     lease_owner=lease_owner_value,
                                     lease_token=lease_token_value,
@@ -6805,7 +6817,7 @@ class MultiSourceEnricher:
                 if self.store is not None and missing_post_claim_entries:
                     try:
                         post_claim_registry_entries = dict(
-                            self.store.get_linkedin_profile_registry_bulk(dispatch_urls) or {}
+                            self.store.repos.linkedin_profile_registry.get_bulk(dispatch_urls) or {}
                         )
                     except Exception:
                         post_claim_registry_entries = dispatch_registry_entries
@@ -6853,7 +6865,7 @@ class MultiSourceEnricher:
                 ).strftime("%Y-%m-%d %H:%M:%S")
                 coalescing_refill_items: dict[str, Any] = {}
                 if self.store is not None:
-                    recorder = getattr(self.store, "record_linkedin_profile_refill_plan_items", None)
+                    recorder = getattr(registry_repo, "record_refill_plan_items", None)
                     if callable(recorder):
                         coalescing_refill_items = dict(
                             recorder(
@@ -6873,9 +6885,7 @@ class MultiSourceEnricher:
                             or {}
                         )
                     else:
-                        mark_deferred = getattr(
-                            self.store, "mark_linkedin_profile_registry_deferred_for_coalescing", None
-                        )
+                        mark_deferred = getattr(registry_repo, "mark_deferred_for_coalescing", None)
                         if callable(mark_deferred):
                             for profile_url in dispatch_urls:
                                 mark_deferred(
@@ -6886,7 +6896,7 @@ class MultiSourceEnricher:
                                     snapshot_dir=str(snapshot_dir),
                                 )
                     for profile_url, lease_payload in list(url_claims.items()):
-                        self.store.release_linkedin_profile_registry_lease(
+                        self.store.repos.linkedin_profile_registry.release_lease(
                             profile_url,
                             lease_owner=str(lease_payload.get("lease_owner") or ""),
                             lease_token=str(lease_payload.get("lease_token") or ""),
@@ -6968,7 +6978,7 @@ class MultiSourceEnricher:
             if not acquired_claim_urls:
                 url_claims.clear()
                 return
-            release_many = getattr(self.store, "release_linkedin_profile_registry_leases", None)
+            release_many = getattr(registry_repo, "release_leases", None)
             first_claim = dict(url_claims.get(acquired_claim_urls[0]) or {})
             release_owner = str(first_claim.get("lease_owner") or "")
             release_token = str(first_claim.get("lease_token") or "")
@@ -6990,7 +7000,7 @@ class MultiSourceEnricher:
             else:
                 for profile_url in acquired_claim_urls:
                     lease_payload = dict(url_claims.get(profile_url) or {})
-                    self.store.release_linkedin_profile_registry_lease(
+                    self.store.repos.linkedin_profile_registry.release_lease(
                         profile_url,
                         lease_owner=str(lease_payload.get("lease_owner") or ""),
                         lease_token=str(lease_payload.get("lease_token") or ""),
@@ -7400,7 +7410,7 @@ class MultiSourceEnricher:
             updated_output = {"summary": {**failure_summary, "summary_path": str(summary_path)}}
             if self.store is not None:
                 for profile_url in dispatch_urls:
-                    self.store.mark_linkedin_profile_registry_failed(
+                    self.store.repos.linkedin_profile_registry.mark_failed(
                         str(profile_url or ""),
                         error=error_message,
                         retryable=True,
@@ -7553,7 +7563,7 @@ class MultiSourceEnricher:
                     owner_dataset_id=dataset_id,
                     owner_payload_hash=payload_hash,
                 )
-                queued_many = getattr(self.store, "mark_linkedin_profile_registry_queued_many", None)
+                queued_many = getattr(registry_repo, "mark_queued_many", None)
                 if callable(queued_many):
                     queued_many(
                         dispatch_urls,
@@ -7565,7 +7575,7 @@ class MultiSourceEnricher:
                     )
                 else:
                     for profile_url in dispatch_urls:
-                        self.store.mark_linkedin_profile_registry_queued(
+                        self.store.repos.linkedin_profile_registry.mark_queued(
                             profile_url,
                             source_shards=["enrichment_background_prefetch"],
                             source_jobs=[job_id] if str(job_id or "").strip() else [],
@@ -7730,7 +7740,8 @@ class MultiSourceEnricher:
                     "migration_phase": "W2c_profile_url_terminal_record",
                     "legacy_bridge_used": False,
                 }
-            batch_writer = getattr(self.store, "backfill_linkedin_profile_registry_batch", None)
+            registry_repo = linkedin_profile_registry_repo(self.store)
+            batch_writer = getattr(registry_repo, "backfill_batch", None)
             if callable(batch_writer):
                 recorded_count = int(batch_writer(entries) or 0)
                 return {
@@ -7745,7 +7756,7 @@ class MultiSourceEnricher:
             for entry in entries:
                 profile_url = str(entry.get("profile_url") or "")
                 if fetched_fallback:
-                    self.store.mark_linkedin_profile_registry_fetched(
+                    self.store.repos.linkedin_profile_registry.mark_fetched(
                         profile_url,
                         raw_path=str(entry.get("raw_path") or ""),
                         source_shards=list(entry.get("source_shards") or []),
@@ -7756,7 +7767,7 @@ class MultiSourceEnricher:
                     )
                     recorded_count += 1
                 else:
-                    self.store.mark_linkedin_profile_registry_failed(
+                    self.store.repos.linkedin_profile_registry.mark_failed(
                         profile_url,
                         error=str(entry.get("error") or ""),
                         retryable=bool(entry.get("retryable")),
@@ -8153,7 +8164,7 @@ class MultiSourceEnricher:
         ]
         registry_entries: dict[str, dict[str, Any]] = {}
         if self.store is not None:
-            registry_entries = self.store.get_linkedin_profile_registry_bulk(normalized_urls)
+            registry_entries = self.store.repos.linkedin_profile_registry.get_bulk(normalized_urls)
         fetched: dict[str, dict[str, Any]] = {}
         scheduler_required_urls: list[str] = []
 
@@ -8168,7 +8179,7 @@ class MultiSourceEnricher:
         ) -> None:
             if self.store is None:
                 return
-            self.store.record_linkedin_profile_registry_event(
+            self.store.repos.linkedin_profile_registry.record_event(
                 profile_url,
                 event_type=event_type,
                 event_status=event_status,
@@ -8185,7 +8196,7 @@ class MultiSourceEnricher:
             while remaining and time.monotonic() < deadline:
                 resolved_any = False
                 for profile_url, normalized_registry_key in list(remaining.items()):
-                    registry_entry = self.store.get_linkedin_profile_registry(profile_url) or {}
+                    registry_entry = self.store.repos.linkedin_profile_registry.get(profile_url) or {}
                     registry_status = str(registry_entry.get("status") or "").strip().lower()
                     cached = _load_harvest_profile_payload_from_registry_or_snapshot(
                         registry_entry=registry_entry,
@@ -8216,7 +8227,7 @@ class MultiSourceEnricher:
                 fetched[normalized_profile_url] = profile
                 if self.store is not None:
                     alias_metadata = _profile_registry_alias_metadata(normalized_profile_url, dict(profile or {}))
-                    self.store.mark_linkedin_profile_registry_fetched(
+                    self.store.repos.linkedin_profile_registry.mark_fetched(
                         normalized_profile_url,
                         raw_path=str(dict(profile or {}).get("raw_path") or ""),
                         source_shards=list(source_shards_by_url.get(normalized_profile_url) or []),
@@ -8230,7 +8241,7 @@ class MultiSourceEnricher:
                 continue
             if normalized_profile_url in pending_prefetch_urls:
                 if self.store is not None:
-                    self.store.mark_linkedin_profile_registry_queued(
+                    self.store.repos.linkedin_profile_registry.mark_queued(
                         normalized_profile_url,
                         source_shards=list(source_shards_by_url.get(normalized_profile_url) or []),
                         source_jobs=normalized_source_jobs,
@@ -8259,7 +8270,7 @@ class MultiSourceEnricher:
                 if cached is not None:
                     fetched[normalized_profile_url] = cached
                     alias_metadata = _profile_registry_alias_metadata(normalized_profile_url, cached)
-                    self.store.mark_linkedin_profile_registry_fetched(
+                    self.store.repos.linkedin_profile_registry.mark_fetched(
                         normalized_profile_url,
                         raw_path=str(cached.get("raw_path") or ""),
                         source_shards=list(source_shards_by_url.get(normalized_profile_url) or []),
@@ -8275,7 +8286,7 @@ class MultiSourceEnricher:
                     )
                     continue
                 if registry_status == "fetched":
-                    self.store.mark_linkedin_profile_registry_failed(
+                    self.store.repos.linkedin_profile_registry.mark_failed(
                         normalized_profile_url,
                         error="registry_cached_raw_missing_or_invalid",
                         retryable=True,
@@ -8298,7 +8309,7 @@ class MultiSourceEnricher:
                         job_id=normalized_source_jobs[0] if normalized_source_jobs else "",
                     )
                 if registry_status == "unrecoverable":
-                    self.store.upsert_linkedin_profile_registry_sources(
+                    self.store.repos.linkedin_profile_registry.upsert_sources(
                         normalized_profile_url,
                         source_shards=list(source_shards_by_url.get(normalized_profile_url) or []),
                         source_jobs=normalized_source_jobs,
@@ -8307,7 +8318,7 @@ class MultiSourceEnricher:
                         normalized_profile_url, event_type="cache_skip_unrecoverable", event_status="unrecoverable"
                     )
                     continue
-                self.store.upsert_linkedin_profile_registry_sources(
+                self.store.repos.linkedin_profile_registry.upsert_sources(
                     normalized_profile_url,
                     source_shards=list(source_shards_by_url.get(normalized_profile_url) or []),
                     source_jobs=normalized_source_jobs,
@@ -8328,7 +8339,8 @@ class MultiSourceEnricher:
                 detail="profile hydration is cache-only; provider submit belongs to profile scheduler",
             )
         if scheduler_required_urls and self.store is not None and normalized_source_jobs:
-            recorder = getattr(self.store, "record_linkedin_profile_refill_plan_items", None)
+            registry_repo = linkedin_profile_registry_repo(self.store)
+            recorder = getattr(registry_repo, "record_refill_plan_items", None)
             if callable(recorder):
                 recorder(
                     deferred_profile_urls=scheduler_required_urls,

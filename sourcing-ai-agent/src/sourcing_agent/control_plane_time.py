@@ -11,6 +11,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 
+def utc_now_timestamp() -> str:
+    """The control plane's canonical wall-clock text timestamp (UTC, second precision)."""
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def parse_sqlite_timestamp(value: str) -> datetime | None:
     normalized = str(value or "").strip()
     if not normalized:

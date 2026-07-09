@@ -44,6 +44,7 @@ from sourcing_agent.legacy_public_web_storage import (
     seed_legacy_target_public_web_run,
 )
 from sourcing_agent.legacy_target_candidate_public_web_runtime import execute_target_candidate_public_web_run_once
+from sourcing_agent.linkedin_url_normalization import normalize_linkedin_profile_url_key
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.planning import hydrate_sourcing_plan
@@ -2834,7 +2835,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 if isinstance(primary_email_metadata, dict) and primary_email_metadata:
                     overlay["primary_email_metadata"] = dict(primary_email_metadata)
                 publishable_lookup["by_candidate_id"][candidate_id] = dict(overlay)
-                linkedin_url = self.store.normalize_linkedin_profile_url(
+                linkedin_url = normalize_linkedin_profile_url_key(
                     str(candidate.get("linkedin_url") or "").strip()
                 )
                 if linkedin_url:
@@ -4257,7 +4258,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             },
         )
         self.store.upsert_candidate(candidate)
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             linkedin_url,
             raw_path=str(raw_profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -4549,11 +4550,11 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 }
             ],
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             "https://www.linkedin.com/in/alice-example/",
             raw_path="/tmp/alice-example.json",
         )
-        self.store.mark_linkedin_profile_registry_queued("https://www.linkedin.com/in/bob-example/")
+        self.store.repos.linkedin_profile_registry.mark_queued("https://www.linkedin.com/in/bob-example/")
 
         dashboard_payload = self.orchestrator.get_job_dashboard(job_id)
         assert dashboard_payload is not None
@@ -5535,7 +5536,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "source_validation_status": "validated",
             },
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             linkedin_url,
             raw_path=str(raw_profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -5730,7 +5731,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "source_validation_status": "validated",
             },
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             ready_url,
             raw_path=str(raw_profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -7765,9 +7766,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             metadata={"recovery_kind": "harvest_profile_batch", "profile_urls": [overlap_b, former_c]},
             handoff_from_lane="search_planner",
         )
-        self.store.mark_linkedin_profile_registry_fetched(current_a, raw_path="/tmp/current-a.json")
-        self.store.mark_linkedin_profile_registry_queued(overlap_b)
-        self.store.mark_linkedin_profile_registry_queued(former_c)
+        self.store.repos.linkedin_profile_registry.mark_fetched(current_a, raw_path="/tmp/current-a.json")
+        self.store.repos.linkedin_profile_registry.mark_queued(overlap_b)
+        self.store.repos.linkedin_profile_registry.mark_queued(former_c)
 
         progress = self.orchestrator.get_job_progress(job_id)
         assert progress is not None
@@ -7867,8 +7868,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             checkpoint_payload={"stage": "completed", "recovery_kind": "harvest_profile_batch"},
             output_payload={"summary": {"status": "completed", "requested_urls": seed_urls[:2]}},
         )
-        self.store.mark_linkedin_profile_registry_fetched(seed_urls[0], raw_path="/tmp/openai-chatgpt-a.json")
-        self.store.mark_linkedin_profile_registry_queued(seed_urls[1])
+        self.store.repos.linkedin_profile_registry.mark_fetched(seed_urls[0], raw_path="/tmp/openai-chatgpt-a.json")
+        self.store.repos.linkedin_profile_registry.mark_queued(seed_urls[1])
 
         progress = self.orchestrator.get_job_progress(job_id)
         assert progress is not None
@@ -7987,7 +7988,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             handoff_from_lane="search_planner",
         )
         for url in profile_urls:
-            self.store.mark_linkedin_profile_registry_queued(url)
+            self.store.repos.linkedin_profile_registry.mark_queued(url)
 
         progress = self.orchestrator.get_job_progress(job_id)
         assert progress is not None
@@ -8144,9 +8145,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             output_payload={"summary": {"status": "completed", "requested_urls": all_urls}},
         )
         for url in all_urls[:2]:
-            self.store.mark_linkedin_profile_registry_fetched(url, raw_path=f"/tmp/{url.rstrip('/').rsplit('/', 1)[-1]}.json")
+            self.store.repos.linkedin_profile_registry.mark_fetched(url, raw_path=f"/tmp/{url.rstrip('/').rsplit('/', 1)[-1]}.json")
         for url in all_urls[2:]:
-            self.store.mark_linkedin_profile_registry_queued(url)
+            self.store.repos.linkedin_profile_registry.mark_queued(url)
 
         progress = self.orchestrator.get_job_progress(job_id)
         assert progress is not None
@@ -8844,8 +8845,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             metadata={"recovery_kind": "harvest_profile_batch", "profile_urls": [fetched_url, queued_url]},
             handoff_from_lane="search_planner",
         )
-        self.store.mark_linkedin_profile_registry_fetched(fetched_url, raw_path="/tmp/openai-chatgpt-fetched.json")
-        self.store.mark_linkedin_profile_registry_queued(queued_url)
+        self.store.repos.linkedin_profile_registry.mark_fetched(fetched_url, raw_path="/tmp/openai-chatgpt-fetched.json")
+        self.store.repos.linkedin_profile_registry.mark_queued(queued_url)
 
         progress = self.orchestrator.get_job_progress(job_id)
 
@@ -9361,8 +9362,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 ]
             },
         )
-        self.store.mark_linkedin_profile_registry_fetched(current_a, raw_path="/tmp/current-a.json")
-        self.store.mark_linkedin_profile_registry_fetched(former_b, raw_path="/tmp/former-b.json")
+        self.store.repos.linkedin_profile_registry.mark_fetched(current_a, raw_path="/tmp/current-a.json")
+        self.store.repos.linkedin_profile_registry.mark_fetched(former_b, raw_path="/tmp/former-b.json")
 
         dashboard = self.orchestrator.get_job_dashboard(job_id)
         assert dashboard is not None
@@ -10856,7 +10857,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 },
             )
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             linkedin_url,
             raw_path=str(raw_profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -11112,7 +11113,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 },
             )
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             linkedin_url,
             raw_path=str(raw_profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -11218,7 +11219,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 },
             )
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             linkedin_url,
             raw_path=str(raw_profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -11317,7 +11318,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 },
             )
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             linkedin_url,
             raw_path=str(raw_profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -11429,7 +11430,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             "https://www.linkedin.com/in/lovable-reuse-096/",
             raw_path=str(raw_profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -11948,7 +11949,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             },
         )
         self.store.upsert_candidate(candidate)
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             linkedin_url,
             raw_path=str(raw_profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -12142,7 +12143,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             },
         )
         self.store.upsert_candidate(candidate)
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             linkedin_url,
             raw_path=str(raw_profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -12248,7 +12249,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             },
         )
         self.store.upsert_candidate(candidate)
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             linkedin_url,
             raw_path=str(raw_profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -12354,7 +12355,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             },
         )
         self.store.upsert_candidate(candidate)
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             linkedin_url,
             raw_path=str(raw_profile_path),
             snapshot_dir=str(snapshot_dir),
@@ -15058,7 +15059,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 },
             }
         )
-        self.store.mark_linkedin_profile_registry_fetched(
+        self.store.repos.linkedin_profile_registry.mark_fetched(
             profile_url=linkedin_url,
             raw_path=str(raw_profile_path),
             raw_linkedin_url=linkedin_url,
@@ -20547,8 +20548,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         ]
 
         with unittest.mock.patch.object(
-            self.store,
-            "get_linkedin_profile_registry_bulk",
+            self.store.repos.linkedin_profile_registry,
+            "get_bulk",
             return_value={},
         ):
             result = self.orchestrator._publish_harvest_prefetch_board_visible_delta_item(  # noqa: SLF001

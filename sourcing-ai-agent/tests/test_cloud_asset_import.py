@@ -164,7 +164,7 @@ class CloudAssetImportTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         )
         self.assertTrue(bool(execution_profile))
         self.assertTrue(str(execution_profile.get("source_generation_key") or ""))
-        profile_registry_entry = store.get_linkedin_profile_registry("https://www.linkedin.com/in/alice-example/")
+        profile_registry_entry = store.repos.linkedin_profile_registry.get("https://www.linkedin.com/in/alice-example/")
         self.assertIsNotNone(profile_registry_entry)
         assert profile_registry_entry is not None
         self.assertEqual(profile_registry_entry["status"], "fetched")
@@ -284,7 +284,7 @@ class CloudAssetImportTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         )
 
         target_store = self.make_pg_store(self.target_runtime / "sourcing_agent.db")
-        profile_registry_entry = target_store.get_linkedin_profile_registry(
+        profile_registry_entry = target_store.repos.linkedin_profile_registry.get(
             "https://www.linkedin.com/in/alice-example/"
         )
         self.assertIsNotNone(profile_registry_entry)

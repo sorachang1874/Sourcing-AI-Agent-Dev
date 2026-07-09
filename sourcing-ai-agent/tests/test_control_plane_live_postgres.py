@@ -14,6 +14,7 @@ from sourcing_agent.legacy_public_web_storage import (
     list_legacy_target_public_web_promotions,
     list_legacy_target_public_web_runs,
 )
+from sourcing_agent.linkedin_url_normalization import normalize_linkedin_profile_url_key
 from sourcing_agent.retrieval_runtime import load_bootstrap_candidate_source
 from sourcing_agent.storage import ControlPlaneStore
 
@@ -2337,36 +2338,36 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
 
         canonical_url = "https://www.linkedin.com/in/alice-example/"
         alias_url = "linkedin.com/in/ALICE-EXAMPLE"
-        store.mark_linkedin_profile_registry_fetched(
+        store.repos.linkedin_profile_registry.mark_fetched(
             canonical_url,
             raw_path="/tmp/alice-example.json",
             alias_urls=[alias_url],
             raw_linkedin_url=alias_url,
         )
-        by_alias = store.get_linkedin_profile_registry(alias_url) or {}
+        by_alias = store.repos.linkedin_profile_registry.get(alias_url) or {}
 
         self.assertEqual(by_alias["status"], "fetched")
         self.assertEqual(by_alias["last_raw_path"], "/tmp/alice-example.json")
         self.assertEqual(
             by_alias["profile_url_key"],
-            store.normalize_linkedin_profile_url(canonical_url),
+            normalize_linkedin_profile_url_key(canonical_url),
         )
 
     def test_postgres_only_profile_registry_leases_events_and_backfill_runs(self) -> None:
         store = self._build_store(mode="postgres_only")
         profile_url = "https://www.linkedin.com/in/lease-test/"
 
-        lease = store.acquire_linkedin_profile_registry_lease(profile_url, lease_owner="worker-a", lease_seconds=120)
+        lease = store.repos.linkedin_profile_registry.acquire_lease(profile_url, lease_owner="worker-a", lease_seconds=120)
         self.assertTrue(bool(lease.get("acquired")))
         self.assertEqual(str(lease.get("lease_owner") or ""), "worker-a")
-        released = store.release_linkedin_profile_registry_lease(profile_url, lease_owner="worker-a")
+        released = store.repos.linkedin_profile_registry.release_lease(profile_url, lease_owner="worker-a")
         self.assertTrue(released)
 
-        store.record_linkedin_profile_registry_event(profile_url, event_type="lookup_attempt")
-        metrics = store.get_linkedin_profile_registry_metrics(lookback_hours=0)
+        store.repos.linkedin_profile_registry.record_event(profile_url, event_type="lookup_attempt")
+        metrics = store.repos.linkedin_profile_registry.get_metrics(lookback_hours=0)
         self.assertGreaterEqual(int(metrics["event_count"] or 0), 1)
 
-        run = store.upsert_linkedin_profile_registry_backfill_run(
+        run = store.repos.linkedin_profile_registry.upsert_backfill_run(
             "run::pg-only::snapshot",
             scope_company="acme",
             scope_snapshot_id="20260421T000000",
@@ -2381,7 +2382,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
-        processed = store.backfill_linkedin_profile_registry_batch(
+        processed = store.repos.linkedin_profile_registry.backfill_batch(
             [
                 {
                     "profile_url": "linkedin.com/in/ALICE-EXAMPLE",
@@ -2426,7 +2427,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(len(registry_bulk_upserts), 1)
         self.assertEqual(len(alias_bulk_upserts), 1)
 
-        by_alias = store.get_linkedin_profile_registry("linkedin.com/in/ALICE-EXAMPLE")
+        by_alias = store.repos.linkedin_profile_registry.get("linkedin.com/in/ALICE-EXAMPLE")
         self.assertIsNotNone(by_alias)
         assert by_alias is not None
         self.assertEqual(by_alias["status"], "fetched")
@@ -2435,11 +2436,11 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertIn("backfill:a", by_alias["source_shards"])
         self.assertIn("backfill:b", by_alias["source_shards"])
         alias_keys = {
-            store.normalize_linkedin_profile_url(item)
+            normalize_linkedin_profile_url_key(item)
             for item in list(by_alias.get("alias_urls") or [])
             if str(item or "").strip()
         }
-        self.assertIn(store.normalize_linkedin_profile_url("linkedin.com/in/ALICE-EXAMPLE"), alias_keys)
+        self.assertIn(normalize_linkedin_profile_url_key("linkedin.com/in/ALICE-EXAMPLE"), alias_keys)
 
     def test_postgres_only_skips_sqlite_fallback_for_control_plane_and_materialization_reads(self) -> None:
         store = self._build_store(mode="postgres_only")
@@ -2483,7 +2484,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             summary_payload={"source": "postgres_only"},
         )
         pg_completed_job = store.get_job("postgres-job-completed") or {}
-        pg_control = store.create_confidence_policy_control(
+        pg_control = store.repos.criteria_confidence.create_policy_control(
             target_company="Postgres Only",
             request_payload={
                 "raw_user_request": "找 Postgres Only 的推理人才",
@@ -2594,11 +2595,11 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         )
         self.assertEqual(int(pg_control["control_id"] or 0), 1)
         self.assertEqual(
-            store.get_confidence_policy_control(int(pg_control["control_id"]))["notes"],
+            store.repos.criteria_confidence.get_policy_control(int(pg_control["control_id"]))["notes"],
             "postgres-only",
         )
         self.assertEqual(
-            [row["notes"] for row in store.list_confidence_policy_controls(target_company="Postgres Only")],
+            [row["notes"] for row in store.repos.criteria_confidence.list_policy_controls(target_company="Postgres Only")],
             ["postgres-only"],
         )
 
@@ -2936,7 +2937,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             status="queued",
             created_job_id="job-1",
         )
-        control = mirror_store.create_confidence_policy_control(
+        control = mirror_store.repos.criteria_confidence.create_policy_control(
             target_company="Acme",
             request_payload={"target_company": "Acme"},
             scope_kind="company",
@@ -3120,7 +3121,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         history_row = prefer_store.get_frontend_history_link("hist-pg")
         session_row = prefer_store.get_agent_runtime_session(job_id="job-pg")
         dispatch_row = prefer_store.get_query_dispatch(9)
-        control_row = prefer_store.get_confidence_policy_control(11)
+        control_row = prefer_store.repos.criteria_confidence.get_policy_control(11)
         event_rows = prefer_store.list_job_events("job-pg", stage="runtime_control")
 
         self.assertEqual(manual_review_rows[0]["metadata"]["source"], "postgres")
@@ -3186,7 +3187,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             payload={"source": "postgres_native"},
         )
 
-        control = store.create_confidence_policy_control(
+        control = store.repos.criteria_confidence.create_policy_control(
             target_company="Acme Native",
             request_payload={"target_company": "Acme Native"},
             scope_kind="request_family",
@@ -3196,7 +3197,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             reviewer="qa",
             locked_policy={"source": "postgres_native"},
         )
-        deactivated = store.deactivate_confidence_policy_control(control_id=int(control["control_id"]))
+        deactivated = store.repos.criteria_confidence.deactivate_policy_control(control_id=int(control["control_id"]))
 
         store.upsert_organization_asset_registry(
             {
@@ -3248,7 +3249,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             scoped_companies=["Acme Native"],
             summary={"source": "postgres_native"},
         )
-        feedback = store.record_criteria_feedback(
+        feedback = store.repos.criteria_confidence.record_feedback(
             {
                 "target_company": "Acme Native",
                 "feedback_type": "must_have_signal",
@@ -3258,7 +3259,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 "metadata": {"source": "postgres_native"},
             }
         )
-        suggestions = store.record_pattern_suggestions(
+        suggestions = store.repos.criteria_confidence.record_suggestions(
             [
                 {
                     "target_company": "Acme Native",
@@ -3279,20 +3280,20 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 }
             ]
         )
-        reviewed_suggestion = store.review_pattern_suggestion(
+        reviewed_suggestion = store.repos.criteria_confidence.review_suggestion(
             suggestion_id=int(suggestions[0]["suggestion_id"]),
             action="apply",
             reviewer="qa",
             notes="promote",
         )
-        version = store.create_criteria_version(
+        version = store.repos.criteria_confidence.create_version(
             target_company="Acme Native",
             request_payload={"target_company": "Acme Native", "keywords": ["infra"]},
             plan_payload={"mode": "postgres_native"},
             patterns=[],
             source_kind="plan",
         )
-        compiler_run = store.record_criteria_compiler_run(
+        compiler_run = store.repos.criteria_confidence.record_compiler_run(
             version_id=int(version["version_id"]),
             job_id="job-native",
             provider_name="deterministic",
@@ -3301,7 +3302,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             input_payload={"source": "postgres_native"},
             output_payload={"compiled": True},
         )
-        diff = store.record_criteria_result_diff(
+        diff = store.repos.criteria_confidence.record_result_diff(
             target_company="Acme Native",
             trigger_feedback_id=int(feedback["feedback_id"]),
             criteria_version_id=int(version["version_id"]),
@@ -3311,7 +3312,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             diff_payload={"added": ["cand-native"]},
             artifact_path="runtime/company_assets/acme-native/snap-2/diff.json",
         )
-        policy_run = store.record_confidence_policy_run(
+        policy_run = store.repos.criteria_confidence.record_policy_run(
             target_company="Acme Native",
             job_id="job-native",
             criteria_version_id=int(version["version_id"]),
@@ -3327,13 +3328,13 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 "summary": {"source": "postgres_native"},
             },
         )
-        feedback_rows = store.list_criteria_feedback(target_company="Acme Native", limit=5)
-        pattern_rows = store.list_criteria_patterns(target_company="Acme Native", status="", limit=10)
-        suggestion_row = store.get_pattern_suggestion(int(suggestions[0]["suggestion_id"]))
-        version_row = store.get_criteria_version(int(version["version_id"]))
-        compiler_rows = store.list_criteria_compiler_runs(target_company="Acme Native", limit=5)
-        diff_rows = store.list_criteria_result_diffs(target_company="Acme Native", limit=5)
-        policy_rows = store.list_confidence_policy_runs(target_company="Acme Native", limit=5)
+        feedback_rows = store.repos.criteria_confidence.list_feedback(target_company="Acme Native", limit=5)
+        pattern_rows = store.repos.criteria_confidence.list_patterns(target_company="Acme Native", status="", limit=10)
+        suggestion_row = store.repos.criteria_confidence.get_suggestion(int(suggestions[0]["suggestion_id"]))
+        version_row = store.repos.criteria_confidence.get_version(int(version["version_id"]))
+        compiler_rows = store.repos.criteria_confidence.list_compiler_runs(target_company="Acme Native", limit=5)
+        diff_rows = store.repos.criteria_confidence.list_result_diffs(target_company="Acme Native", limit=5)
+        policy_rows = store.repos.criteria_confidence.list_policy_runs(target_company="Acme Native", limit=5)
 
         self.assertEqual(reviewed["status"], "approved")
         self.assertEqual(reviewed["execution_bundle"]["source"], "postgres_native")

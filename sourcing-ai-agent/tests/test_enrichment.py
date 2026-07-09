@@ -6,6 +6,7 @@ import time
 import unittest
 from hashlib import sha1
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from sourcing_agent.agent_runtime import AgentRuntimeCoordinator
@@ -89,7 +90,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        store.mark_linkedin_profile_registry_fetched(
+        store.repos.linkedin_profile_registry.mark_fetched(
             profile_url,
             raw_path=str(raw_path),
             source_shards=["test_cached_harvest_profile"],
@@ -1395,13 +1396,14 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 self.queued_url = normalize_linkedin_profile_url_key(queued_url)
                 self.events = events
                 self.lookup_count = 0
+                self.repos = SimpleNamespace(linkedin_profile_registry=self)
 
-            def get_linkedin_profile_registry_bulk(self, profile_urls):
+            def get_bulk(self, profile_urls):
                 return {
                     self.queued_url: {"status": "queued"},
                 }
 
-            def get_linkedin_profile_registry(self, profile_url):
+            def get(self, profile_url):
                 if normalize_linkedin_profile_url_key(profile_url) == self.queued_url:
                     self.lookup_count += 1
                     self.events.append(f"queued_lookup_{self.lookup_count}")
@@ -1411,26 +1413,26 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             def list_agent_workers(self, job_id="", lane_id="", limit=0):
                 return []
 
-            def acquire_linkedin_profile_registry_lease(self, profile_url, lease_owner="", lease_seconds=0):
+            def acquire_lease(self, profile_url, lease_owner="", lease_seconds=0):
                 return {"acquired": True, "lease_owner": lease_owner, "lease_token": "token"}
 
-            def release_linkedin_profile_registry_lease(self, profile_url, lease_owner="", lease_token=""):
+            def release_lease(self, profile_url, lease_owner="", lease_token=""):
                 return {"released": True}
 
-            def record_linkedin_profile_registry_event(self, profile_url, **kwargs):
+            def record_event(self, profile_url, **kwargs):
                 self.events.append(str(kwargs.get("event_type") or "registry_event"))
                 return {"profile_url": profile_url, **kwargs}
 
-            def mark_linkedin_profile_registry_queued(self, profile_url, **kwargs):
+            def mark_queued(self, profile_url, **kwargs):
                 return {"profile_url": profile_url, **kwargs}
 
-            def mark_linkedin_profile_registry_fetched(self, profile_url, **kwargs):
+            def mark_fetched(self, profile_url, **kwargs):
                 return {"profile_url": profile_url, **kwargs}
 
-            def mark_linkedin_profile_registry_failed(self, profile_url, **kwargs):
+            def mark_failed(self, profile_url, **kwargs):
                 return {"profile_url": profile_url, **kwargs}
 
-            def upsert_linkedin_profile_registry_sources(self, profile_url, **kwargs):
+            def upsert_sources(self, profile_url, **kwargs):
                 return {"profile_url": profile_url, **kwargs}
 
         with tempfile.TemporaryDirectory() as tempdir:
@@ -1495,8 +1497,9 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 self.profile_url = normalize_linkedin_profile_url_key(profile_url)
                 self.raw_path = raw_path
                 self.fetched_marks: list[str] = []
+                self.repos = SimpleNamespace(linkedin_profile_registry=self)
 
-            def get_linkedin_profile_registry_bulk(self, profile_urls):
+            def get_bulk(self, profile_urls):
                 return {
                     self.profile_url: {
                         "status": "queued",
@@ -1504,7 +1507,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     }
                 }
 
-            def get_linkedin_profile_registry(self, profile_url):
+            def get(self, profile_url):
                 if normalize_linkedin_profile_url_key(profile_url) == self.profile_url:
                     return {
                         "status": "queued",
@@ -1512,26 +1515,26 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     }
                 return {}
 
-            def acquire_linkedin_profile_registry_lease(self, profile_url, lease_owner="", lease_seconds=0):
+            def acquire_lease(self, profile_url, lease_owner="", lease_seconds=0):
                 return {"acquired": True, "lease_owner": lease_owner, "lease_token": "token"}
 
-            def release_linkedin_profile_registry_lease(self, profile_url, lease_owner="", lease_token=""):
+            def release_lease(self, profile_url, lease_owner="", lease_token=""):
                 return {"released": True}
 
-            def record_linkedin_profile_registry_event(self, profile_url, **kwargs):
+            def record_event(self, profile_url, **kwargs):
                 return {"profile_url": profile_url, **kwargs}
 
-            def mark_linkedin_profile_registry_queued(self, profile_url, **kwargs):
+            def mark_queued(self, profile_url, **kwargs):
                 return {"profile_url": profile_url, **kwargs}
 
-            def mark_linkedin_profile_registry_fetched(self, profile_url, **kwargs):
+            def mark_fetched(self, profile_url, **kwargs):
                 self.fetched_marks.append(str(profile_url or "").strip())
                 return {"profile_url": profile_url, **kwargs}
 
-            def mark_linkedin_profile_registry_failed(self, profile_url, **kwargs):
+            def mark_failed(self, profile_url, **kwargs):
                 return {"profile_url": profile_url, **kwargs}
 
-            def upsert_linkedin_profile_registry_sources(self, profile_url, **kwargs):
+            def upsert_sources(self, profile_url, **kwargs):
                 return {"profile_url": profile_url, **kwargs}
 
         with tempfile.TemporaryDirectory() as tempdir:
@@ -2467,11 +2470,12 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             def __init__(self, profile_url: str) -> None:
                 self.profile_key = normalize_linkedin_profile_url_key(profile_url)
                 self.source_updates: list[dict[str, object]] = []
+                self.repos = SimpleNamespace(linkedin_profile_registry=self)
 
-            def get_linkedin_profile_registry_bulk(self, profile_urls):
+            def get_bulk(self, profile_urls):
                 return {self.profile_key: {"status": "queued"}}
 
-            def upsert_linkedin_profile_registry_sources(self, profile_url, **kwargs):
+            def upsert_sources(self, profile_url, **kwargs):
                 self.source_updates.append({"profile_url": profile_url, **kwargs})
                 return {"profile_url": profile_url, **kwargs}
 
@@ -2648,7 +2652,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     }
                 },
             )
-            store.mark_linkedin_profile_registry_queued(
+            store.repos.linkedin_profile_registry.mark_queued(
                 profile_url,
                 source_shards=["enrichment_background_prefetch"],
                 source_jobs=["job_reclaim_stale_queued_registry"],
@@ -2681,7 +2685,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 runtime_mode="workflow",
                 allow_shared_provider_cache=True,
             )
-            registry = store.get_linkedin_profile_registry(profile_url) or {}
+            registry = store.repos.linkedin_profile_registry.get(profile_url) or {}
             worker = store.get_agent_worker(worker_id=old_handle.worker_id) or {}
 
         self.assertEqual(result["status"], "completed")
@@ -2779,7 +2783,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 },
                 handoff_from_lane="acquisition_specialist",
             )
-            store.mark_linkedin_profile_registry_queued(
+            store.repos.linkedin_profile_registry.mark_queued(
                 profile_url,
                 source_shards=["enrichment_background_prefetch"],
                 source_jobs=["job_resume_queued_registry"],
@@ -2825,7 +2829,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 allow_shared_provider_cache=True,
             )
 
-            registry = store.get_linkedin_profile_registry_bulk([profile_url])
+            registry = store.repos.linkedin_profile_registry.get_bulk([profile_url])
             worker = store.get_agent_worker(worker_id=handle.worker_id)
 
         self.assertEqual(result["worker_status"], "completed")
@@ -2995,7 +2999,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 },
                 handoff_from_lane="acquisition_specialist",
             )
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=profile_urls,
                 source_jobs=[job_id],
                 snapshot_dir=str(root),
@@ -3059,7 +3063,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             )
 
             worker = store.get_agent_worker(worker_id=handle.worker_id) or {}
-            registry = store.get_linkedin_profile_registry_bulk(profile_urls)
+            registry = store.repos.linkedin_profile_registry.get_bulk(profile_urls)
 
         self.assertEqual(result["worker_status"], "completed")
         self.assertEqual(result["summary"]["replay_reason"], "completed_queue_summary_recovered")
@@ -3221,7 +3225,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 lane_id="enrichment_specialist",
                 worker_key=f"harvest_profile_batch::{payload_hash}",
             )
-            registry = store.get_linkedin_profile_registry_bulk(profile_urls)
+            registry = store.repos.linkedin_profile_registry.get_bulk(profile_urls)
 
         self.assertEqual(connector.execute_calls, [profile_urls])
         self.assertEqual(connector.persist_calls, [profile_urls[:2], profile_urls[2:4], profile_urls[4:]])
@@ -3341,9 +3345,9 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 allow_shared_provider_cache=True,
             )
 
-            fetched_entry = store.get_linkedin_profile_registry(fetched_url) or {}
-            unresolved_entry = store.get_linkedin_profile_registry(unresolved_url) or {}
-            retry_items = store.list_linkedin_profile_refill_queue_items(
+            fetched_entry = store.repos.linkedin_profile_registry.get(fetched_url) or {}
+            unresolved_entry = store.repos.linkedin_profile_registry.get(unresolved_url) or {}
+            retry_items = store.repos.linkedin_profile_registry.list_refill_queue_items(
                 states=["retry_wait"],
                 source_job="job_partial_success_retry",
                 snapshot_dir=str(root),
@@ -3453,7 +3457,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     runtime_mode="daemon_recovery",
                     allow_shared_provider_cache=True,
                 )
-            registry = store.get_linkedin_profile_registry_bulk([profile_url])
+            registry = store.repos.linkedin_profile_registry.get_bulk([profile_url])
             workers = worker_runtime.list_workers(job_id="job_scripted_resume_queued_registry")
 
         self.assertEqual(first["worker_status"], "queued")
@@ -3607,7 +3611,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 runtime_mode="daemon_recovery",
                 allow_shared_provider_cache=True,
             )
-            registry = store.get_linkedin_profile_registry(profile_url) or {}
+            registry = store.repos.linkedin_profile_registry.get(profile_url) or {}
             worker = store.get_agent_worker(worker_id=handle.worker_id) or {}
 
         self.assertEqual(result["worker_status"], "completed")
@@ -5457,8 +5461,8 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
             result = enricher.run_linkedin_profile_url_terminal_record_command_once(command)
             replay = enricher.run_linkedin_profile_url_terminal_record_command_once(command)
-            fetched_entry = store.get_linkedin_profile_registry(fetched_url) or {}
-            failed_entry = store.get_linkedin_profile_registry(failed_url) or {}
+            fetched_entry = store.repos.linkedin_profile_registry.get(fetched_url) or {}
+            failed_entry = store.repos.linkedin_profile_registry.get(failed_url) or {}
             refreshed_command = store.get_workflow_command(command["command_id"])
 
         self.assertEqual(result["status"], "completed")
@@ -5579,8 +5583,9 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 self.queued_url = queued_url
                 self.raw_path = raw_path
                 self._backing = backing
+                self.repos = SimpleNamespace(linkedin_profile_registry=self)
 
-            def get_linkedin_profile_registry_bulk(self, profile_urls):
+            def get_bulk(self, profile_urls):
                 rows = {}
                 for profile_url in list(profile_urls or []):
                     key = normalize_linkedin_profile_url_key(profile_url)
@@ -5599,7 +5604,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                         }
                 return rows
 
-            def upsert_linkedin_profile_registry_sources(self, *args, **kwargs):
+            def upsert_sources(self, *args, **kwargs):
                 return {}
 
             def __getattr__(self, name):
@@ -5615,7 +5620,11 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     "list_agent_workers_by_remote_provider_identifiers",
                 }:
                     raise AttributeError(name)
-                return getattr(self.__dict__["_backing"], name)
+                backing = self.__dict__["_backing"]
+                try:
+                    return getattr(backing, name)
+                except AttributeError:
+                    return getattr(backing.repos.linkedin_profile_registry, name)
 
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
@@ -5744,14 +5753,14 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             store = self.make_pg_store(str(root / "control_plane.db"))
             profile_url = "https://www.linkedin.com/in/provider-owned-planned-dispatch/"
             job_id = "job_provider_owned_planned_dispatch"
-            store.mark_linkedin_profile_registry_queued(
+            store.repos.linkedin_profile_registry.mark_queued(
                 profile_url,
                 source_jobs=[job_id],
                 snapshot_dir=str(root),
                 run_id="run-provider-owned",
                 dataset_id="dataset-provider-owned",
             )
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=[profile_url],
                 source_jobs=[job_id],
                 snapshot_dir=str(root),
@@ -5811,8 +5820,8 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 for index in range(20)
             ]
             job_id = "job_provider_owned_race"
-            original_get_bulk = store.get_linkedin_profile_registry_bulk
-            original_get_lease = store.get_linkedin_profile_registry_lease
+            original_get_bulk = store.repos.linkedin_profile_registry.get_bulk
+            original_get_lease = store.repos.linkedin_profile_registry.get_lease
 
             def _get_bulk_with_provider_owner_race(profile_urls_arg):
                 urls = [str(profile_url or "").strip() for profile_url in list(profile_urls_arg or [])]
@@ -5837,7 +5846,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     }
                 return original_get_bulk(profile_urls_arg)
 
-            store.get_linkedin_profile_registry_bulk = _get_bulk_with_provider_owner_race
+            store.repos.linkedin_profile_registry.get_bulk = _get_bulk_with_provider_owner_race
             enricher = MultiSourceEnricher(
                 catalog,
                 accounts=[],
@@ -5902,7 +5911,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 for index in range(20)
             ]
             job_id = "job_provider_owned_contended"
-            original_get_bulk = store.get_linkedin_profile_registry_bulk
+            original_get_bulk = store.repos.linkedin_profile_registry.get_bulk
             batch_acquire_started = False
 
             def _get_bulk_with_provider_owner_after_contention(profile_urls_arg):
@@ -5938,8 +5947,8 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     },
                 }
 
-            store.get_linkedin_profile_registry_bulk = _get_bulk_with_provider_owner_after_contention
-            store.acquire_linkedin_profile_registry_leases = _contended_batch_acquire  # type: ignore[method-assign]
+            store.repos.linkedin_profile_registry.get_bulk = _get_bulk_with_provider_owner_after_contention
+            store.repos.linkedin_profile_registry.acquire_leases = _contended_batch_acquire  # type: ignore[method-assign]
             enricher = MultiSourceEnricher(
                 catalog,
                 accounts=[],
@@ -6004,7 +6013,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 for index in range(3)
             ]
             job_id = "job_registry_lease_contention"
-            store.acquire_linkedin_profile_registry_leases(
+            store.repos.linkedin_profile_registry.acquire_leases(
                 profile_urls,
                 lease_owner="competing-local-submit",
                 lease_seconds=120,
@@ -6034,7 +6043,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     "allow_under_target_final_tail_dispatch": True,
                 },
             )
-            entries = store.get_linkedin_profile_registry_bulk(profile_urls)
+            entries = store.repos.linkedin_profile_registry.get_bulk(profile_urls)
 
         summary = dict(result.get("summary") or {})
         self.assertEqual(result["worker_status"], "backpressure")
@@ -6100,7 +6109,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     raw_path = root / "harvest_profiles" / f"{normalize_linkedin_profile_url_key(profile_url)}.json"
                     raw_path.parent.mkdir(parents=True, exist_ok=True)
                     raw_path.write_text(json.dumps({"profileUrl": profile_url}), encoding="utf-8")
-                    store.mark_linkedin_profile_registry_fetched(
+                    store.repos.linkedin_profile_registry.mark_fetched(
                         profile_url,
                         raw_path=str(raw_path),
                         source_shards=["enrichment_background_prefetch"],
@@ -6738,7 +6747,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 trigger_kind="profile_prefetch_replan",
                 record_active_items=False,
             )
-            entries = store.get_linkedin_profile_registry_bulk(profile_urls)
+            entries = store.repos.linkedin_profile_registry.get_bulk(profile_urls)
             oldest_age_ms = _profile_prefetch_oldest_deferred_coalescing_age_ms(
                 profile_urls,
                 entries,
@@ -6778,7 +6787,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 f"https://www.linkedin.com/in/ready-final-tail-{index}/"
                 for index in range(47)
             ]
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 deferred_profile_urls=profile_urls,
                 source_jobs=["job_ready_tail"],
                 snapshot_dir=str(root),
@@ -6873,7 +6882,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 f"https://www.linkedin.com/in/daemon-final-tail-{index}/"
                 for index in range(40)
             ]
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 deferred_profile_urls=profile_urls,
                 source_jobs=["job_daemon_final_tail"],
                 snapshot_dir=str(root),
@@ -6915,7 +6924,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     priority=True,
                     load_cached_profile_payloads=False,
                 )
-            registry_entries = store.get_linkedin_profile_registry_bulk(profile_urls)
+            registry_entries = store.repos.linkedin_profile_registry.get_bulk(profile_urls)
 
         self.assertEqual(result["status"], "queued")
         self.assertEqual(result["batch_plan_reason"], "queue_quiescent_final_tail")
@@ -6965,7 +6974,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 f"https://www.linkedin.com/in/former-probe-{index}/"
                 for index in range(25)
             ]
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 deferred_profile_urls=current_urls,
                 source_jobs=["job_probe_coalescing"],
                 snapshot_dir=str(root),
@@ -7100,8 +7109,8 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     load_cached_profile_payloads=False,
                 )
 
-            head_entries = store.get_linkedin_profile_registry_bulk(former_urls[:50])
-            tail_entries = store.get_linkedin_profile_registry_bulk(former_urls[50:])
+            head_entries = store.repos.linkedin_profile_registry.get_bulk(former_urls[:50])
+            tail_entries = store.repos.linkedin_profile_registry.get_bulk(former_urls[50:])
 
         self.assertEqual([len(chunk) for chunk in attempted_chunks], [50])
         self.assertEqual(result["status"], "queued")
@@ -7206,7 +7215,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 )
 
             nested_result = dict(nested_results[0])
-            all_entries = store.get_linkedin_profile_registry_bulk(profile_urls)
+            all_entries = store.repos.linkedin_profile_registry.get_bulk(profile_urls)
 
         # R1.b ("fewer larger envelopes"): the 115-url wave now reserves into a single
         # durable-unit envelope instead of the old 50+50 fan-out with a 15-item
@@ -7249,7 +7258,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             )
             store = self.make_pg_store(str(root / "control_plane.db"))
             profile_url = "https://www.linkedin.com/in/reserved-owner-hash/"
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=[profile_url],
                 source_jobs=["job_reserved_owner_hash"],
                 snapshot_dir=str(root),
@@ -7320,14 +7329,14 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 f"https://www.linkedin.com/in/reserved-budget-b-{index:03d}/"
                 for index in range(50)
             ]
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=first_batch,
                 source_jobs=["job_reserved_budget"],
                 snapshot_dir=str(root),
                 active_queue_state="dispatch_reserved",
                 active_owner_payload_hash="reserved-a",
             )
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=second_batch,
                 source_jobs=["job_reserved_budget"],
                 snapshot_dir=str(root),
@@ -7421,7 +7430,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 f"https://www.linkedin.com/in/active-owner-{index:03d}/"
                 for index in range(50)
             ]
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=terminal_batch,
                 source_jobs=["job_terminal_slot_release"],
                 snapshot_dir=str(root),
@@ -7429,7 +7438,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 active_owner_worker_id=101,
                 active_owner_payload_hash="terminal-owner",
             )
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=active_batch,
                 source_jobs=["job_terminal_slot_release"],
                 snapshot_dir=str(root),
@@ -7619,7 +7628,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 lock_enter_count += 1
                 if lock_enter_count != 1:
                     return
-                store.record_linkedin_profile_refill_plan_items(
+                store.repos.linkedin_profile_registry.record_refill_plan_items(
                     active_profile_urls=externally_owned_urls,
                     source_jobs=["job_revalidate_owned"],
                     snapshot_dir=str(root),
@@ -8002,8 +8011,8 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
             active_url = "https://www.linkedin.com/in/refill-item-0/"
             deferred_url = "https://www.linkedin.com/in/refill-item-104/"
-            active_entry = store.get_linkedin_profile_registry(active_url) or {}
-            deferred_entry = store.get_linkedin_profile_registry(deferred_url) or {}
+            active_entry = store.repos.linkedin_profile_registry.get(active_url) or {}
+            deferred_entry = store.repos.linkedin_profile_registry.get(deferred_url) or {}
 
         self.assertEqual(result["status"], "queued")
         self.assertEqual([len(chunk) for chunk in dispatched_chunks], [50])
@@ -8085,7 +8094,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             # and closed before the daemon refills the remaining deferred items.
             submitted_urls = initial_urls[:928]
             for profile_url in submitted_urls:
-                store.mark_linkedin_profile_registry_fetched(
+                store.repos.linkedin_profile_registry.mark_fetched(
                     profile_url,
                     raw_path=str(root / "harvest_profiles" / f"{normalize_linkedin_profile_url_key(profile_url)}.json"),
                     source_jobs=["job_large_wave_refill"],
@@ -8167,7 +8176,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 f"https://www.linkedin.com/in/refill-loop-deferred-{index}/"
                 for index in range(50)
             ]
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 deferred_profile_urls=deferred_urls,
                 source_jobs=["job_refill_loop"],
                 snapshot_dir=str(root),
@@ -8219,7 +8228,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     allow_shared_provider_cache=True,
                 )
 
-            deferred_entry = store.get_linkedin_profile_registry(deferred_urls[0]) or {}
+            deferred_entry = store.repos.linkedin_profile_registry.get(deferred_urls[0]) or {}
 
         self.assertEqual(result["status"], "queued")
         self.assertEqual(result["refill_queue_item_count"], 50)
@@ -8277,14 +8286,14 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             for index in range(50)
         ]
         retry_url = "https://www.linkedin.com/in/refill-retry-second/"
-        store.record_linkedin_profile_refill_plan_items(
+        store.repos.linkedin_profile_registry.record_refill_plan_items(
             deferred_profile_urls=normal_urls,
             source_jobs=["job_refill_retry_isolation"],
             snapshot_dir=str(root),
             plan_reason="ready_to_dispatch",
             deferred_reason="worker_budget_deferred",
         )
-        store.mark_linkedin_profile_registry_failed(
+        store.repos.linkedin_profile_registry.mark_failed(
             retry_url,
             error="temporary provider timeout",
             retryable=True,
@@ -8292,7 +8301,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             source_jobs=["job_refill_retry_isolation"],
             snapshot_dir=str(root),
         )
-        store.record_linkedin_profile_refill_plan_items(
+        store.repos.linkedin_profile_registry.record_refill_plan_items(
             deferred_profile_urls=[retry_url],
             source_jobs=["job_refill_retry_isolation"],
             snapshot_dir=str(root),
@@ -8347,7 +8356,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 allow_shared_provider_cache=True,
             )
 
-        retry_entry = store.get_linkedin_profile_registry(retry_url) or {}
+        retry_entry = store.repos.linkedin_profile_registry.get(retry_url) or {}
 
         self.assertEqual(normal_result["status"], "queued")
         self.assertEqual(dispatched_chunks, [normal_urls])
@@ -8398,7 +8407,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         store = self.make_pg_store(str(root / "control_plane.db"))
         self.assertTrue(store.control_plane_postgres_is_postgres_only())
         retry_url = "https://www.linkedin.com/in/refill-retry-only/"
-        store.mark_linkedin_profile_registry_failed(
+        store.repos.linkedin_profile_registry.mark_failed(
             retry_url,
             error="temporary provider timeout",
             retryable=True,
@@ -8406,7 +8415,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             source_jobs=["job_refill_retry_only"],
             snapshot_dir=str(root),
         )
-        store.record_linkedin_profile_refill_plan_items(
+        store.repos.linkedin_profile_registry.record_refill_plan_items(
             deferred_profile_urls=[retry_url],
             source_jobs=["job_refill_retry_only"],
             snapshot_dir=str(root),
@@ -8531,7 +8540,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(batch_plan["planned_dispatch_item_count"], 5)
         self.assertEqual(batch_plan["planned_deferred_item_count"], 0)
         self.assertEqual(batch_plan["available_slot_count"], 4)
-        registry_entries = store.get_linkedin_profile_registry_bulk(urls)
+        registry_entries = store.repos.linkedin_profile_registry.get_bulk(urls)
         self.assertTrue(all(str(entry.get("refill_queue_state") or "") == "deferred_budget" for entry in registry_entries.values()))
 
     def test_queue_background_profile_prefetch_blocks_retry_until_normal_owned_worker_terminal(self) -> None:
@@ -8598,14 +8607,14 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     }
                 },
             )
-            store.mark_linkedin_profile_registry_queued(
+            store.repos.linkedin_profile_registry.mark_queued(
                 normal_url,
                 source_jobs=["job_refill_retry_gate"],
                 run_id="run-normal-owned",
                 dataset_id="dataset-normal-owned",
                 snapshot_dir=str(root),
             )
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=[normal_url],
                 source_jobs=["job_refill_retry_gate"],
                 snapshot_dir=str(root),
@@ -8617,7 +8626,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 active_owner_dataset_id="dataset-normal-owned",
                 active_owner_payload_hash="payload-normal-owned",
             )
-            store.mark_linkedin_profile_registry_failed(
+            store.repos.linkedin_profile_registry.mark_failed(
                 retry_url,
                 error="temporary provider timeout",
                 retryable=True,
@@ -8625,7 +8634,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 source_jobs=["job_refill_retry_gate"],
                 snapshot_dir=str(root),
             )
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 deferred_profile_urls=[retry_url],
                 source_jobs=["job_refill_retry_gate"],
                 snapshot_dir=str(root),
@@ -8688,7 +8697,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             store = self.make_pg_store(str(root / "control_plane.db"))
             normal_url = "https://www.linkedin.com/in/refill-normal-claim-open/"
             retry_url = "https://www.linkedin.com/in/refill-retry-held-by-claim/"
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=[normal_url],
                 source_jobs=["job_refill_retry_claim_gate"],
                 snapshot_dir=str(root),
@@ -8698,7 +8707,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 active_reason="provider_submit_claimed",
                 active_refill_not_before_at="2099-01-01 00:00:00",
             )
-            store.mark_linkedin_profile_registry_failed(
+            store.repos.linkedin_profile_registry.mark_failed(
                 retry_url,
                 error="temporary provider timeout",
                 retryable=True,
@@ -8706,7 +8715,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 source_jobs=["job_refill_retry_claim_gate"],
                 snapshot_dir=str(root),
             )
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 deferred_profile_urls=[retry_url],
                 source_jobs=["job_refill_retry_claim_gate"],
                 snapshot_dir=str(root),
@@ -8769,12 +8778,12 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             store = self.make_pg_store(str(root / "control_plane.db"))
             normal_url = "https://www.linkedin.com/in/refill-normal-owned-retry-counted/"
             retry_url = "https://www.linkedin.com/in/refill-retry-held-by-owned/"
-            store.mark_linkedin_profile_registry_queued(
+            store.repos.linkedin_profile_registry.mark_queued(
                 normal_url,
                 source_jobs=["job_refill_retry_counted_owned_gate"],
                 snapshot_dir=str(root),
             )
-            store.mark_linkedin_profile_registry_failed(
+            store.repos.linkedin_profile_registry.mark_failed(
                 normal_url,
                 error="partial batch still recording terminal URL states",
                 retryable=True,
@@ -8782,7 +8791,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 source_jobs=["job_refill_retry_counted_owned_gate"],
                 snapshot_dir=str(root),
             )
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=[normal_url],
                 source_jobs=["job_refill_retry_counted_owned_gate"],
                 snapshot_dir=str(root),
@@ -8794,7 +8803,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 active_owner_dataset_id="dataset-normal-owned-retry-counted",
                 active_owner_payload_hash="payload-normal-owned-retry-counted",
             )
-            store.mark_linkedin_profile_registry_failed(
+            store.repos.linkedin_profile_registry.mark_failed(
                 retry_url,
                 error="temporary provider timeout",
                 retryable=True,
@@ -8802,7 +8811,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 source_jobs=["job_refill_retry_counted_owned_gate"],
                 snapshot_dir=str(root),
             )
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 deferred_profile_urls=[retry_url],
                 source_jobs=["job_refill_retry_counted_owned_gate"],
                 snapshot_dir=str(root),
@@ -8942,11 +8951,12 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         class _Store:
             def __init__(self, raw_paths_by_url):
                 self.raw_paths_by_url = dict(raw_paths_by_url)
+                self.repos = SimpleNamespace(linkedin_profile_registry=self)
 
             def get_agent_worker(self, *args, **kwargs):
                 return None
 
-            def get_linkedin_profile_registry_bulk(self, profile_urls):
+            def get_bulk(self, profile_urls):
                 rows = {}
                 for profile_url in list(profile_urls or []):
                     raw_path = self.raw_paths_by_url.get(profile_url)
@@ -8958,13 +8968,13 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                         }
                 return rows
 
-            def acquire_linkedin_profile_registry_lease(self, profile_url, **kwargs):
+            def acquire_lease(self, profile_url, **kwargs):
                 return {"acquired": True, "lease_owner": "test", "lease_token": f"lease-{profile_url}"}
 
-            def release_linkedin_profile_registry_lease(self, *args, **kwargs):
+            def release_lease(self, *args, **kwargs):
                 return True
 
-            def mark_linkedin_profile_registry_fetched(self, *args, **kwargs):
+            def mark_fetched(self, *args, **kwargs):
                 return True
 
         class _WorkerRuntime:
@@ -9097,7 +9107,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     ),
                     encoding="utf-8",
                 )
-                store.mark_linkedin_profile_registry_fetched(
+                store.repos.linkedin_profile_registry.mark_fetched(
                     profile_url,
                     raw_path=str(raw_path),
                     source_shards=["enrichment_background_prefetch"],
@@ -9254,21 +9264,22 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             def __init__(self) -> None:
                 self.deferred_urls: list[str] = []
                 self.released_urls: list[str] = []
+                self.repos = SimpleNamespace(linkedin_profile_registry=self)
 
             def get_agent_worker(self, *args, **kwargs):
                 return None
 
-            def get_linkedin_profile_registry_bulk(self, profile_urls):
+            def get_bulk(self, profile_urls):
                 return {}
 
-            def acquire_linkedin_profile_registry_lease(self, profile_url, **kwargs):
+            def acquire_lease(self, profile_url, **kwargs):
                 return {"acquired": True, "lease_owner": "test", "lease_token": f"lease-{profile_url}"}
 
-            def release_linkedin_profile_registry_lease(self, profile_url, **kwargs):
+            def release_lease(self, profile_url, **kwargs):
                 self.released_urls.append(profile_url)
                 return True
 
-            def mark_linkedin_profile_registry_deferred_for_coalescing(self, profile_url, **kwargs):
+            def mark_deferred_for_coalescing(self, profile_url, **kwargs):
                 self.deferred_urls.append(profile_url)
                 return {"profile_url": profile_url, "status": "deferred_coalescing"}
 
@@ -9379,8 +9390,8 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 )
             summary = dict(result.get("summary") or {})
             workers = store.list_agent_workers(job_id="job_durable_tail", lane_id="enrichment_specialist")
-            registry = store.get_linkedin_profile_registry(profile_url)
-            future_ready_items = store.list_linkedin_profile_refill_queue_items(
+            registry = store.repos.linkedin_profile_registry.get(profile_url)
+            future_ready_items = store.repos.linkedin_profile_registry.list_refill_queue_items(
                 states=["deferred_coalescing"],
                 source_job="job_durable_tail",
                 snapshot_dir=str(root),
@@ -9448,7 +9459,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             )
             enricher.worker_runtime = worker_runtime
             profile_url = "https://www.linkedin.com/in/aged-tiny-tail/"
-            store.mark_linkedin_profile_registry_deferred_for_coalescing(
+            store.repos.linkedin_profile_registry.mark_deferred_for_coalescing(
                 profile_url,
                 reason="final_tail_unproven",
                 source_shards=["enrichment_background_prefetch"],
@@ -9477,7 +9488,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                         "planned_dispatch_worker_count": 1,
                     },
                 )
-            registry_entry = store.get_linkedin_profile_registry(profile_url) or {}
+            registry_entry = store.repos.linkedin_profile_registry.get(profile_url) or {}
 
         self.assertEqual(result["worker_status"], "queued")
         self.assertEqual(connector.submitted_urls, [[profile_url]])
@@ -9509,14 +9520,20 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 super().__init__(db_path)
                 self.queued_many_calls: list[list[str]] = []
                 self.queued_single_calls: list[str] = []
+                registry_repo = self.repos.linkedin_profile_registry
+                original_mark_queued_many = registry_repo.mark_queued_many
+                original_mark_queued = registry_repo.mark_queued
 
-            def mark_linkedin_profile_registry_queued_many(self, profile_urls, **kwargs):
-                self.queued_many_calls.append(list(profile_urls))
-                return super().mark_linkedin_profile_registry_queued_many(profile_urls, **kwargs)
+                def _spy_mark_queued_many(profile_urls, **kwargs):
+                    self.queued_many_calls.append(list(profile_urls))
+                    return original_mark_queued_many(profile_urls, **kwargs)
 
-            def mark_linkedin_profile_registry_queued(self, profile_url, **kwargs):
-                self.queued_single_calls.append(str(profile_url))
-                return super().mark_linkedin_profile_registry_queued(profile_url, **kwargs)
+                def _spy_mark_queued(profile_url, **kwargs):
+                    self.queued_single_calls.append(str(profile_url))
+                    return original_mark_queued(profile_url, **kwargs)
+
+                registry_repo.mark_queued_many = _spy_mark_queued_many
+                registry_repo.mark_queued = _spy_mark_queued
 
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
@@ -9623,7 +9640,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 },
             )
             workers = worker_runtime.list_workers(job_id="job_provider_failure_terminal")
-            registry_entry = store.get_linkedin_profile_registry(profile_url) or {}
+            registry_entry = store.repos.linkedin_profile_registry.get(profile_url) or {}
 
         self.assertEqual(result["worker_status"], "completed")
         self.assertEqual(result["terminal_envelope_outcome"], "provider_failed_url_retry_recorded")
@@ -9697,8 +9714,8 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 allow_shared_provider_cache=True,
             )
             workers = worker_runtime.list_workers(job_id="job_provider_slot_full")
-            registry_entry = store.get_linkedin_profile_registry("https://www.linkedin.com/in/provider-full/") or {}
-            ready_items = store.list_linkedin_profile_refill_queue_items(
+            registry_entry = store.repos.linkedin_profile_registry.get("https://www.linkedin.com/in/provider-full/") or {}
+            ready_items = store.repos.linkedin_profile_registry.list_refill_queue_items(
                 states=["deferred_budget"],
                 source_job="job_provider_slot_full",
                 snapshot_dir=str(root),
@@ -9892,14 +9909,14 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     allow_shared_provider_cache=True,
                     priority=True,
                 )
-            registry_entry = store.get_linkedin_profile_registry(profile_url) or {}
-            immediate_ready_items = store.list_linkedin_profile_refill_queue_items(
+            registry_entry = store.repos.linkedin_profile_registry.get(profile_url) or {}
+            immediate_ready_items = store.repos.linkedin_profile_registry.list_refill_queue_items(
                 states=["dispatch_claimed"],
                 source_job="job_dispatch_claim_recoverable",
                 snapshot_dir=str(root),
                 limit=10,
             )
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=[profile_url],
                 source_jobs=["job_dispatch_claim_recoverable"],
                 snapshot_dir=str(root),
@@ -9909,7 +9926,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 active_reason="provider_submit_claimed",
                 active_refill_not_before_at="2000-01-01 00:00:00",
             )
-            expired_ready_items = store.list_linkedin_profile_refill_queue_items(
+            expired_ready_items = store.repos.linkedin_profile_registry.list_refill_queue_items(
                 states=["dispatch_claimed"],
                 source_job="job_dispatch_claim_recoverable",
                 snapshot_dir=str(root),
@@ -9933,8 +9950,9 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         class _Store:
             def __init__(self, raw_path: Path) -> None:
                 self.raw_path = raw_path
+                self.repos = SimpleNamespace(linkedin_profile_registry=self)
 
-            def get_linkedin_profile_registry_bulk(self, profile_urls):
+            def get_bulk(self, profile_urls):
                 return {
                     normalize_linkedin_profile_url_key(profile_url): {
                         "profile_url": profile_url,
@@ -10030,7 +10048,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 f"https://www.linkedin.com/in/refill-dispatch-hot-path-{index}/"
                 for index in range(4)
             ]
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 deferred_profile_urls=profile_urls,
                 source_jobs=["job_refill_hot_path"],
                 snapshot_dir=str(root),
@@ -10136,7 +10154,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             owner_payload_hash = sha1(
                 json.dumps([profile_url], ensure_ascii=False).encode("utf-8")
             ).hexdigest()[:16]
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 active_profile_urls=[profile_url],
                 source_jobs=["job_dispatch_claim_hot_path"],
                 snapshot_dir=str(root),
@@ -10167,7 +10185,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 runtime_mode="daemon_refill",
                 allow_shared_provider_cache=True,
             )
-            registry_entry = store.get_linkedin_profile_registry(profile_url) or {}
+            registry_entry = store.repos.linkedin_profile_registry.get(profile_url) or {}
 
         self.assertEqual(result["worker_status"], "queued")
         self.assertEqual(connector.submitted_urls, [[profile_url]])
@@ -10219,13 +10237,13 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             dispatch_url = "https://www.linkedin.com/in/refill-submit-no-hydrate/"
             invalid_raw_path = root / "invalid_cached_profile.json"
             invalid_raw_path.write_text("{not valid json and must not be read", encoding="utf-8")
-            store.mark_linkedin_profile_registry_fetched(
+            store.repos.linkedin_profile_registry.mark_fetched(
                 cached_marker_url,
                 raw_path=str(invalid_raw_path),
                 source_jobs=["job_refill_no_hydrate"],
                 snapshot_dir=str(root),
             )
-            store.record_linkedin_profile_refill_plan_items(
+            store.repos.linkedin_profile_registry.record_refill_plan_items(
                 deferred_profile_urls=[dispatch_url],
                 source_jobs=["job_refill_no_hydrate"],
                 snapshot_dir=str(root),
@@ -10303,9 +10321,9 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             batch_acquire_calls: list[list[str]] = []
             single_acquire_calls: list[str] = []
             batch_release_calls: list[list[str]] = []
-            original_batch_acquire = store.acquire_linkedin_profile_registry_leases
-            original_single_acquire = store.acquire_linkedin_profile_registry_lease
-            original_batch_release = store.release_linkedin_profile_registry_leases
+            original_batch_acquire = store.repos.linkedin_profile_registry.acquire_leases
+            original_single_acquire = store.repos.linkedin_profile_registry.acquire_lease
+            original_batch_release = store.repos.linkedin_profile_registry.release_leases
 
             def _record_batch_acquire(profile_urls, **kwargs):
                 batch_acquire_calls.append(list(profile_urls or []))
@@ -10319,9 +10337,9 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 batch_release_calls.append(list(profile_urls or []))
                 return original_batch_release(profile_urls, **kwargs)
 
-            store.acquire_linkedin_profile_registry_leases = _record_batch_acquire  # type: ignore[method-assign]
-            store.acquire_linkedin_profile_registry_lease = _record_single_acquire  # type: ignore[method-assign]
-            store.release_linkedin_profile_registry_leases = _record_batch_release  # type: ignore[method-assign]
+            store.repos.linkedin_profile_registry.acquire_leases = _record_batch_acquire  # type: ignore[method-assign]
+            store.repos.linkedin_profile_registry.acquire_lease = _record_single_acquire  # type: ignore[method-assign]
+            store.repos.linkedin_profile_registry.release_leases = _record_batch_release  # type: ignore[method-assign]
             connector = _Connector()
             enricher = MultiSourceEnricher(catalog, accounts=[], harvest_profile_connector=connector, store=store)
             enricher.worker_runtime = AgentRuntimeCoordinator(store)

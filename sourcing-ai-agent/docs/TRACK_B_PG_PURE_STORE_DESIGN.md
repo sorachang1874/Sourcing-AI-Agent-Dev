@@ -537,3 +537,89 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     env 插件面(Makefile/scripts/service_daemon/scripted_test_runtime)现为惰性 no-op,后续专批清理;`orchestrator.py:41719` 的 `except sqlite3.OperationalError`
     重试挂钩现永不匹配(psycopg 错误直穿),后续清理;`control_plane_postgres.py` 的独立 on-disk-SQLite 导入/导出工具(自带 sqlite3.connect)是合法的
     SQLite→PG 迁移工具,独立退役决策。
+- **2026-07-02 ②.0 试点收口 DONE(linkedin_profile_registry 域全量搬迁 + 域迁移协议定型)**:God-class 门面的第一个域整体退役
+  —— 26 个公开方法 + 12 个私有 helper 从 `storage.py` **删除**并以域内短名落地 `repositories/linkedin_profile_registry.py`
+  (89 → 2,824 行;`storage.py` 19,187 → 16,382 行,-2,805)。调用方**同批直迁、零双轨**。
+  - **公共 API 形态(协议定型,后续批复制)**:`store.repos.<domain>`(`ControlPlaneRepositories` 命名空间,store `__init__`
+    随 adapter 建);repository 公开方法用**域内短名**(`get`/`get_bulk`/`mark_fetched`/`acquire_lease`/`record_refill_plan_items`…),
+    God-class 前缀不带入新 API;`normalize_linkedin_profile_url` 不迁移(调用方直接用 `linkedin_url_normalization.normalize_linkedin_profile_url_key`
+    模块函数 —— 守卫本就禁 `.normalize_linkedin_profile_url(` 调用记号)。getattr 特征检测调用方经 `repositories.linkedin_profile_registry_repo(store)`
+    duck-typed 访问器(store-like 无 `repos` 时返 None,fallback 分支形状 1:1 保留)。
+  - **Repository 基类扩展**(`control_plane_repository.py` 255 → 367 行):fail-closed 原语 `_select_row`/`_select_rows`/`_write_row`/
+    `_should_prefer_read`/`_strict_authoritative`/`_raise_read|write_failure`/`_raise_postgres_only_invariant`,与退役的 storage 包装**逐字同语义**
+    (错误串格式字节不变);原泛型 `get`/`select`/`upsert` 删除(零调用方,`get_by_key` 试点脚手架一并退役)。**写纪律**:repository 写一律走
+    adapter 原语(`upsert_row`/`bulk_upsert_rows`/`insert_row_with_generated_id`/`delete_rows`)—— repositories/ 内**禁止字面 ON CONFLICT SQL**
+    (pg_onconflict 守卫的字面扫描不覆盖该目录,conflict target 由 `_PRIMARY_KEY_COLUMNS` 承保)。
+  - **方法体逐字移植**,含全部已知语义暗礁:count/sentinel(missing lease = `{}` 非 None)、fail-closed raise 位点、
+    `preserve_unrecoverable`/refill 队列状态机、terminal-row 仍需 upsert 的 scope 计数语义。仅两处有意偏差(均验证/披露):
+    `mark_queued_many` 死分支标签 `sqlite_loop`→`per_row_loop`(无断言引用);`upsert_backfill_run` 写路径改走新 BACKFILL_RUNS descriptor
+    `to_columns`(37 个 IRREGULAR mapper 之一顺手转正,JSON-safe payload 字节等价,battery 验证);4×35 行的 effective-payload 行构造重复
+    收敛为 `_effective_payload_row` 单 helper。invariant 错误串中的 method 标签改用新短名(结构不变)。
+  - **A/B 验证(删除前窗口内新旧并存对拍)**:(a) 纯函数 battery —— `_compose_effective_payload` 120 组合、summarize/normalize_backfill_entry/
+    percentile/row_payload/backfill-descriptor 读/retry-env 全部逐字节相等;(b) PG 读面 —— 9 个读方法同种子同参深度相等(含 alias 链、missing
+    sentinel);(c) PG 写面 —— 19 步写脚本(queued/fetched/failed×2/queued_many/refill_plan×2/deferred/aliases/events/backfill_run×2/
+    backfill_batch/lease 六步)在冻结时钟(storage/repo/adapter 三层时间函数 monkeypatch)下双跑,5 张域表全 dump 字节比对相同
+    (仅 event_id 独立序列归一为 run 内序号)。
+  - **调用方迁移(workflow 20 agent 并行,逐文件 grep 清零 + py_compile)**:src 90 点(65 直调 + 25 getattr,12 文件:enrichment 54、
+    company_asset_completion 10、orchestrator 7、snapshot_materializer 4、supplement/backfill/fetch_owner 各 3、excel_intake 2、
+    candidate_artifacts/outreach_layering/cli/apify 冒烟脚本各 1)+ tests 383 点(storage_profile_registry 147、enrichment 122(含 8 个
+    fake store:方法改短名 + `self.repos = SimpleNamespace(linkedin_profile_registry=self)`)、pipeline 39、results_api 29、
+    live_postgres 12(adapter 直调按规则不动)、candidate_artifacts 9、company_asset_completion 10、小文件批 15)。白盒测试缝隙迁移:
+    `store._control_plane_postgres`→`repo._adapter`、`_select_control_plane_rows`→`repo._select_rows`、`_resolve_linkedin_profile_registry_key`→
+    `repo._resolve_key`、tripwire `get_linkedin_profile_registry`→`repo.get`。orchestrator 两个 summary 方法(守卫断言源码文本)零触碰,AST 复验。
+  - **验证**:合同 lane `make ci-pre-agent-contract` **181 passed / 0 skip**;域套件 test_storage_profile_registry **32/32**;
+    test_enrichment 135、candidate_artifacts+live_postgres 114、company_asset_completion/supplement/excel_intake/profile_registry_backfill 77、
+    workflow_explain/operation_runtime/cloud_asset_import/workflow_efficiency 181/1 失败、results_api 296/1 失败;
+    3 个守卫套件(storage_surface_guardrails / pg_onconflict_guard / crm_public_web_runtime_boundary)39 全过;全仓 compileall 干净;
+    旧 facade 记号全仓 grep 清零(仅守卫自身禁令串 + adapter 直调测试)。失败归因:results_api lovable_board(已知预算)+
+    workflow_explain legacy-standard-bundle + hosted_workflow_smoke asset_population 组 —— 后两者**stash 控制实验证明 pre-existing**
+    (干净基线同样失败,与本批无关)。
+  - **残留披露**:`profile_prefetch_scheduler_lock`(协调原语,非 CRUD)按手册 §2 范围留在 storage;runtime_provider_limiter 三方法属
+    `runtime_provider_limiter_leases` 域未动;events/aliases 表仍为 raw-dict 读(descriptor 化留给 ③ jsonb 轮);
+    后续批若迁 public-web 域,新 repositories/ 文件需加入 test_crm_public_web_runtime_boundary 的 ALLOWED_LEGACY_STORAGE_ACCESS_FILES。
+
+- **2026-07-06 ② 批次 1(②.1)完成 —— criteria/confidence 域整体退役到 `store.repos.criteria_confidence`**:
+  - **范围**:8 表(criteria_feedback / criteria_patterns / criteria_pattern_suggestions / criteria_versions /
+    criteria_compiler_runs / criteria_result_diffs / confidence_policy_runs / confidence_policy_controls;
+    criteria_result_diffs 为侦察补入 —— FK 同簇,原候选清单遗漏)、24 公共方法(域短名)+ 2 私有 helper + 8 手写 row mapper +
+    3 模块级纯函数,整域一批、无双轨。storage.py 16,332 → **15,091 行**(-1,241);新
+    `repositories/criteria_confidence.py` 1,259 行;`control_plane_repository.py` 368 → 394 行。
+  - **基座件**:(a) `Repository._call_native_write` —— storage `_call_control_plane_postgres_native` 写分支的逐字镜像
+    (native 写原语 insert_row_with_generated_id / update_row_returning / upsert_row_with_generated_id;non-strict 吞为 None、
+    strict raise,消息串逐字);本域是 repositories/ 首个使用这三原语的域。(b) 跨域缝隙定型:`ControlPlaneRepositories(adapter,
+    job_lookup=store.get_job)` 注入回调,`_prepare_feedback_context` 用 `self._job_lookup(job_id) if callable(...) else None`
+    —— repo 不得反向 import storage(环),未来 jobs 域迁移只换绑定。(c) 共享纯函数外提:`_matching_bundle_payload` /
+    `_request_signature_context` 逐字迁入 `request_matching.py`(公名 `matching_bundle_payload` / `request_signature_context`);
+    storage 保留 `_matching_bundle_payload` 别名 import(外域 5 调用点零改动),`_request_signature_context` 别名随域删除一并移除。
+  - **逐字声明**:AST 定位 + 座名机械替换后逐函数字节比对:**34 函数完全相等,3 个预期差异恰为披露偏差,0 意外、0 遗漏**。披露偏差:
+    (1) create/deactivate_policy_control 中 B4.3 遗留 inert '?' 占位符死代码块随迁删除(diff 仅含删行,变量后续零引用);
+    (2) `_raise_control_plane_postgres_write_failure`→基类 `_raise_write_failure` 座名映射 ×6(消息串逐字,②.0 协议映射表补此一项);
+    (3) get_job 缝隙一行(见上)。mapper 全部逐字**不转 descriptor**(推翻侦察初判):mapper 为 None 直通
+    (`_row_value` default 仅键缺失时生效,NULL 列值直通),而写路径在 nullable bigint FK 真写 NULL —— Kind.INT 会把 None 强转 0,
+    真实数据上必炸字节比对;descriptor 化整体移交 ③ jsonb 轮(需先加 nullable-int/直通 Kind)。`_confidence_policy_control_from_row`
+    的裸下标(缺列 KeyError)语义保留;storage 版 `_row_value`(default=''、except Exception)与基类版语义不同,模块内逐字复制而非复用。
+  - **A/B 数字**(临时件 tests/test_ab_cc_migration_tmp.py,4/4 过后删除):纯函数电池(matches_scope 7 控制 × 80 参数组 = 560 组、
+    _payload_signature 3 载荷、signature_context 4 形状 + is-identity 断言);读面 34 对同参深比对(含 blank-company OR 兼容、
+    NULL FK 直通、缺行哨兵);**Tier-A/Tier-B 哨兵分裂显式验证**(非权威空读:Tier-A 6 对 RuntimeError 消息逐字相等,
+    Tier-B 8 个静默 []/None —— postgres_only 下 raise 分支不可达,故 patch 非权威态验证);写面 23 步脚本双跑
+    (冻结 storage `_utc_now_timestamp` + repo `utc_now_timestamp` 两层即可 —— 本域无租约/派生时钟;返回值逐项相等 + 8 表 dump 字节相等)。
+    新 gotcha:**8 表 id 全是独立 CREATE SEQUENCE(dump 风格 DDL,无 OWNED BY),TRUNCATE RESTART IDENTITY 不重置** ——
+    ②.0 events 教训的全域泛化;A/B 间隔需显式 `ALTER SEQUENCE ... RESTART WITH 1`。
+  - **调用方迁移**(workflow 6 agent 并行 + 2 处手工补切,共 87 处):src 40(orchestrator 34、criteria_evolution 6);
+    tests 47(live_postgres 21、criteria_evolution 15、matching_metadata 5、pipeline 6)。api/cli 不动(调的是 orchestrator 门面);
+    orchestrator 三个同名门面方法(record_criteria_feedback/list_criteria_patterns/review_pattern_suggestion)保留,仅内部 store 调用改写;
+    pipeline 经门面的 8 处不动;fake store 零个、getattr 探测零处(无 accessor,与 ②.0 不同)。
+    **事故记录**:手写 rename map 漏了 `list_confidence_policy_runs→list_policy_runs`,两个 agent 按"不在映射表不猜"纪律保守跳过并上报,
+    我补切 2 处 —— 教训:fan-out 映射表必须由侦察清单机械生成,不得手打;agent 的"报告而非猜测"规则是本批的安全网。
+  - **onconflict 守卫扩展**(与 storage 删除同批,阻塞项解除):`extract_generated_id_upsert_targets` /
+    `collect_all_conflict_targets` 增扫 `repositories/*.py`(AST generated-id 调用 + 字面 ON CONFLICT;`_call_native_write`
+    首位置常量形状与 storage 相同,匹配器零改);criteria_patterns 哨兵断言现由 repositories/criteria_confidence.py 喂养,
+    删除后守卫 4/4 复验通过。control_plane_postgres.py `_CONTROL_PLANE_UNIQUE_INDEXES` 注释同步(数据结构未动)。
+  - **验证**:合同 lane 181/**0 skip** + 后续门(2/11/1/2)+ 冒烟 dry_run_ready;criteria_evolution+matching_metadata 9 过;
+    live_postgres 56 过;守卫+linkedin 域回归(storage_surface_guardrails / crm_public_web_runtime_boundary /
+    storage_profile_registry)67 过;onconflict 守卫 4 过;pipeline 域子集(-k criteria/confidence/pattern/feedback)4 过 2 败 ——
+    **worktree 基线对照:基线同子集 3 败 ⊇ 迁移树 2 败,零回归**(基线独有 1 败为抖动)。ruff 门:orchestrator.py 一次 format
+    (长接收器换行)后 39 文件全过;mypy 87 错误与基线**逐字节相同**(1/64/1/21 同四文件,债务全 pre-existing);
+    compileall 干净;29 个旧记号全仓 grep 清零(仅 pycache 二进制 / request_matching 来源注释 / pipeline 的 orchestrator 门面调用)。
+  - **残留披露**:`get_confidence_policy_control` 与 `upsert_pattern` 零生产调用方(前者仅测试直连,后者仅域内组合);
+    orchestrator 门面三方法待其自身域重构时再议;`_storage_b423/b425_backup` 的 pycache 残迹与本批无关。
