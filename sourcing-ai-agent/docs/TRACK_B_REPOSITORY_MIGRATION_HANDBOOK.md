@@ -1,6 +1,7 @@
 # Track B ② Repository 迁移 Handbook(新一轮的入口文档)
 
-> 状态:**②.1 完成(2026-07-06)** —— criteria/confidence 域 8 表 24 方法整体退役到 `store.repos.criteria_confidence`,
+> Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
+> 状态:**②.1 完成(2026-07-06;②.0+②.1 已于 2026-07-09 提交 `d5109f1`)** —— criteria/confidence 域 8 表 24 方法整体退役到 `store.repos.criteria_confidence`,
 > storage.py 16,332 → 15,091 行,调用方 87 处直迁(src 40 + tests 47),onconflict 守卫扩展至扫描 repositories/*.py,
 > 合同 lane 181/0 skip、A/B 4 电池全过、pipeline 子集 worktree 对照零回归。批记录:`TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。
 > ②.0 试点(linkedin_profile_registry,2026-07-02)见前一条批记录。下一批:②.2 manual_review(§3 顺序)。

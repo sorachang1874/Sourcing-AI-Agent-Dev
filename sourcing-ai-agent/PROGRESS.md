@@ -8,6 +8,45 @@
 > month-before-last out before appending. Keep this file under ~300 lines.
 > Archives: [2026-05](docs/archive/progress/PROGRESS_2026-05.md) · [2026-04 and earlier](docs/archive/progress/PROGRESS_2026-04_and_earlier.md)
 
+## 2026-07-09 (Asia/Shanghai)
+
+### Governance batch: Track B ②.0+②.1 committed; provider fail-closed merged; CI lanes hardened; protocol upgrades; GPT-5.6 takeover prep
+
+- **Track B ②.0+②.1 landed as one commit (`d5109f1`)**: the linkedin_profile_registry (②.0, 2026-07-02)
+  and criteria/confidence (②.1, 2026-07-06) domains retired from `storage.py` into
+  `store.repos.<domain>` repositories (storage.py 19,187 → 15,091 lines). The two verified batches had
+  sat uncommitted in the working tree; batch details in `docs/TRACK_B_PG_PURE_STORE_DESIGN.md` §6,
+  protocol in `docs/TRACK_B_REPOSITORY_MIGRATION_HANDBOOK.md`. Next batch: ②.2 manual_review.
+- **`fix/provider-fail-closed-isolation` merged (`430a369`)** — the 2026-06-27 test-billing incident
+  fix had been stranded on its branch for 12 days with every fail-open signature still live on main:
+  unset `SOURCING_EXTERNAL_PROVIDER_MODE` now normalizes to `simulate` (never live), live access in all
+  non-production environments requires the two-key confirm, detached subprocesses get live access
+  disabled + tokens blanked, and `tests/conftest.py` points secrets at an empty temp file session-wide.
+  Verified: 58 runtime/model/settings tests + provider connector suites; 7 full-suite failures proven
+  pre-existing by a worktree control run at the pre-merge baseline (ledger R-010).
+- **CI lanes hardened (`8b555b6`)**: `tests/test_pg_onconflict_guard.py` (extended in ②.1 to scan
+  `repositories/*.py`) ran in NO lane — now in both the Makefile contract lane and backend-ci; and
+  `SOURCING_REQUIRE_PG_STORE_TESTS=1` + `SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1` now cover every
+  lane segment, so PG-availability skips fail closed (the Docker-daemon-down mass-skip false-green
+  class). Mutation-proven: an unreachable DSN converts the skip into a failure. Lane: 185 passed 0 skip.
+- **Protocol upgrades from the playbook round-2 mapping (`6e2526a`)**: NEW `docs/RESIDUAL_LEDGER.md`
+  (unifies the two drifted known-failure budget copies; per-row id/tripwire/attribution; only-down
+  ratchet; green-modulo-ledger acceptance); handbook §7 pending decisions → decision cards with
+  deadlines and timeout defaults; handbook §4 gains the A/B mutation self-check and step 7 (async
+  cross-model reference review per batch); `INDEPENDENT_REVIEW_GATE.md` gains a checked-in Model
+  Routing Table (review-lane fallback must never resolve to the author's model family);
+  `INDEPENDENT_REVIEW_BRIEF.md` output format rewritten (exhaustive severity-ranked findings,
+  new/re-raise/residual classification with ledger-id citations, termination rule).
+- Playbook side: eight distilled experience items (worktree-not-stash baselines, verbatim-move byte
+  gates, fail-closed lanes, guard scanning surfaces, generated dispatch tables, fan-out resume,
+  double-run determinism, debt-baseline ratchets) written back to the ai-assisted-engineering-playbook
+  sibling repo (round-2 distillation).
+
+> **Tracker gap note**: 2026-06-14 → 2026-07-06 work (Track A Phase 4 close, M2 provider runtime,
+> Track B B3/B4.x, ②.0/②.1) was recorded in `docs/TRACK_B_PG_PURE_STORE_DESIGN.md` §6,
+> `docs/NEXT_TODO.md`, and the Track B handbook instead of this tracker. This tracker resumes today;
+> consult those docs for that window.
+
 ## 2026-06-12 (Asia/Shanghai)
 
 ### Phase 3a extraction, FastAPI transport port, ON CONFLICT gap class — interrupted batch recovered and landed

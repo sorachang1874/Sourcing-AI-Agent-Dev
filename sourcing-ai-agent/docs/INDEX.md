@@ -14,7 +14,7 @@
 
 ## Current Stage Checkpoint (2026-06-11)
 
-> Update (2026-07-02)：本节保留为 2026-06-11 规划快照。其后已完成：Track A Phase 0–4、Track C C1+C2、M2 全部、Track B B1/B2/B3/B4.1/B4.2 写路径/B4.3（`storage.py` 已 PG-pure，SQLite 影子已删除；PG schema 单源为 `migrations/` 版本化 SQL + migration runner）。当前进度与下一步（B4.2 ② repository query methods）以 `../PROGRESS.md`、`NEXT_TODO.md`、`TRACK_B_PG_PURE_STORE_DESIGN.md` 为准。
+> Update (2026-07-09)：本节保留为 2026-06-11 规划快照。其后已完成：Track A Phase 0–4、Track C C1+C2、M2 全部、Track B B1/B2/B3/B4.1/B4.2 写路径/B4.3（`storage.py` 已 PG-pure，SQLite 影子已删除；PG schema 单源为 `migrations/` 版本化 SQL + migration runner）、Track B ②.0/②.1 域退役（linkedin_profile_registry + criteria/confidence → `store.repos.*`）、provider fail-closed 合入、合同 lane skip→fail 加固。当前进度与下一步（**②.2 manual_review**）以 `TRACK_B_REPOSITORY_MIGRATION_HANDBOOK.md`（② 轮入口）、`../PROGRESS.md`、`NEXT_TODO.md`、`TRACK_B_PG_PURE_STORE_DESIGN.md` §6 为准；已知失败/残差唯一清单 = `RESIDUAL_LEDGER.md`；跨模型评审与模型路由 = `INDEPENDENT_REVIEW_GATE.md`。
 
 - 2026-06-11 起，重构按五条轨道推进（详见 `SERVICE_GRADE_ARCHITECTURE_PLAN.md` 的 2026-06-11 revision 与 `NEXT_TODO.md`）：
   - **A 分解**：orchestrator god class（87k 行）按 Phase 0（测试前置修缮）→ CommandKernel → CommandSpec registry（= 重定义后的 M1）→ 逐域提取 → 纠缠核心重设计。
