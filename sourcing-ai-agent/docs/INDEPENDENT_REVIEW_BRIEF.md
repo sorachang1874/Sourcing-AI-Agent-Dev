@@ -44,15 +44,30 @@ Start with a compact evidence header:
 - Accepted exceptions, if any.
 - Residual risks for live/W6/manual follow-up.
 
-Then list prioritized blocking findings only:
+Then list findings **exhaustively, ranked by severity** — do not truncate to the top items. A real
+finding withheld from this round surfaces in the next round and costs a whole extra gate cycle (the
+Track A 5e closeout took five review rounds precisely because each round surfaced a new partial
+list). For each finding:
 
 1. `severity` / `file:line` / issue.
 2. Why it matters.
 3. Concrete fix.
+4. **Classification** (exactly one):
+   - `new` — a new-class finding not previously raised for this scope. Only `new` findings can block.
+   - `re-raise` — previously raised and already addressed; cite the addressing commit/artifact.
+     Invalid as a blocking finding unless accompanied by new evidence the fix is insufficient.
+   - `residual` — true but deliberately accepted; **must cite a `docs/RESIDUAL_LEDGER.md` row id**.
+     A `residual` classification without a ledger id is invalid — reclassify as `new`.
 
 End with one verdict:
 
-- `GO`: no blocking findings.
-- `NO-GO`: must fix the listed blocking findings before live validation, W6/nightly, or merge.
+- `GO`: no `new` blocking findings. Listed `residual`/`re-raise` items do not block.
+- `NO-GO`: must fix the listed `new` blocking findings before live validation, W6/nightly, or merge.
 
-Do not pad with nice-to-haves. Do not self-certify if you authored the change. If evidence is insufficient, return `NO-GO` and name the missing artifact or Contract. A bare `NO-GO` without at least one `severity / file:line / issue` finding is an invalid review artifact.
+**Termination rule**: a review round whose blocking findings are all `re-raise`/`residual` is a
+terminal `GO` — the gate loop ends; it does not re-litigate accepted residuals each round.
+
+Style suggestions and nice-to-haves go in a clearly separated non-blocking trailer section, never
+mixed into the findings list. Do not self-certify if you authored the change.
+If evidence is insufficient, return `NO-GO` and name the missing artifact or Contract.
+A bare `NO-GO` without at least one `severity / file:line / issue` finding is an invalid review artifact.

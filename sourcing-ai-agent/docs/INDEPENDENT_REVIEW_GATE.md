@@ -77,8 +77,31 @@ codex exec \
   < runtime/reviews/<review-id>.prompt.md
 ```
 
-If `gpt-5.5` is unavailable, use another independent reviewer model and record that substitution in the review output. The author still cannot self-certify.
+If `gpt-5.5` is unavailable, substitute per the Model Routing Table below and record that substitution in the review output. **A review lane substitution must never resolve to the author's model family** — if no non-author-family reviewer is reachable, defer the gate visibly (record the deferred gate in `docs/RESIDUAL_LEDGER.md`) rather than self-family-certify. The author still cannot self-certify.
 The Make/script target defaults are `REVIEW_MODEL=gpt-5.5`, `REVIEW_REASONING_EFFORT=xhigh`, and `REVIEW_SERVICE_TIER=fast`. Override them only when the local reviewer environment cannot support that combination, and keep the substitution visible in the generated review artifact metadata.
+
+## Model Routing Table (checked-in, 2026-07-09)
+
+Routing is a checked-in artifact, not a per-session improvisation — the ②.1 recon batch was wiped by a
+primary-model quota wall and the fallback was improvised in-chat; this table makes the fallback a
+pre-declared decision. Both `AGENTS.md` files point here; do not fork per-file copies of these defaults.
+
+| Lane | Nature | Primary | Fallback | On quota exhaustion |
+| --- | --- | --- | --- | --- |
+| Recon / scout (read-only fan-out) | execution-dense | author-session model | author family, lighter tier (e.g. Sonnet) | degrade to fallback; resume, don't rerun survivors |
+| Mechanical edit fan-out | execution-dense | author family, lighter tier | author-session model | degrade |
+| Adversarial verification / synthesis | reasoning-dense | author-session model | author family, deepest available | degrade |
+| **Independent review (this gate)** | reasoning-dense | `gpt-5.5` (xhigh, fast tier) | another **non-author-family** model | **defer visibly — never substitute the author family** |
+
+Constraints:
+
+- The review lane is the independence lane: primary and fallback must both resolve outside the
+  author's model family (today the author family is Claude; the reviewer family is GPT/Codex).
+- Every fired fallback or deferred gate is recorded in the review artifact metadata (and the
+  residual ledger for deferrals), so a silent downgrade cannot become a hidden fallback.
+- Interrupted fan-outs resume from their run id (re-dispatch only unfinished lanes); a completed
+  agent's output is never re-rolled by a full rerun.
+- Assignments dated 2026-07-09; revisit when the model lineup changes.
 
 ## Required Evidence
 

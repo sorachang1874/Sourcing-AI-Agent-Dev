@@ -79,7 +79,7 @@ Significant changes and milestone closeouts require an independent adversarial r
 
 Required rule:
 1. The reviewer must not be the author of the implementation or contract change.
-2. Prefer a different model/tool from the author when available, for example Codex/GPT-5.5 reviewing Claude output or vice versa.
+2. Prefer a different model/tool from the author when available, for example Codex/GPT-5.5 reviewing Claude output or vice versa. Model selection and fallback per lane are governed by the checked-in Model Routing Table in `docs/INDEPENDENT_REVIEW_GATE.md` — a review-lane fallback must never resolve to the author's model family; defer visibly instead.
 3. The review is adversarial: prioritize correctness, contract ownership, hidden fallback, provider-cost, migration, runtime recovery, data-quality, and frontend/backend drift risks.
 4. Run the reviewer in read-only mode. For Codex, use `codex exec --sandbox read-only --model gpt-5.5 -c service_tier='"fast"' -c model_reasoning_effort='"xhigh"'` with a prompt file or non-interactive stdin; do not pipe through `head`/`tail`, and store the output under `runtime/reviews/` or a PR review thread.
 5. A `NO-GO` review finding must be fixed or explicitly accepted by the user/founder before proceeding. A green test suite does not override a blocking independent review.

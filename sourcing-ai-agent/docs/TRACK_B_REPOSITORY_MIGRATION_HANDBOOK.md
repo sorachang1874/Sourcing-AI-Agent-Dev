@@ -72,6 +72,8 @@
    storage+repo 两层即可,有租约的按 ②.0 冻三层且到期设远期;**独立 CREATE SEQUENCE(dump 风格 DDL,无 OWNED BY)不被
    RESTART IDENTITY 重置 —— 显式 `ALTER SEQUENCE ... RESTART WITH 1`**,②.1 证实这是全域现象而非 events 特例)。
    A/B 文件为临时件,跑完删除、数字入批记录。
+   **电池自检(变异一次)**:电池首跑全绿后,人为破坏一处被比对面(改一个字段映射/一行 SQL)确认电池变红,再恢复 ——
+   防"新比新"的空转比对(同 Track A Step 1 的变异敏感性验证、2026-07-09 lane REQUIRE flag 的坏 DSN 自证)。
 4. **调用方切换 + storage 方法删除**(同一批内完成,不留双轨):
    - fake store 适配:方法改短名 + `self.repos = SimpleNamespace(<domain>=self)`;只改名**不补缺**(缺失驱动 fallback 是有意的)。
    - 白盒缝隙迁到 repo 实例:`_control_plane_postgres`→`repo._adapter`、`_select_control_plane_rows`→`repo._select_rows`、域私有 helper 对应短名。
@@ -85,7 +87,14 @@
    `SOURCING_TEST_PG_ISOLATED_SCHEMA=1`)+ 全部被改测试文件 + lint 门(`run_python_quality.sh`:ruff 段必须全过;
    mypy 段与基线**计数逐字对照**,债务不得新增);任何**不在 §6 已知预算内**的失败跑 **git worktree 基线对照**定 pre-existing
    (勿用 stash —— 见 §6 效率纪律;慢套件只跑域相关 `-k` 子集)。
-6. **文档**:TRACK_B doc §6 追加一条批记录(表/方法数、调用方 diff 面、验证数字);协议有修订则更新本节。
+6. **文档**:TRACK_B doc §6 追加一条批记录(表/方法数、调用方 diff 面、验证数字);协议有修订则更新本节;
+   扫一遍 `docs/RESIDUAL_LEDGER.md` 的 tripwire 列,触发的行升级为工作项或决策卡。
+7. **异步参考评审(不阻塞落地,2026-07-09 接入)**:批 settle 后按 `docs/INDEPENDENT_REVIEW_GATE.md` 的
+   Async Reference Review Lane 在后台发跨模型评审(锚定 pinned commit,模型路由见该文件 Model Routing 表 ——
+   评审 lane 兜底禁止落回作者模型家族);工作按主验证(A/B + 对抗校验 + lane)推进,评审落地后按
+   `INDEPENDENT_REVIEW_BRIEF.md` 的三分类分诊:`new` 类 follow-up 修复、`re-raise` 类记录、`residual` 类
+   须引用 `RESIDUAL_LEDGER.md` 行 id。verbatim-port 批是"同 worktree 盲区"(作者与验证 agent 共享同一棵树、
+   同一套侦察工件)的典型风险面,跨模型异步通道恰好补此盲区。
 
 ## 5. 常用命令
 
@@ -117,7 +126,9 @@ grep -n "def .*linkedin_profile_registry" src/sourcing_agent/storage.py
 - **test_pipeline 是非 lane 的 SQLite 时代套件**:postgres_only 下有 ~15+ pre-existing 失败(含 ~33 个直写已删影子的测试,现 AttributeError)——不要把它们归因到你的改动;用 stash 控制实验。
 - **守卫测试断言源码文本**(test_crm_public_web_runtime_boundary、test_pre_agent_contract_review、test_pg_onconflict_guard):删 storage 方法前 grep 这些文件,守卫要随迁(onconflict guard 的 unique_sets 现解析 0001_baseline.sql + live 模块字面 DDL)。
 - **ultracode 工作流经验**:分类/审计批用「N 组分类 + 逐项对抗校验」两阶段;会话限额打断可用 `resumeFromRunId` 缓存续跑;`parallel()` 返回值要 `await` 后再 return。
-- 已知失败预算(全部 stash 证明 pre-existing,勿追):lovable_board_visible_patches(owner 分子契约决策待定)、settings runtime-override 命名、snapshot idempotent 0!=1、2 个 crm sync-export 契约漂移(C1.4 异步化后待转 submit→drain→poll)、hosted_workflow_smoke 的 asset_population 组(default_results_mode None,②.0 stash 复证)、workflow_explain 的 legacy-standard-bundle full-coverage-proof(②.0 stash 复证)。
+- **已知失败预算已升级为残差台账 `docs/RESIDUAL_LEDGER.md`(2026-07-09)**:逐条带 id/tripwire/归因证据,
+  批验收 = green-modulo-ledger;新失败先 worktree 归因再入账;评审 residual 类 finding 必须引用行 id。
+  本节旧的扁平预算清单已迁入该台账(R-001…R-012),勿在此处再维护副本。
 - **②.0 新增经验**:写面 A/B 需 monkeypatch **三层**时间源(storage `_utc_now_timestamp`+`datetime` / repo 模块 `utc_now_timestamp`+`datetime` / adapter `_utc_now_sql_timestamp`+`_expiry_timestamp`),租约到期时间要设**远期**(`expired` 是对真实墙钟算的 derived 字段);`linkedin_profile_registry_events.event_id` 是独立 sequence,`TRUNCATE RESTART IDENTITY` 不重置 —— 比对时归一为 run 内序号。守卫扫描面:repositories/ 不在 onconflict 字面扫描内(写走 adapter 原语即可);test_crm_public_web_runtime_boundary 的 AST 扫描**覆盖** repositories/(public-web 域迁移时需加 allowlist)。
 - **效率纪律(②.0 教训,勿再全量跑慢套件)**:test_pipeline 全量在 postgres_only 下 **>90 分钟**且非 lane —— 观察性验证只跑域相关子集
   (`-k "linkedin or profile_registry or refill or prefetch"`,59/457 项,~70 秒);控制实验用 **git worktree**(HEAD 基线副本,
@@ -132,8 +143,31 @@ grep -n "def .*linkedin_profile_registry" src/sourcing_agent/storage.py
   与基线计数逐字相同,ruff 段全过即可;(f) worktree 基线跑 `run_python_quality.sh` 会因 worktree 无 .venv 失败
   ("Missing required tool: ruff")—— 用主仓 venv 的 mypy 二进制在 worktree cwd 下直跑。
 
-## 7. 待 owner 决策(不阻塞 ②,但会到期)
+## 7. 待 owner 决策(决策卡格式,2026-07-09 升级;每卡一问、有推荐、有截止、有超时默认)
 
-- **③ jsonb/timestamptz 迁移窗口**(合同级,停机窗口 + 明确 GO)。
-- `control_plane_postgres.py` on-disk-SQLite 导入/导出工具是否退役。
-- lovable_board 分子契约。
+### D-1 ③ jsonb/timestamptz 迁移窗口
+
+- **单一问题**:是否批准 ③ 的 jsonb/timestamptz 生产数据迁移窗口(合同级,需停机窗口 + 明确 GO)?
+- **选项**:(a) ② 全域收官后立即排窗口 —— ③ 设计已 RATIFIED(`TRACK_B_B4_2_PG_NATIVE_STORE_DESIGN.md` §4,
+  tolerant-read-first、staged、可回滚),越晚做迁移面越大;(b) 推迟到 Track C 容器化部署窗口一起停机 ——
+  一次停机做两件事,但 ③ 的收益(descriptor 一行 Kind 切换、GIN 查询)全部延后。
+- **推荐**:(a)。②.2/②.3 每多迁一域,③ 的 mapper 兼容面就多一块。
+- **截止**:2026-07-31;**决策人**:owner。
+- **超时默认**:维持 TEXT 列现状(安全、无停机),③ 冻结并在本卡记一次顺延;② 系列不受阻。
+
+### D-2 `control_plane_postgres.py` on-disk-SQLite 导入/导出工具退役
+
+- **单一问题**:这对独立的 on-disk-SQLite 导入/导出工具(非运行时路径,仅数据搬运)现在退役还是保留?
+- **选项**:(a) 退役删除 —— storage.py 已 PG-pure,工具的"从旧 SQLite 导入"场景已随影子退役消失;
+  (b) 保留到首次生产数据迁移(③)完成 —— 万一需要从历史 SQLite 备份补数据。
+- **推荐**:(b) 保留但标注 deprecated + 不再维护,③ 完成后自动转 (a)。
+- **截止**:随 D-1 裁决;**决策人**:owner。
+- **超时默认**:(b)(保留不动,零风险)。
+
+### D-3 lovable_board 分子契约
+
+- **单一问题**:看板卡片计数分子取"已合入看板的可见 patch 数"还是"全部投影成员数"(112/297 vs 186/297 族)?
+- **选项**:(a) 可见 patch 分子 —— 与前端当前渲染一致;(b) 投影成员分子 —— 与导出/CRM 计数一致。
+- **推荐**:无强推荐 —— 这是产品语义,需 owner 从用户视角裁决(证据:`RESIDUAL_LEDGER.md` R-001/R-007 的三组失败数字)。
+- **截止**:2026-07-31(投影计数契约化是 Track C serving 的前置);**决策人**:owner。
+- **超时默认**:维持现状,R-001/R-007 继续 accepted 并在台账顺延一次(顺延即在该行追加日期)。

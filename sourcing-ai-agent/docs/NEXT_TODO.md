@@ -76,15 +76,12 @@
 - Provider 级并发预算：HarvestAPI profile-fetch 有 ~8 并发 actor 的隐性限制（"too many requests"），旧 8 槽 API 信号量即源于此——保护必须移到 provider 层（per-provider+key 的信号量/令牌桶），HTTP 入口的并发上限才能放开。
 - API key 池化扩容；高需求下避免 profile fetch batch 过度碎片化。
 
-## 已知失败预算（必须归因后入账，不得静默增长）
+## 已知失败预算 → 已升级为残差台账（2026-07-09）
 
-> 规则：新失败先做 control-environment 归因（在无该变更的对照环境复现）再入账；修复后移除条目。2026-06-12 凌晨批次的 8 个被举报失败已全部归因并修复（3× 测试自身 Thread.start 全局 stub 扼杀 psycopg_pool 工作线程、1× 测试未随 06-07 workspace fail-closed 契约更新、1× c942874 携带的 get_job_api include_details 压缩丢字段、3× c942874 携带的 completion-policy/W6/canonical-projection 漂移——其中投影读路径丢 job-scoped 标记是真实产品缺陷，已修）。
-
-- `tests/test_results_api.py`：36 → **3**（2026-06-12 迁移+契约修复后）。剩余 = 看板合并计数桶（卡片详情已合入看板 112/297 vs 186/297、115/140 vs 140/140、population floor 80≠297）——pre-handoff 投影/看板漂移，无可引用已提交契约。
-- `tests/test_enrichment.py`：38 → 12 → **0**（2026-06-12 Phase 4 Step 0 清账，`ef74475`）。调度器契约正式化于 `docs/PROFILE_PREFETCH_SCHEDULER_CONTRACT.md`；5 个 stale 测试更新到大信封契约、5 个 refill/tiny 碎片化回归改代码、1 个 plan/window reconciliation 回归（D1）、1 个 stub 面（D2）全部解决；storeless fail-open（决策 #1）改 fail-closed。
-- `tests/test_results_api.py`：**3**（看板合并计数族——`卡片详情已合入看板 X/Y`、population floor）。**已确认下游于调度器、属投影计数族,2026-06-12 移交 Phase 4 B 带（决策 D3）**;Step 0 不动。另注:全量跑偶现第 4 个失败 `test_job_result_lifecycle_stage1_event_time_write_before_public_read` 是 PG teardown 竞态 flake（隔离跑绿、对照归因 pre-existing），非预算项。
-- `tests/test_workflow_explain.py::test_explain_workflow_does_not_use_legacy_standard_bundle_as_hidden_full_coverage_proof`（2026-06-11 归因：pre-handoff uncommitted worktree state，与 CommandKernel/registry 提取无关）。
-- `tests/test_control_plane_live_postgres.py::test_serving_projection_foundation_uses_live_postgres_tables`（同上）。
+> 唯一权威清单 = **`docs/RESIDUAL_LEDGER.md`**（逐条 id/tripwire/归因证据；批验收 = green-modulo-ledger；
+> 新失败先 **git worktree 基线对照**归因再入账，不得静默增长；计数类条目只降不增棘轮）。
+> 本节历史条目已全部迁入台账（R-001…R-012，含 closed 行审计痕迹），此处不再维护副本；
+> 历史归因叙事（2026-06-12 的 8 失败清账等）见 git 历史与 `docs/archive/`。
 
 ## Decisions Log (2026-06-11)
 
