@@ -22,6 +22,13 @@ from sourcing_agent.model_provider import (
 )
 from sourcing_agent.settings import ModelProviderSettings, QwenSettings
 
+# Explicit live opt-in for tests that assert live-client selection (fail-closed default).
+_LIVE_CONFIRMED_ENV = {
+    "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+    "SOURCING_LIVE_PROVIDER_CONFIRM": "1",
+    "SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS": "1",
+}
+
 
 class ModelProviderTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -53,24 +60,38 @@ class ModelProviderTest(unittest.TestCase):
         )
 
     def test_build_model_client_prefers_configured_model_provider_when_enabled(self) -> None:
-        model_client = build_model_client(
-            ModelProviderSettings(
-                enabled=True,
-                provider_name="relay",
-                api_key="sk-test",
-                base_url="https://tb.keeps.cc/v1",
-                model="claude-sonnet-4-6",
-            ),
-            QwenSettings(enabled=True, api_key="sk-qwen"),
-        )
+        # A live LLM client now requires explicit live mode + dual-confirm (fail-closed default).
+        with patch.dict("os.environ", _LIVE_CONFIRMED_ENV, clear=False):
+            model_client = build_model_client(
+                ModelProviderSettings(
+                    enabled=True,
+                    provider_name="relay",
+                    api_key="sk-test",
+                    base_url="https://tb.keeps.cc/v1",
+                    model="claude-sonnet-4-6",
+                ),
+                QwenSettings(enabled=True, api_key="sk-qwen"),
+            )
         self.assertIsInstance(model_client, OpenAICompatibleChatModelClient)
 
     def test_build_model_client_uses_qwen_when_no_configured_model_provider(self) -> None:
-        model_client = build_model_client(
-            ModelProviderSettings(enabled=False),
-            QwenSettings(enabled=True, api_key="sk-qwen"),
-        )
+        with patch.dict("os.environ", _LIVE_CONFIRMED_ENV, clear=False):
+            model_client = build_model_client(
+                ModelProviderSettings(enabled=False),
+                QwenSettings(enabled=True, api_key="sk-qwen"),
+            )
         self.assertIsInstance(model_client, QwenResponsesModelClient)
+
+    def test_build_model_client_fails_closed_to_deterministic_without_live_confirm(self) -> None:
+        # Regression guard: in the default (non-live) mode, a configured live model
+        # client must NOT be built — no accidental billed LLM calls.
+        with patch.dict("os.environ", {}, clear=True):
+            model_client = build_model_client(
+                ModelProviderSettings(enabled=True, api_key="sk-test", base_url="https://x/v1", model="m"),
+                QwenSettings(enabled=True, api_key="sk-qwen"),
+            )
+        self.assertNotIsInstance(model_client, OpenAICompatibleChatModelClient)
+        self.assertNotIsInstance(model_client, QwenResponsesModelClient)
 
     def test_public_web_signal_prompt_and_normalizer_preserve_user_visible_signal_contract(self) -> None:
         prompt = _build_public_web_signal_adjudication_prompt()

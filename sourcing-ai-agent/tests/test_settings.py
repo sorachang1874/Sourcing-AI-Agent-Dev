@@ -85,6 +85,10 @@ class SettingsRuntimeOverrideTest(unittest.TestCase):
                 {
                     "SOURCING_RUNTIME_DIR": str(project_root / "runtime" / "test_env"),
                     "OBJECT_STORAGE_PROVIDER": "filesystem",
+                    # This test exercises secrets-file fallback resolution, so it must
+                    # control SOURCING_SECRETS_FILE rather than inherit the conftest
+                    # test-isolation default.
+                    "SOURCING_SECRETS_FILE": "",
                 },
                 clear=False,
             ):

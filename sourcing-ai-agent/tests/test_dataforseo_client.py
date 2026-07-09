@@ -10,6 +10,22 @@ from sourcing_agent.dataforseo_client import (
 
 
 class DataForSeoClientTest(unittest.TestCase):
+    def setUp(self) -> None:
+        # Provider-mode default is now fail-closed (simulate). This suite exercises the
+        # LIVE DataForSEO dispatch path with the network mocked, so it opts into live +
+        # the non-production dual-confirm.
+        _live = patch.dict(
+            "os.environ",
+            {
+                "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+                "SOURCING_LIVE_PROVIDER_CONFIRM": "1",
+                "SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS": "1",
+            },
+            clear=False,
+        )
+        _live.start()
+        self.addCleanup(_live.stop)
+
     def test_task_post_many_posts_multiple_tasks(self) -> None:
         client = DataForSeoGoogleOrganicClient(login="login", password="password", timeout_seconds=30)
         payload = {

@@ -12,7 +12,7 @@ import requests
 from .document_extraction import infer_structured_signals_from_payload
 from .domain import JobRequest
 from .query_intent_policy import build_supported_rewrite_policy_prompt_context
-from .runtime_environment import external_provider_mode
+from .runtime_environment import assert_live_provider_access_allowed, external_provider_mode
 from .settings import ModelProviderSettings, QwenSettings
 
 _OUTREACH_LAYER_PROMPT_TEMPLATE_VERSION = "outreach_layering_v3_explicit_greater_china_scope"
@@ -1951,6 +1951,17 @@ def build_model_client(
             if qwen_settings and qwen_settings.enabled:
                 return ScriptedLivePlanningModelClient(QwenResponsesModelClient(qwen_settings), mode=external_mode)
         return OfflineModelClient(mode=external_mode)
+    # Genuine live mode: a billed LLM client must clear the same fail-closed gate as
+    # every other live provider — outside production it requires the explicit
+    # SOURCING_LIVE_PROVIDER_CONFIRM/ALLOW_ISOLATED dual-confirm. This fires only when
+    # external_mode == "live" (scripted-live-model-planning is handled above), so it
+    # does not affect the intentional scripted planning opt-in.
+    if (model_settings and model_settings.enabled) or (qwen_settings and qwen_settings.enabled):
+        assert_live_provider_access_allowed(
+            provider_name="model_provider",
+            operation="build_live_model_client",
+            provider_mode=external_mode,
+        )
     if model_settings and model_settings.enabled:
         return OpenAICompatibleChatModelClient(model_settings)
     if qwen_settings and qwen_settings.enabled:

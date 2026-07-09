@@ -73,6 +73,25 @@ class _AliasJudgingModelClient(DeterministicModelClient):
 
 
 class HarvestConnectorTest(unittest.TestCase):
+    def setUp(self) -> None:
+        # The provider-mode default is now fail-closed (simulate) — see
+        # runtime_environment.SAFE_DEFAULT_PROVIDER_MODE. This suite predominantly
+        # exercises the LIVE harvest dispatch path (with the network mocked), so it
+        # must opt into live explicitly, including the non-production dual-confirm.
+        # Tests that want a non-live mode override SOURCING_EXTERNAL_PROVIDER_MODE
+        # in their own patch.dict(...).
+        live_env_patch = patch.dict(
+            os.environ,
+            {
+                "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+                "SOURCING_LIVE_PROVIDER_CONFIRM": "1",
+                "SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS": "1",
+            },
+            clear=False,
+        )
+        live_env_patch.start()
+        self.addCleanup(live_env_patch.stop)
+
     def _openai_agent_streaming_scenario_path(self) -> Path:
         return (
             Path(__file__).resolve().parents[1]
@@ -4643,7 +4662,7 @@ class HarvestConnectorTest(unittest.TestCase):
                     "SOURCING_APIFY_WEBHOOK_URL": "",
                     "APIFY_WEBHOOK_URL": "",
                     "SOURCING_RUNTIME_ENVIRONMENT": "local_dev",
-                    "SOURCING_EXTERNAL_PROVIDER_MODE": "",
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
                     "SOURCING_DEFAULT_APIFY_WEBHOOK_URL_ENABLED": "",
                     "SOURCING_LOCAL_DEV_APIFY_WEBHOOK_URL": "https://relay.example.test/local-dev/providers/apify/webhook",
                     "SOURCING_PROVIDER_WEBHOOK_TOKEN": "local-dev-secret",

@@ -31,6 +31,22 @@ from sourcing_agent.settings import SearchProviderSettings
 
 
 class SearchProviderTest(unittest.TestCase):
+    def setUp(self) -> None:
+        # Provider-mode default is now fail-closed (simulate). This suite exercises the
+        # LIVE search dispatch path with the network mocked, so it opts into live +
+        # the non-production dual-confirm. Non-live tests override the mode themselves.
+        _live = patch.dict(
+            os.environ,
+            {
+                "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+                "SOURCING_LIVE_PROVIDER_CONFIRM": "1",
+                "SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS": "1",
+            },
+            clear=False,
+        )
+        _live.start()
+        self.addCleanup(_live.stop)
+
     def test_dataforseo_live_boundary_rejects_scripted_runtime_before_http(self) -> None:
         provider = DataForSeoGoogleOrganicSearchProvider(
             login="dataforseo-login",

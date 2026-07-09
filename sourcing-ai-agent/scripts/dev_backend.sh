@@ -120,7 +120,8 @@ _dev_backend_infer_runtime_environment() {
     printf '%s' "$explicit"
     return
   fi
-  local mode="${SOURCING_EXTERNAL_PROVIDER_MODE:-live}"
+  # Fail-closed default: dev backend does not go live unless explicitly told to.
+  local mode="${SOURCING_EXTERNAL_PROVIDER_MODE:-simulate}"
   mode="${mode,,}"
   case "$mode" in
     simulate|scripted|replay)
@@ -184,7 +185,8 @@ EOF
 }
 
 _dev_backend_apply_provider_isolation_contract() {
-  local mode="${SOURCING_EXTERNAL_PROVIDER_MODE:-live}"
+  # Fail-closed default: unset mode means simulate, which blanks live tokens below.
+  local mode="${SOURCING_EXTERNAL_PROVIDER_MODE:-simulate}"
   mode="${mode,,}"
   case "$mode" in
     simulate|scripted|replay)

@@ -8,6 +8,11 @@ from typing import Any, Iterator, Mapping
 
 LIVE_PROVIDER_MODE = "live"
 NON_LIVE_PROVIDER_MODES = frozenset({"simulate", "replay", "scripted"})
+# Fail-closed default: a process that does not explicitly opt into live providers
+# (SOURCING_EXTERNAL_PROVIDER_MODE unset/blank/unrecognized) must NOT make billed
+# external calls. Going live requires an explicit mode plus, in non-production
+# environments, the SOURCING_LIVE_PROVIDER_CONFIRM/ALLOW_ISOLATED two-key confirm.
+SAFE_DEFAULT_PROVIDER_MODE = "simulate"
 PRODUCTION_RUNTIME_ENVIRONMENTS = frozenset({"production"})
 ISOLATED_RUNTIME_ENVIRONMENTS = frozenset({"test", "simulate", "scripted", "replay", "ci"})
 LIVE_PROVIDER_ACCESS_DISABLED_ENV = "SOURCING_LIVE_PROVIDER_ACCESS_DISABLED"
@@ -159,7 +164,9 @@ def iter_runtime_namespace_path_values(payload: Any) -> Iterator[tuple[str, str]
     yield from _walk(payload)
 
 _PROVIDER_MODE_ALIASES = {
-    "": LIVE_PROVIDER_MODE,
+    # Unset/blank no longer means "live" — see SAFE_DEFAULT_PROVIDER_MODE. Live is
+    # only reached by explicitly passing "live" (or "prod"/"production" mode).
+    "": SAFE_DEFAULT_PROVIDER_MODE,
     "prod": LIVE_PROVIDER_MODE,
     "production": LIVE_PROVIDER_MODE,
     "offline": "replay",
@@ -241,7 +248,8 @@ def normalize_provider_mode(raw_value: str | None = None) -> str:
     normalized = _PROVIDER_MODE_ALIASES.get(raw, raw)
     if normalized in {LIVE_PROVIDER_MODE, *NON_LIVE_PROVIDER_MODES}:
         return normalized
-    return normalized or LIVE_PROVIDER_MODE
+    # Unknown/garbage values fail closed to the safe default rather than to live.
+    return SAFE_DEFAULT_PROVIDER_MODE
 
 
 def _runtime_dir_path(runtime_dir: str | Path | None = None) -> Path | None:
@@ -573,11 +581,12 @@ def assert_live_provider_access_allowed(
         provider_mode=mode,
         runtime_environment=runtime_environment,
     )
-    if env.requires_isolated_state and not isolated_live_provider_access_confirmed():
+    if not env.is_production and not isolated_live_provider_access_confirmed():
         raise LiveProviderAccessError(
-            f"Live provider access in isolated runtime requires both {LIVE_PROVIDER_CONFIRM_ENV}=1 "
+            f"Live provider access outside production requires both {LIVE_PROVIDER_CONFIRM_ENV}=1 "
             f"and {ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS_ENV}=1; blocked {provider_name}.{operation} "
-            f"for runtime_environment={env.name}, runtime_dir={env.runtime_dir or ''}."
+            f"for runtime_environment={env.name}, runtime_dir={env.runtime_dir or ''}. "
+            f"(local_dev/test/ci must explicitly confirm live external-provider billing.)"
         )
     markers = synthetic_provider_input_markers(payload)
     if markers:
