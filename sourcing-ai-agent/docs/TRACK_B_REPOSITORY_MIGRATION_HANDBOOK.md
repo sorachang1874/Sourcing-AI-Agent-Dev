@@ -80,7 +80,8 @@
    - **映射表纪律(②.1 事故教训)**:fan-out 的 rename map 必须从侦察清单**机械生成**,不得手打(②.1 手打漏了
      `list_confidence_policy_runs`,靠 agent"不在映射表不猜、上报 ambiguous"纪律兜住)——给 agent 的指令里必须包含
      该"报告而非猜测"条款,收口时逐条核对 ambiguous_sites。
-5. **合同 lane + 域套件**:`make ci-pre-agent-contract`(**0 skip 检查**)+ 该域直连套件(postgres_only env +
+5. **合同 lane + 域套件**:`make ci-pre-agent-contract`(2026-07-09 起 lane 自带 skip→fail:REQUIRE flags 全段生效,
+   PG 不可用直接红,不再依赖人工数 skip;非 PG 原因的 skip 仍需扫一眼输出)+ 该域直连套件(postgres_only env +
    `SOURCING_TEST_PG_ISOLATED_SCHEMA=1`)+ 全部被改测试文件 + lint 门(`run_python_quality.sh`:ruff 段必须全过;
    mypy 段与基线**计数逐字对照**,债务不得新增);任何**不在 §6 已知预算内**的失败跑 **git worktree 基线对照**定 pre-existing
    (勿用 stash —— 见 §6 效率纪律;慢套件只跑域相关 `-k` 子集)。
@@ -100,7 +101,8 @@ SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1 \
 SOURCING_TEST_PG_ISOLATED_SCHEMA=1 \
 .venv/bin/python -m pytest tests/<suite> -q
 
-# 合同 lane(Testcontainers,自隔离;跑完必须检查 0 skip —— Docker daemon 宕会静默大面积 skip)
+# 合同 lane(解析本地/CI DSN,SOURCING_RUN_TESTCONTAINERS=1 才回落容器;2026-07-09 起
+# REQUIRE flags 内建于 lane 命令 —— PG 不可用时 fail-closed 变红,Docker daemon 宕不再静默假绿)
 make ci-pre-agent-contract
 
 # 域方法清单(示例:某域还有多少 storage 方法)

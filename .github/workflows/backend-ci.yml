@@ -89,6 +89,11 @@ jobs:
           # src -> sourcing_agent package; . -> repo subdir so `scripts.*`/`tests.*` resolve.
           PYTHONPATH: src:.
           SOURCING_CONTROL_PLANE_POSTGRES_DSN: postgresql://sourcing:sourcing@localhost:5432/sourcing
+          # Skip→fail hardening (2026-07-09): PG-availability skips become failures in every
+          # invocation below. Without these, a broken PG service mass-skips the PG-backed
+          # suites and the job stays green (the Docker-daemon-down false-green class).
+          SOURCING_REQUIRE_PG_STORE_TESTS: "1"
+          SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS: "1"
         run: |
           python -m pytest -q \
             tests/test_api_auth.py \
@@ -101,6 +106,7 @@ jobs:
             tests/test_crm_public_web_runtime_boundary.py \
             tests/test_legacy_public_web_retirement_audit.py \
             tests/test_storage_surface_guardrails.py \
+            tests/test_pg_onconflict_guard.py \
             tests/test_migration_runner.py \
             tests/test_pg_only_dedup_reads.py
           SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1 python -m pytest -q \
