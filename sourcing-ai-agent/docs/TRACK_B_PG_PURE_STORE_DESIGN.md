@@ -757,5 +757,6 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     文件全绿；mypy 保持 R-011 基线 **87 errors / 4 files**。未运行 live provider、W6 或 manual signoff。
   - **失败归因/接续**:`test_results_api` 精确组 8 pass / 1 fail；唯一 `115/140` vs `140/140` 在 pinned HEAD
     精确复现，归 R-001/R-007 与待裁决 D-3，非本批回归。D-4 已关闭；下一批为 ②.3d person search index，完成后
-    serving_projection 域闭合。异步 review 为 scope-local；请求记录后不阻塞 ②.3d 开发，GO 前仅冻结 ②.3c 的
+    serving_projection 域闭合。fixed-forward review scope=`40bdcf8..508799e` 已因 canonical network preflight 的 HTTPS/backend
+    全超时延期为 R-015；异步 review 为 scope-local，不阻塞 ②.3d 开发，GO 前仅冻结 ②.3c fixed-forward 的
     live/W6/manual/里程碑签收。
