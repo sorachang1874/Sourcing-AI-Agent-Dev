@@ -692,8 +692,10 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   - **评审/接续**:②.2 的独立非作者 Codex fallback 已 GO并关闭 R-013(两份 transport/timeout artifact 仍无效)。②.3a
     独立非作者 Codex review(`runtime/reviews/20260710_async-reference-track-b-2-3a-codex-subagent.md`)对
     `9217350..d97d17c` 给出 **GO / 0 blocking**:独立核验 17/17 bodies、8/8 primitives、18/18 Tier A/B、
-    caller closure=150 calls+1 callback。两条 low 为永久 Tier/clock/limit 测试与 caller/dispatch guard 耐久性缺口,
-    下一 follow-up commit 补齐;不回滚或阻断 ②.3b。
+    caller closure=150 calls+1 callback。两条 low(永久 Tier/clock/limit 测试与 caller/dispatch guard 耐久性缺口)
+    已 fixed-forward:新增 **18-outcome** Tier-A/B battery、三类 upsert 双时钟 + 三类 list zero/negative limit、receiver-aware
+    AST direct/callback/getattr 合成变异守卫及 4 个退休 dispatch keys 守卫;focused **23 passed**,强化合同 lane
+    **192 passed/0 skip** + 后续 **2/11/1/2 passed**,dry-run clean。共享 Repository 的 onconflict guard 注释也同步为现状。
 
 - **2026-07-10 ②.3b 完成 —— `projection_manifest_shards` 退役到 serving_projection repository**:
   - **边界/语义**:单表 3 public(`upsert/get/list`)+1 bespoke mapper+2 repo-local helper。mapper 的 negative/malformed

@@ -220,7 +220,7 @@ class Repository:
     Write discipline (②.0 protocol): repository writes route through the adapter primitives
     (``upsert_row``/``bulk_upsert_rows``/``insert_row_with_generated_id``/``delete_rows``) whose conflict
     targets are covered by the pg-onconflict guard via ``_PRIMARY_KEY_COLUMNS``. Literal ``ON CONFLICT``
-    SQL must not live in ``repositories/`` — the guard's literal-SQL scan does not cover this package.
+    SQL must not live in ``repositories/``; the guard scans this package and requires adapter primitives.
     """
 
     descriptor: TableDescriptor

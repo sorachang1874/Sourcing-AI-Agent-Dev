@@ -47,8 +47,10 @@
 - This is the low-risk catalog sub-batch only. Manifest shards, members, and person search index remain in
   `ControlPlaneStore` as ②.3b/c/d; no schema, count/readiness, board, provider, or public API semantics changed.
   Independent non-author Codex review of `9217350..d97d17c` returned GO with no blocking finding
-  (`runtime/reviews/20260710_async-reference-track-b-2-3a-codex-subagent.md`). Two low durability gaps
-  remain for a follow-up: permanent Tier-A/Tier-B edge tests and stronger caller/dispatch closure guards.
+  (`runtime/reviews/20260710_async-reference-track-b-2-3a-codex-subagent.md`). Its two low durability findings
+  were fixed forward: a permanent 18-outcome Tier-A/Tier-B battery plus dual-clock/zero-negative-limit assertions,
+  and a receiver-aware AST caller/callback/getattr guard plus retired dispatch-key guard. The focused group passed
+  23 tests; the strengthened contract lane passed 192/0 skip plus the unchanged 2/11/1/2 downstream gates.
 
 ### Track B ②.2: manual_review repository cutover
 

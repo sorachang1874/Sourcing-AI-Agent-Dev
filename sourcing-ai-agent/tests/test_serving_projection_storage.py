@@ -91,10 +91,34 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                     "state": "archived",
                 }
             )
+
+        with mock.patch.object(
+            serving_projection_repository,
+            "utc_now_timestamp",
+            return_value="2026-07-10 05:30:00",
+        ):
+            repository.upsert(
+                {
+                    "projection_id": "proj-z",
+                    "projection_type": "collection_authoritative_projection",
+                    "collection_id": "company:alpha",
+                    "source_run_id": "run-z",
+                    "state": "serving",
+                }
+            )
+            repository.upsert_run_link(
+                {"run_id": "run-a", "projection_id": "proj-z", "link_type": "audit"}
+            )
             repository.upsert_authoritative_pointer(
                 {"collection_id": "company:alpha", "active_projection_id": "proj-z"}
             )
 
+        projection = repository.get("proj-z")
+        audit_link = repository.get_run_link("run-a", link_type="audit")
+        pointer = repository.get_authoritative_pointer("company:alpha")
+        for row in (projection, audit_link, pointer):
+            self.assertEqual(row["created_at"], "2026-07-10 05:00:00")
+            self.assertEqual(row["updated_at"], "2026-07-10 05:30:00")
         self.assertEqual(
             [row["projection_id"] for row in repository.list(collection_id="company:alpha")],
             ["proj-z", "proj-a"],
@@ -114,12 +138,15 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
             ],
             ["proj-z"],
         )
+        self.assertEqual(len(repository.list(collection_id="company:alpha", limit=0)), 2)
+        self.assertEqual(len(repository.list(collection_id="company:alpha", limit=-1)), 1)
         self.assertEqual(
             [row["link_type"] for row in repository.list_run_links("run-a")],
             ["audit", "result"],
         )
         self.assertEqual(len(repository.list_run_links("run-a", limit=1)), 1)
-        pointer = repository.get_authoritative_pointer("company:alpha")
+        self.assertEqual(len(repository.list_run_links("run-a", limit=0)), 2)
+        self.assertEqual(len(repository.list_run_links("run-a", limit=-1)), 1)
         self.assertEqual(pointer["previous_projection_id"], "proj-a")
         self.assertEqual(
             [row["collection_id"] for row in repository.list_authoritative_pointers()],
@@ -130,6 +157,8 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
             ["company:alpha", "company:beta"],
         )
         self.assertEqual(len(repository.list_authoritative_pointers(state="", limit=1)), 1)
+        self.assertEqual(len(repository.list_authoritative_pointers(state="", limit=0)), 2)
+        self.assertEqual(len(repository.list_authoritative_pointers(state="", limit=-1)), 1)
 
     def test_serving_projection_members_dedupe_and_page_by_identity_key(self) -> None:
         self.store.repos.serving_projection.upsert(

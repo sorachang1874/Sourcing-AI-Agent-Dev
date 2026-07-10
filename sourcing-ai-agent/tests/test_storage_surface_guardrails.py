@@ -43,6 +43,15 @@ _RETIRED_SERVING_PROJECTION_STORE_METHODS = {
     "list_projection_manifest_shards",
     "_projection_manifest_shard_from_row",
 }
+_RETIRED_SERVING_PROJECTION_CALL_ATTRIBUTES = {
+    name for name in _RETIRED_SERVING_PROJECTION_STORE_METHODS if not name.startswith("_")
+}
+_RETIRED_SERVING_PROJECTION_NATIVE_DISPATCH_KEYS = {
+    "upsert_serving_projection",
+    "upsert_run_projection_link",
+    "upsert_collection_authoritative_pointer",
+    "upsert_projection_manifest_shard",
+}
 _SERVING_PROJECTION_REPOSITORY_METHODS = {
     "upsert",
     "get",
@@ -67,6 +76,82 @@ def _class_method_names(path: Path, class_name: str) -> set[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     class_node = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name)
     return {node.name for node in class_node.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+
+def _assigned_literal_dict_keys(path: Path, assignment_name: str) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        if not any(isinstance(target, ast.Name) and target.id == assignment_name for target in targets):
+            continue
+        value = node.value
+        if not isinstance(value, ast.Dict):
+            return set()
+        return {key.value for key in value.keys if isinstance(key, ast.Constant) and isinstance(key.value, str)}
+    raise AssertionError(f"assignment not found: {assignment_name}")
+
+
+def _is_store_receiver(node: ast.AST) -> bool:
+    if isinstance(node, ast.Name):
+        return node.id == "store" or node.id.endswith("_store")
+    return isinstance(node, ast.Attribute) and node.attr in {"store", "_store"}
+
+
+def _retired_serving_projection_references(tree: ast.AST) -> list[tuple[int, str]]:
+    offenders: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr in _RETIRED_SERVING_PROJECTION_CALL_ATTRIBUTES
+            and _is_store_receiver(node.value)
+        ):
+            offenders.append((node.lineno, node.attr))
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and len(node.args) >= 2
+            and _is_store_receiver(node.args[0])
+            and isinstance(node.args[1], ast.Constant)
+            and node.args[1].value in _RETIRED_SERVING_PROJECTION_CALL_ATTRIBUTES
+        ):
+            offenders.append((node.lineno, f"getattr:{node.args[1].value}"))
+    return offenders
+
+
+class _CatalogFaultAdapter:
+    def __init__(self, *, authoritative: bool, failing_method: str) -> None:
+        self.authoritative = authoritative
+        self.failing_method = failing_method
+
+    def should_prefer_read(self, table_name: str) -> bool:
+        return True
+
+    def is_authoritative(self, table_name: str) -> bool:
+        return self.authoritative
+
+    def _raise_if_failing(self, method_name: str) -> None:
+        if self.failing_method == method_name:
+            raise RuntimeError(f"{method_name}-boom")
+
+    def select_one(self, table_name: str, **kwargs: object) -> None:
+        self._raise_if_failing("select_one")
+        return None
+
+    def select_many(self, table_name: str, **kwargs: object) -> list[dict[str, object]]:
+        self._raise_if_failing("select_many")
+        return []
+
+    def upsert_row(self, table_name: str, row: dict[str, object]) -> None:
+        self._raise_if_failing("upsert_row")
+
+
+def _runtime_error(callable_) -> RuntimeError:
+    with pytest.raises(RuntimeError) as raised:
+        callable_()
+    return raised.value
 
 
 def test_production_code_does_not_reintroduce_sqlitestore_facade_name() -> None:
@@ -182,6 +267,119 @@ def test_serving_projection_catalog_storage_facade_is_retired_to_repository() ->
     assert storage_methods.isdisjoint(_RETIRED_SERVING_PROJECTION_STORE_METHODS)
     assert _SERVING_PROJECTION_REPOSITORY_METHODS <= repository_methods
     assert "self.serving_projection = ServingProjectionRepository(adapter)" in namespace_source
+
+
+def test_serving_projection_retired_calls_and_native_dispatch_keys_cannot_return() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    checked_roots = [repo_root / "src" / "sourcing_agent", repo_root / "scripts"]
+    synthetic = ast.parse(
+        "\n".join(
+            [
+                'store.get_serving_projection("proj")',
+                "callback = store.list_collection_authoritative_pointers",
+                'dynamic = getattr(self.store, "upsert_run_projection_link")',
+                'orchestrator.get_run_projection_link("run")',
+            ]
+        )
+    )
+    assert {label for _line, label in _retired_serving_projection_references(synthetic)} == {
+        "get_serving_projection",
+        "list_collection_authoritative_pointers",
+        "getattr:upsert_run_projection_link",
+    }
+
+    offenders: list[str] = []
+    for root in checked_roots:
+        for path in root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            offenders.extend(
+                f"{path.relative_to(repo_root)}:{line}:{label}"
+                for line, label in _retired_serving_projection_references(tree)
+            )
+
+    native_dispatch_keys = _assigned_literal_dict_keys(
+        repo_root / "src" / "sourcing_agent" / "storage.py",
+        "_CONTROL_PLANE_POSTGRES_NATIVE_TABLES",
+    )
+    assert offenders == []
+    assert native_dispatch_keys.isdisjoint(_RETIRED_SERVING_PROJECTION_NATIVE_DISPATCH_KEYS)
+
+
+def test_serving_projection_catalog_repository_preserves_all_tier_a_b_fault_contracts() -> None:
+    read_cases = [
+        ("serving_projections", "select_one", lambda repo: repo.get("proj"), {}),
+        ("serving_projections", "select_many", lambda repo: repo.list(), []),
+        ("run_projection_links", "select_one", lambda repo: repo.get_run_link("run"), {}),
+        ("run_projection_links", "select_many", lambda repo: repo.list_run_links("run"), []),
+        (
+            "collection_authoritative_pointers",
+            "select_one",
+            lambda repo: repo.get_authoritative_pointer("company:test"),
+            {},
+        ),
+        (
+            "collection_authoritative_pointers",
+            "select_many",
+            lambda repo: repo.list_authoritative_pointers(),
+            [],
+        ),
+    ]
+    write_cases = [
+        (
+            "serving_projections",
+            "upsert_serving_projection",
+            lambda repo: repo.upsert({"projection_id": "proj"}),
+        ),
+        (
+            "run_projection_links",
+            "upsert_run_projection_link",
+            lambda repo: repo.upsert_run_link({"run_id": "run", "projection_id": "proj"}),
+        ),
+        (
+            "collection_authoritative_pointers",
+            "upsert_collection_authoritative_pointer",
+            lambda repo: repo.upsert_authoritative_pointer(
+                {"collection_id": "company:test", "active_projection_id": "proj"}
+            ),
+        ),
+    ]
+    checks = 0
+    for table_name, primitive, call, sentinel in read_cases:
+        strict_repo = ServingProjectionRepository(_CatalogFaultAdapter(authoritative=True, failing_method=primitive))
+        strict_error = _runtime_error(lambda: call(strict_repo))
+        assert str(strict_error) == (
+            f"Postgres authoritative read failed for {table_name} via {primitive}: RuntimeError: {primitive}-boom"
+        )
+        assert isinstance(strict_error.__cause__, RuntimeError)
+        checks += 1
+
+        non_authoritative_repo = ServingProjectionRepository(
+            _CatalogFaultAdapter(authoritative=False, failing_method=primitive)
+        )
+        assert call(non_authoritative_repo) == sentinel
+        checks += 1
+
+    for table_name, old_method_name, call in write_cases:
+        strict_repo = ServingProjectionRepository(_CatalogFaultAdapter(authoritative=True, failing_method="upsert_row"))
+        strict_error = _runtime_error(lambda: call(strict_repo))
+        assert str(strict_error) == (
+            f"Postgres authoritative write failed for {table_name} via upsert_row: RuntimeError: upsert_row-boom"
+        )
+        assert isinstance(strict_error.__cause__, RuntimeError)
+        checks += 1
+
+        non_authoritative_repo = ServingProjectionRepository(
+            _CatalogFaultAdapter(authoritative=False, failing_method="upsert_row")
+        )
+        no_confirmation = _runtime_error(lambda: call(non_authoritative_repo))
+        assert str(no_confirmation) == (
+            f"Postgres authoritative write failed for {table_name} via {old_method_name}: "
+            "postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)"
+        )
+        assert no_confirmation.__cause__ is None
+        checks += 1
+
+    assert checks == 18
 
 
 def test_serving_projection_catalog_repository_mappers_preserve_descriptor_contract() -> None:
