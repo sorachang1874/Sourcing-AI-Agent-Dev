@@ -36,7 +36,7 @@
   provider validation was run, so relay acceptance, returned model identity, price, and product quality remain a
   guarded post-review live proof rather than a checked-in claim.
 
-### Track B ②.3c: serving_projection_members repository cutover + D-4(a)
+### Track B ②.3c: serving_projection_members repository cutover + D-4(a) (`219f2e8`)
 
 - Eight members methods plus their bespoke mapper/payload/readiness helpers moved to
   `store.repos.serving_projection`. All 56 external production calls and 39 test calls switched; the two

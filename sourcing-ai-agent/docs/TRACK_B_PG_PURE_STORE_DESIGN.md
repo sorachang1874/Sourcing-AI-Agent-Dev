@@ -721,7 +721,7 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     无 artifact,后续含一次 capacity 与两次 interrupted;使用 hardened runner 的再次重试又在 900 秒无输出超时,
     artifact 明标 invalid,故 R-014 仍 pending。只阻断本 scope 的 live/W6/manual/里程碑签收,其他模块继续。
 
-- **2026-07-10 ②.3c 完成 —— `serving_projection_members` 退役到 serving_projection repository；D-4(a) 同批闭环**:
+- **2026-07-10 ②.3c 完成（`219f2e8`）—— `serving_projection_members` 退役到 serving_projection repository；D-4(a) 同批闭环**:
   - **范围/调用面**:8 public(`upsert_members`/`replace_members`/`list_members`/`list_members_by_identity_keys`/
     `list_members_by_person_identity`/`count_members_by_readiness`/`get_member`/`count_members`)+ bespoke mapper/payload/readiness
     helper 迁入 `store.repos.serving_projection`。Scout 的 97 direct calls = production 58(storage internal 2 + external 56)
