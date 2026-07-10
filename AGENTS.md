@@ -137,12 +137,12 @@ Required review triggers:
 
 Review rules:
 1. The reviewer must not be the implementation author. Author summaries, green tests, and long smoke runs do not count as independent review.
-2. Run targeted tests and fast contract preflight first; then run the independent review; only then run expensive live/W6/manual signoff.
-3. A `NO-GO` finding blocks progress until fixed or explicitly accepted by the user/founder and recorded in the review artifact/TODO.
+2. Run targeted tests and fast contract preflight first; then launch the independent review against a pinned commit. Once the review request is recorded, unrelated work and the next implementation batch may continue; only expensive live/W6/manual signoff for the reviewed scope waits for the verdict.
+3. A `NO-GO` finding blocks promotion, live/W6/manual validation, and milestone signoff of the affected scope until fixed or explicitly accepted by the user/founder and recorded in the review artifact/TODO. It does not freeze unrelated modules; fixes may land asynchronously while other scoped work proceeds.
 4. Provider-costing live gates and milestone signoff must require a valid `GO` review artifact that matches the current gate scope, not just a path that exists. `NO-GO`, timeout, no-output, invalid, missing-metadata, prompt-file, or unrelated artifacts fail closed.
 5. If unsure whether a change affects shared semantics, run the gate.
 6. Independent review is scoped review, not a full development-session resume. The reviewer should inspect the listed diff scope and targeted Contract sections, not full progress trackers or long Contract documents, unless the review scope explicitly requires that full context.
-7. For Codex-based reviews, the default reviewer configuration is GPT-5.5 with `model_reasoning_effort="xhigh"` and fast mode via `service_tier="fast"`; prefer a project-specific runner when present so those values are recorded in the review artifact. Per-lane model routing and fallback (including the ban on review-lane fallback into the author's model family) are defined once in the project's `docs/INDEPENDENT_REVIEW_GATE.md` Model Routing Table — do not fork those defaults here.
+7. For Codex-based reviews, the default reviewer configuration is GPT-5.5 with `model_reasoning_effort="xhigh"` and fast mode via `service_tier="fast"`; prefer a project-specific runner when present so those values are recorded in the review artifact. Per-lane model routing and fallback are defined once in the project's `docs/INDEPENDENT_REVIEW_GATE.md` Model Routing Table — do not fork those defaults here. Independence is enforced by a separate non-author read-only session; a different model family is preferred when available, not required.
 
 ## Definition of Done
 Work is only done when:

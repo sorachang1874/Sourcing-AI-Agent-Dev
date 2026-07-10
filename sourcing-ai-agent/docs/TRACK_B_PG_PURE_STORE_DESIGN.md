@@ -662,4 +662,5 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     但宿主机 `claude` 未进入 owner 的 ReClaude 专用容器/daemon transport,只返回 `ConnectionRefused`
     (无 findings/verdict),故 artifact
     `runtime/reviews/20260710T021502Z_async-reference-track-b-2-2-manual-review.md` 明标 **DEFERRED/INVALID**;
-    owner 指示本 session 不重试,记 R-013,不得把该 artifact 当 GO。
+    owner 指示不重试该 Claude transport,记 R-013,不得把该 artifact 当 GO;随后于 2026-07-10 批准改用
+    独立只读 Codex reviewer session,请求发出后不阻塞 ②.3,findings 回来再按 scope 异步修复。

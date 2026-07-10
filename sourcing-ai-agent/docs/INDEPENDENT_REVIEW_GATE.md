@@ -38,8 +38,9 @@ Small localized changes may skip this only when they do not change shared semant
 
 For changes inside the narrowed gate scope that are already covered by independent adversarial subagent verification (the post-handoff standard for extractions, transport ports, and storage-contract fixes), the Codex review runs as a NON-BLOCKING parallel reference channel instead of a blocking gate:
 
-- Fire `scripts/run_independent_review_gate.py --execute` in the background once the implementation is settled (anchor `--base` to a pinned commit), while the primary subagent verification runs — both channels are read-only and review the same diff.
-- Work proceeds on the primary verification verdict; the Codex result is read when it lands and triaged under the standard finding discipline: real findings are fixed forward in a follow-up commit, false positives are recorded. Never roll back landed work solely because the reference review is pending.
+- Fire `scripts/run_independent_review_gate.py --execute` in the background once the implementation is settled (anchor `--base` to a pinned commit), while the primary subagent verification runs — both channels are read-only and review the same diff. The reviewer must be a separate non-author session; a different model family is preferred but not required.
+- Once the request and pinned scope are recorded, the next repository/module batch and unrelated work proceed immediately. The Codex result is read when it lands and triaged under the standard finding discipline: real findings are fixed forward in a follow-up commit, false positives are recorded. Never roll back landed work solely because the reference review is pending.
+- A `NO-GO` creates scope-local review debt: it blocks live/W6/manual validation and milestone signoff for that reviewed scope, but does not freeze unrelated development. Track the debt until fixed or explicitly accepted.
 - Destructive operations on non-rebuildable assets keep the BLOCKING gate below unchanged — the async lane never applies to them.
 - First instance: `runtime/reviews/20260612T080442Z_async-reference-phase3d-acquisition-extraction.md` (Phase 3d extraction, GO; independently cross-confirmed the Claude verifier's AST findings).
 
@@ -77,10 +78,10 @@ codex exec \
   < runtime/reviews/<review-id>.prompt.md
 ```
 
-If `gpt-5.5` is unavailable, substitute per the Model Routing Table below and record that substitution in the review output. **A review lane substitution must never resolve to the author's model family** — if no non-author-family reviewer is reachable, defer the gate visibly (record the deferred gate in `docs/RESIDUAL_LEDGER.md`) rather than self-family-certify. The author still cannot self-certify.
+If `gpt-5.5` is unavailable, substitute per the Model Routing Table below and record that substitution in the review output. A same-family Codex/GPT fallback is allowed only through a separate non-author read-only session; the implementation author still cannot self-certify. If no reviewer session is reachable, defer the gate visibly in `docs/RESIDUAL_LEDGER.md` while unrelated work continues.
 The Make/script target defaults are `REVIEW_MODEL=gpt-5.5`, `REVIEW_REASONING_EFFORT=xhigh`, and `REVIEW_SERVICE_TIER=fast`. Override them only when the local reviewer environment cannot support that combination, and keep the substitution visible in the generated review artifact metadata.
 
-## Model Routing Table (checked-in, 2026-07-09)
+## Model Routing Table (checked-in 2026-07-09; owner-updated 2026-07-10)
 
 Routing is a checked-in artifact, not a per-session improvisation — the ②.1 recon batch was wiped by a
 primary-model quota wall and the fallback was improvised in-chat; this table makes the fallback a
@@ -91,17 +92,19 @@ pre-declared decision. Both `AGENTS.md` files point here; do not fork per-file c
 | Recon / scout (read-only fan-out) | execution-dense | author-session model | author family, lighter tier (e.g. Sonnet) | degrade to fallback; resume, don't rerun survivors |
 | Mechanical edit fan-out | execution-dense | author family, lighter tier | author-session model | degrade |
 | Adversarial verification / synthesis | reasoning-dense | author-session model | author family, deepest available | degrade |
-| **Independent review (this gate)** | reasoning-dense | Claude (deepest available) | another **non-GPT-family** model | **defer visibly — never substitute the author family** |
+| **Independent review (this gate)** | reasoning-dense | GPT-5.5 in a separate read-only Codex session (`xhigh`, `fast`) | newest available Codex/GPT reasoning model in a separate read-only session | record the fallback or defer the review; continue unrelated work |
 
 Constraints:
 
-- The review lane is the independence lane: primary and fallback must both resolve outside the
-  author's model family (today the author family is GPT/Codex; the reviewer family is Claude).
+- Review independence is session/author separation: the implementation author cannot certify their own
+  change, but a distinct read-only Codex reviewer session may use the same model family. Cross-model
+  review remains preferred when its transport is operational because it adds heterogeneous blind-spot coverage.
 - Every fired fallback or deferred gate is recorded in the review artifact metadata (and the
   residual ledger for deferrals), so a silent downgrade cannot become a hidden fallback.
 - Interrupted fan-outs resume from their run id (re-dispatch only unfinished lanes); a completed
   agent's output is never re-rolled by a full rerun.
-- Assignments dated 2026-07-09; revisit when the model lineup changes.
+- Initial assignments dated 2026-07-09; owner changed the independent lane to Codex-first and explicitly
+  non-blocking for unrelated development on 2026-07-10. Revisit when the model lineup or reviewer transport changes.
 
 ## Required Evidence
 
@@ -136,4 +139,4 @@ Independent review is scoped review, not a full development-session resume. The 
 
 ## Failure Policy
 
-`NO-GO` findings must be resolved or explicitly accepted by the user/founder before proceeding. A green targeted test, W6/nightly, or browser/manual pass does not override a blocking independent review. If an exception is accepted, it must be named in the review artifact and carried in the next milestone TODO until retired.
+`NO-GO` findings must be resolved or explicitly accepted by the user/founder before the affected scope is promoted, run through live/W6/manual validation, or signed off. Unrelated modules and later pinned batches may continue while that debt is fixed asynchronously. A green targeted test, W6/nightly, or browser/manual pass does not override the scope-local block. If an exception is accepted, it must be named in the review artifact and carried in the next milestone TODO until retired.

@@ -93,12 +93,13 @@
    (勿用 stash —— 见 §6 效率纪律;慢套件只跑域相关 `-k` 子集)。
 6. **文档**:TRACK_B doc §6 追加一条批记录(表/方法数、调用方 diff 面、验证数字);协议有修订则更新本节;
    扫一遍 `docs/RESIDUAL_LEDGER.md` 的 tripwire 列,触发的行升级为工作项或决策卡。
-7. **异步参考评审(不阻塞落地,2026-07-09 接入)**:批 settle 后按 `docs/INDEPENDENT_REVIEW_GATE.md` 的
-   Async Reference Review Lane 在后台发跨模型评审(锚定 pinned commit,模型路由见该文件 Model Routing 表 ——
-   评审 lane 兜底禁止落回作者模型家族);工作按主验证(A/B + 对抗校验 + lane)推进,评审落地后按
+7. **异步参考评审(不阻塞后续开发,2026-07-09 接入;owner 2026-07-10 更新)**:批 settle 后按
+   `docs/INDEPENDENT_REVIEW_GATE.md` 的 Async Reference Review Lane 在后台发独立只读 Codex 评审
+   (锚定 pinned commit,模型路由见该文件 Model Routing 表;跨模型优先但非必需)。请求与 scope 记录后立即开始下一域;
+   `NO-GO` 只冻结被审 scope 的 live/W6/manual/里程碑签收,不冻结其他模块。工作按主验证(A/B + 对抗校验 + lane)推进,评审落地后按
    `INDEPENDENT_REVIEW_BRIEF.md` 的三分类分诊:`new` 类 follow-up 修复、`re-raise` 类记录、`residual` 类
    须引用 `RESIDUAL_LEDGER.md` 行 id。verbatim-port 批是"同 worktree 盲区"(作者与验证 agent 共享同一棵树、
-   同一套侦察工件)的典型风险面,跨模型异步通道恰好补此盲区。
+   同一套侦察工件)的典型风险面;独立 reviewer session 是最低要求,跨模型可用时再补异质盲区覆盖。
 
 ## 5. 常用命令
 

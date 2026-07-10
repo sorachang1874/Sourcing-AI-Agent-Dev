@@ -25,12 +25,14 @@
   dry-run report; domain/guard group 69 passed; Ruff/format and compileall clean; mypy stayed at the
   R-011 baseline of 87 errors in four files. Five targeted pipeline tests had the exact same 3-pass/
   2-fail result on the migration and baseline worktrees (R-009, zero regression).
-- The takeover routing table was corrected first in `c19c0fd`: GPT/Codex is now the author family and
-  the independent-review lane must remain in the non-GPT Claude family. A host-CLI Claude Opus/xhigh
+- The takeover routing table was initially corrected in `c19c0fd` to keep the reviewer outside the
+  GPT/Codex author family. A host-CLI Claude Opus/xhigh
   review of pinned `c19c0fd..d0828e7` bypassed the owner's ReClaude container/daemon transport and
   returned only `ConnectionRefused`; it has no verdict and is recorded as deferred/invalid in R-013.
-  Per owner direction it was not retried this session. Next
-  repository domain is ②.3 serving_projection; the invalid artifact cannot unlock live/W6/signoff.
+  Per owner direction it was not retried. The owner then updated the policy on 2026-07-10: a separate
+  read-only Codex session is an accepted reviewer, and a recorded review request does not block the next
+  module. `NO-GO` remains a scope-local block on live/W6/manual/milestone signoff. Next repository domain
+  is ②.3 serving_projection; the invalid Claude artifact cannot unlock signoff.
 
 ## 2026-07-09 (Asia/Shanghai)
 
@@ -58,7 +60,7 @@
   ratchet; green-modulo-ledger acceptance); handbook §7 pending decisions → decision cards with
   deadlines and timeout defaults; handbook §4 gains the A/B mutation self-check and step 7 (async
   cross-model reference review per batch); `INDEPENDENT_REVIEW_GATE.md` gains a checked-in Model
-  Routing Table (review-lane fallback must never resolve to the author's model family);
+  Routing Table (the original cross-family-only fallback was superseded by the 2026-07-10 owner decision);
   `INDEPENDENT_REVIEW_BRIEF.md` output format rewritten (exhaustive severity-ranked findings,
   new/re-raise/residual classification with ledger-id citations, termination rule).
 - Playbook side: eight distilled experience items (worktree-not-stash baselines, verbatim-move byte
