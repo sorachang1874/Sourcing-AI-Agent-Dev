@@ -29,6 +29,7 @@ from .control_plane_live_postgres import (
     LiveControlPlanePostgresAdapter,
     resolve_control_plane_postgres_live_mode,
 )
+from .control_plane_repository import _validate_bulk_upsert_rows_call_contract
 from .control_plane_serde import json_safe_payload as _control_plane_json_safe_payload
 from .control_plane_time import (
     is_sqlite_timestamp_expired as _is_sqlite_timestamp_expired,
@@ -772,6 +773,13 @@ class ControlPlaneStore:
 
     def _require_legacy_target_public_web_migration_write(self, table_name: str) -> None:
         if int(getattr(self, "_legacy_target_public_web_migration_write_depth", 0) or 0) > 0:
+            prepare_schema = getattr(
+                self._control_plane_postgres,
+                "ensure_legacy_target_public_web_migration_write_schema",
+                None,
+            )
+            if callable(prepare_schema):
+                prepare_schema(table_name)
             return
         raise RuntimeError(
             "legacy_target_candidate_public_web_write_retired: "
@@ -984,6 +992,11 @@ class ControlPlaneStore:
 
     def _call_control_plane_postgres_native(self, method_name: str, /, *args: Any, **kwargs: Any) -> Any:
         normalized_method_name = str(method_name or "").strip()
+        _validate_bulk_upsert_rows_call_contract(
+            normalized_method_name,
+            positional_args=args,
+            keyword_args=kwargs,
+        )
         table_name = self._control_plane_postgres_native_table_name(normalized_method_name, kwargs)
         strict_no_fallback = bool(
             table_name

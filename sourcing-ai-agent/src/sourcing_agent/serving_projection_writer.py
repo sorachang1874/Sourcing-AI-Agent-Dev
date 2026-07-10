@@ -29,12 +29,10 @@ class ServingProjectionWriter:
         state: str = "serving",
     ) -> dict[str, Any]:
         normalized_run_id = _require_non_empty(run_id, "run_id")
-        existing_link = self.store.repos.serving_projection.get_run_link(normalized_run_id)
-        effective_projection_id = str(projection_id or existing_link.get("projection_id") or "").strip()
         projection_payload = {
-            "projection_id": effective_projection_id,
+            "projection_id": str(projection_id or "").strip(),
             "projection_type": "run_scope_projection",
-            "collection_id": str(collection_id or existing_link.get("collection_id") or "").strip(),
+            "collection_id": str(collection_id or "").strip(),
             "source_run_id": normalized_run_id,
             "state": state,
             "scope_label": str(scope_label or "").strip(),
@@ -44,30 +42,21 @@ class ServingProjectionWriter:
             "provenance": dict(provenance or {}),
             "metadata": _metadata_with_writer(metadata or {}, self.writer_id),
         }
-        projection = self.store.repos.serving_projection.upsert(projection_payload)
-        persisted_projection_id = _require_non_empty(projection.get("projection_id"), "projection_id")
-        if replace_members:
-            member_count = self.store.repos.serving_projection.replace_members(persisted_projection_id, members)
-        else:
-            member_count = self.store.repos.serving_projection.upsert_members(persisted_projection_id, members)
-        link = self.store.repos.serving_projection.upsert_run_link(
-            {
+        return self.store.repos.serving_projection.publish_run_scope_projection(
+            projection_payload=projection_payload,
+            run_link_payload={
                 "run_id": normalized_run_id,
-                "projection_id": persisted_projection_id,
                 "projection_type": "run_scope_projection",
-                "collection_id": projection.get("collection_id") or "",
+                "collection_id": str(collection_id or "").strip(),
                 "created_by": self.writer_id,
                 "metadata": {
                     "writer_id": self.writer_id,
-                    "projection_state": projection.get("state") or "",
+                    "projection_state": state,
                 },
-            }
+            },
+            members=members,
+            replace_members=replace_members,
         )
-        return {
-            "projection": projection,
-            "link": link,
-            "member_count": member_count,
-        }
 
     def publish_collection_authoritative_projection(
         self,
@@ -87,49 +76,33 @@ class ServingProjectionWriter:
     ) -> dict[str, Any]:
         normalized_collection_id = _require_non_empty(collection_id, "collection_id")
         normalized_version = _require_non_empty(active_collection_version, "active_collection_version")
-        existing_pointer = self.store.repos.serving_projection.get_authoritative_pointer(normalized_collection_id)
-        effective_projection_id = str(projection_id or "").strip()
-        if (
-            not effective_projection_id
-            and str(existing_pointer.get("active_collection_version") or "") == normalized_version
-        ):
-            effective_projection_id = str(existing_pointer.get("active_projection_id") or "").strip()
-        projection = self.store.repos.serving_projection.upsert(
-            {
-                "projection_id": effective_projection_id,
-                "projection_type": "collection_authoritative_projection",
+        projection_payload = {
+            "projection_id": str(projection_id or "").strip(),
+            "projection_type": "collection_authoritative_projection",
+            "collection_id": normalized_collection_id,
+            "source_collection_version": normalized_version,
+            "state": state,
+            "scope_label": str(scope_label or "").strip(),
+            "scope_spec": dict(scope_spec or {}),
+            "counts": _counts_with_member_floor(counts or {}, members),
+            "readiness": dict(readiness or {}),
+            "provenance": dict(provenance or {}),
+            "metadata": _metadata_with_writer(metadata or {}, self.writer_id),
+        }
+        return self.store.repos.serving_projection.publish_collection_authoritative_projection(
+            projection_payload=projection_payload,
+            pointer_payload={
                 "collection_id": normalized_collection_id,
-                "state": state,
-                "scope_label": str(scope_label or "").strip(),
-                "scope_spec": dict(scope_spec or {}),
-                "counts": _counts_with_member_floor(counts or {}, members),
-                "readiness": dict(readiness or {}),
-                "provenance": dict(provenance or {}),
-                "metadata": _metadata_with_writer(metadata or {}, self.writer_id),
-            }
-        )
-        persisted_projection_id = _require_non_empty(projection.get("projection_id"), "projection_id")
-        if replace_members:
-            member_count = self.store.repos.serving_projection.replace_members(persisted_projection_id, members)
-        else:
-            member_count = self.store.repos.serving_projection.upsert_members(persisted_projection_id, members)
-        pointer = self.store.repos.serving_projection.upsert_authoritative_pointer(
-            {
-                "collection_id": normalized_collection_id,
-                "active_projection_id": persisted_projection_id,
                 "active_collection_version": normalized_version,
                 "writer_id": self.writer_id,
                 "metadata": {
                     "writer_id": self.writer_id,
-                    "projection_state": projection.get("state") or "",
+                    "projection_state": state,
                 },
-            }
+            },
+            members=members,
+            replace_members=replace_members,
         )
-        return {
-            "projection": projection,
-            "pointer": pointer,
-            "member_count": member_count,
-        }
 
 
 def _require_non_empty(value: Any, field_name: str) -> str:

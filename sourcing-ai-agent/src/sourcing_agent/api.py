@@ -1230,6 +1230,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         )
         if crm_payload is None:
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "projection not found"})
+        if crm_payload.get("status") == "not_ready":
+            return _json_response(HTTPStatus.CONFLICT, crm_payload)
         return _json_response(HTTPStatus.OK, crm_payload)
 
     add(["GET"], "/api/projections/{projection_id:sourcing_ident}/crm-state", get_projection_crm_state)
@@ -1309,6 +1311,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "person summary not found"})
         if person_payload.get("status") == "invalid":
             return _json_response(HTTPStatus.BAD_REQUEST, person_payload)
+        if person_payload.get("status") == "not_ready":
+            return _json_response(HTTPStatus.CONFLICT, person_payload)
         return _json_response(HTTPStatus.OK, person_payload)
 
     add(["GET"], "/api/persons/{person_key}", get_person_summary)

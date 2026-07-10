@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from .control_plane_repository import ControlPlaneAuthoritativeReadError
+from .media_asset_owner import media_asset_frontend_url
 from .public_candidate_facets import (
     apply_candidate_page_filter,
     candidate_page_filter_active,
@@ -11,7 +13,6 @@ from .public_candidate_facets import (
     normalize_candidate_page_filter,
     public_facet_summary_from_counts,
 )
-from .media_asset_owner import media_asset_frontend_url
 from .storage import ControlPlaneStore
 
 _SERVABLE_PROJECTION_STATES = {"serving", "building", "degraded"}
@@ -58,11 +59,21 @@ class ServingProjectionReader:
                 projection_id=normalized_projection_id,
                 projection=projection,
             )
-        visible_count = self.store.repos.serving_projection.count_members(normalized_projection_id, visible_only=True)
-        readiness_counts = self.store.repos.serving_projection.count_members_by_readiness(
-            normalized_projection_id,
-            visible_only=True,
-        )
+        try:
+            visible_count = self.store.repos.serving_projection.count_members(
+                normalized_projection_id,
+                visible_only=True,
+            )
+            readiness_counts = self.store.repos.serving_projection.count_members_by_readiness(
+                normalized_projection_id,
+                visible_only=True,
+            )
+        except ControlPlaneAuthoritativeReadError:
+            return self._projection_error(
+                "projection_members_unavailable",
+                projection_id=normalized_projection_id,
+                projection=projection,
+            )
         return {
             "status": "ready",
             "projection": self._public_projection_payload(
@@ -91,65 +102,72 @@ class ServingProjectionReader:
         filter_signature = candidate_page_filter_signature(normalized_filter)
         filter_active = candidate_page_filter_active(normalized_filter)
         total_count = int(projection.get("visible_member_count") or 0)
-        if filter_active:
-            filtered = self._filtered_projection_members(
-                normalized_projection_id,
-                candidate_filter=normalized_filter,
-                offset=normalized_offset,
-                limit=normalized_limit,
-            )
-            if str(filtered.get("status") or "ready") != "ready":
-                filter_contract = self._projection_filter_contract(
-                    projection=projection,
-                    applied_filter=normalized_filter,
-                    filter_signature=filter_signature,
-                    source=str(filtered.get("filter_source") or "projection_person_search_index"),
-                    row_filter_scope="projection_membership",
-                    fallback_used=False,
+        try:
+            if filter_active:
+                filtered = self._filtered_projection_members(
+                    normalized_projection_id,
+                    candidate_filter=normalized_filter,
+                    offset=normalized_offset,
+                    limit=normalized_limit,
                 )
-                return {
-                    "status": "not_ready",
-                    "reason": str(filtered.get("reason") or "projection_person_search_index_unavailable"),
-                    "projection": projection,
-                    "candidate_count": total_count,
-                    "total_candidates": total_count,
-                    "filtered_candidate_count": 0,
-                    "offset": normalized_offset,
-                    "limit": 0,
-                    "has_more": False,
-                    "next_offset": None,
-                    "candidates": [],
-                    "facet_summary": self._projection_facet_summary(projection),
-                    "index_filter_readiness": dict(filtered.get("index_filter_readiness") or {})
-                    or self._index_filter_readiness_payload(projection),
-                    "applied_filter": normalized_filter,
-                    "filter_signature": filter_signature,
-                    "filter_contract": filter_contract,
-                    "field_visibility": projection.get("field_visibility") or self._field_visibility_payload(),
-                    "read_contract": {
-                        "source": "projection_person_search_index",
-                        "fallback_used": False,
-                        "fail_closed": True,
-                    },
-                }
-            filtered_count = int(filtered["filtered_count"])
-            members = list(filtered["members"])
-            filter_source = str(filtered.get("filter_source") or "serving_projection_members_scan")
-            index_filter_readiness = dict(filtered.get("index_filter_readiness") or {})
-            filter_fallback_used = bool(filtered.get("filter_fallback_used"))
-            filter_fallback_reason = str(filtered.get("filter_fallback_reason") or "").strip()
-        else:
-            filtered_count = total_count
-            members = self.store.repos.serving_projection.list_members(
-                normalized_projection_id,
-                offset=normalized_offset,
-                limit=normalized_limit,
-                visible_only=True,
+                if str(filtered.get("status") or "ready") != "ready":
+                    filter_contract = self._projection_filter_contract(
+                        projection=projection,
+                        applied_filter=normalized_filter,
+                        filter_signature=filter_signature,
+                        source=str(filtered.get("filter_source") or "projection_person_search_index"),
+                        row_filter_scope="projection_membership",
+                        fallback_used=False,
+                    )
+                    return {
+                        "status": "not_ready",
+                        "reason": str(filtered.get("reason") or "projection_person_search_index_unavailable"),
+                        "projection": projection,
+                        "candidate_count": total_count,
+                        "total_candidates": total_count,
+                        "filtered_candidate_count": 0,
+                        "offset": normalized_offset,
+                        "limit": 0,
+                        "has_more": False,
+                        "next_offset": None,
+                        "candidates": [],
+                        "facet_summary": self._projection_facet_summary(projection),
+                        "index_filter_readiness": dict(filtered.get("index_filter_readiness") or {})
+                        or self._index_filter_readiness_payload(projection),
+                        "applied_filter": normalized_filter,
+                        "filter_signature": filter_signature,
+                        "filter_contract": filter_contract,
+                        "field_visibility": projection.get("field_visibility") or self._field_visibility_payload(),
+                        "read_contract": {
+                            "source": "projection_person_search_index",
+                            "fallback_used": False,
+                            "fail_closed": True,
+                        },
+                    }
+                filtered_count = int(filtered["filtered_count"])
+                members = list(filtered["members"])
+                filter_source = str(filtered.get("filter_source") or "serving_projection_members_scan")
+                index_filter_readiness = dict(filtered.get("index_filter_readiness") or {})
+                filter_fallback_used = bool(filtered.get("filter_fallback_used"))
+                filter_fallback_reason = str(filtered.get("filter_fallback_reason") or "").strip()
+            else:
+                filtered_count = total_count
+                members = self.store.repos.serving_projection.list_members(
+                    normalized_projection_id,
+                    offset=normalized_offset,
+                    limit=normalized_limit,
+                    visible_only=True,
+                )
+                filter_source = "serving_projection_members"
+                index_filter_readiness = self._index_filter_readiness_payload(projection)
+                filter_fallback_used = False
+                filter_fallback_reason = ""
+        except ControlPlaneAuthoritativeReadError:
+            return self._projection_error(
+                "projection_members_unavailable",
+                projection_id=normalized_projection_id,
+                projection=projection,
             )
-            filter_source = "serving_projection_members"
-            index_filter_readiness = self._index_filter_readiness_payload(projection)
-            filter_fallback_used = False
-            filter_fallback_reason = ""
         crm_overlays_by_person = self._crm_overlays_for_members(members)
         if crm_overlays_by_person:
             members = [
@@ -224,7 +242,17 @@ class ServingProjectionReader:
         normalized_candidate_key = str(candidate_identity_key or "").strip()
         if not normalized_candidate_key:
             return self._projection_error("candidate_identity_key_required", projection_id=normalized_projection_id)
-        member = self.store.repos.serving_projection.get_member(normalized_projection_id, normalized_candidate_key)
+        try:
+            member = self.store.repos.serving_projection.get_member(
+                normalized_projection_id,
+                normalized_candidate_key,
+            )
+        except ControlPlaneAuthoritativeReadError:
+            return self._projection_error(
+                "projection_members_unavailable",
+                projection_id=normalized_projection_id,
+                projection=dict(projection_payload.get("projection") or {}),
+            )
         if not member:
             return self._projection_error("projection_member_not_found", projection_id=normalized_projection_id)
         person_key = str(member.get("person_identity_key") or "").strip()
@@ -302,11 +330,18 @@ class ServingProjectionReader:
             for key in list(search_result.get("candidate_identity_keys") or [])
             if str(key or "").strip()
         ]
-        members = [
-            member
-            for key in keys
-            if (member := self.store.repos.serving_projection.get_member(normalized_projection_id, key))
-        ]
+        try:
+            members = [
+                member
+                for key in keys
+                if (member := self.store.repos.serving_projection.get_member(normalized_projection_id, key))
+            ]
+        except ControlPlaneAuthoritativeReadError:
+            return self._projection_error(
+                "projection_members_unavailable",
+                projection_id=normalized_projection_id,
+                projection=projection,
+            )
         crm_overlays_by_person = self._crm_overlays_for_members(members)
         if crm_overlays_by_person:
             members = [
@@ -351,10 +386,13 @@ class ServingProjectionReader:
         normalized_person_key = str(person_identity_key or "").strip()
         if not normalized_person_key:
             return {"status": "invalid", "reason": "person_identity_key_required"}
-        members = self.store.repos.serving_projection.list_members_by_person_identity(
-            normalized_person_key,
-            limit=max(1, int(limit or 25)),
-        )
+        try:
+            members = self.store.repos.serving_projection.list_members_by_person_identity(
+                normalized_person_key,
+                limit=max(1, int(limit or 25)),
+            )
+        except ControlPlaneAuthoritativeReadError:
+            return self._projection_error("projection_members_unavailable")
         if not members:
             return {
                 "status": "not_found",
@@ -511,7 +549,9 @@ class ServingProjectionReader:
             "filter_source": "serving_projection_members_scan_legacy_cutover",
             "filter_fallback_used": True,
             "filter_fallback_reason": "projection_person_search_index_unavailable",
-            "index_filter_readiness": self._index_filter_readiness_payload(self.store.repos.serving_projection.get(projection_id)),
+            "index_filter_readiness": self._index_filter_readiness_payload(
+                self.store.repos.serving_projection.get(projection_id)
+            ),
         }
 
     def _indexed_filter_projection_members(
@@ -598,9 +638,7 @@ class ServingProjectionReader:
             # board-visible updates, so they are diagnostics rather than the
             # public reader's source of truth.
             readiness["row_count"] = int(normalized_readiness_counts.get("row_count") or visible_count or 0)
-            readiness["profile_required_count"] = int(
-                normalized_readiness_counts.get("profile_required_count") or 0
-            )
+            readiness["profile_required_count"] = int(normalized_readiness_counts.get("profile_required_count") or 0)
             readiness["profile_ready_count"] = int(normalized_readiness_counts.get("profile_ready_count") or 0)
             readiness["card_ready_count"] = int(normalized_readiness_counts.get("card_ready_count") or 0)
             readiness["count_scope"] = "exact_projection"
@@ -625,7 +663,9 @@ class ServingProjectionReader:
             "evidence_index_watermark": str(payload.get("evidence_index_watermark") or "").strip(),
             "visible_member_count": visible_count,
             "field_visibility": self._field_visibility_payload(),
-            "index_filter_readiness": self._index_filter_readiness_payload({**payload, "counts": counts, "readiness": readiness}),
+            "index_filter_readiness": self._index_filter_readiness_payload(
+                {**payload, "counts": counts, "readiness": readiness}
+            ),
             "read_contract": {
                 "source": "serving_projection_members",
                 "fallback_used": False,
@@ -653,7 +693,9 @@ class ServingProjectionReader:
                 "reason": "projection_facet_counts_empty",
             }
         visible_count = _public_count(projection.get("visible_member_count") or counts.get("visible_member_count"))
-        facet_candidate_count = _public_count(summary.get("candidate_count") or public_facet_counts.get("candidate_count"))
+        facet_candidate_count = _public_count(
+            summary.get("candidate_count") or public_facet_counts.get("candidate_count")
+        )
         if visible_count > 0 and facet_candidate_count != visible_count:
             return {
                 "status": "unavailable",
@@ -663,7 +705,9 @@ class ServingProjectionReader:
                 "actual_candidate_count": facet_candidate_count,
             }
         summary["status"] = "complete"
-        summary["count_scope"] = str(public_facet_counts.get("count_scope") or counts.get("count_scope") or "exact_projection")
+        summary["count_scope"] = str(
+            public_facet_counts.get("count_scope") or counts.get("count_scope") or "exact_projection"
+        )
         return summary
 
     def _projection_filter_contract(
@@ -965,10 +1009,15 @@ class ServingProjectionReader:
                 or public_summary.get("status")
                 or ""
             ).strip(),
-            "source_dataset": str(payload.get("source_shard_key") or payload.get("lane") or public_summary.get("source_dataset") or "").strip(),
-            "has_profile_detail": public_summary.get("has_profile_detail") or projection_metrics.get("has_profile_detail"),
-            "needs_profile_completion": public_summary.get("needs_profile_completion") or projection_metrics.get("needs_profile_completion"),
-            "low_profile_richness": public_summary.get("low_profile_richness") or projection_metrics.get("low_profile_richness"),
+            "source_dataset": str(
+                payload.get("source_shard_key") or payload.get("lane") or public_summary.get("source_dataset") or ""
+            ).strip(),
+            "has_profile_detail": public_summary.get("has_profile_detail")
+            or projection_metrics.get("has_profile_detail"),
+            "needs_profile_completion": public_summary.get("needs_profile_completion")
+            or projection_metrics.get("needs_profile_completion"),
+            "low_profile_richness": public_summary.get("low_profile_richness")
+            or projection_metrics.get("low_profile_richness"),
             "crm_overlay_summary": crm_overlay_summary,
             "projection_id": str(payload.get("projection_id") or "").strip(),
             "candidate_identity_key": str(payload.get("candidate_identity_key") or "").strip(),
@@ -990,7 +1039,9 @@ class ServingProjectionReader:
         }
 
     @staticmethod
-    def _projection_error(reason: str, *, projection_id: str = "", projection: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _projection_error(
+        reason: str, *, projection_id: str = "", projection: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "status": "not_ready",
             "reason": reason,

@@ -28,6 +28,32 @@ from typing import Any, NoReturn
 from .control_plane_serde import json_safe_payload
 
 
+def _validate_bulk_upsert_rows_call_contract(
+    method_name: str,
+    *,
+    positional_args: tuple[Any, ...],
+    keyword_args: dict[str, Any],
+) -> None:
+    """Fail closed when wrapper callers bypass the bulk-write keyword contract."""
+
+    if str(method_name or "").strip() != "bulk_upsert_rows":
+        return
+    if positional_args:
+        raise TypeError(
+            "bulk_upsert_rows payload must use keyword arguments; positional payload arguments are not allowed"
+        )
+    if "table_name" not in keyword_args:
+        raise TypeError("bulk_upsert_rows requires an explicit table_name keyword argument")
+    if not str(keyword_args.get("table_name") or "").strip():
+        raise ValueError("bulk_upsert_rows requires a non-empty table_name")
+    if "rows" not in keyword_args:
+        raise TypeError("bulk_upsert_rows requires an explicit rows keyword argument")
+
+
+class ControlPlaneAuthoritativeReadError(RuntimeError):
+    """An authoritative Postgres read failed; callers must not use an empty sentinel."""
+
+
 class Kind(Enum):
     """The typed contract for a control-plane column."""
 
@@ -271,8 +297,8 @@ class Repository:
     ) -> NoReturn:
         message = f"Postgres authoritative read failed for {table_name} via {method_name}: {reason}"
         if error is not None:
-            raise RuntimeError(message) from error
-        raise RuntimeError(message)
+            raise ControlPlaneAuthoritativeReadError(message) from error
+        raise ControlPlaneAuthoritativeReadError(message)
 
     def _raise_postgres_only_invariant(self, *, table_name: str, method_name: str) -> NoReturn:
         raise RuntimeError(
@@ -366,9 +392,14 @@ class Repository:
 
     def _call_native_write(self, method_name: str, /, *, table_name: str, **kwargs: Any) -> Any:
         # == ControlPlaneStore._call_control_plane_postgres_native restricted to native WRITERS with an
-        # explicit table_name (insert_row_with_generated_id / update_row_returning /
-        # upsert_row_with_generated_id / delete_rows): swallow to None when non-authoritative, raise when strict.
+        # explicit table_name (single-row, bulk, scoped replace, and structured UoW methods): swallow to None
+        # when non-authoritative, raise when strict.
         # Native reads in repositories/ go through _select_row(s); there is no read branch here.
+        _validate_bulk_upsert_rows_call_contract(
+            method_name,
+            positional_args=(),
+            keyword_args={"table_name": table_name, **kwargs},
+        )
         strict_no_fallback = bool(table_name and self._strict_authoritative(table_name))
         method = getattr(self._adapter, method_name, None)
         if method is None:

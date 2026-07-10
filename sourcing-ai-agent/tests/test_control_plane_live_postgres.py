@@ -105,7 +105,7 @@ class _RecordingCursor:
 
     def execute(self, sql: str, params: tuple[object, ...] = ()) -> None:
         self.calls.append({"sql": sql, "params": tuple(params), "param_count": len(params)})
-        self.rowcount = max(1, len(params))
+        self.rowcount = 1
 
     def fetchone(self) -> tuple[bool]:
         return (True,)
@@ -363,6 +363,9 @@ class _FakeLiveControlPlanePostgresAdapter:
     def ensure_bootstrapped(self) -> None:
         return
 
+    def ensure_legacy_target_public_web_migration_write_schema(self, table_name: str) -> None:
+        return
+
     def replace_table_from_sqlite(self, table_name: str) -> None:
         self.replaced_tables.append(str(table_name or "").strip())
 
@@ -383,7 +386,13 @@ class _FakeLiveControlPlanePostgresAdapter:
         existing_rows.append(payload)
         self.generic_rows[normalized_table] = existing_rows
 
-    def bulk_upsert_rows(self, table_name: str, rows: list[dict[str, object]] | tuple[dict[str, object], ...]) -> int:
+    def bulk_upsert_rows(
+        self,
+        table_name: str,
+        rows: list[dict[str, object]] | tuple[dict[str, object], ...],
+        *,
+        transaction_lock_key: str = "",
+    ) -> int:
         normalized_table = str(table_name or "").strip()
         payload_rows = [dict(row or {}) for row in list(rows or []) if dict(row or {})]
         self.bulk_upserts.append((normalized_table, payload_rows))
@@ -2418,7 +2427,9 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         store = self._build_store(mode="postgres_only")
         profile_url = "https://www.linkedin.com/in/lease-test/"
 
-        lease = store.repos.linkedin_profile_registry.acquire_lease(profile_url, lease_owner="worker-a", lease_seconds=120)
+        lease = store.repos.linkedin_profile_registry.acquire_lease(
+            profile_url, lease_owner="worker-a", lease_seconds=120
+        )
         self.assertTrue(bool(lease.get("acquired")))
         self.assertEqual(str(lease.get("lease_owner") or ""), "worker-a")
         released = store.repos.linkedin_profile_registry.release_lease(profile_url, lease_owner="worker-a")
@@ -2660,7 +2671,10 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             "postgres-only",
         )
         self.assertEqual(
-            [row["notes"] for row in store.repos.criteria_confidence.list_policy_controls(target_company="Postgres Only")],
+            [
+                row["notes"]
+                for row in store.repos.criteria_confidence.list_policy_controls(target_company="Postgres Only")
+            ],
             ["postgres-only"],
         )
 
@@ -3801,7 +3815,10 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(comparison["secondary_only_member_count"], 1)
         self.assertEqual(comparison["primary_only_member_count"], 1)
         self.assertEqual(
-            str(dict(patched_generation.get("metadata") or {}).get("generation_patch", {}).get("base_generation_key") or ""),
+            str(
+                dict(patched_generation.get("metadata") or {}).get("generation_patch", {}).get("base_generation_key")
+                or ""
+            ),
             str(base_generation.get("generation_key") or ""),
         )
 
@@ -3895,13 +3912,11 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
         # no-op here — otherwise configure_control_plane_postgres_session would emit
         # CREATE SCHEMA / SET search_path against the fake cursor and consume its
         # scripted outcomes.
-        _pin = mock.patch.dict(
-            os.environ, {"SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "public"}, clear=False
-        )
+        _pin = mock.patch.dict(os.environ, {"SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "public"}, clear=False)
         _pin.start()
         self.addCleanup(_pin.stop)
 
-    def test_postgres_only_generic_reads_return_empty_for_missing_table_without_bootstrap(self) -> None:
+    def test_postgres_only_generic_reads_fail_closed_for_missing_table_without_bootstrap(self) -> None:
         class _MissingTableCursor:
             rowcount = 0
             description: list[tuple[str]] = [("value",)]
@@ -3953,19 +3968,24 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
             )
             adapter._connect = lambda: _MissingTableConnection(calls)  # type: ignore[method-assign]
 
-            rows = adapter.select_many(
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "Postgres authoritative table is missing: crm_public_web_runs",
+            ):
+                adapter.select_many(
                 "crm_public_web_runs",
                 where_sql="workspace_id = %s",
                 params=["default"],
             )
-            count = adapter.count_rows(
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "Postgres authoritative table is missing: crm_public_web_runs",
+            ):
+                adapter.count_rows(
                 "crm_public_web_runs",
                 where_sql="workspace_id = %s",
                 params=["default"],
             )
-
-            self.assertEqual(rows, [])
-            self.assertEqual(count, 0)
             adapter.ensure_bootstrapped.assert_not_called()
             self.assertEqual([call["sql"] for call in calls], ["SELECT to_regclass(%s)", "SELECT to_regclass(%s)"])
 
@@ -4201,16 +4221,19 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
                 captured.append(schema)
                 return connection
 
-            with mock.patch.dict(
+            with (
+                mock.patch.dict(
                 os.environ,
                 {
                     "SOURCING_LOCAL_POSTGRES_ENV_FILE": "",
                     "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "public",
                     "SOURCING_RUNTIME_ENVIRONMENT": "",
                 },
-            ), mock.patch(
+                ),
+                mock.patch(
                 "sourcing_agent.control_plane_live_postgres.configure_control_plane_postgres_session",
                 side_effect=_capture_configured_session,
+                ),
             ):
                 adapter._connect()
 
@@ -4254,16 +4277,20 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
             # ensure_bootstrapped now applies the versioned migrations against the schema FROZEN at
             # adapter construction, even after the env restores to a different schema. _connect is
             # stubbed so no real Postgres connection is needed.
-            with mock.patch.dict(
+            with (
+                mock.patch.dict(
                 os.environ,
                 {
                     "SOURCING_LOCAL_POSTGRES_ENV_FILE": "",
                     "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "public",
                     "SOURCING_RUNTIME_ENVIRONMENT": "",
                 },
-            ), mock.patch.object(adapter, "_connect", return_value=mock.MagicMock()), mock.patch(
+                ),
+                mock.patch.object(adapter, "_connect", return_value=mock.MagicMock()),
+                mock.patch(
                 "sourcing_agent.control_plane_live_postgres.apply_pending_migrations",
                 side_effect=_capture_apply,
+                ),
             ):
                 adapter.ensure_bootstrapped()
 
@@ -4451,10 +4478,13 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
             self.assertIn("pg_advisory_xact_lock(hashtext(%s))", str(calls[0]["sql"]))
             self.assertIn("VALUES (%s, %s, %s, %s, %s, %s), (%s, %s, %s, %s, %s, %s)", str(calls[1]["sql"]))
             self.assertIn("WHERE profile_url_key IN (%s, %s)", str(calls[2]["sql"]))
-            self.assertEqual([row["profile_url_key"] for row in list(rows or [])], [
+            self.assertEqual(
+                [row["profile_url_key"] for row in list(rows or [])],
+                [
                 "linkedin.com/in/batch-pg-a",
                 "linkedin.com/in/batch-pg-b",
-            ])
+                ],
+            )
 
     def test_bulk_upsert_rows_chunks_before_postgres_parameter_limit(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -4469,18 +4499,113 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
             calls: list[dict[str, object]] = []
             commit_counter = {"count": 0}
             adapter._connect = lambda: _RecordingConnection(calls, commit_counter)  # type: ignore[method-assign]
-            rows = [
-                {"job_id": f"job-{index}", "status": "completed", "stage": "completed"}
-                for index in range(5)
-            ]
+            rows = [{"job_id": f"job-{index}", "status": "completed", "stage": "completed"} for index in range(5)]
 
             with mock.patch("sourcing_agent.control_plane_live_postgres._BULK_UPSERT_DIRECT_PARAM_LIMIT", 6):
                 affected = adapter.bulk_upsert_rows("jobs", rows)
 
             param_counts = [int(call["param_count"]) for call in calls if int(call["param_count"]) > 0]
-            self.assertEqual(affected, 15)
+            self.assertEqual(affected, 1)
             self.assertEqual(param_counts, [6, 6, 3])
-            self.assertEqual(commit_counter["count"], 3)
+            self.assertEqual(commit_counter["count"], 1)
+            self.assertEqual(sum("CREATE TEMP TABLE" in str(call["sql"]) for call in calls), 1)
+            self.assertEqual(sum("SELECT" in str(call["sql"]) for call in calls), 1)
+
+    def test_projection_parent_and_member_replace_share_one_locked_transaction(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+            )
+            adapter.ensure_bootstrapped = lambda: None  # type: ignore[method-assign]
+            adapter._ensure_table_write_schema = lambda _table_name: None  # type: ignore[method-assign]
+            calls: list[dict[str, object]] = []
+            commit_counter = {"count": 0}
+            adapter._connect = lambda: _RecordingConnection(calls, commit_counter)  # type: ignore[method-assign]
+
+            with mock.patch("sourcing_agent.control_plane_live_postgres._BULK_UPSERT_DIRECT_PARAM_LIMIT", 2):
+                result = adapter.upsert_row_and_replace_rows(
+                    table_name="serving_projections",
+                    row={"projection_id": "proj-atomic", "state": "serving"},
+                    replace_table_name="serving_projection_members",
+                    replace_where_sql="projection_id = %s",
+                    replace_params=["proj-atomic"],
+                    replace_rows=[
+                        {"projection_id": "proj-atomic", "candidate_identity_key": "candidate:1"},
+                        {"projection_id": "proj-atomic", "candidate_identity_key": "candidate:2"},
+                    ],
+                    transaction_lock_key="serving_projection_publication:proj-atomic",
+                )
+
+            self.assertIsNotNone(result)
+            self.assertEqual(commit_counter["count"], 1)
+            sql_calls = [str(call["sql"]) for call in calls]
+            self.assertIn("pg_advisory_xact_lock", sql_calls[0])
+            self.assertIn('INSERT INTO "serving_projections"', sql_calls[1])
+            self.assertIn('DELETE FROM "serving_projection_members"', sql_calls[2])
+            self.assertIn("CREATE TEMP TABLE", sql_calls[3])
+            self.assertIn('INSERT INTO "serving_projection_members"', sql_calls[-1])
+            self.assertEqual(
+                calls[0]["params"],
+                (adapter._advisory_lock_key("serving_projection_publication:proj-atomic"),),  # noqa: SLF001
+            )
+
+    def test_projection_incremental_members_use_the_same_publication_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+            )
+            adapter.ensure_bootstrapped = lambda: None  # type: ignore[method-assign]
+            adapter._ensure_table_write_schema = lambda _table_name: None  # type: ignore[method-assign]
+            calls: list[dict[str, object]] = []
+            commit_counter = {"count": 0}
+            adapter._connect = lambda: _RecordingConnection(calls, commit_counter)  # type: ignore[method-assign]
+
+            affected = adapter.bulk_upsert_rows(
+                "serving_projection_members",
+                [{"projection_id": "proj-atomic", "candidate_identity_key": "candidate:incremental"}],
+                transaction_lock_key="serving_projection_publication:proj-atomic",
+            )
+
+            self.assertEqual(affected, 1)
+            self.assertEqual(commit_counter["count"], 1)
+            self.assertIn("pg_advisory_xact_lock", str(calls[0]["sql"]))
+            self.assertIn('INSERT INTO "serving_projection_members"', str(calls[1]["sql"]))
+
+    def test_projection_parent_and_incremental_members_share_one_locked_transaction(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+            )
+            adapter.ensure_bootstrapped = lambda: None  # type: ignore[method-assign]
+            adapter._ensure_table_write_schema = lambda _table_name: None  # type: ignore[method-assign]
+            calls: list[dict[str, object]] = []
+            commit_counter = {"count": 0}
+            adapter._connect = lambda: _RecordingConnection(calls, commit_counter)  # type: ignore[method-assign]
+
+            result = adapter.upsert_row_and_upsert_rows(
+                table_name="serving_projections",
+                row={"projection_id": "proj-incremental", "state": "serving"},
+                upsert_table_name="serving_projection_members",
+                upsert_rows=[
+                    {"projection_id": "proj-incremental", "candidate_identity_key": "candidate:1"},
+                ],
+                transaction_lock_key="serving_projection_publication:proj-incremental",
+            )
+
+            self.assertEqual(result, {"upserted_count": 1, "child_upserted_count": 1})
+            self.assertEqual(commit_counter["count"], 1)
+            self.assertIn("pg_advisory_xact_lock", str(calls[0]["sql"]))
+            self.assertIn('INSERT INTO "serving_projections"', str(calls[1]["sql"]))
+            self.assertIn('INSERT INTO "serving_projection_members"', str(calls[2]["sql"]))
 
 
 if __name__ == "__main__":

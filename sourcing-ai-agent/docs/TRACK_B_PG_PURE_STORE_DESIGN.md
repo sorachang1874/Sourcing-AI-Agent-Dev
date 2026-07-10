@@ -735,12 +735,26 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     `cmp=1`,证明电池能抓到语义漂移。
   - **D-4(a) 根因修复**:owner 选择的一次性方案已完成。members、projection person search index、asset membership index、
     candidate materialization state 的 4 个 `bulk_upsert_rows` wrapper 调用全部改为显式 `table_name=`/`rows=`；新增全局
-    receiver-aware AST guard 扫描 `src/` 与 `scripts/`,并以 4 个合成 positional mutation 分别证明会 loudly fail。四点违规计数 0。
-  - **验证**:surface **15 passed**、members storage **9**、live-PG **57 + 4 subtests**、writer **7**、asset audit/repair
+    receiver-aware AST guard 扫描 `src/` 与 `scripts/`;4 个生产调用点违规计数为 0,并以 direct/alias/getattr/unbound/computed
+    5 种 runtime bypass mutation 分别证明会 loudly fail。
+  - **`219f2e8` 原始验证**:surface **15 passed**、members storage **9**、live-PG **57 + 4 subtests**、writer **7**、asset audit/repair
     **22**、projection CRM **20 + 4 subtests**、person asset/CRM **17**、CRM boundary **34**、operation targeted **4**。
-    stable-tree `make ci-pre-agent-contract` 为 **224 passed** + 后续 **2/11/1/2 passed** = **240 passed**，并有
-    `dry_run_ready failures=[]`；review-evidence 回归 **127 passed**。Ruff/format 43 文件、compileall/diff-check 绿；
+    stable-tree `make ci-pre-agent-contract` 为 **223 passed** + 后续 **2/11/1/2 passed** = **239 passed**，并有
+    `dry_run_ready failures=[]`；review-evidence 回归 **124 passed**。Ruff/format 43 文件、compileall/diff-check 绿；
     mypy 仍为 R-011 基线 **87 errors / 4 files**,无新增。
+  - **`de54587` 后独立复验（不倒灌到 `219f2e8`）**:`make ci-pre-agent-contract` 为 **224 passed** + 后续
+    **2/11/1/2 passed** = **240 passed**,`dry_run_ready failures=[]`;review-evidence 回归 **127 passed**。
+  - **审计 fixed-forward**:权威 PG 表缺失及 member count/readiness/page 查询失败不再伪装成
+    空投影；公开读 fail-closed,内部 builder 中止。增量发布通过 `upsert_row_and_upsert_rows`、完整替换通过
+    `upsert_row_and_replace_rows`,均把 projection parent 与 members 放在同一 PG 事务并共用 schema-namespaced
+    publication lock。正常 run/collection 发布再通过单连接 domain UoW `publish_serving_projection`,按 logical-scope lock → route
+    锁内重读/稳定随机 identity 选择 → projection lock → publication timestamp → parent/members/route 的顺序,把 link/pointer 与
+    parent/members 放在同一事务原子提交；member 或 route 失败整笔回滚且不留 orphan。
+  - **fixed-forward 验证**:live-PG foundation + writer + surface guard **105 passed + 4 subtests**；person/fault/API/legacy
+    精确组 **30 passed**；新缺表语义暴露的 durable-runtime fixture 启动缺口修正为 migration bootstrap 后，完整
+    `test_operation_runtime.py` **93 passed**。最终 settled worktree `make ci-pre-agent-contract` 为 **255 passed** + 后续
+    **2/11/1/2 passed**，`dry_run_ready failures=[]`；`make lint` 43 文件全绿，额外 Ruff 扫描本树 21 个改动 Python
+    文件全绿；mypy 保持 R-011 基线 **87 errors / 4 files**。未运行 live provider、W6 或 manual signoff。
   - **失败归因/接续**:`test_results_api` 精确组 8 pass / 1 fail；唯一 `115/140` vs `140/140` 在 pinned HEAD
     精确复现，归 R-001/R-007 与待裁决 D-3，非本批回归。D-4 已关闭；下一批为 ②.3d person search index，完成后
     serving_projection 域闭合。异步 review 为 scope-local；请求记录后不阻塞 ②.3d 开发，GO 前仅冻结 ②.3c 的

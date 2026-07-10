@@ -3,7 +3,7 @@
 > Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
 > 状态:**②.3c 完成(2026-07-10)** —— `serving_projection_members` 8 公共方法 + bespoke helpers 已退役到
 > `store.repos.serving_projection`,storage.py 14,261 → 13,822 行,97 direct calls 全部迁移且旧 facade/dispatch 清零。
-> D-4(a) 同批关闭:4 个 `bulk_upsert_rows` wrapper 调用改显式 keyword,全局 AST guard + 四点变异自检已落地。
+> D-4(a) 同批关闭:4 个 `bulk_upsert_rows` wrapper 调用改显式 keyword,全局 AST guard + 5-shape runtime bypass 变异自检已落地。
 > 批记录:`TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。下一批:②.3d person search index,完成后整域闭合。
 > B4.3 影子拆除 100% 完成(commit 952f9ee)。本文档是路线图
 > **②「Repository 查询方法建设 + 按域迁移调用方」** 这一轮的执行手册。
@@ -58,7 +58,7 @@
    - 公共 API = `store.repos.<domain>`,方法用**域内短名**(God-class 前缀不带入);getattr 调用方配 `repositories.<domain>_repo(store)`
      duck-typed 访问器(无 repos 的 fake 返 None → fallback 分支形状不变)。
    - 方法体**逐字移植**,内部改用基类 fail-closed 原语,座名映射表(②.1 定稿):`_select_control_plane_row(s)`→`_select_row(s)`、
-     `_write_control_plane_row_to_postgres`→`_write_row`、`_call_control_plane_postgres_native`→`_call_native_write`(native 写三原语)、
+     `_write_control_plane_row_to_postgres`→`_write_row`、`_call_control_plane_postgres_native`→`_call_native_write`(native 写原语)、
      `_control_plane_postgres_should_prefer_read`→`_should_prefer_read`、`..._should_skip_sqlite_fallback`→`_strict_authoritative`、
      `_raise_control_plane_postgres_{write,read}_failure`→`_raise_{write,read}_failure`、`_utc_now_timestamp`→`control_plane_time.utc_now_timestamp`。
      不趁机改语义、不趁机"修" sentinel;硬编码错误串(含旧长方法名)逐字保留。
@@ -66,8 +66,15 @@
      (`ControlPlaneRepositories.__init__(adapter, *, <dep>_lookup=store.<method>)`,repo 内 `callable(...)` 守卫,缺省时行为 == 该依赖缺失的原分支)。
    - **逐字性机械验证**(②.1 新增,A/B 之前的第一道闸):AST 定位新旧函数源段,对旧段施加映射表替换后**逐函数字节比对**;
      预期差异只允许是披露偏差,diff 逐条目检(②.1:34 函数全等 + 3 披露差异 + 0 意外)。
-   - **写纪律**:写一律走 adapter 原语(upsert_row/bulk_upsert_rows/insert_row_with_generated_id/update_row_returning/
-     upsert_row_with_generated_id/delete_rows);repositories/ 内**禁止字面 ON CONFLICT SQL**。onconflict 守卫已扩展(②.1):
+   - **写纪律**:写一律走 adapter 原语(upsert_row/bulk_upsert_rows/replace_rows/upsert_row_and_upsert_rows/upsert_row_and_replace_rows/
+     publish_serving_projection/insert_row_with_generated_id/update_row_returning/upsert_row_with_generated_id/delete_rows);repositories/ 内
+     **禁止字面 ON CONFLICT SQL**。
+     `replace_rows` 与 `upsert_row_and_replace_rows` 是同连接/同事务的 scoped-replace/UoW 原语,不得拆回 delete + 分批独立提交;
+     `upsert_row_and_upsert_rows` 是 parent + incremental children 的同连接/同事务 UoW 原语。需要互斥的增量/替换路径必须传同一
+     transaction lock key,不得让 delete/replace 与无锁增量 merge 竞态。`publish_serving_projection` 是 serving_projection 的 domain
+     UoW:logical-scope lock 后锁内选 identity,再取 projection lock,并在同一连接/事务写 parent、members 与 route;不得拆回多次借连接或
+     route-after-commit。
+     onconflict 守卫已扩展(②.1):
      AST generated-id 扫描 + 字面扫描均覆盖 `repositories/*.py`,带非主键 conflict target 的方法可安全迁移。
    - "软 irregular" read-mapper 可顺手转 descriptor(全列 battery 验证)。
 3. **A/B 验证**(新旧并存窗口内,删除前):纯函数直接 battery;PG 读面同种子同参深拍 + **两个哨兵 tier 显式断言**

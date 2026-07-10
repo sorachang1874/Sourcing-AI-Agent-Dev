@@ -8,6 +8,7 @@ import pytest
 from sourcing_agent.repositories import serving_projection_repo
 from sourcing_agent.repositories.manual_review import ManualReviewRepository
 from sourcing_agent.repositories.serving_projection import ServingProjectionRepository
+from sourcing_agent.storage import ControlPlaneStore
 
 _RETIRED_MANUAL_REVIEW_STORE_METHODS = {
     "replace_manual_review_items",
@@ -189,7 +190,13 @@ class _CatalogFaultAdapter:
     def upsert_row(self, table_name: str, row: dict[str, object]) -> None:
         self._raise_if_failing("upsert_row")
 
-    def bulk_upsert_rows(self, *, table_name: str, rows: list[dict[str, object]]) -> int:
+    def bulk_upsert_rows(
+        self,
+        *,
+        table_name: str,
+        rows: list[dict[str, object]],
+        **kwargs: object,
+    ) -> int:
         self._raise_if_failing("bulk_upsert_rows")
         return len(rows)
 
@@ -197,9 +204,56 @@ class _CatalogFaultAdapter:
         self._raise_if_failing("delete_rows")
         return 1
 
+    def replace_rows(self, *, table_name: str, rows: list[dict[str, object]], **kwargs: object) -> int:
+        self._raise_if_failing("replace_rows")
+        return len(rows)
+
+    def upsert_row_and_replace_rows(
+        self,
+        *,
+        table_name: str,
+        row: dict[str, object],
+        replace_rows: list[dict[str, object]],
+        **kwargs: object,
+    ) -> dict[str, int]:
+        self._raise_if_failing("upsert_row_and_replace_rows")
+        return {"upserted_count": 1, "replaced_count": len(replace_rows)}
+
+    def upsert_row_and_upsert_rows(
+        self,
+        *,
+        table_name: str,
+        row: dict[str, object],
+        upsert_rows: list[dict[str, object]],
+        **kwargs: object,
+    ) -> dict[str, int]:
+        self._raise_if_failing("upsert_row_and_upsert_rows")
+        return {"upserted_count": 1, "child_upserted_count": len(upsert_rows)}
+
     def count_rows(self, table_name: str, **kwargs: object) -> int:
         self._raise_if_failing("count_rows")
         return 0
+
+
+class _BulkUpsertRecordingAdapter:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, list[dict[str, object]]]] = []
+
+    def should_prefer_read(self, _table_name: str) -> bool:
+        return True
+
+    def is_authoritative(self, _table_name: str) -> bool:
+        return True
+
+    def bulk_upsert_rows(
+        self,
+        *,
+        table_name: str,
+        rows: list[dict[str, object]],
+        **kwargs: object,
+    ) -> int:
+        self.calls.append((table_name, rows))
+        return len(rows)
 
 
 def _runtime_error(callable_) -> RuntimeError:
@@ -407,6 +461,102 @@ def test_bulk_upsert_wrapper_calls_require_explicit_table_and_rows_keywords() ->
     assert offenders == []
 
 
+@pytest.mark.parametrize(
+    "invoke",
+    [
+        lambda store: store._call_control_plane_postgres_native("bulk_upsert_rows", "members", []),
+        lambda store: (lambda call: call("bulk_upsert_rows", "members", []))(store._call_control_plane_postgres_native),
+        lambda store: getattr(store, "_call_control_plane_postgres_native")("bulk_upsert_rows", "members", []),
+        lambda store: ControlPlaneStore._call_control_plane_postgres_native(store, "bulk_upsert_rows", "members", []),
+        lambda store: store._call_control_plane_postgres_native("".join(("bulk_upsert", "_rows")), "members", []),
+    ],
+    ids=["direct-positional", "alias", "getattr", "unbound", "computed-method-name"],
+)
+def test_bulk_upsert_runtime_contract_rejects_positional_ast_bypasses(invoke) -> None:
+    adapter = _BulkUpsertRecordingAdapter()
+    store = object.__new__(ControlPlaneStore)
+    store._control_plane_postgres = adapter
+
+    with pytest.raises(TypeError, match="positional payload arguments are not allowed"):
+        invoke(store)
+
+    assert adapter.calls == []
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "error_type", "message"),
+    [
+        ({"rows": []}, TypeError, "explicit table_name keyword argument"),
+        ({"table_name": "", "rows": []}, ValueError, "non-empty table_name"),
+        ({"table_name": "   ", "rows": []}, ValueError, "non-empty table_name"),
+        ({"table_name": "members"}, TypeError, "explicit rows keyword argument"),
+    ],
+    ids=["missing-table", "empty-table", "blank-table", "missing-rows"],
+)
+def test_bulk_upsert_runtime_contract_requires_table_and_explicit_rows(
+    kwargs: dict[str, object],
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    adapter = _BulkUpsertRecordingAdapter()
+    store = object.__new__(ControlPlaneStore)
+    store._control_plane_postgres = adapter
+
+    with pytest.raises(error_type, match=message):
+        store._call_control_plane_postgres_native("bulk_upsert_rows", **kwargs)
+
+    assert adapter.calls == []
+
+
+def test_bulk_upsert_runtime_contract_allows_explicit_empty_rows_across_write_boundaries() -> None:
+    adapter = _BulkUpsertRecordingAdapter()
+    store = object.__new__(ControlPlaneStore)
+    store._control_plane_postgres = adapter
+    repository = ServingProjectionRepository(adapter)
+
+    assert (
+        store._call_control_plane_postgres_native(
+            "bulk_upsert_rows",
+            table_name="store_members",
+            rows=[],
+        )
+        == 0
+    )
+    assert (
+        repository._call_native_write(
+            "bulk_upsert_rows",
+            table_name="repository_members",
+            rows=[],
+        )
+        == 0
+    )
+    assert adapter.calls == [("store_members", []), ("repository_members", [])]
+
+
+@pytest.mark.parametrize(
+    ("table_name", "include_rows", "error_type", "message"),
+    [
+        ("", True, ValueError, "non-empty table_name"),
+        ("repository_members", False, TypeError, "explicit rows keyword argument"),
+    ],
+    ids=["repository-empty-table", "repository-missing-rows"],
+)
+def test_repository_bulk_upsert_runtime_contract_fails_closed(
+    table_name: str,
+    include_rows: bool,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    adapter = _BulkUpsertRecordingAdapter()
+    repository = ServingProjectionRepository(adapter)
+    kwargs: dict[str, object] = {"rows": []} if include_rows else {}
+
+    with pytest.raises(error_type, match=message):
+        repository._call_native_write("bulk_upsert_rows", table_name=table_name, **kwargs)
+
+    assert adapter.calls == []
+
+
 def test_serving_projection_catalog_repository_preserves_all_tier_a_b_fault_contracts() -> None:
     read_cases = [
         ("serving_projections", "select_one", lambda repo: repo.get("proj"), {}),
@@ -578,13 +728,67 @@ def test_serving_projection_member_repository_preserves_tier_a_b_and_count_senti
     strict_readiness_repo = ServingProjectionRepository(
         _CatalogFaultAdapter(authoritative=True, failing_method="select_many")
     )
-    assert strict_readiness_repo.count_members_by_readiness("proj") == {}
+    readiness_error = _runtime_error(lambda: strict_readiness_repo.count_members_by_readiness("proj"))
+    assert str(readiness_error) == (
+        "Postgres authoritative read failed for serving_projection_members via select_many: "
+        "RuntimeError: select_many-boom"
+    )
+    assert isinstance(readiness_error.__cause__, RuntimeError)
+    checks += 1
+    non_authoritative_readiness_repo = ServingProjectionRepository(
+        _CatalogFaultAdapter(authoritative=False, failing_method="select_many")
+    )
+    assert non_authoritative_readiness_repo.count_members_by_readiness("proj") == {}
     checks += 1
 
     strict_count_repo = ServingProjectionRepository(
         _CatalogFaultAdapter(authoritative=True, failing_method="count_rows")
     )
-    assert strict_count_repo.count_members("proj") == 0
+    count_error = _runtime_error(lambda: strict_count_repo.count_members("proj"))
+    assert str(count_error) == (
+        "Postgres authoritative read failed for serving_projection_members via count_rows: "
+        "RuntimeError: count_rows-boom"
+    )
+    assert isinstance(count_error.__cause__, RuntimeError)
+    checks += 1
+    non_authoritative_count_repo = ServingProjectionRepository(
+        _CatalogFaultAdapter(authoritative=False, failing_method="count_rows")
+    )
+    assert non_authoritative_count_repo.count_members("proj") == 0
+    checks += 1
+
+    strict_replace_repo = ServingProjectionRepository(
+        _CatalogFaultAdapter(authoritative=True, failing_method="replace_rows")
+    )
+    replace_error = _runtime_error(
+        lambda: strict_replace_repo.replace_members("proj", [{"candidate_identity_key": "candidate:1"}])
+    )
+    assert str(replace_error) == (
+        "Postgres authoritative write failed for serving_projection_members via replace_rows: "
+        "RuntimeError: replace_rows-boom"
+    )
+    assert isinstance(replace_error.__cause__, RuntimeError)
+    checks += 1
+    non_authoritative_replace_repo = ServingProjectionRepository(
+        _CatalogFaultAdapter(authoritative=False, failing_method="replace_rows")
+    )
+    assert non_authoritative_replace_repo.replace_members("proj", [{"candidate_identity_key": "candidate:1"}]) == 0
+    checks += 1
+
+    strict_publication_repo = ServingProjectionRepository(
+        _CatalogFaultAdapter(authoritative=True, failing_method="upsert_row_and_replace_rows")
+    )
+    publication_error = _runtime_error(
+        lambda: strict_publication_repo.upsert_with_replaced_members(
+            {"projection_id": "proj", "state": "serving"},
+            [{"candidate_identity_key": "candidate:1"}],
+        )
+    )
+    assert str(publication_error) == (
+        "Postgres authoritative write failed for serving_projections via upsert_row_and_replace_rows: "
+        "RuntimeError: upsert_row_and_replace_rows-boom"
+    )
+    assert isinstance(publication_error.__cause__, RuntimeError)
     checks += 1
 
     invariant_repo = ServingProjectionRepository(
@@ -599,7 +803,7 @@ def test_serving_projection_member_repository_preserves_tier_a_b_and_count_senti
     )
     checks += 1
 
-    assert checks == 13
+    assert checks == 18
 
 
 def test_serving_projection_member_mapper_preserves_irregular_read_contract() -> None:

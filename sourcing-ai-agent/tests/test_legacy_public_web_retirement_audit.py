@@ -13,7 +13,6 @@ from sourcing_agent.legacy_public_web_storage import (
     seed_legacy_target_public_web_run,
 )
 from sourcing_agent.storage import ControlPlaneStore
-
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin, pg_backed_control_plane_store
 
 
@@ -40,7 +39,7 @@ class LegacyPublicWebRetirementAuditTest(PGControlPlaneStoreTestMixin, unittest.
                     ORDER BY tablename
                     """
                 )
-                return [str(row["tablename"]) for row in cursor.fetchall()]
+                return [str(row.get("tablename") if isinstance(row, dict) else row[0]) for row in cursor.fetchall()]
 
     def test_fresh_store_does_not_bootstrap_empty_legacy_public_web_tables(self) -> None:
         # B4.3f: the legacy tables must exist neither in PG (fresh schema) nor via any
@@ -52,6 +51,67 @@ class LegacyPublicWebRetirementAuditTest(PGControlPlaneStoreTestMixin, unittest.
             self.assertEqual(store.list_target_candidate_public_web_batches(), [])
             self.assertEqual(store.list_target_candidate_public_web_runs(), [])
             self.assertEqual(store.list_target_candidate_public_web_promotions(), [])
+
+    def test_each_migration_seed_prepares_only_its_table_before_read_before_write(self) -> None:
+        with pg_backed_control_plane_store(schema_label="legacy_seed_schema_prepare") as store:
+            adapter = store._control_plane_postgres
+            self.assertEqual(self._legacy_pg_table_names(store), [])
+            with adapter.legacy_target_public_web_migration_table_context("read_only_missing_table_probe"):
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "Postgres authoritative table is missing: target_candidate_public_web_batches",
+                ):
+                    adapter.select_many("target_candidate_public_web_batches", limit=1)
+            self.assertEqual(self._legacy_pg_table_names(store), [])
+
+            batch = seed_legacy_target_public_web_batch(
+                store,
+                {
+                    "batch_id": "legacy-seed-batch",
+                    "idempotency_key": "legacy-seed-batch",
+                    "status": "completed",
+                },
+            )
+            self.assertEqual(batch["batch_id"], "legacy-seed-batch")
+            self.assertEqual(self._legacy_pg_table_names(store), ["target_candidate_public_web_batches"])
+
+            run = seed_legacy_target_public_web_run(
+                store,
+                {
+                    "run_id": "legacy-seed-run",
+                    "batch_id": "legacy-seed-batch",
+                    "idempotency_key": "legacy-seed-run",
+                    "record_id": "target-seed",
+                    "status": "completed",
+                },
+            )
+            self.assertEqual(run["run_id"], "legacy-seed-run")
+            self.assertEqual(
+                self._legacy_pg_table_names(store),
+                ["target_candidate_public_web_batches", "target_candidate_public_web_runs"],
+            )
+
+            promotion = seed_legacy_target_public_web_promotion(
+                store,
+                {
+                    "promotion_id": "legacy-seed-promotion",
+                    "run_id": "legacy-seed-run",
+                    "record_id": "target-seed",
+                    "signal_id": "signal-seed",
+                    "action": "promote",
+                    "signal_type": "email",
+                    "normalized_value": "seed@example.com",
+                },
+            )
+            self.assertEqual(promotion["promotion_id"], "legacy-seed-promotion")
+            self.assertEqual(
+                self._legacy_pg_table_names(store),
+                [
+                    "target_candidate_public_web_batches",
+                    "target_candidate_public_web_promotions",
+                    "target_candidate_public_web_runs",
+                ],
+            )
 
     def test_sqlite_migration_schema_helper_stays_removed(self) -> None:
         # Track B B4.1 removed the SQLite normal-schema bootstrap; B4.3f removed the
@@ -141,7 +201,7 @@ class LegacyPublicWebRetirementAuditTest(PGControlPlaneStoreTestMixin, unittest.
                 "idempotency_key": "legacy-batch-1",
                 "status": "completed",
                 "summary": {"status": "completed"},
-            }
+            },
         )
         seed_legacy_target_public_web_run(
             self.store,
@@ -153,7 +213,7 @@ class LegacyPublicWebRetirementAuditTest(PGControlPlaneStoreTestMixin, unittest.
                 "current_company": "Example AI",
                 "status": "completed",
                 "phase": "completed",
-            }
+            },
         )
         seed_legacy_target_public_web_promotion(
             self.store,
@@ -165,7 +225,7 @@ class LegacyPublicWebRetirementAuditTest(PGControlPlaneStoreTestMixin, unittest.
                 "action": "promote",
                 "signal_type": "email",
                 "normalized_value": "grace@example.org",
-            }
+            },
         )
 
         report = audit_legacy_public_web_retirement(store=self.store)

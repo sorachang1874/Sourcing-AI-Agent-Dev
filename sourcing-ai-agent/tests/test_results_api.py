@@ -19,6 +19,7 @@ from sourcing_agent.api import create_server
 from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.asset_paths import canonicalize_company_key
 from sourcing_agent.company_registry import normalize_company_key
+from sourcing_agent.control_plane_repository import ControlPlaneAuthoritativeReadError
 from sourcing_agent.crm_public_web_runtime import execute_crm_public_web_run_once, public_web_signal_id_for_identity
 from sourcing_agent.domain import Candidate, JobRequest
 from sourcing_agent.durable_runtime import (
@@ -242,6 +243,111 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             model_client=self.model_client,
             semantic_provider=self.semantic_provider,
             acquisition_engine=self.acquisition_engine,
+        )
+
+    def test_projection_facet_layering_count_fault_does_not_complete_item(self) -> None:
+        projection_id = "proj_projection_layering_count_fault"
+        self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+            run_id="job-projection-layering-count-fault",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:projection-layering-count-fault",
+                    "person_identity_key": "linkedin:projection-layering-count-fault",
+                }
+            ],
+            replace_members=True,
+        )
+        item = {
+            "item_id": "item-projection-layering-count-fault",
+            "job_id": "job-projection-layering-count-fault",
+            "serving_projection_id": projection_id,
+        }
+
+        with (
+            mock.patch.object(
+                self.store._control_plane_postgres,  # noqa: SLF001
+                "count_rows",
+                side_effect=RuntimeError("postgres unavailable"),
+            ),
+            mock.patch.object(self.store, "mark_job_materialization_item_completed") as mark_completed,
+            self.assertRaises(ControlPlaneAuthoritativeReadError),
+        ):
+            self.orchestrator._process_projection_facet_layering_build_item_from_serving_projection(  # noqa: SLF001
+                item=item,
+                lease_owner="test-worker",
+            )
+
+        mark_completed.assert_not_called()
+
+    def test_projection_crm_state_member_fault_fails_closed(self) -> None:
+        projection_id = "proj_crm_state_member_fault"
+        candidate_key = "linkedin:crm-state-member-fault"
+        self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+            run_id="job-crm-state-member-fault",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": candidate_key,
+                    "person_identity_key": candidate_key,
+                }
+            ],
+            replace_members=True,
+        )
+
+        with mock.patch.object(
+            self.store.repos.serving_projection,
+            "get_member",
+            side_effect=ControlPlaneAuthoritativeReadError("postgres unavailable"),
+        ):
+            payload = self.orchestrator.get_projection_crm_state_api(
+                projection_id,
+                candidate_identity_keys=[candidate_key],
+            )
+
+        self.assertEqual(payload["status"], "not_ready")
+        self.assertEqual(payload["reason"], "projection_members_unavailable")
+        self.assertTrue(payload["read_contract"]["fail_closed"])
+        self.assertFalse(payload["read_contract"]["fallback_used"])
+
+    def test_person_and_projection_crm_not_ready_routes_return_conflict(self) -> None:
+        not_ready = {
+            "status": "not_ready",
+            "reason": "projection_members_unavailable",
+            "read_contract": {"fallback_used": False, "fail_closed": True},
+        }
+        with (
+            mock.patch.object(self.orchestrator, "get_person_summary_api", return_value=not_ready),
+            mock.patch.object(self.orchestrator, "get_projection_crm_state_api", return_value=not_ready),
+        ):
+            server = create_server(self.orchestrator, host="127.0.0.1", port=0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            host, port = server.server_address
+            opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
+            statuses: list[int] = []
+            payloads: list[dict[str, Any]] = []
+            try:
+                for path in (
+                    "/api/persons/linkedin%3Aroute-fault",
+                    "/api/projections/proj_route_fault/crm-state",
+                ):
+                    try:
+                        opener.open(f"http://{host}:{port}{path}")
+                    except urllib_error.HTTPError as exc:
+                        statuses.append(exc.code)
+                        payloads.append(json.loads(exc.read().decode("utf-8")))
+                    else:
+                        self.fail(f"{path} should fail closed")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+        self.assertEqual(statuses, [409, 409])
+        self.assertEqual(
+            [payload["reason"] for payload in payloads],
+            ["projection_members_unavailable", "projection_members_unavailable"],
         )
 
     def _run_with_pg_durable_runtime(self, schema_label: str, callback: Any) -> Any:

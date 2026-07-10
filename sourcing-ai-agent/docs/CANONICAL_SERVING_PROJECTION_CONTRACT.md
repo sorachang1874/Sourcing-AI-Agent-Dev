@@ -24,6 +24,8 @@ Current foundation implemented on 2026-05-19:
 - `store.repos.serving_projection` owns projection upsert/list/get, member upsert/replace/list/count, manifest shard upsert/list/get, run/projection link upsert/list/get, and collection authoritative pointer upsert/get; the retired `ControlPlaneStore` domain facades must not reappear.
 - `ServingProjectionWriter` is the first owner-facing writer facade for publishing run-scope projections and collection-authoritative projections through the storage foundation instead of scattering low-level table writes.
 - PG-only and mirror control-plane modes know these tables, and member counting uses a PG `COUNT(*)` path instead of scanning all rows.
+- A missing authoritative PG table is an availability/integrity failure, not an empty-set result. PG-only generic reads raise; projection member count/readiness/page failures become fail-closed `status=not_ready` / `reason=projection_members_unavailable` at public readers (HTTP 409 at the API boundary), while internal builders abort before terminal or index-finalization writes.
+- `ServingProjectionWriter` publishes projection metadata, members, and the run-link or collection-pointer route through `publish_serving_projection`, a single-connection PG domain unit of work. It acquires the logical scope lock before rereading/selecting the stable random projection identity, then acquires the schema-namespaced projection lock before assigning publication time and writing parent, members, and route in one transaction. Empty replacement sets atomically clear membership, and any member chunk or route failure rolls back the complete publication without an orphan projection or an advanced route.
 - `tests/test_serving_projection_storage.py` covers local storage semantics, member dedupe, field visibility defaults, and the rule that manifest shards are audit refs rather than online membership.
 - `tests/test_serving_projection_writer.py` covers writer-owned run link creation, member publication, idempotent run projection reuse, and collection pointer switching.
 - `tests/testcontainers_pg_contract.py` provides the first disposable PG contract harness.
@@ -135,6 +137,9 @@ Rules:
 - Large projections such as Google 8k+ boards must not re-read or rebuild full overlays on the request path.
 - Sidecar/object manifests may be used by offline builders, migration, backfill, audit, and compaction. They are not public-reader fallbacks.
 - If PG membership is missing or invalid while a sidecar exists, public readers fail closed with a projection repair diagnostic. They do not silently serve from the sidecar.
+- A full member replacement must use `upsert_row_and_replace_rows` to upsert `serving_projections`, delete the existing `serving_projection_members` scope, and merge every replacement chunk in one PG transaction guarded by a schema-namespaced advisory lock for the `projection_id`. `members=[]` is a valid atomic clear.
+- An incremental member publication must use `upsert_row_and_upsert_rows` to upsert the same projection parent and merge all supplied members in one PG transaction. Direct repository member merges use that same publication-lock key. Incremental and replacement writers therefore serialize on one projection identity rather than racing a delete against an unlocked merge.
+- Normal run-scope and collection-authoritative publication must use `publish_serving_projection`: the parent, incremental or replacement members, and run-link or collection-pointer route commit atomically on one connection. A failed member merge, replacement, or route write rolls back the complete publication, so routing metadata cannot advance independently and a newly generated projection cannot be left orphaned.
 
 ### CollectionWriter
 
@@ -461,6 +466,7 @@ Public readers must:
 Projection reader v1 rules:
 
 - `serving_projection_members` is the online source of truth for pagination and projection membership.
+- Only a successful authoritative PG count of zero means an empty projection. A missing authoritative table and count/readiness/page query failures must not become `0`, `[]`, or `{}`: public projection routes return `not_ready` with `projection_members_unavailable`, while internal consumers propagate the failure and perform no empty-set completion/finalization side effects.
 - `GET /api/projections/{projection_id}/candidates` may page membership rows for unfiltered candidate windows. Active search/filter requests must use `projection_person_search_index`; if the index is unavailable, the reader fails closed rather than scanning all membership rows. It must not read overlay files, job summaries, stage files, candidate sidecars, raw profile JSON, or manifest sidecars as normal fallback sources.
 - The response must include `candidate_count` / `total_candidates` for the whole projection and `filtered_candidate_count` for the requested filter.
 - `filter_contract.backend_filtered_paging_supported=true` means the backend, not the frontend loaded-row window, owns filtered paging for this projection. If `facet_count_scope` / `index_filter_readiness.count_scope` is `unavailable`, the frontend must fail closed by disabling search/facet controls instead of issuing active filter requests that the projection reader will reject.

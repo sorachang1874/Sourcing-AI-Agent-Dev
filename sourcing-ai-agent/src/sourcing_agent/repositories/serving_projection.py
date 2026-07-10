@@ -393,6 +393,48 @@ class ServingProjectionRepository(Repository):
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             return 0
+        row_payloads = self._member_row_payloads(normalized_projection_id, members)
+        if not row_payloads:
+            return 0
+        if self._should_prefer_read("serving_projection_members"):
+            return int(
+                self._call_native_write(
+                    "bulk_upsert_rows",
+                    table_name="serving_projection_members",
+                    rows=row_payloads,
+                    transaction_lock_key=f"serving_projection_publication:{normalized_projection_id}",
+                )
+                or 0
+            )
+        self._raise_postgres_only_invariant(
+            table_name="serving_projection_members",
+            method_name="upsert_serving_projection_members",
+        )
+
+    def _member_row_payloads(
+        self,
+        projection_id: str,
+        members: builtins.list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    ) -> builtins.list[dict[str, Any]]:
+        normalized_by_key = self._normalized_member_inputs(members)
+        if not normalized_by_key:
+            return []
+        existing_by_key = {
+            str(item.get("candidate_identity_key") or "").strip(): item
+            for item in self.list_members_by_identity_keys(projection_id, builtins.list(normalized_by_key))
+            if str(item.get("candidate_identity_key") or "").strip()
+        }
+        return self._member_row_payloads_from_existing(
+            projection_id,
+            normalized_by_key,
+            existing_by_key=existing_by_key,
+            now=utc_now_timestamp(),
+        )
+
+    @staticmethod
+    def _normalized_member_inputs(
+        members: builtins.list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    ) -> dict[str, dict[str, Any]]:
         normalized_by_key: dict[str, dict[str, Any]] = {}
         for member in builtins.list(members or []):
             if not isinstance(member, dict):
@@ -417,37 +459,25 @@ class ServingProjectionRepository(Repository):
             if not candidate_identity_key:
                 continue
             normalized_by_key[candidate_identity_key] = dict(member)
-        if not normalized_by_key:
-            return 0
-        now = utc_now_timestamp()
-        if self._should_prefer_read("serving_projection_members"):
-            member_keys = builtins.list(normalized_by_key.keys())
-            existing_by_key = {
-                str(item.get("candidate_identity_key") or "").strip(): item
-                for item in self.list_members_by_identity_keys(normalized_projection_id, member_keys)
-                if str(item.get("candidate_identity_key") or "").strip()
-            }
-            row_payloads = [
-                self._member_row_payload(
-                    normalized_projection_id,
-                    member,
-                    existing=existing_by_key.get(candidate_identity_key),
-                    now=now,
-                )
-                for candidate_identity_key, member in normalized_by_key.items()
-            ]
-            return int(
-                self._call_native_write(
-                    "bulk_upsert_rows",
-                    table_name="serving_projection_members",
-                    rows=row_payloads,
-                )
-                or 0
+        return normalized_by_key
+
+    def _member_row_payloads_from_existing(
+        self,
+        projection_id: str,
+        normalized_by_key: dict[str, dict[str, Any]],
+        *,
+        existing_by_key: dict[str, dict[str, Any]],
+        now: str,
+    ) -> builtins.list[dict[str, Any]]:
+        return [
+            self._member_row_payload(
+                projection_id,
+                member,
+                existing=existing_by_key.get(candidate_identity_key),
+                now=now,
             )
-        self._raise_postgres_only_invariant(
-            table_name="serving_projection_members",
-            method_name="upsert_serving_projection_members",
-        )
+            for candidate_identity_key, member in normalized_by_key.items()
+        ]
 
     def replace_members(
         self,
@@ -458,22 +488,18 @@ class ServingProjectionRepository(Repository):
         if not normalized_projection_id:
             return 0
         if self._should_prefer_read("serving_projection_members"):
-            try:
+            row_payloads = self._member_row_payloads(normalized_projection_id, members)
+            return int(
                 self._call_native_write(
-                    "delete_rows",
+                    "replace_rows",
                     table_name="serving_projection_members",
                     where_sql="projection_id = %s",
                     params=[normalized_projection_id],
+                    rows=row_payloads,
+                    transaction_lock_key=f"serving_projection_publication:{normalized_projection_id}",
                 )
-                return self.upsert_members(normalized_projection_id, members)
-            except Exception as exc:
-                if self._strict_authoritative("serving_projection_members"):
-                    self._raise_write_failure(
-                        table_name="serving_projection_members",
-                        method_name="replace_serving_projection_members",
-                        reason=f"{type(exc).__name__}: {exc}",
-                        error=exc,
-                    )
+                or 0
+            )
         self._raise_postgres_only_invariant(
             table_name="serving_projection_members",
             method_name="replace_serving_projection_members",
@@ -579,6 +605,8 @@ class ServingProjectionRepository(Repository):
             clauses.append("visibility_state = ?")
             params.append("visible")
         where_sqlite = " AND ".join(clauses)
+        if not self._should_prefer_read("serving_projection_members"):
+            return {}
         try:
             rows = self._adapter.select_many(
                 "serving_projection_members",
@@ -588,7 +616,14 @@ class ServingProjectionRepository(Repository):
                 limit=0,
             )
             return _member_readiness_counts([self._member_from_row(row) for row in rows])
-        except Exception:
+        except Exception as exc:
+            if self._strict_authoritative("serving_projection_members"):
+                self._raise_read_failure(
+                    table_name="serving_projection_members",
+                    method_name="select_many",
+                    reason=f"{type(exc).__name__}: {exc}",
+                    error=exc,
+                )
             return {}
 
     def get_member(self, projection_id: str, candidate_identity_key: str) -> dict[str, Any]:
@@ -616,6 +651,8 @@ class ServingProjectionRepository(Repository):
             clauses.append("visibility_state = ?")
             params.append("visible")
         where_sqlite = " AND ".join(clauses)
+        if not self._should_prefer_read("serving_projection_members"):
+            return 0
         try:
             count_rows = getattr(self._adapter, "count_rows", None)
             if callable(count_rows):
@@ -627,8 +664,14 @@ class ServingProjectionRepository(Repository):
                     )
                     or 0
                 )
-        except Exception:
-            return 0
+        except Exception as exc:
+            if self._strict_authoritative("serving_projection_members"):
+                self._raise_read_failure(
+                    table_name="serving_projection_members",
+                    method_name="count_rows",
+                    reason=f"{type(exc).__name__}: {exc}",
+                    error=exc,
+                )
         try:
             rows = self._adapter.select_many(
                 "serving_projection_members",
@@ -637,17 +680,33 @@ class ServingProjectionRepository(Repository):
                 limit=0,
             )
             return len(rows)
-        except Exception:
+        except Exception as exc:
+            if self._strict_authoritative("serving_projection_members"):
+                self._raise_read_failure(
+                    table_name="serving_projection_members",
+                    method_name="select_many",
+                    reason=f"{type(exc).__name__}: {exc}",
+                    error=exc,
+                )
             return 0
 
-    def upsert(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _projection_row_payload(
+        self,
+        payload: dict[str, Any],
+        *,
+        selected_projection_id: str = "",
+        existing: dict[str, Any] | None = None,
+        now: str = "",
+    ) -> tuple[str, dict[str, Any]]:
         normalized = dict(payload or {})
-        projection_id = _build_projection_id(normalized.get("projection_id") or normalized.get("id"))
+        projection_id = str(selected_projection_id or "").strip() or _build_projection_id(
+            normalized.get("projection_id") or normalized.get("id")
+        )
         projection_type = _normalize_projection_type(normalized.get("projection_type"))
         state = _normalize_projection_state(normalized.get("state"))
-        now = utc_now_timestamp()
-        existing = self.get(projection_id)
-        row_payload = SERVING_PROJECTIONS.to_columns(
+        effective_now = str(now or utc_now_timestamp())
+        existing_row = self.get(projection_id) if existing is None else dict(existing)
+        return projection_id, SERVING_PROJECTIONS.to_columns(
             {
                 **normalized,
                 "projection_id": projection_id,
@@ -667,10 +726,13 @@ class ServingProjectionRepository(Repository):
                 "metadata": _normalize_json_object_payload(
                     normalized.get("metadata") or normalized.get("metadata_json")
                 ),
-                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-                "updated_at": now,
+                "created_at": str(existing_row.get("created_at") or normalized.get("created_at") or effective_now),
+                "updated_at": effective_now,
             }
         )
+
+    def upsert(self, payload: dict[str, Any]) -> dict[str, Any]:
+        projection_id, row_payload = self._projection_row_payload(payload)
         if self._write_row("serving_projections", row_payload):
             return self.get(projection_id)
         self._raise_write_failure(
@@ -678,6 +740,261 @@ class ServingProjectionRepository(Repository):
             method_name="upsert_serving_projection",
             reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
         )
+
+    def upsert_with_replaced_members(
+        self,
+        payload: dict[str, Any],
+        members: builtins.list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    ) -> dict[str, Any]:
+        """Atomically persist projection metadata and its complete member scope."""
+
+        if not self._should_prefer_read("serving_projections"):
+            self._raise_postgres_only_invariant(
+                table_name="serving_projections",
+                method_name="upsert_serving_projection_with_replaced_members",
+            )
+        if not self._should_prefer_read("serving_projection_members"):
+            self._raise_postgres_only_invariant(
+                table_name="serving_projection_members",
+                method_name="upsert_serving_projection_with_replaced_members",
+            )
+        projection_id, projection_row = self._projection_row_payload(payload)
+        member_rows = self._member_row_payloads(projection_id, members)
+        result = self._call_native_write(
+            "upsert_row_and_replace_rows",
+            table_name="serving_projections",
+            row=projection_row,
+            replace_table_name="serving_projection_members",
+            replace_where_sql="projection_id = %s",
+            replace_params=[projection_id],
+            replace_rows=member_rows,
+            transaction_lock_key=f"serving_projection_publication:{projection_id}",
+        )
+        if not isinstance(result, dict):
+            self._raise_write_failure(
+                table_name="serving_projections",
+                method_name="upsert_serving_projection_with_replaced_members",
+                reason="postgres-only: atomic publication returned no confirmation",
+            )
+        projection = self.get(projection_id)
+        if not projection:
+            self._raise_read_failure(
+                table_name="serving_projections",
+                method_name="upsert_serving_projection_with_replaced_members",
+                reason="atomic publication committed but projection read-back returned no row",
+            )
+        return {
+            "projection": projection,
+            "member_count": int(result.get("replaced_count") or 0),
+        }
+
+    def upsert_with_members(
+        self,
+        payload: dict[str, Any],
+        members: builtins.list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    ) -> dict[str, Any]:
+        """Atomically persist projection metadata and merge incremental members."""
+
+        if not self._should_prefer_read("serving_projections"):
+            self._raise_postgres_only_invariant(
+                table_name="serving_projections",
+                method_name="upsert_serving_projection_with_members",
+            )
+        if not self._should_prefer_read("serving_projection_members"):
+            self._raise_postgres_only_invariant(
+                table_name="serving_projection_members",
+                method_name="upsert_serving_projection_with_members",
+            )
+        projection_id, projection_row = self._projection_row_payload(payload)
+        member_rows = self._member_row_payloads(projection_id, members)
+        result = self._call_native_write(
+            "upsert_row_and_upsert_rows",
+            table_name="serving_projections",
+            row=projection_row,
+            upsert_table_name="serving_projection_members",
+            upsert_rows=member_rows,
+            transaction_lock_key=f"serving_projection_publication:{projection_id}",
+        )
+        if not isinstance(result, dict):
+            self._raise_write_failure(
+                table_name="serving_projections",
+                method_name="upsert_serving_projection_with_members",
+                reason="postgres-only: atomic incremental publication returned no confirmation",
+            )
+        projection = self.get(projection_id)
+        if not projection:
+            self._raise_read_failure(
+                table_name="serving_projections",
+                method_name="upsert_serving_projection_with_members",
+                reason="atomic incremental publication committed but projection read-back returned no row",
+            )
+        return {
+            "projection": projection,
+            "member_count": int(result.get("child_upserted_count") or 0),
+        }
+
+    def publish_run_scope_projection(
+        self,
+        *,
+        projection_payload: dict[str, Any],
+        run_link_payload: dict[str, Any],
+        members: builtins.list[dict[str, Any]] | tuple[dict[str, Any], ...],
+        replace_members: bool,
+    ) -> dict[str, Any]:
+        normalized_projection = dict(projection_payload or {})
+        normalized_link = dict(run_link_payload or {})
+        run_id = str(
+            normalized_link.get("run_id")
+            or normalized_projection.get("source_run_id")
+            or normalized_projection.get("run_id")
+            or ""
+        ).strip()
+        if not run_id:
+            raise ValueError("run_id is required for run-scope projection publication")
+        normalized_link["run_id"] = run_id
+        normalized_link["link_type"] = "result"
+        return self._publish_projection_with_route(
+            scope_kind="run_scope",
+            scope_key=run_id,
+            active_collection_version="",
+            projection_payload=normalized_projection,
+            routing_payload=normalized_link,
+            members=members,
+            replace_members=replace_members,
+        )
+
+    def publish_collection_authoritative_projection(
+        self,
+        *,
+        projection_payload: dict[str, Any],
+        pointer_payload: dict[str, Any],
+        members: builtins.list[dict[str, Any]] | tuple[dict[str, Any], ...],
+        replace_members: bool,
+    ) -> dict[str, Any]:
+        normalized_projection = dict(projection_payload or {})
+        normalized_pointer = dict(pointer_payload or {})
+        collection_id = str(
+            normalized_pointer.get("collection_id") or normalized_projection.get("collection_id") or ""
+        ).strip()
+        active_collection_version = str(
+            normalized_pointer.get("active_collection_version")
+            or normalized_projection.get("source_collection_version")
+            or ""
+        ).strip()
+        if not collection_id or not active_collection_version:
+            raise ValueError(
+                "collection_id and active_collection_version are required for authoritative projection publication"
+            )
+        normalized_pointer["collection_id"] = collection_id
+        normalized_pointer["active_collection_version"] = active_collection_version
+        return self._publish_projection_with_route(
+            scope_kind="collection_authoritative",
+            scope_key=collection_id,
+            active_collection_version=active_collection_version,
+            projection_payload=normalized_projection,
+            routing_payload=normalized_pointer,
+            members=members,
+            replace_members=replace_members,
+        )
+
+    def _publish_projection_with_route(
+        self,
+        *,
+        scope_kind: str,
+        scope_key: str,
+        active_collection_version: str,
+        projection_payload: dict[str, Any],
+        routing_payload: dict[str, Any],
+        members: builtins.list[dict[str, Any]] | tuple[dict[str, Any], ...],
+        replace_members: bool,
+    ) -> dict[str, Any]:
+        normalized_members = self._normalized_member_inputs(members)
+        explicit_projection_id = str(
+            projection_payload.get("projection_id") or projection_payload.get("id") or ""
+        ).strip()
+
+        def build_payload(
+            *,
+            selected_projection_id: str,
+            existing_projection: dict[str, Any],
+            existing_members_by_key: dict[str, dict[str, Any]],
+            existing_route: dict[str, Any],
+            publication_now: str,
+        ) -> dict[str, Any]:
+            effective_projection_payload = dict(projection_payload)
+            if scope_kind == "run_scope" and not str(effective_projection_payload.get("collection_id") or "").strip():
+                effective_projection_payload["collection_id"] = str(existing_route.get("collection_id") or "").strip()
+            _, projection_row = self._projection_row_payload(
+                effective_projection_payload,
+                selected_projection_id=selected_projection_id,
+                existing=existing_projection,
+                now=publication_now,
+            )
+            member_rows = self._member_row_payloads_from_existing(
+                selected_projection_id,
+                normalized_members,
+                existing_by_key=existing_members_by_key,
+                now=publication_now,
+            )
+            if scope_kind == "run_scope":
+                routing_row = self._run_link_row_payload(
+                    {
+                        **routing_payload,
+                        "projection_id": selected_projection_id,
+                        "collection_id": projection_row.get("collection_id") or "",
+                    },
+                    existing=existing_route,
+                    now=publication_now,
+                )
+            else:
+                routing_row = self._authoritative_pointer_row_payload(
+                    {
+                        **routing_payload,
+                        "active_projection_id": selected_projection_id,
+                    },
+                    existing=existing_route,
+                    now=publication_now,
+                )
+            return {
+                "projection_row": projection_row,
+                "member_rows": member_rows,
+                "routing_row": routing_row,
+            }
+
+        result = self._call_native_write(
+            "publish_serving_projection",
+            table_name="serving_projections",
+            scope_kind=scope_kind,
+            scope_key=scope_key,
+            explicit_projection_id=explicit_projection_id,
+            active_collection_version=active_collection_version,
+            replace_members=bool(replace_members),
+            member_identity_keys=builtins.list(normalized_members),
+            projection_id_factory=_build_projection_id,
+            payload_builder=build_payload,
+        )
+        if not isinstance(result, dict):
+            self._raise_write_failure(
+                table_name="serving_projections",
+                method_name="publish_serving_projection",
+                reason="postgres-only: atomic serving publication returned no confirmation",
+            )
+        projection = self._projection_from_row(result.get("projection_row"))
+        if scope_kind == "run_scope":
+            routing = self._run_link_from_row(result.get("routing_row"))
+            return {
+                "projection": projection,
+                "link": routing,
+                "member_count": int(result.get("member_count") or 0),
+                "identity_source": str(result.get("identity_source") or ""),
+            }
+        routing = self._authoritative_pointer_from_row(result.get("routing_row"))
+        return {
+            "projection": projection,
+            "pointer": routing,
+            "member_count": int(result.get("member_count") or 0),
+            "identity_source": str(result.get("identity_source") or ""),
+        }
 
     def get(self, projection_id: str) -> dict[str, Any]:
         normalized_projection_id = str(projection_id or "").strip()
@@ -729,16 +1046,20 @@ class ServingProjectionRepository(Repository):
             return postgres_rows
         return []
 
-    def upsert_run_link(self, payload: dict[str, Any]) -> dict[str, Any]:
+    @staticmethod
+    def _run_link_row_payload(
+        payload: dict[str, Any],
+        *,
+        existing: dict[str, Any],
+        now: str,
+    ) -> dict[str, Any]:
         normalized = dict(payload or {})
         run_id = str(normalized.get("run_id") or normalized.get("job_id") or "").strip()
         projection_id = str(normalized.get("projection_id") or "").strip()
         if not run_id or not projection_id:
             return {}
         link_type = str(normalized.get("link_type") or "result").strip() or "result"
-        existing = self.get_run_link(run_id, link_type=link_type)
-        now = utc_now_timestamp()
-        row_payload = RUN_PROJECTION_LINKS.to_columns(
+        return RUN_PROJECTION_LINKS.to_columns(
             {
                 **normalized,
                 "run_id": run_id,
@@ -752,6 +1073,19 @@ class ServingProjectionRepository(Repository):
                 "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
                 "updated_at": now,
             }
+        )
+
+    def upsert_run_link(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        run_id = str(normalized.get("run_id") or normalized.get("job_id") or "").strip()
+        projection_id = str(normalized.get("projection_id") or "").strip()
+        if not run_id or not projection_id:
+            return {}
+        link_type = str(normalized.get("link_type") or "result").strip() or "result"
+        row_payload = self._run_link_row_payload(
+            normalized,
+            existing=self.get_run_link(run_id, link_type=link_type),
+            now=utc_now_timestamp(),
         )
         if self._write_row("run_projection_links", row_payload):
             return self.get_run_link(run_id, link_type=link_type)
@@ -792,7 +1126,13 @@ class ServingProjectionRepository(Repository):
             return postgres_rows
         return []
 
-    def upsert_authoritative_pointer(self, payload: dict[str, Any]) -> dict[str, Any]:
+    @staticmethod
+    def _authoritative_pointer_row_payload(
+        payload: dict[str, Any],
+        *,
+        existing: dict[str, Any],
+        now: str,
+    ) -> dict[str, Any]:
         normalized = dict(payload or {})
         collection_id = str(normalized.get("collection_id") or "").strip()
         active_projection_id = str(
@@ -800,7 +1140,6 @@ class ServingProjectionRepository(Repository):
         ).strip()
         if not collection_id or not active_projection_id:
             return {}
-        existing = self.get_authoritative_pointer(collection_id)
         previous_projection_id = str(
             normalized.get("previous_projection_id")
             or (
@@ -810,8 +1149,7 @@ class ServingProjectionRepository(Repository):
             )
             or ""
         ).strip()
-        now = utc_now_timestamp()
-        row_payload = COLLECTION_AUTHORITATIVE_POINTERS.to_columns(
+        return COLLECTION_AUTHORITATIVE_POINTERS.to_columns(
             {
                 **normalized,
                 "collection_id": collection_id,
@@ -825,6 +1163,20 @@ class ServingProjectionRepository(Repository):
                 "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
                 "updated_at": now,
             }
+        )
+
+    def upsert_authoritative_pointer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        collection_id = str(normalized.get("collection_id") or "").strip()
+        active_projection_id = str(
+            normalized.get("active_projection_id") or normalized.get("projection_id") or ""
+        ).strip()
+        if not collection_id or not active_projection_id:
+            return {}
+        row_payload = self._authoritative_pointer_row_payload(
+            normalized,
+            existing=self.get_authoritative_pointer(collection_id),
+            now=utc_now_timestamp(),
         )
         if self._write_row("collection_authoritative_pointers", row_payload):
             return self.get_authoritative_pointer(collection_id)

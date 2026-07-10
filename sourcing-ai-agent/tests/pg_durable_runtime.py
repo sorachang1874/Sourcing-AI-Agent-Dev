@@ -10,6 +10,7 @@ from types import TracebackType
 from typing import Iterator
 from unittest import mock
 
+from sourcing_agent.control_plane_live_postgres import LiveControlPlanePostgresAdapter
 from sourcing_agent.local_postgres import (
     normalize_control_plane_postgres_connect_dsn,
     normalize_control_plane_postgres_schema,
@@ -158,6 +159,15 @@ class PGDurableRuntimeFixture:
 @contextmanager
 def pg_durable_runtime_env(*, runtime_dir: str | Path, schema_label: str) -> Iterator[PGDurableRuntimeFixture]:
     with PGDurableRuntimeFixture(runtime_dir=runtime_dir, schema_label=schema_label) as fixture:
+        adapter = LiveControlPlanePostgresAdapter(
+            runtime_dir=fixture.runtime_dir,
+            dsn=fixture.dsn,
+            mode="postgres_only",
+        )
+        try:
+            adapter.ensure_bootstrapped()
+        finally:
+            adapter.close()
         yield fixture
 
 

@@ -42,7 +42,6 @@ from typing import Iterator
 
 from sourcing_agent.local_postgres import quote_control_plane_postgres_identifier
 from sourcing_agent.storage import ControlPlaneStore
-
 from tests.pg_durable_runtime import PGDurableRuntimeFixture, psycopg
 
 REQUIRE_PG_STORE_TESTS_ENV = "SOURCING_REQUIRE_PG_STORE_TESTS"
@@ -150,6 +149,7 @@ class PGControlPlaneStoreTestMixin:
 
     def make_pg_store(self, db_path: str | Path) -> ControlPlaneStore:
         store = ControlPlaneStore(db_path)
+        store._control_plane_postgres.ensure_bootstrapped()  # noqa: SLF001
         self.addCleanup(store.close)
         return store
 
@@ -174,6 +174,7 @@ def pg_backed_control_plane_store(
         )
         try:
             store = ControlPlaneStore(Path(db_path) if db_path is not None else Path(tempdir) / "control_plane.db")
+            store._control_plane_postgres.ensure_bootstrapped()  # noqa: SLF001
             try:
                 yield store
             finally:

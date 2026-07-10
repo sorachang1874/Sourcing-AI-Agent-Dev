@@ -194,7 +194,13 @@ _PRIMARY_KEY_COLUMNS = {
     "organization_execution_profiles": ("profile_id",),
     "acquisition_shard_registry": ("shard_key",),
     "cloud_asset_operation_ledger": ("ledger_id",),
-    "asset_materialization_generations": ("target_company", "snapshot_id", "asset_view", "artifact_kind", "artifact_key"),
+    "asset_materialization_generations": (
+        "target_company",
+        "snapshot_id",
+        "asset_view",
+        "artifact_kind",
+        "artifact_key",
+    ),
     "asset_membership_index": ("generation_key", "member_key"),
     "candidate_materialization_state": ("target_company", "snapshot_id", "asset_view", "candidate_id"),
     "snapshot_materialization_runs": ("run_id",),
@@ -593,9 +599,7 @@ class LiveControlPlanePostgresAdapter:
             resolve_default_control_plane_db_path(self.runtime_dir, base_dir=self.runtime_dir).expanduser()
         )
         self.dsn = str(dsn or resolve_control_plane_postgres_dsn(self.runtime_dir)).strip()
-        self.schema = normalize_control_plane_postgres_schema(
-            resolve_control_plane_postgres_schema(self.runtime_dir)
-        )
+        self.schema = normalize_control_plane_postgres_schema(resolve_control_plane_postgres_schema(self.runtime_dir))
         self.mode = resolve_control_plane_postgres_live_mode(mode)
         self.tables = tuple(str(item).strip() for item in tables if str(item).strip())
         self._lock = threading.Lock()
@@ -615,8 +619,7 @@ class LiveControlPlanePostgresAdapter:
     def should_mirror(self, table_name: str) -> bool:
         normalized_table = _normalize_postgres_identifier(table_name)
         return self.enabled and (
-            normalized_table in self.tables
-            or self._legacy_target_public_web_migration_table_enabled(normalized_table)
+            normalized_table in self.tables or self._legacy_target_public_web_migration_table_enabled(normalized_table)
         )
 
     def should_prefer_read(self, table_name: str) -> bool:
@@ -677,7 +680,9 @@ class LiveControlPlanePostgresAdapter:
             try:
                 connection = self._connect()
                 with connection.cursor() as cursor:
-                    cursor.execute("SELECT pg_try_advisory_xact_lock(hashtext(%s))", (self._advisory_lock_key(lock_key),))
+                    cursor.execute(
+                        "SELECT pg_try_advisory_xact_lock(hashtext(%s))", (self._advisory_lock_key(lock_key),)
+                    )
                     row = cursor.fetchone()
                     acquired = bool(row[0] if isinstance(row, (list, tuple)) and row else row)
                 if not acquired:
@@ -844,7 +849,9 @@ class LiveControlPlanePostgresAdapter:
             id_column=id_column,
             sequence_name=sequence_name,
         )
-        normalized_conflict_columns = [str(column or "").strip() for column in list(conflict_columns or []) if str(column or "").strip()]
+        normalized_conflict_columns = [
+            str(column or "").strip() for column in list(conflict_columns or []) if str(column or "").strip()
+        ]
         if not resolved_id_column or not resolved_sequence_name or not normalized_conflict_columns:
             return None
         self._ensure_table_write_schema(normalized_table)
@@ -861,9 +868,7 @@ class LiveControlPlanePostgresAdapter:
             if str(column or "").strip() and str(column or "").strip() != resolved_id_column
         ]
         if not normalized_update_columns:
-            conflict_sql = (
-                f" ON CONFLICT ({', '.join(_quote_identifier(column) for column in normalized_conflict_columns)}) DO NOTHING"
-            )
+            conflict_sql = f" ON CONFLICT ({', '.join(_quote_identifier(column) for column in normalized_conflict_columns)}) DO NOTHING"
         else:
             conflict_sql = (
                 f" ON CONFLICT ({', '.join(_quote_identifier(column) for column in normalized_conflict_columns)}) DO UPDATE SET "
@@ -878,7 +883,10 @@ class LiveControlPlanePostgresAdapter:
         )
         return self._execute_returning_one(
             sql,
-            (None if provided_id_value in {None, "", 0} else provided_id_value, *(payload.get(column) for column in columns)),
+            (
+                None if provided_id_value in {None, "", 0} else provided_id_value,
+                *(payload.get(column) for column in columns),
+            ),
         )
 
     def update_row_returning(
@@ -893,11 +901,13 @@ class LiveControlPlanePostgresAdapter:
         normalized_id_column = _normalize_postgres_identifier(id_column)
         if not self.should_prefer_read(normalized_table) or not normalized_id_column:
             return None
-        payload = _normalize_postgres_row_payload({
-            str(column or "").strip(): value
-            for column, value in dict(row or {}).items()
-            if str(column or "").strip() and str(column or "").strip() != normalized_id_column
-        })
+        payload = _normalize_postgres_row_payload(
+            {
+                str(column or "").strip(): value
+                for column, value in dict(row or {}).items()
+                if str(column or "").strip() and str(column or "").strip() != normalized_id_column
+            }
+        )
         if not payload:
             return None
         self._ensure_table_write_schema(normalized_table)
@@ -996,7 +1006,6 @@ class LiveControlPlanePostgresAdapter:
                     except Exception:
                         pass
 
-
     def _ensure_legacy_target_public_web_migration_table_schema(self, table_name: str) -> None:
         """Create the retired target-candidate Public Web table for explicit migration writes.
 
@@ -1018,6 +1027,14 @@ class LiveControlPlanePostgresAdapter:
             with connection.cursor() as cursor:
                 for statement in ddl:
                     cursor.execute(statement)
+
+    def ensure_legacy_target_public_web_migration_write_schema(self, table_name: str) -> None:
+        """Prepare one retired table before an explicit migration write's read-before-write."""
+
+        normalized_table = _normalize_postgres_identifier(table_name)
+        if not self._legacy_target_public_web_migration_table_enabled(normalized_table):
+            raise RuntimeError("legacy target Public Web schema preparation requires an active migration table context")
+        self._ensure_legacy_target_public_web_migration_table_schema(normalized_table)
 
     def _ensure_table_write_schema(self, table_name: str) -> None:
         normalized_table = str(table_name or "").strip()
@@ -1114,18 +1131,14 @@ class LiveControlPlanePostgresAdapter:
                         )
                     )
                     continue
-                if (
-                    normalized_table == "job_result_lifecycle"
-                    and column
-                    in {
-                        "phase",
-                        "state",
-                        "served_snapshot_id",
-                        "serving_projection_id",
-                        "serving_projection_phase",
-                        "background_snapshot_materialization_status",
-                    }
-                ):
+                if normalized_table == "job_result_lifecycle" and column in {
+                    "phase",
+                    "state",
+                    "served_snapshot_id",
+                    "serving_projection_id",
+                    "serving_projection_phase",
+                    "background_snapshot_materialization_status",
+                }:
                     update_assignments.append(
                         (
                             f"{quoted_column} = CASE "
@@ -1168,7 +1181,13 @@ class LiveControlPlanePostgresAdapter:
             sql += f" ON CONFLICT ({conflict_target}) DO NOTHING"
         self._execute_non_query(sql, tuple(_normalize_postgres_payload(payload.get(column)) for column in columns))
 
-    def bulk_upsert_rows(self, table_name: str, rows: list[dict[str, Any]] | tuple[dict[str, Any], ...]) -> int:
+    def bulk_upsert_rows(
+        self,
+        table_name: str,
+        rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+        *,
+        transaction_lock_key: str = "",
+    ) -> int:
         normalized_table = _normalize_postgres_identifier(table_name)
         if not self.should_mirror(normalized_table):
             return 0
@@ -1184,67 +1203,13 @@ class LiveControlPlanePostgresAdapter:
             self._ensure_table_write_schema(normalized_table)
             with self._connect() as connection:
                 with connection.cursor() as cursor:
+                    self._acquire_transaction_lock(cursor, transaction_lock_key)
                     summary = upsert_acquisition_shard_registry_rows(cursor, payload_rows, ensure_schema=False)
                 connection.commit()
             return int(summary.get("row_count") or 0)
-        primary_keys = list(_PRIMARY_KEY_COLUMNS.get(normalized_table) or [])
-        if not primary_keys:
+        plan = self._bulk_upsert_plan(normalized_table, payload_rows)
+        if plan is None:
             return 0
-        columns: list[str] = []
-        seen_columns: set[str] = set()
-        for payload in payload_rows:
-            for column in payload.keys():
-                if not str(column or "").strip() or column in seen_columns:
-                    continue
-                seen_columns.add(column)
-                columns.append(column)
-        if any(column not in columns for column in primary_keys):
-            return 0
-        update_columns = [column for column in columns if column not in primary_keys]
-        chunks = _chunk_postgres_bulk_rows(payload_rows, column_count=len(columns))
-        if len(chunks) > 1:
-            affected_total = 0
-            for chunk in chunks:
-                normalized_chunk = [{column: payload.get(column) for column in columns} for payload in chunk]
-                affected_total += self.bulk_upsert_rows(normalized_table, normalized_chunk)
-            return affected_total
-        conflict_target = ", ".join(_quote_identifier(column) for column in primary_keys)
-        quoted_table_name = _quote_identifier(normalized_table)
-        quoted_columns = [_quote_identifier(column) for column in columns]
-        insert_placeholders = "(" + ", ".join(["%s"] * len(columns)) + ")"
-        values_sql = ", ".join(insert_placeholders for _ in payload_rows)
-        write_params: list[Any] = []
-        for payload in payload_rows:
-            write_params.extend(_normalize_postgres_payload(payload.get(column)) for column in columns)
-        use_direct_values = _bulk_upsert_prefers_direct_values(row_count=len(payload_rows), column_count=len(columns))
-        if use_direct_values:
-            merge_sql = (
-                f"INSERT INTO {quoted_table_name} ({', '.join(quoted_columns)}) "
-                f"VALUES {values_sql}"
-            )
-            if update_columns:
-                merge_sql += f" ON CONFLICT ({conflict_target}) DO UPDATE SET " + ", ".join(
-                    f"{_quote_identifier(column)} = EXCLUDED.{_quote_identifier(column)}" for column in update_columns
-                )
-            else:
-                merge_sql += f" ON CONFLICT ({conflict_target}) DO NOTHING"
-            temp_table_name = ""
-            temp_insert_sql = ""
-        else:
-            temp_table_name = _quote_identifier(
-                f"_cp_bulk_{normalized_table}_{threading.get_ident()}_{int(time.time() * 1000000)}"
-            )
-            temp_insert_sql = f"INSERT INTO {temp_table_name} ({', '.join(quoted_columns)}) VALUES {values_sql}"
-            merge_sql = (
-                f"INSERT INTO {quoted_table_name} ({', '.join(quoted_columns)}) "
-                f"SELECT {', '.join(quoted_columns)} FROM {temp_table_name}"
-            )
-            if update_columns:
-                merge_sql += f" ON CONFLICT ({conflict_target}) DO UPDATE SET " + ", ".join(
-                    f"{_quote_identifier(column)} = EXCLUDED.{_quote_identifier(column)}" for column in update_columns
-                )
-            else:
-                merge_sql += f" ON CONFLICT ({conflict_target}) DO NOTHING"
 
         self.ensure_bootstrapped()
         self._ensure_table_write_schema(normalized_table)
@@ -1253,15 +1218,13 @@ class LiveControlPlanePostgresAdapter:
             try:
                 with self._connect() as connection:
                     with connection.cursor() as cursor:
-                        if use_direct_values:
-                            cursor.execute(merge_sql, tuple(write_params))
-                        else:
-                            cursor.execute(
-                                f"CREATE TEMP TABLE {temp_table_name} (LIKE {quoted_table_name} INCLUDING DEFAULTS) ON COMMIT DROP"
-                            )
-                            cursor.execute(temp_insert_sql, tuple(write_params))
-                            cursor.execute(merge_sql)
-                        affected = int(cursor.rowcount or 0)
+                        self._acquire_transaction_lock(cursor, transaction_lock_key)
+                        affected = self._bulk_upsert_rows_with_cursor(
+                            cursor,
+                            table_name=normalized_table,
+                            payload_rows=payload_rows,
+                            plan=plan,
+                        )
                     connection.commit()
                 return affected
             except Exception as exc:
@@ -1269,6 +1232,535 @@ class LiveControlPlanePostgresAdapter:
                 if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
                     raise
                 time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def upsert_row_and_upsert_rows(
+        self,
+        *,
+        table_name: str,
+        row: dict[str, Any],
+        upsert_table_name: str,
+        upsert_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        transaction_lock_key: str = "",
+    ) -> dict[str, int] | None:
+        """Atomically publish a parent row and merge child rows under one lock."""
+
+        normalized_parent_table = _normalize_postgres_identifier(table_name)
+        normalized_child_table = _normalize_postgres_identifier(upsert_table_name)
+        if not self.should_prefer_read(normalized_parent_table) or not self.should_prefer_read(normalized_child_table):
+            return None
+        parent_rows = self._normalize_bulk_upsert_rows([row])
+        if len(parent_rows) != 1:
+            raise ValueError("upsert_row_and_upsert_rows requires one non-empty row")
+        child_rows = self._normalize_bulk_upsert_rows(upsert_rows)
+        parent_plan = self._bulk_upsert_plan(
+            normalized_parent_table,
+            parent_rows,
+            require_primary_key_values=True,
+        )
+        child_plan = self._bulk_upsert_plan(
+            normalized_child_table,
+            child_rows,
+            require_primary_key_values=True,
+        )
+
+        self.ensure_bootstrapped()
+        self._ensure_table_write_schema(normalized_parent_table)
+        if normalized_child_table != normalized_parent_table:
+            self._ensure_table_write_schema(normalized_child_table)
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        self._acquire_transaction_lock(cursor, transaction_lock_key)
+                        parent_count = self._bulk_upsert_rows_with_cursor(
+                            cursor,
+                            table_name=normalized_parent_table,
+                            payload_rows=parent_rows,
+                            plan=parent_plan,
+                        )
+                        child_count = self._bulk_upsert_rows_with_cursor(
+                            cursor,
+                            table_name=normalized_child_table,
+                            payload_rows=child_rows,
+                            plan=child_plan,
+                        )
+                    connection.commit()
+                return {
+                    "upserted_count": parent_count,
+                    "child_upserted_count": child_count,
+                }
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def replace_rows(
+        self,
+        *,
+        table_name: str,
+        where_sql: str,
+        params: list[Any] | tuple[Any, ...] = (),
+        rows: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        transaction_lock_key: str = "",
+    ) -> int:
+        """Replace one logical row scope in a single transaction.
+
+        All replacement rows are validated before the delete. Every bulk chunk uses
+        the same connection and transaction, so a later insert failure rolls back
+        both earlier chunks and the destructive delete.
+        """
+
+        normalized_table = _normalize_postgres_identifier(table_name)
+        normalized_where_sql = _normalize_postgres_identifier(where_sql)
+        if not self.should_prefer_read(normalized_table) or not normalized_where_sql:
+            return 0
+        payload_rows = self._normalize_bulk_upsert_rows(rows)
+        plan = self._bulk_upsert_plan(
+            normalized_table,
+            payload_rows,
+            require_primary_key_values=True,
+        )
+        self.ensure_bootstrapped()
+        self._ensure_table_write_schema(normalized_table)
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        self._acquire_transaction_lock(cursor, transaction_lock_key)
+                        affected = self._replace_rows_with_cursor(
+                            cursor,
+                            table_name=normalized_table,
+                            where_sql=normalized_where_sql,
+                            params=params,
+                            payload_rows=payload_rows,
+                            plan=plan,
+                        )
+                    connection.commit()
+                return affected
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def upsert_row_and_replace_rows(
+        self,
+        *,
+        table_name: str,
+        row: dict[str, Any],
+        replace_table_name: str,
+        replace_where_sql: str,
+        replace_params: list[Any] | tuple[Any, ...] = (),
+        replace_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        transaction_lock_key: str = "",
+    ) -> dict[str, int] | None:
+        """Atomically publish a parent row and replace its child row scope."""
+
+        normalized_upsert_table = _normalize_postgres_identifier(table_name)
+        normalized_replace_table = _normalize_postgres_identifier(replace_table_name)
+        normalized_replace_where_sql = _normalize_postgres_identifier(replace_where_sql)
+        if (
+            not self.should_prefer_read(normalized_upsert_table)
+            or not self.should_prefer_read(normalized_replace_table)
+            or not normalized_replace_where_sql
+        ):
+            return None
+        upsert_payload_rows = self._normalize_bulk_upsert_rows([row])
+        if len(upsert_payload_rows) != 1:
+            raise ValueError("upsert_row_and_replace_rows requires one non-empty row")
+        replacement_payload_rows = self._normalize_bulk_upsert_rows(replace_rows)
+        upsert_plan = self._bulk_upsert_plan(
+            normalized_upsert_table,
+            upsert_payload_rows,
+            require_primary_key_values=True,
+        )
+        replacement_plan = self._bulk_upsert_plan(
+            normalized_replace_table,
+            replacement_payload_rows,
+            require_primary_key_values=True,
+        )
+
+        self.ensure_bootstrapped()
+        self._ensure_table_write_schema(normalized_upsert_table)
+        if normalized_replace_table != normalized_upsert_table:
+            self._ensure_table_write_schema(normalized_replace_table)
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        self._acquire_transaction_lock(cursor, transaction_lock_key)
+                        upserted_count = self._bulk_upsert_rows_with_cursor(
+                            cursor,
+                            table_name=normalized_upsert_table,
+                            payload_rows=upsert_payload_rows,
+                            plan=upsert_plan,
+                        )
+                        replaced_count = self._replace_rows_with_cursor(
+                            cursor,
+                            table_name=normalized_replace_table,
+                            where_sql=normalized_replace_where_sql,
+                            params=replace_params,
+                            payload_rows=replacement_payload_rows,
+                            plan=replacement_plan,
+                        )
+                    connection.commit()
+                return {
+                    "upserted_count": upserted_count,
+                    "replaced_count": replaced_count,
+                }
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def publish_serving_projection(
+        self,
+        *,
+        table_name: str = "serving_projections",
+        scope_kind: str,
+        scope_key: str,
+        explicit_projection_id: str = "",
+        active_collection_version: str = "",
+        replace_members: bool,
+        member_identity_keys: list[str] | tuple[str, ...] = (),
+        projection_id_factory: Any,
+        payload_builder: Any,
+    ) -> dict[str, Any] | None:
+        """Publish projection data and routing metadata in one locked transaction."""
+
+        normalized_table = _normalize_postgres_identifier(table_name)
+        if normalized_table != "serving_projections":
+            raise ValueError("publish_serving_projection table_name must be serving_projections")
+        normalized_scope_kind = str(scope_kind or "").strip().lower()
+        normalized_scope_key = str(scope_key or "").strip()
+        normalized_explicit_id = str(explicit_projection_id or "").strip()
+        normalized_collection_version = str(active_collection_version or "").strip()
+        route_specs = {
+            "run_scope": {
+                "table": "run_projection_links",
+                "where": "run_id = %s AND link_type = %s",
+                "params": (normalized_scope_key, "result"),
+                "projection_field": "projection_id",
+            },
+            "collection_authoritative": {
+                "table": "collection_authoritative_pointers",
+                "where": "collection_id = %s",
+                "params": (normalized_scope_key,),
+                "projection_field": "active_projection_id",
+            },
+        }
+        route_spec = route_specs.get(normalized_scope_kind)
+        if route_spec is None:
+            raise ValueError(f"unsupported serving projection publication scope: {normalized_scope_kind!r}")
+        if not normalized_scope_key:
+            raise ValueError("serving projection publication scope_key is required")
+        if not callable(projection_id_factory):
+            raise TypeError("projection_id_factory must be callable")
+        if not callable(payload_builder):
+            raise TypeError("payload_builder must be callable")
+        route_table = str(route_spec["table"])
+        required_tables = ("serving_projections", "serving_projection_members", route_table)
+        if any(not self.should_prefer_read(table_name) for table_name in required_tables):
+            return None
+
+        normalized_member_keys = [
+            str(item or "").strip() for item in dict.fromkeys(member_identity_keys or ()) if str(item or "").strip()
+        ]
+        self.ensure_bootstrapped()
+        for table_name in required_tables:
+            self._ensure_table_write_schema(table_name)
+
+        random_projection_id = ""
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        self._acquire_transaction_lock(
+                            cursor,
+                            f"serving_projection_scope:{normalized_scope_kind}:{normalized_scope_key}",
+                        )
+                        cursor.execute(
+                            f"SELECT * FROM {_quote_identifier(route_table)} WHERE {route_spec['where']}",
+                            tuple(route_spec["params"]),
+                        )
+                        existing_route = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+
+                        reusable_projection_id = str(
+                            existing_route.get(str(route_spec["projection_field"])) or ""
+                        ).strip()
+                        if (
+                            normalized_scope_kind == "collection_authoritative"
+                            and str(existing_route.get("active_collection_version") or "").strip()
+                            != normalized_collection_version
+                        ):
+                            reusable_projection_id = ""
+                        identity_source = "explicit"
+                        selected_projection_id = normalized_explicit_id
+                        if not selected_projection_id and reusable_projection_id:
+                            selected_projection_id = reusable_projection_id
+                            identity_source = "existing_route"
+                        if not selected_projection_id:
+                            if not random_projection_id:
+                                random_projection_id = str(projection_id_factory() or "").strip()
+                            selected_projection_id = random_projection_id
+                            identity_source = "random"
+                        if not selected_projection_id:
+                            raise RuntimeError("serving projection identity factory returned an empty id")
+
+                        self._acquire_transaction_lock(
+                            cursor,
+                            f"serving_projection_publication:{selected_projection_id}",
+                        )
+                        publication_now = _utc_now_sql_timestamp()
+                        cursor.execute(
+                            'SELECT * FROM "serving_projections" WHERE projection_id = %s',
+                            (selected_projection_id,),
+                        )
+                        existing_projection = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                        existing_members_by_key: dict[str, dict[str, Any]] = {}
+                        for offset in range(0, len(normalized_member_keys), 500):
+                            chunk = normalized_member_keys[offset : offset + 500]
+                            placeholders = ", ".join("%s" for _ in chunk)
+                            cursor.execute(
+                                'SELECT * FROM "serving_projection_members" '
+                                f"WHERE projection_id = %s AND candidate_identity_key IN ({placeholders})",
+                                (selected_projection_id, *chunk),
+                            )
+                            for row in _fetch_all_dict_rows(cursor):
+                                candidate_key = str(row.get("candidate_identity_key") or "").strip()
+                                if candidate_key:
+                                    existing_members_by_key[candidate_key] = row
+
+                        built_payload = payload_builder(
+                            selected_projection_id=selected_projection_id,
+                            existing_projection=existing_projection,
+                            existing_members_by_key=existing_members_by_key,
+                            existing_route=existing_route,
+                            publication_now=publication_now,
+                        )
+                        if not isinstance(built_payload, dict):
+                            raise TypeError("serving projection payload_builder must return a dict")
+                        projection_rows = self._normalize_bulk_upsert_rows(
+                            [dict(built_payload.get("projection_row") or {})]
+                        )
+                        member_rows = self._normalize_bulk_upsert_rows(list(built_payload.get("member_rows") or []))
+                        routing_rows = self._normalize_bulk_upsert_rows([dict(built_payload.get("routing_row") or {})])
+                        if len(projection_rows) != 1 or len(routing_rows) != 1:
+                            raise ValueError("serving projection publication requires one parent and one routing row")
+                        if str(projection_rows[0].get("projection_id") or "") != selected_projection_id:
+                            raise ValueError("projection payload does not use the selected projection_id")
+                        if any(str(row.get("projection_id") or "") != selected_projection_id for row in member_rows):
+                            raise ValueError("member payload does not use the selected projection_id")
+                        route_projection_id = str(routing_rows[0].get(str(route_spec["projection_field"])) or "")
+                        if route_projection_id != selected_projection_id:
+                            raise ValueError("routing payload does not use the selected projection_id")
+
+                        projection_plan = self._bulk_upsert_plan(
+                            "serving_projections",
+                            projection_rows,
+                            require_primary_key_values=True,
+                        )
+                        member_plan = self._bulk_upsert_plan(
+                            "serving_projection_members",
+                            member_rows,
+                            require_primary_key_values=True,
+                        )
+                        routing_plan = self._bulk_upsert_plan(
+                            route_table,
+                            routing_rows,
+                            require_primary_key_values=True,
+                        )
+                        projection_count = self._bulk_upsert_rows_with_cursor(
+                            cursor,
+                            table_name="serving_projections",
+                            payload_rows=projection_rows,
+                            plan=projection_plan,
+                        )
+                        if projection_count <= 0:
+                            raise RuntimeError("serving projection parent upsert returned no confirmation")
+                        if replace_members:
+                            member_count = self._replace_rows_with_cursor(
+                                cursor,
+                                table_name="serving_projection_members",
+                                where_sql="projection_id = %s",
+                                params=(selected_projection_id,),
+                                payload_rows=member_rows,
+                                plan=member_plan,
+                            )
+                        else:
+                            member_count = self._bulk_upsert_rows_with_cursor(
+                                cursor,
+                                table_name="serving_projection_members",
+                                payload_rows=member_rows,
+                                plan=member_plan,
+                            )
+                        routing_count = self._bulk_upsert_rows_with_cursor(
+                            cursor,
+                            table_name=route_table,
+                            payload_rows=routing_rows,
+                            plan=routing_plan,
+                        )
+                        if routing_count <= 0:
+                            raise RuntimeError("serving projection routing upsert returned no confirmation")
+                    connection.commit()
+                return {
+                    "projection_id": selected_projection_id,
+                    "identity_source": identity_source,
+                    "projection_row": projection_rows[0],
+                    "routing_row": routing_rows[0],
+                    "member_count": member_count,
+                }
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    @staticmethod
+    def _normalize_bulk_upsert_rows(
+        rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    ) -> list[dict[str, Any]]:
+        return [
+            _normalize_postgres_row_payload(dict(row or {}))
+            for row in list(rows or [])
+            if isinstance(row, dict) and dict(row)
+        ]
+
+    @staticmethod
+    def _bulk_upsert_plan(
+        table_name: str,
+        payload_rows: list[dict[str, Any]],
+        *,
+        require_primary_key_values: bool = False,
+    ) -> tuple[list[str], list[str]] | None:
+        if not payload_rows:
+            return None
+        primary_keys = list(_PRIMARY_KEY_COLUMNS.get(table_name) or [])
+        if not primary_keys:
+            if require_primary_key_values:
+                raise ValueError(f"bulk upsert table has no registered primary key: {table_name}")
+            return None
+        columns: list[str] = []
+        seen_columns: set[str] = set()
+        for payload in payload_rows:
+            for column in payload:
+                if not str(column or "").strip() or column in seen_columns:
+                    continue
+                seen_columns.add(column)
+                columns.append(column)
+        missing_primary_keys = [column for column in primary_keys if column not in columns]
+        if missing_primary_keys:
+            if require_primary_key_values:
+                raise ValueError(
+                    f"bulk upsert rows missing primary key columns for {table_name}: {', '.join(missing_primary_keys)}"
+                )
+            return None
+        if require_primary_key_values:
+            for row_index, payload in enumerate(payload_rows):
+                missing_values = [column for column in primary_keys if payload.get(column) in {None, ""}]
+                if missing_values:
+                    raise ValueError(
+                        f"bulk upsert row {row_index} has empty primary key values for {table_name}: "
+                        f"{', '.join(missing_values)}"
+                    )
+        return columns, primary_keys
+
+    def _bulk_upsert_rows_with_cursor(
+        self,
+        cursor: Any,
+        *,
+        table_name: str,
+        payload_rows: list[dict[str, Any]],
+        plan: tuple[list[str], list[str]] | None,
+    ) -> int:
+        if not payload_rows:
+            return 0
+        if plan is None:
+            return 0
+        columns, primary_keys = plan
+        update_columns = [column for column in columns if column not in primary_keys]
+        quoted_table_name = _quote_identifier(table_name)
+        quoted_columns = [_quote_identifier(column) for column in columns]
+        conflict_target = ", ".join(_quote_identifier(column) for column in primary_keys)
+        chunks = _chunk_postgres_bulk_rows(payload_rows, column_count=len(columns))
+
+        def _values_sql(chunk: list[dict[str, Any]]) -> str:
+            return ", ".join("(" + ", ".join(["%s"] * len(columns)) + ")" for _ in chunk)
+
+        def _write_params(chunk: list[dict[str, Any]]) -> tuple[Any, ...]:
+            return tuple(_normalize_postgres_payload(payload.get(column)) for payload in chunk for column in columns)
+
+        def _merge_clause() -> str:
+            if update_columns:
+                return f" ON CONFLICT ({conflict_target}) DO UPDATE SET " + ", ".join(
+                    f"{_quote_identifier(column)} = EXCLUDED.{_quote_identifier(column)}" for column in update_columns
+                )
+            return f" ON CONFLICT ({conflict_target}) DO NOTHING"
+
+        if _bulk_upsert_prefers_direct_values(
+            row_count=len(payload_rows),
+            column_count=len(columns),
+        ):
+            merge_sql = (
+                f"INSERT INTO {quoted_table_name} ({', '.join(quoted_columns)}) "
+                f"VALUES {_values_sql(payload_rows)}{_merge_clause()}"
+            )
+            cursor.execute(merge_sql, _write_params(payload_rows))
+            return int(cursor.rowcount or 0)
+
+        temp_table_name = _quote_identifier(
+            f"_cp_bulk_{table_name}_{threading.get_ident()}_{int(time.time() * 1000000)}"
+        )
+        cursor.execute(
+            f"CREATE TEMP TABLE {temp_table_name} (LIKE {quoted_table_name} INCLUDING DEFAULTS) ON COMMIT DROP"
+        )
+        for chunk in chunks:
+            cursor.execute(
+                f"INSERT INTO {temp_table_name} ({', '.join(quoted_columns)}) VALUES {_values_sql(chunk)}",
+                _write_params(chunk),
+            )
+        merge_sql = (
+            f"INSERT INTO {quoted_table_name} ({', '.join(quoted_columns)}) "
+            f"SELECT {', '.join(quoted_columns)} FROM {temp_table_name}{_merge_clause()}"
+        )
+        cursor.execute(merge_sql)
+        return int(cursor.rowcount or 0)
+
+    def _replace_rows_with_cursor(
+        self,
+        cursor: Any,
+        *,
+        table_name: str,
+        where_sql: str,
+        params: list[Any] | tuple[Any, ...],
+        payload_rows: list[dict[str, Any]],
+        plan: tuple[list[str], list[str]] | None,
+    ) -> int:
+        cursor.execute(
+            f"DELETE FROM {_quote_identifier(table_name)} WHERE {where_sql}",
+            tuple(_normalize_postgres_payload(item) for item in list(params or [])),
+        )
+        return self._bulk_upsert_rows_with_cursor(
+            cursor,
+            table_name=table_name,
+            payload_rows=payload_rows,
+            plan=plan,
+        )
+
+    def _acquire_transaction_lock(self, cursor: Any, lock_key: str) -> None:
+        normalized_lock_key = str(lock_key or "").strip()
+        if not normalized_lock_key:
+            return
+        cursor.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+            (self._advisory_lock_key(normalized_lock_key),),
+        )
 
     def replace_candidate_materialization_state_scope(
         self,
@@ -1339,9 +1831,7 @@ class LiveControlPlanePostgresAdapter:
                         for chunk in _chunk_postgres_bulk_rows(normalized_rows, column_count=len(columns)):
                             if not chunk:
                                 continue
-                            values_sql = ", ".join(
-                                "(" + ", ".join(["%s"] * len(columns)) + ")" for _ in chunk
-                            )
+                            values_sql = ", ".join("(" + ", ".join(["%s"] * len(columns)) + ")" for _ in chunk)
                             insert_sql = (
                                 f"INSERT INTO {quoted_table_name} ({', '.join(quoted_columns)}) VALUES {values_sql}"
                             )
@@ -1395,8 +1885,12 @@ class LiveControlPlanePostgresAdapter:
         query = " ".join(query_parts)
         with self._connect() as connection:
             with connection.cursor() as cursor:
-                if postgres_only_read and not _postgres_table_exists(cursor, normalized_table):
-                    return 0
+                if postgres_only_read and not _postgres_table_exists(
+                    cursor,
+                    normalized_table,
+                    schema=self.schema,
+                ):
+                    raise RuntimeError(f"Postgres authoritative table is missing: {normalized_table}")
                 cursor.execute(query, tuple(_normalize_postgres_payload(item) for item in list(params or [])))
                 row = cursor.fetchone()
         if isinstance(row, dict):
@@ -1439,8 +1933,12 @@ class LiveControlPlanePostgresAdapter:
         query = " ".join(query_parts)
         with self._connect() as connection:
             with connection.cursor() as cursor:
-                if postgres_only_read and not _postgres_table_exists(cursor, normalized_table):
-                    return []
+                if postgres_only_read and not _postgres_table_exists(
+                    cursor,
+                    normalized_table,
+                    schema=self.schema,
+                ):
+                    raise RuntimeError(f"Postgres authoritative table is missing: {normalized_table}")
                 query_params = list(params)
                 if normalized_limit > 0:
                     query_params.append(normalized_limit)
@@ -1529,19 +2027,19 @@ class LiveControlPlanePostgresAdapter:
         query = f"""
             SELECT *
             FROM (
-	                SELECT *,
-	                       ROW_NUMBER() OVER (
-	                           PARTITION BY crm_record_id
-	                           ORDER BY created_at DESC, run_id DESC
-	                       ) AS public_web_run_rank
-	                FROM crm_public_web_runs
+                SELECT *,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY crm_record_id
+                           ORDER BY created_at DESC, run_id DESC
+                       ) AS public_web_run_rank
+                FROM crm_public_web_runs
                 WHERE workspace_id = %s
                   AND crm_record_id IN ({record_placeholders})
                 {status_clause}
-	            ) ranked_public_web_runs
-	            WHERE public_web_run_rank = 1
-	            ORDER BY created_at DESC, run_id DESC
-	            LIMIT %s
+            ) ranked_public_web_runs
+            WHERE public_web_run_rank = 1
+            ORDER BY created_at DESC, run_id DESC
+            LIMIT %s
         """
         params: list[Any] = [normalized_workspace_id, *normalized_record_ids]
         if status_filter:
@@ -3115,14 +3613,13 @@ class LiveControlPlanePostgresAdapter:
                             )
                             row_value = cursor.fetchone()
                             sequence_number = int(
-                                (row_value[0] if isinstance(row_value, (list, tuple)) and row_value else row_value)
-                                or 1
+                                (row_value[0] if isinstance(row_value, (list, tuple)) and row_value else row_value) or 1
                             )
                         event_id = str(payload.get("event_id") or "").strip() or (
                             "evt_"
-                            + sha1(f"{workflow_run_id}:{sequence_number}:{idempotency_key}".encode("utf-8")).hexdigest()[
-                                :24
-                            ]
+                            + sha1(
+                                f"{workflow_run_id}:{sequence_number}:{idempotency_key}".encode("utf-8")
+                            ).hexdigest()[:24]
                         )
                         event_payload = {
                             "event_id": event_id,
@@ -3193,7 +3690,14 @@ class LiveControlPlanePostgresAdapter:
         action_type = str(payload.get("action_type") or "").strip()
         owner_module = str(payload.get("owner_module") or "").strip()
         operation_type = str(payload.get("operation_type") or "").strip()
-        if not action_id or not workspace_id or not idempotency_key or not action_type or not owner_module or not operation_type:
+        if (
+            not action_id
+            or not workspace_id
+            or not idempotency_key
+            or not action_type
+            or not owner_module
+            or not operation_type
+        ):
             return None
         now = _utc_now_sql_timestamp()
         row_payload = {
@@ -3315,7 +3819,14 @@ class LiveControlPlanePostgresAdapter:
         idempotency_key = str(payload.get("idempotency_key") or "").strip()
         owner_module = str(payload.get("owner_module") or "").strip()
         operation_type = str(payload.get("operation_type") or "").strip()
-        if not operation_run_id or not workspace_id or not action_id or not idempotency_key or not owner_module or not operation_type:
+        if (
+            not operation_run_id
+            or not workspace_id
+            or not action_id
+            or not idempotency_key
+            or not owner_module
+            or not operation_type
+        ):
             return None
         now = _utc_now_sql_timestamp()
         row_payload = {
@@ -3432,7 +3943,9 @@ class LiveControlPlanePostgresAdapter:
             (
                 requested_status,
                 _json_dump(progress if progress is not None else _json_load_dict(current.get("progress_json"))),
-                _json_dump(workflow_ref if workflow_ref is not None else _json_load_dict(current.get("workflow_ref_json"))),
+                _json_dump(
+                    workflow_ref if workflow_ref is not None else _json_load_dict(current.get("workflow_ref_json"))
+                ),
                 _json_dump(result_ref if result_ref is not None else _json_load_dict(current.get("result_ref_json"))),
                 _json_dump(metadata if metadata is not None else _json_load_dict(current.get("metadata_json"))),
                 completed_at,
@@ -3482,12 +3995,13 @@ class LiveControlPlanePostgresAdapter:
                             )
                             row_value = cursor.fetchone()
                             sequence_number = int(
-                                (row_value[0] if isinstance(row_value, (list, tuple)) and row_value else row_value)
-                                or 1
+                                (row_value[0] if isinstance(row_value, (list, tuple)) and row_value else row_value) or 1
                             )
                         event_id = str(payload.get("event_id") or "").strip() or (
                             "opevt_"
-                            + sha1(f"{event_stream_id}:{sequence_number}:{idempotency_key}".encode("utf-8")).hexdigest()[:24]
+                            + sha1(
+                                f"{event_stream_id}:{sequence_number}:{idempotency_key}".encode("utf-8")
+                            ).hexdigest()[:24]
                         )
                         row_payload = {
                             "event_id": event_id,
@@ -3760,7 +4274,7 @@ class LiveControlPlanePostgresAdapter:
             SET status = 'running',
                 heartbeat_at = %s,
                 updated_at = %s
-            WHERE {' AND '.join(clauses)}
+            WHERE {" AND ".join(clauses)}
             RETURNING *
             """,
             tuple(params),
@@ -3802,7 +4316,9 @@ class LiveControlPlanePostgresAdapter:
     ) -> dict[str, Any] | None:
         if not self.should_prefer_read("workflow_commands"):
             return None
-        current = self.select_one("workflow_commands", where_sql="command_id = %s", params=[str(command_id or "").strip()])
+        current = self.select_one(
+            "workflow_commands", where_sql="command_id = %s", params=[str(command_id or "").strip()]
+        )
         if current is None:
             return None
         attempt = int(current.get("attempt") or 0)
@@ -4168,7 +4684,10 @@ class LiveControlPlanePostgresAdapter:
             try:
                 with self._connect() as connection:
                     with connection.cursor() as cursor:
-                        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (self._advisory_lock_key(f"linkedin_profile:{normalized_key}"),))
+                        cursor.execute(
+                            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                            (self._advisory_lock_key(f"linkedin_profile:{normalized_key}"),),
+                        )
                         cursor.execute(
                             """
                             INSERT INTO linkedin_profile_registry_leases (
@@ -4367,7 +4886,10 @@ class LiveControlPlanePostgresAdapter:
             try:
                 with self._connect() as connection:
                     with connection.cursor() as cursor:
-                        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (self._advisory_lock_key(f"provider_limiter:{normalized_key}"),))
+                        cursor.execute(
+                            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                            (self._advisory_lock_key(f"provider_limiter:{normalized_key}"),),
+                        )
                         cursor.execute(
                             """
                             DELETE FROM runtime_provider_limiter_leases
@@ -4448,7 +4970,9 @@ class LiveControlPlanePostgresAdapter:
                             """,
                             (normalized_key, now),
                         )
-                        active_count = int((_fetch_one_dict_row(cursor, cursor.fetchone()) or {}).get("active_count") or 0)
+                        active_count = int(
+                            (_fetch_one_dict_row(cursor, cursor.fetchone()) or {}).get("active_count") or 0
+                        )
                     connection.commit()
                 payload = dict(row or {})
                 payload.update(
@@ -5083,7 +5607,7 @@ class LiveControlPlanePostgresAdapter:
         )
         cursor.execute(
             f"""
-            CREATE UNIQUE INDEX IF NOT EXISTS {_quote_identifier(f'idx_{table_name}_{id_column}_unique')}
+            CREATE UNIQUE INDEX IF NOT EXISTS {_quote_identifier(f"idx_{table_name}_{id_column}_unique")}
             ON {quoted_table_name} ({quoted_id_column})
             """
         )
@@ -5153,7 +5677,9 @@ class LiveControlPlanePostgresAdapter:
         normalized_table_name = _normalize_postgres_identifier(table_name)
         normalized_id_column = _normalize_postgres_identifier(id_column)
         normalized_partition_columns = tuple(
-            _normalize_postgres_identifier(column) for column in partition_columns if _normalize_postgres_identifier(column)
+            _normalize_postgres_identifier(column)
+            for column in partition_columns
+            if _normalize_postgres_identifier(column)
         )
         normalized_partition_expression_sql = str(partition_expression_sql or "").strip()
         if (
@@ -6362,9 +6888,7 @@ def _fetch_all_dict_rows(cursor: Any) -> list[dict[str, Any]]:
         if isinstance(row, dict):
             results.append(_normalize_postgres_row_payload(dict(row)))
             continue
-        results.append(
-            _normalize_postgres_row_payload({column: value for column, value in zip(columns, row)})
-        )
+        results.append(_normalize_postgres_row_payload({column: value for column, value in zip(columns, row)}))
     return results
 
 
@@ -6456,11 +6980,15 @@ def _quote_identifier(identifier: str) -> str:
     return f'"{escaped}"'
 
 
-def _postgres_table_exists(cursor: Any, table_name: str) -> bool:
+def _postgres_table_exists(cursor: Any, table_name: str, *, schema: str = "") -> bool:
     normalized_table = _normalize_postgres_identifier(table_name)
     if not normalized_table:
         return False
-    cursor.execute("SELECT to_regclass(%s)", (normalized_table,))
+    normalized_schema = _normalize_postgres_identifier(schema)
+    regclass_name = normalized_table
+    if normalized_schema:
+        regclass_name = f"{_quote_identifier(normalized_schema)}.{_quote_identifier(normalized_table)}"
+    cursor.execute("SELECT to_regclass(%s)", (regclass_name,))
     row = cursor.fetchone()
     if row is None:
         return False
@@ -6492,10 +7020,7 @@ def _chunk_postgres_bulk_rows(rows: list[dict[str, Any]], *, column_count: int) 
     normalized_columns = max(1, int(column_count or 1))
     max_rows_by_param_budget = max(1, _BULK_UPSERT_DIRECT_PARAM_LIMIT // normalized_columns)
     chunk_size = max(1, min(_BULK_UPSERT_DIRECT_ROW_LIMIT, max_rows_by_param_budget))
-    return [
-        normalized_rows[index : index + chunk_size]
-        for index in range(0, len(normalized_rows), chunk_size)
-    ]
+    return [normalized_rows[index : index + chunk_size] for index in range(0, len(normalized_rows), chunk_size)]
 
 
 def _normalized_company_scope(target_company: Any, company_key: Any = "") -> tuple[str, str]:
@@ -6568,9 +7093,7 @@ def _workflow_command_causality_columns_from_payload(payload: Any) -> dict[str, 
         "no_op_reason": str(causality.get("no_op_reason") or "").strip(),
         "readiness_effect": str(causality.get("readiness_effect") or "").strip(),
         "downstream_command_ids_json": _json_dump(list(causality.get("downstream_command_ids") or [])),
-        "causality_schema_version": str(
-            causality.get("schema_version") or "command_causality_v1"
-        ).strip()
+        "causality_schema_version": str(causality.get("schema_version") or "command_causality_v1").strip()
         or "command_causality_v1",
     }
 

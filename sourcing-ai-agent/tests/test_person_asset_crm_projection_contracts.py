@@ -2,7 +2,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from sourcing_agent.control_plane_repository import ControlPlaneAuthoritativeReadError
 from sourcing_agent.crm_migration import CRMTargetCandidateMigrationBackfill
 from sourcing_agent.crm_writer import CRMWriter
 from sourcing_agent.legacy_public_web_storage import seed_legacy_target_public_web_promotion
@@ -10,7 +12,6 @@ from sourcing_agent.person_asset_writer import PersonAssetWriter
 from sourcing_agent.serving_projection_migration import ServingProjectionMigrationBackfill
 from sourcing_agent.serving_projection_reader import ServingProjectionReader
 from sourcing_agent.serving_projection_writer import ServingProjectionWriter
-
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
@@ -27,6 +28,88 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()
+
+    def test_projection_index_count_fault_does_not_delete_or_finalize_index(self) -> None:
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-index-count-fault",
+            projection_id="proj_index_count_fault",
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:index-count-fault",
+                    "person_identity_key": "linkedin:index-count-fault",
+                }
+            ],
+            replace_members=True,
+        )
+
+        with (
+            mock.patch.object(
+                self.store._control_plane_postgres,  # noqa: SLF001
+                "count_rows",
+                side_effect=RuntimeError("postgres unavailable"),
+            ),
+            mock.patch.object(self.store, "delete_projection_person_search_index") as delete_index,
+            mock.patch.object(
+                self.person_asset_writer,
+                "_finalize_projection_person_search_index",
+            ) as finalize_index,
+            self.assertRaises(ControlPlaneAuthoritativeReadError),
+        ):
+            self.person_asset_writer.rebuild_projection_person_search_index_page(
+                projection_id="proj_index_count_fault",
+                reset_index=True,
+            )
+
+        delete_index.assert_not_called()
+        finalize_index.assert_not_called()
+
+    def test_public_projection_member_consumers_fail_closed_after_count_succeeds(self) -> None:
+        projection_id = "proj_member_second_read_fault"
+        candidate_key = "linkedin:member-second-read-fault"
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-member-second-read-fault",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": candidate_key,
+                    "person_identity_key": candidate_key,
+                }
+            ],
+            replace_members=True,
+        )
+        repository = self.store.repos.serving_projection
+        failure = ControlPlaneAuthoritativeReadError("postgres unavailable after count")
+
+        with mock.patch.object(repository, "get_member", side_effect=failure):
+            detail = self.projection_reader.get_projection_person_detail(projection_id, candidate_key)
+        with (
+            mock.patch.object(
+                self.store,
+                "search_projection_person_index",
+                return_value={
+                    "status": "ready",
+                    "candidate_identity_keys": [candidate_key],
+                    "matched_count": 1,
+                    "offset": 0,
+                    "has_more": False,
+                    "next_offset": None,
+                    "index_filter_readiness": {"count_scope": "exact_projection"},
+                },
+            ),
+            mock.patch.object(repository, "get_member", side_effect=failure),
+        ):
+            search = self.projection_reader.search_projection_person_index(
+                projection_id,
+                search_keyword="fault",
+            )
+        with mock.patch.object(repository, "list_members_by_person_identity", side_effect=failure):
+            person = self.projection_reader.get_person_summary(candidate_key)
+
+        for payload in (detail, search, person):
+            self.assertEqual(payload["status"], "not_ready")
+            self.assertEqual(payload["reason"], "projection_members_unavailable")
+            self.assertTrue(payload["read_contract"]["fail_closed"])
+            self.assertFalse(payload["read_contract"]["fallback_used"])
 
     def test_projection_members_use_shared_person_identity_and_summary_view(self) -> None:
         self.projection_writer.publish_run_scope_projection(

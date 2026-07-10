@@ -79,6 +79,7 @@ from .connectors import CompanyIdentity, CompanyRosterSnapshot, resolve_company_
 from .control_plane_postgres import (
     load_control_plane_postgres_sync_state,
 )
+from .control_plane_repository import ControlPlaneAuthoritativeReadError
 from .criteria_evolution import CriteriaEvolutionEngine
 from .crm_migration import CRMTargetCandidateMigrationBackfill
 from .crm_public_web_owner import (
@@ -27941,15 +27942,28 @@ class SourcingOrchestrator:
             return None
         keys = [str(key or "").strip() for key in list(candidate_identity_keys or []) if str(key or "").strip()]
         members: list[dict[str, Any]] = []
-        if keys:
-            for key in keys[:250]:
-                member = self.store.repos.serving_projection.get_member(normalized_projection_id, key)
-                if member:
-                    members.append(member)
-        else:
-            members = self.store.repos.serving_projection.list_members(
-                normalized_projection_id, limit=250, visible_only=True
-            )
+        try:
+            if keys:
+                for key in keys[:250]:
+                    member = self.store.repos.serving_projection.get_member(normalized_projection_id, key)
+                    if member:
+                        members.append(member)
+            else:
+                members = self.store.repos.serving_projection.list_members(
+                    normalized_projection_id, limit=250, visible_only=True
+                )
+        except ControlPlaneAuthoritativeReadError:
+            return {
+                "status": "not_ready",
+                "reason": "projection_members_unavailable",
+                "projection_id": normalized_projection_id,
+                "read_contract": {
+                    "source": "serving_projection_members+crm_records",
+                    "fallback_used": False,
+                    "fail_closed": True,
+                    "auto_create": False,
+                },
+            }
         person_keys = [
             str(member.get("person_identity_key") or "").strip()
             for member in members
