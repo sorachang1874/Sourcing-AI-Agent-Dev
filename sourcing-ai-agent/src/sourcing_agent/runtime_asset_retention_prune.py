@@ -8,6 +8,7 @@ import shutil
 import stat
 import subprocess
 import tarfile
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -119,6 +120,23 @@ ACTIVE_PROCESS_TOKENS = (
     "dev_backend",
     "uvicorn",
 )
+
+
+@dataclass(frozen=True)
+class _ReviewGitProject:
+    """Map project-relative review paths onto the containing Git worktree."""
+
+    git_toplevel: Path
+    project_prefix: str
+
+    def tree_path(self, project_path: str) -> str:
+        return posixpath.join(self.project_prefix, project_path) if self.project_prefix else project_path
+
+    def object_spec(self, revision: str, project_path: str) -> str:
+        return f"{revision}:{self.tree_path(project_path)}"
+
+    def pathspec(self, project_path: str) -> str:
+        return f":(top,literal){self.tree_path(project_path)}"
 
 
 def build_runtime_asset_prune_plan(
@@ -1073,6 +1091,21 @@ def independent_review_scope_digest(scope: dict[str, Any]) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def _review_git_project(root: Path) -> _ReviewGitProject | None:
+    """Resolve project-relative paths without relying on Git's cwd pathspec rules."""
+
+    raw_toplevel = _review_git_text(root, "rev-parse", "--show-toplevel", allow_failure=True)
+    if not raw_toplevel:
+        return None
+    git_toplevel = _realpath(raw_toplevel)
+    try:
+        relative_project = root.relative_to(git_toplevel)
+    except ValueError:
+        return None
+    project_prefix = "" if relative_project == Path(".") else relative_project.as_posix()
+    return _ReviewGitProject(git_toplevel=git_toplevel, project_prefix=project_prefix)
+
+
 def build_independent_review_scope_evidence(
     *,
     workspace_root: str | Path,
@@ -1094,6 +1127,7 @@ def build_independent_review_scope_evidence(
     normalized_files = normalize_independent_review_files(files)
     normalized_title = normalize_independent_review_title(title)
     normalized_base = str(base_ref or "").strip()
+    git_project = _review_git_project(root)
     resolved_head = _review_git_text(root, "rev-parse", "--verify", "HEAD^{commit}", allow_failure=True)
     resolved_base = (
         _review_git_text(root, "rev-parse", "--verify", f"{normalized_base}^{{commit}}", allow_failure=True)
@@ -1103,16 +1137,29 @@ def build_independent_review_scope_evidence(
     scoped_file_types = (
         {
             path: {
-                "base": _review_git_text(root, "cat-file", "-t", f"{resolved_base}:{path}", allow_failure=True),
-                "head": _review_git_text(root, "cat-file", "-t", f"{resolved_head}:{path}", allow_failure=True),
+                "base": _review_git_text(
+                    root,
+                    "cat-file",
+                    "-t",
+                    git_project.object_spec(resolved_base, path),
+                    allow_failure=True,
+                ),
+                "head": _review_git_text(
+                    root,
+                    "cat-file",
+                    "-t",
+                    git_project.object_spec(resolved_head, path),
+                    allow_failure=True,
+                ),
             }
             for path in normalized_files
         }
-        if resolved_base and resolved_head
+        if git_project and resolved_base and resolved_head
         else {}
     )
     pinned = bool(
         normalized_base
+        and git_project
         and resolved_base
         and resolved_head
         and normalized_files
@@ -1121,11 +1168,13 @@ def build_independent_review_scope_evidence(
     scope_mode = INDEPENDENT_REVIEW_PINNED_SCOPE_MODE if pinned else INDEPENDENT_REVIEW_REFERENCE_SCOPE_MODE
     diff_raw = b""
     tree_raw = b""
-    if resolved_base and resolved_head:
-        diff_args = ["diff", "--binary", "--no-ext-diff", resolved_base, resolved_head, "--", *normalized_files]
+    if git_project and resolved_base and resolved_head:
+        pathspecs = [git_project.pathspec(path) for path in normalized_files]
+        diff_args = ["diff", "--binary", "--no-ext-diff", resolved_base, resolved_head, "--", *pathspecs]
         diff_raw = _review_git_bytes(root, *diff_args, allow_failure=True) or b""
-    if resolved_head:
-        tree_args = ["ls-tree", "-r", "--full-tree", resolved_head, "--", *normalized_files]
+    if git_project and resolved_head:
+        pathspecs = [git_project.pathspec(path) for path in normalized_files]
+        tree_args = ["ls-tree", "-r", resolved_head, "--", *pathspecs]
         tree_raw = _review_git_bytes(root, *tree_args, allow_failure=True) or b""
     scope: dict[str, Any] = {
         "title": normalized_title,
@@ -1914,9 +1963,26 @@ def _independent_review_scope_blockers(
     if _review_git_bytes(root, "cat-file", "-e", f"{head_commit}^{{commit}}", allow_failure=True) is None:
         blockers.append("review_artifact_scope_head_commit_missing")
         return blockers
+    git_project = _review_git_project(root)
+    if git_project is None:
+        blockers.append("review_artifact_scope_git_project_unverifiable")
+        return blockers
+    pathspecs = [git_project.pathspec(path) for path in files]
     for path in files:
-        base_entry_type = _review_git_text(root, "cat-file", "-t", f"{base_commit}:{path}", allow_failure=True)
-        head_entry_type = _review_git_text(root, "cat-file", "-t", f"{head_commit}:{path}", allow_failure=True)
+        base_entry_type = _review_git_text(
+            root,
+            "cat-file",
+            "-t",
+            git_project.object_spec(base_commit, path),
+            allow_failure=True,
+        )
+        head_entry_type = _review_git_text(
+            root,
+            "cat-file",
+            "-t",
+            git_project.object_spec(head_commit, path),
+            allow_failure=True,
+        )
         if "blob" not in {base_entry_type, head_entry_type}:
             blockers.append(f"review_artifact_scope_missing_file:{path}")
         elif path in required_files and head_entry_type != "blob":
@@ -1930,17 +1996,16 @@ def _independent_review_scope_blockers(
         base_commit,
         head_commit,
         "--",
-        *files,
+        *pathspecs,
         allow_failure=True,
     )
     tree_raw = _review_git_bytes(
         root,
         "ls-tree",
         "-r",
-        "--full-tree",
         head_commit,
         "--",
-        *files,
+        *pathspecs,
         allow_failure=True,
     )
     if diff_raw is None or hashlib.sha256(diff_raw).hexdigest() != str(scope.get("git_diff_sha256") or ""):
@@ -1974,7 +2039,7 @@ def _independent_review_scope_blockers(
             "--format=%H",
             f"{head_commit}..{current_head_commit}",
             "--",
-            *files,
+            *pathspecs,
             allow_failure=True,
         )
         if current_head_commit and reviewed_head_is_ancestor is not None
@@ -1989,7 +2054,7 @@ def _independent_review_scope_blockers(
             "--cached",
             current_head_commit,
             "--",
-            *files,
+            *pathspecs,
             allow_failure=True,
         )
         if current_head_commit
@@ -2001,7 +2066,7 @@ def _independent_review_scope_blockers(
         "--binary",
         "--no-ext-diff",
         "--",
-        *files,
+        *pathspecs,
         allow_failure=True,
     )
     current_scope_untracked = _review_git_bytes(
@@ -2010,7 +2075,7 @@ def _independent_review_scope_blockers(
         "--others",
         "--exclude-standard",
         "--",
-        *files,
+        *pathspecs,
         allow_failure=True,
     )
     if (

@@ -137,6 +137,28 @@ def _init_review_repo(root: Path) -> str:
     return base
 
 
+def _init_nested_review_repo(git_root: Path) -> tuple[Path, str]:
+    project_root = git_root / "project"
+    (project_root / "docs").mkdir(parents=True)
+    (project_root / "src").mkdir(parents=True)
+    (project_root / "docs" / "INDEPENDENT_REVIEW_BRIEF.md").write_text("# Review brief\n", encoding="utf-8")
+    (project_root / "src" / "example.py").write_text("value = 1\n", encoding="utf-8")
+    (project_root / "src" / "deleted.py").write_text("deleted = False\n", encoding="utf-8")
+    REAL_SUBPROCESS_RUN(["git", "init", "-q"], cwd=git_root, check=True)
+    REAL_SUBPROCESS_RUN(["git", "config", "user.name", "Test"], cwd=git_root, check=True)
+    REAL_SUBPROCESS_RUN(["git", "config", "user.email", "test@example.com"], cwd=git_root, check=True)
+    REAL_SUBPROCESS_RUN(["git", "add", "project"], cwd=git_root, check=True)
+    REAL_SUBPROCESS_RUN(["git", "commit", "-qm", "base"], cwd=git_root, check=True)
+    base = REAL_SUBPROCESS_RUN(
+        ["git", "rev-parse", "HEAD"], cwd=git_root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    (project_root / "src" / "example.py").write_text("value = 2\n", encoding="utf-8")
+    (project_root / "src" / "deleted.py").unlink()
+    REAL_SUBPROCESS_RUN(["git", "add", "-A", "project/src"], cwd=git_root, check=True)
+    REAL_SUBPROCESS_RUN(["git", "commit", "-qm", "reviewed"], cwd=git_root, check=True)
+    return project_root, base
+
+
 def test_effective_rollout_accepts_fast_priority_alias_across_real_event_shapes(tmp_path: Path) -> None:
     runner = _load_runner()
     codex_home = tmp_path / "codex-home"
@@ -353,10 +375,26 @@ def test_causal_binding_requires_one_complete_root_exec_turn_and_exact_messages(
 
     scenarios = (
         ("non_exec", "session_source_exec", "review_artifact_rollout_causal_session_source_not_exec"),
-        ("missing_user_response", "prompt_response_item_exact", "review_artifact_rollout_causal_prompt_response_item_mismatch"),
-        ("missing_user_event", "prompt_event_message_exact", "review_artifact_rollout_causal_prompt_event_message_mismatch"),
-        ("wrong_final_response", "final_response_item_exact", "review_artifact_rollout_causal_final_response_item_mismatch"),
-        ("wrong_final_event", "final_event_message_exact", "review_artifact_rollout_causal_final_event_message_mismatch"),
+        (
+            "missing_user_response",
+            "prompt_response_item_exact",
+            "review_artifact_rollout_causal_prompt_response_item_mismatch",
+        ),
+        (
+            "missing_user_event",
+            "prompt_event_message_exact",
+            "review_artifact_rollout_causal_prompt_event_message_mismatch",
+        ),
+        (
+            "wrong_final_response",
+            "final_response_item_exact",
+            "review_artifact_rollout_causal_final_response_item_mismatch",
+        ),
+        (
+            "wrong_final_event",
+            "final_event_message_exact",
+            "review_artifact_rollout_causal_final_event_message_mismatch",
+        ),
         ("wrong_task_complete", "task_complete_final_exact", "review_artifact_rollout_causal_task_complete_mismatch"),
         ("duplicate_turn", "single_task_turn", "review_artifact_rollout_causal_turn_mismatch"),
         ("abort", "no_abort", "review_artifact_rollout_causal_abort_present"),
@@ -674,6 +712,106 @@ def test_signoff_runner_binds_pinned_scope_and_all_raw_evidence(
         expected_scope_digest=metadata["review_scope_digest_sha256"],
     )
     assert "review_artifact_scope_current_tree_mismatch" in committed_revert_blockers
+
+
+def test_nested_project_scope_maps_explicitly_to_git_toplevel_and_fails_closed(
+    tmp_path: Path,
+) -> None:
+    from sourcing_agent import runtime_asset_retention_prune as review_evidence
+
+    runner = _load_runner()
+    git_root = tmp_path / "parent-repo"
+    git_root.mkdir()
+    project_root, base = _init_nested_review_repo(git_root)
+    scope = review_evidence.build_independent_review_scope_evidence(
+        workspace_root=project_root,
+        title="nested project scope",
+        base_ref=base,
+        files=["src/example.py"],
+        extra_context="contract context",
+    )
+    deleted_scope = review_evidence.build_independent_review_scope_evidence(
+        workspace_root=project_root,
+        title="nested deleted scope",
+        base_ref=base,
+        files=["src/deleted.py"],
+        extra_context="contract context",
+    )
+
+    empty_sha256 = hashlib.sha256(b"").hexdigest()
+    assert scope["scope_mode"] == "pinned_commit_diff"
+    assert scope["files"] == ["src/example.py"]
+    assert scope["git_diff_sha256"] != empty_sha256
+    assert scope["git_tree_sha256"] != empty_sha256
+    pathspec = ":(top,literal)project/src/example.py"
+    diff_raw = REAL_SUBPROCESS_RUN(
+        [
+            "git",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            scope["resolved_base_commit"],
+            scope["resolved_head_commit"],
+            "--",
+            pathspec,
+        ],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+    ).stdout
+    tree_raw = REAL_SUBPROCESS_RUN(
+        ["git", "ls-tree", "-r", scope["resolved_head_commit"], "--", pathspec],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+    ).stdout
+    assert hashlib.sha256(diff_raw).hexdigest() == scope["git_diff_sha256"]
+    assert hashlib.sha256(tree_raw).hexdigest() == scope["git_tree_sha256"]
+    assert b"\tsrc/example.py\n" in tree_raw
+    assert b"\tproject/src/example.py\n" not in tree_raw
+    prompt = runner._build_prompt(root=project_root, scope=scope, extra_context="contract context")
+    assert f"git show {scope['resolved_head_commit']}:./<project-relative-path>" in prompt
+
+    def scope_blockers(candidate_scope: dict[str, object], *, required_files: list[str]) -> list[str]:
+        return review_evidence._independent_review_scope_blockers(
+            scope=candidate_scope,
+            metadata={"review_scope_digest_sha256": candidate_scope["scope_digest_sha256"]},
+            root=project_root,
+            expected_title=str(candidate_scope["title"]),
+            required_files=required_files,
+            expected_scope_digest=str(candidate_scope["scope_digest_sha256"]),
+        )
+
+    assert scope_blockers(scope, required_files=["src/example.py"]) == []
+    assert deleted_scope["scope_mode"] == "pinned_commit_diff"
+    assert scope_blockers(deleted_scope, required_files=[]) == []
+
+    (git_root / "sibling.txt").write_text("unrelated\n", encoding="utf-8")
+    REAL_SUBPROCESS_RUN(["git", "add", "sibling.txt"], cwd=git_root, check=True)
+    REAL_SUBPROCESS_RUN(["git", "commit", "-qm", "unrelated sibling"], cwd=git_root, check=True)
+    assert scope_blockers(scope, required_files=["src/example.py"]) == []
+    assert scope_blockers(deleted_scope, required_files=[]) == []
+
+    (project_root / "src" / "deleted.py").write_text("recreated = True\n", encoding="utf-8")
+    assert "review_artifact_scope_current_tree_mismatch" in scope_blockers(deleted_scope, required_files=[])
+    (project_root / "src" / "deleted.py").unlink()
+
+    example_path = project_root / "src" / "example.py"
+    example_path.write_text("value = 3\n", encoding="utf-8")
+    assert "review_artifact_scope_current_tree_mismatch" in scope_blockers(scope, required_files=["src/example.py"])
+    example_path.write_text("value = 2\n", encoding="utf-8")
+
+    example_path.write_text("value = staged replacement\n", encoding="utf-8")
+    REAL_SUBPROCESS_RUN(["git", "add", "--", "./src/example.py"], cwd=project_root, check=True)
+    example_path.write_text("value = 2\n", encoding="utf-8")
+    assert "review_artifact_scope_current_tree_mismatch" in scope_blockers(scope, required_files=["src/example.py"])
+    REAL_SUBPROCESS_RUN(["git", "add", "--", "./src/example.py"], cwd=project_root, check=True)
+    assert scope_blockers(scope, required_files=["src/example.py"]) == []
+
+    example_path.write_text("value = 4\n", encoding="utf-8")
+    REAL_SUBPROCESS_RUN(["git", "add", "--", "./src/example.py"], cwd=project_root, check=True)
+    REAL_SUBPROCESS_RUN(["git", "commit", "-qm", "change nested reviewed scope"], cwd=git_root, check=True)
+    assert "review_artifact_scope_current_tree_mismatch" in scope_blockers(scope, required_files=["src/example.py"])
 
 
 def test_missing_scoped_file_is_reference_only_and_cannot_sign_off(tmp_path: Path) -> None:

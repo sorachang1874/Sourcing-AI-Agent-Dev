@@ -30,8 +30,8 @@
   a cryptographic signature or remote attestation against a malicious workspace author.
 - Two adversarial review rounds found and closed stale-scope replay, missing required-file, causal-repack,
   index/worktree cancellation, shared business-model identity, and stale W7g batch reuse defects. Final reference
-  reviews returned GO. Validation: review-evidence group **124 passed**; model/settings/CRM/pre-agent group
-  **144 passed + 11 subtests**; final `ci-pre-agent-contract` **223 + 2/11/1/2 = 239 passed** with
+  reviews returned GO. Validation: review-evidence group **127 passed**; model/settings/CRM/pre-agent group
+  **144 passed + 11 subtests**; final `ci-pre-agent-contract` **224 + 2/11/1/2 = 240 passed** with
   `dry_run_ready failures=[]`; Ruff and compileall clean; mypy remains R-011's **87 errors / 4 files**. No live
   provider validation was run, so relay acceptance, returned model identity, price, and product quality remain a
   guarded post-review live proof rather than a checked-in claim.

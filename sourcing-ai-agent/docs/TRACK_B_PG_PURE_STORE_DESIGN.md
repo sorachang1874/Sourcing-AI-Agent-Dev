@@ -738,8 +738,8 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     receiver-aware AST guard 扫描 `src/` 与 `scripts/`,并以 4 个合成 positional mutation 分别证明会 loudly fail。四点违规计数 0。
   - **验证**:surface **15 passed**、members storage **9**、live-PG **57 + 4 subtests**、writer **7**、asset audit/repair
     **22**、projection CRM **20 + 4 subtests**、person asset/CRM **17**、CRM boundary **34**、operation targeted **4**。
-    stable-tree `make ci-pre-agent-contract` 为 **223 passed** + 后续 **2/11/1/2 passed** = **239 passed**，并有
-    `dry_run_ready failures=[]`；review-evidence 回归 **124 passed**。Ruff/format 43 文件、compileall/diff-check 绿；
+    stable-tree `make ci-pre-agent-contract` 为 **224 passed** + 后续 **2/11/1/2 passed** = **240 passed**，并有
+    `dry_run_ready failures=[]`；review-evidence 回归 **127 passed**。Ruff/format 43 文件、compileall/diff-check 绿；
     mypy 仍为 R-011 基线 **87 errors / 4 files**,无新增。
   - **失败归因/接续**:`test_results_api` 精确组 8 pass / 1 fail；唯一 `115/140` vs `140/140` 在 pinned HEAD
     精确复现，归 R-001/R-007 与待裁决 D-3，非本批回归。D-4 已关闭；下一批为 ②.3d person search index，完成后

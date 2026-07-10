@@ -322,7 +322,8 @@ def test_independent_review_gate_is_documented_and_executable() -> None:
     assert 'REVIEW_BASE="<pinned-base-SHA>"' in gate
     assert "review_scope_digest_sha256" in gate
     assert "unrelated work continues" in gate
-    assert "any later commit or working-tree change to one of its scoped files invalidates the artifact" in gate
+    assert "any later scoped commit, staged change, unstaged change, or untracked replacement" in gate
+    assert "index and worktree are checked separately" in gate
     assert "Provider cost safety" in brief
     assert "Product runtime model calls currently do not use model-native web search or tool calls" in (
         REPO_ROOT / "docs" / "DURABLE_EXECUTION_RUNTIME_CONTRACT.md"
