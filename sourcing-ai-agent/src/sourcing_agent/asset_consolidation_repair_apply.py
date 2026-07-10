@@ -161,7 +161,7 @@ def _plan_or_apply_company(
     target_company = _normalize_text(company.get("target_company")) or company_key
     collection_id = _normalize_text(company.get("collection_id")) or f"company:{company_key}"
     candidate = _select_candidate(company=company, snapshot_id=selected_snapshot_id)
-    previous_pointer = store.get_collection_authoritative_pointer(collection_id)
+    previous_pointer = store.repos.serving_projection.get_authoritative_pointer(collection_id)
     base = {
         "company_key": company_key,
         "target_company": target_company,

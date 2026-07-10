@@ -36511,7 +36511,7 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(lifecycle["served_snapshot_id"], "snapshot-reflection-fast-path")
         self.assertEqual(lifecycle["served_candidate_count"], 1)
         self.assertEqual(lifecycle["serving_projection_phase"], "current_snapshot_row_shell_overlay")
-        projection_link = self.store.get_run_projection_link(job_id)
+        projection_link = self.store.repos.serving_projection.get_run_link(job_id)
         self.assertTrue(str(projection_link.get("projection_id") or "").strip())
         self.assertEqual(lifecycle["serving_projection_id"], projection_link["projection_id"])
         row_shell_metadata = dict(dict(lifecycle.get("metadata") or {}).get("row_shell_publication") or {})

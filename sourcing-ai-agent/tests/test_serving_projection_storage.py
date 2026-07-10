@@ -1,6 +1,9 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
+
+import sourcing_agent.repositories.serving_projection as serving_projection_repository
 
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
@@ -16,7 +19,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.tempdir.cleanup()
 
     def test_serving_projection_writer_persists_contract_fields(self) -> None:
-        projection = self.store.upsert_serving_projection(
+        projection = self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_test_1",
                 "projection_type": "run_scope_projection",
@@ -40,8 +43,96 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertEqual(projection["counts"]["candidate_count"], 2)
         self.assertEqual(projection["readiness"]["profile"], "partial")
 
+    def test_catalog_lists_filter_order_limit_and_pointer_rollover(self) -> None:
+        repository = self.store.repos.serving_projection
+        with mock.patch.object(
+            serving_projection_repository,
+            "utc_now_timestamp",
+            return_value="2026-07-10 05:00:00",
+        ):
+            for payload in (
+                {
+                    "projection_id": "proj-a",
+                    "projection_type": "run_scope_projection",
+                    "collection_id": "company:alpha",
+                    "source_run_id": "run-a",
+                    "state": "serving",
+                },
+                {
+                    "projection_id": "proj-z",
+                    "projection_type": "collection_authoritative_projection",
+                    "collection_id": "company:alpha",
+                    "source_run_id": "run-z",
+                    "state": "serving",
+                },
+                {
+                    "projection_id": "proj-mid",
+                    "projection_type": "run_scope_projection",
+                    "collection_id": "company:beta",
+                    "source_run_id": "run-mid",
+                    "state": "archived",
+                },
+            ):
+                repository.upsert(payload)
+
+            repository.upsert_run_link(
+                {"run_id": "run-a", "projection_id": "proj-a", "link_type": "result"}
+            )
+            repository.upsert_run_link(
+                {"run_id": "run-a", "projection_id": "proj-z", "link_type": "audit"}
+            )
+            repository.upsert_authoritative_pointer(
+                {"collection_id": "company:alpha", "active_projection_id": "proj-a"}
+            )
+            repository.upsert_authoritative_pointer(
+                {
+                    "collection_id": "company:beta",
+                    "active_projection_id": "proj-mid",
+                    "state": "archived",
+                }
+            )
+            repository.upsert_authoritative_pointer(
+                {"collection_id": "company:alpha", "active_projection_id": "proj-z"}
+            )
+
+        self.assertEqual(
+            [row["projection_id"] for row in repository.list(collection_id="company:alpha")],
+            ["proj-z", "proj-a"],
+        )
+        self.assertEqual(
+            [row["projection_id"] for row in repository.list(source_run_id="run-a")],
+            ["proj-a"],
+        )
+        self.assertEqual(
+            [
+                row["projection_id"]
+                for row in repository.list(
+                    projection_type="collection_authoritative_projection",
+                    state="serving",
+                    limit=1,
+                )
+            ],
+            ["proj-z"],
+        )
+        self.assertEqual(
+            [row["link_type"] for row in repository.list_run_links("run-a")],
+            ["audit", "result"],
+        )
+        self.assertEqual(len(repository.list_run_links("run-a", limit=1)), 1)
+        pointer = repository.get_authoritative_pointer("company:alpha")
+        self.assertEqual(pointer["previous_projection_id"], "proj-a")
+        self.assertEqual(
+            [row["collection_id"] for row in repository.list_authoritative_pointers()],
+            ["company:alpha"],
+        )
+        self.assertEqual(
+            [row["collection_id"] for row in repository.list_authoritative_pointers(state="")],
+            ["company:alpha", "company:beta"],
+        )
+        self.assertEqual(len(repository.list_authoritative_pointers(state="", limit=1)), 1)
+
     def test_serving_projection_members_dedupe_and_page_by_identity_key(self) -> None:
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_members",
                 "projection_type": "run_scope_projection",
@@ -94,7 +185,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertNotIn("raw_profile", members[0])
 
     def test_list_serving_projection_members_by_identity_keys_bulk_fetches_requested_members(self) -> None:
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_member_keys",
                 "projection_type": "run_scope_projection",
@@ -127,7 +218,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         )
 
     def test_manifest_shards_are_audit_refs_not_member_source(self) -> None:
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_manifest",
                 "projection_type": "collection_authoritative_projection",
@@ -153,7 +244,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertEqual(self.store.count_serving_projection_members("proj_manifest"), 0)
 
     def test_run_projection_link_and_collection_pointer_are_explicit_foundation_records(self) -> None:
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_run_scope",
                 "projection_type": "run_scope_projection",
@@ -162,7 +253,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                 "state": "serving",
             }
         )
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_google_authoritative_v1",
                 "projection_type": "collection_authoritative_projection",
@@ -171,7 +262,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
             }
         )
 
-        link = self.store.upsert_run_projection_link(
+        link = self.store.repos.serving_projection.upsert_run_link(
             {
                 "run_id": "job-google-vision",
                 "projection_id": "proj_run_scope",
@@ -181,7 +272,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                 "metadata": {"scope": "vision-language"},
             }
         )
-        pointer = self.store.upsert_collection_authoritative_pointer(
+        pointer = self.store.repos.serving_projection.upsert_authoritative_pointer(
             {
                 "collection_id": "company:google",
                 "active_projection_id": "proj_google_authoritative_v1",
@@ -194,25 +285,25 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
         self.assertEqual(link["run_id"], "job-google-vision")
         self.assertEqual(link["projection_id"], "proj_run_scope")
         self.assertEqual(link["metadata"], {"scope": "vision-language"})
-        self.assertEqual(self.store.get_run_projection_link("job-google-vision")["projection_id"], "proj_run_scope")
-        self.assertEqual(len(self.store.list_run_projection_links("job-google-vision")), 1)
+        self.assertEqual(self.store.repos.serving_projection.get_run_link("job-google-vision")["projection_id"], "proj_run_scope")
+        self.assertEqual(len(self.store.repos.serving_projection.list_run_links("job-google-vision")), 1)
         self.assertEqual(pointer["active_projection_id"], "proj_google_authoritative_v1")
         self.assertEqual(pointer["previous_projection_id"], "")
 
-        self.store.upsert_collection_authoritative_pointer(
+        self.store.repos.serving_projection.upsert_authoritative_pointer(
             {
                 "collection_id": "company:google",
                 "active_projection_id": "proj_google_authoritative_v2",
                 "active_collection_version": "v2",
             }
         )
-        updated_pointer = self.store.get_collection_authoritative_pointer("company:google")
+        updated_pointer = self.store.repos.serving_projection.get_authoritative_pointer("company:google")
 
         self.assertEqual(updated_pointer["active_projection_id"], "proj_google_authoritative_v2")
         self.assertEqual(updated_pointer["previous_projection_id"], "proj_google_authoritative_v1")
 
     def test_collection_authoritative_pointers_can_be_listed_for_asset_overview(self) -> None:
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_google_authoritative_v1",
                 "projection_type": "collection_authoritative_projection",
@@ -220,7 +311,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                 "state": "serving",
             }
         )
-        self.store.upsert_collection_authoritative_pointer(
+        self.store.repos.serving_projection.upsert_authoritative_pointer(
             {
                 "collection_id": "company:google",
                 "active_projection_id": "proj_google_authoritative_v1",
@@ -228,7 +319,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
             }
         )
 
-        pointers = self.store.list_collection_authoritative_pointers()
+        pointers = self.store.repos.serving_projection.list_authoritative_pointers()
 
         self.assertEqual(len(pointers), 1)
         self.assertEqual(pointers[0]["collection_id"], "company:google")

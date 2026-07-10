@@ -169,13 +169,10 @@ _CONTROL_PLANE_POSTGRES_NATIVE_TABLES = {
     "reawaken_waiting_prerequisite_job_materialization_items": "job_materialization_items",
     "list_latest_target_candidate_public_web_runs_by_record_ids": "target_candidate_public_web_runs",
     "list_latest_crm_public_web_runs_by_record_ids": "crm_public_web_runs",
-    "upsert_serving_projection": "serving_projections",
     "upsert_serving_projection_members": "serving_projection_members",
     "replace_serving_projection_members": "serving_projection_members",
     "replace_projection_person_search_index": "projection_person_search_index",
     "upsert_projection_manifest_shard": "projection_manifest_shards",
-    "upsert_run_projection_link": "run_projection_links",
-    "upsert_collection_authoritative_pointer": "collection_authoritative_pointers",
     "upsert_raw_profile_index": "raw_profile_index",
     "upsert_candidate_evidence_index": "candidate_evidence_index",
 }
@@ -9874,9 +9871,6 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] if "updated_at" in row_keys else dict(row).get("updated_at") or ""),
         }
 
-    def _serving_projection_from_row(self, row: Any) -> dict[str, Any]:
-        return _serving_projection_repo.SERVING_PROJECTIONS.from_row(row)
-
     def _serving_projection_member_from_row(self, row: Any) -> dict[str, Any]:
         if row is None:
             return {}
@@ -9924,101 +9918,6 @@ class ControlPlaneStore:
             "created_at": str(_row_value(row, "created_at") or ""),
             "updated_at": str(_row_value(row, "updated_at") or ""),
         }
-
-    def _run_projection_link_from_row(self, row: Any) -> dict[str, Any]:
-        return _serving_projection_repo.RUN_PROJECTION_LINKS.from_row(row)
-
-    def _collection_authoritative_pointer_from_row(self, row: Any) -> dict[str, Any]:
-        return _serving_projection_repo.COLLECTION_AUTHORITATIVE_POINTERS.from_row(row)
-
-    def upsert_serving_projection(self, payload: dict[str, Any]) -> dict[str, Any]:
-        normalized = dict(payload or {})
-        projection_id = _build_projection_id(normalized.get("projection_id") or normalized.get("id"))
-        projection_type = _normalize_serving_projection_type(normalized.get("projection_type"))
-        state = _normalize_serving_projection_state(normalized.get("state"))
-        now = _utc_now_timestamp()
-        existing = self.get_serving_projection(projection_id)
-        row_payload = _serving_projection_repo.SERVING_PROJECTIONS.to_columns(
-            {
-                **normalized,
-                "projection_id": projection_id,
-                "projection_type": projection_type,
-                "state": state,
-                "source_run_id": normalized.get("source_run_id") or normalized.get("run_id"),
-                "scope_spec": _normalize_json_object_payload(
-                    normalized.get("scope_spec") or normalized.get("scope_spec_json")
-                ),
-                "counts": _normalize_json_object_payload(normalized.get("counts") or normalized.get("counts_json")),
-                "readiness": _normalize_json_object_payload(
-                    normalized.get("readiness") or normalized.get("readiness_json")
-                ),
-                "provenance": _normalize_json_object_payload(
-                    normalized.get("provenance") or normalized.get("provenance_json")
-                ),
-                "metadata": _normalize_json_object_payload(
-                    normalized.get("metadata") or normalized.get("metadata_json")
-                ),
-                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-                "updated_at": now,
-            }
-        )
-        if self._write_control_plane_row_to_postgres("serving_projections", row_payload):
-            return self.get_serving_projection(projection_id)
-        self._raise_control_plane_postgres_write_failure(
-            table_name="serving_projections",
-            method_name="upsert_serving_projection",
-            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
-        )
-
-    def get_serving_projection(self, projection_id: str) -> dict[str, Any]:
-        normalized_projection_id = str(projection_id or "").strip()
-        if not normalized_projection_id:
-            return {}
-        postgres_row = self._select_control_plane_row(
-            "serving_projections",
-            row_builder=self._serving_projection_from_row,
-            where_sql="projection_id = %s",
-            params=[normalized_projection_id],
-        )
-        if postgres_row is not None:
-            return postgres_row
-        return {}
-
-    def list_serving_projections(
-        self,
-        *,
-        collection_id: str = "",
-        source_run_id: str = "",
-        projection_type: str = "",
-        state: str = "",
-        limit: int = 100,
-    ) -> list[dict[str, Any]]:
-        clauses: list[str] = []
-        params: list[Any] = []
-        if str(collection_id or "").strip():
-            clauses.append("collection_id = ?")
-            params.append(str(collection_id or "").strip())
-        if str(source_run_id or "").strip():
-            clauses.append("source_run_id = ?")
-            params.append(str(source_run_id or "").strip())
-        if str(projection_type or "").strip():
-            clauses.append("projection_type = ?")
-            params.append(_normalize_serving_projection_type(projection_type))
-        if str(state or "").strip():
-            clauses.append("state = ?")
-            params.append(_normalize_serving_projection_state(state))
-        where_sqlite = " AND ".join(clauses)
-        postgres_rows = self._select_control_plane_rows(
-            "serving_projections",
-            row_builder=self._serving_projection_from_row,
-            where_sql=where_sqlite.replace("?", "%s"),
-            params=params,
-            order_by_sql="updated_at DESC, projection_id DESC",
-            limit=max(1, int(limit or 100)),
-        )
-        if postgres_rows:
-            return postgres_rows
-        return []
 
     def _serving_projection_member_row_payload(
         self,
@@ -10946,150 +10845,6 @@ class ControlPlaneStore:
             params=params,
             order_by_sql="shard_kind ASC, shard_index ASC, shard_id ASC",
             limit=max(1, int(limit or 1000)),
-        )
-        if postgres_rows:
-            return postgres_rows
-        return []
-
-    def upsert_run_projection_link(self, payload: dict[str, Any]) -> dict[str, Any]:
-        normalized = dict(payload or {})
-        run_id = str(normalized.get("run_id") or normalized.get("job_id") or "").strip()
-        projection_id = str(normalized.get("projection_id") or "").strip()
-        if not run_id or not projection_id:
-            return {}
-        link_type = str(normalized.get("link_type") or "result").strip() or "result"
-        existing = self.get_run_projection_link(run_id, link_type=link_type)
-        now = _utc_now_timestamp()
-        row_payload = _serving_projection_repo.RUN_PROJECTION_LINKS.to_columns(
-            {
-                **normalized,
-                "run_id": run_id,
-                "projection_id": projection_id,
-                "link_type": link_type,
-                "projection_type": _normalize_serving_projection_type(normalized.get("projection_type")),
-                "state": str(normalized.get("state") or "active").strip().lower() or "active",
-                "metadata": _normalize_json_object_payload(
-                    normalized.get("metadata") or normalized.get("metadata_json")
-                ),
-                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-                "updated_at": now,
-            }
-        )
-        if self._write_control_plane_row_to_postgres("run_projection_links", row_payload):
-            return self.get_run_projection_link(run_id, link_type=link_type)
-        self._raise_control_plane_postgres_write_failure(
-            table_name="run_projection_links",
-            method_name="upsert_run_projection_link",
-            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
-        )
-
-    def get_run_projection_link(self, run_id: str, *, link_type: str = "result") -> dict[str, Any]:
-        normalized_run_id = str(run_id or "").strip()
-        normalized_link_type = str(link_type or "result").strip() or "result"
-        if not normalized_run_id:
-            return {}
-        postgres_row = self._select_control_plane_row(
-            "run_projection_links",
-            row_builder=self._run_projection_link_from_row,
-            where_sql="run_id = %s AND link_type = %s",
-            params=[normalized_run_id, normalized_link_type],
-        )
-        if postgres_row is not None:
-            return postgres_row
-        return {}
-
-    def list_run_projection_links(self, run_id: str, *, limit: int = 20) -> list[dict[str, Any]]:
-        normalized_run_id = str(run_id or "").strip()
-        if not normalized_run_id:
-            return []
-        postgres_rows = self._select_control_plane_rows(
-            "run_projection_links",
-            row_builder=self._run_projection_link_from_row,
-            where_sql="run_id = %s",
-            params=[normalized_run_id],
-            order_by_sql="updated_at DESC, link_type ASC",
-            limit=max(1, int(limit or 20)),
-        )
-        if postgres_rows:
-            return postgres_rows
-        return []
-
-    def upsert_collection_authoritative_pointer(self, payload: dict[str, Any]) -> dict[str, Any]:
-        normalized = dict(payload or {})
-        collection_id = str(normalized.get("collection_id") or "").strip()
-        active_projection_id = str(
-            normalized.get("active_projection_id") or normalized.get("projection_id") or ""
-        ).strip()
-        if not collection_id or not active_projection_id:
-            return {}
-        existing = self.get_collection_authoritative_pointer(collection_id)
-        previous_projection_id = str(
-            normalized.get("previous_projection_id")
-            or (
-                (existing or {}).get("active_projection_id")
-                if str((existing or {}).get("active_projection_id") or "") != active_projection_id
-                else (existing or {}).get("previous_projection_id")
-            )
-            or ""
-        ).strip()
-        now = _utc_now_timestamp()
-        row_payload = _serving_projection_repo.COLLECTION_AUTHORITATIVE_POINTERS.to_columns(
-            {
-                **normalized,
-                "collection_id": collection_id,
-                "active_projection_id": active_projection_id,
-                "previous_projection_id": previous_projection_id,
-                "state": str(normalized.get("state") or "active").strip().lower() or "active",
-                "metadata": _normalize_json_object_payload(
-                    normalized.get("metadata") or normalized.get("metadata_json")
-                ),
-                "published_at": str(normalized.get("published_at") or now).strip(),
-                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-                "updated_at": now,
-            }
-        )
-        if self._write_control_plane_row_to_postgres("collection_authoritative_pointers", row_payload):
-            return self.get_collection_authoritative_pointer(collection_id)
-        self._raise_control_plane_postgres_write_failure(
-            table_name="collection_authoritative_pointers",
-            method_name="upsert_collection_authoritative_pointer",
-            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
-        )
-
-    def get_collection_authoritative_pointer(self, collection_id: str) -> dict[str, Any]:
-        normalized_collection_id = str(collection_id or "").strip()
-        if not normalized_collection_id:
-            return {}
-        postgres_row = self._select_control_plane_row(
-            "collection_authoritative_pointers",
-            row_builder=self._collection_authoritative_pointer_from_row,
-            where_sql="collection_id = %s",
-            params=[normalized_collection_id],
-        )
-        if postgres_row is not None:
-            return postgres_row
-        return {}
-
-    def list_collection_authoritative_pointers(
-        self,
-        *,
-        state: str = "active",
-        limit: int = 250,
-    ) -> list[dict[str, Any]]:
-        clauses: list[str] = []
-        params: list[Any] = []
-        normalized_state = str(state or "").strip().lower()
-        if normalized_state:
-            clauses.append("state = ?")
-            params.append(normalized_state)
-        where_sqlite = " AND ".join(clauses)
-        postgres_rows = self._select_control_plane_rows(
-            "collection_authoritative_pointers",
-            row_builder=self._collection_authoritative_pointer_from_row,
-            where_sql=where_sqlite.replace("?", "%s"),
-            params=params,
-            order_by_sql="updated_at DESC, collection_id ASC",
-            limit=max(1, int(limit or 250)),
         )
         if postgres_rows:
             return postgres_rows
@@ -13806,41 +13561,6 @@ def _loads_json_list(value: Any, *, default: list[Any] | None = None) -> list[An
     except (TypeError, ValueError, json.JSONDecodeError):
         return list(default or [])
     return list(parsed) if isinstance(parsed, list) else list(default or [])
-
-
-_SERVING_PROJECTION_TYPES = {
-    "run_scope_projection",
-    "collection_authoritative_projection",
-}
-_SERVING_PROJECTION_STATES = {
-    "draft",
-    "building",
-    "serving",
-    "degraded",
-    "failed",
-    "archived",
-}
-
-
-def _build_projection_id(value: Any = "") -> str:
-    normalized = str(value or "").strip()
-    if normalized:
-        return normalized
-    return f"proj_{uuid4().hex}"
-
-
-def _normalize_serving_projection_type(value: Any) -> str:
-    normalized = str(value or "").strip().lower()
-    if normalized in _SERVING_PROJECTION_TYPES:
-        return normalized
-    return "run_scope_projection"
-
-
-def _normalize_serving_projection_state(value: Any) -> str:
-    normalized = str(value or "").strip().lower()
-    if normalized in _SERVING_PROJECTION_STATES:
-        return normalized
-    return "draft"
 
 
 def _normalize_json_object_payload(value: Any) -> dict[str, Any]:

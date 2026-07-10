@@ -989,7 +989,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             {"job_id": job_id, "projection_person_search_index_item_limit": 1}
         )
         self.assertEqual(index_queue_result["completed_count"], 1, index_queue_result)
-        projection = self.store.get_serving_projection("proj_projection_layering_without_overlay")
+        projection = self.store.repos.serving_projection.get("proj_projection_layering_without_overlay")
         public_facet_counts = dict(dict(projection.get("counts") or {}).get("public_facet_counts") or {})
         self.assertEqual(public_facet_counts["source"], "projection_person_search_index")
         self.assertTrue(public_facet_counts["has_layer_metadata"])
@@ -2074,7 +2074,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         summary = dict(job.get("summary") or {})
         self.assertNotIn("workflow_completion_deferred", summary)
         self.assertNotIn("workflow_completion_blockers", summary)
-        link = self.store.get_run_projection_link(job_id)
+        link = self.store.repos.serving_projection.get_run_link(job_id)
         self.assertTrue(str(dict(link or {}).get("projection_id") or "").startswith("proj_"))
 
     def test_deferred_completion_bridge_accepts_legacy_candidate_source_deferred_signal(self) -> None:
@@ -2157,7 +2157,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertNotIn("workflow_completion_deferred", summary)
         candidate_source_summary = dict(summary.get("candidate_source") or {})
         self.assertNotIn("asset_population_finalization_deferred", candidate_source_summary)
-        link = self.store.get_run_projection_link(job_id)
+        link = self.store.repos.serving_projection.get_run_link(job_id)
         self.assertTrue(str(dict(link or {}).get("projection_id") or "").startswith("proj_"))
 
     def test_recovery_result_view_terminal_proof_deduplicates_promotion_event(self) -> None:
@@ -2237,7 +2237,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             if dict(event.get("payload") or {}).get("event_family") == "workflow_completion_promotion_bridge"
         ]
         self.assertEqual(promotion_events, [])
-        link = self.store.get_run_projection_link(job_id)
+        link = self.store.repos.serving_projection.get_run_link(job_id)
         self.assertTrue(str(dict(link or {}).get("projection_id") or "").startswith("proj_"))
 
     def test_recovery_result_view_terminal_proof_requires_board_visible_completion(self) -> None:
@@ -2407,7 +2407,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(job.get("status"), "completed")
         self.assertEqual(job.get("stage"), "completed")
         self.assertEqual(job.get("artifact_path"), str(self.settings.jobs_dir / f"{job_id}.json"))
-        link = self.store.get_run_projection_link(job_id)
+        link = self.store.repos.serving_projection.get_run_link(job_id)
         self.assertTrue(str(dict(link or {}).get("projection_id") or "").startswith("proj_"))
 
     def test_acquisition_resume_runner_completes_from_result_view_lifecycle_proof(self) -> None:
@@ -2497,7 +2497,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         job = self.store.get_job(job_id) or {}
         self.assertEqual(job.get("status"), "completed")
         self.assertEqual(job.get("stage"), "completed")
-        link = self.store.get_run_projection_link(job_id)
+        link = self.store.repos.serving_projection.get_run_link(job_id)
         projection_id = str(dict(link or {}).get("projection_id") or "")
         self.assertTrue(projection_id.startswith("proj_"))
         self.assertEqual(self.store.count_serving_projection_members(projection_id), 7384)
@@ -3164,7 +3164,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             summary_payload={"candidate_count": 1},
             publish_lifecycle=False,
         )
-        link = self.store.get_run_projection_link("job-projection-event-time")
+        link = self.store.repos.serving_projection.get_run_link("job-projection-event-time")
         projection_id = str(link.get("projection_id") or "")
         commands = self.store.list_workflow_commands(
             workflow_run_id=legacy_job_workflow_run_id("job-projection-event-time"),
@@ -3180,7 +3180,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(persisted["metadata"]["run_scope_projection"]["status"], "published")
         self.assertTrue(projection_id.startswith("proj_"))
         self.assertEqual(self.store.count_serving_projection_members(projection_id), 1)
-        projection = self.store.get_serving_projection(projection_id)
+        projection = self.store.repos.serving_projection.get(projection_id)
         public_facet_counts = dict(dict(projection.get("counts") or {}).get("public_facet_counts") or {})
         self.assertEqual(public_facet_counts["candidate_count"], 1)
         self.assertEqual(public_facet_counts["source"], "serving_projection_members")
@@ -3284,7 +3284,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             }
         )
         phase = dict(dict(recovery.get("recovery_phase_metrics") or {}).get("run_scope_projection_finalize") or {})
-        link = self.store.get_run_projection_link("job-projection-finalize-recovery")
+        link = self.store.repos.serving_projection.get_run_link("job-projection-finalize-recovery")
         projection_id = str(link.get("projection_id") or "")
         stored_view = self.store.get_job_result_view(job_id="job-projection-finalize-recovery") or {}
         stored_projection = dict(dict(stored_view.get("metadata") or {}).get("run_scope_projection") or {})
@@ -3485,7 +3485,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             summary_payload={"candidate_count": 1},
             publish_lifecycle=False,
         )
-        link = self.store.get_run_projection_link("job-projection-event-time-idempotent")
+        link = self.store.repos.serving_projection.get_run_link("job-projection-event-time-idempotent")
         projection_id = str(link.get("projection_id") or "")
         first_merge_commands = self.store.list_workflow_commands(
             workflow_run_id=legacy_job_workflow_run_id("job-projection-event-time-idempotent"),
@@ -3495,8 +3495,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.orchestrator._run_collection_authoritative_merge_queue_once(  # noqa: SLF001
             {"job_id": "job-projection-event-time-idempotent", "owner_id": "test-idempotent-merge"}
         )
-        projection = self.store.get_serving_projection(projection_id)
-        self.store.upsert_serving_projection(
+        projection = self.store.repos.serving_projection.get(projection_id)
+        self.store.repos.serving_projection.upsert(
             {
                 **projection,
                 "counts": {
@@ -3524,7 +3524,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             summary_payload={"candidate_count": 1},
             publish_lifecycle=False,
         )
-        refreshed_projection = self.store.get_serving_projection(projection_id)
+        refreshed_projection = self.store.repos.serving_projection.get(projection_id)
         merge_commands = self.store.list_workflow_commands(
             workflow_run_id=legacy_job_workflow_run_id("job-projection-event-time-idempotent"),
             owner=COLLECTION_AUTHORITATIVE_MERGE_OWNER,
@@ -3607,7 +3607,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         queue_result = self.orchestrator._run_collection_authoritative_merge_queue_once(  # noqa: SLF001
             {"job_id": "job-merge-run", "owner_id": "test-merge-owner"}
         )
-        pointer = self.store.get_collection_authoritative_pointer("company:openai")
+        pointer = self.store.repos.serving_projection.get_authoritative_pointer("company:openai")
         members = self.store.list_serving_projection_members(pointer["active_projection_id"], limit=10)
         names = {member["candidate_identity_key"]: member["public_summary"].get("name") for member in members}
 
@@ -3768,8 +3768,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         first = self.orchestrator._run_projection_person_search_index_queue_once(  # noqa: SLF001
             {"job_id": "job-index-self-progress", "projection_person_search_index_item_limit": 1}
         )
-        projection = self.store.get_serving_projection("proj_index_self_progress")
-        self.store.upsert_serving_projection(
+        projection = self.store.repos.serving_projection.get("proj_index_self_progress")
+        self.store.repos.serving_projection.upsert(
             {
                 **projection,
                 "readiness": {
@@ -3827,8 +3827,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             owner=PROJECTION_PERSON_SEARCH_INDEX_BUILD_OWNER,
             limit=0,
         )[0]
-        projection = self.store.get_serving_projection("proj_index_semantic_obsolete")
-        self.store.upsert_serving_projection(
+        projection = self.store.repos.serving_projection.get("proj_index_semantic_obsolete")
+        self.store.repos.serving_projection.upsert(
             {
                 **projection,
                 "metadata": {
@@ -4001,7 +4001,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             }
         )
         phase = dict(dict(recovery.get("recovery_phase_metrics") or {}).get("collection_authoritative_merge") or {})
-        pointer = self.store.get_collection_authoritative_pointer("company:openai")
+        pointer = self.store.repos.serving_projection.get_authoritative_pointer("company:openai")
 
         self.assertEqual(dict(recovery.get("collection_authoritative_merge") or {}).get("completed_count"), 1)
         self.assertEqual(phase["owner"], COLLECTION_AUTHORITATIVE_MERGE_OWNER)
@@ -22201,7 +22201,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(board_state["published_candidate_count"], 2)
         self.assertTrue(str(board_state.get("row_publication_started_at") or "").strip())
         self.assertEqual(board_state["row_publication_tier"], "lifecycle")
-        link = self.store.get_run_projection_link(job_id)
+        link = self.store.repos.serving_projection.get_run_link(job_id)
         projection_id = str(link.get("projection_id") or "")
         self.assertTrue(projection_id.startswith("proj_"))
         stored_view = self.store.get_job_result_view(job_id=job_id) or {}
@@ -22310,7 +22310,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             reason="unit_test_lovable_initial_row_shell",
         )
         self.assertEqual(row_publication["served_candidate_count"], 25)
-        projection_id = str(self.store.get_run_projection_link(job_id).get("projection_id") or "")
+        projection_id = str(self.store.repos.serving_projection.get_run_link(job_id).get("projection_id") or "")
         self.assertTrue(projection_id.startswith("proj_"))
         self.assertEqual(self.store.count_serving_projection_members(projection_id, visible_only=True), 25)
         self.store.upsert_job_result_lifecycle(

@@ -50,7 +50,7 @@ class CRMWriter:
     ) -> dict[str, Any]:
         normalized_projection_id = _require_non_empty(projection_id, "projection_id")
         normalized_candidate_key = _require_non_empty(candidate_identity_key, "candidate_identity_key")
-        projection = self.store.get_serving_projection(normalized_projection_id)
+        projection = self.store.repos.serving_projection.get(normalized_projection_id)
         if not projection:
             return {
                 "status": "not_found",

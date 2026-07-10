@@ -10,6 +10,25 @@
 
 ## 2026-07-10 (Asia/Shanghai)
 
+### Track B ②.3a: serving_projection catalog repository cutover
+
+- `serving_projections`, `run_projection_links`, and `collection_authoritative_pointers` moved from nine
+  `ControlPlaneStore` methods to `store.repos.serving_projection`; 69 production references (68 calls plus
+  one callback) and 82 direct-test calls switched in the same batch. The nine methods, three store mappers,
+  and three native dispatch keys were deleted; `storage.py` fell from 14,635 to 14,355 lines.
+- The deletion-window battery passed 4 tests plus 18 fault subtests. A frozen real-PG script compared 33
+  return samples and raw 3/2/2-row table dumps against both the coexisting old surface and pinned `9217350`;
+  all normal outputs were byte-identical (SHA-256 `648efefe086ed7359386885eb212e3274a1d2589d54acdb0922868133b611276`).
+  A shared-descriptor mutation stayed equal inside one worktree but changed the pinned hash to
+  `8bef381ff56ef3adb7bd4cf8d1d1cc59e5055377bdf085cefdbbf11ab4c43c26`, proving the cross-worktree gate.
+- Validation: permanent direct/guard group 23 passed, downstream domain group 39 passed, results API exact
+  slice 6 passed, and the three relevant pipeline tests passed on both current and `9217350`. The contract
+  lane passed 189/0 skip plus 2/11/1/2 downstream gates and a clean dry-run report. Ruff/format checked 43
+  files; mypy stayed at R-011's 87 errors in the same four files after the new repository/base were added.
+- This is the low-risk catalog sub-batch only. Manifest shards, members, and person search index remain in
+  `ControlPlaneStore` as ②.3b/c/d; no schema, count/readiness, board, provider, or public API semantics changed.
+  The ②.3a review request is pinned to `9217350..<this implementation commit>` and is asynchronous/scope-local.
+
 ### Track B ②.2: manual_review repository cutover
 
 - The `manual_review_items` domain moved from seven `ControlPlaneStore` methods to
@@ -31,8 +50,9 @@
   returned only `ConnectionRefused`; it has no verdict and is recorded as deferred/invalid in R-013.
   Per owner direction it was not retried. The owner then updated the policy on 2026-07-10: a separate
   read-only Codex session is an accepted reviewer, and a recorded review request does not block the next
-  module. `NO-GO` remains a scope-local block on live/W6/manual/milestone signoff. Next repository domain
-  is ②.3 serving_projection; the invalid Claude artifact cannot unlock signoff.
+  module. The separate non-author Codex fallback subsequently reviewed pinned `c19c0fd..d0828e7` and returned
+  GO (`runtime/reviews/20260710_async-reference-track-b-2-2-codex-subagent.md`; AST 14/14, fault probes 8/8,
+  base/head pipeline result identical). R-013 is closed; the two failed transport artifacts remain invalid.
 
 ## 2026-07-09 (Asia/Shanghai)
 

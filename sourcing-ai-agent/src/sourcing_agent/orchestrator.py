@@ -6689,7 +6689,7 @@ class SourcingOrchestrator:
         normalized_job_id = str(job_id or "").strip()
         if not normalized_job_id:
             return []
-        link = self.store.get_run_projection_link(normalized_job_id)
+        link = self.store.repos.serving_projection.get_run_link(normalized_job_id)
         projection_id = str(dict(link or {}).get("projection_id") or "").strip()
         if not projection_id:
             return []
@@ -6732,11 +6732,11 @@ class SourcingOrchestrator:
         normalized_job_id = str(job_id or "").strip()
         if not normalized_job_id:
             return {}
-        link = self.store.get_run_projection_link(normalized_job_id)
+        link = self.store.repos.serving_projection.get_run_link(normalized_job_id)
         projection_id = str(dict(link or {}).get("projection_id") or "").strip()
         if not projection_id:
             return {}
-        projection = self.store.get_serving_projection(projection_id)
+        projection = self.store.repos.serving_projection.get(projection_id)
         if str(dict(projection or {}).get("projection_type") or "").strip() != "run_scope_projection":
             return {}
         return dict(projection or {})
@@ -6829,11 +6829,11 @@ class SourcingOrchestrator:
         normalized_snapshot_id = str(snapshot_id or "").strip()
         if not normalized_job_id:
             return {"status": "skipped", "reason": "job_id_missing"}
-        link = self.store.get_run_projection_link(normalized_job_id)
+        link = self.store.repos.serving_projection.get_run_link(normalized_job_id)
         projection_id = str(dict(link or {}).get("projection_id") or "").strip()
         if not projection_id:
             return {"status": "skipped", "reason": "run_projection_link_missing"}
-        projection = self.store.get_serving_projection(projection_id)
+        projection = self.store.repos.serving_projection.get(projection_id)
         if not projection:
             return {
                 "status": "skipped",
@@ -6928,7 +6928,7 @@ class SourcingOrchestrator:
             "expected_visible_member_count": max(0, _coerce_int(expected_visible_member_count, 0)),
             "updated_at": _utc_now_iso(),
         }
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 **dict(projection),
                 "collection_id": str(
@@ -6949,7 +6949,9 @@ class SourcingOrchestrator:
             self._enqueue_collection_authoritative_merge_item(
                 job_id=normalized_job_id,
                 request=request,
-                projection_publication={"projection": self.store.get_serving_projection(projection_id) or projection},
+                projection_publication={
+                    "projection": self.store.repos.serving_projection.get(projection_id) or projection
+                },
                 reason="board_visible_projection_members_extended",
             )
             if complete_expected_count > 0 and after_visible_count >= complete_expected_count
@@ -7952,7 +7954,9 @@ class SourcingOrchestrator:
         source_projection_id = str(metadata.get("source_projection_id") or "").strip()
         if not item_id or not collection_id or not source_projection_id:
             return {}
-        projection_payload = dict(source_projection or self.store.get_serving_projection(source_projection_id) or {})
+        projection_payload = dict(
+            source_projection or self.store.repos.serving_projection.get(source_projection_id) or {}
+        )
         job_id = str(
             item_payload.get("job_id")
             or metadata.get("source_run_id")
@@ -8290,7 +8294,7 @@ class SourcingOrchestrator:
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             return {"status": "skipped", "reason": "projection_id_missing"}
-        projection = self.store.get_serving_projection(normalized_projection_id)
+        projection = self.store.repos.serving_projection.get(normalized_projection_id)
         if not projection:
             return {
                 "status": "skipped",
@@ -8413,7 +8417,7 @@ class SourcingOrchestrator:
         ).strip()
         if not item_id or not projection_id:
             return {}
-        projection_payload = dict(projection or self.store.get_serving_projection(projection_id) or {})
+        projection_payload = dict(projection or self.store.repos.serving_projection.get(projection_id) or {})
         job_id = str(item_payload.get("job_id") or projection_payload.get("source_run_id") or projection_id).strip()
         command_workflow_run_id = str(workflow_run_id or "").strip() or legacy_job_workflow_run_id(job_id)
         command_operation_id = str(operation_id or "").strip() or legacy_job_operation_id(job_id)
@@ -8576,7 +8580,7 @@ class SourcingOrchestrator:
                 )
             )
             return {"status": "failed", "reason": "projection_person_search_index_scope_missing", "item": failed_item}
-        projection = self.store.get_serving_projection(projection_id)
+        projection = self.store.repos.serving_projection.get(projection_id)
         if not projection:
             failed_item = (
                 {}
@@ -9349,7 +9353,7 @@ class SourcingOrchestrator:
                 )
             )
             return {"status": "failed", "reason": "collection_authoritative_merge_scope_missing", "item": failed_item}
-        source_projection = self.store.get_serving_projection(source_projection_id)
+        source_projection = self.store.repos.serving_projection.get(source_projection_id)
         if not source_projection:
             failed_item = (
                 {}
@@ -9396,7 +9400,7 @@ class SourcingOrchestrator:
                 )
             )
             return {"status": "failed", "reason": "source_projection_members_missing", "item": failed_item}
-        existing_pointer = self.store.get_collection_authoritative_pointer(collection_id)
+        existing_pointer = self.store.repos.serving_projection.get_authoritative_pointer(collection_id)
         existing_projection_id = str(existing_pointer.get("active_projection_id") or "").strip()
         existing_members = (
             self._list_all_serving_projection_members(existing_projection_id, visible_only=False)
@@ -10470,9 +10474,9 @@ class SourcingOrchestrator:
             return {}
         serving_projection_path = Path(serving_projection_id).expanduser()
         serving_projection_path_exists = serving_projection_path.exists() and not serving_projection_path.is_dir()
-        run_projection_link = self.store.get_run_projection_link(normalized_job_id) or {}
+        run_projection_link = self.store.repos.serving_projection.get_run_link(normalized_job_id) or {}
         run_projection_id = str(run_projection_link.get("projection_id") or "").strip()
-        run_projection = self.store.get_serving_projection(run_projection_id) if run_projection_id else {}
+        run_projection = self.store.repos.serving_projection.get(run_projection_id) if run_projection_id else {}
         run_projection_member_count = (
             self.store.count_serving_projection_members(run_projection_id, visible_only=True)
             if run_projection_id
@@ -17562,7 +17566,7 @@ class SourcingOrchestrator:
             for delta_id in source_delta_ids
             if str(delta_id or "").strip()
         ]
-        existing_link = self.store.get_run_projection_link(workflow_run_id)
+        existing_link = self.store.repos.serving_projection.get_run_link(workflow_run_id)
         existing_projection_id = str(existing_link.get("projection_id") or "").strip()
         existing_visible_count = (
             self.store.count_serving_projection_members(existing_projection_id, visible_only=True)
@@ -17726,7 +17730,7 @@ class SourcingOrchestrator:
             self.store.count_serving_projection_members_by_readiness(projection_id) if projection_id else {}
         )
         if projection_id:
-            self.store.upsert_serving_projection(
+            self.store.repos.serving_projection.upsert(
                 {
                     **projection,
                     "counts": {
@@ -19999,7 +20003,7 @@ class SourcingOrchestrator:
         overlay_info_payload = dict(overlay_info or {})
         if not normalized_job_id:
             return {"status": "skipped", "reason": "projection_build_scope_missing"}
-        linked_projection = dict(self.store.get_run_projection_link(normalized_job_id) or {})
+        linked_projection = dict(self.store.repos.serving_projection.get_run_link(normalized_job_id) or {})
         projection_candidates: list[tuple[str, str]] = []
         seen_projection_ids: set[str] = set()
 
@@ -20021,7 +20025,7 @@ class SourcingOrchestrator:
         projection: dict[str, Any] = {}
         projection_snapshot_id = ""
         for candidate_projection_id, candidate_source in projection_candidates:
-            candidate_projection = self.store.get_serving_projection(candidate_projection_id)
+            candidate_projection = self.store.repos.serving_projection.get(candidate_projection_id)
             if not candidate_projection:
                 continue
             candidate_projection_state = str(dict(candidate_projection or {}).get("state") or "").strip().lower()
@@ -20316,7 +20320,7 @@ class SourcingOrchestrator:
         ).strip()
         if not item_id or not job_id or not projection_id:
             return {"status": "skipped", "reason": "projection_item_scope_missing", "item_id": item_id}
-        projection = self.store.get_serving_projection(projection_id)
+        projection = self.store.repos.serving_projection.get(projection_id)
         if not projection:
             failed_item = (
                 self._command_owned_item_result(
@@ -20623,8 +20627,8 @@ class SourcingOrchestrator:
             analysis_stage_label=analysis_stage_label,
             output_dir=output_dir,
         )
-        latest_projection = self.store.get_serving_projection(projection_id) or projection
-        self.store.upsert_serving_projection(
+        latest_projection = self.store.repos.serving_projection.get(projection_id) or projection
+        self.store.repos.serving_projection.upsert(
             {
                 **latest_projection,
                 "readiness": {
@@ -26562,7 +26566,7 @@ class SourcingOrchestrator:
 
         if normalized_job_id:
             try:
-                run_link = self.store.get_run_projection_link(normalized_job_id)
+                run_link = self.store.repos.serving_projection.get_run_link(normalized_job_id)
             except Exception:
                 run_link = {}
             _add_projection_id(dict(run_link or {}).get("projection_id"))
@@ -27164,7 +27168,7 @@ class SourcingOrchestrator:
         normalized_run_id = str(run_id or "").strip()
         if not normalized_run_id:
             return {"status": "invalid", "reason": "run_id_missing"}
-        link = self.store.get_run_projection_link(normalized_run_id)
+        link = self.store.repos.serving_projection.get_run_link(normalized_run_id)
         if not link:
             return {"status": "not_found", "run_id": normalized_run_id}
         return {
@@ -27178,7 +27182,7 @@ class SourcingOrchestrator:
         normalized_collection_id = str(collection_id or "").strip()
         if not normalized_collection_id:
             return {"status": "invalid", "reason": "collection_id_missing"}
-        pointer = self.store.get_collection_authoritative_pointer(normalized_collection_id)
+        pointer = self.store.repos.serving_projection.get_authoritative_pointer(normalized_collection_id)
         if not pointer:
             return {
                 "status": "not_found",
@@ -27186,7 +27190,7 @@ class SourcingOrchestrator:
                 "collection_id": normalized_collection_id,
             }
         projection_id = str(pointer.get("active_projection_id") or "").strip()
-        projection = self.store.get_serving_projection(projection_id)
+        projection = self.store.repos.serving_projection.get(projection_id)
         if not projection:
             return {
                 "status": "not_ready",
@@ -27208,7 +27212,7 @@ class SourcingOrchestrator:
         }
 
     def list_collection_asset_overview(self, *, limit: int = 250) -> dict[str, Any]:
-        pointers = self.store.list_collection_authoritative_pointers(
+        pointers = self.store.repos.serving_projection.list_authoritative_pointers(
             state="active",
             limit=max(1, _coerce_int(limit, 250)),
         )
@@ -27823,7 +27827,7 @@ class SourcingOrchestrator:
         projection_id = str(normalized.get("projection_id") or "").strip()
         if not projection_id:
             return {"status": "invalid", "reason": "projection_id_required"}
-        projection = self.store.get_serving_projection(projection_id)
+        projection = self.store.repos.serving_projection.get(projection_id)
         if not projection:
             return {"status": "not_found", "reason": "projection_not_found", "projection_id": projection_id}
         return self.person_asset_writer.rebuild_projection_person_search_index(
@@ -27928,7 +27932,7 @@ class SourcingOrchestrator:
         workspace_id: str = "default",
     ) -> dict[str, Any] | None:
         normalized_projection_id = str(projection_id or "").strip()
-        projection = self.store.get_serving_projection(normalized_projection_id)
+        projection = self.store.repos.serving_projection.get(normalized_projection_id)
         if not projection:
             return None
         keys = [str(key or "").strip() for key in list(candidate_identity_keys or []) if str(key or "").strip()]
@@ -29245,7 +29249,7 @@ class SourcingOrchestrator:
         projection_id = str(normalized.get("projection_id") or normalized.get("projectionId") or "").strip()
         collection_id = str(normalized.get("collection_id") or normalized.get("collectionId") or "").strip()
         if not projection_id and collection_id:
-            pointer = self.store.get_collection_authoritative_pointer(collection_id)
+            pointer = self.store.repos.serving_projection.get_authoritative_pointer(collection_id)
             projection_id = str(dict(pointer or {}).get("active_projection_id") or "").strip()
         if not projection_id:
             return {
@@ -29254,7 +29258,7 @@ class SourcingOrchestrator:
                 "migration_path": True,
                 "module_state_mutated": False,
             }
-        projection = self.store.get_serving_projection(projection_id)
+        projection = self.store.repos.serving_projection.get(projection_id)
         if not projection:
             return {
                 "status": "not_found",
@@ -30594,7 +30598,7 @@ class SourcingOrchestrator:
             "/api/jobs/{job_id}/candidates/{candidate_id}",
         ]
         if source_run_id:
-            link = self.store.get_run_projection_link(source_run_id)
+            link = self.store.repos.serving_projection.get_run_link(source_run_id)
             if not link:
                 missing_links.append(source_run_id)
             elif not projection_id:
@@ -53635,17 +53639,17 @@ class SourcingOrchestrator:
         collection_id = self._projection_collection_id_for_request(request)
         if not collection_id:
             return {}
-        pointer = self.store.get_collection_authoritative_pointer(collection_id)
+        pointer = self.store.repos.serving_projection.get_authoritative_pointer(collection_id)
         active_projection_id = ""
         projection: dict[str, Any] = {}
         reuse_basis = "collection_authoritative_projection"
         if str(pointer.get("state") or "").strip().lower() in {"active", ""}:
             active_projection_id = str(pointer.get("active_projection_id") or "").strip()
             if active_projection_id:
-                projection = self.store.get_serving_projection(active_projection_id)
+                projection = self.store.repos.serving_projection.get(active_projection_id)
         if not projection:
             reuse_basis = "run_scope_projection"
-            for candidate_projection in self.store.list_serving_projections(
+            for candidate_projection in self.store.repos.serving_projection.list(
                 collection_id=collection_id,
                 projection_type="run_scope_projection",
                 state="serving",
@@ -53684,7 +53688,7 @@ class SourcingOrchestrator:
         metadata = dict(projection.get("metadata") or {})
         source_projection_id = str(provenance.get("source_projection_id") or "").strip()
         source_projection = (
-            self.store.get_serving_projection(source_projection_id)
+            self.store.repos.serving_projection.get(source_projection_id)
             if source_projection_id
             else (projection if projection_type == "run_scope_projection" else {})
         )
@@ -59744,7 +59748,7 @@ class SourcingOrchestrator:
             ):
                 return False
 
-        existing_link = self.store.get_run_projection_link(normalized_job_id)
+        existing_link = self.store.repos.serving_projection.get_run_link(normalized_job_id)
         projection_id = str(dict(existing_link or {}).get("projection_id") or "").strip()
         if not projection_id:
             return False
@@ -59805,7 +59809,7 @@ class SourcingOrchestrator:
                 "member_count": member_count,
             }
 
-        existing_link = self.store.get_run_projection_link(normalized_job_id)
+        existing_link = self.store.repos.serving_projection.get_run_link(normalized_job_id)
         existing_ready = _ready_projection_payload(
             str(dict(existing_link or {}).get("projection_id") or "").strip(),
             reason="existing_run_scope_projection",
@@ -59869,7 +59873,7 @@ class SourcingOrchestrator:
         expected_count = max(0, int(expected_member_count or 0))
         if not normalized_job_id or expected_count <= 0:
             return {"status": "missing", "reason": "projection_expected_member_count_missing"}
-        existing_link = self.store.get_run_projection_link(normalized_job_id)
+        existing_link = self.store.repos.serving_projection.get_run_link(normalized_job_id)
         projection_id = str(dict(existing_link or {}).get("projection_id") or "").strip()
         if not projection_id:
             return {"status": "missing", "reason": "run_scope_projection_link_missing"}
@@ -63724,7 +63728,7 @@ class SourcingOrchestrator:
         if overlay_path_value:
             overlay_path = Path(overlay_path_value).expanduser()
             if overlay_path.exists() and overlay_path.is_file():
-                run_projection_link = self.store.get_run_projection_link(job_id) or {}
+                run_projection_link = self.store.repos.serving_projection.get_run_link(job_id) or {}
                 overlay_info = {
                     "path": str(overlay_path),
                     "snapshot_id": candidate_source_snapshot_id,

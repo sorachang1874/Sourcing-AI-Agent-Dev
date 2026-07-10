@@ -51,7 +51,7 @@ class ServingProjectionMigrationBackfill:
         normalized_run_id = str(run_id or "").strip()
         if not normalized_run_id:
             return {"status": "invalid", "reason": "run_id_required"}
-        existing_link = self.store.get_run_projection_link(normalized_run_id)
+        existing_link = self.store.repos.serving_projection.get_run_link(normalized_run_id)
         if existing_link and not force:
             return {
                 "status": "skipped_existing_projection",
@@ -323,7 +323,7 @@ class ServingProjectionMigrationBackfill:
         skipped_invalid_count = 0
         for snapshot in candidates[:resolved_limit]:
             collection_id = f"company:{snapshot['company_key']}"
-            existing_pointer = self.store.get_collection_authoritative_pointer(collection_id)
+            existing_pointer = self.store.repos.serving_projection.get_authoritative_pointer(collection_id)
             if existing_pointer and not include_existing:
                 skipped_existing_count += 1
                 results.append(
@@ -623,7 +623,7 @@ class ServingProjectionMigrationBackfill:
                     break
                 offset += len(members)
             if processed_count and not dry_run:
-                self.store.upsert_serving_projection(
+                self.store.repos.serving_projection.upsert(
                     {
                         **projection,
                         "readiness": {
@@ -680,10 +680,10 @@ class ServingProjectionMigrationBackfill:
             return [
                 projection
                 for projection_id in explicit_ids
-                for projection in [self.store.get_serving_projection(projection_id)]
+                for projection in [self.store.repos.serving_projection.get(projection_id)]
                 if projection
             ]
-        return self.store.list_serving_projections(limit=max(1, int(projection_limit or 250)))
+        return self.store.repos.serving_projection.list(limit=max(1, int(projection_limit or 250)))
 
 
 def _projection_member_from_candidate(candidate: dict[str, Any], *, run_id: str, rank_index: int) -> dict[str, Any]:

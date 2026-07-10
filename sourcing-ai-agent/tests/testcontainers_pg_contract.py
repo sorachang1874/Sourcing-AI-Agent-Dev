@@ -33,7 +33,7 @@ class TestcontainersPostgresContractTest(unittest.TestCase):
                 }
                 with mock.patch.dict(os.environ, env, clear=False):
                     store = ControlPlaneStore(runtime_dir / "sourcing_agent.db")
-                    store.upsert_serving_projection(
+                    store.repos.serving_projection.upsert(
                         {
                             "projection_id": "proj_container_pg",
                             "projection_type": "run_scope_projection",
@@ -54,14 +54,14 @@ class TestcontainersPostgresContractTest(unittest.TestCase):
                             }
                         ],
                     )
-                    store.upsert_run_projection_link(
+                    store.repos.serving_projection.upsert_run_link(
                         {
                             "run_id": "job-container-pg",
                             "projection_id": "proj_container_pg",
                             "collection_id": "company:openai",
                         }
                     )
-                    store.upsert_collection_authoritative_pointer(
+                    store.repos.serving_projection.upsert_authoritative_pointer(
                         {
                             "collection_id": "company:openai",
                             "active_projection_id": "proj_container_pg",

@@ -110,7 +110,7 @@ class AssetConsolidationAuditTest(PGControlPlaneStoreTestMixin, unittest.TestCas
                 status="completed",
             )
         )
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_openai_scope",
                 "projection_type": "run_scope_projection",
@@ -120,7 +120,7 @@ class AssetConsolidationAuditTest(PGControlPlaneStoreTestMixin, unittest.TestCas
                 "provenance": {"snapshot_id": "snap-projection"},
             }
         )
-        self.store.upsert_collection_authoritative_pointer(
+        self.store.repos.serving_projection.upsert_authoritative_pointer(
             {
                 "collection_id": "company:openai",
                 "active_projection_id": "proj_openai_scope",
@@ -163,7 +163,7 @@ class AssetConsolidationAuditTest(PGControlPlaneStoreTestMixin, unittest.TestCas
     def test_crm_and_person_asset_dependencies_block_snapshot_archive(self) -> None:
         self._write_snapshot_dir("google", "snap-google-scope")
         self.store.upsert_organization_asset_registry(self._snapshot("Google", "snap-google-scope", company_key="google"))
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_google_scope",
                 "projection_type": "run_scope_projection",
@@ -454,7 +454,7 @@ class AssetConsolidationAuditTest(PGControlPlaneStoreTestMixin, unittest.TestCas
         )
         self.store.upsert_organization_asset_registry(self._snapshot("OpenAI", "snap-repair-reference"))
         self.store.upsert_organization_asset_registry(self._snapshot("OpenAI", "snap-duplicate"))
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_openai_repair_reference",
                 "projection_type": "collection_authoritative_projection",
@@ -480,7 +480,7 @@ class AssetConsolidationAuditTest(PGControlPlaneStoreTestMixin, unittest.TestCas
                 },
             ],
         )
-        self.store.upsert_collection_authoritative_pointer(
+        self.store.repos.serving_projection.upsert_authoritative_pointer(
             {
                 "collection_id": "company:openai",
                 "active_projection_id": "proj_openai_repair_reference",

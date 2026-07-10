@@ -14,6 +14,7 @@ from typing import Any
 from .criteria_confidence import CriteriaConfidenceRepository
 from .linkedin_profile_registry import LinkedinProfileRegistryRepository
 from .manual_review import ManualReviewRepository
+from .serving_projection import ServingProjectionRepository
 
 
 class ControlPlaneRepositories:
@@ -32,6 +33,7 @@ class ControlPlaneRepositories:
         self.linkedin_profile_registry = LinkedinProfileRegistryRepository(adapter)
         self.criteria_confidence = CriteriaConfidenceRepository(adapter, job_lookup=job_lookup)
         self.manual_review = ManualReviewRepository(adapter)
+        self.serving_projection = ServingProjectionRepository(adapter)
 
 
 def linkedin_profile_registry_repo(store: Any) -> Any:

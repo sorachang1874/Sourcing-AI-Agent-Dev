@@ -49,7 +49,7 @@ class ServingProjectionReader:
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             return self._projection_error("invalid_projection_id", projection_id=projection_id)
-        projection = self.store.get_serving_projection(normalized_projection_id)
+        projection = self.store.repos.serving_projection.get(normalized_projection_id)
         if not projection:
             return self._projection_error("projection_not_found", projection_id=normalized_projection_id)
         if str(projection.get("state") or "").strip().lower() not in _SERVABLE_PROJECTION_STATES:
@@ -476,7 +476,7 @@ class ServingProjectionReader:
                 "filter_source": "projection_person_search_index",
                 "filter_fallback_used": False,
                 "index_filter_readiness": self._index_filter_readiness_payload(
-                    self.store.get_serving_projection(projection_id)
+                    self.store.repos.serving_projection.get(projection_id)
                 ),
             }
         page_size = 1000
@@ -511,7 +511,7 @@ class ServingProjectionReader:
             "filter_source": "serving_projection_members_scan_legacy_cutover",
             "filter_fallback_used": True,
             "filter_fallback_reason": "projection_person_search_index_unavailable",
-            "index_filter_readiness": self._index_filter_readiness_payload(self.store.get_serving_projection(projection_id)),
+            "index_filter_readiness": self._index_filter_readiness_payload(self.store.repos.serving_projection.get(projection_id)),
         }
 
     def _indexed_filter_projection_members(

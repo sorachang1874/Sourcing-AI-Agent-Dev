@@ -662,5 +662,32 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     但宿主机 `claude` 未进入 owner 的 ReClaude 专用容器/daemon transport,只返回 `ConnectionRefused`
     (无 findings/verdict),故 artifact
     `runtime/reviews/20260710T021502Z_async-reference-track-b-2-2-manual-review.md` 明标 **DEFERRED/INVALID**;
-    owner 指示不重试该 Claude transport,记 R-013,不得把该 artifact 当 GO;随后于 2026-07-10 批准改用
-    独立只读 Codex reviewer session,请求发出后不阻塞 ②.3,findings 回来再按 scope 异步修复。
+    owner 指示不重试该 Claude transport,不得把该 artifact 当 GO;首个 Codex runner 也因 timeout 产出第二份
+    **INVALID** artifact。随后由独立非作者 Codex session 对 pinned `c19c0fd..d0828e7` 完成有效对抗评审并给出
+    **GO**(`runtime/reviews/20260710_async-reference-track-b-2-2-codex-subagent.md`;AST 14/14、fault 8/8、
+    pipeline base/head 同为 3 pass/2 fail),R-013 已关闭；低优先级永久 fault-test 建议留待下次触碰该域。
+
+- **2026-07-10 ②.3a 完成 —— serving_projection catalog 三表退役到 `store.repos.serving_projection`**:
+  - **子批边界**:`serving_projections` / `run_projection_links` / `collection_authoritative_pointers` 三表、9 public
+    (`upsert/get/list`,run-link 三法,pointer 三法)+3 descriptor mapper+5 module helper。members / manifest / search-index
+    明确留 ②.3b/c/d,3d 后整域闭合;schema/DDL、counts/readiness、board 分子、provider/public API 合同均零变化。
+    `storage.py` **14,635 → 14,355**(-280);repo 公开 API 为域内短名,API/orchestrator 同名 `get_run_projection_link` 门面保留。
+  - **逐字与基座**:删除前对 9 public + 3 mapper + 5 helper 做 approved-name/primitive/clock mapping 后 AST body
+    **17/17 等价,0 意外差异**;旧 9 方法、3 mapper、3 native-dispatch key 同批删除。共享 `Repository` 三个 always-raise helper
+    标为 `NoReturn`,repository 的后置 list 返回注解用 `builtins.list`;仅收紧静态类型,运行时/错误串不变。
+  - **A/B + 变异**:临时 battery **4 passed + 18 subtests**(真实 PG old/new 9 方法、5/3/2 行全表 dump、Tier-A 6 read+3
+    write、Tier-B 6 sentinel+3 no-confirmation、created_at/pointer rollover/filter/order/limit/comparator mutation)。另用 frozen
+    33-return 脚本在同树 old/new 与 pinned `9217350` 各跑,三表 raw dump 3/2/2 行,正常 JSON **14,618 bytes byte-identical**,
+    SHA-256 `648efefe086ed7359386885eb212e3274a1d2589d54acdb0922868133b611276`;descriptor 受控变异在同树 old/new 仍相等,
+    但 pinned 对照变为 `8bef381ff56ef3adb7bd4cf8d1d1cc59e5055377bdf085cefdbbf11ab4c43c26`,证明盲区闸有效。临时件均删除。
+  - **调用方闭合**:production **69**(orchestrator 40 + 其余 src/script 28 direct + callback 1),tests **82**,合计 151;
+    fake/getattr/monkeypatch=0,ambiguous=0。全仓旧 Store receiver/definition=0;仅 API/orchestrator 公共门面名和 repository 错误串保留。
+  - **永久防回归**:surface guard 锁旧 12 method/mapper 不回生、新 12 repo method/mapper+namespace 必须存在;mapper descriptor
+    JSON/default 探针;storage suite 新增 catalog filter/order/limit/link/pointer rollover 业务回归。repo、namespace、共享 Repository 基类
+    纳入 Ruff/format+mypy 显式清单;onconflict 守卫原已动态覆盖 repositories/。
+  - **验证**:直接域/守卫 **23 passed**(storage 7/writer 7/live-PG 2/surface 7);asset audit/repair/person contract **39**;
+    results API 精确 6;pipeline 精确 3 项迁移树与 `9217350` **均 3 passed/454 deselected**。最终合同 lane **189 passed/0 skip** +
+    后续门 **2/11/1/2 passed** + `dry_run_ready failures=[]`;Ruff/format **43 files**;mypy **87 errors/4 files**与 R-011
+    完全同分布,新 repo/base 0;compileall/diff-check 绿。R-001/R-007/D-3 未触发,R-008 保持 closed,R-009 仅作对照规则。
+  - **评审/接续**:②.2 的独立非作者 Codex fallback 已 GO并关闭 R-013(两份 transport/timeout artifact 仍无效)。本 ②.3a
+    异步 review scope 固定 `9217350..<本批 implementation commit>`,请求记录后立即推进 ②.3b;任何 finding 回来按 scope 异步修复。

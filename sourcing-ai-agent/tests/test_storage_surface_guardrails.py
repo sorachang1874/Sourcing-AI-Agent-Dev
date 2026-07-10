@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from sourcing_agent.repositories.manual_review import ManualReviewRepository
+from sourcing_agent.repositories.serving_projection import ServingProjectionRepository
 
 _RETIRED_MANUAL_REVIEW_STORE_METHODS = {
     "replace_manual_review_items",
@@ -23,6 +24,34 @@ _MANUAL_REVIEW_REPOSITORY_METHODS = {
     "review_item",
     "get_item",
     "merge_item_metadata",
+}
+_RETIRED_SERVING_PROJECTION_CATALOG_STORE_METHODS = {
+    "upsert_serving_projection",
+    "get_serving_projection",
+    "list_serving_projections",
+    "upsert_run_projection_link",
+    "get_run_projection_link",
+    "list_run_projection_links",
+    "upsert_collection_authoritative_pointer",
+    "get_collection_authoritative_pointer",
+    "list_collection_authoritative_pointers",
+    "_serving_projection_from_row",
+    "_run_projection_link_from_row",
+    "_collection_authoritative_pointer_from_row",
+}
+_SERVING_PROJECTION_CATALOG_REPOSITORY_METHODS = {
+    "upsert",
+    "get",
+    "list",
+    "upsert_run_link",
+    "get_run_link",
+    "list_run_links",
+    "upsert_authoritative_pointer",
+    "get_authoritative_pointer",
+    "list_authoritative_pointers",
+    "_projection_from_row",
+    "_run_link_from_row",
+    "_authoritative_pointer_from_row",
 }
 
 
@@ -129,3 +158,48 @@ def test_manual_review_repository_mapper_preserves_nullable_and_json_error_contr
 
     with pytest.raises(json.JSONDecodeError):
         repository._item_from_row({**row, "metadata_json": "{"})
+
+
+def test_serving_projection_catalog_storage_facade_is_retired_to_repository() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    storage_methods = _class_method_names(repo_root / "src" / "sourcing_agent" / "storage.py", "ControlPlaneStore")
+    repository_methods = _class_method_names(
+        repo_root / "src" / "sourcing_agent" / "repositories" / "serving_projection.py",
+        "ServingProjectionRepository",
+    )
+    namespace_source = (repo_root / "src" / "sourcing_agent" / "repositories" / "__init__.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert storage_methods.isdisjoint(_RETIRED_SERVING_PROJECTION_CATALOG_STORE_METHODS)
+    assert _SERVING_PROJECTION_CATALOG_REPOSITORY_METHODS <= repository_methods
+    assert "self.serving_projection = ServingProjectionRepository(adapter)" in namespace_source
+
+
+def test_serving_projection_catalog_repository_mappers_preserve_descriptor_contract() -> None:
+    repository = ServingProjectionRepository(object())
+    projection_row = {
+        "projection_id": "proj-guard",
+        "projection_type": "run_scope_projection",
+        "projection_version": None,
+        "counts_json": '{"candidate_count":2}',
+        "readiness_json": "not-json",
+    }
+    run_link_row = {
+        "run_id": "run-guard",
+        "projection_id": "proj-guard",
+        "link_type": "result",
+        "metadata_json": '{"source":"guard"}',
+    }
+    pointer_row = {
+        "collection_id": "company:guard",
+        "active_projection_id": "proj-guard",
+        "metadata_json": "[]",
+    }
+
+    projection = repository._projection_from_row(projection_row)
+    assert projection["projection_version"] == "serving_projection_v1"
+    assert projection["counts"] == {"candidate_count": 2}
+    assert projection["readiness"] == {}
+    assert repository._run_link_from_row(run_link_row)["metadata"] == {"source": "guard"}
+    assert repository._authoritative_pointer_from_row(pointer_row)["metadata"] == {}

@@ -114,7 +114,7 @@ class LegacyPublicWebRetirementAuditTest(PGControlPlaneStoreTestMixin, unittest.
                 "normalized_value": "https://ada.example/",
             }
         )
-        self.store.upsert_collection_authoritative_pointer(
+        self.store.repos.serving_projection.upsert_authoritative_pointer(
             {
                 "collection_id": "company:example",
                 "active_projection_id": "proj_example",

@@ -192,7 +192,7 @@ def _audit_company(
         projection_ids=projection_ids,
         limit=limit,
     )
-    pointer = store.get_collection_authoritative_pointer(collection_id)
+    pointer = store.repos.serving_projection.get_authoritative_pointer(collection_id)
     active_pointer_projection_id = _normalize_text(pointer.get("active_projection_id"))
 
     snapshot_reports = []
@@ -415,11 +415,11 @@ def _projection_dependencies_by_snapshot(
     dependencies: dict[str, list[dict[str, Any]]] = defaultdict(list)
     if not snapshot_ids:
         return dependencies
-    projections = store.list_serving_projections(
+    projections = store.repos.serving_projection.list(
         collection_id=collection_id,
         limit=max(1000, limit * 5),
     )
-    pointer = store.get_collection_authoritative_pointer(collection_id)
+    pointer = store.repos.serving_projection.get_authoritative_pointer(collection_id)
     active_projection_id = _normalize_text(pointer.get("active_projection_id"))
     for projection in projections:
         referenced_snapshot_ids = _projection_snapshot_ids(projection)
@@ -816,7 +816,7 @@ def _load_collection_pointer_identity_set(
     if not projection_id:
         return {}
     active_collection_version = _normalize_text(collection_pointer.get("active_collection_version"))
-    projection = store.get_serving_projection(projection_id)
+    projection = store.repos.serving_projection.get(projection_id)
     if not projection:
         return {
             "reference_key": f"projection:{projection_id}",

@@ -1760,12 +1760,12 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
             )
 
             first_job_id = str((first_record.get("start") or {}).get("job_id") or "")
-            run_projection_link = harness.store.get_run_projection_link(first_job_id)
+            run_projection_link = harness.store.repos.serving_projection.get_run_link(first_job_id)
             self.assertTrue(
                 run_projection_link,
                 "canonical xAI run-scope projection should exist after the first scripted reconcile run",
             )
-            authoritative_projection = harness.store.get_serving_projection(
+            authoritative_projection = harness.store.repos.serving_projection.get(
                 str(dict(run_projection_link or {}).get("projection_id") or "")
             )
             self.assertEqual(
@@ -1778,7 +1778,7 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
                 "complete",
                 json.dumps(authoritative_projection, ensure_ascii=False, indent=2),
             )
-            collection_pointer = harness.store.get_collection_authoritative_pointer("company:xai")
+            collection_pointer = harness.store.repos.serving_projection.get_authoritative_pointer("company:xai")
             collection_merge_items = harness.store.list_job_materialization_items(
                 job_id=first_job_id,
                 item_kind="collection_authoritative_merge",
@@ -1837,9 +1837,9 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
                 1,
                 json.dumps(second_record, ensure_ascii=False, indent=2),
             )
-            refreshed_pointer = harness.store.get_collection_authoritative_pointer("company:xai")
+            refreshed_pointer = harness.store.repos.serving_projection.get_authoritative_pointer("company:xai")
             if refreshed_pointer:
-                refreshed_projection = harness.store.get_serving_projection(
+                refreshed_projection = harness.store.repos.serving_projection.get(
                     str(dict(refreshed_pointer or {}).get("active_projection_id") or "")
                 )
                 self.assertEqual(

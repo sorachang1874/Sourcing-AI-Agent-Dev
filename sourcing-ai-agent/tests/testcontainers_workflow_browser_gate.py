@@ -141,8 +141,8 @@ class TestcontainersWorkflowBrowserGateTest(unittest.TestCase):
                                 frontend_port=frontend_port,
                                 projection_id=projection_id,
                             )
-                            projection = store.get_serving_projection(projection_id)
-                            link = store.get_run_projection_link(job_id)
+                            projection = store.repos.serving_projection.get(projection_id)
+                            link = store.repos.serving_projection.get_run_link(job_id)
                         finally:
                             if preview_process is not None:
                                 _terminate_process(preview_process)
@@ -383,7 +383,7 @@ def _wait_for_workflow_projection_with_index(
     deadline = time.monotonic() + timeout_seconds
     last_status: dict[str, object] = {}
     while time.monotonic() < deadline:
-        link = store.get_run_projection_link(job_id)
+        link = store.repos.serving_projection.get_run_link(job_id)
         projection_id = str((link or {}).get("projection_id") or "").strip()
         if projection_id:
             member_count = store.count_serving_projection_members(projection_id)

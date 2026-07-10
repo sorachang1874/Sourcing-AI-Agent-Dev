@@ -106,7 +106,7 @@ def main() -> int:
     dry_run = not bool(args.apply)
     active_pointers = []
     if not args.skip_active_collections:
-        active_pointers = store.list_collection_authoritative_pointers(state="active", limit=limit)
+        active_pointers = store.repos.serving_projection.list_authoritative_pointers(state="active", limit=limit)
 
     collection_ids = _dedupe(
         [

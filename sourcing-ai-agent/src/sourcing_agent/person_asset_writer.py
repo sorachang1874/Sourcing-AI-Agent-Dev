@@ -466,13 +466,13 @@ class PersonAssetWriter:
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             return
-        projection = self.store.get_serving_projection(normalized_projection_id)
+        projection = self.store.repos.serving_projection.get(normalized_projection_id)
         if projection:
             readiness = {
                 **dict(projection.get("readiness") or {}),
                 "index_count_scope": "index_partial",
             }
-            self.store.upsert_serving_projection(
+            self.store.repos.serving_projection.upsert(
                 {
                     **projection,
                     "readiness": readiness,
@@ -497,7 +497,7 @@ class PersonAssetWriter:
         total_member_count: int,
         truncated: bool,
     ) -> None:
-        projection = self.store.get_serving_projection(projection_id)
+        projection = self.store.repos.serving_projection.get(projection_id)
         if not projection:
             return
         index_summary = self.store.get_projection_person_search_index_summary(projection_id)
@@ -509,7 +509,7 @@ class PersonAssetWriter:
             "evidence_indexed_at": str(readiness_payload.get("evidence_indexed_at") or "").strip(),
         }
         indexed_count = self.store.count_projection_person_search_index(projection_id)
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 **projection,
                 "raw_profile_index_watermark": str(raw_profile_index_watermark or "").strip()
@@ -553,7 +553,7 @@ class PersonAssetWriter:
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             return {"status": "invalid", "reason": "projection_id_required", "facet_record_count": 0}
-        projection = self.store.get_serving_projection(normalized_projection_id)
+        projection = self.store.repos.serving_projection.get(normalized_projection_id)
         if not projection:
             return {
                 "status": "invalid",
@@ -622,14 +622,14 @@ class PersonAssetWriter:
                 "truncated": truncated,
             }
         )
-        latest_projection = self.store.get_serving_projection(normalized_projection_id) or projection
+        latest_projection = self.store.repos.serving_projection.get(normalized_projection_id) or projection
         counts = {
             **dict(latest_projection.get("counts") or {}),
             "public_facet_counts": public_facet_counts,
             "facet_count_scope": effective_count_scope,
             "facet_build_status": "partial" if effective_count_scope == "index_partial" else "completed",
         }
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 **latest_projection,
                 "counts": counts,

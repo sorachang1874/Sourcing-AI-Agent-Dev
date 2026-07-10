@@ -85,8 +85,8 @@ class AssetConsolidationRepairApplyTest(PGControlPlaneStoreTestMixin, unittest.T
         self.assertEqual(company["status"], "dry_run_ready")
         self.assertEqual(company["member_count"], 2)
         self.assertTrue(str(company["planned_projection_id"]).startswith("proj_assetrepair_"))
-        self.assertEqual(self.store.get_collection_authoritative_pointer("company:openai"), {})
-        self.assertEqual(self.store.get_serving_projection(str(company["planned_projection_id"])), {})
+        self.assertEqual(self.store.repos.serving_projection.get_authoritative_pointer("company:openai"), {})
+        self.assertEqual(self.store.repos.serving_projection.get(str(company["planned_projection_id"])), {})
         markdown = render_asset_consolidation_repair_apply_markdown(report)
         self.assertIn("# Asset Consolidation Repair Apply Report", markdown)
         self.assertIn("snap-repair", markdown)
@@ -114,10 +114,10 @@ class AssetConsolidationRepairApplyTest(PGControlPlaneStoreTestMixin, unittest.T
         self.assertEqual(report["status"], "blocked")
         self.assertEqual(company["status"], "blocked_pre_apply_gates")
         self.assertIn("manual_review_not_accepted", company["blocking_reasons"])
-        self.assertEqual(self.store.get_collection_authoritative_pointer("company:openai"), {})
+        self.assertEqual(self.store.repos.serving_projection.get_authoritative_pointer("company:openai"), {})
 
     def test_apply_publishes_collection_authoritative_projection_and_pointer(self) -> None:
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_previous",
                 "projection_type": "collection_authoritative_projection",
@@ -125,7 +125,7 @@ class AssetConsolidationRepairApplyTest(PGControlPlaneStoreTestMixin, unittest.T
                 "state": "serving",
             }
         )
-        self.store.upsert_collection_authoritative_pointer(
+        self.store.repos.serving_projection.upsert_authoritative_pointer(
             {
                 "collection_id": "company:openai",
                 "active_projection_id": "proj_previous",
@@ -165,7 +165,7 @@ class AssetConsolidationRepairApplyTest(PGControlPlaneStoreTestMixin, unittest.T
 
         company = dict(report["companies"][0])
         projection_id = str(company["planned_projection_id"])
-        pointer = self.store.get_collection_authoritative_pointer("company:openai")
+        pointer = self.store.repos.serving_projection.get_authoritative_pointer("company:openai")
         members = self.store.list_serving_projection_members(projection_id, limit=10)
 
         self.assertEqual(report["status"], "applied")
@@ -185,7 +185,7 @@ class AssetConsolidationRepairApplyTest(PGControlPlaneStoreTestMixin, unittest.T
         )
         self.assertEqual(members[0]["public_summary"]["education_lines"], ["Private tutors, Mathematics"])
         self.assertEqual(members[0]["projection_metrics"]["repair_phase"], "W5c.3")
-        projection = self.store.get_serving_projection(projection_id)
+        projection = self.store.repos.serving_projection.get(projection_id)
         self.assertEqual(projection["projection_type"], "collection_authoritative_projection")
         self.assertEqual(projection["scope_spec"]["repair_source"], "w5c_asset_consolidation_repair")
         self.assertEqual(projection["counts"]["result_count"], 2)

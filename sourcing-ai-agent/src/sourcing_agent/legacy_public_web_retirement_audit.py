@@ -68,7 +68,7 @@ def audit_legacy_public_web_retirement(
         limit=normalized_row_limit,
     )
     collection_pointers = _list_rows(
-        store.list_collection_authoritative_pointers,
+        store.repos.serving_projection.list_authoritative_pointers,
         state="active",
         limit=normalized_row_limit,
     )

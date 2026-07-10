@@ -2805,7 +2805,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             acquisition_engine=AcquisitionEngine(catalog, settings, api_store, model_client),
         )
         try:
-            api_store.upsert_serving_projection(
+            api_store.repos.serving_projection.upsert(
                 {
                     "projection_id": "proj-read",
                     "projection_type": "run_scope_projection",
@@ -6508,7 +6508,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             projection_id = completed_projection_command["result"]["projection_id"]
             self.assertTrue(projection_id)
             self.assertEqual(api_store.count_serving_projection_members(projection_id, visible_only=True), 2)
-            run_projection_link = api_store.get_run_projection_link(completed_projection_command["workflow_run_id"])
+            run_projection_link = api_store.repos.serving_projection.get_run_link(completed_projection_command["workflow_run_id"])
             self.assertEqual(run_projection_link["projection_id"], projection_id)
             projection_member_deltas = api_store.list_workflow_entity_deltas(
                 activity_run_id=completed_projection_command["result"]["activity_run_id"],
@@ -7419,7 +7419,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             acquisition_engine=AcquisitionEngine(catalog, settings, api_store, model_client),
         )
         try:
-            api_store.upsert_serving_projection(
+            api_store.repos.serving_projection.upsert(
                 {
                     "projection_id": "proj-crm-op",
                     "projection_type": "run_scope_projection",
@@ -8927,7 +8927,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             acquisition_engine=AcquisitionEngine(catalog, settings, api_store, model_client),
         )
         try:
-            api_store.upsert_serving_projection(
+            api_store.repos.serving_projection.upsert(
                 {
                     "projection_id": "proj-avatar-backfill",
                     "projection_type": "collection_authoritative_projection",

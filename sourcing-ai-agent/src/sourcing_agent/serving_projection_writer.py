@@ -29,7 +29,7 @@ class ServingProjectionWriter:
         state: str = "serving",
     ) -> dict[str, Any]:
         normalized_run_id = _require_non_empty(run_id, "run_id")
-        existing_link = self.store.get_run_projection_link(normalized_run_id)
+        existing_link = self.store.repos.serving_projection.get_run_link(normalized_run_id)
         effective_projection_id = str(projection_id or existing_link.get("projection_id") or "").strip()
         projection_payload = {
             "projection_id": effective_projection_id,
@@ -44,13 +44,13 @@ class ServingProjectionWriter:
             "provenance": dict(provenance or {}),
             "metadata": _metadata_with_writer(metadata or {}, self.writer_id),
         }
-        projection = self.store.upsert_serving_projection(projection_payload)
+        projection = self.store.repos.serving_projection.upsert(projection_payload)
         persisted_projection_id = _require_non_empty(projection.get("projection_id"), "projection_id")
         if replace_members:
             member_count = self.store.replace_serving_projection_members(persisted_projection_id, members)
         else:
             member_count = self.store.upsert_serving_projection_members(persisted_projection_id, members)
-        link = self.store.upsert_run_projection_link(
+        link = self.store.repos.serving_projection.upsert_run_link(
             {
                 "run_id": normalized_run_id,
                 "projection_id": persisted_projection_id,
@@ -87,14 +87,14 @@ class ServingProjectionWriter:
     ) -> dict[str, Any]:
         normalized_collection_id = _require_non_empty(collection_id, "collection_id")
         normalized_version = _require_non_empty(active_collection_version, "active_collection_version")
-        existing_pointer = self.store.get_collection_authoritative_pointer(normalized_collection_id)
+        existing_pointer = self.store.repos.serving_projection.get_authoritative_pointer(normalized_collection_id)
         effective_projection_id = str(projection_id or "").strip()
         if (
             not effective_projection_id
             and str(existing_pointer.get("active_collection_version") or "") == normalized_version
         ):
             effective_projection_id = str(existing_pointer.get("active_projection_id") or "").strip()
-        projection = self.store.upsert_serving_projection(
+        projection = self.store.repos.serving_projection.upsert(
             {
                 "projection_id": effective_projection_id,
                 "projection_type": "collection_authoritative_projection",
@@ -113,7 +113,7 @@ class ServingProjectionWriter:
             member_count = self.store.replace_serving_projection_members(persisted_projection_id, members)
         else:
             member_count = self.store.upsert_serving_projection_members(persisted_projection_id, members)
-        pointer = self.store.upsert_collection_authoritative_pointer(
+        pointer = self.store.repos.serving_projection.upsert_authoritative_pointer(
             {
                 "collection_id": normalized_collection_id,
                 "active_projection_id": persisted_projection_id,

@@ -55,7 +55,7 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
         self.assertEqual(projection["counts"]["result_count"], 2)
         self.assertEqual(projection["counts"]["count_scope"], "exact_projection")
         self.assertEqual(link["projection_id"], projection["projection_id"])
-        self.assertEqual(self.store.get_run_projection_link("job-openai-agent")["projection_id"], projection["projection_id"])
+        self.assertEqual(self.store.repos.serving_projection.get_run_link("job-openai-agent")["projection_id"], projection["projection_id"])
         self.assertEqual([member["candidate_identity_key"] for member in members], ["linkedin:ada", "linkedin:grace"])
 
     def test_publish_collection_authoritative_projection_switches_pointer_with_previous_projection(self) -> None:
@@ -81,7 +81,7 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
             ],
             replace_members=True,
         )
-        pointer = self.store.get_collection_authoritative_pointer("company:google")
+        pointer = self.store.repos.serving_projection.get_authoritative_pointer("company:google")
 
         self.assertEqual(pointer["active_projection_id"], second["projection"]["projection_id"])
         self.assertEqual(pointer["previous_projection_id"], first["projection"]["projection_id"])
@@ -116,7 +116,7 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
         self.assertTrue(missing["read_contract"]["fail_closed"])
         self.assertFalse(missing["read_contract"]["fallback_used"])
 
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_draft",
                 "projection_type": "run_scope_projection",

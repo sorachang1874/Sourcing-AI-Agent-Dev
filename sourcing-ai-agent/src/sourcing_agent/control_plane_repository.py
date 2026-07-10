@@ -23,7 +23,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from enum import Enum
-from typing import Any
+from typing import Any, NoReturn
 
 from .control_plane_serde import json_safe_payload
 
@@ -197,9 +197,7 @@ class TableDescriptor:
         cols = self.column_names()
         placeholders = ", ".join(["%s"] * len(cols))
         non_pk = [c for c in cols if c not in self.pk]
-        assignments = ", ".join(
-            f"{c} = {self.merge.get(c, f'excluded.{c}')}" for c in non_pk
-        )
+        assignments = ", ".join(f"{c} = {self.merge.get(c, f'excluded.{c}')}" for c in non_pk)
         conflict = ", ".join(self.pk)
         return (
             f"INSERT INTO {self.table} ({', '.join(cols)}) VALUES ({placeholders}) "
@@ -257,7 +255,7 @@ class Repository:
         method_name: str,
         reason: str,
         error: Exception | None = None,
-    ) -> None:
+    ) -> NoReturn:
         message = f"Postgres authoritative write failed for {table_name} via {method_name}: {reason}"
         if error is not None:
             raise RuntimeError(message) from error
@@ -270,13 +268,13 @@ class Repository:
         method_name: str,
         reason: str,
         error: Exception | None = None,
-    ) -> None:
+    ) -> NoReturn:
         message = f"Postgres authoritative read failed for {table_name} via {method_name}: {reason}"
         if error is not None:
             raise RuntimeError(message) from error
         raise RuntimeError(message)
 
-    def _raise_postgres_only_invariant(self, *, table_name: str, method_name: str) -> None:
+    def _raise_postgres_only_invariant(self, *, table_name: str, method_name: str) -> NoReturn:
         raise RuntimeError(
             f"postgres-only invariant violated for {table_name} in {method_name}: should_prefer_read "
             "returned False; legacy SQLite tail retired (B4)"

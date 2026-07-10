@@ -1,11 +1,11 @@
 # Track B ② Repository 迁移 Handbook(新一轮的入口文档)
 
 > Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
-> 状态:**②.2 完成(2026-07-10)** —— manual_review 单表 7 公共方法 + 6 helper + mapper 整体退役到
-> `store.repos.manual_review`,storage.py 15,091 → 14,635 行,调用方 31 处直迁(src 14 + tests 17),
-> 合同 lane 187/0 skip、A/B 变异自检和 pinned-worktree 字节对照全过。批记录:
-> `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。②.0/②.1 已于 2026-07-09 提交 `d5109f1`;
-> 下一批:②.3 serving_projection(§3 顺序)。
+> 状态:**②.3a 完成(2026-07-10)** —— serving_projection catalog 三表 9 公共方法 + 3 mapper 已退役到
+> `store.repos.serving_projection`,storage.py 14,635 → 14,355 行,调用方 151 处直迁(src/script 69 + tests 82),
+> 合同 lane 189/0 skip、A/B 变异自检和 pinned-worktree 字节对照全过。批记录:
+> `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。下一批:②.3b `projection_manifest_shards`;随后 ②.3c members / ②.3d
+> search-index,3d 后 serving_projection 整域闭合。
 > B4.3 影子拆除 100% 完成(commit 952f9ee)。本文档是路线图
 > **②「Repository 查询方法建设 + 按域迁移调用方」** 这一轮的执行手册。
 > 设计依据:`docs/TRACK_B_B4_2_PG_NATIVE_STORE_DESIGN.md`(B4.2 设计,owner 已 ratify);历史全记录:`docs/TRACK_B_PG_PURE_STORE_DESIGN.md` §6。
@@ -13,9 +13,9 @@
 
 ## 1. 当前基底(起点事实,勿再重推导)
 
-- `storage.py` = 14,635 行(②.2 后;②.1 后 15,091,②.0 后 16,382,试点前 19,187),**PG-pure**:零 sqlite3 / 零 `_connection` / 零 `_lock`。
+- `storage.py` = 14,355 行(②.3a 后;②.2 后 14,635,②.1 后 15,091,②.0 后 16,382,试点前 19,187),**PG-pure**:零 sqlite3 / 零 `_connection` / 零 `_lock`。
   已整体退役的域:linkedin_profile_registry(②.0)、criteria/confidence(②.1,`store.repos.criteria_confidence`)、
-  manual_review(②.2,`store.repos.manual_review`);
+  manual_review(②.2,`store.repos.manual_review`);serving_projection 的 catalog 三表已退役(②.3a),其余三表按 b/c/d 子批继续;
   其余域仍在 God-class 门面上,按批推进。共享纯函数 `matching_bundle_payload`/`request_signature_context` 已外提到
   `request_matching.py`(storage 留别名 import)。
 - PG schema 唯一来源 = `migrations/0001_baseline.sql` + `migration_runner.py`(adapter `ensure_bootstrapped()` 驱动);遗留迁移表由 adapter 内字面 DDL(`_LEGACY_TARGET_PUBLIC_WEB_MIGRATION_TABLE_DDL`)按需建。
@@ -44,7 +44,7 @@
 1. ~~**②.0 试点收口**~~ **DONE 2026-07-02**:linkedin_profile_registry 域全量搬迁 + 域迁移协议定型(§4);批记录见 TRACK_B doc §6 末条。
 2. ~~**②.1 criteria/confidence**~~ **DONE 2026-07-06**(8 表 24 方法;批记录见 TRACK_B doc §6 末条)。
 3. ~~**②.2 manual_review**~~ **DONE 2026-07-10**(1 表 7 公共方法;批记录见 Track B doc §6 末条)。
-4. **②.3+ 按域推进**(建议顺序:调用面窄→宽):serving_projection → workflow_runtime(commands/workers/leases,调用面最宽,最后;`_call_native_write` 基座已就位)。每域先跑清单命令(§5)定界。
+4. **②.3 serving_projection 分子批推进**:~~②.3a catalog 三表~~ DONE → ②.3b manifest shards → ②.3c members → ②.3d person search index(3d 后整域闭合);再进 workflow_runtime(commands/workers/leases,调用面最宽,最后;`_call_native_write` 基座已就位)。每子批先跑清单命令(§5)定界、每表零双轨并独立记 A/B 数字与异步 review scope。
 5. **随批机会主义**:37 个 IRREGULAR read-mapper 里"软 irregular"(subscript 形式等价)可在其域批内顺手转 descriptor(harness 全列模式验证)。
    **②.1 反例警示**:criteria/confidence 的 8 个 mapper 看似可转,实为 None 直通 + 写路径真写 NULL FK —— Kind.INT 会 None→0 炸字节等价;
    判定"软 irregular"必须核对**写路径是否产 NULL** 与 mapper 的 default 语义,不能只看 subscript 形状。
@@ -151,6 +151,11 @@ rg -n '^    def .*projection' src/sourcing_agent/storage.py
   descriptor Kind;(b) `manual_review_items_review_item_id_seq` 同样是无 OWNED BY 的独立 sequence,A/B 必须显式 restart;
   (c) snapshot-path 电池必须使用 canonical `company_assets/<company>/<snapshot_id>/...` 形状,额外 pinned-worktree 对照可防
   测试路径本身把 `snapshots` 误识别为 snapshot_id;(d) cleanup 是有序、多次写的历史状态机,本批只逐字迁移,不并发化或事务化。
+- **②.3a 新增经验**:(a) 新旧 Store/Repository 若共用同一 descriptor,同 worktree A/B 会出现“新比新”盲区;必须再用批前
+  pinned worktree 跑同一 frozen seed + raw table dump,变异也必须由 pinned hash 抓红;(b) fresh 隔离 PG schema 在 catalog 表尚未
+  migration-bootstrap 时,首个 unqualified read 会沿 `search_path=<test>,public` 命中 public 历史表;A/B/测试在 empty-read 前显式
+  `adapter.ensure_bootstrapped()`,再确认/清空隔离 schema 内表,禁止把 public 行当 seed;(c) repository 短名 `list` 会在类作用域遮蔽
+  后续注解里的 built-in `list`;后续返回注解用 `builtins.list`,fail-closed helper 的真实类型是 `NoReturn`,共享基类和 repo 一起纳入 mypy。
 
 ## 7. 待 owner 决策(决策卡格式,2026-07-09 升级;每卡一问、有推荐、有截止、有超时默认)
 

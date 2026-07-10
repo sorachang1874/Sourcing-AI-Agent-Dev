@@ -106,7 +106,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         facet_summary = after["facet_summary"]
         employment_counts = {str(item["id"]): int(item["count"]) for item in facet_summary["employment"]}
         recall_counts = {str(item["id"]): int(item["count"]) for item in facet_summary["recall"]}
-        projection = self.store.get_serving_projection("proj_google_facets")
+        projection = self.store.repos.serving_projection.get("proj_google_facets")
         facet_counts = dict(dict(projection.get("counts") or {}).get("public_facet_counts") or {})
 
         self.assertEqual(index_result["status"], "indexed")
@@ -244,7 +244,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
 
         self.assertEqual(result["status"], "backfilled")
         self.assertEqual(result["member_count"], 2)
-        self.assertEqual(self.store.get_run_projection_link("job-legacy")["projection_id"], result["projection_id"])
+        self.assertEqual(self.store.repos.serving_projection.get_run_link("job-legacy")["projection_id"], result["projection_id"])
         self.assertEqual(self.store.count_serving_projection_members(result["projection_id"]), 2)
 
     def test_person_summary_backfill_repairs_legacy_projection_rows_without_reader_fallback(self) -> None:
@@ -272,7 +272,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
             ),
             encoding="utf-8",
         )
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_legacy_summary",
                 "projection_type": "run_scope_projection",
@@ -397,8 +397,8 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
             runtime_dir=self.runtime_dir,
             dry_run=False,
         )
-        new_pointer = self.store.get_collection_authoritative_pointer("company:newco")
-        existing_pointer = self.store.get_collection_authoritative_pointer("company:existingco")
+        new_pointer = self.store.repos.serving_projection.get_authoritative_pointer("company:newco")
+        existing_pointer = self.store.repos.serving_projection.get_authoritative_pointer("company:existingco")
         new_members = self.store.list_serving_projection_members(new_pointer["active_projection_id"], limit=10)
 
         self.assertEqual(result["status"], "backfilled")
@@ -437,7 +437,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
 
         result = backfill.backfill_projection_layer_assignments(projection_ids=["proj_collection_layer"])
         row = self.store.get_serving_projection_member("proj_collection_layer", "linkedin:zhang-wei-layer")
-        projection = self.store.get_serving_projection("proj_collection_layer")
+        projection = self.store.repos.serving_projection.get("proj_collection_layer")
 
         self.assertEqual(result["status"], "backfilled")
         self.assertEqual(result["processed_member_count"], 1)

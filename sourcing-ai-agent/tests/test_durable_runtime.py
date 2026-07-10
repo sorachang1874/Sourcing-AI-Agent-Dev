@@ -896,7 +896,7 @@ class LegacyMaterializationAdapterTest(PGDurableRuntimeTestMixin, unittest.TestC
             self.assertEqual(legacy_ref.get("retirement_phase"), "Phase W6")
 
     def test_adapter_converts_projection_index_and_collection_merge_items(self) -> None:
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_adapter",
                 "projection_type": "run_scope_projection",

@@ -338,7 +338,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
                 "promotion_status": "not_promoted",
             }
         )
-        self.store.upsert_serving_projection(
+        self.store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj-api-avatar-backfill",
                 "projection_type": "collection_authoritative_projection",

@@ -1489,7 +1489,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
-        projection = store.upsert_serving_projection(
+        projection = store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_pg_foundation",
                 "projection_type": "run_scope_projection",
@@ -1531,7 +1531,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(rows[0]["public_summary"]["name"], "Test Candidate")
         self.assertNotIn("raw_profile", rows[0])
 
-        link = store.upsert_run_projection_link(
+        link = store.repos.serving_projection.upsert_run_link(
             {
                 "run_id": "job-pg-foundation",
                 "projection_id": "proj_pg_foundation",
@@ -1539,7 +1539,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 "metadata": {"owner": "run_projection_writer_v1"},
             }
         )
-        pointer = store.upsert_collection_authoritative_pointer(
+        pointer = store.repos.serving_projection.upsert_authoritative_pointer(
             {
                 "collection_id": "company:openai",
                 "active_projection_id": "proj_pg_foundation",
@@ -1557,7 +1557,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         adapter = store._control_plane_postgres
         assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
 
-        store.upsert_serving_projection(
+        store.repos.serving_projection.upsert(
             {
                 "projection_id": "proj_pg_mirror",
                 "projection_type": "run_scope_projection",
@@ -1582,14 +1582,14 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 "manifest_ref": "s3://cold-path/proj_pg_mirror/shard-000.json",
             }
         )
-        store.upsert_run_projection_link(
+        store.repos.serving_projection.upsert_run_link(
             {
                 "run_id": "job-pg-mirror",
                 "projection_id": "proj_pg_mirror",
                 "collection_id": "company:lovable-dev",
             }
         )
-        store.upsert_collection_authoritative_pointer(
+        store.repos.serving_projection.upsert_authoritative_pointer(
             {
                 "collection_id": "company:lovable-dev",
                 "active_projection_id": "proj_pg_mirror",
