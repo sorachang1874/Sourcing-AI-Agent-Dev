@@ -26,8 +26,10 @@
   R-011 baseline of 87 errors in four files. Five targeted pipeline tests had the exact same 3-pass/
   2-fail result on the migration and baseline worktrees (R-009, zero regression).
 - The takeover routing table was corrected first in `c19c0fd`: GPT/Codex is now the author family and
-  the independent-review lane must remain in the non-GPT Claude family. The ②.2 batch will be pinned
-  and sent through that lane; next repository domain is ②.3 serving_projection.
+  the independent-review lane must remain in the non-GPT Claude family. A Claude Opus/xhigh review of
+  pinned `c19c0fd..d0828e7` was fired but returned only `ConnectionRefused`; it has no verdict and is
+  recorded as deferred/invalid in R-013. Per owner direction it was not retried this session. Next
+  repository domain is ②.3 serving_projection; the invalid artifact cannot unlock live/W6/signoff.
 
 ## 2026-07-09 (Asia/Shanghai)
 

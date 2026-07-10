@@ -29,6 +29,7 @@
 | R-010 | `test_seed_discovery` ×6 + `test_harvest_connectors` ×1（非 lane 全套件） | 7 个断言退役 ordinal query-key 契约（`::01`）的测试失败（现行为 identity-hash `q_<hash>`；lane 的 `-k` 子集守的正是新契约） | 全套件非 lane，identity-key 契约切换时未同步更新 fixture | 按 identity-key 契约更新 7 处期望 | 触碰 seed_discovery/harvest 全套件或 provider queue 契约的下一批 | **2026-07-09 worktree 基线对照（d5109f1）7/7 同败 —— fail-closed 合并无罪** | 2026-07-09 | accepted |
 | R-011 | lint 门 mypy 段 | **87 条 pre-existing mypy 债务**（candidate_artifacts 1 / orchestrator 64 / public_web_runtime_core 1 / workflow_smoke 21；2026-07-06 基线） | 继承债务，非本期修复范围 | 分模块清偿 | **棘轮：只降不增** —— 每批验收 = 与基线计数逐字相同或更小；下降时同批重钉基线 | ②.1 基线；②.2 复验仍为 87（1/64/1/21） | 2026-07-10 | accepted |
 | R-012 | `test_results_api` flake ×1 | `test_job_result_lifecycle_stage1_event_time_write_before_public_read` 全量跑偶现（PG teardown 竞态） | 隔离跑绿；对照归因 pre-existing flake | teardown join 线程（同 Phase 3b 尾巴） | fixture teardown 修缮批 | 2026-06-12 归因 | 2026-06-12 | accepted（flake，非计数预算） |
+| R-013 | Track B ②.2 independent review | Claude Opus/xhigh 尝试只返回 `ConnectionRefused`，无 findings/verdict；无效 artifact 不得算 GO | preflight 显示 Clash `GLOBAL=DIRECT` 且 GitHub/ChatGPT HTTPS 全超时；路由表禁止降级回 GPT/Codex 作者家族；owner 指示本 session 不重试 | owner 恢复非 DIRECT 网络后，对 pinned `c19c0fd..d0828e7` 重跑非 GPT reviewer，产出完整 metadata + GO/可分诊 NO-GO | 网络恢复时；任何 live/W6/manual/milestone signoff 前必须清账 | `runtime/reviews/20260710T021502Z_async-reference-track-b-2-2-manual-review.md`（DEFERRED/INVALID） | 2026-07-10 | deferred（gate not satisfied） |
 
 ## 使用方式
 

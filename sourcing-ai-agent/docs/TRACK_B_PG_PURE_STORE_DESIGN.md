@@ -658,4 +658,7 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   - **台账/评审**:`RESIDUAL_LEDGER` tripwire 全扫:R-009 仅作基线归因、未启动其重设计,R-011 未增长,其余未触发;
     D-1/D-2/D-3 截止仍为 2026-07-31;②.3 仅做逐字 repository 迁移且不改投影/看板计数语义时不阻塞,
     一旦改计数语义则 R-007/D-3 立即触发。作者家族内只读对抗审查无 finding(另补 Tier-A/Tier-B/
-    update-row-None 探针);正式非 GPT 异步参考评审在 pinned 批提交后启动,结果与 artifact 路径由后续记录回填。
+    update-row-None 探针)。正式非 GPT 异步参考评审锚定 `c19c0fd..d0828e7` 发起 Claude Opus/xhigh,
+    但只返回 `ConnectionRefused`(无 findings/verdict),故 artifact
+    `runtime/reviews/20260710T021502Z_async-reference-track-b-2-2-manual-review.md` 明标 **DEFERRED/INVALID**;
+    owner 指示本 session 不重试,记 R-013,不得把该 artifact 当 GO。
