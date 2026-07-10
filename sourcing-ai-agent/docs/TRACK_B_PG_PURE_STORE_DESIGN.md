@@ -716,5 +716,18 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     最终合同 lane **190 passed/0 skip** + 后续门 **2/11/1/2 passed** + `dry_run_ready failures=[]`;Ruff/format 43 files、
     compileall 绿;mypy **87 errors/4 files**与 R-011 同分布。pipeline 无本表调用,按 R-009 禁令未跑。
   - **风险/评审/接续**:D-4 记录后续 members/search-index 与另两表的 positional `bulk_upsert_rows` 异常吞噬根因;
-    本批未触碰或暗选方案。异步 review scope 将固定 `b3818f0..<本批 implementation commit>`;请求记录后可继续其他
-    模块,但 D-4 裁决前 ②.3c/d 只做只读 Scout/测试设计。
+    本批未触碰或暗选方案。异步 review scope 固定 `b3818f0..aaf13fb`;首个独立 Codex reviewer 在 artifact 写入时
+    遭 model-capacity failure,chat-only GO 不算 verdict;两个 fallback 也未在本 session 产出 artifact,故记 R-014 pending。
+    只阻断本 scope 的 live/W6/manual/里程碑签收,其他模块继续。
+
+- **2026-07-10 ②.3c serving_projection_members SCOUT ONLY(未实施)**:
+  - **方法/调用面**:8 public(`upsert`/`replace`/`list`/`list_by_identity_keys`/`list_by_person_identity_keys`/
+    `count_by_readiness`/`get`/`count`)共 **97 direct calls** = production 58(含 storage internal 2;外部 56)+ tests 39。
+    另有 `hasattr` **1**(public-web runtime get)、`patch.object` **2**(get/list)、fake definition **1**、public
+    callback/getattr **0**;生产文件 8、direct-test 文件 11。旧 native dispatch keys **2**(upsert/replace)。
+  - **helper/dynamic**:`_member_from_row` 1 direct + 4 row-builder callback;`_row_payload` 1 caller;
+    `_readiness_counts` 1 caller;共享 `_normalize_projection_rank_index` 在 mapper/payload 使用。测试另有 3 个 raw-adapter
+    直达点,production 无 adapter 绕过。
+  - **D-4 分界**:选 (a) 时 3c 除把 member bulk 写改显式 keyword 外,还须同批修 search-index/asset-membership/
+    candidate-materialization 三点并补 4 点 failure regression + 全局 AST guard;选 (b) 时 3c 仅修 member 点,search 留 3d,
+    另两点不动且 guard 必须 serving-scoped/显式 allowlist。方向未裁决,故本次只冻结调用面,未开始 semantic/A/B 或产品编辑。

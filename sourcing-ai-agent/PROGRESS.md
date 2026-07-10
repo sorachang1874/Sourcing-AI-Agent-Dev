@@ -28,6 +28,10 @@
   43 files, compileall passed, and mypy remained at R-011's 87 errors in the same four files.
 - D-4 records a separate pre-existing positional bulk-write fail-closed defect affecting the next members/search
   batches plus two other tables. It awaits owner direction; ②.3b did not modify those write paths.
+- The ②.3b independent review scope is pinned to `b3818f0..aaf13fb`. The first Codex reviewer hit model
+  capacity while writing the artifact; two fallback sessions were stopped after they produced no artifact.
+  None of the chat-only/interrupted results counts as a verdict.
+  R-014 keeps the review pending and blocks only this scope's live/W6/manual/milestone signoff.
 
 ### Track B ②.3a: serving_projection catalog repository cutover
 
