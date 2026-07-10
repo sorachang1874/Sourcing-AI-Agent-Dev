@@ -4840,7 +4840,7 @@ export async function getProjectionCandidatePage(
           returnedCount: candidates.length,
           totalCandidates: Number(payload.total_candidates || payload.candidate_count || 0) || 0,
           filteredCandidateCount:
-            Number(payload.filtered_candidate_count || payload.total_candidates || payload.candidate_count || 0) || 0,
+            Number(payload.filtered_candidate_count ?? payload.total_candidates ?? payload.candidate_count ?? 0) || 0,
           hasMore: Boolean(payload.has_more),
           nextOffset:
             typeof payload.next_offset === "number" && Number.isFinite(payload.next_offset)
@@ -4931,7 +4931,7 @@ export async function getDashboardCandidatePage(
           returnedCount: Number(payload.returned_count || 0) || 0,
           totalCandidates: Number(payload.total_candidates || 0) || 0,
           filteredCandidateCount:
-            Number(payload.filtered_candidate_count || payload.total_candidates || 0) || 0,
+            Number(payload.filtered_candidate_count ?? payload.total_candidates ?? 0) || 0,
           hasMore: Boolean(payload.has_more),
           nextOffset:
             typeof payload.next_offset === "number" && Number.isFinite(payload.next_offset)

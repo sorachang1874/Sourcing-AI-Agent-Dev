@@ -246,6 +246,7 @@ class ServingProjectionReader:
             member = self.store.repos.serving_projection.get_member(
                 normalized_projection_id,
                 normalized_candidate_key,
+                visible_only=True,
             )
         except ControlPlaneAuthoritativeReadError:
             return self._projection_error(
@@ -304,12 +305,20 @@ class ServingProjectionReader:
             return projection_payload
         projection = dict(projection_payload.get("projection") or {})
         normalized_projection_id = str(projection.get("projection_id") or "").strip()
-        search_result = self.store.search_projection_person_index(
-            normalized_projection_id,
-            search_keyword=search_keyword,
-            offset=max(0, int(offset or 0)),
-            limit=min(max(1, int(limit or 120)), 250),
-        )
+        normalized_offset = max(0, int(offset or 0))
+        normalized_limit = min(max(1, int(limit or 120)), 250)
+        try:
+            search_result = self.store.repos.serving_projection.search_person_index(
+                normalized_projection_id,
+                search_keyword=search_keyword,
+                offset=normalized_offset,
+                limit=normalized_limit,
+            )
+        except ControlPlaneAuthoritativeReadError:
+            search_result = {
+                "status": "unavailable",
+                "reason": "projection_person_search_index_unavailable",
+            }
         if str(search_result.get("status") or "") != "ready":
             return {
                 "status": "not_ready",
@@ -317,6 +326,10 @@ class ServingProjectionReader:
                 "projection": projection,
                 "candidate_count": int(projection.get("visible_member_count") or 0),
                 "filtered_candidate_count": 0,
+                "offset": normalized_offset,
+                "limit": 0,
+                "has_more": False,
+                "next_offset": None,
                 "candidates": [],
                 "index_filter_readiness": dict(search_result.get("index_filter_readiness") or {}),
                 "read_contract": {
@@ -325,23 +338,38 @@ class ServingProjectionReader:
                     "fail_closed": True,
                 },
             }
-        keys = [
-            str(key or "").strip()
-            for key in list(search_result.get("candidate_identity_keys") or [])
-            if str(key or "").strip()
-        ]
         try:
-            members = [
-                member
-                for key in keys
-                if (member := self.store.repos.serving_projection.get_member(normalized_projection_id, key))
-            ]
+            members = self._hydrate_index_page_members(
+                normalized_projection_id,
+                index_result=search_result,
+                requested_offset=normalized_offset,
+                requested_limit=normalized_limit,
+            )
         except ControlPlaneAuthoritativeReadError:
             return self._projection_error(
                 "projection_members_unavailable",
                 projection_id=normalized_projection_id,
                 projection=projection,
             )
+        if members is None:
+            return {
+                "status": "not_ready",
+                "reason": "projection_person_search_index_unavailable",
+                "projection": projection,
+                "candidate_count": int(projection.get("visible_member_count") or 0),
+                "filtered_candidate_count": 0,
+                "offset": normalized_offset,
+                "limit": 0,
+                "has_more": False,
+                "next_offset": None,
+                "candidates": [],
+                "index_filter_readiness": dict(search_result.get("index_filter_readiness") or {}),
+                "read_contract": {
+                    "source": "projection_person_search_index",
+                    "fallback_used": False,
+                    "fail_closed": True,
+                },
+            }
         crm_overlays_by_person = self._crm_overlays_for_members(members)
         if crm_overlays_by_person:
             members = [
@@ -503,7 +531,10 @@ class ServingProjectionReader:
             offset=offset,
             limit=limit,
         )
-        if indexed_result:
+        if indexed_result and (
+            str(indexed_result.get("status") or "ready") == "ready"
+            or not _legacy_projection_filter_scan_fallback_enabled()
+        ):
             return indexed_result
         if not _legacy_projection_filter_scan_fallback_enabled():
             return {
@@ -566,29 +597,64 @@ class ServingProjectionReader:
             search_keyword = str(dict(candidate_filter or {}).get("search_keyword") or "").strip()
             if not search_keyword:
                 return {}
-            result = self.store.search_projection_person_index(
-                projection_id,
-                search_keyword=search_keyword,
-                offset=offset,
-                limit=limit,
-            )
+            try:
+                result = self.store.repos.serving_projection.search_person_index(
+                    projection_id,
+                    search_keyword=search_keyword,
+                    offset=offset,
+                    limit=limit,
+                )
+            except ControlPlaneAuthoritativeReadError:
+                return {
+                    "status": "not_ready",
+                    "reason": "projection_person_search_index_unavailable",
+                    "members": [],
+                    "filtered_count": 0,
+                    "filter_source": "projection_person_search_index",
+                    "index_filter_readiness": {},
+                }
         else:
-            result = self.store.filter_projection_person_search_index(
-                projection_id,
-                candidate_filter=candidate_filter,
-                offset=offset,
-                limit=limit,
-            )
+            try:
+                result = self.store.repos.serving_projection.filter_person_search_index(
+                    projection_id,
+                    candidate_filter=candidate_filter,
+                    offset=offset,
+                    limit=limit,
+                )
+            except ControlPlaneAuthoritativeReadError:
+                return {
+                    "status": "not_ready",
+                    "reason": "projection_person_search_index_unavailable",
+                    "members": [],
+                    "filtered_count": 0,
+                    "filter_source": "projection_person_search_index",
+                    "index_filter_readiness": {},
+                }
         if str(result.get("status") or "") != "ready":
-            return {}
-        keys = [
-            str(key or "").strip()
-            for key in list(result.get("candidate_identity_keys") or [])
-            if str(key or "").strip()
-        ]
-        members = [
-            member for key in keys if (member := self.store.repos.serving_projection.get_member(projection_id, key))
-        ]
+            return {
+                "status": "not_ready",
+                "reason": "projection_person_search_index_unavailable",
+                "members": [],
+                "filtered_count": 0,
+                "filter_source": "projection_person_search_index",
+                "index_filter_readiness": dict(result.get("index_filter_readiness") or {})
+                or self._index_filter_readiness_payload(self.store.repos.serving_projection.get(projection_id)),
+            }
+        members = self._hydrate_index_page_members(
+            projection_id,
+            index_result=result,
+            requested_offset=offset,
+            requested_limit=limit,
+        )
+        if members is None:
+            return {
+                "status": "not_ready",
+                "reason": "projection_person_search_index_unavailable",
+                "members": [],
+                "filtered_count": 0,
+                "filter_source": "projection_person_search_index",
+                "index_filter_readiness": dict(result.get("index_filter_readiness") or {}),
+            }
         return {
             "status": "ready",
             "members": members,
@@ -596,6 +662,50 @@ class ServingProjectionReader:
             "filter_source": "projection_person_search_index",
             "index_filter_readiness": dict(result.get("index_filter_readiness") or {}),
         }
+
+    def _hydrate_index_page_members(
+        self,
+        projection_id: str,
+        *,
+        index_result: dict[str, Any],
+        requested_offset: int,
+        requested_limit: int,
+    ) -> list[dict[str, Any]] | None:
+        raw_keys = list(index_result.get("candidate_identity_keys") or [])
+        keys = [str(key or "").strip() for key in raw_keys]
+        matched_count = _public_count(index_result.get("matched_count"))
+        normalized_offset = max(0, int(requested_offset or 0))
+        normalized_limit = min(max(1, int(requested_limit or 1)), 250)
+        expected_page_count = min(normalized_limit, max(0, matched_count - normalized_offset))
+        if (
+            _public_count(index_result.get("offset")) != normalized_offset
+            or any(not key for key in keys)
+            or len(keys) != len(set(keys))
+            or len(keys) != expected_page_count
+        ):
+            return None
+        if not keys:
+            return []
+        members = self.store.repos.serving_projection.list_members_by_identity_keys(
+            projection_id,
+            keys,
+            visible_only=True,
+        )
+        members_by_key: dict[str, dict[str, Any]] = {}
+        for member in members:
+            candidate_key = str(member.get("candidate_identity_key") or "").strip()
+            if (
+                not candidate_key
+                or candidate_key not in keys
+                or candidate_key in members_by_key
+                or str(member.get("projection_id") or "").strip() != projection_id
+                or str(member.get("visibility_state") or "").strip() != _VISIBLE_MEMBER_STATE
+            ):
+                return None
+            members_by_key[candidate_key] = member
+        if set(members_by_key) != set(keys):
+            return None
+        return [members_by_key[key] for key in keys]
 
     @staticmethod
     def _field_visibility_payload() -> dict[str, Any]:

@@ -387,7 +387,7 @@ def _wait_for_workflow_projection_with_index(
         projection_id = str((link or {}).get("projection_id") or "").strip()
         if projection_id:
             member_count = store.repos.serving_projection.count_members(projection_id)
-            index_count = store.count_projection_person_search_index(projection_id)
+            index_count = store.repos.serving_projection.count_person_search_index(projection_id)
             last_status = {
                 "job_id": job_id,
                 "projection_id": projection_id,

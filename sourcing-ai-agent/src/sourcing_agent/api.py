@@ -1393,6 +1393,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         )
         if candidate_page_payload is None:
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+        if str(candidate_page_payload.get("status") or "").strip() == "not_ready":
+            return _json_response(HTTPStatus.CONFLICT, candidate_page_payload)
         return _json_response(HTTPStatus.OK, candidate_page_payload)
 
     add(["GET"], "/api/jobs/{job_id:sourcing_ident}/candidates", get_job_candidates)

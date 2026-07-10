@@ -29,7 +29,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
     def tearDown(self) -> None:
         self.tempdir.cleanup()
 
-    def test_projection_index_count_fault_does_not_delete_or_finalize_index(self) -> None:
+    def test_projection_member_count_fault_does_not_delete_or_finalize_index(self) -> None:
         self.projection_writer.publish_run_scope_projection(
             run_id="job-index-count-fault",
             projection_id="proj_index_count_fault",
@@ -48,7 +48,10 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
                 "count_rows",
                 side_effect=RuntimeError("postgres unavailable"),
             ),
-            mock.patch.object(self.store, "delete_projection_person_search_index") as delete_index,
+            mock.patch.object(
+                self.store.repos.serving_projection,
+                "delete_person_search_index",
+            ) as delete_index,
             mock.patch.object(
                 self.person_asset_writer,
                 "_finalize_projection_person_search_index",
@@ -62,6 +65,71 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
 
         delete_index.assert_not_called()
         finalize_index.assert_not_called()
+
+    def test_projection_index_count_fault_raises_typed_authoritative_error(self) -> None:
+        with (
+            mock.patch.object(
+                self.store._control_plane_postgres,  # noqa: SLF001
+                "count_rows",
+                side_effect=RuntimeError("projection index count unavailable"),
+            ),
+            self.assertRaisesRegex(
+                ControlPlaneAuthoritativeReadError,
+                "projection_person_search_index via count_rows",
+            ),
+        ):
+            self.store.repos.serving_projection.count_person_search_index("proj_index_count_fault")
+
+    def test_projection_index_reset_preserves_old_rows_when_atomic_replace_fails(self) -> None:
+        projection_id = "proj_index_atomic_reset_failure"
+        candidate_key = "linkedin:index-atomic-reset"
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-index-atomic-reset-failure",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": candidate_key,
+                    "person_identity_key": candidate_key,
+                    "public_summary": {"display_name": "Atomic Reset"},
+                }
+            ],
+            replace_members=True,
+        )
+        repository = self.store.repos.serving_projection
+        repository.upsert_person_search_index_rows(
+            projection_id,
+            [
+                {
+                    "candidate_identity_key": candidate_key,
+                    "person_identity_key": candidate_key,
+                    "indexed_text": "old searchable row",
+                }
+            ],
+        )
+
+        with (
+            mock.patch.object(
+                repository,
+                "replace_person_search_index",
+                side_effect=RuntimeError("atomic replace unavailable"),
+            ),
+            mock.patch.object(repository, "delete_person_search_index") as delete_index,
+            mock.patch.object(self.person_asset_writer, "_mark_projection_person_search_index_partial") as mark_partial,
+            self.assertRaisesRegex(RuntimeError, "atomic replace unavailable"),
+        ):
+            self.person_asset_writer.rebuild_projection_person_search_index_page(
+                projection_id=projection_id,
+                reset_index=True,
+                rebuild_person_indexes=False,
+            )
+
+        delete_index.assert_not_called()
+        mark_partial.assert_not_called()
+        self.assertEqual(repository.count_person_search_index(projection_id), 1)
+        self.assertEqual(
+            repository.search_person_index(projection_id, search_keyword="old")["candidate_identity_keys"],
+            [candidate_key],
+        )
 
     def test_public_projection_member_consumers_fail_closed_after_count_succeeds(self) -> None:
         projection_id = "proj_member_second_read_fault"
@@ -84,8 +152,8 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
             detail = self.projection_reader.get_projection_person_detail(projection_id, candidate_key)
         with (
             mock.patch.object(
-                self.store,
-                "search_projection_person_index",
+                repository,
+                "search_person_index",
                 return_value={
                     "status": "ready",
                     "candidate_identity_keys": [candidate_key],
@@ -96,7 +164,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
                     "index_filter_readiness": {"count_scope": "exact_projection"},
                 },
             ),
-            mock.patch.object(repository, "get_member", side_effect=failure),
+            mock.patch.object(repository, "list_members_by_identity_keys", side_effect=failure),
         ):
             search = self.projection_reader.search_projection_person_index(
                 projection_id,
@@ -911,7 +979,9 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         evidence_index = self.store.get_candidate_evidence_index("linkedin:person-index-ada")
         vector_search = self.projection_reader.search_projection_person_index("proj_person_index", search_keyword="vector")
         substack_search = self.projection_reader.search_projection_person_index("proj_person_index", search_keyword="Substack")
-        rows = self.store._list_projection_person_search_index_rows("proj_person_index", limit=10)  # noqa: SLF001
+        rows = self.store.repos.serving_projection._list_person_search_index_rows(  # noqa: SLF001
+            "proj_person_index", limit=10
+        )
 
         self.assertEqual(person_index["status"], "indexed")
         self.assertEqual(person_index["raw_profile_indexed_count"], 1)
@@ -999,7 +1069,9 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
             "proj_index_backfill_fast",
             search_keyword="raw-only-nebula-term",
         )
-        row = self.store._list_projection_person_search_index_rows("proj_index_backfill_fast", limit=1)[0]  # noqa: SLF001
+        row = self.store.repos.serving_projection._list_person_search_index_rows(  # noqa: SLF001
+            "proj_index_backfill_fast", limit=1
+        )[0]
 
         self.assertEqual(result["status"], "backfilled")
         self.assertFalse(result["rebuild_person_indexes"])

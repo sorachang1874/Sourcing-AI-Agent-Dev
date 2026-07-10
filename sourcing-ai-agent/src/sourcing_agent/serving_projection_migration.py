@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 from pathlib import Path
 from typing import Any, Callable
 
@@ -15,9 +15,9 @@ from .person_identity import (
     resolve_person_identity_key,
     resolve_profile_url_key,
 )
+from .retrieval_runtime import OUTREACH_LAYER_KEY_BY_INDEX
 from .serving_projection_writer import ServingProjectionWriter
 from .storage import ControlPlaneStore
-from .retrieval_runtime import OUTREACH_LAYER_KEY_BY_INDEX
 
 CandidatePageLoader = Callable[[int, int], dict[str, Any] | None]
 
@@ -240,7 +240,7 @@ class ServingProjectionMigrationBackfill:
             if not projection_id:
                 continue
             member_count = self.store.repos.serving_projection.count_members(projection_id, visible_only=True)
-            index_count = self.store.count_projection_person_search_index(projection_id)
+            index_count = self.store.repos.serving_projection.count_person_search_index(projection_id)
             readiness = dict(projection.get("readiness") or {})
             already_exact = (
                 index_count == member_count

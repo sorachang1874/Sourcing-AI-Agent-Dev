@@ -338,14 +338,15 @@ class PersonAssetWriter:
         truncated = total_member_count > resolved_max_members
         requested_count_scope = str(count_scope or "index_partial").strip() or "index_partial"
         final_count_scope = "index_partial" if truncated else requested_count_scope
-        if bool(reset_index) and resolved_offset == 0:
-            self.store.delete_projection_person_search_index(normalized_projection_id)
-            self._mark_projection_person_search_index_partial(
-                projection_id=normalized_projection_id,
-                total_member_count=total_member_count,
-                truncated=truncated,
-            )
+        replace_first_page = bool(reset_index) and resolved_offset == 0
         if resolved_offset >= effective_member_limit:
+            if replace_first_page:
+                self.store.repos.serving_projection.replace_person_search_index(normalized_projection_id, [])
+                self._mark_projection_person_search_index_partial(
+                    projection_id=normalized_projection_id,
+                    total_member_count=total_member_count,
+                    truncated=truncated,
+                )
             self._finalize_projection_person_search_index(
                 projection_id=normalized_projection_id,
                 count_scope=final_count_scope,
@@ -421,11 +422,25 @@ class PersonAssetWriter:
             )
             for member in members
         ]
-        batch_result = self.store.upsert_projection_person_search_index_rows(normalized_projection_id, rows)
+        if replace_first_page:
+            batch_result = self.store.repos.serving_projection.replace_person_search_index(
+                normalized_projection_id,
+                rows,
+            )
+            self._mark_projection_person_search_index_partial(
+                projection_id=normalized_projection_id,
+                total_member_count=total_member_count,
+                truncated=truncated,
+            )
+        else:
+            batch_result = self.store.repos.serving_projection.upsert_person_search_index_rows(
+                normalized_projection_id,
+                rows,
+            )
         indexed_count = int(batch_result.get("indexed_count") or 0)
         if completed:
             if row_count_scope != final_count_scope:
-                self.store.update_projection_person_search_index_scope(
+                self.store.repos.serving_projection.update_person_search_index_scope(
                     normalized_projection_id,
                     count_scope=final_count_scope,
                     raw_profile_index_watermark=raw_profile_index_watermark,
@@ -481,7 +496,9 @@ class PersonAssetWriter:
                     "metadata": {
                         **dict(projection.get("metadata") or {}),
                         "search_index_writer_id": self.writer_id,
-                        "search_indexed_member_count": self.store.count_projection_person_search_index(normalized_projection_id),
+                        "search_indexed_member_count": self.store.repos.serving_projection.count_person_search_index(
+                            normalized_projection_id
+                        ),
                         "search_index_total_member_count": total_member_count,
                         "search_index_truncated": truncated,
                         "search_index_build_status": "partial",
@@ -502,7 +519,7 @@ class PersonAssetWriter:
         projection = self.store.repos.serving_projection.get(projection_id)
         if not projection:
             return
-        index_summary = self.store.get_projection_person_search_index_summary(projection_id)
+        index_summary = self.store.repos.serving_projection.get_person_search_index_summary(projection_id)
         readiness_payload = dict(index_summary.get("index_filter_readiness") or {})
         readiness = {
             **dict(projection.get("readiness") or {}),
@@ -510,7 +527,7 @@ class PersonAssetWriter:
             "profile_indexed_at": str(readiness_payload.get("profile_indexed_at") or "").strip(),
             "evidence_indexed_at": str(readiness_payload.get("evidence_indexed_at") or "").strip(),
         }
-        indexed_count = self.store.count_projection_person_search_index(projection_id)
+        indexed_count = self.store.repos.serving_projection.count_person_search_index(projection_id)
         self.store.repos.serving_projection.upsert(
             {
                 **projection,
@@ -566,7 +583,7 @@ class PersonAssetWriter:
         indexed_count = (
             max(0, int(total_indexed_count))
             if total_indexed_count is not None
-            else self.store.count_projection_person_search_index(normalized_projection_id)
+            else self.store.repos.serving_projection.count_person_search_index(normalized_projection_id)
         )
         if indexed_count <= 0:
             return {
@@ -583,7 +600,7 @@ class PersonAssetWriter:
         offset = 0
         while offset < effective_limit:
             page_limit = min(resolved_page_size, effective_limit - offset)
-            page = self.store.list_projection_person_search_index_rows(
+            page = self.store.repos.serving_projection.list_person_search_index_rows(
                 normalized_projection_id,
                 offset=offset,
                 limit=page_limit,

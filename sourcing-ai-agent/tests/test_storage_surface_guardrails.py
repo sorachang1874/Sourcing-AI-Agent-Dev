@@ -55,6 +55,19 @@ _RETIRED_SERVING_PROJECTION_STORE_METHODS = {
     "count_serving_projection_members",
     "_serving_projection_member_from_row",
     "_serving_projection_member_row_payload",
+    "replace_projection_person_search_index",
+    "delete_projection_person_search_index",
+    "upsert_projection_person_search_index_rows",
+    "update_projection_person_search_index_scope",
+    "count_projection_person_search_index",
+    "search_projection_person_index",
+    "filter_projection_person_search_index",
+    "get_projection_person_search_index_summary",
+    "list_projection_person_search_index_rows",
+    "_search_projection_person_index_rows",
+    "_list_projection_person_search_index_rows",
+    "_projection_person_search_index_from_row",
+    "_projection_person_search_index_row_payload",
 }
 _RETIRED_SERVING_PROJECTION_CALL_ATTRIBUTES = {
     name for name in _RETIRED_SERVING_PROJECTION_STORE_METHODS if not name.startswith("_")
@@ -66,6 +79,7 @@ _RETIRED_SERVING_PROJECTION_NATIVE_DISPATCH_KEYS = {
     "upsert_projection_manifest_shard",
     "upsert_serving_projection_members",
     "replace_serving_projection_members",
+    "replace_projection_person_search_index",
 }
 _SERVING_PROJECTION_REPOSITORY_METHODS = {
     "upsert",
@@ -94,6 +108,19 @@ _SERVING_PROJECTION_REPOSITORY_METHODS = {
     "count_members",
     "_member_from_row",
     "_member_row_payload",
+    "replace_person_search_index",
+    "delete_person_search_index",
+    "upsert_person_search_index_rows",
+    "update_person_search_index_scope",
+    "count_person_search_index",
+    "search_person_index",
+    "filter_person_search_index",
+    "get_person_search_index_summary",
+    "list_person_search_index_rows",
+    "_search_person_index_rows",
+    "_list_person_search_index_rows",
+    "_person_search_index_from_row",
+    "_person_search_index_row_payload",
 }
 
 
@@ -168,6 +195,7 @@ class _CatalogFaultAdapter:
         self.authoritative = authoritative
         self.failing_method = failing_method
         self.prefer_read = prefer_read
+        self.calls: list[tuple[str, str, dict[str, object]]] = []
 
     def should_prefer_read(self, table_name: str) -> bool:
         return self.prefer_read
@@ -198,6 +226,7 @@ class _CatalogFaultAdapter:
         **kwargs: object,
     ) -> int:
         self._raise_if_failing("bulk_upsert_rows")
+        self.calls.append(("bulk_upsert_rows", table_name, {"rows": rows, **kwargs}))
         return len(rows)
 
     def delete_rows(self, *, table_name: str, **kwargs: object) -> int:
@@ -206,6 +235,7 @@ class _CatalogFaultAdapter:
 
     def replace_rows(self, *, table_name: str, rows: list[dict[str, object]], **kwargs: object) -> int:
         self._raise_if_failing("replace_rows")
+        self.calls.append(("replace_rows", table_name, {"rows": rows, **kwargs}))
         return len(rows)
 
     def upsert_row_and_replace_rows(
@@ -395,6 +425,9 @@ def test_serving_projection_retired_calls_and_native_dispatch_keys_cannot_return
                 'store.get_serving_projection("proj")',
                 "callback = store.list_collection_authoritative_pointers",
                 'dynamic = getattr(self.store, "upsert_run_projection_link")',
+                'store.search_projection_person_index("proj", search_keyword="ada")',
+                "index_callback = store.count_projection_person_search_index",
+                'index_dynamic = getattr(self.store, "delete_projection_person_search_index")',
                 'orchestrator.get_run_projection_link("run")',
             ]
         )
@@ -403,6 +436,9 @@ def test_serving_projection_retired_calls_and_native_dispatch_keys_cannot_return
         "get_serving_projection",
         "list_collection_authoritative_pointers",
         "getattr:upsert_run_projection_link",
+        "search_projection_person_index",
+        "count_projection_person_search_index",
+        "getattr:delete_projection_person_search_index",
     }
 
     offenders: list[str] = []
@@ -804,6 +840,58 @@ def test_serving_projection_member_repository_preserves_tier_a_b_and_count_senti
     checks += 1
 
     assert checks == 18
+
+
+def test_projection_person_search_index_replace_uses_one_atomic_native_write() -> None:
+    adapter = _CatalogFaultAdapter(authoritative=True, failing_method="")
+    repository = ServingProjectionRepository(adapter)
+
+    result = repository.replace_person_search_index(
+        "proj-index-atomic",
+        [
+            {
+                "candidate_identity_key": "candidate:1",
+                "person_identity_key": "person:1",
+                "indexed_text": "Ada Engineer",
+            }
+        ],
+    )
+
+    assert result["status"] == "indexed"
+    assert result["indexed_count"] == 1
+    assert len(adapter.calls) == 1
+    method_name, table_name, call = adapter.calls[0]
+    assert method_name == "replace_rows"
+    assert table_name == "projection_person_search_index"
+    assert call["where_sql"] == "projection_id = %s"
+    assert call["params"] == ["proj-index-atomic"]
+    assert call["transaction_lock_key"] == "projection_person_search_index:proj-index-atomic"
+    assert len(call["rows"]) == 1
+
+    incremental = repository.upsert_person_search_index_rows(
+        "proj-index-atomic",
+        [{"candidate_identity_key": "candidate:2", "person_identity_key": "person:2"}],
+    )
+    assert incremental["status"] == "indexed"
+    assert len(adapter.calls) == 2
+    method_name, table_name, call = adapter.calls[1]
+    assert method_name == "bulk_upsert_rows"
+    assert table_name == "projection_person_search_index"
+    assert call["transaction_lock_key"] == "projection_person_search_index:proj-index-atomic"
+
+    strict_failure = ServingProjectionRepository(
+        _CatalogFaultAdapter(authoritative=True, failing_method="replace_rows")
+    )
+    error = _runtime_error(
+        lambda: strict_failure.replace_person_search_index(
+            "proj-index-atomic",
+            [{"candidate_identity_key": "candidate:1"}],
+        )
+    )
+    assert str(error) == (
+        "Postgres authoritative write failed for projection_person_search_index via replace_rows: "
+        "RuntimeError: replace_rows-boom"
+    )
 
 
 def test_serving_projection_member_mapper_preserves_irregular_read_contract() -> None:

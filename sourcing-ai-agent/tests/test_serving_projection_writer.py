@@ -764,6 +764,140 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
         self.assertEqual(page["read_contract"]["source"], "projection_person_search_index")
         self.assertFalse(page["read_contract"]["fallback_used"])
 
+    def test_index_hydration_preserves_index_order_and_rejects_membership_drift(self) -> None:
+        projection_id = "proj_index_hydration_integrity"
+        self.writer.publish_run_scope_projection(
+            run_id="job-index-hydration-integrity",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:zulu",
+                    "person_identity_key": "linkedin:zulu",
+                    "rank_index": 1,
+                    "visibility_state": "visible",
+                    "public_summary": {"display_name": "Zulu Engineer", "headline": "Engineer"},
+                },
+                {
+                    "candidate_identity_key": "linkedin:alpha",
+                    "person_identity_key": "linkedin:alpha",
+                    "rank_index": 2,
+                    "visibility_state": "visible",
+                    "public_summary": {"display_name": "Alpha Engineer", "headline": "Engineer"},
+                },
+                {
+                    "candidate_identity_key": "linkedin:hidden",
+                    "person_identity_key": "linkedin:hidden",
+                    "rank_index": 3,
+                    "visibility_state": "hidden",
+                    "public_summary": {"display_name": "Hidden Engineer", "headline": "Engineer"},
+                },
+            ],
+            replace_members=True,
+        )
+        self.person_asset_writer.rebuild_projection_person_search_index(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+        )
+        repository = self.store.repos.serving_projection
+
+        ordered = self.reader.search_projection_person_index(projection_id, search_keyword="Engineer")
+        self.assertEqual(ordered["status"], "ready")
+        self.assertEqual(
+            [row["candidate_identity_key"] for row in ordered["candidates"]],
+            ["linkedin:alpha", "linkedin:zulu"],
+        )
+
+        ready_index_result = repository.search_person_index(
+            projection_id,
+            search_keyword="Engineer",
+            offset=0,
+            limit=10,
+        )
+        alpha_member = repository.get_member(projection_id, "linkedin:alpha")
+        hidden_member = repository.get_member(projection_id, "linkedin:hidden")
+        drift_cases = {
+            "missing_member": {
+                "index_result": ready_index_result,
+                "members": [alpha_member],
+            },
+            "hidden_member": {
+                "index_result": {
+                    **ready_index_result,
+                    "candidate_identity_keys": ["linkedin:hidden"],
+                    "matched_count": 1,
+                },
+                "members": [hidden_member],
+            },
+            "duplicate_index_key": {
+                "index_result": {
+                    **ready_index_result,
+                    "candidate_identity_keys": ["linkedin:alpha", "linkedin:alpha"],
+                    "matched_count": 2,
+                },
+                "members": [alpha_member],
+            },
+        }
+        for label, drift_case in drift_cases.items():
+            with (
+                self.subTest(label=label),
+                mock.patch.object(repository, "search_person_index", return_value=drift_case["index_result"]),
+                mock.patch.object(
+                    repository,
+                    "list_members_by_identity_keys",
+                    return_value=drift_case["members"],
+                ),
+            ):
+                payload = self.reader.search_projection_person_index(
+                    projection_id,
+                    search_keyword="Engineer",
+                    limit=10,
+                )
+                self.assertEqual(payload["status"], "not_ready")
+                self.assertEqual(payload["reason"], "projection_person_search_index_unavailable")
+                self.assertEqual(payload["filtered_candidate_count"], 0)
+                self.assertEqual(payload["candidates"], [])
+                self.assertFalse(payload["has_more"])
+                self.assertIsNone(payload["next_offset"])
+
+        detail = self.reader.get_projection_person_detail(projection_id, "linkedin:hidden")
+        self.assertEqual(detail["status"], "not_ready")
+        self.assertEqual(detail["reason"], "projection_member_not_found")
+
+    def test_projection_index_read_fault_fails_closed_before_member_hydration(self) -> None:
+        projection_id = "proj_index_read_fault"
+        self.writer.publish_run_scope_projection(
+            run_id="job-index-read-fault",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:index-read-fault",
+                    "person_identity_key": "linkedin:index-read-fault",
+                }
+            ],
+            replace_members=True,
+        )
+        repository = self.store.repos.serving_projection
+        with (
+            mock.patch.object(
+                repository,
+                "search_person_index",
+                side_effect=ControlPlaneAuthoritativeReadError("projection index unavailable"),
+            ),
+            mock.patch.object(repository, "list_members_by_identity_keys") as hydrate_members,
+        ):
+            search = self.reader.search_projection_person_index(projection_id, search_keyword="fault")
+            filtered = self.reader.get_projection_candidates(
+                projection_id,
+                candidate_filter={"search_keyword": "fault"},
+            )
+
+        for payload in (search, filtered):
+            self.assertEqual(payload["status"], "not_ready")
+            self.assertEqual(payload["reason"], "projection_person_search_index_unavailable")
+            self.assertEqual(payload["candidates"], [])
+            self.assertFalse(payload["read_contract"]["fallback_used"])
+        hydrate_members.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

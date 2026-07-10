@@ -1,10 +1,12 @@
 # Track B ② Repository 迁移 Handbook(新一轮的入口文档)
 
 > Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
-> 状态:**②.3c 完成(2026-07-10)** —— `serving_projection_members` 8 公共方法 + bespoke helpers 已退役到
-> `store.repos.serving_projection`,storage.py 14,261 → 13,822 行,97 direct calls 全部迁移且旧 facade/dispatch 清零。
-> D-4(a) 同批关闭:4 个 `bulk_upsert_rows` wrapper 调用改显式 keyword,全局 AST guard + 5-shape runtime bypass 变异自检已落地。
-> 批记录:`TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。下一批:②.3d person search index,完成后整域闭合。
+> 状态:**②.3d 完成(2026-07-10)** —— `projection_person_search_index` 9 公共方法 + 4 私有方法/
+> bespoke helpers 已退役到 `store.repos.serving_projection`;当前分支 storage.py 13,835 → 13,296 行,
+> production 12 + tests 14 个调用全部迁移,旧 facade/dispatch 清零。②.3 serving_projection 域至此整体闭合。
+> 同批 fixed-forward:权威 index read/count 故障和 membership 漂移 fail-closed、索引批量水合校验顺序/集合/可见性、
+> job candidates 透传 409、前端保留过滤计数 0、reset 首批改为原子 `replace_rows`。批记录见
+> `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。下一域进入 workflow_runtime 前必须重新 Scout。
 > B4.3 影子拆除 100% 完成(commit 952f9ee)。本文档是路线图
 > **②「Repository 查询方法建设 + 按域迁移调用方」** 这一轮的执行手册。
 > 设计依据:`docs/TRACK_B_B4_2_PG_NATIVE_STORE_DESIGN.md`(B4.2 设计,owner 已 ratify);历史全记录:`docs/TRACK_B_PG_PURE_STORE_DESIGN.md` §6。
@@ -12,10 +14,12 @@
 
 ## 1. 当前基底(起点事实,勿再重推导)
 
-- `storage.py` = 13,822 行(②.3c 后;②.3b 后 14,261,②.3a 后 14,355,②.2 后 14,635,②.1 后 15,091,②.0 后 16,382,试点前 19,187),**PG-pure**:零 sqlite3 / 零 `_connection` / 零 `_lock`。
+- `storage.py` = 13,296 行(②.3d 后;②.3d 当前分支起点 13,835,②.3c settled tree 13,822,
+  ②.3b 后 14,261,②.3a 后 14,355,②.2 后 14,635,②.1 后 15,091,②.0 后 16,382,试点前 19,187),
+  **PG-pure**:零 sqlite3 / 零 `_connection` / 零 `_lock`。
   已整体退役的域:linkedin_profile_registry(②.0)、criteria/confidence(②.1,`store.repos.criteria_confidence`)、
-  manual_review(②.2,`store.repos.manual_review`);serving_projection 的 catalog 三表与 manifest shards 已退役(②.3a/b),
-  members 已由 ②.3c 退役,search-index 按 ②.3d 继续;
+  manual_review(②.2,`store.repos.manual_review`);serving_projection 的 catalog、manifest、members、person search index
+  已由 ②.3a-d 整域退役到 `store.repos.serving_projection`;
   其余域仍在 God-class 门面上,按批推进。共享纯函数 `matching_bundle_payload`/`request_signature_context` 已外提到
   `request_matching.py`(storage 留别名 import)。
 - PG schema 唯一来源 = `migrations/0001_baseline.sql` + `migration_runner.py`(adapter `ensure_bootstrapped()` 驱动);遗留迁移表由 adapter 内字面 DDL(`_LEGACY_TARGET_PUBLIC_WEB_MIGRATION_TABLE_DDL`)按需建。
@@ -44,7 +48,10 @@
 1. ~~**②.0 试点收口**~~ **DONE 2026-07-02**:linkedin_profile_registry 域全量搬迁 + 域迁移协议定型(§4);批记录见 TRACK_B doc §6 末条。
 2. ~~**②.1 criteria/confidence**~~ **DONE 2026-07-06**(8 表 24 方法;批记录见 TRACK_B doc §6 末条)。
 3. ~~**②.2 manual_review**~~ **DONE 2026-07-10**(1 表 7 公共方法;批记录见 Track B doc §6 末条)。
-4. **②.3 serving_projection 分子批推进**:~~②.3a catalog 三表~~ DONE → ~~②.3b manifest shards~~ DONE → ~~②.3c members + D-4(a)~~ DONE → ②.3d person search index(3d 后整域闭合);再进 workflow_runtime(commands/workers/leases,调用面最宽,最后;`_call_native_write` 基座已就位)。D-4 的四点显式 keyword 修复和全局 guard 已随 ②.3c 完成。每子批先跑清单命令(§5)定界、每表零双轨并独立记 A/B 数字与异步 review scope。
+4. **②.3 serving_projection 分子批推进完成**:~~②.3a catalog 三表~~ DONE → ~~②.3b manifest shards~~ DONE →
+   ~~②.3c members + D-4(a)~~ DONE → ~~②.3d person search index~~ DONE。serving_projection 整域闭合;
+   下一域进入 workflow_runtime(commands/workers/leases,调用面最宽,最后;`_call_native_write` 基座已就位)前重新 Scout。
+   D-4 的四点显式 keyword 修复和全局 guard 已随 ②.3c 完成。
 5. **随批机会主义**:37 个 IRREGULAR read-mapper 里"软 irregular"(subscript 形式等价)可在其域批内顺手转 descriptor(harness 全列模式验证)。
    **②.1 反例警示**:criteria/confidence 的 8 个 mapper 看似可转,实为 None 直通 + 写路径真写 NULL FK —— Kind.INT 会 None→0 炸字节等价;
    判定"软 irregular"必须核对**写路径是否产 NULL** 与 mapper 的 default 语义,不能只看 subscript 形状。
@@ -168,6 +175,11 @@ rg -n '^    def .*projection' src/sourcing_agent/storage.py
   (b) raw-PG 回归必须绕过 writer 种 `-7/-3` 与坏 JSON,同时断言 raw 仍为负而 public get/list 为 `0/0/{}`,否则测试只证明
   写前净化而非 reader contract;(c) 本表 production caller=0 仍须跑 pinned 删除后对照;本批 `d97d17c` old Store 与新 repo 的
   5,221-byte snapshot/hash 逐字相同。D-4 的 positional bulk-write 根因属于后续 c/d,本批未顺手裁决。
+- **②.3d 新增经验**:(a) search-index 的同树 old/new 会共享 descriptor,所以固定基线 worktree 的 byte/hash 对照和
+  descriptor mutation 必须同时保留;(b) A/B 先逐字迁移历史 count-to-0 sentinel,切换后再把权威 count/select 故障收紧为
+  `ControlPlaneAuthoritativeReadError`,否则 public reader 会把 PG 故障伪装成 missing index;(c) index key 到 member 的 join 不是
+  可丢行 enrichment:必须批量读取后校验请求页长、键唯一/全集、projection id、visible 状态并恢复 index 顺序,任一漂移整页
+  fail-closed;(d) paged rebuild 的 reset 首批必须走 `replace_rows`,不能先 delete 再独立 upsert;空 projection 也以原子空替换清理。
 
 ## 7. 待 owner 决策(决策卡格式,2026-07-09 升级;每卡一问、有推荐、有截止、有超时默认)
 

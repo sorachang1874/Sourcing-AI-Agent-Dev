@@ -760,3 +760,38 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     serving_projection 域闭合。fixed-forward review scope=`40bdcf8..508799e` 已因 canonical network preflight 的 HTTPS/backend
     全超时延期为 R-015；异步 review 为 scope-local，不阻塞 ②.3d 开发，GO 前仅冻结 ②.3c fixed-forward 的
     live/W6/manual/里程碑签收。
+
+- **2026-07-10 ②.3d 完成 —— `projection_person_search_index` 退役到 serving_projection repository，serving_projection 整域闭合**:
+  - **范围/Scout/删除**:单表 9 public(`replace/delete/upsert/update/count/search/filter/summary/list`) + 4 private
+    mapper/search/list/payload 方法 + 2 专属 module helpers。production **12**(person writer 8、reader 3、migration 1)、
+    tests **14** 全部迁到域内短名；fake/getattr/callback/ambiguous production 调用为 0。旧 Store 9 public + 4 private、
+    2 专属 helper、native dispatch 和 descriptor 兼容键同批删除；旧 receiver/definition/dispatch 为 0。
+    当前分支 `storage.py` **13,835 → 13,296**(-539；②.3c settled tree 为 13,822,后续模型合同曾 +13)，
+    repository **1,303 → 1,908** 行。至此 catalog/manifest/members/search-index 均只由
+    `store.repos.serving_projection` 暴露。
+  - **逐字与 A/B**:approved receiver/name/primitive/builtins mapping 后 13 class methods + 4 helpers 全量 AST
+    **17/17 等价，0 意外差异**。临时 battery 同树 **8 passed**；repo-term mutation **2 failed / 6 passed**。
+    pinned `ea03da3` 旧 Store 与当前 repo 的 11,079-byte frozen snapshot 字节相同，SHA-256
+    `b429f29b5e1b99ae09687fa362ea673d76066e2120a341e5d18280ae1a40f30f`；descriptor mutation 在同树仍为
+    8 pass，但当前 hash 变为 `3bc0cbf9e1c17588fc06c34aa85b3ac3fe89ee0a2ff01fb3e6b5bc9d76db8601`，
+    pinned 对照因此抓红。临时 A/B 文件已删除。
+  - **切换后 fixed-forward**:历史 `count_rows` 异常吞为 0 先经 A/B 保真，随后对权威 PG 收紧为 typed
+    `ControlPlaneAuthoritativeReadError`，非权威 Tier-B 仍返 0。search/filter 改为一次 batch hydration，验证页长、
+    key 唯一/全集、projection id 与 visible 状态并恢复 index 顺序；missing/hidden/duplicate/partial/cross-projection
+    任一漂移整页 `projection_person_search_index_unavailable`，member transport 故障单列 `projection_members_unavailable`。
+    person detail 只读 visible member。job candidate page 原样透传 not-ready，HTTP 返回 409，前端 job/projection adapter
+    用 nullish 语义保留过滤计数 0。repository replace 与 paged reset 首批改用带 projection lock 的单事务
+    `replace_rows`，后续 incremental `bulk_upsert_rows` 复用同一 index lock key；失败保留旧索引且不提前发布
+    partial metadata，空投影也原子清空。
+  - **永久防回归**:surface guard 锁 9+4 旧入口/mapper、13 新 repo 方法、旧 dispatch、direct/getattr/callback，
+    并验证 atomic replace 单 native call 与 strict failure。业务回归覆盖索引顺序、missing/hidden/duplicate 漂移、
+    index/member fault 分类、direct-detail visibility、reset rollback、job 409 与两条前端 zero-count adapter。
+  - **验证**:核心 writer/person/surface **69 passed + 3 subtests**；live-PG **60 passed + 4 subtests**；
+    results-index/HTTP 精确组 **8 passed / 297 deselected**；frontend filters/adapters **21 passed**；完整 operation runtime
+    **93 passed**。最终 `make ci-pre-agent-contract` 为 **256 passed / 0 skip** + 后续 **2/11/1/2 passed**，
+    `dry_run_ready failures=[]`。`make lint` **43 files** 全绿，额外 Ruff 扫全部改动 Python(仅 operation 的
+    HEAD 同存 I001/F841 以显式 ignore 复验)与 compileall/diff-check 绿；mypy 保持 R-011 基线
+    **87 errors / 4 files**。未运行 full `test_pipeline.py`、live provider、W6 或 manual signoff。
+  - **台账/接续**:R-001/R-007/D-3 看板分子合同未改；R-009 规则未触发慢 pipeline；R-011 未增长；
+    D-1/D-2/D-3 截止仍为 **2026-07-31**。异步 Codex review 在 implementation commit 固定后登记为 R-017，
+    只冻结本 scope 的 live/W6/manual/里程碑签收，不阻断下一域 Scout/开发。

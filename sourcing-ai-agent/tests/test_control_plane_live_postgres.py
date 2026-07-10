@@ -1578,7 +1578,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             ),
             (
                 "projection_person_search_index",
-                lambda: store.upsert_projection_person_search_index_rows(
+                lambda: store.repos.serving_projection.upsert_person_search_index_rows(
                     "proj-bulk-failure",
                     [{"candidate_identity_key": "candidate:bulk-failure", "indexed_text": "Bulk Failure"}],
                 ),

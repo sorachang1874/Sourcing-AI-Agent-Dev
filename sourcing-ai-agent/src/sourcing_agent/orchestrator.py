@@ -30733,6 +30733,45 @@ class SourcingOrchestrator:
                 offset=normalized_offset,
                 limit=normalized_limit,
             )
+            if str(asset_population_page.get("status") or "").strip() == "not_ready":
+                canonical_total_candidates = self._canonical_public_projection_candidate_count(
+                    result_view_lifecycle=public_projection.get("result_view_lifecycle"),
+                    board_runtime_state=public_projection.get("board_runtime_state"),
+                )
+                total_candidates = max(
+                    _coerce_int(asset_population_page.get("candidate_count"), 0),
+                    canonical_total_candidates,
+                )
+                return {
+                    "job_id": job_id,
+                    "result_mode": "asset_population",
+                    "status": "not_ready",
+                    "reason": str(
+                        asset_population_page.get("reason") or "projection_person_search_index_unavailable"
+                    ).strip(),
+                    "offset": normalized_offset,
+                    "limit": 0,
+                    "returned_count": 0,
+                    "total_candidates": total_candidates,
+                    "filtered_candidate_count": 0,
+                    "has_more": False,
+                    "next_offset": None,
+                    "profile_fetch_progress": dict(asset_population_page.get("profile_fetch_progress") or {}),
+                    "card_materialization_summary": dict(
+                        asset_population_page.get("card_materialization_summary") or {}
+                    ),
+                    "result_view_lifecycle": dict(public_projection.get("result_view_lifecycle") or {}),
+                    "board_runtime_state": dict(public_projection.get("board_runtime_state") or {}),
+                    "linkedin_stage_1_progress": dict(public_projection.get("linkedin_stage_1_progress") or {}),
+                    "provider_execution_manifest": dict(context.get("provider_execution_manifest") or {}),
+                    "facet_summary": dict(asset_population_page.get("facet_summary") or {}),
+                    "facet_summary_scope": str(asset_population_page.get("facet_summary_scope") or "").strip(),
+                    "filter_signature": str(asset_population_page.get("filter_signature") or filter_signature),
+                    "applied_filter": dict(asset_population_page.get("applied_filter") or normalized_candidate_filter),
+                    "filter_contract": dict(asset_population_page.get("filter_contract") or {}),
+                    "read_contract": dict(asset_population_page.get("read_contract") or {}),
+                    "candidates": [],
+                }
             if asset_population_page:
                 pass
             elif filter_active:
@@ -30884,7 +30923,11 @@ class SourcingOrchestrator:
             )
             total_candidates = int(asset_population_page.get("candidate_count") or 0)
             candidates = list(asset_population_page.get("candidates") or [])
-            filtered_candidate_count = int(asset_population_page.get("filtered_candidate_count") or total_candidates)
+            filtered_candidate_count = (
+                _coerce_int(asset_population_page.get("filtered_candidate_count"), 0)
+                if "filtered_candidate_count" in asset_population_page
+                else total_candidates
+            )
             canonical_total_candidates = self._canonical_public_projection_candidate_count(
                 result_view_lifecycle=public_projection.get("result_view_lifecycle"),
                 board_runtime_state=public_projection.get("board_runtime_state"),
@@ -31084,11 +31127,13 @@ class SourcingOrchestrator:
             "offset": int(projection_page.get("offset") or offset),
             "limit": len(rows),
             "returned_count": len(rows),
-            "filtered_candidate_count": int(
-                projection_page.get("filtered_candidate_count")
-                or projection_page.get("total_candidates")
-                or projection_page.get("candidate_count")
-                or 0
+            "filtered_candidate_count": (
+                _coerce_int(projection_page.get("filtered_candidate_count"), 0)
+                if "filtered_candidate_count" in projection_page
+                else _coerce_int(
+                    projection_page.get("total_candidates") or projection_page.get("candidate_count"),
+                    0,
+                )
             ),
             "has_more": bool(projection_page.get("has_more")),
             "next_offset": projection_page.get("next_offset"),

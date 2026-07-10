@@ -1600,7 +1600,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
               limit: 24,
               returned_count: 1,
               total_candidates: 25,
-              filtered_candidate_count: 25,
+              filtered_candidate_count: 0,
               has_more: false,
               next_offset: null,
               candidates: [
@@ -1680,12 +1680,21 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
               });
               releaseFetch();
               const [firstResult, secondResult] = await Promise.all([first, second]);
+              const projectionResult = await api.getProjectionCandidatePage("projection-1", {
+                offset: 24,
+                limit: 24,
+                forceRefresh: true,
+                filter: { searchKeyword: "candidate" },
+              });
               return {
                 fetchCalls,
                 firstPromoted: Boolean(firstResult.boardRuntimeState?.deltaProfileDenominatorPromoted),
                 secondPromoted: Boolean(secondResult.boardRuntimeState?.deltaProfileDenominatorPromoted),
                 firstJobId: String(firstResult.boardRuntimeState?.jobId || ""),
                 secondJobId: String(secondResult.boardRuntimeState?.jobId || ""),
+                firstFilteredCandidateCount: Number(firstResult.filteredCandidateCount),
+                secondFilteredCandidateCount: Number(secondResult.filteredCandidateCount),
+                projectionFilteredCandidateCount: Number(projectionResult.filteredCandidateCount),
               };
             }
 
@@ -1707,8 +1716,11 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
             check=True,
         )
         payload = json.loads(completed.stdout)
-        self.assertEqual(payload["fetchCalls"], 1, payload)
+        self.assertEqual(payload["fetchCalls"], 2, payload)
         self.assertTrue(payload["firstPromoted"], payload)
         self.assertTrue(payload["secondPromoted"], payload)
         self.assertEqual(payload["firstJobId"], "job-1", payload)
         self.assertEqual(payload["secondJobId"], "job-1", payload)
+        self.assertEqual(payload["firstFilteredCandidateCount"], 0, payload)
+        self.assertEqual(payload["secondFilteredCandidateCount"], 0, payload)
+        self.assertEqual(payload["projectionFilteredCandidateCount"], 0, payload)

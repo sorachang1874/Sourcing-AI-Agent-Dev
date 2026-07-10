@@ -310,15 +310,22 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertTrue(payload["read_contract"]["fail_closed"])
         self.assertFalse(payload["read_contract"]["fallback_used"])
 
-    def test_person_and_projection_crm_not_ready_routes_return_conflict(self) -> None:
+    def test_authoritative_read_not_ready_routes_return_conflict(self) -> None:
         not_ready = {
             "status": "not_ready",
             "reason": "projection_members_unavailable",
             "read_contract": {"fallback_used": False, "fail_closed": True},
         }
+        index_not_ready = {
+            **not_ready,
+            "reason": "projection_person_search_index_unavailable",
+            "candidates": [],
+        }
         with (
             mock.patch.object(self.orchestrator, "get_person_summary_api", return_value=not_ready),
             mock.patch.object(self.orchestrator, "get_projection_crm_state_api", return_value=not_ready),
+            mock.patch.object(self.orchestrator, "get_job_candidate_page", return_value=index_not_ready),
+            mock.patch.dict(os.environ, {"SOURCING_ALLOW_LEGACY_JOB_RESULT_ENDPOINTS": "1"}, clear=False),
         ):
             server = create_server(self.orchestrator, host="127.0.0.1", port=0)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -331,6 +338,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 for path in (
                     "/api/persons/linkedin%3Aroute-fault",
                     "/api/projections/proj_route_fault/crm-state",
+                    "/api/jobs/job-route-fault/candidates",
                 ):
                     try:
                         opener.open(f"http://{host}:{port}{path}")
@@ -344,11 +352,70 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=5)
 
-        self.assertEqual(statuses, [409, 409])
+        self.assertEqual(statuses, [409, 409, 409])
         self.assertEqual(
             [payload["reason"] for payload in payloads],
-            ["projection_members_unavailable", "projection_members_unavailable"],
+            [
+                "projection_members_unavailable",
+                "projection_members_unavailable",
+                "projection_person_search_index_unavailable",
+            ],
         )
+
+    def test_job_candidate_page_propagates_projection_index_not_ready(self) -> None:
+        context = {
+            "request": JobRequest.from_payload({}),
+            "candidate_source": {},
+            "effective_execution_semantics": {},
+        }
+        public_projection = {
+            "result_mode": "asset_population",
+            "result_view_lifecycle": {"state": "current_snapshot_serving"},
+            "board_runtime_state": {"expected_candidate_count": 3},
+            "linkedin_stage_1_progress": {},
+        }
+        index_not_ready = {
+            "status": "not_ready",
+            "reason": "projection_person_search_index_unavailable",
+            "candidate_count": 3,
+            "filter_signature": "filter-signature",
+            "filter_contract": {"source": "projection_person_search_index"},
+            "read_contract": {"fallback_used": False, "fail_closed": True},
+            "candidates": [],
+        }
+        with (
+            mock.patch.object(self.orchestrator, "_build_job_results_context", return_value=context),
+            mock.patch.object(self.store, "count_job_results", return_value=0),
+            mock.patch.object(
+                self.orchestrator,
+                "_build_public_board_runtime_projection",
+                return_value=public_projection,
+            ),
+            mock.patch.object(
+                self.orchestrator,
+                "_build_job_asset_population_page_from_canonical_projection",
+                return_value=index_not_ready,
+            ),
+        ):
+            payload = self.orchestrator.get_job_candidate_page(
+                "job-index-not-ready",
+                offset=2,
+                limit=1,
+                lightweight=True,
+                candidate_filter={"search_keyword": "missing"},
+            )
+
+        assert payload is not None
+        self.assertEqual(payload["status"], "not_ready")
+        self.assertEqual(payload["reason"], "projection_person_search_index_unavailable")
+        self.assertEqual(payload["total_candidates"], 3)
+        self.assertEqual(payload["filtered_candidate_count"], 0)
+        self.assertEqual(payload["returned_count"], 0)
+        self.assertEqual(payload["limit"], 0)
+        self.assertFalse(payload["has_more"])
+        self.assertIsNone(payload["next_offset"])
+        self.assertEqual(payload["candidates"], [])
+        self.assertTrue(payload["read_contract"]["fail_closed"])
 
     def _run_with_pg_durable_runtime(self, schema_label: str, callback: Any) -> Any:
         self._join_runtime_owned_threads_for_test()
@@ -3839,7 +3906,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(third["executed_command_count"], 1)
         self.assertEqual(third["candidate_count"], 1)
         self.assertEqual(completed_command["status"], "succeeded")
-        self.assertEqual(self.store.count_projection_person_search_index("proj_index_pages"), 3)
+        self.assertEqual(self.store.repos.serving_projection.count_person_search_index("proj_index_pages"), 3)
         self.assertEqual(search["filtered_candidate_count"], 3)
         self.assertEqual(search["index_filter_readiness"]["count_scope"], "exact_projection")
 
@@ -3901,7 +3968,10 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(second["partial_count"], 1, second)
         self.assertEqual(second["candidate_count"], 1)
         self.assertNotEqual(second["items"][0]["reason"], "projection_person_search_index_obsolete_input_version")
-        self.assertEqual(self.store.count_projection_person_search_index("proj_index_self_progress"), 2)
+        self.assertEqual(
+            self.store.repos.serving_projection.count_person_search_index("proj_index_self_progress"),
+            2,
+        )
 
     def test_projection_person_search_index_obsoletes_when_semantic_projection_input_changes(self) -> None:
         if not self.store.control_plane_postgres_is_postgres_only():
@@ -3960,7 +4030,10 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             completed_command["result"]["reason"],
             "projection_person_search_index_obsolete_input_version",
         )
-        self.assertEqual(self.store.count_projection_person_search_index("proj_index_semantic_obsolete"), 0)
+        self.assertEqual(
+            self.store.repos.serving_projection.count_person_search_index("proj_index_semantic_obsolete"),
+            0,
+        )
 
     def test_projection_person_search_index_build_skips_obsolete_projection_version(self) -> None:
         if not self.store.control_plane_postgres_is_postgres_only():
@@ -4017,7 +4090,10 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             completed_command["result"]["reason"],
             "projection_person_search_index_obsolete_projection_version",
         )
-        self.assertEqual(self.store.count_projection_person_search_index("proj_index_obsolete"), 0)
+        self.assertEqual(
+            self.store.repos.serving_projection.count_person_search_index("proj_index_obsolete"),
+            0,
+        )
 
     def test_collection_authoritative_merge_item_requeues_when_run_projection_updates(self) -> None:
         if not self.store.control_plane_postgres_is_postgres_only():
@@ -4168,7 +4244,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(dict(recovery.get("projection_person_search_index") or {}).get("legacy_bridge_used"), False)
         self.assertEqual(phase["counts"]["completed_count"], 1)
         self.assertEqual(phase["counts"]["executed_command_count"], 1)
-        self.assertEqual(self.store.count_projection_person_search_index("proj_index_recovery"), 1)
+        self.assertEqual(self.store.repos.serving_projection.count_person_search_index("proj_index_recovery"), 1)
 
     def _write_candidate_documents_snapshot(
         self,

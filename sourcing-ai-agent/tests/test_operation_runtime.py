@@ -4923,7 +4923,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 forced_resume["workflow_entity_delta"]["projection_effect"]["domain_mutation_requeued"]
             )
             self.assertEqual(
-                api_store.count_projection_person_search_index(projection_id="proj-domain-resume"),
+                api_store.repos.serving_projection.count_person_search_index(
+                    projection_id="proj-domain-resume"
+                ),
                 0,
             )
         finally:
@@ -5002,7 +5004,12 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             cancelled_activity = api_store.get_workflow_activity_run(activity["activity_run_id"])
             self.assertEqual(cancelled_activity["status"], "cancelled_before_domain_mutation")
             self.assertEqual(cancelled_activity["phase"], "cancelled")
-            self.assertEqual(api_store.count_projection_person_search_index(projection_id="proj-domain-cancel"), 0)
+            self.assertEqual(
+                api_store.repos.serving_projection.count_person_search_index(
+                    projection_id="proj-domain-cancel"
+                ),
+                0,
+            )
         finally:
             api_store.close()
 
@@ -5086,7 +5093,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertFalse(response["module_state_mutated"])
             self.assertEqual(api_store.get_workflow_activity_run(activity["activity_run_id"])["status"], "running")
             self.assertEqual(
-                api_store.count_projection_person_search_index(projection_id="proj-domain-cancel-blocked"),
+                api_store.repos.serving_projection.count_person_search_index(
+                    projection_id="proj-domain-cancel-blocked"
+                ),
                 0,
             )
         finally:
