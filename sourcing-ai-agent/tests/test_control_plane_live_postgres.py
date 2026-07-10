@@ -2916,7 +2916,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             runtime_mode="agent_runtime",
             lanes=[{"lane_id": "research"}],
         )
-        manual_reviews = mirror_store.replace_manual_review_items(
+        manual_reviews = mirror_store.repos.manual_review.replace_items(
             "job-1",
             [
                 {
@@ -3115,7 +3115,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             }
         ]
 
-        manual_review_rows = prefer_store.list_manual_review_items(job_id="job-pg", status="")
+        manual_review_rows = prefer_store.repos.manual_review.list_items(job_id="job-pg", status="")
         review_rows = prefer_store.list_candidate_review_records(job_id="job-pg")
         target_rows = prefer_store.list_target_candidates(job_id="job-pg")
         history_row = prefer_store.get_frontend_history_link("hist-pg")
@@ -3157,7 +3157,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
             decision_payload={"approved": True},
         )
 
-        manual_items = store.replace_manual_review_items(
+        manual_items = store.repos.manual_review.replace_items(
             "job-native",
             [
                 {
@@ -3171,7 +3171,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 }
             ],
         )
-        reviewed_item = store.review_manual_review_item(
+        reviewed_item = store.repos.manual_review.review_item(
             review_item_id=int(manual_items[0]["review_item_id"]),
             action="resolve",
             reviewer="qa",
@@ -3363,7 +3363,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
     def test_merge_manual_review_item_metadata_writes_natively_in_prefer_postgres(self) -> None:
         store = self._build_store(mode="postgres_only")
 
-        manual_items = store.replace_manual_review_items(
+        manual_items = store.repos.manual_review.replace_items(
             "job-native-metadata",
             [
                 {
@@ -3377,7 +3377,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 }
             ],
         )
-        merged = store.merge_manual_review_item_metadata(
+        merged = store.repos.manual_review.merge_item_metadata(
             int(manual_items[0]["review_item_id"]),
             {"merged": True, "seed": 2},
         )

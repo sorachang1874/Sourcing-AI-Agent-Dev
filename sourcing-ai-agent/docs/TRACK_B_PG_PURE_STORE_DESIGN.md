@@ -623,3 +623,39 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     compileall 干净;29 个旧记号全仓 grep 清零(仅 pycache 二进制 / request_matching 来源注释 / pipeline 的 orchestrator 门面调用)。
   - **残留披露**:`get_confidence_policy_control` 与 `upsert_pattern` 零生产调用方(前者仅测试直连,后者仅域内组合);
     orchestrator 门面三方法待其自身域重构时再议;`_storage_b423/b425_backup` 的 pycache 残迹与本批无关。
+
+- **2026-07-10 ② 批次 2(②.2)完成 —— manual_review 单表整域退役到 `store.repos.manual_review`**:
+  - **范围与所有权**:`manual_review_items` 1 表、7 个公共方法(`replace_items`/`list_items`/`count_items`/
+    `cleanup_items`/`review_item`/`get_item`/`merge_item_metadata`)
+    + 6 个模块 helper + 1 个手写 mapper 整体迁入 `repositories/manual_review.py`(481 行),`ControlPlaneStore`
+    同名长门面同批删除、零双轨。`storage.py` **15,091 → 14,635 行**(-456)。mapper 不转 descriptor:
+    nullable scalar 必须保持 `None` 直通,三个 JSON 列必须保持直接 `json.loads` 的 malformed-input raise 语义;
+    当前 `Kind` 会改变这两项合同,留给 ③ 的 nullable/typed-column 设计。
+  - **逐字声明**:对旧实现施加已批准的短名、Repository 原语和时钟映射后,7 public + 6 helper + mapper
+    **14/14 AST 结构等价**,披露差异 0、意外差异 0。保留了 non-authoritative `[]/0/None` 哨兵、Tier-A
+    fail-closed 错误串、replace/cleanup 的非事务顺序、review 的 update-row-None re-read 竞态、未知 action 保持状态、
+    空 candidate/evidence 不覆盖和 review 路径的 `reviewed_at`/`updated_at` 分别取时;未顺手优化 count 或清理状态机。
+  - **A/B + 变异自检**(临时件跑完删除):首轮 3 部分 battery(纯 helper/mapper、PG 读+Tier-A/Tier-B、PG 写返回值+
+    16 列全表 dump+独立 sequence)初跑 **3 passed/4.07s**;把新 mapper 的 metadata 人为改为 `{}` 后
+    **3 failed/3.03s**(三部分均捕获);恢复后 **3 passed/2.88s**。A/B 冻结 storage + repo 两层时钟源。另用真实
+    `company_assets/<company>/<snapshot_id>/...` 路径在迁移树与 pinned `c19c0fd` worktree 各跑同一 cleanup 脚本,
+    两边均 **1 passed**(2.08s/2.04s),6 行×16 列、返回值和 sequence `[6,true]` 的 JSON **逐字节相同**
+    (SHA-256 `8913ee82698af70ee0f1deb7c56307f605b60352e264deaa614963a3d755ecab`);cleanup 计数为
+    metadata_updated=3 / superseded=1 / out_of_scope=2。
+  - **调用方切换**:production **14** 点全在 orchestrator(2 replace / 3 list / 5 count / 2 get / 1 merge /
+    1 review);tests **17** 点(live_postgres 6 + pipeline 11),合计 31 个 repo 直调。pipeline 的 2 个白盒 patch
+    receiver 同步迁到 repo。fake store=0、getattr=0、callback=0、ambiguous_sites=0;API/CLI 继续调用 orchestrator
+    公共门面。全仓旧 `ControlPlaneStore` receiver 直调=0、旧定义=0;adapter API 与 plan-review 域未触碰。
+  - **永久防回归**:`test_storage_surface_guardrails` 新增 AST surface guard(旧 7 门面不得回生、新 7 短方法和
+    namespace wiring 必须存在)及 mapper nullable/malformed-JSON 合同;新 repo 纳入 `run_python_quality.sh` 和 mypy
+    文件清单。`Repository._call_native_write` 的共享能力说明补入已支持的 `delete_rows`;schema/DDL/字段合同零变化。
+  - **验证**:最终 `make ci-pre-agent-contract` **187 passed / 0 skip** + 后续门 **2/11/1/2 passed** +
+    `dry_run_ready failures=[]`;永久域/守卫组合 **69 passed**(surface + synthesis + resolution + live_postgres +
+    pg_onconflict);compileall 干净;ruff/format 40 文件全绿;mypy **87 errors in 4 files**与 R-011 基线相同
+    (candidate_artifacts 1 / orchestrator 64 / public_web_runtime_core 1 / workflow_smoke 21),新 repo 单独 0。
+    pipeline 精确 5 项在迁移树与 `c19c0fd` worktree 都是 **3 passed / 2 failed / 452 deselected**;同两败
+    (`manual_review_count` 12→0、candidate detail 410)逐项相同,零新增 regression,归 R-009。
+  - **台账/评审**:`RESIDUAL_LEDGER` tripwire 全扫:R-009 仅作基线归因、未启动其重设计,R-011 未增长,其余未触发;
+    D-1/D-2/D-3 截止仍为 2026-07-31;②.3 仅做逐字 repository 迁移且不改投影/看板计数语义时不阻塞,
+    一旦改计数语义则 R-007/D-3 立即触发。作者家族内只读对抗审查无 finding(另补 Tier-A/Tier-B/
+    update-row-None 探针);正式非 GPT 异步参考评审在 pinned 批提交后启动,结果与 artifact 路径由后续记录回填。

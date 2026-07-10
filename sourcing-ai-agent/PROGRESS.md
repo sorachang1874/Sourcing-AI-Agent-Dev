@@ -8,6 +8,27 @@
 > month-before-last out before appending. Keep this file under ~300 lines.
 > Archives: [2026-05](docs/archive/progress/PROGRESS_2026-05.md) · [2026-04 and earlier](docs/archive/progress/PROGRESS_2026-04_and_earlier.md)
 
+## 2026-07-10 (Asia/Shanghai)
+
+### Track B ②.2: manual_review repository cutover
+
+- The `manual_review_items` domain moved from seven `ControlPlaneStore` methods to
+  `store.repos.manual_review`; all 14 production and 17 direct-test callers switched in the same
+  batch, and the old facade was deleted. `storage.py` fell from 15,091 to 14,635 lines; the raw mapper
+  remains intentional because nullable scalar and malformed-JSON behavior are not representable by
+  the current descriptor kinds.
+- Equivalence evidence: 14/14 mapped AST functions exact; temporary three-part A/B green, deliberately
+  broken mapper made all three parts fail, then green after restore; a canonical snapshot cleanup
+  script was byte-identical against pinned `c19c0fd` (six 16-column rows plus sequence state, SHA-256
+  `8913ee82698af70ee0f1deb7c56307f605b60352e264deaa614963a3d755ecab`).
+- Validation: `ci-pre-agent-contract` 187 passed / 0 skipped plus 2/11/1/2 downstream passes and a clean
+  dry-run report; domain/guard group 69 passed; Ruff/format and compileall clean; mypy stayed at the
+  R-011 baseline of 87 errors in four files. Five targeted pipeline tests had the exact same 3-pass/
+  2-fail result on the migration and baseline worktrees (R-009, zero regression).
+- The takeover routing table was corrected first in `c19c0fd`: GPT/Codex is now the author family and
+  the independent-review lane must remain in the non-GPT Claude family. The ②.2 batch will be pinned
+  and sent through that lane; next repository domain is ②.3 serving_projection.
+
 ## 2026-07-09 (Asia/Shanghai)
 
 ### Governance batch: Track B ②.0+②.1 committed; provider fail-closed merged; CI lanes hardened; protocol upgrades; GPT-5.6 takeover prep
@@ -204,4 +225,3 @@
 - Validation passed: `uv run pytest tests/test_frontend_candidate_filters.py -k target_candidate_public_web_detail_uses_reviewable_signal_sections -q`; `uv run pytest tests/test_pre_agent_contract_review.py -k 'frontend_public_web_uses_crm_canonical_endpoints_only or operations_page_is_operation_api_only_control_surface' -q`; `uv run pytest tests/test_frontend_local_asset_pages.py -q`; targeted Public Web/results/runtime preflights; `npm run build` in `frontend-demo`; `git diff --check` for the touched files.
 - Current CRM Public Web data observation: Yuwei Qin's current PG-owned Public Web state contains a manually promoted Google Scholar link and a rejected X link; no Yuwei GitHub promotion is present in current PG state. Jackie Bow has durable X and GitHub promotions, including `https://github.com/jbow`.
 - Remaining risks: real provider/model live validation is still pending for workspace mismatch responses, export watermark reuse, model-provider circuit behavior, and Public Web source quality. Historical Markdown deletion was intentionally not performed in this slice; cleanup/deletion needs a separate Independent Review Gate because older docs still carry audit evidence and contract strings.
-

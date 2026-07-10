@@ -26072,9 +26072,11 @@ class SourcingOrchestrator:
             "effective_execution_semantics": effective_execution_semantics,
         }
         if include_manual_review_items:
-            payload["manual_review_items"] = self.store.list_manual_review_items(job_id=job_id, status="", limit=100)
+            payload["manual_review_items"] = self.store.repos.manual_review.list_items(
+                job_id=job_id, status="", limit=100
+            )
         else:
-            payload["manual_review_count"] = self.store.count_manual_review_items(job_id=job_id, status="")
+            payload["manual_review_count"] = self.store.repos.manual_review.count_items(job_id=job_id, status="")
         if include_runtime_details:
             if public_api_contract:
                 payload.update(
@@ -27127,7 +27129,7 @@ class SourcingOrchestrator:
             "board_runtime_state": board_runtime_state,
             "linkedin_stage_1_progress": linkedin_stage_1_progress,
             "execution_phase_contract": execution_phase_contract,
-            "manual_review_count": self.store.count_manual_review_items(job_id=job_id, status=""),
+            "manual_review_count": self.store.repos.manual_review.count_items(job_id=job_id, status=""),
             "request_preview": _load_job_request_preview(job),
             "provider_execution_manifest": dict(context.get("provider_execution_manifest") or {}),
             "effective_execution_semantics": effective_execution_semantics,
@@ -31514,7 +31516,7 @@ class SourcingOrchestrator:
         if str(stage2_final_summary.get("status") or "").strip().lower() != "completed":
             return job
         result_count = self.store.count_job_results(job_id)
-        manual_review_count = self.store.count_manual_review_items(job_id=job_id, status="")
+        manual_review_count = self.store.repos.manual_review.count_items(job_id=job_id, status="")
         if result_count <= 0 and manual_review_count <= 0:
             return job
         # Final-results reconciliation is the one owner-approved entry point
@@ -36405,7 +36407,7 @@ class SourcingOrchestrator:
         )
         manual_review_items = [
             item
-            for item in self.store.list_manual_review_items(job_id=job_id, status="", limit=200)
+            for item in self.store.repos.manual_review.list_items(job_id=job_id, status="", limit=200)
             if str(item.get("candidate_id") or "").strip() == normalized_candidate_id
         ]
         asset_population_record = None
@@ -36549,7 +36551,7 @@ class SourcingOrchestrator:
             job=job,
             ranked_result_count=self.store.count_job_results(job_id),
         )
-        manual_review_count = self.store.count_manual_review_items(job_id=job_id, status="")
+        manual_review_count = self.store.repos.manual_review.count_items(job_id=job_id, status="")
         runtime_controls = self._build_live_runtime_controls_payload(job, use_poll_cache=True)
         auto_recovery = self._maybe_auto_recover_workflow_on_progress(
             job=job,
@@ -36566,7 +36568,7 @@ class SourcingOrchestrator:
                 job=job,
                 ranked_result_count=self.store.count_job_results(job_id),
             )
-            manual_review_count = self.store.count_manual_review_items(job_id=job_id, status="")
+            manual_review_count = self.store.repos.manual_review.count_items(job_id=job_id, status="")
             runtime_controls = self._build_live_runtime_controls_payload(job, use_poll_cache=False)
         payload = _build_job_progress_payload(
             job=job,
@@ -50669,7 +50671,7 @@ class SourcingOrchestrator:
         self, target_company: str = "", job_id: str = "", status: str = "open"
     ) -> dict[str, Any]:
         return {
-            "manual_review_items": self.store.list_manual_review_items(
+            "manual_review_items": self.store.repos.manual_review.list_items(
                 target_company=target_company,
                 job_id=job_id,
                 status=status,
@@ -52372,7 +52374,7 @@ class SourcingOrchestrator:
         review_item_id = int(payload.get("review_item_id") or 0)
         if review_item_id <= 0:
             return {"status": "invalid", "reason": "review_item_id is required"}
-        review_item = self.store.get_manual_review_item(review_item_id)
+        review_item = self.store.repos.manual_review.get_item(review_item_id)
         if review_item is None:
             return {"status": "not_found", "review_item_id": review_item_id}
         metadata = dict(review_item.get("metadata") or {})
@@ -52389,7 +52391,7 @@ class SourcingOrchestrator:
             review_item,
             model_client=self.model_client,
         )
-        updated = self.store.merge_manual_review_item_metadata(
+        updated = self.store.repos.manual_review.merge_item_metadata(
             review_item_id,
             {
                 "manual_review_synthesis": dict(compiled.get("synthesis") or {}),
@@ -52406,7 +52408,7 @@ class SourcingOrchestrator:
 
     def review_manual_review_item(self, payload: dict[str, Any]) -> dict[str, Any]:
         review_item_id = int(payload.get("review_item_id") or 0)
-        review_item = self.store.get_manual_review_item(review_item_id) if review_item_id > 0 else None
+        review_item = self.store.repos.manual_review.get_item(review_item_id) if review_item_id > 0 else None
         resolution: dict[str, Any] | None = None
         if _has_manual_review_resolution_payload(payload):
             resolution = apply_manual_review_resolution(
@@ -52422,7 +52424,7 @@ class SourcingOrchestrator:
             if resolution is None:
                 return {"status": "invalid", "reason": "review_item_id or manual review resolution payload is required"}
             return {"status": "applied_without_queue", "resolution": resolution}
-        item = self.store.review_manual_review_item(
+        item = self.store.repos.manual_review.review_item(
             review_item_id=review_item_id,
             action=str(payload.get("action") or payload.get("status") or "").strip(),
             reviewer=str(payload.get("reviewer") or "").strip(),
@@ -69938,7 +69940,7 @@ class SourcingOrchestrator:
         artifact_path = self.jobs_dir / artifact_filename
         artifact_path.write_text(json.dumps(_storage_json_safe_payload(artifact), ensure_ascii=False, indent=2))
         self.store.replace_job_results(job_id, [])
-        self.store.replace_manual_review_items(job_id, manual_review_items)
+        self.store.repos.manual_review.replace_items(job_id, manual_review_items)
         if persist_job_state:
             final_job_status = "running" if workflow_completion_deferred else "completed"
             final_job_stage = "retrieving" if workflow_completion_deferred else "completed"
@@ -70371,7 +70373,7 @@ class SourcingOrchestrator:
         artifact_path = self.jobs_dir / artifact_filename
         artifact_path.write_text(json.dumps(_storage_json_safe_payload(artifact), ensure_ascii=False, indent=2))
         self.store.replace_job_results(job_id, persisted_results)
-        self.store.replace_manual_review_items(job_id, manual_review_items)
+        self.store.repos.manual_review.replace_items(job_id, manual_review_items)
         if persist_job_state:
             self.store.save_job(
                 job_id=job_id,

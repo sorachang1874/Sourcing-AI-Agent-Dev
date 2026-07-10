@@ -13,6 +13,7 @@ from typing import Any
 
 from .criteria_confidence import CriteriaConfidenceRepository
 from .linkedin_profile_registry import LinkedinProfileRegistryRepository
+from .manual_review import ManualReviewRepository
 
 
 class ControlPlaneRepositories:
@@ -30,6 +31,7 @@ class ControlPlaneRepositories:
     def __init__(self, adapter: Any, *, job_lookup: Callable[[str], Any] | None = None) -> None:
         self.linkedin_profile_registry = LinkedinProfileRegistryRepository(adapter)
         self.criteria_confidence = CriteriaConfidenceRepository(adapter, job_lookup=job_lookup)
+        self.manual_review = ManualReviewRepository(adapter)
 
 
 def linkedin_profile_registry_repo(store: Any) -> Any:

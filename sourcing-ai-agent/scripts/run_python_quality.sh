@@ -14,6 +14,7 @@ PYTHON_QUALITY_TARGETS=(
   "src/sourcing_agent/cloud_asset_import.py"
   "src/sourcing_agent/company_registry.py"
   "src/sourcing_agent/control_plane_postgres.py"
+  "src/sourcing_agent/repositories/manual_review.py"
   "src/sourcing_agent/profile_registry_backfill.py"
   "src/sourcing_agent/profile_registry_utils.py"
   "src/sourcing_agent/linkedin_url_normalization.py"

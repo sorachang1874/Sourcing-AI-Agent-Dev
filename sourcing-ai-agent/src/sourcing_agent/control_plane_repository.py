@@ -369,7 +369,7 @@ class Repository:
     def _call_native_write(self, method_name: str, /, *, table_name: str, **kwargs: Any) -> Any:
         # == ControlPlaneStore._call_control_plane_postgres_native restricted to native WRITERS with an
         # explicit table_name (insert_row_with_generated_id / update_row_returning /
-        # upsert_row_with_generated_id): swallow to None when non-authoritative, raise when strict.
+        # upsert_row_with_generated_id / delete_rows): swallow to None when non-authoritative, raise when strict.
         # Native reads in repositories/ go through _select_row(s); there is no read branch here.
         strict_no_fallback = bool(table_name and self._strict_authoritative(table_name))
         method = getattr(self._adapter, method_name, None)

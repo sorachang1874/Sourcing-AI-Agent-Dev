@@ -4005,7 +4005,7 @@ class PipelineTest(unittest.TestCase):
                     }
                 ],
             )
-            self.store.replace_manual_review_items(current_job_id, [])
+            self.store.repos.manual_review.replace_items(current_job_id, [])
             if persist_job_state:
                 self.store.save_job(
                     job_id=current_job_id,
@@ -4259,7 +4259,7 @@ class PipelineTest(unittest.TestCase):
                     }
                 ],
             )
-            self.store.replace_manual_review_items(current_job_id, [])
+            self.store.repos.manual_review.replace_items(current_job_id, [])
             if persist_job_state:
                 self.store.save_job(
                     job_id=current_job_id,
@@ -4509,7 +4509,7 @@ class PipelineTest(unittest.TestCase):
                     }
                 ],
             )
-            self.store.replace_manual_review_items(current_job_id, [])
+            self.store.repos.manual_review.replace_items(current_job_id, [])
             if persist_job_state:
                 self.store.save_job(
                     job_id=current_job_id,
@@ -6918,7 +6918,7 @@ class PipelineTest(unittest.TestCase):
                 "source_path": "/tmp/lia-web.json",
             },
         ]
-        stored_items = self.store.replace_manual_review_items(
+        stored_items = self.store.repos.manual_review.replace_items(
             "job_manual_synth",
             [
                 {
@@ -10723,8 +10723,8 @@ class PipelineTest(unittest.TestCase):
                 side_effect=AssertionError("progress should not load full job results"),
             ),
             unittest.mock.patch.object(
-                self.store,
-                "list_manual_review_items",
+                self.store.repos.manual_review,
+                "list_items",
                 side_effect=AssertionError("progress should not load full manual review rows"),
             ),
             unittest.mock.patch.object(
@@ -10733,8 +10733,8 @@ class PipelineTest(unittest.TestCase):
                 return_value=12,
             ) as result_count_mock,
             unittest.mock.patch.object(
-                self.store,
-                "count_manual_review_items",
+                self.store.repos.manual_review,
+                "count_items",
                 return_value=5,
             ) as manual_review_count_mock,
         ):
@@ -38942,10 +38942,10 @@ class PipelineTest(unittest.TestCase):
             "metadata": {},
         }
 
-        self.store.replace_manual_review_items("job_old", [old_item, old_other_item])
-        self.store.replace_manual_review_items("job_new", [new_item])
+        self.store.repos.manual_review.replace_items("job_old", [old_item, old_other_item])
+        self.store.repos.manual_review.replace_items("job_new", [new_item])
 
-        all_items = self.store.list_manual_review_items(target_company="Acme", status="", limit=10)
+        all_items = self.store.repos.manual_review.list_items(target_company="Acme", status="", limit=10)
         status_by_candidate = {(item["candidate_id"], item["job_id"]): item["status"] for item in all_items}
         snapshot_by_candidate = {
             (item["candidate_id"], item["job_id"]): item["metadata"].get("snapshot_id") for item in all_items
@@ -38955,9 +38955,9 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(status_by_candidate[("cand_manual", "job_old")], "superseded")
         self.assertEqual(status_by_candidate[("cand_manual", "job_new")], "open")
 
-        cleanup = self.store.cleanup_manual_review_items(target_company="Acme", snapshot_id="20260407T120000")
+        cleanup = self.store.repos.manual_review.cleanup_items(target_company="Acme", snapshot_id="20260407T120000")
         self.assertGreaterEqual(cleanup["out_of_scope_count"], 1)
-        open_items = self.store.list_manual_review_items(target_company="Acme", status="open", limit=10)
+        open_items = self.store.repos.manual_review.list_items(target_company="Acme", status="open", limit=10)
         self.assertEqual(len(open_items), 1)
         self.assertEqual(open_items[0]["candidate_id"], "cand_manual")
         self.assertEqual(open_items[0]["metadata"].get("snapshot_id"), "20260407T120000")
@@ -39659,7 +39659,7 @@ class PipelineTest(unittest.TestCase):
             self.assertIn("status", daemon_status_resp)
             self.assertIn("service_name", daemon_status_resp)
 
-            manual_review_items = self.store.replace_manual_review_items(
+            manual_review_items = self.store.repos.manual_review.replace_items(
                 job_resp["job_id"],
                 [
                     {
@@ -40124,7 +40124,7 @@ class PipelineTest(unittest.TestCase):
                 }
             ],
         )
-        self.store.replace_manual_review_items(
+        self.store.repos.manual_review.replace_items(
             job_id,
             [
                 {
