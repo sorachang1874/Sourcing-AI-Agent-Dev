@@ -227,7 +227,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
             }
         )
 
-        shard = self.store.upsert_projection_manifest_shard(
+        shard = self.store.repos.serving_projection.upsert_manifest_shard(
             {
                 "projection_id": "proj_manifest",
                 "shard_kind": "candidate_identity_manifest",
@@ -240,8 +240,120 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
 
         self.assertEqual(shard["projection_id"], "proj_manifest")
         self.assertEqual(shard["row_count"], 7384)
-        self.assertEqual(self.store.list_projection_manifest_shards("proj_manifest")[0]["manifest_ref"], shard["manifest_ref"])
+        self.assertEqual(
+            self.store.repos.serving_projection.list_manifest_shards("proj_manifest")[0]["manifest_ref"],
+            shard["manifest_ref"],
+        )
         self.assertEqual(self.store.count_serving_projection_members("proj_manifest"), 0)
+
+    def test_manifest_shard_repository_preserves_normalization_order_and_update_contract(self) -> None:
+        repository = self.store.repos.serving_projection
+        self.assertEqual(repository.upsert_manifest_shard({}), {})
+        self.assertEqual(repository.get_manifest_shard(""), {})
+        self.assertEqual(repository.list_manifest_shards(""), [])
+
+        with mock.patch.object(
+            serving_projection_repository,
+            "utc_now_timestamp",
+            return_value="2026-07-10 07:00:00",
+        ):
+            defaulted = repository.upsert_manifest_shard(
+                {
+                    "projection_id": "proj-contract",
+                    "shard_index": -7,
+                    "manifest_ref": "s3://bucket/default.json",
+                    "row_count": "bad",
+                    "metadata_json": '{"source":"contract"}',
+                }
+            )
+            explicit = repository.upsert_manifest_shard(
+                {
+                    "shard_id": " explicit-shard ",
+                    "projection_id": "proj-contract",
+                    "shard_kind": "zeta",
+                    "shard_index": "2",
+                    "manifest_ref": "s3://bucket/zeta.json",
+                    "row_count": "4",
+                    "metadata": {"nested": ["x"]},
+                    "created_at": "2026-01-01 00:00:00",
+                }
+            )
+            malformed = repository.upsert_manifest_shard(
+                {
+                    "projection_id": "proj-contract",
+                    "shard_kind": "alpha",
+                    "shard_index": 1,
+                    "manifest_ref": "s3://bucket/alpha.json",
+                    "row_count": 3,
+                    "metadata_json": "[",
+                }
+            )
+
+        with mock.patch.object(
+            serving_projection_repository,
+            "utc_now_timestamp",
+            return_value="2026-07-10 07:30:00",
+        ):
+            updated = repository.upsert_manifest_shard(
+                {
+                    "projection_id": "proj-contract",
+                    "shard_index": 0,
+                    "manifest_ref": "s3://bucket/default-v2.json",
+                    "row_count": 9,
+                }
+            )
+
+        self.assertEqual(defaulted["shard_id"], "proj-contract::candidate_identity_manifest::0")
+        self.assertEqual(defaulted["shard_index"], 0)
+        self.assertEqual(defaulted["row_count"], 0)
+        self.assertEqual(defaulted["metadata"], {"source": "contract"})
+        self.assertEqual(explicit["shard_id"], "explicit-shard")
+        self.assertEqual(explicit["shard_index"], 2)
+        self.assertEqual(explicit["row_count"], 4)
+        self.assertEqual(malformed["metadata"], {})
+        self.assertEqual(updated["created_at"], defaulted["created_at"])
+        self.assertEqual(updated["updated_at"], "2026-07-10 07:30:00")
+        self.assertEqual(
+            [row["shard_kind"] for row in repository.list_manifest_shards("proj-contract")],
+            ["alpha", "candidate_identity_manifest", "zeta"],
+        )
+        self.assertEqual(repository.list_manifest_shards("proj-contract", shard_kind="zeta"), [explicit])
+        self.assertEqual(len(repository.list_manifest_shards("proj-contract", limit=1)), 1)
+        self.assertEqual(len(repository.list_manifest_shards("proj-contract", limit=0)), 3)
+
+    def test_manifest_shard_reader_clamps_raw_postgres_negative_values(self) -> None:
+        adapter = self.store._control_plane_postgres
+        adapter.ensure_bootstrapped()
+        adapter.upsert_row(
+            "projection_manifest_shards",
+            {
+                "shard_id": "raw-negative",
+                "projection_id": "proj-raw",
+                "shard_kind": "candidate_identity_manifest",
+                "shard_index": -7,
+                "manifest_ref": "s3://bucket/raw.json",
+                "row_count": -3,
+                "content_signature": "sha256:raw",
+                "metadata_json": "{",
+                "created_at": "2026-07-10 08:00:00",
+                "updated_at": "2026-07-10 08:00:00",
+            },
+        )
+
+        raw = adapter.select_one(
+            "projection_manifest_shards",
+            where_sql="shard_id = %s",
+            params=["raw-negative"],
+        )
+        public = self.store.repos.serving_projection.get_manifest_shard("raw-negative")
+        listed = self.store.repos.serving_projection.list_manifest_shards("proj-raw")
+
+        self.assertEqual(int(raw["shard_index"]), -7)
+        self.assertEqual(int(raw["row_count"]), -3)
+        self.assertEqual(public["shard_index"], 0)
+        self.assertEqual(public["row_count"], 0)
+        self.assertEqual(public["metadata"], {})
+        self.assertEqual(listed, [public])
 
     def test_run_projection_link_and_collection_pointer_are_explicit_foundation_records(self) -> None:
         self.store.repos.serving_projection.upsert(

@@ -172,7 +172,6 @@ _CONTROL_PLANE_POSTGRES_NATIVE_TABLES = {
     "upsert_serving_projection_members": "serving_projection_members",
     "replace_serving_projection_members": "serving_projection_members",
     "replace_projection_person_search_index": "projection_person_search_index",
-    "upsert_projection_manifest_shard": "projection_manifest_shards",
     "upsert_raw_profile_index": "raw_profile_index",
     "upsert_candidate_evidence_index": "candidate_evidence_index",
 }
@@ -9903,22 +9902,6 @@ class ControlPlaneStore:
     def _projection_person_search_index_from_row(self, row: Any) -> dict[str, Any]:
         return _serving_projection_repo.PROJECTION_PERSON_SEARCH_INDEX.from_row(row)
 
-    def _projection_manifest_shard_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "shard_id": str(_row_value(row, "shard_id") or ""),
-            "projection_id": str(_row_value(row, "projection_id") or ""),
-            "shard_kind": str(_row_value(row, "shard_kind") or ""),
-            "shard_index": _normalize_projection_rank_index(_row_value(row, "shard_index")),
-            "manifest_ref": str(_row_value(row, "manifest_ref") or ""),
-            "row_count": _normalize_projection_rank_index(_row_value(row, "row_count")),
-            "content_signature": str(_row_value(row, "content_signature") or ""),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
-
     def _serving_projection_member_row_payload(
         self,
         projection_id: str,
@@ -10772,83 +10755,6 @@ class ControlPlaneStore:
             "created_at": str(normalized.get("created_at") or now),
             "updated_at": now,
         }
-
-    def upsert_projection_manifest_shard(self, payload: dict[str, Any]) -> dict[str, Any]:
-        normalized = dict(payload or {})
-        projection_id = str(normalized.get("projection_id") or "").strip()
-        if not projection_id:
-            return {}
-        shard_kind = str(normalized.get("shard_kind") or "candidate_identity_manifest").strip()
-        shard_index = _normalize_projection_rank_index(normalized.get("shard_index"))
-        manifest_ref = str(normalized.get("manifest_ref") or "").strip()
-        explicit_shard_id = str(normalized.get("shard_id") or "").strip()
-        shard_id = explicit_shard_id or f"{projection_id}::{shard_kind}::{shard_index}"
-        now = _utc_now_timestamp()
-        existing = self.get_projection_manifest_shard(shard_id)
-        row_payload = {
-            "shard_id": shard_id,
-            "projection_id": projection_id,
-            "shard_kind": shard_kind,
-            "shard_index": shard_index,
-            "manifest_ref": manifest_ref,
-            "row_count": _normalize_projection_rank_index(normalized.get("row_count")),
-            "content_signature": str(normalized.get("content_signature") or "").strip(),
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
-            "updated_at": now,
-        }
-        if self._write_control_plane_row_to_postgres("projection_manifest_shards", row_payload):
-            return self.get_projection_manifest_shard(shard_id)
-        self._raise_control_plane_postgres_write_failure(
-            table_name="projection_manifest_shards",
-            method_name="upsert_projection_manifest_shard",
-            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
-        )
-
-    def get_projection_manifest_shard(self, shard_id: str) -> dict[str, Any]:
-        normalized_shard_id = str(shard_id or "").strip()
-        if not normalized_shard_id:
-            return {}
-        postgres_row = self._select_control_plane_row(
-            "projection_manifest_shards",
-            row_builder=self._projection_manifest_shard_from_row,
-            where_sql="shard_id = %s",
-            params=[normalized_shard_id],
-        )
-        if postgres_row is not None:
-            return postgres_row
-        return {}
-
-    def list_projection_manifest_shards(
-        self,
-        projection_id: str,
-        *,
-        shard_kind: str = "",
-        limit: int = 1000,
-    ) -> list[dict[str, Any]]:
-        normalized_projection_id = str(projection_id or "").strip()
-        if not normalized_projection_id:
-            return []
-        clauses = ["projection_id = ?"]
-        params: list[Any] = [normalized_projection_id]
-        if str(shard_kind or "").strip():
-            clauses.append("shard_kind = ?")
-            params.append(str(shard_kind or "").strip())
-        where_sqlite = " AND ".join(clauses)
-        postgres_rows = self._select_control_plane_rows(
-            "projection_manifest_shards",
-            row_builder=self._projection_manifest_shard_from_row,
-            where_sql=where_sqlite.replace("?", "%s"),
-            params=params,
-            order_by_sql="shard_kind ASC, shard_index ASC, shard_id ASC",
-            limit=max(1, int(limit or 1000)),
-        )
-        if postgres_rows:
-            return postgres_rows
-        return []
 
     def _select_asset_membership_rows_for_generation(self, generation_key: str) -> list[dict[str, Any]]:
         normalized_generation_key = str(generation_key or "").strip()

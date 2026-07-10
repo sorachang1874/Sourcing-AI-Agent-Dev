@@ -689,5 +689,30 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     results API 精确 6;pipeline 精确 3 项迁移树与 `9217350` **均 3 passed/454 deselected**。最终合同 lane **189 passed/0 skip** +
     后续门 **2/11/1/2 passed** + `dry_run_ready failures=[]`;Ruff/format **43 files**;mypy **87 errors/4 files**与 R-011
     完全同分布,新 repo/base 0;compileall/diff-check 绿。R-001/R-007/D-3 未触发,R-008 保持 closed,R-009 仅作对照规则。
-  - **评审/接续**:②.2 的独立非作者 Codex fallback 已 GO并关闭 R-013(两份 transport/timeout artifact 仍无效)。本 ②.3a
-    异步 review scope 固定 `9217350..d97d17c`,请求已记录并立即推进 ②.3b;任何 finding 回来按 scope 异步修复。
+  - **评审/接续**:②.2 的独立非作者 Codex fallback 已 GO并关闭 R-013(两份 transport/timeout artifact 仍无效)。②.3a
+    独立非作者 Codex review(`runtime/reviews/20260710_async-reference-track-b-2-3a-codex-subagent.md`)对
+    `9217350..d97d17c` 给出 **GO / 0 blocking**:独立核验 17/17 bodies、8/8 primitives、18/18 Tier A/B、
+    caller closure=150 calls+1 callback。两条 low 为永久 Tier/clock/limit 测试与 caller/dispatch guard 耐久性缺口,
+    下一 follow-up commit 补齐;不回滚或阻断 ②.3b。
+
+- **2026-07-10 ②.3b 完成 —— `projection_manifest_shards` 退役到 serving_projection repository**:
+  - **边界/语义**:单表 3 public(`upsert/get/list`)+1 bespoke mapper+2 repo-local helper。mapper 的 negative/malformed
+    int clamp 与 broad-exception `_row_value` 不等价于 generic descriptor/shared helper,故逐字保留手写形态;schema/DDL、
+    projection counts/readiness、board/public API/provider 合同均零变化。`storage.py` **14,355 → 14,261**(-94)。
+  - **Scout/调用面/删除**:production **0**,tests **4 / 2 files**,fake/getattr/monkeypatch/callback **0**;旧 3 public、
+    1 mapper、1 native-dispatch key 同批删除,全仓旧 receiver/definition=0(仅 surface guard 与 fail-closed 错误串保留)。
+    `_normalize_projection_rank_index` 因 members 域仍使用而不删。
+  - **A/B + 变异**:approved name/primitive/type-annotation mapping 后 AST **6/6 等价,0 意外差异**。临时真实-PG battery
+    **3 passed + 9 subtests**:旧/new public+raw dump、default/explicit id、negative/bad/numeric int、metadata、filter/order/limit、
+    created_at preserve、Tier-A 3 read/write、Tier-B 3 sentinel/no-confirmation。去掉 `max(0,...)` 的受控 mapper 变异把
+    `-7/-3` 泄漏到 public row,电池转红。临时件均删除。
+  - **pinned 删除后对照**:同一 frozen runner 在 pinned `d97d17c` old Store 与当前 repo 各跑,比较 13 个 public return
+    sample + 4-row raw table dump;两边 **5,221 bytes byte-identical**,SHA-256
+    `74cc0b13d342f857cfb49d3a97200bac69cd9dcb9b6e18bc8781561a9f0d0f00`。
+  - **永久防回归/验证**:新增 normalization/order/update 业务回归、raw-PG negative/bad-JSON reader 回归、surface+irregular
+    mapper guard。domain/surface/onconflict **21 passed**,live-PG foundation **2 passed/54 deselected**,writer **7 passed**;
+    最终合同 lane **190 passed/0 skip** + 后续门 **2/11/1/2 passed** + `dry_run_ready failures=[]`;Ruff/format 43 files、
+    compileall 绿;mypy **87 errors/4 files**与 R-011 同分布。pipeline 无本表调用,按 R-009 禁令未跑。
+  - **风险/评审/接续**:D-4 记录后续 members/search-index 与另两表的 positional `bulk_upsert_rows` 异常吞噬根因;
+    本批未触碰或暗选方案。异步 review scope 将固定 `b3818f0..<本批 implementation commit>`;请求记录后可继续其他
+    模块,但 D-4 裁决前 ②.3c/d 只做只读 Scout/测试设计。

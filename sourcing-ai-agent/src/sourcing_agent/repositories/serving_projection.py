@@ -142,6 +142,24 @@ def _normalize_json_object_payload(value: Any) -> dict[str, Any]:
     return _loads_json_dict(value)
 
 
+def _row_value(row: Any, key: str, default: Any = "") -> Any:
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(key, default)
+    try:
+        return row[key]
+    except Exception:
+        return default
+
+
+def _normalize_non_negative_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _build_projection_id(value: Any = "") -> str:
     normalized = str(value or "").strip()
     if normalized:
@@ -164,7 +182,7 @@ def _normalize_projection_state(value: Any) -> str:
 
 
 class ServingProjectionRepository(Repository):
-    """PG-only repository for projection catalog, run-link, and collection-pointer records."""
+    """PG-only repository for projection catalog, links, pointers, and manifest shards."""
 
     def _projection_from_row(self, row: Any) -> dict[str, Any]:
         return SERVING_PROJECTIONS.from_row(row)
@@ -174,6 +192,22 @@ class ServingProjectionRepository(Repository):
 
     def _authoritative_pointer_from_row(self, row: Any) -> dict[str, Any]:
         return COLLECTION_AUTHORITATIVE_POINTERS.from_row(row)
+
+    def _manifest_shard_from_row(self, row: Any) -> dict[str, Any]:
+        if row is None:
+            return {}
+        return {
+            "shard_id": str(_row_value(row, "shard_id") or ""),
+            "projection_id": str(_row_value(row, "projection_id") or ""),
+            "shard_kind": str(_row_value(row, "shard_kind") or ""),
+            "shard_index": _normalize_non_negative_int(_row_value(row, "shard_index")),
+            "manifest_ref": str(_row_value(row, "manifest_ref") or ""),
+            "row_count": _normalize_non_negative_int(_row_value(row, "row_count")),
+            "content_signature": str(_row_value(row, "content_signature") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
 
     def upsert(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
@@ -403,6 +437,83 @@ class ServingProjectionRepository(Repository):
             params=params,
             order_by_sql="updated_at DESC, collection_id ASC",
             limit=max(1, int(limit or 250)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        return []
+
+    def upsert_manifest_shard(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        projection_id = str(normalized.get("projection_id") or "").strip()
+        if not projection_id:
+            return {}
+        shard_kind = str(normalized.get("shard_kind") or "candidate_identity_manifest").strip()
+        shard_index = _normalize_non_negative_int(normalized.get("shard_index"))
+        manifest_ref = str(normalized.get("manifest_ref") or "").strip()
+        explicit_shard_id = str(normalized.get("shard_id") or "").strip()
+        shard_id = explicit_shard_id or f"{projection_id}::{shard_kind}::{shard_index}"
+        now = utc_now_timestamp()
+        existing = self.get_manifest_shard(shard_id)
+        row_payload = {
+            "shard_id": shard_id,
+            "projection_id": projection_id,
+            "shard_kind": shard_kind,
+            "shard_index": shard_index,
+            "manifest_ref": manifest_ref,
+            "row_count": _normalize_non_negative_int(normalized.get("row_count")),
+            "content_signature": str(normalized.get("content_signature") or "").strip(),
+            "metadata_json": json.dumps(
+                _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json")),
+                ensure_ascii=False,
+            ),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+            "updated_at": now,
+        }
+        if self._write_row("projection_manifest_shards", row_payload):
+            return self.get_manifest_shard(shard_id)
+        self._raise_write_failure(
+            table_name="projection_manifest_shards",
+            method_name="upsert_projection_manifest_shard",
+            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
+        )
+
+    def get_manifest_shard(self, shard_id: str) -> dict[str, Any]:
+        normalized_shard_id = str(shard_id or "").strip()
+        if not normalized_shard_id:
+            return {}
+        postgres_row = self._select_row(
+            "projection_manifest_shards",
+            row_builder=self._manifest_shard_from_row,
+            where_sql="shard_id = %s",
+            params=[normalized_shard_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        return {}
+
+    def list_manifest_shards(
+        self,
+        projection_id: str,
+        *,
+        shard_kind: str = "",
+        limit: int = 1000,
+    ) -> builtins.list[dict[str, Any]]:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            return []
+        clauses = ["projection_id = ?"]
+        params: builtins.list[Any] = [normalized_projection_id]
+        if str(shard_kind or "").strip():
+            clauses.append("shard_kind = ?")
+            params.append(str(shard_kind or "").strip())
+        where_sqlite = " AND ".join(clauses)
+        postgres_rows = self._select_rows(
+            "projection_manifest_shards",
+            row_builder=self._manifest_shard_from_row,
+            where_sql=where_sqlite.replace("?", "%s"),
+            params=params,
+            order_by_sql="shard_kind ASC, shard_index ASC, shard_id ASC",
+            limit=max(1, int(limit or 1000)),
         )
         if postgres_rows:
             return postgres_rows

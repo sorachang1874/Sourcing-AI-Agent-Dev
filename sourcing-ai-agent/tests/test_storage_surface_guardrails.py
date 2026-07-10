@@ -25,7 +25,7 @@ _MANUAL_REVIEW_REPOSITORY_METHODS = {
     "get_item",
     "merge_item_metadata",
 }
-_RETIRED_SERVING_PROJECTION_CATALOG_STORE_METHODS = {
+_RETIRED_SERVING_PROJECTION_STORE_METHODS = {
     "upsert_serving_projection",
     "get_serving_projection",
     "list_serving_projections",
@@ -38,8 +38,12 @@ _RETIRED_SERVING_PROJECTION_CATALOG_STORE_METHODS = {
     "_serving_projection_from_row",
     "_run_projection_link_from_row",
     "_collection_authoritative_pointer_from_row",
+    "upsert_projection_manifest_shard",
+    "get_projection_manifest_shard",
+    "list_projection_manifest_shards",
+    "_projection_manifest_shard_from_row",
 }
-_SERVING_PROJECTION_CATALOG_REPOSITORY_METHODS = {
+_SERVING_PROJECTION_REPOSITORY_METHODS = {
     "upsert",
     "get",
     "list",
@@ -52,6 +56,10 @@ _SERVING_PROJECTION_CATALOG_REPOSITORY_METHODS = {
     "_projection_from_row",
     "_run_link_from_row",
     "_authoritative_pointer_from_row",
+    "upsert_manifest_shard",
+    "get_manifest_shard",
+    "list_manifest_shards",
+    "_manifest_shard_from_row",
 }
 
 
@@ -171,8 +179,8 @@ def test_serving_projection_catalog_storage_facade_is_retired_to_repository() ->
         encoding="utf-8"
     )
 
-    assert storage_methods.isdisjoint(_RETIRED_SERVING_PROJECTION_CATALOG_STORE_METHODS)
-    assert _SERVING_PROJECTION_CATALOG_REPOSITORY_METHODS <= repository_methods
+    assert storage_methods.isdisjoint(_RETIRED_SERVING_PROJECTION_STORE_METHODS)
+    assert _SERVING_PROJECTION_REPOSITORY_METHODS <= repository_methods
     assert "self.serving_projection = ServingProjectionRepository(adapter)" in namespace_source
 
 
@@ -203,3 +211,57 @@ def test_serving_projection_catalog_repository_mappers_preserve_descriptor_contr
     assert projection["readiness"] == {}
     assert repository._run_link_from_row(run_link_row)["metadata"] == {"source": "guard"}
     assert repository._authoritative_pointer_from_row(pointer_row)["metadata"] == {}
+
+
+def test_serving_projection_manifest_shard_mapper_preserves_irregular_read_contract() -> None:
+    repository = ServingProjectionRepository(object())
+    negative_row = {
+        "shard_id": "negative",
+        "projection_id": "proj-guard",
+        "shard_kind": "candidate_identity_manifest",
+        "shard_index": -7,
+        "manifest_ref": "s3://bucket/negative.json",
+        "row_count": -3,
+        "metadata_json": "{",
+    }
+    malformed_row = {
+        "shard_id": "malformed",
+        "projection_id": "proj-guard",
+        "shard_index": "bad",
+        "row_count": "bad",
+        "metadata_json": "[]",
+    }
+
+    class BrokenRow:
+        def __getitem__(self, key: str) -> object:
+            raise RuntimeError(key)
+
+    assert repository._manifest_shard_from_row(None) == {}
+    assert repository._manifest_shard_from_row(negative_row) == {
+        "shard_id": "negative",
+        "projection_id": "proj-guard",
+        "shard_kind": "candidate_identity_manifest",
+        "shard_index": 0,
+        "manifest_ref": "s3://bucket/negative.json",
+        "row_count": 0,
+        "content_signature": "",
+        "metadata": {},
+        "created_at": "",
+        "updated_at": "",
+    }
+    malformed = repository._manifest_shard_from_row(malformed_row)
+    assert malformed["shard_index"] == 0
+    assert malformed["row_count"] == 0
+    assert malformed["metadata"] == {}
+    assert repository._manifest_shard_from_row(BrokenRow()) == {
+        "shard_id": "",
+        "projection_id": "",
+        "shard_kind": "",
+        "shard_index": 0,
+        "manifest_ref": "",
+        "row_count": 0,
+        "content_signature": "",
+        "metadata": {},
+        "created_at": "",
+        "updated_at": "",
+    }

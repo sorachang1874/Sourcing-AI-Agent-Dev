@@ -10,6 +10,25 @@
 
 ## 2026-07-10 (Asia/Shanghai)
 
+### Track B ②.3b: projection_manifest_shards repository cutover
+
+- The three `projection_manifest_shards` methods and its bespoke mapper moved from `ControlPlaneStore` to
+  `store.repos.serving_projection`; four direct test calls across two files switched in the same batch.
+  Production callers were already zero. The old methods, mapper, and native dispatch key were deleted;
+  `storage.py` fell from 14,355 to 14,261 lines.
+- The mapper intentionally remains hand-written: its non-negative integer clamp and broad row-access fallback
+  are stricter than the generic descriptor contract. Six old/new function bodies were AST-equivalent after the
+  approved name/primitive mappings. The deletion-window battery passed 3 tests plus 9 subtests, including
+  Tier-A/Tier-B read/write faults and a clamp mutation that changed negative values from 0 back to negative.
+- A frozen real-PG snapshot compared 13 public return samples and a four-row raw table dump against pinned
+  `d97d17c`; both 5,221-byte outputs were byte-identical with SHA-256
+  `74cc0b13d342f857cfb49d3a97200bac69cd9dcb9b6e18bc8781561a9f0d0f00`.
+- Validation: domain/surface/on-conflict 21 passed, live-PG foundation 2 passed, writer 7 passed, and the final
+  contract lane passed 190/0 skip plus 2/11/1/2 downstream gates and a clean dry-run report. Ruff/format checked
+  43 files, compileall passed, and mypy remained at R-011's 87 errors in the same four files.
+- D-4 records a separate pre-existing positional bulk-write fail-closed defect affecting the next members/search
+  batches plus two other tables. It awaits owner direction; ②.3b did not modify those write paths.
+
 ### Track B ②.3a: serving_projection catalog repository cutover
 
 - `serving_projections`, `run_projection_links`, and `collection_authoritative_pointers` moved from nine
@@ -27,7 +46,9 @@
   files; mypy stayed at R-011's 87 errors in the same four files after the new repository/base were added.
 - This is the low-risk catalog sub-batch only. Manifest shards, members, and person search index remain in
   `ControlPlaneStore` as ②.3b/c/d; no schema, count/readiness, board, provider, or public API semantics changed.
-  The ②.3a review request is pinned to `9217350..d97d17c` and is asynchronous/scope-local.
+  Independent non-author Codex review of `9217350..d97d17c` returned GO with no blocking finding
+  (`runtime/reviews/20260710_async-reference-track-b-2-3a-codex-subagent.md`). Two low durability gaps
+  remain for a follow-up: permanent Tier-A/Tier-B edge tests and stronger caller/dispatch closure guards.
 
 ### Track B ②.2: manual_review repository cutover
 

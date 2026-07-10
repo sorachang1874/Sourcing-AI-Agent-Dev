@@ -1510,7 +1510,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 }
             ],
         )
-        shard = store.upsert_projection_manifest_shard(
+        shard = store.repos.serving_projection.upsert_manifest_shard(
             {
                 "projection_id": "proj_pg_foundation",
                 "shard_index": 0,
@@ -1576,7 +1576,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 }
             ],
         )
-        store.upsert_projection_manifest_shard(
+        store.repos.serving_projection.upsert_manifest_shard(
             {
                 "projection_id": "proj_pg_mirror",
                 "manifest_ref": "s3://cold-path/proj_pg_mirror/shard-000.json",
