@@ -30,6 +30,7 @@ _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS: dict[
 ] = {}
 _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS_LOCK = Lock()
 _MODEL_PROVIDER_USAGE_TOKEN_LIMIT = 1_000_000_000
+CRM_PUBLIC_WEB_PRODUCT_MODEL = "gpt-5.6-sol"
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,6 +289,36 @@ def _annotate_public_web_model_fallback(
         result["model_error"] = error
     elif response:
         result["raw_response_preview"] = response[:300]
+
+
+def _crm_public_web_model_configuration_fallback(
+    *,
+    fallback: dict[str, Any],
+    provider: str,
+    requested_model: str,
+) -> dict[str, Any]:
+    requested = str(requested_model or "").strip()
+    result = _normalize_public_web_signal_adjudication({}, fallback=fallback)
+    result.update(
+        {
+            "provider": str(provider or "").strip(),
+            "model": requested,
+            "model_version": requested,
+            "requested_model": requested,
+        }
+    )
+    _annotate_public_web_model_fallback(
+        result,
+        response="",
+        error=(
+            "crm_public_web_product_model_mismatch: "
+            f"expected_model={CRM_PUBLIC_WEB_PRODUCT_MODEL} "
+            f"requested_model={requested or 'empty'}"
+        ),
+        parsed={},
+        fallback_reason_override="model_configuration_mismatch",
+    )
+    return result
 
 
 def _build_outreach_layer_system_prompt() -> str:
@@ -1114,23 +1145,11 @@ class QwenResponsesModelClient(DeterministicModelClient):
 
     def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]:
         fallback = super().analyze_public_web_candidate_signals(payload)
-        response, model_error = self._safe_text_prompt_with_error(
-            _build_public_web_signal_adjudication_prompt(),
-            json.dumps(payload, ensure_ascii=False),
-            max_tokens=720,
+        return _crm_public_web_model_configuration_fallback(
+            fallback=fallback,
+            provider=self.provider_name(),
+            requested_model=self.settings.model,
         )
-        parsed = _safe_json_object(response)
-        result = _normalize_public_web_signal_adjudication(parsed, fallback=fallback)
-        result["provider"] = "qwen"
-        result["model"] = self.settings.model
-        result["model_version"] = self.settings.model
-        _annotate_public_web_model_fallback(
-            result,
-            response=response,
-            error=model_error,
-            parsed=parsed,
-        )
-        return result
 
     def plan_search_strategy(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
         response = self._safe_text_prompt(
@@ -1460,6 +1479,13 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
 
     def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]:
         fallback = super().analyze_public_web_candidate_signals(payload)
+        requested_model = str(self.settings.model or "").strip()
+        if requested_model != CRM_PUBLIC_WEB_PRODUCT_MODEL:
+            return _crm_public_web_model_configuration_fallback(
+                fallback=fallback,
+                provider=self.provider_name(),
+                requested_model=requested_model,
+            )
         call_result, model_error = self._safe_public_web_prompt_result_with_error(
             _build_public_web_signal_adjudication_prompt(),
             json.dumps(payload, ensure_ascii=False),
@@ -1467,7 +1493,6 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         )
         response = call_result.text if call_result is not None else ""
         parsed = _safe_json_object(response)
-        requested_model = str(self.settings.model or "").strip()
         identity_fallback_reason = ""
         if call_result is not None:
             identity_fallback_reason, identity_error = _openai_model_identity_failure(

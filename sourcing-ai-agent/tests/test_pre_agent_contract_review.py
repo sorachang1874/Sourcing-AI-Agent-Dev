@@ -813,7 +813,8 @@ def test_w7g_crm_public_web_live_validation_has_guarded_runner() -> None:
     assert "LIVE_CONFIRM" in script
     assert "SOURCING_LIVE_PROVIDER_CONFIRM" in script
     assert "CRM_PUBLIC_WEB_LIVE_PRE_AGENT_CONTRACT_PASSED" in script
-    assert "gpt-5.6-sol" in script
+    assert "from sourcing_agent.model_provider import CRM_PUBLIC_WEB_PRODUCT_MODEL" in script
+    assert "EXPECTED_PUBLIC_WEB_MODEL = CRM_PUBLIC_WEB_PRODUCT_MODEL" in script
     assert "target_candidate_public_web_v1" in script
     assert "live_prerequisites" in script
     assert "record_id_selection_guidance" in script

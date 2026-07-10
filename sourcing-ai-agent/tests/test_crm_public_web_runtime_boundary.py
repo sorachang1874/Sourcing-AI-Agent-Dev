@@ -282,7 +282,7 @@ def test_crm_public_web_candidate_context_includes_projection_profile_detail_for
     assert record["current_company"] == "Anthropic"
 
 
-def test_public_web_phase_metrics_expose_model_fallback_diagnostics() -> None:
+def test_public_web_phase_metrics_expose_product_model_configuration_fallback() -> None:
     metrics = _public_web_phase_metrics_from_summary(
         checkpoint={"tasks": []},
         summary={},
@@ -291,25 +291,33 @@ def test_public_web_phase_metrics_expose_model_fallback_diagnostics() -> None:
             "entry_links": [],
             "email_candidates": [],
             "ai_adjudication": {
-                "provider": "chshapi_openai_compatible",
+                "provider": "sharedchat_openai_compatible",
                 "model": "gpt-5.5",
                 "model_version": "gpt-5.5",
                 "fallback_used": True,
-                "fallback_reason": "model_call_failed",
-                "model_error": "OpenAI-compatible HTTP 401: auth_unavailable",
+                "fallback_reason": "model_configuration_mismatch",
+                "model_error": (
+                    "crm_public_web_product_model_mismatch: "
+                    "expected_model=gpt-5.6-sol requested_model=gpt-5.5"
+                ),
                 "result": {
+                    "requested_model": "gpt-5.5",
                     "fallback_used": True,
                 },
             },
         },
     )
 
-    assert metrics["model_provider"] == "chshapi_openai_compatible"
+    assert metrics["model_provider"] == "sharedchat_openai_compatible"
     assert metrics["model"] == "gpt-5.5"
     assert metrics["model_version"] == "gpt-5.5"
+    assert metrics["requested_model"] == "gpt-5.5"
+    assert "response_model" not in metrics
+    assert "effective_model" not in metrics
+    assert "model_identity_provenance" not in metrics
     assert metrics["model_fallback_used"] is True
-    assert metrics["model_fallback_reason"] == "model_call_failed"
-    assert "401" in metrics["model_error"]
+    assert metrics["model_fallback_reason"] == "model_configuration_mismatch"
+    assert metrics["model_error"].endswith("requested_model=gpt-5.5")
 
 
 def test_public_web_phase_metrics_propagate_provider_response_model_provenance() -> None:

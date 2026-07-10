@@ -9,6 +9,7 @@ import requests
 import sourcing_agent.model_provider as model_provider_module
 from sourcing_agent.domain import JobRequest
 from sourcing_agent.model_provider import (
+    CRM_PUBLIC_WEB_PRODUCT_MODEL,
     DeterministicModelClient,
     OfflineModelClient,
     OpenAICompatibleChatModelClient,
@@ -694,7 +695,7 @@ class ModelProviderTest(unittest.TestCase):
                 provider_name="chshapi_openai_compatible",
                 api_key="sk-test",
                 base_url="https://api.chshapi.org/v1",
-                model="gpt-5.5",
+                model=CRM_PUBLIC_WEB_PRODUCT_MODEL,
             )
         )
         payload = {
@@ -772,7 +773,7 @@ class ModelProviderTest(unittest.TestCase):
                 provider_name="chshapi_openai_compatible",
                 api_key="sk-test",
                 base_url="https://api.chshapi.org/v1",
-                model="gpt-5.5",
+                model=CRM_PUBLIC_WEB_PRODUCT_MODEL,
             )
         )
 
@@ -786,14 +787,75 @@ class ModelProviderTest(unittest.TestCase):
         )
 
         self.assertEqual(result["provider"], "chshapi_openai_compatible")
-        self.assertEqual(result["model"], "gpt-5.5")
-        self.assertEqual(result["model_version"], "gpt-5.5")
-        self.assertEqual(result["requested_model"], "gpt-5.5")
+        self.assertEqual(result["model"], CRM_PUBLIC_WEB_PRODUCT_MODEL)
+        self.assertEqual(result["model_version"], CRM_PUBLIC_WEB_PRODUCT_MODEL)
+        self.assertEqual(result["requested_model"], CRM_PUBLIC_WEB_PRODUCT_MODEL)
         self.assertNotIn("effective_model", result)
         self.assertNotIn("model_identity_provenance", result)
         self.assertTrue(result["fallback_used"])
         self.assertEqual(result["fallback_reason"], "model_call_failed")
         self.assertIn("401", result["model_error"])
+
+    def test_openai_public_web_rejects_wrong_product_model_before_transport_without_blocking_other_calls(self) -> None:
+        class _Client(OpenAICompatibleChatModelClient):
+            def __init__(self, settings: ModelProviderSettings) -> None:
+                super().__init__(settings)
+                self.prompt_calls = 0
+
+            def _call_prompt_result(  # noqa: ANN001, ARG002
+                self,
+                messages,
+                *,
+                max_tokens: int,
+            ) -> OpenAIModelCallResult:
+                self.prompt_calls += 1
+                return OpenAIModelCallResult(
+                    text='{"target_company":"Anthropic"}',
+                    requested_model=self.settings.model,
+                    response_model=self.settings.model,
+                    usage=OpenAIModelUsage(),
+                )
+
+        client = _Client(
+            ModelProviderSettings(
+                enabled=True,
+                provider_name="sharedchat_openai_compatible",
+                api_key="sk-test",
+                base_url="https://new.sharedchat.cc/codex",
+                model="gpt-5.5",
+                api_style="openai_responses",
+            )
+        )
+
+        result = client.analyze_public_web_candidate_signals(
+            {
+                "candidate": {"candidate_name": "Jackie Bow", "current_company": "Anthropic"},
+                "entry_links": [{"url": "https://github.com/jbow", "title": "Jackie Bow"}],
+                "email_candidates": [],
+                "evidence_slices": [],
+            }
+        )
+
+        self.assertEqual(client.prompt_calls, 0)
+        self.assertEqual(result["provider"], "sharedchat_openai_compatible")
+        self.assertEqual(result["model"], "gpt-5.5")
+        self.assertEqual(result["model_version"], "gpt-5.5")
+        self.assertEqual(result["requested_model"], "gpt-5.5")
+        self.assertNotIn("response_model", result)
+        self.assertNotIn("effective_model", result)
+        self.assertNotIn("model_identity_provenance", result)
+        self.assertTrue(result["fallback_used"])
+        self.assertEqual(result["fallback_reason"], "model_configuration_mismatch")
+        self.assertEqual(
+            result["model_error"],
+            "crm_public_web_product_model_mismatch: expected_model=gpt-5.6-sol requested_model=gpt-5.5",
+        )
+
+        self.assertEqual(
+            client.normalize_request({"raw_user_request": "Find Anthropic researchers"}),
+            {"target_company": "Anthropic"},
+        )
+        self.assertEqual(client.prompt_calls, 1)
 
     def test_openai_public_web_adjudication_records_provider_response_identity_and_usage(self) -> None:
         class _Response:
@@ -911,10 +973,21 @@ class ModelProviderTest(unittest.TestCase):
                 self.assertIn("model_provider_circuit_open", circuit_health["error"])
                 self.assertEqual(client.prompt_calls, 1)
 
-    def test_qwen_public_web_model_call_error_is_fail_visible(self) -> None:
+    def test_qwen_public_web_is_rejected_before_prompt_without_blocking_other_calls(self) -> None:
         class _Client(QwenResponsesModelClient):
-            def _run_text_prompt(self, system_prompt: str, user_prompt: str, *, max_tokens: int | None = None) -> str:  # noqa: ARG002
-                raise RuntimeError("Qwen HTTP 401: invalid api key")
+            def __init__(self, settings: QwenSettings) -> None:
+                super().__init__(settings)
+                self.prompt_calls = 0
+
+            def _run_text_prompt(  # noqa: ARG002
+                self,
+                system_prompt: str,
+                user_prompt: str,
+                *,
+                max_tokens: int | None = None,
+            ) -> str:
+                self.prompt_calls += 1
+                return '{"target_company":"Anthropic"}'
 
         client = _Client(QwenSettings(enabled=True, api_key="sk-qwen", model="qwen3.5-plus-2026-04-20"))
 
@@ -927,11 +1000,29 @@ class ModelProviderTest(unittest.TestCase):
             }
         )
 
+        self.assertEqual(client.prompt_calls, 0)
         self.assertEqual(result["provider"], "qwen")
         self.assertEqual(result["model"], "qwen3.5-plus-2026-04-20")
+        self.assertEqual(result["model_version"], "qwen3.5-plus-2026-04-20")
+        self.assertEqual(result["requested_model"], "qwen3.5-plus-2026-04-20")
+        self.assertNotIn("response_model", result)
+        self.assertNotIn("effective_model", result)
+        self.assertNotIn("model_identity_provenance", result)
         self.assertTrue(result["fallback_used"])
-        self.assertEqual(result["fallback_reason"], "model_call_failed")
-        self.assertIn("401", result["model_error"])
+        self.assertEqual(result["fallback_reason"], "model_configuration_mismatch")
+        self.assertEqual(
+            result["model_error"],
+            (
+                "crm_public_web_product_model_mismatch: expected_model=gpt-5.6-sol "
+                "requested_model=qwen3.5-plus-2026-04-20"
+            ),
+        )
+
+        self.assertEqual(
+            client.normalize_request({"raw_user_request": "Find Anthropic researchers"}),
+            {"target_company": "Anthropic"},
+        )
+        self.assertEqual(client.prompt_calls, 1)
 
     def test_request_normalization_prompt_lists_agent_as_ai_direction(self) -> None:
         prompt = _build_request_normalization_system_prompt()

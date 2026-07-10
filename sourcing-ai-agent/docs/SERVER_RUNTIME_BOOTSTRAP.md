@@ -108,6 +108,45 @@ sudo apt-get install -y libnspr4 libnss3
 2. 其次恢复 `runtime/secrets/providers.local.json`
 3. 不要把生产 secrets 写回仓库
 
+### CRM Public Web product-model deployment contract
+
+普通 CRM Public Web 的真实 AI adjudication 只允许 OpenAI-compatible transport 上精确的
+`gpt-5.6-sol`。这个约束在 provider transport 前执行；错误配置必须产生 `fallback_used=true`、
+`fallback_reason=model_configuration_mismatch` 和可审计的 `model_error`，不得发送模型请求，也不得用
+deterministic fallback 冒充 AI review。Qwen 是真实 provider，不是该产品模型的替代路径；它的 Public Web
+adjudication 同样必须在 prompt 前返回 configuration fallback。共享 `ModelClient` / Qwen 的非 CRM Public Web
+用途仍按各自配置运行。
+
+远端模型配置变更必须按下面的完整顺序发布，不能只热改 secret 后继续使用旧进程：
+
+1. 停止所有 API 和 worker daemon 实例，并确认旧 release 下没有仍可接收 CRM Public Web 工作的进程。
+2. 在实际最高优先级配置源更新模型：环境变量 `MODEL_PROVIDER_MODEL` 优先于
+   `runtime/secrets/providers.local.json`；最终解析值必须精确为 `gpt-5.6-sol`，且 API/worker 使用同一
+   secret revision。不要在日志或部署记录中输出 API key。
+3. 在仍未启动服务时，用仓内解释器只检查非敏感解析结果：
+
+   ```bash
+   PYTHONPATH=src .venv/bin/python - <<'PY'
+   from sourcing_agent.settings import load_settings
+
+   settings = load_settings(".").model_provider
+   print({"provider": settings.provider_name, "model": settings.model, "api_style": settings.api_style})
+   PY
+   ```
+
+4. 从同一 release 和 secret revision 全量重启 API 与 worker daemon；滚动期间不得让旧模型 worker 与
+   新模型 API 混跑。
+5. 重启后的第一次 `GET /api/providers/health` 必须产生新的 generation proof。确认
+   `providers.model.status=ready`、`chat_status=ready`、`requested_model=response_model=effective_model=gpt-5.6-sol`
+   且 `model_identity_provenance=provider_response`。`/models` inventory、配置回显、缓存结果或只有 requested
+   model 都不构成部署证明。这个检查会触发有界的真实模型 generation，只能在 owner 批准的 live 窗口执行。
+6. 只有在有效 Independent Review `GO` 和全部 live-cost guard 就绪后，才运行 W7g；每个可验证终态 run 的
+   `latest_run.analysis.phase_metrics` 必须重复证明同一组 exact identity 字段且
+   `model_fallback_used=false`。健康检查不能替代 run-level proof。
+
+回滚同样要求全停：停止 API/worker，恢复上一份 release 与匹配的 secret revision，再同时重启。不得只回滚
+代码或只回滚 secret，避免同一 durable queue 被两个模型合同消费。
+
 ## Object Storage Contract
 
 server 侧必须明确：
@@ -167,8 +206,12 @@ mkdir -p runtime/secrets runtime/asset_imports runtime/vendor
 
 至少先确保：
 
-- `test-model` 可通过
+- 非敏感配置解析出的 CRM Public Web product model 精确为 `gpt-5.6-sol`
+- 在 owner 批准的 live 窗口内，`test-model` 可通过并返回 exact provider-response identity
 - object storage client 可初始化
+
+已有服务升级时，必须执行上面的“全停 -> 更新 secret -> 全量重启 -> exact identity proof”流程；不能把
+启动前的 `test-model` 结果当成新进程已加载配置的证据。
 
 ### 4. Restore durable assets
 
@@ -267,6 +310,10 @@ PYTHONPATH=src python3 -m sourcing_agent.cli write-worker-daemon-systemd-unit \
 - `GET /health`
 - `GET /api/providers/health`
 - `PYTHONPATH=src python3 -m sourcing_agent.cli show-daemon-status`
+
+启用 CRM Public Web 时，`/api/providers/health` 还必须满足 Secrets Contract 中的 exact
+`requested_model` / `response_model` / `effective_model` / provenance 检查。任一字段缺失、fallback、identity
+mismatch 或旧模型值都应阻断 CRM Public Web live/product 签收。
 
 如果 server 主要是为了继续 TML 资产积累，再额外检查：
 

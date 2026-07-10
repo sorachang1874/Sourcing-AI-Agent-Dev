@@ -20,9 +20,10 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urljoin
 from urllib.request import Request, urlopen
 
+from sourcing_agent.model_provider import CRM_PUBLIC_WEB_PRODUCT_MODEL
 from sourcing_agent.runtime_asset_retention_prune import validate_independent_review_artifact
 
-EXPECTED_PUBLIC_WEB_MODEL = "gpt-5.6-sol"
+EXPECTED_PUBLIC_WEB_MODEL = CRM_PUBLIC_WEB_PRODUCT_MODEL
 EXPECTED_OWNER = "crm_public_web_v1"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INDEPENDENT_REVIEW_ARTIFACT_ROOT = REPO_ROOT / "runtime" / "reviews"
