@@ -27,7 +27,7 @@
   files; mypy stayed at R-011's 87 errors in the same four files after the new repository/base were added.
 - This is the low-risk catalog sub-batch only. Manifest shards, members, and person search index remain in
   `ControlPlaneStore` as ②.3b/c/d; no schema, count/readiness, board, provider, or public API semantics changed.
-  The ②.3a review request is pinned to `9217350..<this implementation commit>` and is asynchronous/scope-local.
+  The ②.3a review request is pinned to `9217350..d97d17c` and is asynchronous/scope-local.
 
 ### Track B ②.2: manual_review repository cutover
 

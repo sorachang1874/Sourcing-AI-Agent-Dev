@@ -690,4 +690,4 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     后续门 **2/11/1/2 passed** + `dry_run_ready failures=[]`;Ruff/format **43 files**;mypy **87 errors/4 files**与 R-011
     完全同分布,新 repo/base 0;compileall/diff-check 绿。R-001/R-007/D-3 未触发,R-008 保持 closed,R-009 仅作对照规则。
   - **评审/接续**:②.2 的独立非作者 Codex fallback 已 GO并关闭 R-013(两份 transport/timeout artifact 仍无效)。本 ②.3a
-    异步 review scope 固定 `9217350..<本批 implementation commit>`,请求记录后立即推进 ②.3b;任何 finding 回来按 scope 异步修复。
+    异步 review scope 固定 `9217350..d97d17c`,请求已记录并立即推进 ②.3b;任何 finding 回来按 scope 异步修复。

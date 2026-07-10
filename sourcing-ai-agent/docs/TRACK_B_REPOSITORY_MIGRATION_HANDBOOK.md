@@ -185,3 +185,18 @@ rg -n '^    def .*projection' src/sourcing_agent/storage.py
 - **推荐**:无强推荐 —— 这是产品语义,需 owner 从用户视角裁决(证据:`RESIDUAL_LEDGER.md` R-001/R-007 的三组失败数字)。
 - **截止**:2026-07-31(投影计数契约化是 Track C serving 的前置);**决策人**:owner。
 - **超时默认**:维持现状,R-001/R-007 继续 accepted 并在台账顺延一次(顺延即在该行追加日期)。
+
+### D-4 positional `bulk_upsert_rows` 的 fail-closed 修复范围
+
+- **单一问题**:是否批准在 serving members/search-index 迁移前,把所有经
+  `_call_control_plane_postgres_native` 的 positional `bulk_upsert_rows` 调用改为显式
+  `table_name=` / `rows=`,并用 fast guard 禁止复发?
+- **选项**:(a) 同批修完 4 点(`serving_projection_members`、`projection_person_search_index`、
+  `asset_membership_index`、`candidate_materialization_state`)并补 guard —— wrapper 只从 keyword 或 facade-name map
+  识别 strict table;当前 4 点均落成 `strict_no_fallback=False`,adapter 异常被吞,其中 search-index 可假报 indexed;
+  (b) 只在 ②.3c/d 修前两点 —— 改动最小,但同一根因仍留两点;(c) 扩 wrapper 从 positional args 推断表 ——
+  兼容现状,但把隐藏 heuristic 固化进共享基座,并与 repository 的显式 table contract 分叉。
+- **推荐**:(a)。4 点修复有界,同时退休根因;不要扩大 shared inference。
+- **截止**:2026-07-31;**决策人**:owner。
+- **超时默认**:执行 (a) 的显式 keyword 修复与 fast guard,不改 shared positional inference。落地前四个受影响
+  写面不得进入 live/W6/manual/里程碑签收;②.3b 与其他模块开发不受阻。
