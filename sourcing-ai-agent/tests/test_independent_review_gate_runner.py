@@ -3,8 +3,10 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -47,10 +49,20 @@ def _write_rollout(codex_home: Path, events: list[dict[str, object]]) -> Path:
     return path
 
 
-def _session_meta(*, source: str = "exec") -> dict[str, object]:
+def _session_meta(*, source: str = "exec", thread_source: str = "") -> dict[str, object]:
+    payload = {
+        "id": THREAD_ID,
+        "session_id": THREAD_ID,
+        "cli_version": "0.144.0",
+        "source": source,
+        "parent_thread_id": None,
+        "forked_from_id": None,
+    }
+    if thread_source:
+        payload["thread_source"] = thread_source
     return {
         "type": "session_meta",
-        "payload": {"id": THREAD_ID, "cli_version": "0.144.0", "source": source},
+        "payload": payload,
     }
 
 
@@ -63,11 +75,12 @@ def _completed_exec_rollout(
     prompt: str,
     final_output: str,
     source: str = "exec",
+    thread_source: str = "",
     extra_events: list[dict[str, object]] | None = None,
 ) -> list[dict[str, object]]:
     normalized_final = final_output.rstrip("\r\n")
     return [
-        _session_meta(source=source),
+        _session_meta(source=source, thread_source=thread_source),
         {"type": "event_msg", "payload": {"type": "task_started", "turn_id": TURN_ID}},
         {
             "type": "response_item",
@@ -116,6 +129,121 @@ def _completed_exec_rollout(
             },
         },
     ]
+
+
+def _completed_app_server_transcript(
+    runner,
+    *,
+    root: Path,
+    configured,
+    prompt: str,
+    final_output: str,
+) -> bytes:
+    initialize, thread_start, turn_start = runner._app_server_requests(
+        root=root,
+        configured=configured,
+        prompt=prompt,
+        thread_id=THREAD_ID,
+    )
+    final_text = final_output.rstrip("\r\n")
+    final_item = {
+        "id": "review-final-message",
+        "type": "agentMessage",
+        "phase": "final_answer",
+        "text": final_text,
+    }
+    thread = {
+        "id": THREAD_ID,
+        "sessionId": THREAD_ID,
+        "source": "vscode",
+        "threadSource": runner._APP_SERVER_THREAD_SOURCE,
+    }
+    turn = {"id": TURN_ID, "items": [], "status": "inProgress"}
+    completed_turn = {"id": TURN_ID, "items": [final_item], "status": "completed"}
+    messages = [
+        ("client", initialize),
+        ("server", {"id": runner._APP_SERVER_INITIALIZE_ID, "result": {"userAgent": "test"}}),
+        ("client", {"method": "initialized"}),
+        ("client", thread_start),
+        (
+            "server",
+            {
+                "id": runner._APP_SERVER_THREAD_START_ID,
+                "result": {
+                    "approvalPolicy": "never",
+                    "approvalsReviewer": "user",
+                    "cwd": str(root.resolve()),
+                    "model": "gpt-5.6-sol",
+                    "modelProvider": "openai",
+                    "reasoningEffort": "ultra",
+                    "runtimeWorkspaceRoots": [str(root.resolve())],
+                    "sandbox": {"type": "readOnly", "networkAccess": False},
+                    "serviceTier": "priority",
+                    "thread": thread,
+                },
+            },
+        ),
+        ("server", {"method": "thread/started", "params": {"thread": thread}}),
+        ("client", turn_start),
+        ("server", {"id": runner._APP_SERVER_TURN_START_ID, "result": {"turn": turn}}),
+        ("server", {"method": "turn/started", "params": {"threadId": THREAD_ID, "turn": turn}}),
+        (
+            "server",
+            {
+                "method": "item/completed",
+                "params": {
+                    "completedAtMs": 1,
+                    "item": final_item,
+                    "threadId": THREAD_ID,
+                    "turnId": TURN_ID,
+                },
+            },
+        ),
+        (
+            "server",
+            {
+                "method": "turn/completed",
+                "params": {"threadId": THREAD_ID, "turn": completed_turn},
+            },
+        ),
+    ]
+    return b"".join(
+        runner._canonical_json_line({"direction": direction, "message": message})
+        for direction, message in messages
+    )
+
+
+def _app_server_result(
+    runner,
+    *,
+    root: Path,
+    configured,
+    prompt_raw: bytes,
+    final_output: str,
+    returncode: int = 0,
+    stderr: str = "",
+):
+    transcript_raw = _completed_app_server_transcript(
+        runner,
+        root=root,
+        configured=configured,
+        prompt=prompt_raw.decode("utf-8"),
+        final_output=final_output,
+    )
+    evidence = runner._parse_app_server_transcript(
+        transcript_raw=transcript_raw,
+        configured=configured,
+        root=root,
+        prompt_raw=prompt_raw,
+        raw_output=final_output.encode("utf-8"),
+    )
+    return runner.AppServerReviewResult(
+        args=tuple(runner._build_app_server_args()),
+        returncode=returncode,
+        transcript_raw=transcript_raw,
+        stderr=stderr,
+        evidence=evidence,
+    )
 
 
 def _init_review_repo(root: Path) -> str:
@@ -423,6 +551,440 @@ def test_causal_binding_requires_one_complete_root_exec_turn_and_exact_messages(
         assert runner._review_causal_binding_valid(binding) is False, scenario
 
 
+def test_app_server_transcript_binds_active_settings_ids_prompt_and_final_output(tmp_path: Path) -> None:
+    runner = _load_runner()
+    configured = _configured(runner, tmp_path / "codex-home")
+    prompt = "Review the exact pinned scope."
+    final_output = "No blocking findings.\n\nGO\n"
+    transcript_raw = _completed_app_server_transcript(
+        runner,
+        root=tmp_path,
+        configured=configured,
+        prompt=prompt,
+        final_output=final_output,
+    )
+
+    evidence = runner._parse_app_server_transcript(
+        transcript_raw=transcript_raw,
+        configured=configured,
+        root=tmp_path,
+        prompt_raw=prompt.encode("utf-8"),
+        raw_output=final_output.encode("utf-8"),
+    )
+
+    assert evidence.settings == runner.ReviewerSettings("gpt-5.6-sol", "ultra", "priority")
+    assert evidence.thread_id == THREAD_ID
+    assert evidence.session_id == THREAD_ID
+    assert evidence.session_source == "vscode"
+    assert evidence.turn_id == TURN_ID
+    assert evidence.final_output == final_output.rstrip("\r\n").encode("utf-8")
+    records = [json.loads(line) for line in transcript_raw.decode("utf-8").splitlines()]
+    assert records[0]["message"]["params"]["capabilities"] == {"experimentalApi": True}
+    assert runner._app_server_transcript_binding_valid(evidence.binding) is True
+
+
+@pytest.mark.parametrize(
+    ("mutation", "failed_field"),
+    [
+        ("initialized", "single_initialized_notification"),
+        ("initialize_capability", "single_initialize_request"),
+        ("extra_client", "request_settings_exact"),
+        ("active_tier", "active_settings_exact"),
+        ("request_tier", "request_settings_exact"),
+        ("reroute", "no_model_reroute"),
+        ("thread_identity", "thread_identity_exact"),
+        ("thread_session_identity", "thread_identity_exact"),
+        ("turn_identity", "turn_identity_exact"),
+        ("final_message", "final_agent_message_exact"),
+    ],
+)
+def test_app_server_transcript_mutations_fail_closed(
+    tmp_path: Path,
+    mutation: str,
+    failed_field: str,
+) -> None:
+    runner = _load_runner()
+    from sourcing_agent import runtime_asset_retention_prune as verifier
+
+    configured = _configured(runner, tmp_path / "codex-home")
+    prompt = "Review the exact pinned scope."
+    final_output = "No blocking findings.\n\nGO\n"
+    transcript_raw = _completed_app_server_transcript(
+        runner,
+        root=tmp_path,
+        configured=configured,
+        prompt=prompt,
+        final_output=final_output,
+    )
+    records = [json.loads(line) for line in transcript_raw.decode("utf-8").splitlines()]
+    if mutation == "initialized":
+        records[2]["message"] = {"method": "initialized", "params": {}}
+    elif mutation == "initialize_capability":
+        records[0]["message"]["params"]["capabilities"]["experimentalApi"] = False
+    elif mutation == "extra_client":
+        records.insert(
+            6,
+            {
+                "direction": "client",
+                "message": {
+                    "method": "thread/settings/update",
+                    "params": {"threadId": THREAD_ID, "serviceTier": "standard"},
+                },
+            },
+        )
+    elif mutation == "active_tier":
+        records[4]["message"]["result"]["serviceTier"] = "standard"
+    elif mutation == "request_tier":
+        records[3]["message"]["params"]["serviceTier"] = "standard"
+    elif mutation == "reroute":
+        records.insert(
+            -1,
+            {
+                "direction": "server",
+                "message": {
+                    "method": "model/rerouted",
+                    "params": {"fromModel": "gpt-5.6-sol", "toModel": "gpt-5.5"},
+                },
+            },
+        )
+    elif mutation == "thread_identity":
+        records[5]["message"]["params"]["thread"]["sessionId"] = "different-session"
+    elif mutation == "thread_session_identity":
+        records[4]["message"]["result"]["thread"]["sessionId"] = "different-session"
+    elif mutation == "turn_identity":
+        records[8]["message"]["params"]["turn"]["id"] = "different-turn"
+    else:
+        records[9]["message"]["params"]["item"]["text"] = "different final"
+    mutated_raw = b"".join(
+        runner._canonical_json_line(record)
+        for record in records
+    )
+
+    evidence = runner._parse_app_server_transcript(
+        transcript_raw=mutated_raw,
+        configured=configured,
+        root=tmp_path,
+        prompt_raw=prompt.encode("utf-8"),
+        raw_output=final_output.encode("utf-8"),
+    )
+    verifier_evidence, verifier_blockers = verifier._parse_independent_review_app_server_transcript(
+        transcript_raw=mutated_raw,
+        configured={
+            "model": configured.settings.model,
+            "reasoning_effort": configured.settings.reasoning_effort,
+            "service_tier": configured.settings.service_tier,
+        },
+        root=tmp_path,
+        prompt_raw=prompt.encode("utf-8"),
+        raw_output=final_output.encode("utf-8"),
+    )
+
+    assert evidence.binding[failed_field] is False
+    assert runner._app_server_transcript_binding_valid(evidence.binding) is False
+    assert verifier_evidence["binding"] == evidence.binding
+    assert f"review_artifact_transcript_binding_invalid:{failed_field}" in verifier_blockers
+
+
+def test_app_server_effective_settings_use_active_tier_and_rollout_corroboration(tmp_path: Path) -> None:
+    runner = _load_runner()
+    codex_home = tmp_path / "codex-home"
+    configured = _configured(runner, codex_home)
+    prompt = "Review the exact pinned scope."
+    final_output = "No blocking findings.\n\nGO\n"
+    transcript_raw = _completed_app_server_transcript(
+        runner,
+        root=tmp_path,
+        configured=configured,
+        prompt=prompt,
+        final_output=final_output,
+    )
+    transcript = runner._parse_app_server_transcript(
+        transcript_raw=transcript_raw,
+        configured=configured,
+        root=tmp_path,
+        prompt_raw=prompt.encode("utf-8"),
+        raw_output=final_output.encode("utf-8"),
+    )
+    rollout_path = _write_rollout(
+        codex_home,
+        [
+            _session_meta(source="vscode", thread_source=runner._APP_SERVER_THREAD_SOURCE),
+            {"type": "turn_context", "payload": {"model": "gpt-5.6-sol", "effort": "ultra"}},
+        ],
+    )
+
+    effective = runner._load_app_server_effective_reviewer_configuration(
+        transcript=transcript,
+        configured=configured,
+        codex_home=codex_home,
+    )
+
+    assert effective.settings == runner.ReviewerSettings("gpt-5.6-sol", "ultra", "priority")
+    assert effective.thread_id == THREAD_ID
+    assert effective.session_id == THREAD_ID
+    assert effective.rollout_path == rollout_path
+    assert effective.source == {
+        "model": ["app_server_thread_start_response", "turn_context"],
+        "reasoning_effort": ["app_server_thread_start_response", "turn_context"],
+        "service_tier": ["app_server_thread_start_response"],
+    }
+
+    rollout_path.write_text(
+        "".join(
+            json.dumps(event) + "\n"
+            for event in [
+                _session_meta(source="vscode", thread_source=runner._APP_SERVER_THREAD_SOURCE),
+                {
+                    "type": "turn_context",
+                    "payload": {"model": "gpt-5.6-sol", "effort": "ultra"},
+                },
+                {
+                    "type": "event_msg",
+                    "payload": {
+                        "type": "thread_settings_applied",
+                        "thread_settings": {
+                            "model": "gpt-5.6-sol",
+                            "reasoning_effort": "ultra",
+                            "service_tier": "standard",
+                        },
+                    },
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="service_tier.*differs"):
+        runner._load_app_server_effective_reviewer_configuration(
+            transcript=transcript,
+            configured=configured,
+            codex_home=codex_home,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "runner_error", "verifier_blocker"),
+    [
+        (
+            {"id": "different-thread"},
+            "identity.*does not match",
+            "review_artifact_rollout_invalid_thread_identity",
+        ),
+        (
+            {"session_id": "different-session"},
+            "session identity.*does not match",
+            "review_artifact_rollout_invalid_session_identity",
+        ),
+        (
+            {"parent_thread_id": "parent-thread"},
+            "not an independent root reviewer session",
+            "review_artifact_rollout_not_root_session",
+        ),
+        (
+            {"forked_from_id": "fork-source"},
+            "not an independent root reviewer session",
+            "review_artifact_rollout_not_root_session",
+        ),
+    ],
+)
+def test_app_server_rollout_identity_and_root_lineage_fail_closed(
+    tmp_path: Path,
+    mutation: dict[str, str],
+    runner_error: str,
+    verifier_blocker: str,
+) -> None:
+    runner = _load_runner()
+    from sourcing_agent import runtime_asset_retention_prune as verifier
+
+    codex_home = tmp_path / "codex-home"
+    configured = _configured(runner, codex_home)
+    prompt = "Review the exact pinned scope."
+    final_output = "No blocking findings.\n\nGO\n"
+    transcript_raw = _completed_app_server_transcript(
+        runner,
+        root=tmp_path,
+        configured=configured,
+        prompt=prompt,
+        final_output=final_output,
+    )
+    transcript = runner._parse_app_server_transcript(
+        transcript_raw=transcript_raw,
+        configured=configured,
+        root=tmp_path,
+        prompt_raw=prompt.encode("utf-8"),
+        raw_output=final_output.encode("utf-8"),
+    )
+    session_meta = _session_meta(source="vscode", thread_source=runner._APP_SERVER_THREAD_SOURCE)
+    session_meta["payload"].update(mutation)
+    rollout_path = _write_rollout(
+        codex_home,
+        [
+            session_meta,
+            {"type": "turn_context", "payload": {"model": "gpt-5.6-sol", "effort": "ultra"}},
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match=runner_error):
+        runner._load_app_server_effective_reviewer_configuration(
+            transcript=transcript,
+            configured=configured,
+            codex_home=codex_home,
+        )
+
+    _, blockers = verifier._parse_independent_review_rollout_v3(
+        rollout_raw=rollout_path.read_bytes(),
+        configured_model="gpt-5.6-sol",
+    )
+    if mutation.keys() & {"id", "session_id"}:
+        # The parser proves uniqueness; the enclosing verifier binds the value
+        # to transcript identity. Exercise that comparison explicitly here.
+        parsed, _ = verifier._parse_independent_review_rollout_v3(
+            rollout_raw=rollout_path.read_bytes(),
+            configured_model="gpt-5.6-sol",
+        )
+        observed_key = "rollout_id" if "id" in mutation else "session_id"
+        expected_value = transcript.thread_id if observed_key == "rollout_id" else transcript.session_id
+        assert parsed[observed_key] != expected_value
+    else:
+        assert verifier_blocker in blockers
+
+
+def test_app_server_transport_runs_scripted_json_rpc_without_model_access(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    configured = _configured(runner, tmp_path / "codex-home")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_codex = fake_bin / "codex"
+    fake_codex.write_text(
+        """#!/usr/bin/env python3
+import json
+import sys
+
+thread_id = "019f0000-0000-7000-8000-000000000099"
+session_id = thread_id
+turn_id = "019f0000-0000-7000-8000-000000000100"
+
+def emit(message):
+    sys.stdout.write(json.dumps(message, separators=(",", ":")) + "\\n")
+    sys.stdout.flush()
+
+for raw_line in sys.stdin:
+    message = json.loads(raw_line)
+    method = message.get("method")
+    if method == "initialize":
+        if message["params"].get("capabilities") != {"experimentalApi": True}:
+            emit({"id": message["id"], "error": {"code": -32600, "message": "experimentalApi required"}})
+        else:
+            emit({"id": message["id"], "result": {"userAgent": "scripted"}})
+    elif method == "thread/start":
+        params = message["params"]
+        thread = {
+            "id": thread_id,
+            "sessionId": session_id,
+            "source": "vscode",
+            "threadSource": params["threadSource"],
+        }
+        emit({
+            "id": message["id"],
+            "result": {
+                "approvalPolicy": params["approvalPolicy"],
+                "approvalsReviewer": params["approvalsReviewer"],
+                "cwd": params["cwd"],
+                "model": params["model"],
+                "modelProvider": "openai",
+                "reasoningEffort": params["config"]["model_reasoning_effort"],
+                "sandbox": {"type": "readOnly", "networkAccess": False},
+                "serviceTier": "priority",
+                "thread": thread,
+            },
+        })
+        emit({"method": "thread/started", "params": {"thread": thread}})
+    elif method == "turn/start":
+        active_turn = {"id": turn_id, "items": [], "status": "inProgress"}
+        final_item = {
+            "id": "scripted-final",
+            "type": "agentMessage",
+            "phase": "final_answer",
+            "text": "GO",
+        }
+        emit({"id": message["id"], "result": {"turn": active_turn}})
+        emit({
+            "method": "turn/started",
+            "params": {"threadId": thread_id, "turn": active_turn},
+        })
+        emit({
+            "method": "item/completed",
+            "params": {
+                "completedAtMs": 1,
+                "item": final_item,
+                "threadId": thread_id,
+                "turnId": turn_id,
+            },
+        })
+        emit({
+            "method": "turn/completed",
+            "params": {
+                "threadId": thread_id,
+                "turn": {"id": turn_id, "items": [final_item], "status": "completed"},
+            },
+        })
+""",
+        encoding="utf-8",
+    )
+    fake_codex.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ.get('PATH', '')}")
+
+    result = runner._run_app_server_review(
+        root=tmp_path,
+        configured=configured,
+        prompt_raw=b"scripted prompt",
+        timeout_seconds=10,
+    )
+
+    assert result.returncode == 0
+    assert result.evidence.final_output == b"GO"
+    assert result.evidence.session_id == THREAD_ID
+    assert runner._app_server_transcript_binding_valid(result.evidence.binding) is True
+
+
+def test_app_server_transport_timeout_is_hard_when_server_stalls_mid_frame(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    configured = _configured(runner, tmp_path / "codex-home")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_codex = fake_bin / "codex"
+    fake_codex.write_text(
+        """#!/usr/bin/env python3
+import sys
+import time
+
+sys.stdin.readline()
+sys.stdout.write("{")
+sys.stdout.flush()
+time.sleep(30)
+""",
+        encoding="utf-8",
+    )
+    fake_codex.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ.get('PATH', '')}")
+
+    started = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        runner._run_app_server_review(
+            root=tmp_path,
+            configured=configured,
+            prompt_raw=b"scripted prompt",
+            timeout_seconds=1,
+        )
+
+    assert time.monotonic() - started < 5
+
+
 def test_signoff_runner_binds_pinned_scope_and_all_raw_evidence(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -452,20 +1014,29 @@ def test_signoff_runner_binds_pinned_scope_and_all_raw_evidence(
     )
     output_path = root / "runtime" / "reviews" / "valid.md"
 
-    def fake_run(args, **kwargs):
-        if args and args[0] == "git":
-            return REAL_SUBPROCESS_RUN(args, **kwargs)
-        prompt = kwargs["stdin"].read()
+    def fake_app_server_review(**kwargs):
+        prompt = kwargs["prompt_raw"].decode("utf-8")
         final_output = "Reviewed pinned scope.\n\nGO\n"
-        result_path = Path(args[args.index("--output-last-message") + 1])
-        result_path.parent.mkdir(parents=True, exist_ok=True)
-        result_path.write_text(final_output, encoding="utf-8")
-        _write_rollout(codex_home, _completed_exec_rollout(prompt=prompt, final_output=final_output))
-        return subprocess.CompletedProcess(args, 0, stdout=_thread_started() + "\n", stderr="")
+        _write_rollout(
+            codex_home,
+            _completed_exec_rollout(
+                prompt=prompt,
+                final_output=final_output,
+                source="vscode",
+                thread_source=runner._APP_SERVER_THREAD_SOURCE,
+            ),
+        )
+        return _app_server_result(
+            runner,
+            root=root,
+            configured=kwargs["configured"],
+            prompt_raw=kwargs["prompt_raw"],
+            final_output=final_output,
+        )
 
     monkeypatch.setattr(runner, "_repo_root", lambda: root)
     monkeypatch.setattr(runner, "_codex_home", lambda: codex_home)
-    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    monkeypatch.setattr(runner, "_run_app_server_review", fake_app_server_review)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -491,7 +1062,12 @@ def test_signoff_runner_binds_pinned_scope_and_all_raw_evidence(
     metadata = parse_independent_review_artifact_metadata(artifact_text)
     evidence_path = root / metadata["reviewer_effective_config_path"]
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-    assert evidence["contract_version"] == "independent_review_effective_config_v2"
+    assert evidence["contract_version"] == "independent_review_effective_config_v3"
+    assert evidence["session"]["session_id"] == THREAD_ID
+    assert evidence["session"]["thread_id"] == THREAD_ID
+    assert evidence["session"]["turn_id"] == TURN_ID
+    assert evidence["transport"]["kind"] == "app_server_stdio"
+    assert evidence["transport"]["active_settings_source"] == "thread/start.response"
     assert evidence["scope"]["title"] == "pinned scope"
     assert evidence["scope"]["scope_mode"] == "pinned_commit_diff"
     assert evidence["scope"]["files"] == ["src/example.py"]
@@ -512,6 +1088,71 @@ def test_signoff_runner_binds_pinned_scope_and_all_raw_evidence(
         )
         == []
     )
+
+    original_evidence_raw = evidence_path.read_bytes()
+    turn_mismatch_evidence = json.loads(original_evidence_raw)
+    turn_mismatch_evidence["causal_binding"]["turn_id"] = "different-rollout-turn"
+    turn_mismatch_raw = (json.dumps(turn_mismatch_evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    turn_mismatch_sha = hashlib.sha256(turn_mismatch_raw).hexdigest()
+    evidence_path.write_bytes(turn_mismatch_raw)
+    output_path.write_text(
+        artifact_text.replace(metadata["reviewer_effective_config_sha256"], turn_mismatch_sha),
+        encoding="utf-8",
+    )
+    assert "review_artifact_effective_config_v3_turn_identity_mismatch" in validate_independent_review_artifact(
+        artifact_path=output_path,
+        workspace_root=root,
+        expected_title="pinned scope",
+        required_files=["src/example.py"],
+    )
+    evidence_path.write_bytes(original_evidence_raw)
+    output_path.write_text(artifact_text, encoding="utf-8")
+
+    rollout_path = root / evidence["session"]["rollout_path"]
+    original_rollout_raw = rollout_path.read_bytes()
+    original_rollout_sha = metadata["reviewer_rollout_sha256"]
+    for mutation, expected_blocker in (
+        (
+            {"session_id": "different-session"},
+            "review_artifact_rollout_recomputed_mismatch:session_id",
+        ),
+        (
+            {"parent_thread_id": "parent-thread"},
+            "review_artifact_rollout_not_root_session",
+        ),
+    ):
+        rollout_events = [json.loads(line) for line in original_rollout_raw.decode("utf-8").splitlines()]
+        session_meta = next(event for event in rollout_events if event.get("type") == "session_meta")
+        session_meta["payload"].update(mutation)
+        mutated_rollout_raw = "".join(
+            json.dumps(event, separators=(",", ":")) + "\n"
+            for event in rollout_events
+        ).encode("utf-8")
+        mutated_rollout_sha = hashlib.sha256(mutated_rollout_raw).hexdigest()
+        rollout_path.write_bytes(mutated_rollout_raw)
+        mutated_evidence = json.loads(original_evidence_raw)
+        mutated_evidence["session"]["rollout_sha256"] = mutated_rollout_sha
+        mutated_evidence_raw = (json.dumps(mutated_evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        mutated_evidence_sha = hashlib.sha256(mutated_evidence_raw).hexdigest()
+        evidence_path.write_bytes(mutated_evidence_raw)
+        output_path.write_text(
+            artifact_text.replace(original_rollout_sha, mutated_rollout_sha).replace(
+                metadata["reviewer_effective_config_sha256"],
+                mutated_evidence_sha,
+            ),
+            encoding="utf-8",
+        )
+
+        assert expected_blocker in validate_independent_review_artifact(
+            artifact_path=output_path,
+            workspace_root=root,
+            expected_title="pinned scope",
+            required_files=["src/example.py"],
+        )
+
+    rollout_path.write_bytes(original_rollout_raw)
+    evidence_path.write_bytes(original_evidence_raw)
+    output_path.write_text(artifact_text, encoding="utf-8")
 
     replay_blockers = validate_independent_review_artifact(
         artifact_path=output_path,
@@ -899,20 +1540,31 @@ def test_nonzero_codex_exit_forces_no_go_and_records_durable_evidence(
     output_path = root / "runtime" / "reviews" / "nonzero.md"
     prompt_path = root / "runtime" / "reviews" / "nonzero.prompt.md"
 
-    def fake_run(args, **kwargs):
-        if args and args[0] == "git":
-            return REAL_SUBPROCESS_RUN(args, **kwargs)
-        prompt = kwargs["stdin"].read()
+    def fake_app_server_review(**kwargs):
+        prompt = kwargs["prompt_raw"].decode("utf-8")
         final_output = "GO\n"
-        result_path = Path(args[args.index("--output-last-message") + 1])
-        result_path.parent.mkdir(parents=True, exist_ok=True)
-        result_path.write_text(final_output, encoding="utf-8")
-        _write_rollout(codex_home, _completed_exec_rollout(prompt=prompt, final_output=final_output))
-        return subprocess.CompletedProcess(args, 17, stdout=_thread_started(), stderr="capacity")
+        _write_rollout(
+            codex_home,
+            _completed_exec_rollout(
+                prompt=prompt,
+                final_output=final_output,
+                source="vscode",
+                thread_source=runner._APP_SERVER_THREAD_SOURCE,
+            ),
+        )
+        return _app_server_result(
+            runner,
+            root=root,
+            configured=kwargs["configured"],
+            prompt_raw=kwargs["prompt_raw"],
+            final_output=final_output,
+            returncode=17,
+            stderr="capacity",
+        )
 
     monkeypatch.setattr(runner, "_repo_root", lambda: root)
     monkeypatch.setattr(runner, "_codex_home", lambda: codex_home)
-    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    monkeypatch.setattr(runner, "_run_app_server_review", fake_app_server_review)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -938,7 +1590,7 @@ def test_nonzero_codex_exit_forces_no_go_and_records_durable_evidence(
     assert "GO\n\nNO-GO: reviewer process exited with status 17" in artifact
     evidence_path = next((root / "runtime" / "reviews").glob("*_nonzero.effective-config.json"))
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-    assert evidence["process"] == {"reviewer_exit_code": 17}
+    assert evidence["process"] == {"reviewer_exit_code": 17, "timed_out": False}
     assert set(evidence) == {
         "artifacts",
         "causal_binding",
@@ -949,9 +1601,10 @@ def test_nonzero_codex_exit_forces_no_go_and_records_durable_evidence(
         "process",
         "scope",
         "session",
+        "transport",
     }
     assert evidence["scope"]["scope_mode"] == "reference_only_worktree"
-    assert evidence["artifacts"]["raw_output"]["sha256"] == hashlib.sha256(b"GO\n").hexdigest()
+    assert evidence["artifacts"]["raw_output"]["sha256"] == hashlib.sha256(b"GO").hexdigest()
     blockers = validate_independent_review_artifact(
         artifact_path=output_path,
         workspace_root=root,
@@ -977,14 +1630,12 @@ def test_codex_timeout_is_recorded_as_invalid_no_go(
     output_path = root / "runtime" / "reviews" / "timeout.md"
     prompt_path = root / "runtime" / "reviews" / "timeout.prompt.md"
 
-    def fake_run(args, **kwargs):
-        if args and args[0] == "git":
-            return REAL_SUBPROCESS_RUN(args, **kwargs)
-        raise subprocess.TimeoutExpired(args, kwargs["timeout"])
+    def fake_app_server_review(**kwargs):
+        raise subprocess.TimeoutExpired(runner._build_app_server_args(), kwargs["timeout_seconds"])
 
     monkeypatch.setattr(runner, "_repo_root", lambda: root)
     monkeypatch.setattr(runner, "_codex_home", lambda: codex_home)
-    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    monkeypatch.setattr(runner, "_run_app_server_review", fake_app_server_review)
     monkeypatch.setattr(
         sys,
         "argv",

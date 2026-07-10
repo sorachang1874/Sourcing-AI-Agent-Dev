@@ -306,19 +306,21 @@ def test_independent_review_gate_is_documented_and_executable() -> None:
 
     assert "Independent Review Gate" in agents
     assert "reviewer must not be the author" in agents
-    assert "codex exec --strict-config --sandbox read-only" in agents
+    assert "scripts/run_independent_review_gate.py --execute" in agents
+    assert "app-server transport" in agents
     assert "NO-GO" in gate
     assert "reviewer that did not author the change" in gate
     assert "docs/INDEPENDENT_REVIEW_BRIEF.md" in gate
-    assert "feeds it non-interactively" in gate
-    assert "< runtime/reviews/<review-id>.prompt.md" in gate
+    assert "captures the bidirectional transcript" in gate
+    assert "thread/start" in gate
     assert "Python so it works on macOS without GNU `timeout`" in gate
     assert "newest available model" in gate
     assert "highest supported reasoning effort" in gate
     assert "~/.codex/config.toml" in gate
-    assert "codex exec \\" in gate
+    assert "codex --sandbox read-only app-server --strict-config --stdio" in gate
     assert "--strict-config" in gate
     assert "no model/effort/tier CLI overrides" in gate
+    assert "independent_review_effective_config_v3" in gate
     assert 'REVIEW_BASE="<pinned-base-SHA>"' in gate
     assert "review_scope_digest_sha256" in gate
     assert "unrelated work continues" in gate
@@ -329,8 +331,8 @@ def test_independent_review_gate_is_documented_and_executable() -> None:
         REPO_ROOT / "docs" / "DURABLE_EXECUTION_RUNTIME_CONTRACT.md"
     ).read_text(encoding="utf-8")
     assert "stdout=subprocess.PIPE" in runner
-    assert "timeout=timeout_seconds" in runner
-    assert "stdin=prompt_handle" in runner
+    assert "_run_app_server_review" in runner
+    assert "selectors.DefaultSelector" in runner
     assert "## Review Metadata" in runner
     assert "contract_docs_considered" in runner
     assert "author_validation" in runner
@@ -338,9 +340,9 @@ def test_independent_review_gate_is_documented_and_executable() -> None:
     assert "DEFAULT_REVIEWER_REASONING_EFFORT" not in runner
     assert "DEFAULT_REVIEWER_SERVICE_TIER" not in runner
     assert "_load_reviewer_configuration" in runner
-    assert "_load_effective_reviewer_configuration" in runner
+    assert "_load_app_server_effective_reviewer_configuration" in runner
     assert "thread_settings_applied" in runner
-    assert "_build_codex_args" in runner
+    assert "_build_app_server_args" in runner
     assert "INVALID_REVIEW_ARTIFACT: bare NO-GO" in runner
     assert "reviewer produced no output" in runner
     assert 'review_body.strip() == "NO-GO"' in runner

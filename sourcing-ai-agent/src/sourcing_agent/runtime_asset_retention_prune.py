@@ -16,6 +16,7 @@ from typing import Any
 CONTRACT_VERSION = "runtime_asset_retention_prune_v1"
 BUNDLE_MANIFEST_CONTRACT_VERSION = "runtime_asset_supersession_cold_bundle_manifest_v1"
 INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION = "independent_review_effective_config_v2"
+INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION_V3 = "independent_review_effective_config_v3"
 REQUIRED_REVIEW_ARTIFACT_METADATA_FIELDS = (
     "reviewer_model",
     "reviewer_reasoning_effort",
@@ -70,6 +71,67 @@ _INDEPENDENT_REVIEW_CAUSAL_FIELDS = {
     "normalized_final_output_sha256",
     *_INDEPENDENT_REVIEW_CAUSAL_BOOLEAN_FIELDS,
 }
+_INDEPENDENT_REVIEW_APP_SERVER_CAUSAL_BOOLEAN_FIELDS = (
+    "rollout_json_valid",
+    "text_utf8_valid",
+    "session_source_matches_thread_start",
+    "session_thread_source_exact",
+    "single_task_turn",
+    "no_abort",
+    "prompt_response_item_exact",
+    "prompt_event_message_exact",
+    "final_response_item_exact",
+    "final_event_message_exact",
+    "task_complete_final_exact",
+)
+_INDEPENDENT_REVIEW_APP_SERVER_CAUSAL_FIELDS = {
+    "turn_id",
+    "prompt_sha256",
+    "normalized_final_output_sha256",
+    *_INDEPENDENT_REVIEW_APP_SERVER_CAUSAL_BOOLEAN_FIELDS,
+}
+_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS = (
+    "transcript_json_valid",
+    "single_initialize_request",
+    "single_initialize_response",
+    "single_initialized_notification",
+    "single_thread_start_request",
+    "single_thread_start_response",
+    "single_turn_start_request",
+    "single_turn_start_response",
+    "request_settings_exact",
+    "active_settings_exact",
+    "active_read_only",
+    "thread_identity_exact",
+    "thread_source_exact",
+    "turn_identity_exact",
+    "single_turn_completed",
+    "turn_status_completed",
+    "prompt_request_exact",
+    "final_agent_message_exact",
+    "no_protocol_error",
+    "no_model_reroute",
+    "thread_settings_consistent",
+)
+_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_FIELDS = {
+    "thread_id",
+    "session_id",
+    "turn_id",
+    "prompt_sha256",
+    "normalized_final_output_sha256",
+    *_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS,
+}
+_INDEPENDENT_REVIEW_APP_SERVER_TRANSPORT = "app_server_stdio"
+_INDEPENDENT_REVIEW_APP_SERVER_PROTOCOL = "codex_app_server_jsonrpc_v2"
+_INDEPENDENT_REVIEW_APP_SERVER_ACTIVE_SETTINGS_SOURCE = "thread/start.response"
+_INDEPENDENT_REVIEW_APP_SERVER_EFFECTIVE_SOURCE = "app_server_thread_start_response"
+_INDEPENDENT_REVIEW_APP_SERVER_CLIENT_NAME = "sourcing-ai-agent-independent-review-gate"
+_INDEPENDENT_REVIEW_APP_SERVER_CLIENT_VERSION = "3"
+_INDEPENDENT_REVIEW_APP_SERVER_SERVICE_NAME = "sourcing-ai-agent-independent-review-gate"
+_INDEPENDENT_REVIEW_APP_SERVER_THREAD_SOURCE = "sourcing-ai-agent-independent-review-v3"
+_INDEPENDENT_REVIEW_APP_SERVER_INITIALIZE_ID = "review-initialize"
+_INDEPENDENT_REVIEW_APP_SERVER_THREAD_START_ID = "review-thread-start"
+_INDEPENDENT_REVIEW_APP_SERVER_TURN_START_ID = "review-turn-start"
 _INDEPENDENT_REVIEW_SCOPE_DIGEST_FIELDS = (
     "title",
     "base_ref",
@@ -1371,8 +1433,23 @@ def validate_independent_review_effective_config_evidence(
     if not isinstance(payload, dict):
         blockers.append("review_artifact_effective_config_invalid_json")
         return blockers
-    if str(payload.get("contract_version") or "") != INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION:
+    contract_version = str(payload.get("contract_version") or "")
+    if contract_version == INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION_V3:
+        blockers.extend(
+            _validate_independent_review_effective_config_evidence_v3(
+                payload=payload,
+                metadata=metadata,
+                root=root,
+                review_text=review_text,
+                expected_title=expected_title,
+                required_files=list(required_files or []),
+                expected_scope_digest=expected_scope_digest,
+            )
+        )
+        return _dedupe_strings(blockers)
+    if contract_version != INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION:
         blockers.append("review_artifact_effective_config_contract_mismatch")
+        return _dedupe_strings(blockers)
 
     raw_config = payload.get("config")
     raw_session = payload.get("session")
@@ -1555,6 +1632,314 @@ def validate_independent_review_effective_config_evidence(
     return _dedupe_strings(blockers)
 
 
+def _validate_independent_review_effective_config_evidence_v3(
+    *,
+    payload: dict[str, Any],
+    metadata: dict[str, str],
+    root: Path,
+    review_text: str,
+    expected_title: str,
+    required_files: list[str],
+    expected_scope_digest: str,
+) -> list[str]:
+    blockers: list[str] = []
+
+    def mapping(name: str) -> dict[str, Any]:
+        value = payload.get(name)
+        if isinstance(value, dict):
+            return dict(value)
+        blockers.append(f"review_artifact_effective_config_v3_invalid_{name}")
+        return {}
+
+    config = mapping("config")
+    session = mapping("session")
+    process = mapping("process")
+    effective = mapping("effective")
+    transport = mapping("transport")
+    causal_binding = mapping("causal_binding")
+    scope = mapping("scope")
+    artifacts = mapping("artifacts")
+
+    def artifact(kind: str) -> dict[str, Any]:
+        value = artifacts.get(kind)
+        return dict(value) if isinstance(value, dict) else {}
+
+    def artifact_field(kind: str, field: str) -> str:
+        return str(artifact(kind).get(field) or "")
+
+    expected_metadata = {
+        "reviewer_config_path": str(config.get("path") or ""),
+        "reviewer_config_sha256": str(config.get("sha256") or ""),
+        "reviewer_exit_code": str(process.get("reviewer_exit_code") if "reviewer_exit_code" in process else ""),
+        "reviewer_codex_cli_version": str(session.get("codex_cli_version") or ""),
+        "reviewer_thread_id": str(session.get("thread_id") or ""),
+        "reviewer_rollout_path": str(session.get("rollout_path") or ""),
+        "reviewer_rollout_sha256": str(session.get("rollout_sha256") or ""),
+        "reviewer_model": str(effective.get("model") or ""),
+        "reviewer_reasoning_effort": str(effective.get("reasoning_effort") or ""),
+        "reviewer_service_tier": str(effective.get("service_tier") or ""),
+        "review_scope_mode": str(scope.get("scope_mode") or ""),
+        "review_base_ref": str(scope.get("base_ref") or ""),
+        "review_resolved_base_commit": str(scope.get("resolved_base_commit") or ""),
+        "review_resolved_head_commit": str(scope.get("resolved_head_commit") or ""),
+        "review_git_diff_sha256": str(scope.get("git_diff_sha256") or ""),
+        "review_git_tree_sha256": str(scope.get("git_tree_sha256") or ""),
+        "review_extra_context_sha256": str(scope.get("extra_context_sha256") or ""),
+        "review_scope_digest_sha256": str(scope.get("scope_digest_sha256") or ""),
+        "prompt_path": artifact_field("prompt", "path"),
+        "prompt_sha256": artifact_field("prompt", "sha256"),
+        "events_path": artifact_field("events", "path"),
+        "events_sha256": artifact_field("events", "sha256"),
+        "raw_output_path": artifact_field("raw_output", "path"),
+        "raw_output_sha256": artifact_field("raw_output", "sha256"),
+    }
+    for field, expected in expected_metadata.items():
+        if not expected or str(metadata.get(field) or "").strip() != expected:
+            blockers.append(f"review_artifact_effective_config_mismatch:{field}")
+
+    if not _is_sha256(str(config.get("sha256") or "")):
+        blockers.append("review_artifact_effective_config_invalid_config_sha256")
+    try:
+        evidence_exit_code = int(str(process.get("reviewer_exit_code")))
+    except (TypeError, ValueError):
+        evidence_exit_code = -1
+    if evidence_exit_code != 0:
+        blockers.append("review_artifact_effective_config_exit_not_zero")
+    if process.get("timed_out") is not False:
+        blockers.append("review_artifact_effective_config_v3_timed_out")
+
+    session_id = str(session.get("session_id") or "").strip()
+    thread_id = str(session.get("thread_id") or "").strip()
+    turn_id = str(session.get("turn_id") or "").strip()
+    session_source = str(session.get("session_source") or "").strip()
+    cli_version = str(session.get("codex_cli_version") or "").strip()
+    if (
+        not session_id
+        or not thread_id
+        or not turn_id
+        or not session_source
+        or _is_default_review_metadata_value(cli_version)
+    ):
+        blockers.append("review_artifact_effective_config_incomplete_session")
+
+    configured_model = str(config.get("model") or "").strip()
+    configured_reasoning = str(config.get("reasoning_effort") or "").strip()
+    configured_tier = str(config.get("service_tier") or "").strip()
+    effective_model = str(effective.get("model") or "").strip()
+    effective_reasoning = str(effective.get("reasoning_effort") or "").strip()
+    effective_tier = _canonical_review_service_tier(effective.get("service_tier"))
+    if not configured_model or configured_model != effective_model:
+        blockers.append("review_artifact_effective_config_model_differs_from_config")
+    if not configured_reasoning or configured_reasoning != effective_reasoning:
+        blockers.append("review_artifact_effective_config_reasoning_differs_from_config")
+    if not configured_tier or not _review_service_tier_matches(configured_tier, effective_tier):
+        blockers.append("review_artifact_effective_config_tier_differs_from_config")
+
+    claimed_reroutes = payload.get("model_reroutes")
+    if not isinstance(claimed_reroutes, list):
+        blockers.append("review_artifact_effective_config_invalid_model_reroutes")
+        claimed_reroutes = []
+    elif claimed_reroutes:
+        blockers.append("review_artifact_effective_config_model_reroute_not_allowed")
+
+    expected_transport_fields = {
+        "kind",
+        "protocol",
+        "active_settings_source",
+        "transcript",
+        "binding",
+    }
+    if set(transport) != expected_transport_fields:
+        blockers.append("review_artifact_effective_config_v3_transport_invalid_fields")
+    if transport.get("kind") != _INDEPENDENT_REVIEW_APP_SERVER_TRANSPORT:
+        blockers.append("review_artifact_effective_config_v3_transport_kind_mismatch")
+    if transport.get("protocol") != _INDEPENDENT_REVIEW_APP_SERVER_PROTOCOL:
+        blockers.append("review_artifact_effective_config_v3_transport_protocol_mismatch")
+    if transport.get("active_settings_source") != _INDEPENDENT_REVIEW_APP_SERVER_ACTIVE_SETTINGS_SOURCE:
+        blockers.append("review_artifact_effective_config_v3_active_settings_source_mismatch")
+    transport_transcript = dict(transport["transcript"]) if isinstance(transport.get("transcript"), dict) else {}
+    claimed_transcript_binding = dict(transport["binding"]) if isinstance(transport.get("binding"), dict) else {}
+    transcript_artifact = artifact("transcript")
+    events_artifact = artifact("events")
+    if (
+        set(transport_transcript) != {"path", "sha256"}
+        or transport_transcript != transcript_artifact
+        or events_artifact != transcript_artifact
+    ):
+        blockers.append("review_artifact_effective_config_v3_transcript_binding_mismatch")
+    if set(claimed_transcript_binding) != _INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_FIELDS:
+        blockers.append("review_artifact_effective_config_v3_transcript_binding_invalid_fields")
+    if set(causal_binding) != _INDEPENDENT_REVIEW_APP_SERVER_CAUSAL_FIELDS:
+        blockers.append("review_artifact_effective_config_causal_binding_invalid_fields")
+    if (
+        str(claimed_transcript_binding.get("turn_id") or "").strip() != turn_id
+        or str(causal_binding.get("turn_id") or "").strip() != turn_id
+    ):
+        blockers.append("review_artifact_effective_config_v3_turn_identity_mismatch")
+    for binding_name, binding, boolean_fields in (
+        ("transcript", claimed_transcript_binding, _INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS),
+        ("causal", causal_binding, _INDEPENDENT_REVIEW_APP_SERVER_CAUSAL_BOOLEAN_FIELDS),
+    ):
+        if not _is_sha256(str(binding.get("prompt_sha256") or "")) or not _is_sha256(
+            str(binding.get("normalized_final_output_sha256") or "")
+        ):
+            blockers.append(f"review_artifact_effective_config_v3_{binding_name}_binding_invalid_hash")
+        if any(not isinstance(binding.get(field), bool) for field in boolean_fields):
+            blockers.append(f"review_artifact_effective_config_v3_{binding_name}_binding_invalid_boolean")
+
+    prompt_raw, prompt_blockers = _read_independent_review_evidence_file(
+        root=root,
+        path_text=artifact_field("prompt", "path"),
+        expected_sha=artifact_field("prompt", "sha256"),
+        blocker_prefix="review_artifact_prompt",
+    )
+    transcript_raw, transcript_blockers = _read_independent_review_evidence_file(
+        root=root,
+        path_text=str(transcript_artifact.get("path") or ""),
+        expected_sha=str(transcript_artifact.get("sha256") or ""),
+        blocker_prefix="review_artifact_transcript",
+    )
+    events_raw, events_blockers = _read_independent_review_evidence_file(
+        root=root,
+        path_text=artifact_field("events", "path"),
+        expected_sha=artifact_field("events", "sha256"),
+        blocker_prefix="review_artifact_events",
+    )
+    raw_output, output_blockers = _read_independent_review_evidence_file(
+        root=root,
+        path_text=artifact_field("raw_output", "path"),
+        expected_sha=artifact_field("raw_output", "sha256"),
+        blocker_prefix="review_artifact_raw_output",
+    )
+    rollout_raw, rollout_blockers = _read_independent_review_evidence_file(
+        root=root,
+        path_text=str(session.get("rollout_path") or ""),
+        expected_sha=str(session.get("rollout_sha256") or ""),
+        blocker_prefix="review_artifact_rollout",
+    )
+    blockers.extend(prompt_blockers + transcript_blockers + events_blockers + output_blockers + rollout_blockers)
+    if transcript_raw is not None and events_raw is not None and transcript_raw != events_raw:
+        blockers.append("review_artifact_effective_config_v3_events_transcript_mismatch")
+    if prompt_raw is not None:
+        blockers.extend(_independent_review_prompt_blockers(prompt_raw=prompt_raw, scope=scope))
+    if raw_output is not None and review_text:
+        marker = "## Reviewer Output\n\n"
+        artifact_body = review_text.partition(marker)[2].encode("utf-8") if marker in review_text else b""
+        if artifact_body != raw_output:
+            blockers.append("review_artifact_raw_output_body_mismatch")
+
+    transcript_evidence: dict[str, Any] = {}
+    if prompt_raw is not None and transcript_raw is not None and raw_output is not None:
+        transcript_evidence, replay_blockers = _parse_independent_review_app_server_transcript(
+            transcript_raw=transcript_raw,
+            configured={
+                "model": configured_model,
+                "reasoning_effort": configured_reasoning,
+                "service_tier": configured_tier,
+            },
+            root=root,
+            prompt_raw=prompt_raw,
+            raw_output=raw_output,
+        )
+        blockers.extend(replay_blockers)
+        recomputed_binding = dict(transcript_evidence.get("binding") or {})
+        for field in sorted(_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_FIELDS):
+            if claimed_transcript_binding.get(field) != recomputed_binding.get(field):
+                blockers.append(f"review_artifact_transcript_binding_recomputed_mismatch:{field}")
+        recomputed_settings = dict(transcript_evidence.get("settings") or {})
+        for field, claimed in (
+            ("model", effective_model),
+            ("reasoning_effort", effective_reasoning),
+            ("service_tier", effective_tier),
+        ):
+            recomputed = str(recomputed_settings.get(field) or "")
+            matches = (
+                _review_service_tier_matches(recomputed, claimed) if field == "service_tier" else recomputed == claimed
+            )
+            if not matches:
+                blockers.append(f"review_artifact_transcript_recomputed_mismatch:{field}")
+        for field, claimed in (
+            ("thread_id", thread_id),
+            ("session_id", session_id),
+            ("turn_id", turn_id),
+            ("session_source", session_source),
+        ):
+            if str(transcript_evidence.get(field) or "") != claimed:
+                blockers.append(f"review_artifact_transcript_recomputed_mismatch:{field}")
+        if list(transcript_evidence.get("model_reroutes") or []) != claimed_reroutes:
+            blockers.append("review_artifact_transcript_recomputed_mismatch:model_reroutes")
+    else:
+        blockers.append("review_artifact_transcript_causal_evidence_incomplete")
+
+    rollout_evidence: dict[str, Any] = {}
+    if rollout_raw is not None:
+        rollout_evidence, rollout_recompute_blockers = _parse_independent_review_rollout_v3(
+            rollout_raw=rollout_raw,
+            configured_model=configured_model,
+        )
+        blockers.extend(rollout_recompute_blockers)
+        if str(rollout_evidence.get("rollout_id") or "") != thread_id:
+            blockers.append("review_artifact_rollout_recomputed_mismatch:thread_id")
+        if str(rollout_evidence.get("session_id") or "") != session_id:
+            blockers.append("review_artifact_rollout_recomputed_mismatch:session_id")
+        if str(rollout_evidence.get("codex_cli_version") or "") != cli_version:
+            blockers.append("review_artifact_rollout_recomputed_mismatch:codex_cli_version")
+        if str(rollout_evidence.get("session_source") or "") != session_source:
+            blockers.append("review_artifact_rollout_recomputed_mismatch:session_source")
+        if rollout_evidence.get("thread_source") != _INDEPENDENT_REVIEW_APP_SERVER_THREAD_SOURCE:
+            blockers.append("review_artifact_rollout_recomputed_mismatch:thread_source")
+        if str(rollout_evidence.get("model") or "") != effective_model:
+            blockers.append("review_artifact_rollout_recomputed_mismatch:model")
+        if str(rollout_evidence.get("reasoning_effort") or "") != effective_reasoning:
+            blockers.append("review_artifact_rollout_recomputed_mismatch:reasoning_effort")
+        rollout_tier = _canonical_review_service_tier(rollout_evidence.get("service_tier"))
+        if rollout_tier and not _review_service_tier_matches(rollout_tier, effective_tier):
+            blockers.append("review_artifact_rollout_recomputed_mismatch:service_tier")
+        if list(rollout_evidence.get("model_reroutes") or []) != claimed_reroutes:
+            blockers.append("review_artifact_rollout_recomputed_mismatch:model_reroutes")
+        if thread_id and thread_id not in str(session.get("rollout_path") or ""):
+            blockers.append("review_artifact_rollout_thread_mismatch")
+
+    expected_effective_source: dict[str, list[str]] = {}
+    rollout_sources = dict(rollout_evidence.get("source") or {})
+    for field in ("model", "reasoning_effort", "service_tier"):
+        expected_effective_source[field] = [
+            _INDEPENDENT_REVIEW_APP_SERVER_EFFECTIVE_SOURCE,
+            *list(rollout_sources.get(field) or []),
+        ]
+    if effective.get("source") != expected_effective_source:
+        blockers.append("review_artifact_effective_config_v3_effective_source_mismatch")
+
+    if prompt_raw is not None and raw_output is not None and rollout_raw is not None:
+        recomputed_causal, causal_blockers = _parse_independent_review_causal_binding(
+            rollout_raw=rollout_raw,
+            prompt_raw=prompt_raw,
+            raw_output=raw_output,
+            expected_thread_id=thread_id,
+            expected_session_source=session_source,
+            session_source_field="session_source_matches_thread_start",
+            expected_thread_source=_INDEPENDENT_REVIEW_APP_SERVER_THREAD_SOURCE,
+        )
+        blockers.extend(causal_blockers)
+        for field in sorted(_INDEPENDENT_REVIEW_APP_SERVER_CAUSAL_FIELDS):
+            if causal_binding.get(field) != recomputed_causal.get(field):
+                blockers.append(f"review_artifact_causal_binding_recomputed_mismatch:{field}")
+    else:
+        blockers.append("review_artifact_causal_binding_evidence_incomplete")
+
+    blockers.extend(
+        _independent_review_scope_blockers(
+            scope=scope,
+            metadata=metadata,
+            root=root,
+            expected_title=expected_title,
+            required_files=required_files,
+            expected_scope_digest=expected_scope_digest,
+        )
+    )
+    return _dedupe_strings(blockers)
+
+
 def _read_independent_review_evidence_file(
     *, root: Path, path_text: str, expected_sha: str, blocker_prefix: str
 ) -> tuple[bytes | None, list[str]]:
@@ -1607,6 +1992,338 @@ def _independent_review_prompt_blockers(*, prompt_raw: bytes, scope: dict[str, A
         if context_sha != str(scope.get("extra_context_sha256") or ""):
             blockers.append("review_artifact_prompt_context_sha256_mismatch")
     return _dedupe_strings(blockers)
+
+
+def _independent_review_app_server_requests(
+    *,
+    root: Path,
+    configured: dict[str, str],
+    prompt: str,
+    thread_id: str,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    tier = _canonical_review_service_tier(configured.get("service_tier"))
+    initialize = {
+        "id": _INDEPENDENT_REVIEW_APP_SERVER_INITIALIZE_ID,
+        "method": "initialize",
+        "params": {
+            "capabilities": {"experimentalApi": True},
+            "clientInfo": {
+                "name": _INDEPENDENT_REVIEW_APP_SERVER_CLIENT_NAME,
+                "title": "Sourcing AI Agent independent review gate",
+                "version": _INDEPENDENT_REVIEW_APP_SERVER_CLIENT_VERSION,
+            }
+        },
+    }
+    thread_start = {
+        "id": _INDEPENDENT_REVIEW_APP_SERVER_THREAD_START_ID,
+        "method": "thread/start",
+        "params": {
+            "allowProviderModelFallback": False,
+            "approvalPolicy": "never",
+            "approvalsReviewer": "user",
+            "config": {"model_reasoning_effort": configured.get("reasoning_effort", "")},
+            "cwd": str(root.resolve()),
+            "ephemeral": False,
+            "model": configured.get("model", ""),
+            "runtimeWorkspaceRoots": [str(root.resolve())],
+            "sandbox": "read-only",
+            "serviceName": _INDEPENDENT_REVIEW_APP_SERVER_SERVICE_NAME,
+            "serviceTier": tier,
+            "threadSource": _INDEPENDENT_REVIEW_APP_SERVER_THREAD_SOURCE,
+        },
+    }
+    turn_start = {
+        "id": _INDEPENDENT_REVIEW_APP_SERVER_TURN_START_ID,
+        "method": "turn/start",
+        "params": {
+            "approvalPolicy": "never",
+            "approvalsReviewer": "user",
+            "cwd": str(root.resolve()),
+            "effort": configured.get("reasoning_effort", ""),
+            "input": [{"type": "text", "text": prompt}],
+            "model": configured.get("model", ""),
+            "runtimeWorkspaceRoots": [str(root.resolve())],
+            "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
+            "serviceTier": tier,
+            "threadId": thread_id,
+        },
+    }
+    return initialize, thread_start, turn_start
+
+
+def _parse_independent_review_app_server_transcript(
+    *,
+    transcript_raw: bytes,
+    configured: dict[str, str],
+    root: Path,
+    prompt_raw: bytes,
+    raw_output: bytes,
+) -> tuple[dict[str, Any], list[str]]:
+    blockers: list[str] = []
+    transcript_json_valid = True
+    records: list[dict[str, Any]] = []
+    try:
+        transcript_text = transcript_raw.decode("utf-8")
+    except UnicodeDecodeError:
+        transcript_text = transcript_raw.decode("utf-8", errors="replace")
+        transcript_json_valid = False
+        blockers.append("review_artifact_transcript_invalid_utf8")
+    for line_number, raw_line in enumerate(transcript_text.splitlines(), start=1):
+        if not raw_line.strip():
+            continue
+        try:
+            raw_record = json.loads(raw_line)
+        except (TypeError, ValueError):
+            transcript_json_valid = False
+            blockers.append(f"review_artifact_transcript_invalid_json:{line_number}")
+            continue
+        if not isinstance(raw_record, dict) or set(raw_record) != {"direction", "message"}:
+            transcript_json_valid = False
+            blockers.append(f"review_artifact_transcript_invalid_record:{line_number}")
+            continue
+        if raw_record.get("direction") not in {"client", "server"} or not isinstance(raw_record.get("message"), dict):
+            transcript_json_valid = False
+            blockers.append(f"review_artifact_transcript_invalid_record:{line_number}")
+            continue
+        records.append(
+            {
+                "direction": str(raw_record["direction"]),
+                "message": dict(raw_record["message"]),
+            }
+        )
+    client_messages = [dict(record["message"]) for record in records if record["direction"] == "client"]
+    server_messages = [dict(record["message"]) for record in records if record["direction"] == "server"]
+
+    def client_requests(method: str) -> list[dict[str, Any]]:
+        return [message for message in client_messages if str(message.get("method") or "") == method]
+
+    def server_responses(request_id: str) -> list[dict[str, Any]]:
+        return [message for message in server_messages if str(message.get("id") or "") == request_id]
+
+    initialize_requests = client_requests("initialize")
+    initialized_notifications = [
+        message for message in client_messages if str(message.get("method") or "") == "initialized"
+    ]
+    thread_requests = client_requests("thread/start")
+    turn_requests = client_requests("turn/start")
+    initialize_responses = server_responses(_INDEPENDENT_REVIEW_APP_SERVER_INITIALIZE_ID)
+    thread_responses = server_responses(_INDEPENDENT_REVIEW_APP_SERVER_THREAD_START_ID)
+    turn_responses = server_responses(_INDEPENDENT_REVIEW_APP_SERVER_TURN_START_ID)
+
+    thread_result_raw = thread_responses[0].get("result") if len(thread_responses) == 1 else None
+    thread_result = dict(thread_result_raw) if isinstance(thread_result_raw, dict) else {}
+    thread_raw = thread_result.get("thread")
+    thread = dict(thread_raw) if isinstance(thread_raw, dict) else {}
+    thread_id = str(thread.get("id") or "").strip()
+    session_id = str(thread.get("sessionId") or "").strip()
+    settings = {
+        "model": str(thread_result.get("model") or "").strip(),
+        "reasoning_effort": str(thread_result.get("reasoningEffort") or "").strip(),
+        "service_tier": _canonical_review_service_tier(thread_result.get("serviceTier")),
+    }
+
+    turn_result_raw = turn_responses[0].get("result") if len(turn_responses) == 1 else None
+    turn_result = dict(turn_result_raw) if isinstance(turn_result_raw, dict) else {}
+    started_turn_raw = turn_result.get("turn")
+    started_turn = dict(started_turn_raw) if isinstance(started_turn_raw, dict) else {}
+    turn_id = str(started_turn.get("id") or "").strip()
+
+    completed_notifications = [
+        message
+        for message in server_messages
+        if str(message.get("method") or "") == "turn/completed"
+        and isinstance(message.get("params"), dict)
+        and str(dict(message["params"]).get("threadId") or "").strip() == thread_id
+    ]
+    completed_params = (
+        dict(completed_notifications[0]["params"])
+        if len(completed_notifications) == 1 and isinstance(completed_notifications[0].get("params"), dict)
+        else {}
+    )
+    completed_turn_raw = completed_params.get("turn")
+    completed_turn = dict(completed_turn_raw) if isinstance(completed_turn_raw, dict) else {}
+
+    completed_agent_items: list[dict[str, Any]] = []
+    for message in server_messages:
+        if str(message.get("method") or "") != "item/completed" or not isinstance(message.get("params"), dict):
+            continue
+        params = dict(message["params"])
+        item_raw = params.get("item")
+        item = dict(item_raw) if isinstance(item_raw, dict) else {}
+        if (
+            str(params.get("threadId") or "").strip() == thread_id
+            and str(params.get("turnId") or "").strip() == turn_id
+            and str(item.get("type") or "") == "agentMessage"
+            and str(item.get("phase") or "") == "final_answer"
+        ):
+            completed_agent_items.append(item)
+    completed_items_raw = completed_turn.get("items")
+    completed_items = completed_items_raw if isinstance(completed_items_raw, list) else []
+    turn_agent_items = [
+        dict(item)
+        for item in completed_items
+        if isinstance(item, dict)
+        and str(item.get("type") or "") == "agentMessage"
+        and str(item.get("phase") or "") == "final_answer"
+    ]
+    final_item = turn_agent_items[0] if len(turn_agent_items) == 1 else {}
+    final_text = str(final_item.get("text") or "")
+    try:
+        prompt = prompt_raw.decode("utf-8")
+        expected_output = raw_output.decode("utf-8")
+    except UnicodeDecodeError:
+        prompt = ""
+        expected_output = ""
+        blockers.append("review_artifact_transcript_text_invalid_utf8")
+    normalized_expected = _review_normalize_trailing_newlines(expected_output)
+
+    expected_initialize, expected_thread, expected_turn = _independent_review_app_server_requests(
+        root=root,
+        configured=configured,
+        prompt=prompt,
+        thread_id=thread_id,
+    )
+    request_settings_exact = client_messages == [
+        expected_initialize,
+        {"method": "initialized"},
+        expected_thread,
+        expected_turn,
+    ]
+    sandbox = dict(thread_result["sandbox"]) if isinstance(thread_result.get("sandbox"), dict) else {}
+    active_read_only = (
+        str(sandbox.get("type") or "") == "readOnly"
+        and sandbox.get("networkAccess") is False
+        and thread_result.get("approvalPolicy") == "never"
+        and thread_result.get("approvalsReviewer") == "user"
+        and Path(str(thread_result.get("cwd") or "")).resolve() == root.resolve()
+    )
+    thread_started_notifications = [
+        message
+        for message in server_messages
+        if str(message.get("method") or "") == "thread/started" and isinstance(message.get("params"), dict)
+    ]
+    notified_thread_raw = (
+        dict(thread_started_notifications[0]["params"]).get("thread")
+        if len(thread_started_notifications) == 1
+        else None
+    )
+    notified_thread = dict(notified_thread_raw) if isinstance(notified_thread_raw, dict) else {}
+    thread_identity_exact = (
+        bool(thread_id)
+        and bool(session_id)
+        and thread_id == session_id
+        and len(thread_started_notifications) == 1
+        and str(notified_thread.get("id") or "").strip() == thread_id
+        and str(notified_thread.get("sessionId") or "").strip() == session_id
+        and notified_thread.get("source") == thread.get("source")
+        and notified_thread.get("threadSource") == thread.get("threadSource")
+    )
+    session_source = str(thread.get("source") or "").strip()
+    thread_source_exact = (
+        bool(session_source) and thread.get("threadSource") == _INDEPENDENT_REVIEW_APP_SERVER_THREAD_SOURCE
+    )
+    turn_started_notifications = [
+        message
+        for message in server_messages
+        if str(message.get("method") or "") == "turn/started" and isinstance(message.get("params"), dict)
+    ]
+    notified_turn_params = dict(turn_started_notifications[0]["params"]) if len(turn_started_notifications) == 1 else {}
+    notified_turn_raw = notified_turn_params.get("turn")
+    notified_turn = dict(notified_turn_raw) if isinstance(notified_turn_raw, dict) else {}
+    turn_identity_exact = (
+        bool(turn_id)
+        and str(started_turn.get("id") or "").strip() == turn_id
+        and len(turn_started_notifications) == 1
+        and str(notified_turn_params.get("threadId") or "").strip() == thread_id
+        and str(notified_turn.get("id") or "").strip() == turn_id
+        and str(completed_params.get("threadId") or "").strip() == thread_id
+        and str(completed_turn.get("id") or "").strip() == turn_id
+    )
+    active_settings_exact = (
+        settings["model"] == configured.get("model")
+        and settings["reasoning_effort"] == configured.get("reasoning_effort")
+        and _review_service_tier_matches(str(configured.get("service_tier") or ""), settings["service_tier"])
+    )
+    final_agent_message_exact = (
+        len(completed_agent_items) == 1
+        and len(turn_agent_items) == 1
+        and str(completed_agent_items[0].get("id") or "") == str(final_item.get("id") or "")
+        and _review_normalize_trailing_newlines(str(completed_agent_items[0].get("text") or "")) == normalized_expected
+        and _review_normalize_trailing_newlines(final_text) == normalized_expected
+        and bool(normalized_expected)
+    )
+    reroutes: list[dict[str, str]] = []
+    for message in server_messages:
+        if str(message.get("method") or "") != "model/rerouted" or not isinstance(message.get("params"), dict):
+            continue
+        params = dict(message["params"])
+        reroutes.append(
+            {
+                "from_model": str(params.get("fromModel") or "").strip(),
+                "to_model": str(params.get("toModel") or "").strip(),
+            }
+        )
+    protocol_errors = [
+        message for message in server_messages if "error" in message or str(message.get("method") or "") == "error"
+    ]
+    settings_consistent = True
+    for message in server_messages:
+        if str(message.get("method") or "") != "thread/settings/updated" or not isinstance(message.get("params"), dict):
+            continue
+        params = dict(message["params"])
+        settings_raw = params.get("threadSettings")
+        observed = dict(settings_raw) if isinstance(settings_raw, dict) else {}
+        if (
+            str(params.get("threadId") or "").strip() != thread_id
+            or str(observed.get("model") or "").strip() != settings["model"]
+            or str(observed.get("effort") or "").strip() != settings["reasoning_effort"]
+            or not _review_service_tier_matches(str(observed.get("serviceTier") or ""), settings["service_tier"])
+        ):
+            settings_consistent = False
+
+    binding: dict[str, Any] = {
+        "thread_id": thread_id,
+        "session_id": session_id,
+        "turn_id": turn_id,
+        "prompt_sha256": hashlib.sha256(prompt_raw).hexdigest(),
+        "normalized_final_output_sha256": hashlib.sha256(normalized_expected.encode("utf-8")).hexdigest(),
+        "transcript_json_valid": transcript_json_valid,
+        "single_initialize_request": initialize_requests == [expected_initialize],
+        "single_initialize_response": len(initialize_responses) == 1 and "result" in initialize_responses[0],
+        "single_initialized_notification": initialized_notifications == [{"method": "initialized"}],
+        "single_thread_start_request": len(thread_requests) == 1,
+        "single_thread_start_response": len(thread_responses) == 1 and bool(thread_result),
+        "single_turn_start_request": len(turn_requests) == 1,
+        "single_turn_start_response": len(turn_responses) == 1 and bool(started_turn),
+        "request_settings_exact": request_settings_exact,
+        "active_settings_exact": active_settings_exact,
+        "active_read_only": active_read_only,
+        "thread_identity_exact": thread_identity_exact,
+        "thread_source_exact": thread_source_exact,
+        "turn_identity_exact": turn_identity_exact,
+        "single_turn_completed": len(completed_notifications) == 1,
+        "turn_status_completed": completed_turn.get("status") == "completed",
+        "prompt_request_exact": request_settings_exact,
+        "final_agent_message_exact": final_agent_message_exact,
+        "no_protocol_error": not protocol_errors,
+        "no_model_reroute": not reroutes,
+        "thread_settings_consistent": settings_consistent,
+    }
+    for field in _INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS:
+        if binding[field] is not True:
+            blockers.append(f"review_artifact_transcript_binding_invalid:{field}")
+    if any(not str(binding.get(field) or "").strip() for field in ("thread_id", "session_id", "turn_id")):
+        blockers.append("review_artifact_transcript_binding_incomplete_identity")
+    return {
+        "settings": settings,
+        "thread_id": thread_id,
+        "session_id": session_id,
+        "session_source": session_source,
+        "turn_id": turn_id,
+        "final_output": final_text.encode("utf-8"),
+        "binding": binding,
+        "model_reroutes": reroutes,
+    }, _dedupe_strings(blockers)
 
 
 def _independent_review_events_blockers(*, events_raw: bytes, expected_thread_id: str) -> list[str]:
@@ -1667,6 +2384,9 @@ def _parse_independent_review_causal_binding(
     prompt_raw: bytes,
     raw_output: bytes,
     expected_thread_id: str,
+    expected_session_source: str = "exec",
+    session_source_field: str = "session_source_exec",
+    expected_thread_source: str = "",
 ) -> tuple[dict[str, Any], list[str]]:
     rollout_json_valid = True
     text_utf8_valid = True
@@ -1679,6 +2399,7 @@ def _parse_independent_review_causal_binding(
         text_utf8_valid = False
     normalized_final = _review_normalize_trailing_newlines(final_output)
     root_session_sources: list[str] = []
+    root_thread_sources: list[str] = []
     task_starts: list[tuple[int, str]] = []
     task_completes: list[tuple[int, str, str]] = []
     abort_seen = False
@@ -1704,6 +2425,7 @@ def _parse_independent_review_causal_binding(
             if session_id == expected_thread_id:
                 source = event_payload.get("source")
                 root_session_sources.append(source if isinstance(source, str) else "")
+                root_thread_sources.append(str(event_payload.get("thread_source") or "").strip())
         elif kind == "task_started":
             task_starts.append((line_number, str(event_payload.get("turn_id") or "").strip()))
         elif kind == "task_complete":
@@ -1756,13 +2478,13 @@ def _parse_independent_review_causal_binding(
         ]
         return single_task_turn and len(matches) == 1
 
-    binding = {
+    binding: dict[str, Any] = {
         "turn_id": turn_id,
         "prompt_sha256": hashlib.sha256(prompt_raw).hexdigest(),
         "normalized_final_output_sha256": hashlib.sha256(normalized_final.encode("utf-8")).hexdigest(),
         "rollout_json_valid": rollout_json_valid,
         "text_utf8_valid": text_utf8_valid,
-        "session_source_exec": root_session_sources == ["exec"],
+        session_source_field: root_session_sources == [expected_session_source],
         "single_task_turn": single_task_turn,
         "no_abort": not abort_seen,
         "prompt_response_item_exact": exact_between(response_user_messages, prompt),
@@ -1783,11 +2505,17 @@ def _parse_independent_review_causal_binding(
             and _review_normalize_trailing_newlines(task_completes[0][2]) == normalized_final
         ),
     }
+    if expected_thread_source:
+        binding["session_thread_source_exact"] = root_thread_sources == [expected_thread_source]
     blockers: list[str] = []
     blocker_by_field = {
         "rollout_json_valid": "review_artifact_rollout_causal_invalid_json",
         "text_utf8_valid": "review_artifact_rollout_causal_invalid_utf8",
-        "session_source_exec": "review_artifact_rollout_causal_session_source_not_exec",
+        session_source_field: (
+            "review_artifact_rollout_causal_session_source_not_exec"
+            if session_source_field == "session_source_exec" and expected_session_source == "exec"
+            else "review_artifact_rollout_causal_session_source_mismatch"
+        ),
         "single_task_turn": "review_artifact_rollout_causal_turn_mismatch",
         "no_abort": "review_artifact_rollout_causal_abort_present",
         "prompt_response_item_exact": "review_artifact_rollout_causal_prompt_response_item_mismatch",
@@ -1796,6 +2524,8 @@ def _parse_independent_review_causal_binding(
         "final_event_message_exact": "review_artifact_rollout_causal_final_event_message_mismatch",
         "task_complete_final_exact": "review_artifact_rollout_causal_task_complete_mismatch",
     }
+    if expected_thread_source:
+        blocker_by_field["session_thread_source_exact"] = "review_artifact_rollout_causal_thread_source_mismatch"
     for field, blocker in blocker_by_field.items():
         if binding[field] is not True:
             blockers.append(blocker)
@@ -1910,6 +2640,121 @@ def _parse_independent_review_rollout(*, rollout_raw: bytes, configured_model: s
         "session_id": session_id,
         "thread_id": session_id,
         "codex_cli_version": next(iter(cli_versions), ""),
+        "model": state.get("model", ""),
+        "reasoning_effort": state.get("reasoning_effort", ""),
+        "service_tier": state.get("service_tier", ""),
+        "source": source,
+        "model_reroutes": reroutes,
+    }, blockers
+
+
+def _parse_independent_review_rollout_v3(
+    *, rollout_raw: bytes, configured_model: str
+) -> tuple[dict[str, Any], list[str]]:
+    state: dict[str, str] = {}
+    source: dict[str, list[str]] = {"model": [], "reasoning_effort": [], "service_tier": []}
+    rollout_ids: set[str] = set()
+    session_ids: set[str] = set()
+    cli_versions: set[str] = set()
+    session_sources: set[str] = set()
+    thread_sources: set[str] = set()
+    root_lineage_valid = True
+    reroutes: list[dict[str, str]] = []
+    blockers: list[str] = []
+    for line_number, raw_line in enumerate(rollout_raw.decode("utf-8", errors="replace").splitlines(), start=1):
+        if not raw_line.strip():
+            continue
+        try:
+            event = json.loads(raw_line)
+        except (TypeError, ValueError):
+            blockers.append(f"review_artifact_rollout_invalid_json:{line_number}")
+            continue
+        if not isinstance(event, dict):
+            blockers.append(f"review_artifact_rollout_invalid_event:{line_number}")
+            continue
+        kind, event_payload = _review_rollout_event_kind_and_payload(event)
+        if kind == "session_meta":
+            rollout_id = str(event_payload.get("id") or "").strip()
+            session_id = str(event_payload.get("session_id") or "").strip()
+            cli_version = str(event_payload.get("cli_version") or "").strip()
+            session_source = event_payload.get("source")
+            thread_source = str(event_payload.get("thread_source") or "").strip()
+            if rollout_id:
+                rollout_ids.add(rollout_id)
+            if session_id:
+                session_ids.add(session_id)
+            if cli_version:
+                cli_versions.add(cli_version)
+            if isinstance(session_source, str) and session_source.strip():
+                session_sources.add(session_source.strip())
+            if thread_source:
+                thread_sources.add(thread_source)
+            if str(event_payload.get("parent_thread_id") or "").strip() or str(
+                event_payload.get("forked_from_id") or ""
+            ).strip():
+                root_lineage_valid = False
+            continue
+        if kind == "model_reroute":
+            containers = [event_payload]
+            for key in ("reroute", "model_reroute"):
+                value = event_payload.get(key)
+                if isinstance(value, dict):
+                    containers.insert(0, dict(value))
+            from_model = _review_rollout_first_value(
+                containers, ("from_model", "source_model", "previous_model", "original_model", "from")
+            )
+            to_model = _review_rollout_first_value(
+                containers, ("to_model", "target_model", "new_model", "rerouted_model", "to")
+            )
+            current_model = state.get("model") or configured_model
+            if not from_model or not to_model or from_model != current_model:
+                blockers.append("review_artifact_rollout_ambiguous_model_reroute")
+            else:
+                state["model"] = to_model
+                if "model_reroute" not in source["model"]:
+                    source["model"].append("model_reroute")
+                reroutes.append({"from_model": from_model, "to_model": to_model})
+            continue
+        for field, value in _review_rollout_settings(kind, event_payload).items():
+            previous = state.get(field, "")
+            matches = (
+                _review_service_tier_matches(previous, value)
+                if field == "service_tier" and previous
+                else previous == value
+            )
+            if previous and not matches:
+                blockers.append(f"review_artifact_rollout_conflicting_{field}")
+                continue
+            state[field] = _canonical_review_service_tier(value) if field == "service_tier" else value
+            if kind not in source[field]:
+                source[field].append(kind)
+    if len(rollout_ids) != 1:
+        blockers.append("review_artifact_rollout_invalid_thread_identity")
+    if len(session_ids) != 1:
+        blockers.append("review_artifact_rollout_invalid_session_identity")
+    if len(cli_versions) != 1:
+        blockers.append("review_artifact_rollout_invalid_cli_version")
+    if len(session_sources) != 1:
+        blockers.append("review_artifact_rollout_invalid_session_source")
+    if len(thread_sources) != 1:
+        blockers.append("review_artifact_rollout_invalid_thread_source")
+    if not root_lineage_valid:
+        blockers.append("review_artifact_rollout_not_root_session")
+    if reroutes:
+        blockers.append("review_artifact_rollout_model_reroute_not_allowed")
+    if (
+        not state.get("model")
+        or not source["model"]
+        or not state.get("reasoning_effort")
+        or not source["reasoning_effort"]
+    ):
+        blockers.append("review_artifact_rollout_incomplete_effective_settings")
+    return {
+        "rollout_id": next(iter(rollout_ids), ""),
+        "session_id": next(iter(session_ids), ""),
+        "codex_cli_version": next(iter(cli_versions), ""),
+        "session_source": next(iter(session_sources), ""),
+        "thread_source": next(iter(thread_sources), ""),
         "model": state.get("model", ""),
         "reasoning_effort": state.get("reasoning_effort", ""),
         "service_tier": state.get("service_tier", ""),

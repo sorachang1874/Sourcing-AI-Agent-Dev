@@ -6,8 +6,10 @@ import datetime as dt
 import hashlib
 import json
 import os
+import selectors
 import shlex
 import subprocess
+import tempfile
 import time
 import tomllib
 from pathlib import Path
@@ -19,7 +21,15 @@ from sourcing_agent.runtime_asset_retention_prune import (
 )
 
 _INHERITED_VALUE_SENTINELS = {"", "auto", "default", "inherit"}
-_EFFECTIVE_CONFIG_CONTRACT_VERSION = "independent_review_effective_config_v2"
+_EFFECTIVE_CONFIG_CONTRACT_VERSION = "independent_review_effective_config_v3"
+_APP_SERVER_TRANSPORT = "app_server_stdio"
+_APP_SERVER_CLIENT_NAME = "sourcing-ai-agent-independent-review-gate"
+_APP_SERVER_CLIENT_VERSION = "3"
+_APP_SERVER_SERVICE_NAME = "sourcing-ai-agent-independent-review-gate"
+_APP_SERVER_THREAD_SOURCE = "sourcing-ai-agent-independent-review-v3"
+_APP_SERVER_INITIALIZE_ID = "review-initialize"
+_APP_SERVER_THREAD_START_ID = "review-thread-start"
+_APP_SERVER_TURN_START_ID = "review-turn-start"
 _ROLLOUT_SETTING_EVENT_TYPES = {
     "session_configured",
     "thread_settings_applied",
@@ -50,6 +60,32 @@ class EffectiveReviewerConfiguration(NamedTuple):
     model_reroutes: tuple[dict[str, str], ...]
 
 
+class AppServerTranscriptEvidence(NamedTuple):
+    settings: ReviewerSettings
+    thread_id: str
+    session_id: str
+    session_source: str
+    turn_id: str
+    final_output: bytes
+    binding: dict[str, object]
+    model_reroutes: tuple[dict[str, str], ...]
+
+
+class AppServerReviewResult(NamedTuple):
+    args: tuple[str, ...]
+    returncode: int
+    transcript_raw: bytes
+    stderr: str
+    evidence: AppServerTranscriptEvidence
+
+
+class AppServerReviewError(RuntimeError):
+    def __init__(self, message: str, *, transcript_raw: bytes = b"", stderr: str = "") -> None:
+        super().__init__(message)
+        self.transcript_raw = transcript_raw
+        self.stderr = stderr
+
+
 _CAUSAL_BINDING_BOOLEAN_FIELDS = (
     "rollout_json_valid",
     "text_utf8_valid",
@@ -61,6 +97,44 @@ _CAUSAL_BINDING_BOOLEAN_FIELDS = (
     "final_response_item_exact",
     "final_event_message_exact",
     "task_complete_final_exact",
+)
+
+_APP_SERVER_CAUSAL_BINDING_BOOLEAN_FIELDS = (
+    "rollout_json_valid",
+    "text_utf8_valid",
+    "session_source_matches_thread_start",
+    "session_thread_source_exact",
+    "single_task_turn",
+    "no_abort",
+    "prompt_response_item_exact",
+    "prompt_event_message_exact",
+    "final_response_item_exact",
+    "final_event_message_exact",
+    "task_complete_final_exact",
+)
+
+_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS = (
+    "transcript_json_valid",
+    "single_initialize_request",
+    "single_initialize_response",
+    "single_initialized_notification",
+    "single_thread_start_request",
+    "single_thread_start_response",
+    "single_turn_start_request",
+    "single_turn_start_response",
+    "request_settings_exact",
+    "active_settings_exact",
+    "active_read_only",
+    "thread_identity_exact",
+    "thread_source_exact",
+    "turn_identity_exact",
+    "single_turn_completed",
+    "turn_status_completed",
+    "prompt_request_exact",
+    "final_agent_message_exact",
+    "no_protocol_error",
+    "no_model_reroute",
+    "thread_settings_consistent",
 )
 
 
@@ -145,6 +219,525 @@ def _canonical_service_tier(value: object) -> str:
     return "priority" if normalized in {"fast", "priority"} else normalized
 
 
+def _canonical_json_line(payload: dict[str, object]) -> bytes:
+    return (json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
+
+
+def _app_server_requests(
+    *,
+    root: Path,
+    configured: ReviewerConfiguration,
+    prompt: str,
+    thread_id: str = "",
+) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
+    tier = _canonical_service_tier(configured.settings.service_tier)
+    initialize = {
+        "id": _APP_SERVER_INITIALIZE_ID,
+        "method": "initialize",
+        "params": {
+            "capabilities": {"experimentalApi": True},
+            "clientInfo": {
+                "name": _APP_SERVER_CLIENT_NAME,
+                "title": "Sourcing AI Agent independent review gate",
+                "version": _APP_SERVER_CLIENT_VERSION,
+            }
+        },
+    }
+    thread_start = {
+        "id": _APP_SERVER_THREAD_START_ID,
+        "method": "thread/start",
+        "params": {
+            "allowProviderModelFallback": False,
+            "approvalPolicy": "never",
+            "approvalsReviewer": "user",
+            "config": {"model_reasoning_effort": configured.settings.reasoning_effort},
+            "cwd": str(root.resolve()),
+            "ephemeral": False,
+            "model": configured.settings.model,
+            "runtimeWorkspaceRoots": [str(root.resolve())],
+            "sandbox": "read-only",
+            "serviceName": _APP_SERVER_SERVICE_NAME,
+            "serviceTier": tier,
+            "threadSource": _APP_SERVER_THREAD_SOURCE,
+        },
+    }
+    turn_start = {
+        "id": _APP_SERVER_TURN_START_ID,
+        "method": "turn/start",
+        "params": {
+            "approvalPolicy": "never",
+            "approvalsReviewer": "user",
+            "cwd": str(root.resolve()),
+            "effort": configured.settings.reasoning_effort,
+            "input": [{"type": "text", "text": prompt}],
+            "model": configured.settings.model,
+            "runtimeWorkspaceRoots": [str(root.resolve())],
+            "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
+            "serviceTier": tier,
+            "threadId": thread_id,
+        },
+    }
+    return initialize, thread_start, turn_start
+
+
+def _transcript_messages(transcript_raw: bytes) -> tuple[list[dict[str, object]], bool]:
+    records: list[dict[str, object]] = []
+    valid = True
+    for raw_line in transcript_raw.decode("utf-8", errors="replace").splitlines():
+        if not raw_line.strip():
+            continue
+        try:
+            record = json.loads(raw_line)
+        except (TypeError, ValueError):
+            valid = False
+            continue
+        if not isinstance(record, dict) or record.get("direction") not in {"client", "server"}:
+            valid = False
+            continue
+        message = record.get("message")
+        if not isinstance(message, dict):
+            valid = False
+            continue
+        records.append({"direction": str(record["direction"]), "message": dict(message)})
+    return records, valid
+
+
+def _parse_app_server_transcript(
+    *,
+    transcript_raw: bytes,
+    configured: ReviewerConfiguration,
+    root: Path,
+    prompt_raw: bytes,
+    raw_output: bytes | None = None,
+) -> AppServerTranscriptEvidence:
+    records, transcript_json_valid = _transcript_messages(transcript_raw)
+    client_messages = [dict(record["message"]) for record in records if record["direction"] == "client"]
+    server_messages = [dict(record["message"]) for record in records if record["direction"] == "server"]
+
+    def client_requests(method: str) -> list[dict[str, object]]:
+        return [message for message in client_messages if str(message.get("method") or "") == method]
+
+    def server_responses(request_id: str) -> list[dict[str, object]]:
+        return [message for message in server_messages if str(message.get("id") or "") == request_id]
+
+    initialize_requests = client_requests("initialize")
+    initialized_notifications = client_requests("initialized")
+    thread_requests = client_requests("thread/start")
+    turn_requests = client_requests("turn/start")
+    initialize_responses = server_responses(_APP_SERVER_INITIALIZE_ID)
+    thread_responses = server_responses(_APP_SERVER_THREAD_START_ID)
+    turn_responses = server_responses(_APP_SERVER_TURN_START_ID)
+
+    thread_result_raw = thread_responses[0].get("result") if len(thread_responses) == 1 else None
+    thread_result = dict(thread_result_raw) if isinstance(thread_result_raw, dict) else {}
+    thread_raw = thread_result.get("thread")
+    thread = dict(thread_raw) if isinstance(thread_raw, dict) else {}
+    thread_id = str(thread.get("id") or "").strip()
+    session_id = str(thread.get("sessionId") or "").strip()
+    active_settings = ReviewerSettings(
+        model=str(thread_result.get("model") or "").strip(),
+        reasoning_effort=str(thread_result.get("reasoningEffort") or "").strip(),
+        service_tier=_canonical_service_tier(thread_result.get("serviceTier")),
+    )
+
+    turn_result_raw = turn_responses[0].get("result") if len(turn_responses) == 1 else None
+    turn_result = dict(turn_result_raw) if isinstance(turn_result_raw, dict) else {}
+    started_turn_raw = turn_result.get("turn")
+    started_turn = dict(started_turn_raw) if isinstance(started_turn_raw, dict) else {}
+    turn_id = str(started_turn.get("id") or "").strip()
+
+    completed_notifications = [
+        message
+        for message in server_messages
+        if str(message.get("method") or "") == "turn/completed"
+        and isinstance(message.get("params"), dict)
+        and str(dict(message["params"]).get("threadId") or "").strip() == thread_id
+    ]
+    completed_params = (
+        dict(completed_notifications[0]["params"])
+        if len(completed_notifications) == 1 and isinstance(completed_notifications[0].get("params"), dict)
+        else {}
+    )
+    completed_turn_raw = completed_params.get("turn")
+    completed_turn = dict(completed_turn_raw) if isinstance(completed_turn_raw, dict) else {}
+
+    completed_agent_items: list[dict[str, object]] = []
+    for message in server_messages:
+        if str(message.get("method") or "") != "item/completed" or not isinstance(message.get("params"), dict):
+            continue
+        params = dict(message["params"])
+        item_raw = params.get("item")
+        item = dict(item_raw) if isinstance(item_raw, dict) else {}
+        if (
+            str(params.get("threadId") or "").strip() == thread_id
+            and str(params.get("turnId") or "").strip() == turn_id
+            and str(item.get("type") or "") == "agentMessage"
+            and str(item.get("phase") or "") == "final_answer"
+        ):
+            completed_agent_items.append(item)
+    turn_agent_items = [
+        dict(item)
+        for item in list(completed_turn.get("items") or [])
+        if isinstance(item, dict)
+        and str(item.get("type") or "") == "agentMessage"
+        and str(item.get("phase") or "") == "final_answer"
+    ]
+    final_item = turn_agent_items[0] if len(turn_agent_items) == 1 else {}
+    final_text = str(final_item.get("text") or "")
+    final_output = final_text.encode("utf-8")
+    normalized_expected = _normalize_trailing_newlines((raw_output or final_output).decode("utf-8", errors="replace"))
+
+    expected_initialize, expected_thread, expected_turn = _app_server_requests(
+        root=root,
+        configured=configured,
+        prompt=prompt_raw.decode("utf-8", errors="replace"),
+        thread_id=thread_id,
+    )
+    request_settings_exact = (
+        len(thread_requests) == 1
+        and thread_requests[0] == expected_thread
+        and len(turn_requests) == 1
+        and turn_requests[0] == expected_turn
+        and client_messages == [
+            expected_initialize,
+            {"method": "initialized"},
+            expected_thread,
+            expected_turn,
+        ]
+    )
+    sandbox = dict(thread_result.get("sandbox")) if isinstance(thread_result.get("sandbox"), dict) else {}
+    active_read_only = (
+        str(sandbox.get("type") or "") == "readOnly"
+        and sandbox.get("networkAccess") is False
+        and thread_result.get("approvalPolicy") == "never"
+        and thread_result.get("approvalsReviewer") == "user"
+        and Path(str(thread_result.get("cwd") or "")).resolve() == root.resolve()
+    )
+    thread_started_notifications = [
+        message
+        for message in server_messages
+        if str(message.get("method") or "") == "thread/started" and isinstance(message.get("params"), dict)
+    ]
+    notified_thread_raw = (
+        dict(thread_started_notifications[0]["params"]).get("thread")
+        if len(thread_started_notifications) == 1
+        else None
+    )
+    notified_thread = dict(notified_thread_raw) if isinstance(notified_thread_raw, dict) else {}
+    thread_identity_exact = (
+        bool(thread_id)
+        and bool(session_id)
+        and thread_id == session_id
+        and len(thread_started_notifications) == 1
+        and str(notified_thread.get("id") or "").strip() == thread_id
+        and str(notified_thread.get("sessionId") or "").strip() == session_id
+        and notified_thread.get("source") == thread.get("source")
+        and notified_thread.get("threadSource") == thread.get("threadSource")
+    )
+    session_source = str(thread.get("source") or "").strip()
+    thread_source_exact = bool(session_source) and thread.get("threadSource") == _APP_SERVER_THREAD_SOURCE
+    turn_started_notifications = [
+        message
+        for message in server_messages
+        if str(message.get("method") or "") == "turn/started" and isinstance(message.get("params"), dict)
+    ]
+    notified_turn_params = (
+        dict(turn_started_notifications[0]["params"]) if len(turn_started_notifications) == 1 else {}
+    )
+    notified_turn_raw = notified_turn_params.get("turn")
+    notified_turn = dict(notified_turn_raw) if isinstance(notified_turn_raw, dict) else {}
+    turn_identity_exact = (
+        bool(turn_id)
+        and str(started_turn.get("id") or "").strip() == turn_id
+        and len(turn_started_notifications) == 1
+        and str(notified_turn_params.get("threadId") or "").strip() == thread_id
+        and str(notified_turn.get("id") or "").strip() == turn_id
+        and str(completed_params.get("threadId") or "").strip() == thread_id
+        and str(completed_turn.get("id") or "").strip() == turn_id
+    )
+    active_settings_exact = (
+        active_settings.model == configured.settings.model
+        and active_settings.reasoning_effort == configured.settings.reasoning_effort
+        and _service_tier_matches(configured.settings.service_tier, active_settings.service_tier)
+    )
+
+    final_agent_message_exact = (
+        len(completed_agent_items) == 1
+        and len(turn_agent_items) == 1
+        and str(completed_agent_items[0].get("id") or "") == str(final_item.get("id") or "")
+        and _normalize_trailing_newlines(str(completed_agent_items[0].get("text") or "")) == normalized_expected
+        and _normalize_trailing_newlines(final_text) == normalized_expected
+        and bool(normalized_expected)
+    )
+    reroutes: list[dict[str, str]] = []
+    for message in server_messages:
+        if str(message.get("method") or "") != "model/rerouted" or not isinstance(message.get("params"), dict):
+            continue
+        params = dict(message["params"])
+        reroutes.append(
+            {
+                "from_model": str(params.get("fromModel") or "").strip(),
+                "to_model": str(params.get("toModel") or "").strip(),
+            }
+        )
+    protocol_errors = [
+        message
+        for message in server_messages
+        if "error" in message or str(message.get("method") or "") == "error"
+    ]
+    settings_consistent = True
+    for message in server_messages:
+        if str(message.get("method") or "") != "thread/settings/updated" or not isinstance(
+            message.get("params"), dict
+        ):
+            continue
+        params = dict(message["params"])
+        settings_raw = params.get("threadSettings")
+        settings = dict(settings_raw) if isinstance(settings_raw, dict) else {}
+        observed = ReviewerSettings(
+            model=str(settings.get("model") or "").strip(),
+            reasoning_effort=str(settings.get("effort") or "").strip(),
+            service_tier=_canonical_service_tier(settings.get("serviceTier")),
+        )
+        if (
+            str(params.get("threadId") or "").strip() != thread_id
+            or observed.model != active_settings.model
+            or observed.reasoning_effort != active_settings.reasoning_effort
+            or not _service_tier_matches(observed.service_tier, active_settings.service_tier)
+        ):
+            settings_consistent = False
+
+    binding: dict[str, object] = {
+        "thread_id": thread_id,
+        "session_id": session_id,
+        "turn_id": turn_id,
+        "prompt_sha256": hashlib.sha256(prompt_raw).hexdigest(),
+        "normalized_final_output_sha256": hashlib.sha256(normalized_expected.encode("utf-8")).hexdigest(),
+        "transcript_json_valid": transcript_json_valid,
+        "single_initialize_request": initialize_requests == [expected_initialize],
+        "single_initialize_response": len(initialize_responses) == 1 and "result" in initialize_responses[0],
+        "single_initialized_notification": initialized_notifications == [{"method": "initialized"}],
+        "single_thread_start_request": len(thread_requests) == 1,
+        "single_thread_start_response": len(thread_responses) == 1 and bool(thread_result),
+        "single_turn_start_request": len(turn_requests) == 1,
+        "single_turn_start_response": len(turn_responses) == 1 and bool(started_turn),
+        "request_settings_exact": request_settings_exact,
+        "active_settings_exact": active_settings_exact,
+        "active_read_only": active_read_only,
+        "thread_identity_exact": thread_identity_exact,
+        "thread_source_exact": thread_source_exact,
+        "turn_identity_exact": turn_identity_exact,
+        "single_turn_completed": len(completed_notifications) == 1,
+        "turn_status_completed": completed_turn.get("status") == "completed",
+        "prompt_request_exact": request_settings_exact,
+        "final_agent_message_exact": final_agent_message_exact,
+        "no_protocol_error": not protocol_errors,
+        "no_model_reroute": not reroutes,
+        "thread_settings_consistent": settings_consistent,
+    }
+    return AppServerTranscriptEvidence(
+        settings=active_settings,
+        thread_id=thread_id,
+        session_id=session_id,
+        session_source=session_source,
+        turn_id=turn_id,
+        final_output=final_output,
+        binding=binding,
+        model_reroutes=tuple(reroutes),
+    )
+
+
+def _app_server_transcript_binding_valid(binding: dict[str, object]) -> bool:
+    return all(binding.get(field) is True for field in _APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS) and all(
+        str(binding.get(field) or "").strip() for field in ("thread_id", "session_id", "turn_id")
+    )
+
+
+def _build_app_server_args() -> list[str]:
+    return ["codex", "--sandbox", "read-only", "app-server", "--strict-config", "--stdio"]
+
+
+def _run_app_server_review(
+    *,
+    root: Path,
+    configured: ReviewerConfiguration,
+    prompt_raw: bytes,
+    timeout_seconds: int,
+) -> AppServerReviewResult:
+    try:
+        prompt = prompt_raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RuntimeError("independent review prompt is not valid UTF-8") from exc
+    args = _build_app_server_args()
+    transcript = bytearray()
+    deadline = time.monotonic() + max(1, timeout_seconds)
+
+    with tempfile.TemporaryFile() as stderr_file:
+        process = subprocess.Popen(
+            args,
+            cwd=root,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=stderr_file,
+            text=False,
+            bufsize=0,
+        )
+        if process.stdin is None or process.stdout is None:
+            process.kill()
+            raise RuntimeError("Codex app-server did not expose stdio pipes")
+        selector = selectors.DefaultSelector()
+        selector.register(process.stdout, selectors.EVENT_READ)
+        stdout_buffer = bytearray()
+
+        def record(direction: str, message: dict[str, object]) -> None:
+            transcript.extend(_canonical_json_line({"direction": direction, "message": message}))
+
+        def send(message: dict[str, object]) -> None:
+            record("client", message)
+            process.stdin.write(_canonical_json_line(message))
+            process.stdin.flush()
+
+        def receive() -> dict[str, object]:
+            while b"\n" not in stdout_buffer:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(args, timeout_seconds, output=bytes(transcript))
+                ready = selector.select(remaining)
+                if not ready:
+                    raise subprocess.TimeoutExpired(args, timeout_seconds, output=bytes(transcript))
+                chunk = os.read(process.stdout.fileno(), 65536)
+                if not chunk:
+                    raise RuntimeError(f"Codex app-server exited before review completion (status {process.poll()})")
+                stdout_buffer.extend(chunk)
+            raw_line, _, remainder = stdout_buffer.partition(b"\n")
+            stdout_buffer.clear()
+            stdout_buffer.extend(remainder)
+            try:
+                message = json.loads(raw_line)
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError("Codex app-server emitted invalid JSON") from exc
+            if not isinstance(message, dict):
+                raise RuntimeError("Codex app-server emitted a non-object JSON message")
+            message = dict(message)
+            record("server", message)
+            if "id" in message and "method" in message:
+                raise RuntimeError(f"Codex app-server requested unsupported client action {message.get('method')!r}")
+            return message
+
+        def receive_response(request_id: str) -> dict[str, object]:
+            while True:
+                message = receive()
+                if str(message.get("id") or "") != request_id:
+                    continue
+                if "error" in message:
+                    raise RuntimeError(f"Codex app-server request {request_id!r} failed: {message['error']!r}")
+                result = message.get("result")
+                if not isinstance(result, dict):
+                    raise RuntimeError(f"Codex app-server request {request_id!r} returned no object result")
+                return dict(result)
+
+        try:
+            initialize, thread_start, _ = _app_server_requests(
+                root=root,
+                configured=configured,
+                prompt=prompt,
+            )
+            send(initialize)
+            receive_response(_APP_SERVER_INITIALIZE_ID)
+            send({"method": "initialized"})
+            send(thread_start)
+            thread_result = receive_response(_APP_SERVER_THREAD_START_ID)
+            thread_raw = thread_result.get("thread")
+            thread = dict(thread_raw) if isinstance(thread_raw, dict) else {}
+            thread_id = str(thread.get("id") or "").strip()
+            if not thread_id:
+                raise RuntimeError("Codex app-server thread/start returned no thread id")
+            _, _, turn_start = _app_server_requests(
+                root=root,
+                configured=configured,
+                prompt=prompt,
+                thread_id=thread_id,
+            )
+            send(turn_start)
+            turn_result = receive_response(_APP_SERVER_TURN_START_ID)
+            turn_raw = turn_result.get("turn")
+            turn = dict(turn_raw) if isinstance(turn_raw, dict) else {}
+            turn_id = str(turn.get("id") or "").strip()
+            if not turn_id:
+                raise RuntimeError("Codex app-server turn/start returned no turn id")
+            while True:
+                message = receive()
+                method = str(message.get("method") or "")
+                if method == "model/rerouted":
+                    raise RuntimeError("Codex app-server recorded model/rerouted; rerouted reviews fail closed")
+                params_raw = message.get("params")
+                params = dict(params_raw) if isinstance(params_raw, dict) else {}
+                completed_turn_raw = params.get("turn")
+                completed_turn = dict(completed_turn_raw) if isinstance(completed_turn_raw, dict) else {}
+                if (
+                    method == "turn/completed"
+                    and str(params.get("threadId") or "").strip() == thread_id
+                    and str(completed_turn.get("id") or "").strip() == turn_id
+                ):
+                    break
+            process.stdin.close()
+            try:
+                returncode = process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.terminate()
+                try:
+                    returncode = process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    returncode = process.wait(timeout=2)
+        except BaseException as exc:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=2)
+            stderr_file.seek(0)
+            stderr = stderr_file.read().decode("utf-8", errors="replace")
+            if isinstance(exc, subprocess.TimeoutExpired):
+                exc.output = bytes(transcript)
+                exc.stderr = stderr
+                raise
+            if not isinstance(exc, (OSError, RuntimeError)):
+                raise
+            raise AppServerReviewError(
+                str(exc),
+                transcript_raw=bytes(transcript),
+                stderr=stderr,
+            ) from exc
+        finally:
+            selector.close()
+        stderr_file.seek(0)
+        stderr = stderr_file.read().decode("utf-8", errors="replace")
+
+    evidence = _parse_app_server_transcript(
+        transcript_raw=bytes(transcript),
+        configured=configured,
+        root=root,
+        prompt_raw=prompt_raw,
+    )
+    if not _app_server_transcript_binding_valid(evidence.binding):
+        failed = [field for field in _APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS if evidence.binding.get(field) is not True]
+        raise AppServerReviewError(
+            "Codex app-server transcript failed closed: " + ", ".join(failed),
+            transcript_raw=bytes(transcript),
+            stderr=stderr,
+        )
+    return AppServerReviewResult(
+        args=tuple(args),
+        returncode=int(returncode),
+        transcript_raw=bytes(transcript),
+        stderr=stderr,
+        evidence=evidence,
+    )
+
+
 def _event_kind_and_payload(event: dict[str, object]) -> tuple[str, dict[str, object]]:
     raw_payload = event.get("payload")
     payload: dict[str, object] = dict(raw_payload) if isinstance(raw_payload, dict) else {}
@@ -181,6 +774,9 @@ def _review_causal_binding(
     prompt_raw: bytes,
     raw_output: bytes,
     expected_thread_id: str,
+    expected_session_source: str = "exec",
+    session_source_field: str = "session_source_exec",
+    expected_thread_source: str = "",
 ) -> dict[str, object]:
     rollout_json_valid = True
     text_utf8_valid = True
@@ -193,6 +789,7 @@ def _review_causal_binding(
         text_utf8_valid = False
     normalized_final = _normalize_trailing_newlines(final_output)
     session_sources: list[str] = []
+    thread_sources: list[str] = []
     task_starts: list[tuple[int, str]] = []
     task_completes: list[tuple[int, str, str]] = []
     abort_seen = False
@@ -218,6 +815,7 @@ def _review_causal_binding(
             if session_id == expected_thread_id:
                 source = payload.get("source")
                 session_sources.append(source if isinstance(source, str) else "")
+                thread_sources.append(str(payload.get("thread_source") or "").strip())
         elif kind == "task_started":
             task_starts.append((line_number, str(payload.get("turn_id") or "").strip()))
         elif kind == "task_complete":
@@ -275,13 +873,13 @@ def _review_causal_binding(
         and _normalize_trailing_newlines(task_completes[0][2]) == normalized_final
         and bool(normalized_final)
     )
-    return {
+    binding: dict[str, object] = {
         "turn_id": turn_id,
         "prompt_sha256": hashlib.sha256(prompt_raw).hexdigest(),
         "normalized_final_output_sha256": hashlib.sha256(normalized_final.encode("utf-8")).hexdigest(),
         "rollout_json_valid": rollout_json_valid,
         "text_utf8_valid": text_utf8_valid,
-        "session_source_exec": session_sources == ["exec"],
+        session_source_field: session_sources == [expected_session_source],
         "single_task_turn": single_task_turn,
         "no_abort": not abort_seen,
         "prompt_response_item_exact": exact_between(prompt_response_items, prompt),
@@ -298,10 +896,38 @@ def _review_causal_binding(
         ),
         "task_complete_final_exact": task_complete_final_exact,
     }
+    if expected_thread_source:
+        binding["session_thread_source_exact"] = thread_sources == [expected_thread_source]
+    return binding
 
 
 def _review_causal_binding_valid(binding: dict[str, object]) -> bool:
     return bool(binding.get("turn_id")) and all(binding.get(field) is True for field in _CAUSAL_BINDING_BOOLEAN_FIELDS)
+
+
+def _review_app_server_causal_binding(
+    *,
+    rollout_raw: bytes,
+    prompt_raw: bytes,
+    raw_output: bytes,
+    expected_thread_id: str,
+    expected_session_source: str,
+) -> dict[str, object]:
+    return _review_causal_binding(
+        rollout_raw=rollout_raw,
+        prompt_raw=prompt_raw,
+        raw_output=raw_output,
+        expected_thread_id=expected_thread_id,
+        expected_session_source=expected_session_source,
+        session_source_field="session_source_matches_thread_start",
+        expected_thread_source=_APP_SERVER_THREAD_SOURCE,
+    )
+
+
+def _review_app_server_causal_binding_valid(binding: dict[str, object]) -> bool:
+    return bool(binding.get("turn_id")) and all(
+        binding.get(field) is True for field in _APP_SERVER_CAUSAL_BINDING_BOOLEAN_FIELDS
+    )
 
 
 def _first_mapping_value(mappings: list[dict[str, object]], keys: tuple[str, ...]) -> str:
@@ -472,6 +1098,152 @@ def _load_effective_reviewer_configuration(
     )
 
 
+def _load_app_server_effective_reviewer_configuration(
+    *,
+    transcript: AppServerTranscriptEvidence,
+    configured: ReviewerConfiguration,
+    codex_home: Path | None = None,
+) -> EffectiveReviewerConfiguration:
+    if not _app_server_transcript_binding_valid(transcript.binding):
+        raise RuntimeError("Codex app-server transcript did not bind a complete review turn")
+    active = transcript.settings
+    if any(not value or value.lower() in _INHERITED_VALUE_SENTINELS for value in active):
+        raise RuntimeError("Codex app-server thread/start did not report complete active reviewer settings")
+    if active.model != configured.settings.model:
+        raise RuntimeError(
+            f"active reviewer model {active.model!r} differs from global config {configured.settings.model!r}"
+        )
+    if active.reasoning_effort != configured.settings.reasoning_effort:
+        raise RuntimeError(
+            "active reviewer reasoning effort "
+            f"{active.reasoning_effort!r} differs from global config {configured.settings.reasoning_effort!r}"
+        )
+    if not _service_tier_matches(configured.settings.service_tier, active.service_tier):
+        raise RuntimeError(
+            f"active reviewer service tier {active.service_tier!r} differs from global config "
+            f"{configured.settings.service_tier!r}"
+        )
+
+    rollout_path = _rollout_path_for_thread(
+        transcript.thread_id,
+        codex_home=codex_home or _codex_home(),
+    )
+    if rollout_path is None:
+        raise RuntimeError(f"Codex rollout for thread {transcript.thread_id} was not persisted")
+    rollout_raw = rollout_path.read_bytes()
+    sources: dict[str, list[str]] = {
+        "model": ["app_server_thread_start_response"],
+        "reasoning_effort": ["app_server_thread_start_response"],
+        "service_tier": ["app_server_thread_start_response"],
+    }
+    observed_fields: set[str] = set()
+    reroutes: list[dict[str, str]] = []
+    rollout_ids: set[str] = set()
+    rollout_session_ids: set[str] = set()
+    cli_versions: set[str] = set()
+    session_sources: set[str] = set()
+    thread_sources: set[str] = set()
+    root_lineage_valid = True
+    rollout_json_valid = True
+    for line_number, raw_line in enumerate(rollout_raw.decode("utf-8", errors="replace").splitlines(), start=1):
+        if not raw_line.strip():
+            continue
+        try:
+            event = json.loads(raw_line)
+        except (TypeError, ValueError):
+            rollout_json_valid = False
+            continue
+        if not isinstance(event, dict):
+            rollout_json_valid = False
+            continue
+        kind, payload = _event_kind_and_payload(event)
+        if kind == "session_meta":
+            rollout_id = str(payload.get("id") or "").strip()
+            rollout_session_id = str(payload.get("session_id") or "").strip()
+            cli_version = str(payload.get("cli_version") or "").strip()
+            source = str(payload.get("source") or "").strip()
+            thread_source = str(payload.get("thread_source") or "").strip()
+            if rollout_id:
+                rollout_ids.add(rollout_id)
+            if rollout_session_id:
+                rollout_session_ids.add(rollout_session_id)
+            if cli_version:
+                cli_versions.add(cli_version)
+            if source:
+                session_sources.add(source)
+            if thread_source:
+                thread_sources.add(thread_source)
+            if str(payload.get("parent_thread_id") or "").strip() or str(
+                payload.get("forked_from_id") or ""
+            ).strip():
+                root_lineage_valid = False
+            continue
+        if kind == "model_reroute":
+            from_model, to_model = _model_reroute(payload)
+            if not from_model or not to_model:
+                raise RuntimeError(
+                    f"Codex rollout {rollout_path} has ambiguous model_reroute metadata at line {line_number}"
+                )
+            reroutes.append({"from_model": from_model, "to_model": to_model})
+            continue
+        observation = _settings_observation(kind, payload)
+        for field, value in observation.items():
+            expected = getattr(active, field)
+            matches = _service_tier_matches(expected, value) if field == "service_tier" else expected == value
+            if not matches:
+                raise RuntimeError(
+                    f"Codex rollout {rollout_path} effective {field} {value!r} differs from "
+                    f"thread/start active value {expected!r}"
+                )
+            observed_fields.add(field)
+            if kind not in sources[field]:
+                sources[field].append(kind)
+
+    if not rollout_json_valid:
+        raise RuntimeError(f"Codex rollout {rollout_path} contains invalid JSON")
+    if rollout_ids != {transcript.thread_id}:
+        raise RuntimeError(
+            f"Codex rollout {rollout_path} identity {sorted(rollout_ids)!r} does not match "
+            f"thread/start id {transcript.thread_id!r}"
+        )
+    if rollout_session_ids != {transcript.session_id}:
+        raise RuntimeError(
+            f"Codex rollout {rollout_path} session identity {sorted(rollout_session_ids)!r} does not match "
+            f"thread/start session {transcript.session_id!r}"
+        )
+    if not root_lineage_valid:
+        raise RuntimeError(f"Codex rollout {rollout_path} is not an independent root reviewer session")
+    if session_sources != {transcript.session_source}:
+        raise RuntimeError(
+            f"Codex rollout {rollout_path} source {sorted(session_sources)!r} does not match "
+            f"thread/start source {transcript.session_source!r}"
+        )
+    if thread_sources != {_APP_SERVER_THREAD_SOURCE}:
+        raise RuntimeError(
+            f"Codex rollout {rollout_path} did not record dedicated thread source {_APP_SERVER_THREAD_SOURCE!r}"
+        )
+    if len(cli_versions) != 1:
+        raise RuntimeError(f"Codex rollout {rollout_path} did not record exactly one Codex CLI version")
+    if reroutes or transcript.model_reroutes:
+        raise RuntimeError(f"Codex review for thread {transcript.thread_id} recorded a model reroute")
+    missing_rollout_fields = {"model", "reasoning_effort"} - observed_fields
+    if missing_rollout_fields:
+        raise RuntimeError(
+            f"Codex rollout {rollout_path} did not corroborate active reviewer settings: "
+            + ", ".join(sorted(missing_rollout_fields))
+        )
+    return EffectiveReviewerConfiguration(
+        settings=active,
+        thread_id=transcript.thread_id,
+        rollout_path=rollout_path,
+        session_id=transcript.session_id,
+        codex_cli_version=next(iter(cli_versions)),
+        source=sources,
+        rollout_sha256=hashlib.sha256(rollout_raw).hexdigest(),
+        model_reroutes=(),
+    )
+
+
 def _effective_config_payload(
     *,
     configured: ReviewerConfiguration,
@@ -486,6 +1258,9 @@ def _effective_config_payload(
     raw_output_sha256: str,
     root: Path,
     causal_binding: dict[str, object] | None = None,
+    transcript_binding: dict[str, object] | None = None,
+    turn_id: str = "",
+    session_source: str = "",
 ) -> dict[str, object]:
     if not effective.session_id or not effective.thread_id:
         raise RuntimeError("Codex rollout did not record complete session/thread identity")
@@ -503,11 +1278,13 @@ def _effective_config_payload(
         "session": {
             "session_id": effective.session_id,
             "thread_id": effective.thread_id,
+            "turn_id": turn_id,
+            "session_source": session_source,
             "codex_cli_version": effective.codex_cli_version,
             "rollout_path": _workspace_path(root, effective.rollout_path),
             "rollout_sha256": effective.rollout_sha256,
         },
-        "process": {"reviewer_exit_code": int(reviewer_exit_code)},
+        "process": {"reviewer_exit_code": int(reviewer_exit_code), "timed_out": False},
         "effective": {
             "model": effective.settings.model,
             "reasoning_effort": effective.settings.reasoning_effort,
@@ -516,10 +1293,21 @@ def _effective_config_payload(
         },
         "model_reroutes": list(effective.model_reroutes),
         "causal_binding": dict(causal_binding or {}),
+        "transport": {
+            "kind": _APP_SERVER_TRANSPORT,
+            "protocol": "codex_app_server_jsonrpc_v2",
+            "active_settings_source": "thread/start.response",
+            "transcript": {
+                "path": _workspace_path(root, events_path),
+                "sha256": events_sha256,
+            },
+            "binding": dict(transcript_binding or {}),
+        },
         "scope": scope,
         "artifacts": {
             "prompt": {"path": _workspace_path(root, prompt_path), "sha256": prompt_sha256},
             "events": {"path": _workspace_path(root, events_path), "sha256": events_sha256},
+            "transcript": {"path": _workspace_path(root, events_path), "sha256": events_sha256},
             "raw_output": {"path": _workspace_path(root, raw_output_path), "sha256": raw_output_sha256},
         },
     }
@@ -540,6 +1328,9 @@ def _write_effective_config_evidence(
     raw_output_sha256: str,
     root: Path,
     causal_binding: dict[str, object],
+    transcript_binding: dict[str, object],
+    turn_id: str,
+    session_source: str,
 ) -> str:
     payload = _effective_config_payload(
         configured=configured,
@@ -554,6 +1345,9 @@ def _write_effective_config_evidence(
         raw_output_sha256=raw_output_sha256,
         root=root,
         causal_binding=causal_binding,
+        transcript_binding=transcript_binding,
+        turn_id=turn_id,
+        session_source=session_source,
     )
     raw = (json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n").encode("utf-8")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -620,6 +1414,7 @@ def _artifact_header(
     raw_output_sha256: str,
     reviewer_exit_code: int,
     shell_command: str,
+    transcript: AppServerTranscriptEvidence,
 ) -> str:
     files = list(scope_evidence.get("files") or [])
     scope = "\n".join(f"- `{path}`" for path in files) if files else "- Current uncommitted diff."
@@ -630,12 +1425,17 @@ def _artifact_header(
         f"- reviewer_model: {effective.settings.model}\n"
         f"- reviewer_reasoning_effort: {effective.settings.reasoning_effort}\n"
         f"- reviewer_service_tier: {effective.settings.service_tier}\n"
-        "- reviewer_configuration_mode: inherited Codex global config; no model/effort/tier CLI override\n"
+        "- reviewer_configuration_mode: operator config values requested explicitly; active values verified "
+        "from thread/start response\n"
+        f"- reviewer_transport: {_APP_SERVER_TRANSPORT}\n"
         f"- reviewer_config_path: `{configured.path}`\n"
         f"- reviewer_config_sha256: {configured.sha256}\n"
         f"- reviewer_exit_code: {reviewer_exit_code}\n"
         f"- reviewer_codex_cli_version: {effective.codex_cli_version}\n"
+        f"- reviewer_session_id: {effective.session_id}\n"
+        f"- reviewer_session_source: {transcript.session_source}\n"
         f"- reviewer_thread_id: {effective.thread_id}\n"
+        f"- reviewer_turn_id: {transcript.turn_id}\n"
         f"- reviewer_rollout_path: `{_workspace_path(root, effective.rollout_path)}`\n"
         f"- reviewer_rollout_sha256: {effective.rollout_sha256}\n"
         f"- reviewer_effective_config_path: `{_workspace_path(root, effective_config_path)}`\n"
@@ -695,7 +1495,7 @@ def main() -> int:
     parser.add_argument("--timeout-seconds", type=int, default=420, help="Hard timeout for --execute.")
     parser.add_argument("--output", default="", help="Review output file.")
     parser.add_argument("--prompt-output", default="", help="Prompt output file for dry-run/use elsewhere.")
-    parser.add_argument("--execute", action="store_true", help="Run codex exec in read-only mode.")
+    parser.add_argument("--execute", action="store_true", help="Run Codex app-server in read-only mode.")
     args = parser.parse_args()
 
     root = _repo_root()
@@ -741,11 +1541,8 @@ def main() -> int:
     prompt_sha256 = hashlib.sha256(prompt_raw).hexdigest()
 
     timeout_seconds = max(60, int(args.timeout_seconds or 420))
-    codex_args = _build_codex_args(
-        root=root,
-        output_path=output_path,
-    )
-    shell_command = " ".join(shlex.quote(part) for part in codex_args) + f" < {shlex.quote(str(prompt_path))}"
+    codex_args = _build_app_server_args()
+    shell_command = " ".join(shlex.quote(part) for part in codex_args)
     if not args.execute:
         print(f"prompt_written={prompt_path}")
         print(f"review_output={output_path}")
@@ -755,29 +1552,30 @@ def main() -> int:
         print(f"reviewer_service_tier={configured.settings.service_tier}")
         print(f"reviewer_config_path={configured.path}")
         print(f"reviewer_config_sha256={configured.sha256}")
+        print(f"reviewer_transport={_APP_SERVER_TRANSPORT}")
+        print(f"reviewer_thread_source={_APP_SERVER_THREAD_SOURCE}")
         print(f"review_scope_mode={scope_evidence['scope_mode']}")
         print(f"review_resolved_base_commit={scope_evidence['resolved_base_commit']}")
         print(f"review_resolved_head_commit={scope_evidence['resolved_head_commit']}")
         print(f"review_scope_digest_sha256={scope_evidence['scope_digest_sha256']}")
-        print("execute_command=" + shell_command)
+        print("execute_command=" + shell_command + "  # JSON-RPC prompt is sent by this runner")
         return 0
 
     try:
-        with prompt_path.open("r", encoding="utf-8") as prompt_handle:
-            completed = subprocess.run(
-                codex_args,
-                cwd=root,
-                stdin=prompt_handle,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=timeout_seconds,
-            )
-    except subprocess.TimeoutExpired:
+        completed = _run_app_server_review(
+            root=root,
+            configured=configured,
+            prompt_raw=prompt_raw,
+            timeout_seconds=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        partial_transcript = exc.output if isinstance(exc.output, bytes) else b""
+        events_path.write_bytes(partial_transcript)
         timeout_note = (
             "## Review Metadata\n\n"
             f"- title: {args.title or 'Independent review'}\n"
             "- reviewer_exit_code: timeout\n"
+            f"- reviewer_transport: {_APP_SERVER_TRANSPORT}\n"
             f"- prompt_path: `{prompt_path}`\n\n"
             "## Reviewer Output\n\n"
             f"NO-GO: independent review timed out after {timeout_seconds} seconds. "
@@ -787,7 +1585,42 @@ def main() -> int:
         print(f"prompt_written={prompt_path}")
         print(f"review_output={output_path}")
         return 124
-    events_raw = (completed.stdout or "").encode("utf-8")
+    except AppServerReviewError as exc:
+        events_path.write_bytes(exc.transcript_raw)
+        if exc.stderr:
+            print(exc.stderr.rstrip())
+        output_path.write_text(
+            "## Review Metadata\n\n"
+            f"- title: {args.title or 'Independent review'}\n"
+            "- reviewer_exit_code: invalid_transport\n"
+            f"- reviewer_transport: {_APP_SERVER_TRANSPORT}\n"
+            f"- prompt_path: `{prompt_path}`\n"
+            f"- events_path: `{events_path}`\n"
+            f"- events_sha256: {hashlib.sha256(exc.transcript_raw).hexdigest()}\n\n"
+            "## Reviewer Output\n\n"
+            f"NO-GO: Codex app-server review transport failed closed: {exc}. "
+            "Do not treat this as review evidence.\n",
+            encoding="utf-8",
+        )
+        print(f"prompt_written={prompt_path}")
+        print(f"review_output={output_path}")
+        return 2
+    except (OSError, RuntimeError) as exc:
+        output_path.write_text(
+            "## Review Metadata\n\n"
+            f"- title: {args.title or 'Independent review'}\n"
+            "- reviewer_exit_code: invalid_transport\n"
+            f"- reviewer_transport: {_APP_SERVER_TRANSPORT}\n"
+            f"- prompt_path: `{prompt_path}`\n\n"
+            "## Reviewer Output\n\n"
+            f"NO-GO: Codex app-server review transport failed closed: {exc}. "
+            "Do not treat this as review evidence.\n",
+            encoding="utf-8",
+        )
+        print(f"prompt_written={prompt_path}")
+        print(f"review_output={output_path}")
+        return 2
+    events_raw = completed.transcript_raw
     events_path.write_bytes(events_raw)
     events_sha256 = hashlib.sha256(events_raw).hexdigest()
     print(f"prompt_written={prompt_path}")
@@ -795,7 +1628,7 @@ def main() -> int:
     print(f"review_events={events_path}")
     if completed.stderr:
         print(completed.stderr.rstrip())
-    reviewer_output_raw = output_path.read_bytes() if output_path.exists() else b""
+    reviewer_output_raw = completed.evidence.final_output
     try:
         review_body = reviewer_output_raw.decode("utf-8")
     except UnicodeDecodeError:
@@ -803,8 +1636,8 @@ def main() -> int:
     raw_output_path.write_bytes(reviewer_output_raw)
     raw_output_sha256 = hashlib.sha256(reviewer_output_raw).hexdigest()
     try:
-        effective = _load_effective_reviewer_configuration(
-            events_text=completed.stdout or "",
+        effective = _load_app_server_effective_reviewer_configuration(
+            transcript=completed.evidence,
             configured=configured,
         )
         rollout_raw = effective.rollout_path.read_bytes()
@@ -814,12 +1647,17 @@ def main() -> int:
             rollout_path=rollout_evidence_path,
             rollout_sha256=hashlib.sha256(rollout_raw).hexdigest(),
         )
-        causal_binding = _review_causal_binding(
+        causal_binding = _review_app_server_causal_binding(
             rollout_raw=rollout_raw,
             prompt_raw=prompt_raw,
             raw_output=reviewer_output_raw,
             expected_thread_id=effective.thread_id,
+            expected_session_source=completed.evidence.session_source,
         )
+        if str(causal_binding.get("turn_id") or "").strip() != completed.evidence.turn_id:
+            raise RuntimeError(
+                "Codex app-server transcript turn does not match the persisted rollout task turn"
+            )
         effective_config_sha256 = _write_effective_config_evidence(
             path=effective_config_path,
             configured=configured,
@@ -834,12 +1672,17 @@ def main() -> int:
             raw_output_sha256=raw_output_sha256,
             root=root,
             causal_binding=causal_binding,
+            transcript_binding=completed.evidence.binding,
+            turn_id=completed.evidence.turn_id,
+            session_source=completed.evidence.session_source,
         )
     except (OSError, RuntimeError) as exc:
         output_path.write_text(
             "## Review Metadata\n\n"
             f"- title: {args.title or 'Independent review'}\n"
-            "- reviewer_configuration_mode: inherited Codex global config; no model/effort/tier CLI override\n"
+            "- reviewer_configuration_mode: operator config values requested explicitly; active values "
+            "unverified\n"
+            f"- reviewer_transport: {_APP_SERVER_TRANSPORT}\n"
             f"- reviewer_config_path: `{configured.path}`\n"
             f"- reviewer_config_sha256: {configured.sha256}\n"
             f"- reviewer_exit_code: {completed.returncode}\n"
@@ -867,6 +1710,7 @@ def main() -> int:
         raw_output_sha256=raw_output_sha256,
         reviewer_exit_code=int(completed.returncode),
         shell_command=shell_command,
+        transcript=completed.evidence,
     )
     if completed.returncode != 0:
         reviewer_output = review_body.rstrip("\n") + "\n\n" if review_body else ""
@@ -890,13 +1734,16 @@ def main() -> int:
         )
         output_path.write_text(header + review_body + invalid_note, encoding="utf-8")
         return 2
-    if not _review_causal_binding_valid(causal_binding):
+    if not _app_server_transcript_binding_valid(completed.evidence.binding) or not _review_app_server_causal_binding_valid(
+        causal_binding
+    ):
         reviewer_output = review_body.rstrip("\r\n") + "\n\n"
         output_path.write_text(
             header
             + reviewer_output
-            + "INVALID_REVIEW_ARTIFACT: persisted Codex exec rollout did not causally bind the exact prompt, "
-            "final output, and single completed turn. Do not treat this as review evidence.\n\nNO-GO\n",
+            + "INVALID_REVIEW_ARTIFACT: Codex app-server transcript and persisted rollout did not causally bind "
+            "the active settings, exact prompt, final output, and single completed turn. Do not treat this as "
+            "review evidence.\n\nNO-GO\n",
             encoding="utf-8",
         )
         return 2

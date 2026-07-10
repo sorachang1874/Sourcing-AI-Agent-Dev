@@ -55,7 +55,7 @@ For changes inside the narrowed gate scope that are already covered by independe
 
 ## Codex Reviewer Command
 
-Use `codex exec` in read-only mode and write the review to a file. The standing policy is the newest available model at its highest supported reasoning effort. The operator maintains model, effort, and service tier in `~/.codex/config.toml`; project scripts and docs must not pin or override those values. The runner writes the prompt to `runtime/reviews/*.prompt.md`, feeds it non-interactively, captures JSON events, and reconciles persisted `thread_settings_applied`, `session_configured`, and `turn_context` observations. Missing effective tier evidence, conflicting observations, or model reroute fails closed. Do not pipe through `head` or `tail`.
+Use the canonical runner's Codex app-server JSON-RPC transport in read-only mode. The standing policy is the newest available model at its highest supported reasoning effort. The operator maintains model, effort, and service tier in `~/.codex/config.toml`; the runner reads those values, mirrors the same values into the isolated `thread/start` and `turn/start` requests, and does not add model/effort/tier CLI pins. It writes the prompt to `runtime/reviews/*.prompt.md`, captures the bidirectional transcript, and treats the active model, reasoning effort, and service tier returned by `thread/start` as authoritative. The persisted rollout must corroborate the same thread/source/model/effort; any rollout tier observation must also match, but a rollout that omits tier no longer hides the active tier response. Missing active settings, conflicting evidence, settings drift, or model reroute fails closed.
 
 ```sh
 make independent-review-gate \
@@ -68,20 +68,13 @@ make independent-review-gate \
 
 For this W7g command, replace `REVIEW_BASE="<pinned-base-SHA>"` with the exact base commit before launch; never omit it or substitute a moving branch. The immutable file scope includes `scripts/run_independent_review_gate.py`, the shared verifier in `src/sourcing_agent/runtime_asset_retention_prune.py`, and `tests/test_independent_review_gate_runner.py` because they create or validate the `GO` artifact consumed by W7g. The review must also verify that real execution requires exact `CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1` / `--force-refresh` and rejects the omission before provider health or any other backend request. The runner binds the resolved base and head commits, normalized file list, Git diff/tree content, title, scope mode, and extra-context digest into `review_scope_digest_sha256`. Project-relative scope paths are explicitly mapped to the containing Git top-level, so this remains signoff-capable when the application root is a subdirectory of the worktree. Record the emitted digest with the review request, then pass the exact value as `CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256` when the resulting artifact is used for live validation. An unpinned/current-working-tree request is reference-only. A pinned commit-object review remains signoff-capable while unrelated work continues, but any later scoped commit, staged change, unstaged change, or untracked replacement invalidates the artifact at consumption; index and worktree are checked separately so opposing changes cannot cancel. Commit the intended scope and launch a new pinned review for those gates.
 
-Equivalent direct shape. The Make/script path enforces the timeout through Python so it works on macOS without GNU `timeout`; add an external `timeout`/`gtimeout` only if your shell has it.
+Transport process shape. This command alone is not a review request and cannot create valid evidence; the Make/script path owns initialization, thread/turn requests, transcript capture, timeout, and artifact binding through Python so it works on macOS without GNU `timeout`.
 
 ```sh
-codex exec \
-  --strict-config \
-  --cd . \
-  --sandbox read-only \
-  --json \
-  --output-last-message runtime/reviews/<review-id>.md \
-  - \
-  < runtime/reviews/<review-id>.prompt.md
+codex --sandbox read-only app-server --strict-config --stdio
 ```
 
-The canonical command has no model/effort/tier CLI overrides. Before execution, the runner requires explicit global values; after execution, it extracts the actual model, reasoning effort, and service tier from the persisted rollout and fails closed on missing metadata or a mismatch. It writes a redacted `*.effective-config.json` using `independent_review_effective_config_v2`; the evidence binds prompt, captured JSON events, raw reviewer output, global config, and source rollout by SHA-256, plus a canonical pinned-Git scope digest over title/base/head/files/diff/tree/extra-context. The shared verifier reparses the rollout instead of trusting the JSON copy, records Codex session/thread and CLI version, requires one completed root `source=exec` turn, and proves the exact prompt and final raw output appear in the independent rollout event shapes before accepting `reviewer_exit_code=0`. A requested alias therefore cannot be misreported as the applied tier, old real-session evidence cannot be repacked under another prompt/scope, and a nonzero Codex process cannot leave a valid-looking `GO`.
+The canonical process has no model/effort/tier CLI overrides. Before execution, the runner requires explicit global values and sends those exact values in the app-server thread/turn protocol; after execution, it requires the `thread/start` active response to match. It writes a redacted `*.effective-config.json` using `independent_review_effective_config_v3`; the evidence binds prompt, bidirectional transcript, raw reviewer output, global config, source rollout, active settings, thread/session/turn identity, dedicated thread source, and process status by SHA-256, plus a canonical pinned-Git scope digest over title/base/head/files/diff/tree/extra-context. The shared verifier replays the transcript and rollout instead of trusting the JSON copy, requires one completed read-only turn, and proves the exact prompt and final raw output occur in both evidence paths before accepting `reviewer_exit_code=0`. Old complete v2 artifacts remain verifier-compatible, but new runs only emit v3. A requested alias therefore cannot be misreported as the active tier, old real-session evidence cannot be repacked under another prompt/scope, and a nonzero Codex process cannot leave a valid-looking `GO`.
 
 This is a local integrity and anti-replay contract, not an external signature scheme. It does not claim cryptographic authenticity or remote attestation against a malicious author who can rewrite the repository and every local evidence file together; human/session independence and protected CI/PR storage remain the trust boundary for that threat.
 
@@ -121,8 +114,8 @@ The review output must record:
 - Reviewed files or diff scope.
 - Contract docs considered.
 - Validation already run by the author.
-- Command, `reviewer_exit_code=0`, Codex CLI/session/thread identity, global-config digest, rollout path/digest, and effective model, reasoning effort, and service tier used for the independent review.
-- A hash-bound `independent_review_effective_config_v2` JSON artifact with prompt/events/raw-output/rollout provenance, a recomputable pinned-Git scope digest, and an empty model-reroute chain.
+- Command, `reviewer_exit_code=0`, Codex CLI/session/thread/turn identity, global-config digest, transcript and rollout paths/digests, and active model, reasoning effort, and service tier used for the independent review.
+- A hash-bound `independent_review_effective_config_v3` JSON artifact with prompt/transcript/raw-output/rollout provenance, replayable app-server and rollout causal bindings, a recomputable pinned-Git scope digest, and an empty model-reroute chain.
 - Blocking findings or `GO` / `NO-GO`.
 - Accepted exceptions, if any, with user/founder approval context.
 - Residual risks that should be checked in W6/nightly, live validation, or manual product review.
@@ -133,7 +126,7 @@ Provider-costing live gates and milestone signoff runners must call the shared a
 
 ## Independence Rule
 
-The implementation author cannot self-certify. A valid reviewer must be a separate read-only Codex exec session, another coding agent, or another model/tool configured to inspect the diff without mutating code. The reviewer may use local read-only commands and tests already produced by the author as evidence, but must independently judge GO/NO-GO.
+The implementation author cannot self-certify. A valid reviewer must be a separate read-only Codex app-server thread/session, another coding agent, or another model/tool configured to inspect the diff without mutating code. The reviewer may use local read-only commands and tests already produced by the author as evidence, but must independently judge GO/NO-GO.
 
 ## Scope Discipline
 
