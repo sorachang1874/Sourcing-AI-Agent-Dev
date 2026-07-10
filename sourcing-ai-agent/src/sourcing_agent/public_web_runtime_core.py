@@ -50,6 +50,7 @@ from .public_web_signal_identity import (
     public_web_signal_id_for_identity,
     public_web_signal_identity_key,  # noqa: F401  (re-exported for downstream modules)
 )
+from .repositories import serving_projection_repo
 from .search_provider import BaseSearchProvider
 
 PUBLIC_WEB_JOB_TYPE = "target_candidate_public_web_search"
@@ -66,6 +67,15 @@ PUBLIC_WEB_TERMINAL_STATUSES = {
     "failed",
     "cancelled",
 }
+
+_PUBLIC_WEB_MODEL_USAGE_TOKEN_FIELDS = (
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+    "cached_input_tokens",
+    "reasoning_output_tokens",
+)
+_PUBLIC_WEB_MODEL_USAGE_TOKEN_LIMIT = 1_000_000_000
 
 PUBLIC_WEB_RETRYABLE_TERMINAL_STATUSES = {
     "completed_with_errors",
@@ -414,10 +424,12 @@ def _public_web_sync_batch_summary(store: Any, run: dict[str, Any], *, owner: Pu
 def _crm_public_web_projection_context(store: Any, crm_record: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     projection_id = str(crm_record.get("source_projection_id") or "").strip()
     candidate_identity_key = str(crm_record.get("candidate_identity_key") or "").strip()
-    if not projection_id or not candidate_identity_key or not hasattr(store, "get_serving_projection_member"):
+    projection_repository = serving_projection_repo(store)
+    get_member = getattr(projection_repository, "get_member", None)
+    if not projection_id or not candidate_identity_key or not callable(get_member):
         return {}, {}
     try:
-        member = store.get_serving_projection_member(projection_id, candidate_identity_key)
+        member = get_member(projection_id, candidate_identity_key)
     except Exception:
         return {}, {}
     member_payload = dict(member or {})
@@ -1981,6 +1993,25 @@ def _public_web_phase_metrics_from_summary(
     if model_version:
         metrics["model"] = model_version
         metrics["model_version"] = model_version
+    requested_model = str(ai_adjudication.get("requested_model") or ai_result.get("requested_model") or "").strip()
+    response_model = str(ai_adjudication.get("response_model") or ai_result.get("response_model") or "").strip()
+    effective_model = str(ai_adjudication.get("effective_model") or ai_result.get("effective_model") or "").strip()
+    model_identity_provenance = str(
+        ai_adjudication.get("model_identity_provenance") or ai_result.get("model_identity_provenance") or ""
+    ).strip()
+    if requested_model:
+        metrics["requested_model"] = requested_model
+    if response_model:
+        metrics["response_model"] = response_model
+    if effective_model:
+        metrics["effective_model"] = effective_model
+    if response_model and effective_model and model_identity_provenance == "provider_response":
+        metrics["model_identity_provenance"] = model_identity_provenance
+    raw_model_usage = ai_adjudication.get("model_usage")
+    if not isinstance(raw_model_usage, dict):
+        raw_model_usage = ai_result.get("model_usage")
+    if isinstance(raw_model_usage, dict):
+        metrics["model_usage"] = _bounded_public_web_model_usage(raw_model_usage)
     model_fallback_used = bool(ai_adjudication.get("fallback_used")) or bool(ai_result.get("fallback_used"))
     metrics["model_fallback_used"] = model_fallback_used
     if model_fallback_used:
@@ -1992,6 +2023,20 @@ def _public_web_phase_metrics_from_summary(
         if model_error:
             metrics["model_error"] = model_error[:500]
     return metrics
+
+
+def _bounded_public_web_model_usage(raw_usage: dict[str, Any]) -> dict[str, int]:
+    usage: dict[str, int] = {}
+    for field in _PUBLIC_WEB_MODEL_USAGE_TOKEN_FIELDS:
+        value = raw_usage.get(field)
+        if value is None or isinstance(value, bool):
+            continue
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        usage[field] = min(_PUBLIC_WEB_MODEL_USAGE_TOKEN_LIMIT, max(0, parsed))
+    return usage
 
 
 def _aggregate_public_web_phase_metrics(runs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -3210,7 +3255,9 @@ def _model_identity_from_signals(signals: dict[str, Any]) -> tuple[str, str]:
         or ""
     ).strip()
     model_version = str(
-        adjudication.get("model_version")
+        adjudication.get("effective_model")
+        or result.get("effective_model")
+        or adjudication.get("model_version")
         or adjudication.get("model")
         or result.get("model_version")
         or result.get("model")

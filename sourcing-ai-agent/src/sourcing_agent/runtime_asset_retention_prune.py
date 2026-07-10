@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import posixpath
 import shutil
 import stat
 import subprocess
@@ -11,16 +12,75 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 CONTRACT_VERSION = "runtime_asset_retention_prune_v1"
 BUNDLE_MANIFEST_CONTRACT_VERSION = "runtime_asset_supersession_cold_bundle_manifest_v1"
+INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION = "independent_review_effective_config_v2"
 REQUIRED_REVIEW_ARTIFACT_METADATA_FIELDS = (
     "reviewer_model",
     "reviewer_reasoning_effort",
     "reviewer_service_tier",
+    "reviewer_config_path",
+    "reviewer_config_sha256",
+    "reviewer_exit_code",
+    "reviewer_codex_cli_version",
+    "reviewer_thread_id",
+    "reviewer_rollout_path",
+    "reviewer_rollout_sha256",
+    "reviewer_effective_config_path",
+    "reviewer_effective_config_sha256",
+    "review_scope_mode",
+    "review_base_ref",
+    "review_resolved_base_commit",
+    "review_resolved_head_commit",
+    "review_git_diff_sha256",
+    "review_git_tree_sha256",
+    "review_extra_context_sha256",
+    "review_scope_digest_sha256",
     "prompt_path",
+    "prompt_sha256",
+    "events_path",
+    "events_sha256",
+    "raw_output_path",
+    "raw_output_sha256",
     "command",
 )
+INDEPENDENT_REVIEW_PINNED_SCOPE_MODE = "pinned_commit_diff"
+INDEPENDENT_REVIEW_REFERENCE_SCOPE_MODE = "reference_only_worktree"
+_INDEPENDENT_REVIEW_ROLLOUT_SETTING_EVENT_TYPES = {
+    "session_configured",
+    "thread_settings_applied",
+    "turn_context",
+}
+_INDEPENDENT_REVIEW_CAUSAL_BOOLEAN_FIELDS = (
+    "rollout_json_valid",
+    "text_utf8_valid",
+    "session_source_exec",
+    "single_task_turn",
+    "no_abort",
+    "prompt_response_item_exact",
+    "prompt_event_message_exact",
+    "final_response_item_exact",
+    "final_event_message_exact",
+    "task_complete_final_exact",
+)
+_INDEPENDENT_REVIEW_CAUSAL_FIELDS = {
+    "turn_id",
+    "prompt_sha256",
+    "normalized_final_output_sha256",
+    *_INDEPENDENT_REVIEW_CAUSAL_BOOLEAN_FIELDS,
+}
+_INDEPENDENT_REVIEW_SCOPE_DIGEST_FIELDS = (
+    "title",
+    "base_ref",
+    "scope_mode",
+    "resolved_base_commit",
+    "resolved_head_commit",
+    "files",
+    "git_diff_sha256",
+    "git_tree_sha256",
+    "extra_context_sha256",
+)
+_REVIEW_GIT_RUN = subprocess.run
 ALLOWED_PRUNE_ROOTS = ("runtime/test_env", "output")
 PROTECTED_NAMES = {"company_assets", "secrets", "object_store"}
 TTL_LOCAL_REBUILDABLE_POLICY = "ttl_local_rebuildable"
@@ -198,14 +258,18 @@ def build_runtime_asset_prune_plan_from_cold_bundle_manifest(
     source_bundle_manifest_path = str(cold_copy_manifest or "")
     source_bundle_manifest_sha256 = _manifest_file_sha256(root=root, manifest_path=source_bundle_manifest_path)
     review_plan_artifact_path = (
-        _workspace_relative_file_path(root=root, raw_path=str(review_plan_artifact or "")) if str(review_plan_artifact or "").strip() else ""
+        _workspace_relative_file_path(root=root, raw_path=str(review_plan_artifact or ""))
+        if str(review_plan_artifact or "").strip()
+        else ""
     )
     operations: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     for raw_entry in list(bundle_manifest.get("archives") or []):
         entry = dict(raw_entry or {})
         path_text = str(entry.get("path") or "")
-        skip_reason = _cold_bundle_entry_plan_skip_reason(entry=entry, root=root, source_contract_valid=source_contract_valid)
+        skip_reason = _cold_bundle_entry_plan_skip_reason(
+            entry=entry, root=root, source_contract_valid=source_contract_valid
+        )
         if skip_reason:
             skipped.append({"path": path_text, "reason": skip_reason})
             continue
@@ -227,7 +291,11 @@ def build_runtime_asset_prune_plan_from_cold_bundle_manifest(
                 "source_manifest_digest_sha256": str(entry.get("source_manifest_digest_sha256") or ""),
             }
         )
-    status = "ready_for_review" if source_contract_valid and operations and not skipped else "blocked_invalid_cold_bundle_manifest"
+    status = (
+        "ready_for_review"
+        if source_contract_valid and operations and not skipped
+        else "blocked_invalid_cold_bundle_manifest"
+    )
     plan = {
         "contract_version": CONTRACT_VERSION,
         "status": status,
@@ -245,7 +313,9 @@ def build_runtime_asset_prune_plan_from_cold_bundle_manifest(
         "min_age_days": 0,
         "target_free_bytes": 0,
         "max_entries": 0,
-        "allowed_retention_classes": sorted({str(item.get("retention_class") or "") for item in operations if str(item.get("retention_class") or "")}),
+        "allowed_retention_classes": sorted(
+            {str(item.get("retention_class") or "") for item in operations if str(item.get("retention_class") or "")}
+        ),
         "destructive_review_evidence": {
             "review_artifact": str(review_artifact or ""),
             "review_title": str(review_title or ""),
@@ -278,7 +348,9 @@ def build_runtime_asset_prune_plan_from_cold_bundle_manifest(
     evidence = dict(plan.get("destructive_review_evidence") or {})
     evidence["review_plan_artifact"] = review_plan_artifact_path
     evidence["review_plan_scope_digest_sha256"] = scope_digest
-    source_bundle_relative = _workspace_relative_file_path(root=root, raw_path=source_bundle_manifest_path) or source_bundle_manifest_path
+    source_bundle_relative = (
+        _workspace_relative_file_path(root=root, raw_path=source_bundle_manifest_path) or source_bundle_manifest_path
+    )
     required_artifacts: list[dict[str, str]] = []
     if source_bundle_relative and source_bundle_manifest_sha256:
         required_artifacts.append(
@@ -479,7 +551,9 @@ def apply_runtime_asset_prune_plan(
         blockers.append("process_check_bypass_not_allowed")
         active = []
     elif apply:
-        active = detect_active_runtime_processes(root=root, operation_paths=[str(item.get("path") or "") for item in operations])
+        active = detect_active_runtime_processes(
+            root=root, operation_paths=[str(item.get("path") or "") for item in operations]
+        )
         if active:
             blockers.append("active_runtime_processes_detected")
     else:
@@ -502,7 +576,9 @@ def apply_runtime_asset_prune_plan(
     removed_count = 0
     removed_bytes = 0
     if apply:
-        preflight_results = [_apply_one_operation(operation=operation, root=root, apply=False) for operation in operations]
+        preflight_results = [
+            _apply_one_operation(operation=operation, root=root, apply=False) for operation in operations
+        ]
         preflight_failed_count = sum(1 for item in preflight_results if _operation_result_failed(item))
         if preflight_failed_count:
             return {
@@ -592,7 +668,15 @@ def render_runtime_asset_prune_plan_markdown(plan: dict[str, Any]) -> str:
             artifact_kind = str(artifact.get("kind") or "").strip()
             if artifact_path:
                 lines.append(f"- required artifact: `{artifact_kind}` `{artifact_path}` sha256 `{artifact_sha}`")
-    lines.extend(["", "## Selected Operations", "", "| path | class | files | bytes | latest mtime |", "| --- | --- | ---: | ---: | --- |"])
+    lines.extend(
+        [
+            "",
+            "## Selected Operations",
+            "",
+            "| path | class | files | bytes | latest mtime |",
+            "| --- | --- | ---: | ---: | --- |",
+        ]
+    )
     for item in list(plan.get("operations") or [])[:200]:
         payload = dict(item or {})
         lines.append(
@@ -605,7 +689,9 @@ def render_runtime_asset_prune_plan_markdown(plan: dict[str, Any]) -> str:
             )
         )
     if len(list(plan.get("operations") or [])) > 200:
-        lines.append(f"| ... | ... | ... | {len(list(plan.get('operations') or [])) - 200} more operations omitted | ... |")
+        lines.append(
+            f"| ... | ... | ... | {len(list(plan.get('operations') or [])) - 200} more operations omitted | ... |"
+        )
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -676,9 +762,15 @@ def detect_active_runtime_processes(*, root: Path, operation_paths: list[str] | 
             continue
         process_commands[pid] = command
         normalized = command.lower()
-        if any(token in normalized for token in ACTIVE_PROCESS_TOKENS) and _runtime_process_applies_to_root(pid=pid, command=command, root=root):
+        if any(token in normalized for token in ACTIVE_PROCESS_TOKENS) and _runtime_process_applies_to_root(
+            pid=pid, command=command, root=root
+        ):
             active.append({"pid": pid, "command": command[:500]})
-    active.extend(_active_runtime_pid_file_processes(root=root, process_commands=process_commands, operation_paths=operation_paths))
+    active.extend(
+        _active_runtime_pid_file_processes(
+            root=root, process_commands=process_commands, operation_paths=operation_paths
+        )
+    )
     deduped: dict[int, dict[str, Any]] = {}
     for item in active:
         pid = int(item.get("pid") or 0)
@@ -737,7 +829,12 @@ def _apply_one_operation(*, operation: dict[str, Any], root: Path, apply: bool) 
     if not target.exists():
         return {"path": path_text, "status": "blocked", "reason": "target_missing", "planned_size_bytes": planned_size}
     if not target.is_dir() or target.is_symlink():
-        return {"path": path_text, "status": "blocked", "reason": "target_not_plain_directory", "planned_size_bytes": planned_size}
+        return {
+            "path": path_text,
+            "status": "blocked",
+            "reason": "target_not_plain_directory",
+            "planned_size_bytes": planned_size,
+        }
     if not apply:
         return {"path": path_text, "status": "would_remove", "reason": "", "planned_size_bytes": planned_size}
     try:
@@ -751,7 +848,10 @@ def _skip_reason(*, item: dict[str, Any], path_text: str, root: Path, now: datet
     path_reason = _path_safety_reason(path_text=path_text, root=root)
     if path_reason:
         return path_reason
-    if _is_current_or_latest_path(path_text) or str(item.get("retention_class") or "") == "review_current_alias_or_latest_artifact":
+    if (
+        _is_current_or_latest_path(path_text)
+        or str(item.get("retention_class") or "") == "review_current_alias_or_latest_artifact"
+    ):
         return "current_or_latest_alias"
     latest_mtime = _parse_datetime(str(item.get("latest_mtime") or ""))
     if latest_mtime and min_age_days > 0:
@@ -804,7 +904,10 @@ def _operation_safety_reason(*, operation: dict[str, Any], root: Path) -> str:
         return "invalid_source_scan_root"
     if not path_text.startswith(f"{source_scan_root}/"):
         return "path_source_scan_root_mismatch"
-    if _is_current_or_latest_path(path_text) or str(operation.get("retention_class") or "") == "review_current_alias_or_latest_artifact":
+    if (
+        _is_current_or_latest_path(path_text)
+        or str(operation.get("retention_class") or "") == "review_current_alias_or_latest_artifact"
+    ):
         return "current_or_latest_alias"
     declared_retention_class = str(operation.get("retention_class") or "").strip()
     if not declared_retention_class:
@@ -873,7 +976,11 @@ def _destructive_evidence_blockers(*, plan: dict[str, Any], root: Path) -> list[
     blockers: list[str] = []
     review_artifact = str(evidence.get("review_artifact") or "").strip()
     has_cold_copy = bool(str(evidence.get("cold_copy_manifest") or "").strip())
-    cold_copy_contract = _cold_copy_manifest_contract_version(root=root, manifest_path=str(evidence.get("cold_copy_manifest") or "")) if has_cold_copy else ""
+    cold_copy_contract = (
+        _cold_copy_manifest_contract_version(root=root, manifest_path=str(evidence.get("cold_copy_manifest") or ""))
+        if has_cold_copy
+        else ""
+    )
     mandatory_review_tokens = (
         _bundle_mandatory_review_tokens(plan=plan, evidence=evidence)
         if cold_copy_contract == BUNDLE_MANIFEST_CONTRACT_VERSION
@@ -899,10 +1006,15 @@ def _destructive_evidence_blockers(*, plan: dict[str, Any], root: Path) -> list[
                 blockers.append("review_artifact_missing")
             else:
                 blockers.extend(
-                    _review_artifact_blockers(
-                        path=resolved_review_path,
-                        evidence=evidence,
-                        mandatory_tokens=mandatory_review_tokens,
+                    validate_independent_review_artifact(
+                        artifact_path=resolved_review_path,
+                        workspace_root=root,
+                        expected_title=str(evidence.get("review_title") or ""),
+                        required_files=list(evidence.get("review_required_files") or []),
+                        required_artifacts=list(evidence.get("review_required_artifacts") or []),
+                        required_tokens=_dedupe_strings(
+                            list(evidence.get("review_required_tokens") or []) + mandatory_review_tokens
+                        ),
                     )
                 )
     if not str(evidence.get("reuse_index_effect") or "").strip():
@@ -912,8 +1024,16 @@ def _destructive_evidence_blockers(*, plan: dict[str, Any], root: Path) -> list[
         blockers.append("missing_cold_copy_or_accepted_retention_exception")
     if has_cold_copy:
         if cold_copy_contract == BUNDLE_MANIFEST_CONTRACT_VERSION:
-            blockers.extend(_bundle_plan_binding_blockers(plan=plan, root=root, manifest_path=str(evidence.get("cold_copy_manifest") or "")))
-        blockers.extend(_cold_copy_manifest_blockers(plan=plan, root=root, manifest_path=str(evidence.get("cold_copy_manifest") or "")))
+            blockers.extend(
+                _bundle_plan_binding_blockers(
+                    plan=plan, root=root, manifest_path=str(evidence.get("cold_copy_manifest") or "")
+                )
+            )
+        blockers.extend(
+            _cold_copy_manifest_blockers(
+                plan=plan, root=root, manifest_path=str(evidence.get("cold_copy_manifest") or "")
+            )
+        )
         privileged_classes = _uncopied_privileged_retention_classes(plan)
         if privileged_classes and cold_copy_contract != BUNDLE_MANIFEST_CONTRACT_VERSION:
             blockers.append("missing_supersession_cold_bundle_for_retention_classes:" + ",".join(privileged_classes))
@@ -924,31 +1044,194 @@ def _destructive_evidence_blockers(*, plan: dict[str, Any], root: Path) -> list[
     return blockers
 
 
-def _review_artifact_blockers(*, path: Path, evidence: dict[str, Any], mandatory_tokens: list[str] | None = None) -> list[str]:
+def normalize_independent_review_title(value: object) -> str:
+    return " ".join(str(value or "").split()) or "Independent review"
+
+
+def normalize_independent_review_files(files: list[str] | tuple[str, ...]) -> list[str]:
+    normalized: set[str] = set()
+    for raw_path in files:
+        candidate = str(raw_path or "").strip().replace("\\", "/")
+        if not candidate:
+            continue
+        path = posixpath.normpath(candidate)
+        if path in {"", "."} or path.startswith("/") or path == ".." or path.startswith("../"):
+            raise ValueError(f"review scope path must be workspace-relative: {candidate!r}")
+        normalized.add(path)
+    return sorted(normalized)
+
+
+def independent_review_scope_digest(scope: dict[str, Any]) -> str:
+    canonical: dict[str, Any] = {
+        field: list(scope.get(field) or []) if field == "files" else str(scope.get(field) or "")
+        for field in _INDEPENDENT_REVIEW_SCOPE_DIGEST_FIELDS
+    }
+    canonical["title"] = normalize_independent_review_title(canonical["title"])
+    canonical["base_ref"] = str(canonical["base_ref"]).strip()
+    canonical["files"] = normalize_independent_review_files(list(canonical["files"]))
+    raw = json.dumps(canonical, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def build_independent_review_scope_evidence(
+    *,
+    workspace_root: str | Path,
+    title: str,
+    base_ref: str,
+    files: list[str],
+    extra_context: str,
+) -> dict[str, Any]:
+    """Build the immutable Git scope reviewed by a signoff-capable session.
+
+    A missing base, unresolved Git object, or implicit whole-worktree scope
+    deliberately degrades the request to reference-only evidence. The scope
+    digest pins the resolved base/head Git objects and explicit file set, while
+    signoff validation separately requires the current scoped tree to retain the
+    reviewed bytes.
+    """
+
+    root = _realpath(workspace_root)
+    normalized_files = normalize_independent_review_files(files)
+    normalized_title = normalize_independent_review_title(title)
+    normalized_base = str(base_ref or "").strip()
+    resolved_head = _review_git_text(root, "rev-parse", "--verify", "HEAD^{commit}", allow_failure=True)
+    resolved_base = (
+        _review_git_text(root, "rev-parse", "--verify", f"{normalized_base}^{{commit}}", allow_failure=True)
+        if normalized_base
+        else ""
+    )
+    scoped_file_types = (
+        {
+            path: {
+                "base": _review_git_text(root, "cat-file", "-t", f"{resolved_base}:{path}", allow_failure=True),
+                "head": _review_git_text(root, "cat-file", "-t", f"{resolved_head}:{path}", allow_failure=True),
+            }
+            for path in normalized_files
+        }
+        if resolved_base and resolved_head
+        else {}
+    )
+    pinned = bool(
+        normalized_base
+        and resolved_base
+        and resolved_head
+        and normalized_files
+        and all("blob" in scoped_file_types.get(path, {}).values() for path in normalized_files)
+    )
+    scope_mode = INDEPENDENT_REVIEW_PINNED_SCOPE_MODE if pinned else INDEPENDENT_REVIEW_REFERENCE_SCOPE_MODE
+    diff_raw = b""
+    tree_raw = b""
+    if resolved_base and resolved_head:
+        diff_args = ["diff", "--binary", "--no-ext-diff", resolved_base, resolved_head, "--", *normalized_files]
+        diff_raw = _review_git_bytes(root, *diff_args, allow_failure=True) or b""
+    if resolved_head:
+        tree_args = ["ls-tree", "-r", "--full-tree", resolved_head, "--", *normalized_files]
+        tree_raw = _review_git_bytes(root, *tree_args, allow_failure=True) or b""
+    scope: dict[str, Any] = {
+        "title": normalized_title,
+        "base_ref": normalized_base,
+        "scope_mode": scope_mode,
+        "resolved_base_commit": resolved_base,
+        "resolved_head_commit": resolved_head,
+        "files": normalized_files,
+        "git_diff_sha256": hashlib.sha256(diff_raw).hexdigest(),
+        "git_tree_sha256": hashlib.sha256(tree_raw).hexdigest(),
+        "extra_context_sha256": hashlib.sha256(
+            (str(extra_context or "").strip() or "None.").encode("utf-8")
+        ).hexdigest(),
+    }
+    scope["scope_digest_sha256"] = independent_review_scope_digest(scope)
+    return scope
+
+
+def _review_git_bytes(root: Path, *args: str, allow_failure: bool = False) -> bytes | None:
+    try:
+        completed = _REVIEW_GIT_RUN(
+            ["git", *args],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except OSError:
+        if allow_failure:
+            return None
+        raise
+    if completed.returncode != 0:
+        if allow_failure:
+            return None
+        detail = completed.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"git {' '.join(args)} failed: {detail}")
+    stdout = completed.stdout
+    return stdout.encode("utf-8") if isinstance(stdout, str) else bytes(stdout or b"")
+
+
+def _review_git_text(root: Path, *args: str, allow_failure: bool = False) -> str:
+    raw = _review_git_bytes(root, *args, allow_failure=allow_failure)
+    return raw.decode("utf-8", errors="replace").strip() if raw is not None else ""
+
+
+def validate_independent_review_artifact(
+    *,
+    artifact_path: str | Path,
+    workspace_root: str | Path,
+    expected_title: str = "",
+    required_files: list[str] | None = None,
+    required_artifacts: list[dict[str, Any]] | None = None,
+    required_tokens: list[str] | None = None,
+    expected_scope_digest: str = "",
+) -> list[str]:
     blockers: list[str] = []
+    root = _realpath(workspace_root)
+    path = Path(artifact_path).expanduser()
+    if not path.is_absolute():
+        path = root / path
+    try:
+        path = _realpath(path)
+        path.relative_to(root)
+    except ValueError:
+        return ["review_artifact_outside_workspace"]
     if path.name.endswith(".prompt.md"):
         blockers.append("review_artifact_is_prompt")
         return blockers
-    review_text = path.read_text(encoding="utf-8", errors="replace")
+    try:
+        review_text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ["review_artifact_missing"]
     if "## Review Metadata" not in review_text or "## Reviewer Output" not in review_text:
         blockers.append("review_artifact_missing_runner_metadata")
-    metadata = _review_artifact_metadata(review_text)
+    metadata = parse_independent_review_artifact_metadata(review_text)
     if not metadata:
         blockers.append("review_artifact_missing_runner_metadata")
     for field in REQUIRED_REVIEW_ARTIFACT_METADATA_FIELDS:
         value = metadata.get(field, "").strip()
         if not value:
             blockers.append(f"review_artifact_missing_metadata:{field}")
-    for field in ("reviewer_model", "reviewer_reasoning_effort", "reviewer_service_tier", "prompt_path", "command"):
+    for field in REQUIRED_REVIEW_ARTIFACT_METADATA_FIELDS:
         if _is_default_review_metadata_value(metadata.get(field, "")):
             blockers.append(f"review_artifact_missing_metadata:{field}")
-    expected_title = str(evidence.get("review_title") or "").strip()
-    if expected_title and f"- title: {expected_title}" not in review_text:
+    expected_title = normalize_independent_review_title(expected_title) if str(expected_title or "").strip() else ""
+    try:
+        normalized_required_files = normalize_independent_review_files(list(required_files or []))
+    except ValueError:
+        normalized_required_files = []
+        blockers.append("review_artifact_invalid_required_file_scope")
+    blockers.extend(
+        validate_independent_review_effective_config_evidence(
+            metadata=metadata,
+            workspace_root=root,
+            review_text=review_text,
+            expected_title=expected_title,
+            required_files=normalized_required_files,
+            expected_scope_digest=expected_scope_digest,
+        )
+    )
+    if expected_title and normalize_independent_review_title(metadata.get("title", "")) != expected_title:
         blockers.append("review_artifact_title_mismatch")
-    for required_file in list(evidence.get("review_required_files") or []):
-        if f"`{required_file}`" not in review_text and str(required_file) not in review_text:
+    for required_file in normalized_required_files:
+        if f"`{required_file}`" not in review_text and required_file not in review_text:
             blockers.append(f"review_artifact_missing_scope:{required_file}")
-    for artifact in list(evidence.get("review_required_artifacts") or []):
+    for artifact in list(required_artifacts or []):
         if not isinstance(artifact, dict):
             blockers.append("review_artifact_invalid_required_artifact")
             continue
@@ -958,7 +1241,7 @@ def _review_artifact_blockers(*, path: Path, evidence: dict[str, Any], mandatory
             blockers.append(f"review_artifact_missing_artifact_scope:{artifact_path}")
         if artifact_sha and artifact_sha not in review_text:
             blockers.append(f"review_artifact_missing_artifact_sha:{artifact_path or artifact_sha[:12]}")
-    for token in _dedupe_strings(list(evidence.get("review_required_tokens") or []) + list(mandatory_tokens or [])):
+    for token in _dedupe_strings(list(required_tokens or [])):
         token_text = str(token or "").strip()
         if token_text and token_text not in review_text:
             blockers.append(f"review_artifact_missing_token:{token_text[:80]}")
@@ -970,7 +1253,7 @@ def _review_artifact_blockers(*, path: Path, evidence: dict[str, Any], mandatory
     return _dedupe_strings(blockers)
 
 
-def _review_artifact_metadata(review_text: str) -> dict[str, str]:
+def parse_independent_review_artifact_metadata(review_text: str) -> dict[str, str]:
     metadata: dict[str, str] = {}
     in_metadata = False
     for raw_line in review_text.splitlines():
@@ -991,12 +1274,796 @@ def _is_default_review_metadata_value(value: str) -> bool:
     return str(value or "").strip().lower() in {"", "default", "auto", "inherit"}
 
 
+def validate_independent_review_effective_config_evidence(
+    *,
+    metadata: dict[str, str],
+    workspace_root: str | Path,
+    review_text: str = "",
+    expected_title: str = "",
+    required_files: list[str] | None = None,
+    expected_scope_digest: str = "",
+) -> list[str]:
+    blockers: list[str] = []
+    root = _realpath(workspace_root)
+    try:
+        reviewer_exit_code = int(metadata.get("reviewer_exit_code", ""))
+    except (TypeError, ValueError):
+        reviewer_exit_code = -1
+    if reviewer_exit_code != 0:
+        blockers.append("review_artifact_reviewer_exit_not_zero")
+
+    evidence_path_text = str(metadata.get("reviewer_effective_config_path") or "").strip()
+    evidence_sha = str(metadata.get("reviewer_effective_config_sha256") or "").strip()
+    if not evidence_path_text or not _is_sha256(evidence_sha):
+        blockers.append("review_artifact_effective_config_evidence_missing")
+        return blockers
+    evidence_path = Path(evidence_path_text).expanduser()
+    if not evidence_path.is_absolute():
+        evidence_path = root / evidence_path
+    try:
+        resolved_evidence_path = _realpath(evidence_path)
+        resolved_evidence_path.relative_to(_realpath(root))
+    except ValueError:
+        blockers.append("review_artifact_effective_config_outside_workspace")
+        return blockers
+    try:
+        evidence_raw = resolved_evidence_path.read_bytes()
+    except OSError:
+        blockers.append("review_artifact_effective_config_missing")
+        return blockers
+    if hashlib.sha256(evidence_raw).hexdigest() != evidence_sha:
+        blockers.append("review_artifact_effective_config_sha256_mismatch")
+        return blockers
+    try:
+        payload = json.loads(evidence_raw)
+    except (TypeError, ValueError):
+        blockers.append("review_artifact_effective_config_invalid_json")
+        return blockers
+    if not isinstance(payload, dict):
+        blockers.append("review_artifact_effective_config_invalid_json")
+        return blockers
+    if str(payload.get("contract_version") or "") != INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION:
+        blockers.append("review_artifact_effective_config_contract_mismatch")
+
+    raw_config = payload.get("config")
+    raw_session = payload.get("session")
+    raw_process = payload.get("process")
+    raw_effective = payload.get("effective")
+    raw_causal_binding = payload.get("causal_binding")
+    raw_scope = payload.get("scope")
+    raw_artifacts = payload.get("artifacts")
+    config: dict[str, Any] = dict(raw_config) if isinstance(raw_config, dict) else {}
+    session: dict[str, Any] = dict(raw_session) if isinstance(raw_session, dict) else {}
+    process: dict[str, Any] = dict(raw_process) if isinstance(raw_process, dict) else {}
+    effective: dict[str, Any] = dict(raw_effective) if isinstance(raw_effective, dict) else {}
+    causal_binding: dict[str, Any] = dict(raw_causal_binding) if isinstance(raw_causal_binding, dict) else {}
+    scope: dict[str, Any] = dict(raw_scope) if isinstance(raw_scope, dict) else {}
+    artifacts: dict[str, Any] = dict(raw_artifacts) if isinstance(raw_artifacts, dict) else {}
+
+    def artifact_field(kind: str, field: str) -> str:
+        value = artifacts.get(kind)
+        artifact = dict(value) if isinstance(value, dict) else {}
+        return str(artifact.get(field) or "")
+
+    expected_metadata = {
+        "reviewer_config_path": str(config.get("path") or ""),
+        "reviewer_config_sha256": str(config.get("sha256") or ""),
+        "reviewer_exit_code": str(process.get("reviewer_exit_code") if "reviewer_exit_code" in process else ""),
+        "reviewer_codex_cli_version": str(session.get("codex_cli_version") or ""),
+        "reviewer_thread_id": str(session.get("thread_id") or ""),
+        "reviewer_rollout_path": str(session.get("rollout_path") or ""),
+        "reviewer_rollout_sha256": str(session.get("rollout_sha256") or ""),
+        "reviewer_model": str(effective.get("model") or ""),
+        "reviewer_reasoning_effort": str(effective.get("reasoning_effort") or ""),
+        "reviewer_service_tier": str(effective.get("service_tier") or ""),
+        "review_scope_mode": str(scope.get("scope_mode") or ""),
+        "review_base_ref": str(scope.get("base_ref") or ""),
+        "review_resolved_base_commit": str(scope.get("resolved_base_commit") or ""),
+        "review_resolved_head_commit": str(scope.get("resolved_head_commit") or ""),
+        "review_git_diff_sha256": str(scope.get("git_diff_sha256") or ""),
+        "review_git_tree_sha256": str(scope.get("git_tree_sha256") or ""),
+        "review_extra_context_sha256": str(scope.get("extra_context_sha256") or ""),
+        "review_scope_digest_sha256": str(scope.get("scope_digest_sha256") or ""),
+        "prompt_path": artifact_field("prompt", "path"),
+        "prompt_sha256": artifact_field("prompt", "sha256"),
+        "events_path": artifact_field("events", "path"),
+        "events_sha256": artifact_field("events", "sha256"),
+        "raw_output_path": artifact_field("raw_output", "path"),
+        "raw_output_sha256": artifact_field("raw_output", "sha256"),
+    }
+    for field, expected in expected_metadata.items():
+        if not expected or str(metadata.get(field) or "").strip() != expected:
+            blockers.append(f"review_artifact_effective_config_mismatch:{field}")
+    if not _is_sha256(str(config.get("sha256") or "")):
+        blockers.append("review_artifact_effective_config_invalid_config_sha256")
+    try:
+        evidence_exit_code = int(str(process.get("reviewer_exit_code")))
+    except (TypeError, ValueError):
+        evidence_exit_code = -1
+    if evidence_exit_code != 0:
+        blockers.append("review_artifact_effective_config_exit_not_zero")
+    session_id = str(session.get("session_id") or "").strip()
+    thread_id = str(session.get("thread_id") or "").strip()
+    cli_version = str(session.get("codex_cli_version") or "").strip()
+    if not session_id or not thread_id or session_id != thread_id or _is_default_review_metadata_value(cli_version):
+        blockers.append("review_artifact_effective_config_incomplete_session")
+
+    configured_model = str(config.get("model") or "").strip()
+    configured_reasoning = str(config.get("reasoning_effort") or "").strip()
+    configured_tier = str(config.get("service_tier") or "").strip()
+    if not configured_model or configured_model != str(effective.get("model") or "").strip():
+        blockers.append("review_artifact_effective_config_model_differs_from_config")
+    if not configured_reasoning or configured_reasoning != str(effective.get("reasoning_effort") or "").strip():
+        blockers.append("review_artifact_effective_config_reasoning_differs_from_config")
+    if not configured_tier or not _review_service_tier_matches(
+        configured_tier,
+        str(effective.get("service_tier") or ""),
+    ):
+        blockers.append("review_artifact_effective_config_tier_differs_from_config")
+    claimed_reroutes = payload.get("model_reroutes")
+    if not isinstance(claimed_reroutes, list):
+        blockers.append("review_artifact_effective_config_invalid_model_reroutes")
+    if isinstance(claimed_reroutes, list) and claimed_reroutes:
+        blockers.append("review_artifact_effective_config_model_reroute_not_allowed")
+    if not isinstance(raw_causal_binding, dict):
+        blockers.append("review_artifact_effective_config_causal_binding_missing")
+    if set(causal_binding) != _INDEPENDENT_REVIEW_CAUSAL_FIELDS:
+        blockers.append("review_artifact_effective_config_causal_binding_invalid_fields")
+    if not _is_sha256(str(causal_binding.get("prompt_sha256") or "")) or not _is_sha256(
+        str(causal_binding.get("normalized_final_output_sha256") or "")
+    ):
+        blockers.append("review_artifact_effective_config_causal_binding_invalid_hash")
+    if not str(causal_binding.get("turn_id") or "").strip():
+        blockers.append("review_artifact_effective_config_causal_binding_missing_turn")
+    if any(not isinstance(causal_binding.get(field), bool) for field in _INDEPENDENT_REVIEW_CAUSAL_BOOLEAN_FIELDS):
+        blockers.append("review_artifact_effective_config_causal_binding_invalid_boolean")
+
+    prompt_raw, prompt_blockers = _read_independent_review_evidence_file(
+        root=root,
+        path_text=artifact_field("prompt", "path"),
+        expected_sha=artifact_field("prompt", "sha256"),
+        blocker_prefix="review_artifact_prompt",
+    )
+    events_raw, events_blockers = _read_independent_review_evidence_file(
+        root=root,
+        path_text=artifact_field("events", "path"),
+        expected_sha=artifact_field("events", "sha256"),
+        blocker_prefix="review_artifact_events",
+    )
+    raw_output, output_blockers = _read_independent_review_evidence_file(
+        root=root,
+        path_text=artifact_field("raw_output", "path"),
+        expected_sha=artifact_field("raw_output", "sha256"),
+        blocker_prefix="review_artifact_raw_output",
+    )
+    rollout_raw, rollout_blockers = _read_independent_review_evidence_file(
+        root=root,
+        path_text=str(session.get("rollout_path") or ""),
+        expected_sha=str(session.get("rollout_sha256") or ""),
+        blocker_prefix="review_artifact_rollout",
+    )
+    blockers.extend(prompt_blockers + events_blockers + output_blockers + rollout_blockers)
+
+    if prompt_raw is not None:
+        blockers.extend(_independent_review_prompt_blockers(prompt_raw=prompt_raw, scope=scope))
+    if events_raw is not None:
+        blockers.extend(
+            _independent_review_events_blockers(
+                events_raw=events_raw,
+                expected_thread_id=thread_id,
+            )
+        )
+    if raw_output is not None and review_text:
+        marker = "## Reviewer Output\n\n"
+        artifact_body = review_text.partition(marker)[2].encode("utf-8") if marker in review_text else b""
+        if artifact_body != raw_output:
+            blockers.append("review_artifact_raw_output_body_mismatch")
+    if rollout_raw is not None:
+        recomputed, recompute_blockers = _parse_independent_review_rollout(
+            rollout_raw=rollout_raw,
+            configured_model=configured_model,
+        )
+        blockers.extend(recompute_blockers)
+        recomputed_expected = {
+            "session_id": session_id,
+            "thread_id": thread_id,
+            "codex_cli_version": cli_version,
+            "model": str(effective.get("model") or "").strip(),
+            "reasoning_effort": str(effective.get("reasoning_effort") or "").strip(),
+            "service_tier": _canonical_review_service_tier(effective.get("service_tier")),
+            "source": effective.get("source"),
+            "model_reroutes": claimed_reroutes,
+        }
+        for field, claimed in recomputed_expected.items():
+            if recomputed.get(field) != claimed:
+                blockers.append(f"review_artifact_rollout_recomputed_mismatch:{field}")
+        if thread_id and thread_id not in str(session.get("rollout_path") or ""):
+            blockers.append("review_artifact_rollout_thread_mismatch")
+    if prompt_raw is not None and raw_output is not None and rollout_raw is not None:
+        recomputed_causal, causal_blockers = _parse_independent_review_causal_binding(
+            rollout_raw=rollout_raw,
+            prompt_raw=prompt_raw,
+            raw_output=raw_output,
+            expected_thread_id=thread_id,
+        )
+        blockers.extend(causal_blockers)
+        for field in sorted(_INDEPENDENT_REVIEW_CAUSAL_FIELDS):
+            if causal_binding.get(field) != recomputed_causal.get(field):
+                blockers.append(f"review_artifact_causal_binding_recomputed_mismatch:{field}")
+    else:
+        blockers.append("review_artifact_causal_binding_evidence_incomplete")
+
+    blockers.extend(
+        _independent_review_scope_blockers(
+            scope=scope,
+            metadata=metadata,
+            root=root,
+            expected_title=expected_title,
+            required_files=list(required_files or []),
+            expected_scope_digest=expected_scope_digest,
+        )
+    )
+    return _dedupe_strings(blockers)
+
+
+def _read_independent_review_evidence_file(
+    *, root: Path, path_text: str, expected_sha: str, blocker_prefix: str
+) -> tuple[bytes | None, list[str]]:
+    if not str(path_text or "").strip() or not _is_sha256(expected_sha):
+        return None, [f"{blocker_prefix}_evidence_missing"]
+    path = Path(path_text).expanduser()
+    if not path.is_absolute():
+        path = root / path
+    try:
+        resolved = _realpath(path)
+        resolved.relative_to(root)
+    except ValueError:
+        return None, [f"{blocker_prefix}_outside_workspace"]
+    try:
+        raw = resolved.read_bytes()
+    except OSError:
+        return None, [f"{blocker_prefix}_missing"]
+    if hashlib.sha256(raw).hexdigest() != expected_sha:
+        return raw, [f"{blocker_prefix}_sha256_mismatch"]
+    return raw, []
+
+
+def _independent_review_prompt_blockers(*, prompt_raw: bytes, scope: dict[str, Any]) -> list[str]:
+    try:
+        prompt = prompt_raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return ["review_artifact_prompt_invalid_utf8"]
+    expected_lines = (
+        f"Title: {normalize_independent_review_title(scope.get('title'))}",
+        f"Base/ref: {str(scope.get('base_ref') or '').strip()}",
+        f"Resolved base commit: {str(scope.get('resolved_base_commit') or '').strip()}",
+        f"Resolved head commit: {str(scope.get('resolved_head_commit') or '').strip()}",
+        f"Scope digest: {str(scope.get('scope_digest_sha256') or '').strip()}",
+    )
+    blockers = ["review_artifact_prompt_scope_mismatch" for line in expected_lines if line not in prompt]
+    try:
+        files = normalize_independent_review_files(list(scope.get("files") or []))
+    except ValueError:
+        files = []
+        blockers.append("review_artifact_prompt_invalid_file_scope")
+    if any(f"- `{path}`" not in prompt for path in files):
+        blockers.append("review_artifact_prompt_file_scope_mismatch")
+    context_marker = "Additional context:\n"
+    context_end_marker = "\n\nRun read-only inspection commands as needed."
+    if context_marker not in prompt or context_end_marker not in prompt.partition(context_marker)[2]:
+        blockers.append("review_artifact_prompt_context_missing")
+    else:
+        context = prompt.partition(context_marker)[2].partition(context_end_marker)[0]
+        context_sha = hashlib.sha256(context.strip().encode("utf-8")).hexdigest()
+        if context_sha != str(scope.get("extra_context_sha256") or ""):
+            blockers.append("review_artifact_prompt_context_sha256_mismatch")
+    return _dedupe_strings(blockers)
+
+
+def _independent_review_events_blockers(*, events_raw: bytes, expected_thread_id: str) -> list[str]:
+    thread_ids: set[str] = set()
+    blockers: list[str] = []
+    for line_number, raw_line in enumerate(events_raw.decode("utf-8", errors="replace").splitlines(), start=1):
+        if not raw_line.strip():
+            continue
+        try:
+            event = json.loads(raw_line)
+        except (TypeError, ValueError):
+            blockers.append(f"review_artifact_events_invalid_json:{line_number}")
+            continue
+        if not isinstance(event, dict) or str(event.get("type") or "") != "thread.started":
+            continue
+        raw_payload = event.get("payload")
+        payload = dict(raw_payload) if isinstance(raw_payload, dict) else {}
+        thread_id = str(event.get("thread_id") or payload.get("thread_id") or "").strip()
+        if thread_id:
+            thread_ids.add(thread_id)
+    if thread_ids != {expected_thread_id}:
+        blockers.append("review_artifact_events_thread_mismatch")
+    return blockers
+
+
+def _review_rollout_event_kind_and_payload(event: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    raw_payload = event.get("payload")
+    payload = dict(raw_payload) if isinstance(raw_payload, dict) else {}
+    if str(event.get("type") or "") == "event_msg":
+        return str(payload.get("type") or "").strip(), payload
+    return str(event.get("type") or "").strip(), payload
+
+
+def _review_rollout_response_message_text(payload: dict[str, Any], *, role: str) -> str | None:
+    if str(payload.get("type") or "") != "message" or str(payload.get("role") or "") != role:
+        return None
+    content = payload.get("content")
+    if not isinstance(content, list) or not content:
+        return None
+    expected_part_type = "input_text" if role == "user" else "output_text"
+    parts: list[str] = []
+    for raw_part in content:
+        if not isinstance(raw_part, dict):
+            return None
+        if str(raw_part.get("type") or "") != expected_part_type or not isinstance(raw_part.get("text"), str):
+            return None
+        parts.append(str(raw_part["text"]))
+    return "".join(parts)
+
+
+def _review_normalize_trailing_newlines(value: str) -> str:
+    return value.rstrip("\r\n")
+
+
+def _parse_independent_review_causal_binding(
+    *,
+    rollout_raw: bytes,
+    prompt_raw: bytes,
+    raw_output: bytes,
+    expected_thread_id: str,
+) -> tuple[dict[str, Any], list[str]]:
+    rollout_json_valid = True
+    text_utf8_valid = True
+    try:
+        prompt = prompt_raw.decode("utf-8")
+        final_output = raw_output.decode("utf-8")
+    except UnicodeDecodeError:
+        prompt = ""
+        final_output = ""
+        text_utf8_valid = False
+    normalized_final = _review_normalize_trailing_newlines(final_output)
+    root_session_sources: list[str] = []
+    task_starts: list[tuple[int, str]] = []
+    task_completes: list[tuple[int, str, str]] = []
+    abort_seen = False
+    response_user_messages: list[tuple[int, str]] = []
+    event_user_messages: list[tuple[int, str]] = []
+    response_final_messages: list[tuple[int, str]] = []
+    event_final_messages: list[tuple[int, str]] = []
+
+    for line_number, raw_line in enumerate(rollout_raw.decode("utf-8", errors="replace").splitlines(), start=1):
+        if not raw_line.strip():
+            continue
+        try:
+            event = json.loads(raw_line)
+        except (TypeError, ValueError):
+            rollout_json_valid = False
+            continue
+        if not isinstance(event, dict):
+            rollout_json_valid = False
+            continue
+        kind, event_payload = _review_rollout_event_kind_and_payload(event)
+        if kind == "session_meta":
+            session_id = str(event_payload.get("id") or event_payload.get("session_id") or "").strip()
+            if session_id == expected_thread_id:
+                source = event_payload.get("source")
+                root_session_sources.append(source if isinstance(source, str) else "")
+        elif kind == "task_started":
+            task_starts.append((line_number, str(event_payload.get("turn_id") or "").strip()))
+        elif kind == "task_complete":
+            task_completes.append(
+                (
+                    line_number,
+                    str(event_payload.get("turn_id") or "").strip(),
+                    str(event_payload.get("last_agent_message") or ""),
+                )
+            )
+        elif "abort" in kind.lower():
+            abort_seen = True
+        elif kind == "response_item":
+            user_text = _review_rollout_response_message_text(event_payload, role="user")
+            if user_text is not None:
+                response_user_messages.append((line_number, user_text))
+            assistant_text = _review_rollout_response_message_text(event_payload, role="assistant")
+            if assistant_text is not None and str(event_payload.get("phase") or "") == "final_answer":
+                response_final_messages.append((line_number, assistant_text))
+        elif kind == "user_message" and isinstance(event_payload.get("message"), str):
+            event_user_messages.append((line_number, str(event_payload["message"])))
+        elif (
+            kind == "agent_message"
+            and str(event_payload.get("phase") or "") == "final_answer"
+            and isinstance(event_payload.get("message"), str)
+        ):
+            event_final_messages.append((line_number, str(event_payload["message"])))
+
+    single_task_turn = (
+        len(task_starts) == 1
+        and len(task_completes) == 1
+        and bool(task_starts[0][1])
+        and task_starts[0][1] == task_completes[0][1]
+        and task_starts[0][0] < task_completes[0][0]
+    )
+    turn_id = task_starts[0][1] if single_task_turn else ""
+    start_line = task_starts[0][0] if single_task_turn else -1
+    complete_line = task_completes[0][0] if single_task_turn else -1
+
+    def exact_between(observations: list[tuple[int, str]], expected: str, *, normalize_newlines: bool = False) -> bool:
+        matches = [
+            line_number
+            for line_number, observed in observations
+            if start_line < line_number < complete_line
+            and (
+                _review_normalize_trailing_newlines(observed) == _review_normalize_trailing_newlines(expected)
+                if normalize_newlines
+                else observed == expected
+            )
+        ]
+        return single_task_turn and len(matches) == 1
+
+    binding = {
+        "turn_id": turn_id,
+        "prompt_sha256": hashlib.sha256(prompt_raw).hexdigest(),
+        "normalized_final_output_sha256": hashlib.sha256(normalized_final.encode("utf-8")).hexdigest(),
+        "rollout_json_valid": rollout_json_valid,
+        "text_utf8_valid": text_utf8_valid,
+        "session_source_exec": root_session_sources == ["exec"],
+        "single_task_turn": single_task_turn,
+        "no_abort": not abort_seen,
+        "prompt_response_item_exact": exact_between(response_user_messages, prompt),
+        "prompt_event_message_exact": exact_between(event_user_messages, prompt),
+        "final_response_item_exact": exact_between(
+            response_final_messages,
+            final_output,
+            normalize_newlines=True,
+        ),
+        "final_event_message_exact": exact_between(
+            event_final_messages,
+            final_output,
+            normalize_newlines=True,
+        ),
+        "task_complete_final_exact": (
+            single_task_turn
+            and bool(normalized_final)
+            and _review_normalize_trailing_newlines(task_completes[0][2]) == normalized_final
+        ),
+    }
+    blockers: list[str] = []
+    blocker_by_field = {
+        "rollout_json_valid": "review_artifact_rollout_causal_invalid_json",
+        "text_utf8_valid": "review_artifact_rollout_causal_invalid_utf8",
+        "session_source_exec": "review_artifact_rollout_causal_session_source_not_exec",
+        "single_task_turn": "review_artifact_rollout_causal_turn_mismatch",
+        "no_abort": "review_artifact_rollout_causal_abort_present",
+        "prompt_response_item_exact": "review_artifact_rollout_causal_prompt_response_item_mismatch",
+        "prompt_event_message_exact": "review_artifact_rollout_causal_prompt_event_message_mismatch",
+        "final_response_item_exact": "review_artifact_rollout_causal_final_response_item_mismatch",
+        "final_event_message_exact": "review_artifact_rollout_causal_final_event_message_mismatch",
+        "task_complete_final_exact": "review_artifact_rollout_causal_task_complete_mismatch",
+    }
+    for field, blocker in blocker_by_field.items():
+        if binding[field] is not True:
+            blockers.append(blocker)
+    return binding, blockers
+
+
+def _review_rollout_first_value(mappings: list[dict[str, Any]], keys: tuple[str, ...]) -> str:
+    for mapping in mappings:
+        for key in keys:
+            value = mapping.get(key)
+            if isinstance(value, dict):
+                value = value.get("model") or value.get("value")
+            normalized = str(value or "").strip()
+            if normalized:
+                return normalized
+    return ""
+
+
+def _review_rollout_settings(kind: str, payload: dict[str, Any]) -> dict[str, str]:
+    if kind not in _INDEPENDENT_REVIEW_ROLLOUT_SETTING_EVENT_TYPES:
+        return {}
+    containers: list[dict[str, Any]] = []
+    for key in ("thread_settings", "session_config", "settings", "config"):
+        value = payload.get(key)
+        if isinstance(value, dict):
+            containers.append(dict(value))
+    containers.append(payload)
+    collaboration_mode = payload.get("collaboration_mode")
+    if isinstance(collaboration_mode, dict) and isinstance(collaboration_mode.get("settings"), dict):
+        containers.append(dict(collaboration_mode["settings"]))
+    values = {
+        "model": _review_rollout_first_value(containers, ("model",)),
+        "reasoning_effort": _review_rollout_first_value(
+            containers, ("reasoning_effort", "model_reasoning_effort", "effort")
+        ),
+        "service_tier": _canonical_review_service_tier(_review_rollout_first_value(containers, ("service_tier",))),
+    }
+    return {field: value for field, value in values.items() if value}
+
+
+def _parse_independent_review_rollout(*, rollout_raw: bytes, configured_model: str) -> tuple[dict[str, Any], list[str]]:
+    state: dict[str, str] = {}
+    source: dict[str, list[str]] = {"model": [], "reasoning_effort": [], "service_tier": []}
+    session_ids: set[str] = set()
+    cli_versions: set[str] = set()
+    reroutes: list[dict[str, str]] = []
+    blockers: list[str] = []
+    for line_number, raw_line in enumerate(rollout_raw.decode("utf-8", errors="replace").splitlines(), start=1):
+        if not raw_line.strip():
+            continue
+        try:
+            event = json.loads(raw_line)
+        except (TypeError, ValueError):
+            blockers.append(f"review_artifact_rollout_invalid_json:{line_number}")
+            continue
+        if not isinstance(event, dict):
+            blockers.append(f"review_artifact_rollout_invalid_event:{line_number}")
+            continue
+        kind, payload = _review_rollout_event_kind_and_payload(event)
+        if kind == "session_meta":
+            session_id = str(payload.get("id") or payload.get("session_id") or "").strip()
+            cli_version = str(payload.get("cli_version") or "").strip()
+            if session_id:
+                session_ids.add(session_id)
+            if cli_version:
+                cli_versions.add(cli_version)
+            continue
+        if kind == "model_reroute":
+            containers = [payload]
+            for key in ("reroute", "model_reroute"):
+                value = payload.get(key)
+                if isinstance(value, dict):
+                    containers.insert(0, dict(value))
+            from_model = _review_rollout_first_value(
+                containers, ("from_model", "source_model", "previous_model", "original_model", "from")
+            )
+            to_model = _review_rollout_first_value(
+                containers, ("to_model", "target_model", "new_model", "rerouted_model", "to")
+            )
+            current_model = state.get("model") or configured_model
+            if not from_model or not to_model or from_model != current_model:
+                blockers.append("review_artifact_rollout_ambiguous_model_reroute")
+            else:
+                state["model"] = to_model
+                if "model_reroute" not in source["model"]:
+                    source["model"].append("model_reroute")
+                reroutes.append({"from_model": from_model, "to_model": to_model})
+            continue
+        for field, value in _review_rollout_settings(kind, payload).items():
+            previous = state.get(field, "")
+            matches = (
+                _review_service_tier_matches(previous, value)
+                if field == "service_tier" and previous
+                else previous == value
+            )
+            if previous and not matches:
+                blockers.append(f"review_artifact_rollout_conflicting_{field}")
+                continue
+            state[field] = _canonical_review_service_tier(value) if field == "service_tier" else value
+            if kind not in source[field]:
+                source[field].append(kind)
+    if len(session_ids) != 1:
+        blockers.append("review_artifact_rollout_invalid_session_identity")
+    if len(cli_versions) != 1:
+        blockers.append("review_artifact_rollout_invalid_cli_version")
+    if reroutes:
+        blockers.append("review_artifact_rollout_model_reroute_not_allowed")
+    if any(not state.get(field) or not source[field] for field in source):
+        blockers.append("review_artifact_rollout_incomplete_effective_settings")
+    session_id = next(iter(session_ids), "")
+    return {
+        "session_id": session_id,
+        "thread_id": session_id,
+        "codex_cli_version": next(iter(cli_versions), ""),
+        "model": state.get("model", ""),
+        "reasoning_effort": state.get("reasoning_effort", ""),
+        "service_tier": state.get("service_tier", ""),
+        "source": source,
+        "model_reroutes": reroutes,
+    }, blockers
+
+
+def _independent_review_scope_blockers(
+    *,
+    scope: dict[str, Any],
+    metadata: dict[str, str],
+    root: Path,
+    expected_title: str,
+    required_files: list[str],
+    expected_scope_digest: str,
+) -> list[str]:
+    blockers: list[str] = []
+    try:
+        files = normalize_independent_review_files(list(scope.get("files") or []))
+    except ValueError:
+        files = []
+        blockers.append("review_artifact_scope_invalid_files")
+    if files != list(scope.get("files") or []):
+        blockers.append("review_artifact_scope_files_not_canonical")
+    title = normalize_independent_review_title(scope.get("title"))
+    if expected_title and title != expected_title:
+        blockers.append("review_artifact_scope_title_mismatch")
+    if required_files and files != required_files:
+        blockers.append("review_artifact_scope_files_mismatch")
+    digest = independent_review_scope_digest(scope)
+    claimed_digest = str(scope.get("scope_digest_sha256") or "").strip()
+    if not _is_sha256(claimed_digest) or digest != claimed_digest:
+        blockers.append("review_artifact_scope_digest_mismatch")
+    if str(metadata.get("review_scope_digest_sha256") or "").strip() != claimed_digest:
+        blockers.append("review_artifact_scope_metadata_digest_mismatch")
+    expected_digest = str(expected_scope_digest or "").strip()
+    if expected_digest and (not _is_sha256(expected_digest) or expected_digest != claimed_digest):
+        blockers.append("review_artifact_expected_scope_digest_mismatch")
+    if str(scope.get("scope_mode") or "") != INDEPENDENT_REVIEW_PINNED_SCOPE_MODE:
+        blockers.append("review_artifact_scope_not_signoff_capable")
+
+    base_ref = str(scope.get("base_ref") or "").strip()
+    base_commit = str(scope.get("resolved_base_commit") or "").strip()
+    head_commit = str(scope.get("resolved_head_commit") or "").strip()
+    if not base_ref or not _is_git_object_id(base_commit) or not _is_git_object_id(head_commit):
+        blockers.append("review_artifact_scope_missing_pinned_commits")
+        return blockers
+    if _review_git_bytes(root, "cat-file", "-e", f"{base_commit}^{{commit}}", allow_failure=True) is None:
+        blockers.append("review_artifact_scope_base_commit_missing")
+    if _review_git_bytes(root, "cat-file", "-e", f"{head_commit}^{{commit}}", allow_failure=True) is None:
+        blockers.append("review_artifact_scope_head_commit_missing")
+        return blockers
+    for path in files:
+        base_entry_type = _review_git_text(root, "cat-file", "-t", f"{base_commit}:{path}", allow_failure=True)
+        head_entry_type = _review_git_text(root, "cat-file", "-t", f"{head_commit}:{path}", allow_failure=True)
+        if "blob" not in {base_entry_type, head_entry_type}:
+            blockers.append(f"review_artifact_scope_missing_file:{path}")
+        elif path in required_files and head_entry_type != "blob":
+            blockers.append(f"review_artifact_scope_required_file_missing_at_head:{path}")
+
+    diff_raw = _review_git_bytes(
+        root,
+        "diff",
+        "--binary",
+        "--no-ext-diff",
+        base_commit,
+        head_commit,
+        "--",
+        *files,
+        allow_failure=True,
+    )
+    tree_raw = _review_git_bytes(
+        root,
+        "ls-tree",
+        "-r",
+        "--full-tree",
+        head_commit,
+        "--",
+        *files,
+        allow_failure=True,
+    )
+    if diff_raw is None or hashlib.sha256(diff_raw).hexdigest() != str(scope.get("git_diff_sha256") or ""):
+        blockers.append("review_artifact_scope_git_diff_sha256_mismatch")
+    if tree_raw is None or hashlib.sha256(tree_raw).hexdigest() != str(scope.get("git_tree_sha256") or ""):
+        blockers.append("review_artifact_scope_git_tree_sha256_mismatch")
+
+    current_head_commit = _review_git_text(
+        root,
+        "rev-parse",
+        "--verify",
+        "HEAD^{commit}",
+        allow_failure=True,
+    )
+    reviewed_head_is_ancestor = (
+        _review_git_bytes(
+            root,
+            "merge-base",
+            "--is-ancestor",
+            head_commit,
+            current_head_commit,
+            allow_failure=True,
+        )
+        if current_head_commit
+        else None
+    )
+    later_scoped_commits = (
+        _review_git_bytes(
+            root,
+            "log",
+            "--format=%H",
+            f"{head_commit}..{current_head_commit}",
+            "--",
+            *files,
+            allow_failure=True,
+        )
+        if current_head_commit and reviewed_head_is_ancestor is not None
+        else None
+    )
+    current_scope_index_diff = (
+        _review_git_bytes(
+            root,
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            "--cached",
+            current_head_commit,
+            "--",
+            *files,
+            allow_failure=True,
+        )
+        if current_head_commit
+        else None
+    )
+    current_scope_worktree_diff = _review_git_bytes(
+        root,
+        "diff",
+        "--binary",
+        "--no-ext-diff",
+        "--",
+        *files,
+        allow_failure=True,
+    )
+    current_scope_untracked = _review_git_bytes(
+        root,
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+        "--",
+        *files,
+        allow_failure=True,
+    )
+    if (
+        not current_head_commit
+        or reviewed_head_is_ancestor is None
+        or later_scoped_commits is None
+        or current_scope_index_diff is None
+        or current_scope_worktree_diff is None
+        or current_scope_untracked is None
+    ):
+        blockers.append("review_artifact_scope_current_tree_unverifiable")
+    elif (
+        later_scoped_commits.strip()
+        or current_scope_index_diff
+        or current_scope_worktree_diff
+        or current_scope_untracked.strip()
+    ):
+        blockers.append("review_artifact_scope_current_tree_mismatch")
+
+    return blockers
+
+
+def _is_git_object_id(value: str) -> bool:
+    normalized = str(value or "").strip().lower()
+    return len(normalized) in {40, 64} and all(character in "0123456789abcdef" for character in normalized)
+
+
+def _canonical_review_service_tier(value: object) -> str:
+    normalized = str(value or "").strip()
+    return "priority" if normalized in {"fast", "priority"} else normalized
+
+
+def _is_sha256(value: str) -> bool:
+    normalized = str(value or "").strip().lower()
+    return len(normalized) == 64 and all(character in "0123456789abcdef" for character in normalized)
+
+
+def _review_service_tier_matches(configured: str, effective: str) -> bool:
+    aliases = {"fast": "priority", "priority": "priority"}
+    return aliases.get(str(configured or "").strip(), str(configured or "").strip()) == aliases.get(
+        str(effective or "").strip(),
+        str(effective or "").strip(),
+    )
+
+
 def _bundle_mandatory_review_tokens(*, plan: dict[str, Any], evidence: dict[str, Any]) -> list[str]:
     tokens = [BUNDLE_MANIFEST_CONTRACT_VERSION]
     source_bundle_sha = str(plan.get("source_bundle_manifest_sha256") or "").strip()
     if source_bundle_sha:
         tokens.append(f"source_bundle_manifest_sha256={source_bundle_sha}")
-    scope_digest = str(evidence.get("review_plan_scope_digest_sha256") or plan.get("review_plan_scope_digest_sha256") or "").strip()
+    scope_digest = str(
+        evidence.get("review_plan_scope_digest_sha256") or plan.get("review_plan_scope_digest_sha256") or ""
+    ).strip()
     if scope_digest:
         tokens.append(f"review_plan_scope_digest_sha256={scope_digest}")
     return _dedupe_strings(tokens)
@@ -1038,7 +2105,9 @@ def _raw_path_symlink_reason(*, path_text: str, root: Path) -> str:
 
 
 def _normalize_path_token(value: str) -> str:
-    return "".join(character.lower() if character.isalnum() else "_" for character in str(value or "").strip()).strip("_")
+    return "".join(character.lower() if character.isalnum() else "_" for character in str(value or "").strip()).strip(
+        "_"
+    )
 
 
 def _normalize_retention_classes(values: list[str] | None) -> list[str]:
@@ -1053,7 +2122,9 @@ def _normalize_retention_classes(values: list[str] | None) -> list[str]:
     return normalized
 
 
-def _effective_retention_class(*, path_text: str, retention_class: str = "", matched_markers: list[str] | None = None) -> str:
+def _effective_retention_class(
+    *, path_text: str, retention_class: str = "", matched_markers: list[str] | None = None
+) -> str:
     tokens = [_normalize_path_token(part) for part in Path(str(path_text or "")).parts]
     tokens.extend(_normalize_path_token(marker) for marker in list(matched_markers or []))
     normalized_path = _normalize_path_token(path_text)
@@ -1102,7 +2173,9 @@ def _cold_copy_manifest_blockers(*, plan: dict[str, Any], root: Path, manifest_p
     if contract_version == BUNDLE_MANIFEST_CONTRACT_VERSION:
         entries, archive_field_blockers = _supersession_cold_bundle_archives(payload)
         contract_blockers.extend(archive_field_blockers)
-        contract_blockers.extend(_supersession_cold_bundle_manifest_blockers(plan=plan, root=root, payload=payload, archives=entries))
+        contract_blockers.extend(
+            _supersession_cold_bundle_manifest_blockers(plan=plan, root=root, payload=payload, archives=entries)
+        )
     by_path = {str(entry.get("path") or ""): entry for entry in entries if str(entry.get("path") or "")}
     missing_count = 0
     metadata_mismatch_count = 0
@@ -1193,7 +2266,9 @@ def _bundle_review_scope_binding_blockers(
 ) -> list[str]:
     blockers: list[str] = []
     review_plan_artifact = str(evidence.get("review_plan_artifact") or "").strip()
-    scope_digest = str(evidence.get("review_plan_scope_digest_sha256") or plan.get("review_plan_scope_digest_sha256") or "").strip()
+    scope_digest = str(
+        evidence.get("review_plan_scope_digest_sha256") or plan.get("review_plan_scope_digest_sha256") or ""
+    ).strip()
     if not review_plan_artifact:
         blockers.append("missing_review_plan_artifact")
     if len(scope_digest) != 64:
@@ -1203,23 +2278,37 @@ def _bundle_review_scope_binding_blockers(
         if current_scope_digest != scope_digest:
             blockers.append("review_plan_scope_digest_mismatch")
     if review_plan_artifact and len(scope_digest) == 64:
-        blockers.extend(_review_plan_artifact_blockers(plan=plan, root=root, artifact_path=review_plan_artifact, expected_scope_digest=scope_digest))
-    if source_bundle_path and source_bundle_sha256 and not _review_required_artifact_present(
-        evidence=evidence,
-        path=source_bundle_path,
-        sha256=source_bundle_sha256,
+        blockers.extend(
+            _review_plan_artifact_blockers(
+                plan=plan, root=root, artifact_path=review_plan_artifact, expected_scope_digest=scope_digest
+            )
+        )
+    if (
+        source_bundle_path
+        and source_bundle_sha256
+        and not _review_required_artifact_present(
+            evidence=evidence,
+            path=source_bundle_path,
+            sha256=source_bundle_sha256,
+        )
     ):
         blockers.append("missing_source_bundle_review_required_artifact")
-    if review_plan_artifact and scope_digest and not _review_required_artifact_present(
-        evidence=evidence,
-        path=review_plan_artifact,
-        sha256=scope_digest,
+    if (
+        review_plan_artifact
+        and scope_digest
+        and not _review_required_artifact_present(
+            evidence=evidence,
+            path=review_plan_artifact,
+            sha256=scope_digest,
+        )
     ):
         blockers.append("missing_review_plan_required_artifact")
     return blockers
 
 
-def _review_plan_artifact_blockers(*, plan: dict[str, Any], root: Path, artifact_path: str, expected_scope_digest: str) -> list[str]:
+def _review_plan_artifact_blockers(
+    *, plan: dict[str, Any], root: Path, artifact_path: str, expected_scope_digest: str
+) -> list[str]:
     blockers: list[str] = []
     raw_path = str(artifact_path or "").strip()
     if not raw_path:
@@ -1256,7 +2345,10 @@ def _review_required_artifact_present(*, evidence: dict[str, Any], path: str, sh
         if not isinstance(raw_item, dict):
             continue
         item = dict(raw_item)
-        if str(item.get("path") or "").strip() == expected_path and str(item.get("sha256") or "").strip() == expected_sha:
+        if (
+            str(item.get("path") or "").strip() == expected_path
+            and str(item.get("sha256") or "").strip() == expected_sha
+        ):
             return True
     return False
 
@@ -1292,11 +2384,22 @@ def _manifest_int(entry: dict[str, Any], key: str) -> int | None:
 
 
 def _manifest_entry_has_proof(entry: dict[str, Any]) -> bool:
-    proof_keys = ("sha256", "sha256_digest", "archive_sha256", "content_hash", "hash", "proof", "proof_uri", "manifest_sha256")
+    proof_keys = (
+        "sha256",
+        "sha256_digest",
+        "archive_sha256",
+        "content_hash",
+        "hash",
+        "proof",
+        "proof_uri",
+        "manifest_sha256",
+    )
     return any(str(entry.get(key) or "").strip() for key in proof_keys)
 
 
-def _supersession_cold_bundle_manifest_blockers(*, plan: dict[str, Any], root: Path, payload: dict[str, Any], archives: list[dict[str, Any]]) -> list[str]:
+def _supersession_cold_bundle_manifest_blockers(
+    *, plan: dict[str, Any], root: Path, payload: dict[str, Any], archives: list[dict[str, Any]]
+) -> list[str]:
     blockers: list[str] = []
     if str(payload.get("status") or "") != "ready_for_prune_cold_copy_manifest":
         blockers.append("cold_bundle_manifest_not_ready")
@@ -1324,7 +2427,9 @@ def _supersession_cold_bundle_manifest_blockers(*, plan: dict[str, Any], root: P
             blockers.append(f"cold_bundle_entry_not_ready:{path_text}")
         if bool(entry.get("archive_verified")) is not True:
             blockers.append(f"cold_bundle_entry_not_verified:{path_text}")
-        archive_reason = _cold_bundle_archive_file_reason(entry=entry, operation=op, root=root, operation_paths=operation_paths)
+        archive_reason = _cold_bundle_archive_file_reason(
+            entry=entry, operation=op, root=root, operation_paths=operation_paths
+        )
         if archive_reason:
             blockers.append(f"{archive_reason}:{path_text}")
     return blockers
@@ -1386,7 +2491,9 @@ def _cold_bundle_archive_file_reason(
     if not str(entry.get("source_manifest_digest_sha256") or "").strip():
         return "cold_bundle_missing_source_manifest_digest"
     archive_format = str(entry.get("archive_format") or "")
-    archive_structure_reason = _cold_bundle_archive_structure_reason(archive_path=resolved, archive_format=archive_format, source_path=str(operation.get("path") or ""))
+    archive_structure_reason = _cold_bundle_archive_structure_reason(
+        archive_path=resolved, archive_format=archive_format, source_path=str(operation.get("path") or "")
+    )
     if archive_structure_reason:
         return archive_structure_reason
     return ""
@@ -1426,7 +2533,7 @@ def _cold_bundle_archive_structure_reason(*, archive_path: Path, archive_format:
         if shutil.which("zstd") is None:
             return "cold_bundle_archive_zstd_unavailable"
         result = subprocess.run(
-            ["sh", "-c", "zstd -dc \"$1\" | tar -tf -", "sh", str(archive_path)],
+            ["sh", "-c", 'zstd -dc "$1" | tar -tf -', "sh", str(archive_path)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -1687,7 +2794,9 @@ def _active_runtime_pid_file_processes(
         command = process_commands.get(pid)
         if command is None:
             continue
-        if not _command_is_workspace_runtime_process(command=command, root=root) and not _runtime_process_reference_is_fresh(reference_path):
+        if not _command_is_workspace_runtime_process(
+            command=command, root=root
+        ) and not _runtime_process_reference_is_fresh(reference_path):
             # The recorded pid is alive, but the live process is unrecognizable
             # as a workspace runtime process AND the reference file has gone
             # stale far beyond its heartbeat contract: treat as pid reuse after
@@ -1695,7 +2804,12 @@ def _active_runtime_pid_file_processes(
             # rule would let a dead service block pruning of its own runtime
             # directory forever.
             continue
-        active.append({"pid": pid, "command": f"{command[:450]} [runtime process reference: {_display_path(reference_path, root)}]"})
+        active.append(
+            {
+                "pid": pid,
+                "command": f"{command[:450]} [runtime process reference: {_display_path(reference_path, root)}]",
+            }
+        )
     return active
 
 
@@ -1748,7 +2862,11 @@ def _iter_runtime_process_references(root: Path, *, operation_paths: list[str] |
     references: list[tuple[Path, int]] = []
     scan_bases = _runtime_process_reference_scan_bases(root=root, operation_paths=operation_paths)
     for base, recursive in scan_bases:
-        patterns = ("**/service_logs/*.pid", "**/services/*/status.json") if recursive else ("service_logs/*.pid", "services/*/status.json")
+        patterns = (
+            ("**/service_logs/*.pid", "**/services/*/status.json")
+            if recursive
+            else ("service_logs/*.pid", "services/*/status.json")
+        )
         for pattern in patterns:
             try:
                 for reference_path in base.glob(pattern):

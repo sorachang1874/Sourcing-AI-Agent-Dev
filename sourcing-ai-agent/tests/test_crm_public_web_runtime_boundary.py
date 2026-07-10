@@ -14,8 +14,7 @@ import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
-from tests.source_inspection import all_source_files, find_class_method, find_def, find_module_def
+from types import SimpleNamespace
 
 from sourcing_agent.asset_logger import AssetLogger
 from sourcing_agent.public_web_runtime_core import (
@@ -25,7 +24,6 @@ from sourcing_agent.public_web_runtime_core import (
     _public_web_phase_metrics_from_summary,
 )
 from sourcing_agent.public_web_search import (
-    CandidateSearchOutcome,
     CandidateSearchPlan,
     PublicWebCandidateContext,
     PublicWebExperimentOptions,
@@ -38,6 +36,7 @@ from sourcing_agent.search_provider import (
     SearchBatchSubmissionResult,
     SearchBatchSubmissionTask,
 )
+from tests.source_inspection import all_source_files, find_class_method, find_def, find_module_def
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src" / "sourcing_agent"
@@ -86,6 +85,8 @@ ALLOWED_LEGACY_STORAGE_WRITE_TEST_FUNCTIONS = {
     "test_legacy_target_public_web_storage_writes_fail_closed_without_migration_context",
 }
 
+PUBLIC_WEB_CORE_ALLOWED_LEGACY_STORAGE_FUNCTIONS: frozenset[str] = frozenset()
+
 FORBIDDEN_CRM_SYMBOLS_FROM_LEGACY_MODULE = {
     "CRM_PUBLIC_WEB_EXECUTION_BACKEND",
     "CRM_PUBLIC_WEB_JOB_TYPE",
@@ -100,6 +101,9 @@ FORBIDDEN_CRM_SYMBOLS_FROM_LEGACY_MODULE = {
 
 
 class _ProjectionContextStore:
+    def __init__(self) -> None:
+        self.repos = SimpleNamespace(serving_projection=self)
+
     def get_crm_record(self, crm_record_id: str) -> dict:
         assert crm_record_id == "crmrec_margaret"
         return {
@@ -112,7 +116,7 @@ class _ProjectionContextStore:
             "primary_company_cache": "Anthropic",
         }
 
-    def get_serving_projection_member(self, projection_id: str, candidate_identity_key: str) -> dict:
+    def get_member(self, projection_id: str, candidate_identity_key: str) -> dict:
         assert projection_id == "proj_anthropic"
         assert candidate_identity_key == "linkedin:margaret-v"
         return {
@@ -306,6 +310,86 @@ def test_public_web_phase_metrics_expose_model_fallback_diagnostics() -> None:
     assert metrics["model_fallback_used"] is True
     assert metrics["model_fallback_reason"] == "model_call_failed"
     assert "401" in metrics["model_error"]
+
+
+def test_public_web_phase_metrics_propagate_provider_response_model_provenance() -> None:
+    metrics = _public_web_phase_metrics_from_summary(
+        checkpoint={"tasks": []},
+        summary={},
+        analysis_duration_ms=12.0,
+        signals={
+            "entry_links": [],
+            "email_candidates": [],
+            "ai_adjudication": {
+                "provider": "sharedchat_openai_compatible",
+                "model": "gpt-5.6-sol",
+                "model_version": "gpt-5.6-sol",
+                "fallback_used": False,
+                "result": {
+                    "requested_model": "gpt-5.6-sol",
+                    "response_model": "gpt-5.6-sol",
+                    "effective_model": "gpt-5.6-sol",
+                    "model_identity_provenance": "provider_response",
+                    "model_usage": {"input_tokens": 120, "output_tokens": 24, "total_tokens": 144},
+                },
+            },
+        },
+    )
+
+    assert metrics["model_provider"] == "sharedchat_openai_compatible"
+    assert metrics["model"] == "gpt-5.6-sol"
+    assert metrics["model_version"] == "gpt-5.6-sol"
+    assert metrics["requested_model"] == "gpt-5.6-sol"
+    assert metrics["response_model"] == "gpt-5.6-sol"
+    assert metrics["effective_model"] == "gpt-5.6-sol"
+    assert metrics["model_identity_provenance"] == "provider_response"
+    assert metrics["model_usage"] == {"input_tokens": 120, "output_tokens": 24, "total_tokens": 144}
+
+    missing_response_identity = _public_web_phase_metrics_from_summary(
+        checkpoint={"tasks": []},
+        summary={},
+        analysis_duration_ms=12.0,
+        signals={
+            "ai_adjudication": {
+                "result": {
+                    "requested_model": "gpt-5.6-sol",
+                    "effective_model": "gpt-5.6-sol",
+                    "model_identity_provenance": "provider_response",
+                }
+            }
+        },
+    )
+    assert "model_identity_provenance" not in missing_response_identity
+
+
+def test_public_web_phase_metrics_allowlist_and_bound_model_usage() -> None:
+    metrics = _public_web_phase_metrics_from_summary(
+        checkpoint={"tasks": []},
+        summary={},
+        analysis_duration_ms=12.0,
+        signals={
+            "ai_adjudication": {
+                "result": {
+                    "model_usage": {
+                        "input_tokens": "120",
+                        "output_tokens": True,
+                        "total_tokens": 2_000_000_000,
+                        "cached_input_tokens": 4,
+                        "reasoning_output_tokens": -3,
+                        "provider_payload": {"secret": "must-not-propagate"},
+                        "unbounded_provider_detail": "must-not-propagate",
+                    }
+                }
+            }
+        },
+    )
+
+    assert metrics["model_usage"] == {
+        "input_tokens": 120,
+        "total_tokens": 1_000_000_000,
+        "cached_input_tokens": 4,
+        "reasoning_output_tokens": 0,
+    }
 
 
 def test_operation_native_public_web_poll_budget_does_not_terminalize_before_remote_timeout() -> None:

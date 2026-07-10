@@ -261,11 +261,11 @@ The current M0.9 exact-prune apply is not complete, and there is no current acce
 - `v9` returned `NO-GO` because the destructive prune verifier still accepted incomplete runner metadata.
 - `v10` returned `NO-GO` because this runbook still pointed operators back to the invalid `v8` artifact.
 
-The code-side metadata verifier has been hardened to reject review artifacts missing `reviewer_model`, `reviewer_reasoning_effort`, `reviewer_service_tier`, `prompt_path`, or `command`, and to reject default/auto/inherit reasoning or service-tier values for destructive prune apply. Before any destructive apply, generate a fresh current-scope Independent Review artifact that returns `GO`, then regenerate the plan against that artifact and confirm the plan scope digest remains exactly `2fe946d01dec5e534861e5c7ca2cf2e635da15c1d8524cb0d35a901c01add512`.
+The code-side verifier now uses the shared review-artifact contract. It rejects missing/default reviewer fields, nonzero reviewer exit, missing Codex CLI/session/thread identity, model reroute, config/effective mismatch, reference-only scope, later scoped commits, staged/unstaged/untracked scoped drift, and missing or SHA-mismatched `independent_review_effective_config_v2` prompt/events/raw-output/config/rollout evidence. It reparses the rollout, proves one completed root exec turn contains the exact prompt and final raw output, and recomputes the pinned-Git review scope instead of trusting copied metadata. Before any destructive apply, generate a fresh current-scope Independent Review artifact through the inherited-config runner; it must pass that durable evidence verification and return `GO`. Then regenerate the plan against that artifact and confirm the plan scope digest remains exactly `2fe946d01dec5e534861e5c7ca2cf2e635da15c1d8524cb0d35a901c01add512`.
 
 ## M0.9 Exact Next Commands
 
-First obtain a fresh `GO` review artifact for the current exact scope. Use the returned `review_output` path only if the artifact verdict is `GO` and its metadata records `gpt-5.5`, `xhigh`, and `fast`:
+First obtain a fresh `GO` review artifact for the current exact scope. Use the returned `review_output` path only if the artifact verdict is `GO`, the runner inherited `~/.codex/config.toml` without CLI pins, and the metadata records complete effective model/reasoning/service-tier values:
 
 ```sh
 PYTHONPATH=src .venv/bin/python scripts/run_independent_review_gate.py \

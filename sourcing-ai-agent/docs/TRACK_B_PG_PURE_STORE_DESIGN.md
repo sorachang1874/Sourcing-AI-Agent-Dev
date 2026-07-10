@@ -716,18 +716,32 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     最终合同 lane **190 passed/0 skip** + 后续门 **2/11/1/2 passed** + `dry_run_ready failures=[]`;Ruff/format 43 files、
     compileall 绿;mypy **87 errors/4 files**与 R-011 同分布。pipeline 无本表调用,按 R-009 禁令未跑。
   - **风险/评审/接续**:D-4 记录后续 members/search-index 与另两表的 positional `bulk_upsert_rows` 异常吞噬根因;
-    本批未触碰或暗选方案。异步 review scope 固定 `b3818f0..aaf13fb`;首个独立 Codex reviewer 在 artifact 写入时
-    遭 model-capacity failure,chat-only GO 不算 verdict;两个 fallback 也未在本 session 产出 artifact,故记 R-014 pending。
-    只阻断本 scope 的 live/W6/manual/里程碑签收,其他模块继续。
+    本批未触碰或暗选方案,owner 后于 2026-07-10 选择 (a) 随 3c 修四点+全局 guard。异步 review scope 固定
+    `b3818f0..aaf13fb`;telemetry 不支持 5h quota 耗尽或首轮 capacity 归因:首轮 task-complete 但只产 chat GO、
+    无 artifact,后续含一次 capacity 与两次 interrupted;使用 hardened runner 的再次重试又在 900 秒无输出超时,
+    artifact 明标 invalid,故 R-014 仍 pending。只阻断本 scope 的 live/W6/manual/里程碑签收,其他模块继续。
 
-- **2026-07-10 ②.3c serving_projection_members SCOUT ONLY(未实施)**:
-  - **方法/调用面**:8 public(`upsert`/`replace`/`list`/`list_by_identity_keys`/`list_by_person_identity_keys`/
-    `count_by_readiness`/`get`/`count`)共 **97 direct calls** = production 58(含 storage internal 2;外部 56)+ tests 39。
-    另有 `hasattr` **1**(public-web runtime get)、`patch.object` **2**(get/list)、fake definition **1**、public
-    callback/getattr **0**;生产文件 8、direct-test 文件 11。旧 native dispatch keys **2**(upsert/replace)。
-  - **helper/dynamic**:`_member_from_row` 1 direct + 4 row-builder callback;`_row_payload` 1 caller;
-    `_readiness_counts` 1 caller;共享 `_normalize_projection_rank_index` 在 mapper/payload 使用。测试另有 3 个 raw-adapter
-    直达点,production 无 adapter 绕过。
-  - **D-4 分界**:选 (a) 时 3c 除把 member bulk 写改显式 keyword 外,还须同批修 search-index/asset-membership/
-    candidate-materialization 三点并补 4 点 failure regression + 全局 AST guard;选 (b) 时 3c 仅修 member 点,search 留 3d,
-    另两点不动且 guard 必须 serving-scoped/显式 allowlist。方向未裁决,故本次只冻结调用面,未开始 semantic/A/B 或产品编辑。
+- **2026-07-10 ②.3c 完成 —— `serving_projection_members` 退役到 serving_projection repository；D-4(a) 同批闭环**:
+  - **范围/调用面**:8 public(`upsert_members`/`replace_members`/`list_members`/`list_members_by_identity_keys`/
+    `list_members_by_person_identity`/`count_members_by_readiness`/`get_member`/`count_members`)+ bespoke mapper/payload/readiness
+    helper 迁入 `store.repos.serving_projection`。Scout 的 97 direct calls = production 58(storage internal 2 + external 56)
+    + tests 39 全部切换；动态 public-web 探测改走 `serving_projection_repo(store)` accessor,缺 repo 时返 None 且不回退旧 facade。
+    旧 8 Store 方法、helper 和 2 个 native dispatch keys 同批删除；旧 attribute/getattr/定义/dispatch 引用均为 0。
+    `storage.py` **14,261 → 13,822**(-439),repository 520 → 951 行。
+  - **A/B + 变异**:冻结 seed、raw PG dump、分页/dedupe/replace/identity/readiness、malformed JSON 与 negative-rank 电池
+    对 pinned `6989ce1` 旧 Store 和新 repository 产出均为 **11,783 bytes**,SHA-256
+    `d139000b384d754d9d190193e83248b4a37c58799b1acef9b50d130dd2b33913`,`cmp=0`。移除 rank clamp 的受控变异
+    产出 **11,785 bytes**,SHA-256 `f10aacd3c8d13d4223e6890b3285931b79771867eafc8acf22b774116cccbca0`,
+    `cmp=1`,证明电池能抓到语义漂移。
+  - **D-4(a) 根因修复**:owner 选择的一次性方案已完成。members、projection person search index、asset membership index、
+    candidate materialization state 的 4 个 `bulk_upsert_rows` wrapper 调用全部改为显式 `table_name=`/`rows=`；新增全局
+    receiver-aware AST guard 扫描 `src/` 与 `scripts/`,并以 4 个合成 positional mutation 分别证明会 loudly fail。四点违规计数 0。
+  - **验证**:surface **15 passed**、members storage **9**、live-PG **57 + 4 subtests**、writer **7**、asset audit/repair
+    **22**、projection CRM **20 + 4 subtests**、person asset/CRM **17**、CRM boundary **34**、operation targeted **4**。
+    stable-tree `make ci-pre-agent-contract` 为 **223 passed** + 后续 **2/11/1/2 passed** = **239 passed**，并有
+    `dry_run_ready failures=[]`；review-evidence 回归 **124 passed**。Ruff/format 43 文件、compileall/diff-check 绿；
+    mypy 仍为 R-011 基线 **87 errors / 4 files**,无新增。
+  - **失败归因/接续**:`test_results_api` 精确组 8 pass / 1 fail；唯一 `115/140` vs `140/140` 在 pinned HEAD
+    精确复现，归 R-001/R-007 与待裁决 D-3，非本批回归。D-4 已关闭；下一批为 ②.3d person search index，完成后
+    serving_projection 域闭合。异步 review 为 scope-local；请求记录后不阻塞 ②.3d 开发，GO 前仅冻结 ②.3c 的
+    live/W6/manual/里程碑签收。

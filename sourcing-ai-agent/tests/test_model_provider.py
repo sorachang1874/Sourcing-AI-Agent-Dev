@@ -1,13 +1,19 @@
 import json
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Lock
 from unittest.mock import patch
 
 import requests
 
+import sourcing_agent.model_provider as model_provider_module
+from sourcing_agent.domain import JobRequest
 from sourcing_agent.model_provider import (
     DeterministicModelClient,
     OfflineModelClient,
     OpenAICompatibleChatModelClient,
+    OpenAIModelCallResult,
+    OpenAIModelUsage,
     QwenResponsesModelClient,
     ScriptedLivePlanningModelClient,
     _build_public_web_signal_adjudication_prompt,
@@ -126,7 +132,12 @@ class ModelProviderTest(unittest.TestCase):
             def _list_models(self) -> dict:
                 return {"data": [{"id": "gpt-5.5"}]}
 
-            def _call_chat_completions(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:  # noqa: ARG002
+            def _call_chat_completions_result(  # noqa: ARG002
+                self,
+                messages: list[dict[str, str]],
+                *,
+                max_tokens: int,
+            ) -> OpenAIModelCallResult:
                 raise RuntimeError("OpenAI-compatible HTTP 401: auth_unavailable")
 
         client = _Client(
@@ -153,13 +164,28 @@ class ModelProviderTest(unittest.TestCase):
                 self.responses_calls = 0
 
             def _list_models(self) -> dict:
-                return {"data": [{"id": "gpt-5.5"}]}
+                return {"data": [{"id": "gpt-5.6-sol"}]}
 
-            def _call_responses_api(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:  # noqa: ARG002
+            def _call_responses_api_result(  # noqa: ARG002
+                self,
+                messages: list[dict[str, str]],
+                *,
+                max_tokens: int,
+            ) -> OpenAIModelCallResult:
                 self.responses_calls += 1
-                return "MODEL_OK"
+                return OpenAIModelCallResult(
+                    text="MODEL_OK",
+                    requested_model=self.settings.model,
+                    response_model="gpt-5.6-sol",
+                    usage=OpenAIModelUsage(input_tokens=8, output_tokens=2, total_tokens=10),
+                )
 
-            def _call_chat_completions(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:  # noqa: ARG002
+            def _call_chat_completions_result(  # noqa: ARG002
+                self,
+                messages: list[dict[str, str]],
+                *,
+                max_tokens: int,
+            ) -> OpenAIModelCallResult:
                 raise AssertionError("responses-style provider must not call chat completions")
 
         client = _Client(
@@ -168,7 +194,7 @@ class ModelProviderTest(unittest.TestCase):
                 provider_name="sharedchat_openai_compatible",
                 api_key="sk-test",
                 base_url="https://new.sharedchat.cc/codex",
-                model="gpt-5.5",
+                model="gpt-5.6-sol",
                 api_style="openai_responses",
             )
         )
@@ -177,7 +203,442 @@ class ModelProviderTest(unittest.TestCase):
 
         self.assertEqual(health["status"], "ready")
         self.assertEqual(health["chat_status"], "ready")
+        self.assertEqual(health["requested_model"], "gpt-5.6-sol")
+        self.assertEqual(health["effective_model"], "gpt-5.6-sol")
+        self.assertEqual(health["model_identity_provenance"], "provider_response")
+        self.assertEqual(health["model_usage"]["total_tokens"], 10)
         self.assertEqual(client.responses_calls, 1)
+
+    def test_openai_healthcheck_singleflight_shares_first_paid_probe_across_clients(self) -> None:
+        prompt_calls = 0
+        prompt_calls_lock = Lock()
+
+        class _Client(OpenAICompatibleChatModelClient):
+            def _list_models(self) -> dict:
+                return {"data": [{"id": "gpt-5.6-sol"}]}
+
+            def _call_prompt_result(  # noqa: ANN001, ARG002
+                self,
+                messages,
+                *,
+                max_tokens: int,
+            ) -> OpenAIModelCallResult:
+                nonlocal prompt_calls
+                with prompt_calls_lock:
+                    prompt_calls += 1
+                return OpenAIModelCallResult(
+                    text="MODEL_OK",
+                    requested_model=self.settings.model,
+                    response_model=self.settings.model,
+                    usage=OpenAIModelUsage(input_tokens=4, output_tokens=2, total_tokens=6),
+                )
+
+        settings = ModelProviderSettings(
+            enabled=True,
+            provider_name="sharedchat_openai_compatible",
+            api_key="sk-test",
+            base_url="https://singleflight.test/codex",
+            model="gpt-5.6-sol",
+            api_style="openai_responses",
+        )
+        clients = [_Client(settings), _Client(settings)]
+        claim_start = Barrier(2)
+        claim_complete = Barrier(2)
+        original_claim = model_provider_module._claim_model_provider_healthcheck_flight
+
+        def _synchronized_claim(key):  # noqa: ANN001, ANN202
+            claim_start.wait(timeout=5)
+            claimed = original_claim(key)
+            claim_complete.wait(timeout=5)
+            return claimed
+
+        with (
+            patch.object(
+                model_provider_module,
+                "_claim_model_provider_healthcheck_flight",
+                side_effect=_synchronized_claim,
+            ),
+            ThreadPoolExecutor(max_workers=2) as executor,
+        ):
+            futures = [executor.submit(client.healthcheck) for client in clients]
+            health_results = [future.result(timeout=5) for future in futures]
+
+        self.assertEqual(prompt_calls, 1)
+        self.assertTrue(all(result["status"] == "ready" for result in health_results))
+        self.assertTrue(all(result["effective_model"] == "gpt-5.6-sol" for result in health_results))
+        self.assertTrue(all(client._healthcheck_cache is not None for client in clients))
+
+    def test_openai_responses_product_model_is_sent_exactly(self) -> None:
+        class _Response:
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return {
+                    "output_text": "MODEL_OK",
+                    "model": "gpt-5.6-sol",
+                    "usage": {
+                        "input_tokens": 11,
+                        "output_tokens": 3,
+                        "total_tokens": 14,
+                        "input_tokens_details": {"cached_tokens": 4},
+                        "output_tokens_details": {"reasoning_tokens": 2},
+                        "unbounded_provider_detail": "ignored",
+                    },
+                }
+
+        client = OpenAICompatibleChatModelClient(
+            ModelProviderSettings(
+                enabled=True,
+                provider_name="sharedchat_openai_compatible",
+                api_key="sk-test",
+                base_url="https://new.sharedchat.cc/codex",
+                model="gpt-5.6-sol",
+                api_style="openai_responses",
+            )
+        )
+
+        with patch("sourcing_agent.model_provider.requests.post", return_value=_Response()) as post:
+            call_result = client._call_responses_api_result(
+                [{"role": "user", "content": "Reply with exactly: MODEL_OK"}],
+                max_tokens=32,
+            )
+            text_result = client._call_responses_api(
+                [{"role": "user", "content": "Reply with exactly: MODEL_OK"}],
+                max_tokens=32,
+            )
+
+        self.assertEqual(call_result.text, "MODEL_OK")
+        self.assertEqual(text_result, "MODEL_OK")
+        self.assertEqual(call_result.requested_model, "gpt-5.6-sol")
+        self.assertEqual(call_result.response_model, "gpt-5.6-sol")
+        self.assertEqual(call_result.effective_model, "gpt-5.6-sol")
+        self.assertEqual(call_result.model_identity_provenance, "provider_response")
+        self.assertEqual(
+            call_result.usage.to_record(),
+            {
+                "input_tokens": 11,
+                "output_tokens": 3,
+                "total_tokens": 14,
+                "cached_input_tokens": 4,
+                "reasoning_output_tokens": 2,
+            },
+        )
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(post.call_args.kwargs["json"]["model"], "gpt-5.6-sol")
+        self.assertEqual(post.call_args.kwargs["json"]["temperature"], 0)
+
+    def test_openai_chat_result_preserves_response_model_and_bounded_usage(self) -> None:
+        class _Response:
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return {
+                    "choices": [{"message": {"content": "MODEL_OK"}}],
+                    "model": "gpt-5.6-sol",
+                    "usage": {
+                        "prompt_tokens": -3,
+                        "completion_tokens": 5,
+                        "total_tokens": 2_000_000_000,
+                        "prompt_tokens_details": {"cached_tokens": 2},
+                        "completion_tokens_details": {"reasoning_tokens": 1},
+                    },
+                }
+
+        client = OpenAICompatibleChatModelClient(
+            ModelProviderSettings(
+                enabled=True,
+                provider_name="openai_compatible",
+                api_key="sk-test",
+                base_url="https://example.test/v1",
+                model="gpt-5.6-sol",
+            )
+        )
+
+        with patch("sourcing_agent.model_provider.requests.post", return_value=_Response()) as post:
+            result = client._call_chat_completions_result(
+                [{"role": "user", "content": "Reply with exactly: MODEL_OK"}],
+                max_tokens=32,
+            )
+
+        self.assertEqual(result.text, "MODEL_OK")
+        self.assertEqual(result.effective_model, "gpt-5.6-sol")
+        self.assertEqual(
+            result.usage.to_record(),
+            {
+                "input_tokens": 0,
+                "output_tokens": 5,
+                "total_tokens": 1_000_000_000,
+                "cached_input_tokens": 2,
+                "reasoning_output_tokens": 1,
+            },
+        )
+        self.assertEqual(post.call_args.kwargs["json"]["model"], "gpt-5.6-sol")
+
+    def test_openai_healthcheck_fails_closed_when_response_model_is_missing(self) -> None:
+        class _Client(OpenAICompatibleChatModelClient):
+            def __init__(self, settings: ModelProviderSettings) -> None:
+                super().__init__(settings)
+                self.prompt_calls = 0
+
+            def _list_models(self) -> dict:
+                return {"data": [{"id": "gpt-5.6-sol"}]}
+
+            def _call_prompt_result(self, messages, *, max_tokens: int) -> OpenAIModelCallResult:  # noqa: ANN001, ARG002
+                self.prompt_calls += 1
+                return OpenAIModelCallResult(
+                    text="MODEL_OK",
+                    requested_model=self.settings.model,
+                    response_model="",
+                    usage=OpenAIModelUsage(input_tokens=4, output_tokens=2, total_tokens=6),
+                )
+
+        client = _Client(
+            ModelProviderSettings(
+                enabled=True,
+                provider_name="sharedchat_openai_compatible",
+                api_key="sk-test",
+                base_url="https://new.sharedchat.cc/codex",
+                model="gpt-5.6-sol",
+                api_style="openai_responses",
+            )
+        )
+
+        health = client.healthcheck()
+        circuit_health = client.healthcheck()
+
+        self.assertEqual(health["status"], "degraded")
+        self.assertEqual(health["chat_status"], "model_identity_missing")
+        self.assertEqual(health["requested_model"], "gpt-5.6-sol")
+        self.assertNotIn("response_model", health)
+        self.assertNotIn("effective_model", health)
+        self.assertNotIn("model_identity_provenance", health)
+        self.assertIn("model_response_identity_missing", health["error"])
+        self.assertEqual(client._healthcheck_cache["status"], "degraded")
+        self.assertEqual(circuit_health["chat_status"], "circuit_open")
+        self.assertEqual(client.prompt_calls, 1)
+
+    def test_openai_healthcheck_fails_closed_when_response_model_mismatches(self) -> None:
+        class _Client(OpenAICompatibleChatModelClient):
+            def __init__(self, settings: ModelProviderSettings) -> None:
+                super().__init__(settings)
+                self.prompt_calls = 0
+
+            def _list_models(self) -> dict:
+                return {"data": [{"id": "gpt-5.6-sol"}]}
+
+            def _call_prompt_result(self, messages, *, max_tokens: int) -> OpenAIModelCallResult:  # noqa: ANN001, ARG002
+                self.prompt_calls += 1
+                return OpenAIModelCallResult(
+                    text="MODEL_OK",
+                    requested_model=self.settings.model,
+                    response_model="gpt-5.5",
+                    usage=OpenAIModelUsage(input_tokens=4, output_tokens=2, total_tokens=6),
+                )
+
+        client = _Client(
+            ModelProviderSettings(
+                enabled=True,
+                provider_name="sharedchat_openai_compatible",
+                api_key="sk-test",
+                base_url="https://new.sharedchat.cc/codex",
+                model="gpt-5.6-sol",
+                api_style="openai_responses",
+            )
+        )
+
+        health = client.healthcheck()
+        circuit_health = client.healthcheck()
+
+        self.assertEqual(health["status"], "degraded")
+        self.assertEqual(health["chat_status"], "model_identity_mismatch")
+        self.assertEqual(health["requested_model"], "gpt-5.6-sol")
+        self.assertEqual(health["response_model"], "gpt-5.5")
+        self.assertEqual(health["effective_model"], "gpt-5.5")
+        self.assertEqual(health["model_identity_provenance"], "provider_response")
+        self.assertIn("model_response_identity_mismatch", health["error"])
+        self.assertEqual(client._healthcheck_cache["status"], "degraded")
+        self.assertEqual(circuit_health["chat_status"], "circuit_open")
+        self.assertEqual(client.prompt_calls, 1)
+
+    def test_openai_healthcheck_nonready_inventory_or_response_opens_circuit(self) -> None:
+        for scenario in ("model_missing", "unexpected_response"):
+            with self.subTest(scenario=scenario):
+                _reset_model_provider_circuits_for_tests()
+
+                class _Client(OpenAICompatibleChatModelClient):
+                    def __init__(self, settings: ModelProviderSettings) -> None:
+                        super().__init__(settings)
+                        self.prompt_calls = 0
+
+                    def _list_models(self) -> dict:
+                        listed_model = "gpt-5.5" if scenario == "model_missing" else self.settings.model
+                        return {"data": [{"id": listed_model}]}
+
+                    def _call_prompt_result(  # noqa: ANN001, ARG002
+                        self,
+                        messages,
+                        *,
+                        max_tokens: int,
+                    ) -> OpenAIModelCallResult:
+                        self.prompt_calls += 1
+                        return OpenAIModelCallResult(
+                            text="NOT_OK" if scenario == "unexpected_response" else "MODEL_OK",
+                            requested_model=self.settings.model,
+                            response_model=self.settings.model,
+                            usage=OpenAIModelUsage(input_tokens=4, output_tokens=2, total_tokens=6),
+                        )
+
+                client = _Client(
+                    ModelProviderSettings(
+                        enabled=True,
+                        provider_name=f"sharedchat_{scenario}",
+                        api_key="sk-test",
+                        base_url=f"https://{scenario}.test/codex",
+                        model="gpt-5.6-sol",
+                        api_style="openai_responses",
+                    )
+                )
+
+                first = client.healthcheck()
+                second = client.healthcheck()
+
+                self.assertEqual(first["status"], "degraded")
+                self.assertEqual(client._healthcheck_cache["status"], "degraded")
+                self.assertEqual(second["chat_status"], "circuit_open")
+                self.assertEqual(client.prompt_calls, 1)
+
+    def test_openai_business_json_paths_reject_mismatched_model_identity(self) -> None:
+        self._assert_openai_business_json_paths_reject_model_identity("gpt-5.5")
+
+    def test_openai_business_json_paths_reject_missing_model_identity(self) -> None:
+        self._assert_openai_business_json_paths_reject_model_identity("")
+
+    def test_openai_legacy_string_apis_reject_mismatched_model_identity(self) -> None:
+        for operation in ("prompt", "chat_completions", "responses"):
+            with self.subTest(operation=operation):
+                _reset_model_provider_circuits_for_tests()
+
+                class _Client(OpenAICompatibleChatModelClient):
+                    def _mismatched_result(self) -> OpenAIModelCallResult:
+                        return OpenAIModelCallResult(
+                            text="UNTRUSTED_MODEL_TEXT",
+                            requested_model=self.settings.model,
+                            response_model="gpt-5.5",
+                            usage=OpenAIModelUsage(input_tokens=2, output_tokens=1, total_tokens=3),
+                        )
+
+                    def _call_prompt_result(  # noqa: ANN001, ARG002
+                        self,
+                        messages,
+                        *,
+                        max_tokens: int,
+                    ) -> OpenAIModelCallResult:
+                        return self._mismatched_result()
+
+                    def _call_chat_completions_result(  # noqa: ANN001, ARG002
+                        self,
+                        messages,
+                        *,
+                        max_tokens: int,
+                    ) -> OpenAIModelCallResult:
+                        return self._mismatched_result()
+
+                    def _call_responses_api_result(  # noqa: ANN001, ARG002
+                        self,
+                        messages,
+                        *,
+                        max_tokens: int,
+                    ) -> OpenAIModelCallResult:
+                        return self._mismatched_result()
+
+                client = _Client(
+                    ModelProviderSettings(
+                        enabled=True,
+                        provider_name=f"sharedchat_legacy_{operation}",
+                        api_key="sk-test",
+                        base_url=f"https://legacy-{operation}.test/codex",
+                        model="gpt-5.6-sol",
+                        api_style="openai_responses",
+                    )
+                )
+                messages = [{"role": "user", "content": "Return trusted text."}]
+
+                with self.assertRaisesRegex(RuntimeError, "model_response_identity_mismatch"):
+                    if operation == "prompt":
+                        client._call_prompt(messages, max_tokens=32)
+                    elif operation == "chat_completions":
+                        client._call_chat_completions(messages, max_tokens=32)
+                    else:
+                        client._call_responses_api(messages, max_tokens=32)
+
+                circuit_health = client.healthcheck()
+                self.assertEqual(circuit_health["chat_status"], "circuit_open")
+                self.assertIn("model_response_identity_mismatch", circuit_health["error"])
+
+    def _assert_openai_business_json_paths_reject_model_identity(self, response_model: str) -> None:
+        for operation in ("refinement", "planning"):
+            with self.subTest(operation=operation, response_model=response_model or "missing"):
+                _reset_model_provider_circuits_for_tests()
+
+                class _Client(OpenAICompatibleChatModelClient):
+                    def __init__(self, settings: ModelProviderSettings) -> None:
+                        super().__init__(settings)
+                        self.prompt_calls = 0
+
+                    def _call_prompt_result(  # noqa: ANN001, ARG002
+                        self,
+                        messages,
+                        *,
+                        max_tokens: int,
+                    ) -> OpenAIModelCallResult:
+                        self.prompt_calls += 1
+                        return OpenAIModelCallResult(
+                            text=json.dumps(
+                                {
+                                    "patch": {"keywords": ["untrusted-provider-refinement"]},
+                                    "planner_mode": "untrusted-provider-planning",
+                                    "objective": "This provider JSON must not be accepted.",
+                                    "query_bundles": [],
+                                    "follow_up_rules": [],
+                                    "review_triggers": [],
+                                }
+                            ),
+                            requested_model=self.settings.model,
+                            response_model=response_model,
+                            usage=OpenAIModelUsage(input_tokens=10, output_tokens=4, total_tokens=14),
+                        )
+
+                client = _Client(
+                    ModelProviderSettings(
+                        enabled=True,
+                        provider_name=f"sharedchat_business_{operation}_{response_model or 'missing'}",
+                        api_key="sk-test",
+                        base_url=f"https://business-{operation}-{response_model or 'missing'}.test/codex",
+                        model="gpt-5.6-sol",
+                        api_style="openai_responses",
+                    )
+                )
+
+                if operation == "refinement":
+                    result = client.normalize_refinement_instruction({"instruction": "只看 Agent 方向"})
+                    self.assertEqual(result, {})
+                else:
+                    result = client.plan_search_strategy(
+                        JobRequest(target_company="OpenAI", query="OpenAI Agent researchers"),
+                        {"draft_search_strategy": {"query_bundles": []}},
+                    )
+                    self.assertEqual(result["planner_mode"], "deterministic")
+                    self.assertNotEqual(result["planner_mode"], "untrusted-provider-planning")
+
+                circuit_health = client.healthcheck()
+                self.assertEqual(circuit_health["chat_status"], "circuit_open")
+                self.assertIn(
+                    "model_response_identity_missing" if not response_model else "model_response_identity_mismatch",
+                    circuit_health["error"],
+                )
+                self.assertEqual(client.prompt_calls, 1)
 
     def test_openai_compatible_healthcheck_failure_opens_uncached_circuit(self) -> None:
         class _Client(OpenAICompatibleChatModelClient):
@@ -188,7 +649,12 @@ class ModelProviderTest(unittest.TestCase):
             def _list_models(self) -> dict:
                 return {"data": [{"id": "gpt-5.5"}]}
 
-            def _call_chat_completions(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:  # noqa: ARG002
+            def _call_chat_completions_result(  # noqa: ARG002
+                self,
+                messages: list[dict[str, str]],
+                *,
+                max_tokens: int,
+            ) -> OpenAIModelCallResult:
                 self.chat_calls += 1
                 raise RuntimeError("OpenAI-compatible HTTP 503: auth_unavailable")
 
@@ -261,8 +727,13 @@ class ModelProviderTest(unittest.TestCase):
             def _list_models(self) -> dict:
                 return {"data": [{"id": "gpt-5.5"}]}
 
-            def _call_prompt(self, messages, *, max_tokens: int) -> str:  # noqa: ANN001, ARG002
-                return "MODEL_OK"
+            def _call_prompt_result(self, messages, *, max_tokens: int) -> OpenAIModelCallResult:  # noqa: ANN001, ARG002
+                return OpenAIModelCallResult(
+                    text="MODEL_OK",
+                    requested_model=self.settings.model,
+                    response_model=self.settings.model,
+                    usage=OpenAIModelUsage(),
+                )
 
         client = _Client(
             ModelProviderSettings(
@@ -287,7 +758,12 @@ class ModelProviderTest(unittest.TestCase):
 
     def test_openai_public_web_model_call_error_is_fail_visible(self) -> None:
         class _Client(OpenAICompatibleChatModelClient):
-            def _run_text_prompt(self, system_prompt: str, user_prompt: str, *, max_tokens: int) -> str:  # noqa: ARG002
+            def _call_prompt_result(  # noqa: ANN001, ARG002
+                self,
+                messages,
+                *,
+                max_tokens: int,
+            ) -> OpenAIModelCallResult:
                 raise RuntimeError("OpenAI-compatible HTTP 401: auth_unavailable")
 
         client = _Client(
@@ -312,9 +788,128 @@ class ModelProviderTest(unittest.TestCase):
         self.assertEqual(result["provider"], "chshapi_openai_compatible")
         self.assertEqual(result["model"], "gpt-5.5")
         self.assertEqual(result["model_version"], "gpt-5.5")
+        self.assertEqual(result["requested_model"], "gpt-5.5")
+        self.assertNotIn("effective_model", result)
+        self.assertNotIn("model_identity_provenance", result)
         self.assertTrue(result["fallback_used"])
         self.assertEqual(result["fallback_reason"], "model_call_failed")
         self.assertIn("401", result["model_error"])
+
+    def test_openai_public_web_adjudication_records_provider_response_identity_and_usage(self) -> None:
+        class _Response:
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return {
+                    "output_text": json.dumps(
+                        {
+                            "summary": "Provider-reviewed evidence.",
+                            "link_assessments": [],
+                            "email_assessments": [],
+                        }
+                    ),
+                    "model": "gpt-5.6-sol",
+                    "usage": {"input_tokens": 120, "output_tokens": 24, "total_tokens": 144},
+                }
+
+        client = OpenAICompatibleChatModelClient(
+            ModelProviderSettings(
+                enabled=True,
+                provider_name="sharedchat_openai_compatible",
+                api_key="sk-test",
+                base_url="https://new.sharedchat.cc/codex",
+                model="gpt-5.6-sol",
+                api_style="openai_responses",
+            )
+        )
+
+        with patch("sourcing_agent.model_provider.requests.post", return_value=_Response()):
+            result = client.analyze_public_web_candidate_signals(
+                {
+                    "candidate": {"candidate_name": "Jackie Bow", "current_company": "Anthropic"},
+                    "entry_links": [{"url": "https://github.com/jbow", "title": "Jackie Bow"}],
+                    "email_candidates": [],
+                    "evidence_slices": [],
+                }
+            )
+
+        self.assertFalse(result["fallback_used"])
+        self.assertEqual(result["requested_model"], "gpt-5.6-sol")
+        self.assertEqual(result["response_model"], "gpt-5.6-sol")
+        self.assertEqual(result["effective_model"], "gpt-5.6-sol")
+        self.assertEqual(result["model_identity_provenance"], "provider_response")
+        self.assertEqual(result["model"], "gpt-5.6-sol")
+        self.assertEqual(result["model_version"], "gpt-5.6-sol")
+        self.assertEqual(
+            result["model_usage"],
+            {"input_tokens": 120, "output_tokens": 24, "total_tokens": 144},
+        )
+
+    def test_openai_public_web_adjudication_rejects_unproven_or_mismatched_model_identity(self) -> None:
+        for response_model, expected_reason in (
+            ("", "model_identity_missing"),
+            ("gpt-5.5", "model_identity_mismatch"),
+        ):
+            with self.subTest(response_model=response_model or "missing"):
+                _reset_model_provider_circuits_for_tests()
+
+                class _Client(OpenAICompatibleChatModelClient):
+                    def __init__(self, settings: ModelProviderSettings) -> None:
+                        super().__init__(settings)
+                        self.prompt_calls = 0
+
+                    def _call_prompt_result(  # noqa: ANN001, ARG002
+                        self,
+                        messages,
+                        *,
+                        max_tokens: int,
+                    ) -> OpenAIModelCallResult:
+                        self.prompt_calls += 1
+                        return OpenAIModelCallResult(
+                            text=json.dumps(
+                                {
+                                    "summary": "Provider result must not be used.",
+                                    "link_assessments": [],
+                                    "email_assessments": [],
+                                }
+                            ),
+                            requested_model=self.settings.model,
+                            response_model=response_model,
+                            usage=OpenAIModelUsage(input_tokens=10, output_tokens=2, total_tokens=12),
+                        )
+
+                client = _Client(
+                    ModelProviderSettings(
+                        enabled=True,
+                        provider_name=f"sharedchat_{expected_reason}",
+                        api_key="sk-test",
+                        base_url=f"https://{expected_reason}.test/codex",
+                        model="gpt-5.6-sol",
+                        api_style="openai_responses",
+                    )
+                )
+                payload = {
+                    "candidate": {"candidate_name": "Jackie Bow", "current_company": "Anthropic"},
+                    "entry_links": [{"url": "https://github.com/jbow", "title": "Jackie Bow"}],
+                    "email_candidates": [],
+                    "evidence_slices": [],
+                }
+
+                first = client.analyze_public_web_candidate_signals(payload)
+                circuit_health = client.healthcheck()
+
+                self.assertEqual(first["summary"], "Deterministic public-web signal adjudication fallback.")
+                self.assertTrue(first["fallback_used"])
+                self.assertEqual(first["fallback_reason"], expected_reason)
+                self.assertIn(
+                    f"model_response_identity_{expected_reason.removeprefix('model_identity_')}", first["model_error"]
+                )
+                self.assertEqual(first["model"], "gpt-5.6-sol")
+                self.assertEqual(first["model_version"], "gpt-5.6-sol")
+                self.assertEqual(circuit_health["chat_status"], "circuit_open")
+                self.assertIn("model_provider_circuit_open", circuit_health["error"])
+                self.assertEqual(client.prompt_calls, 1)
 
     def test_qwen_public_web_model_call_error_is_fail_visible(self) -> None:
         class _Client(QwenResponsesModelClient):
@@ -498,7 +1093,9 @@ class ModelProviderTest(unittest.TestCase):
 
         prompt_payload = dict(captured.get("payload") or {})
         supported = list(prompt_payload.get("supported_rewrite_policies") or [])
-        self.assertTrue(any(item.get("rewrite_id") == "greater_china_outreach" for item in supported if isinstance(item, dict)))
+        self.assertTrue(
+            any(item.get("rewrite_id") == "greater_china_outreach" for item in supported if isinstance(item, dict))
+        )
         system_prompt = str(captured.get("system_prompt") or "")
         self.assertIn("four orthogonal dimensions", system_prompt)
         self.assertIn("keyword_priority_only", system_prompt)
@@ -506,7 +1103,8 @@ class ModelProviderTest(unittest.TestCase):
         self.assertIn("acquisition_strategy_override is only the base roster strategy axis", system_prompt)
         self.assertIn("prefer categories=['researcher','engineer']", system_prompt)
         multimodal = next(
-            item for item in supported
+            item
+            for item in supported
             if isinstance(item, dict) and item.get("rewrite_id") == "multimodal_project_focus"
         )
         self.assertEqual(multimodal.get("request_patch", {}).get("keywords"), ["multimodal"])
@@ -514,7 +1112,9 @@ class ModelProviderTest(unittest.TestCase):
     def test_request_normalization_prompt_keeps_explicit_thematic_boundary(self) -> None:
         system_prompt = _build_request_normalization_system_prompt()
 
-        self.assertIn("Do not expand a single direction into sibling, parent, child, or adjacent directions", system_prompt)
+        self.assertIn(
+            "Do not expand a single direction into sibling, parent, child, or adjacent directions", system_prompt
+        )
         self.assertIn("if the request says Multimodal", system_prompt)
         self.assertIn("do not add Text, Vision, vision-language, or video generation", system_prompt)
 
@@ -532,7 +1132,9 @@ class ModelProviderTest(unittest.TestCase):
 
         prompt_payload = dict(captured.get("payload") or {})
         supported = list(prompt_payload.get("supported_rewrite_policies") or [])
-        self.assertTrue(any(item.get("rewrite_id") == "greater_china_outreach" for item in supported if isinstance(item, dict)))
+        self.assertTrue(
+            any(item.get("rewrite_id") == "greater_china_outreach" for item in supported if isinstance(item, dict))
+        )
 
     def test_qwen_normalize_review_instruction_prompt_includes_keyword_first_axes(self) -> None:
         captured: dict[str, object] = {}

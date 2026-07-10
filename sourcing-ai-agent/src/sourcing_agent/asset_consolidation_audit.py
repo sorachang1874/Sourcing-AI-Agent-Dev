@@ -434,7 +434,7 @@ def _projection_dependencies_by_snapshot(
                     "source_run_id": _normalize_text(projection.get("source_run_id")),
                     "active_state": state in ACTIVE_PROJECTION_STATES,
                     "active_pointer": bool(active_projection_id and projection_id == active_projection_id),
-                    "member_count": store.count_serving_projection_members(projection_id, visible_only=False)
+                    "member_count": store.repos.serving_projection.count_members(projection_id, visible_only=False)
                     if projection_id
                     else 0,
                     "reference_fields": sorted(_projection_snapshot_reference_fields(projection, snapshot_id)),
@@ -844,8 +844,8 @@ def _load_collection_pointer_identity_set(
             "identity_keys": set(),
             "error": f"projection_state:{state or 'missing'}",
         }
-    total_count = store.count_serving_projection_members(projection_id, visible_only=True)
-    members = store.list_serving_projection_members(
+    total_count = store.repos.serving_projection.count_members(projection_id, visible_only=True)
+    members = store.repos.serving_projection.list_members(
         projection_id,
         limit=max(1, int(max_candidates or DEFAULT_OVERLAP_CANDIDATE_LIMIT)),
         visible_only=True,

@@ -44,10 +44,10 @@ manual_review**，按 handbook §3 顺序与 §4 协议逐字执行。
   验收门 = `make ci-pre-agent-contract`（REQUIRE flags 已内建，PG 不可用会红）+ 域直连套件；
   失败 ⊆ `RESIDUAL_LEDGER.md` 未 closed 行 = 绿，否则现场 **git worktree 基线对照**归因（勿 stash）。
 - **lint 门**：`run_python_quality.sh` ruff 段全过；mypy 段与台账 R-011 基线（87 条）**只降不增**。
-- **评审独立性反转**：你（GPT/Codex）现在是**作者家族**。`INDEPENDENT_REVIEW_GATE.md` 模型路由表
-  写于 Claude 为作者的时代（reviewer = GPT-5.5）——**你的第一个 session 应把该表的 author/reviewer
-  家族对调**（评审 lane 主/兜底改为非 GPT 家族，如 Claude；不变量 = 评审 lane 永不落回作者家族），
-  这是一处一行级文档修改，做完记入批记录。
+- **评审独立性当前裁决（owner 2026-07-10 覆盖本 handoff 初稿）**：Claude/Reclaude transport
+  不适合当前 review gate；独立评审暂时使用另一只 non-author、read-only Codex session，并允许与开发
+  异步并行。独立性由 session/author separation 强制；跨模型家族仍优先，但当前不可用时不阻断其他
+  模块开发。live/W6/manual/里程碑签收仍必须等待本 scope 的有效 `GO` artifact。
 - **网络**：`make agent-network-preflight` 会因预置 proxy env 报 FAIL，但实际连通正常——**只读报告，
   不得改 proxy/VPN/Clash 状态**。
 

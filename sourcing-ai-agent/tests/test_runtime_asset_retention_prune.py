@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import subprocess
@@ -8,6 +9,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from sourcing_agent import runtime_asset_retention_prune as prune_module
 from sourcing_agent.runtime_asset_retention_audit import build_runtime_asset_retention_report
 from sourcing_agent.runtime_asset_retention_prune import (
     apply_runtime_asset_prune_plan,
@@ -16,7 +18,6 @@ from sourcing_agent.runtime_asset_retention_prune import (
     render_runtime_asset_prune_apply_markdown,
     render_runtime_asset_prune_plan_markdown,
 )
-from sourcing_agent import runtime_asset_retention_prune as prune_module
 
 
 def _write_bytes(path: Path, size: int) -> None:
@@ -34,23 +35,246 @@ def _set_old_mtime(path: Path, *, days: int = 20) -> None:
 def _review_artifact(workspace: Path) -> str:
     path = workspace / "runtime" / "reviews" / "retention_prune_review.md"
     path.parent.mkdir(parents=True, exist_ok=True)
+    body = "Reviewed scope: test.\n\n`GO`\n"
+    metadata = _verified_review_metadata(
+        workspace,
+        stem="retention_prune_review",
+        title="runtime asset prune test",
+        files=["src/sourcing_agent/runtime_asset_retention_prune.py"],
+        raw_output=body.encode("utf-8"),
+    )
     path.write_text(
         "## Review Metadata\n\n"
-        "- title: runtime asset prune test\n"
-        "- reviewer_model: gpt-5.5\n"
-        "- reviewer_reasoning_effort: xhigh\n"
-        "- reviewer_service_tier: fast\n"
-        "- prompt_path: `runtime/reviews/retention_prune_review.prompt.md`\n"
-        "- command: `codex exec --model gpt-5.5 -c 'service_tier=\"fast\"' -c 'model_reasoning_effort=\"xhigh\"'`\n"
+        "- title: runtime asset prune test\n" + "\n".join(metadata) + "\n"
+        "- command: `codex exec --strict-config --sandbox read-only`\n"
         "- contract_docs_considered: `AGENTS.md`, `docs/INDEPENDENT_REVIEW_GATE.md`\n"
         "\nReviewed scope:\n"
         "- `src/sourcing_agent/runtime_asset_retention_prune.py`\n\n"
-        "## Reviewer Output\n\n"
-        "Reviewed scope: test.\n\n"
-        "`GO`\n",
+        "## Reviewer Output\n\n" + body,
         encoding="utf-8",
     )
     return str(path.relative_to(workspace))
+
+
+def _verified_review_metadata(
+    workspace: Path,
+    *,
+    stem: str,
+    title: str,
+    files: list[str],
+    raw_output: bytes,
+) -> list[str]:
+    review_dir = workspace / "runtime" / "reviews"
+    review_dir.mkdir(parents=True, exist_ok=True)
+    base = _ensure_review_git_scope(workspace, files=files)
+    scope = prune_module.build_independent_review_scope_evidence(
+        workspace_root=workspace,
+        title=title,
+        base_ref=base,
+        files=files,
+        extra_context="",
+    )
+    thread_id = "019f0000-0000-7000-8000-000000000001"
+    config_relative = f"runtime/reviews/{stem}.config.toml"
+    config_path = workspace / config_relative
+    config_raw = ('model = "gpt-5.6-sol"\nmodel_reasoning_effort = "ultra"\nservice_tier = "fast"\n').encode("utf-8")
+    config_path.write_bytes(config_raw)
+    prompt_relative = f"runtime/reviews/{stem}.prompt.md"
+    prompt_raw = _verified_review_prompt(scope).encode("utf-8")
+    (workspace / prompt_relative).write_bytes(prompt_raw)
+    normalized_final = raw_output.decode("utf-8").rstrip("\r\n")
+    turn_id = "019f0000-0000-7000-8000-000000000011"
+    rollout_relative = f"runtime/reviews/{stem}.rollout-{thread_id}.jsonl"
+    rollout_events = [
+        {
+            "type": "session_meta",
+            "payload": {"id": thread_id, "cli_version": "0.144.0", "source": "exec"},
+        },
+        {"type": "event_msg", "payload": {"type": "task_started", "turn_id": turn_id}},
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": prompt_raw.decode("utf-8")}],
+            },
+        },
+        {
+            "type": "event_msg",
+            "payload": {"type": "user_message", "message": prompt_raw.decode("utf-8")},
+        },
+        {
+            "type": "event_msg",
+            "payload": {
+                "type": "thread_settings_applied",
+                "thread_settings": {
+                    "model": "gpt-5.6-sol",
+                    "reasoning_effort": "ultra",
+                    "service_tier": "priority",
+                },
+            },
+        },
+        {
+            "type": "event_msg",
+            "payload": {
+                "type": "agent_message",
+                "phase": "final_answer",
+                "message": normalized_final,
+            },
+        },
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "phase": "final_answer",
+                "content": [{"type": "output_text", "text": normalized_final}],
+            },
+        },
+        {
+            "type": "event_msg",
+            "payload": {
+                "type": "task_complete",
+                "turn_id": turn_id,
+                "last_agent_message": normalized_final,
+            },
+        },
+    ]
+    rollout_raw = "".join(json.dumps(event, sort_keys=True) + "\n" for event in rollout_events).encode("utf-8")
+    rollout_path = workspace / rollout_relative
+    rollout_path.write_bytes(rollout_raw)
+    rollout_sha = hashlib.sha256(rollout_raw).hexdigest()
+    causal_binding = {
+        "turn_id": turn_id,
+        "prompt_sha256": hashlib.sha256(prompt_raw).hexdigest(),
+        "normalized_final_output_sha256": hashlib.sha256(normalized_final.encode("utf-8")).hexdigest(),
+        "rollout_json_valid": True,
+        "text_utf8_valid": True,
+        "session_source_exec": True,
+        "single_task_turn": True,
+        "no_abort": True,
+        "prompt_response_item_exact": True,
+        "prompt_event_message_exact": True,
+        "final_response_item_exact": True,
+        "final_event_message_exact": True,
+        "task_complete_final_exact": True,
+    }
+    events_relative = f"runtime/reviews/{stem}.events.jsonl"
+    events_raw = (json.dumps({"type": "thread.started", "thread_id": thread_id}) + "\n").encode("utf-8")
+    (workspace / events_relative).write_bytes(events_raw)
+    raw_output_relative = f"runtime/reviews/{stem}.raw-output.md"
+    (workspace / raw_output_relative).write_bytes(raw_output)
+    evidence_relative = f"runtime/reviews/{stem}.effective-config.json"
+    evidence_path = workspace / evidence_relative
+    evidence_payload = {
+        "contract_version": "independent_review_effective_config_v2",
+        "config": {
+            "path": config_relative,
+            "sha256": hashlib.sha256(config_raw).hexdigest(),
+            "model": "gpt-5.6-sol",
+            "reasoning_effort": "ultra",
+            "service_tier": "fast",
+        },
+        "session": {
+            "session_id": thread_id,
+            "thread_id": thread_id,
+            "codex_cli_version": "0.144.0",
+            "rollout_path": rollout_relative,
+            "rollout_sha256": rollout_sha,
+        },
+        "process": {"reviewer_exit_code": 0},
+        "effective": {
+            "model": "gpt-5.6-sol",
+            "reasoning_effort": "ultra",
+            "service_tier": "priority",
+            "source": {
+                "model": ["thread_settings_applied"],
+                "reasoning_effort": ["thread_settings_applied"],
+                "service_tier": ["thread_settings_applied"],
+            },
+        },
+        "model_reroutes": [],
+        "causal_binding": causal_binding,
+        "scope": scope,
+        "artifacts": {
+            "prompt": {"path": prompt_relative, "sha256": hashlib.sha256(prompt_raw).hexdigest()},
+            "events": {"path": events_relative, "sha256": hashlib.sha256(events_raw).hexdigest()},
+            "raw_output": {
+                "path": raw_output_relative,
+                "sha256": hashlib.sha256(raw_output).hexdigest(),
+            },
+        },
+    }
+    evidence_raw = (json.dumps(evidence_payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    evidence_path.write_bytes(evidence_raw)
+    return [
+        "- reviewer_model: gpt-5.6-sol",
+        "- reviewer_reasoning_effort: ultra",
+        "- reviewer_service_tier: priority",
+        f"- reviewer_config_path: `{config_relative}`",
+        f"- reviewer_config_sha256: {hashlib.sha256(config_raw).hexdigest()}",
+        "- reviewer_exit_code: 0",
+        "- reviewer_codex_cli_version: 0.144.0",
+        f"- reviewer_thread_id: {thread_id}",
+        f"- reviewer_rollout_path: `{rollout_relative}`",
+        f"- reviewer_rollout_sha256: {rollout_sha}",
+        f"- reviewer_effective_config_path: `{evidence_relative}`",
+        f"- reviewer_effective_config_sha256: {hashlib.sha256(evidence_raw).hexdigest()}",
+        f"- review_scope_mode: {scope['scope_mode']}",
+        f"- review_base_ref: {scope['base_ref']}",
+        f"- review_resolved_base_commit: {scope['resolved_base_commit']}",
+        f"- review_resolved_head_commit: {scope['resolved_head_commit']}",
+        f"- review_git_diff_sha256: {scope['git_diff_sha256']}",
+        f"- review_git_tree_sha256: {scope['git_tree_sha256']}",
+        f"- review_extra_context_sha256: {scope['extra_context_sha256']}",
+        f"- review_scope_digest_sha256: {scope['scope_digest_sha256']}",
+        f"- prompt_path: `{prompt_relative}`",
+        f"- prompt_sha256: {hashlib.sha256(prompt_raw).hexdigest()}",
+        f"- events_path: `{events_relative}`",
+        f"- events_sha256: {hashlib.sha256(events_raw).hexdigest()}",
+        f"- raw_output_path: `{raw_output_relative}`",
+        f"- raw_output_sha256: {hashlib.sha256(raw_output).hexdigest()}",
+    ]
+
+
+def _ensure_review_git_scope(workspace: Path, *, files: list[str]) -> str:
+    if not (workspace / ".git").exists():
+        workspace.mkdir(parents=True, exist_ok=True)
+        (workspace / ".gitignore").write_text("runtime/\noutput/\n", encoding="utf-8")
+        for relative in files:
+            path = workspace / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=workspace, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=workspace, check=True)
+        subprocess.run(["git", "add", ".gitignore", *files], cwd=workspace, check=True)
+        subprocess.run(["git", "commit", "-qm", "base"], cwd=workspace, check=True)
+        for relative in files:
+            (workspace / relative).write_text("reviewed\n", encoding="utf-8")
+        subprocess.run(["git", "add", *files], cwd=workspace, check=True)
+        subprocess.run(["git", "commit", "-qm", "reviewed"], cwd=workspace, check=True)
+    return subprocess.run(
+        ["git", "rev-list", "--max-parents=0", "HEAD"],
+        cwd=workspace,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _verified_review_prompt(scope: dict[str, object]) -> str:
+    files = "\n".join(f"- `{path}`" for path in list(scope["files"]))
+    return (
+        "# Review brief\n\n## Review Scope\n\n"
+        f"Title: {scope['title']}\n\n"
+        f"Base/ref: {scope['base_ref']}\n\n"
+        f"Resolved base commit: {scope['resolved_base_commit']}\n\n"
+        f"Resolved head commit: {scope['resolved_head_commit']}\n\n"
+        f"Scope digest: {scope['scope_digest_sha256']}\n\n"
+        f"Files or scope:\n{files}\n\n"
+        "Additional context:\nNone.\n\nRun read-only inspection commands as needed.\n"
+    )
 
 
 def _accepted_exception() -> str:
@@ -69,15 +293,27 @@ def _review_kwargs(workspace: Path) -> dict[str, object]:
 def _write_scope_review_artifact(workspace: Path, plan: dict[str, object]) -> str:
     path = workspace / "runtime" / "reviews" / "retention_prune_scope_review.md"
     evidence = dict(plan.get("destructive_review_evidence") or {})
+    output_lines: list[str] = []
+    for artifact in list(evidence.get("review_required_artifacts") or []):
+        payload = dict(artifact or {})
+        output_lines.append(f"- `{payload.get('path')}` sha256 `{payload.get('sha256')}`")
+    for token in list(evidence.get("review_required_tokens") or []):
+        output_lines.append(f"- `{token}`")
+    output_lines.append("GO")
+    raw_output = ("\n".join(output_lines) + "\n").encode("utf-8")
+    metadata = _verified_review_metadata(
+        workspace,
+        stem="retention_prune_scope_review",
+        title="runtime asset prune test",
+        files=["src/sourcing_agent/runtime_asset_retention_prune.py"],
+        raw_output=raw_output,
+    )
     lines = [
         "## Review Metadata",
         "",
         "- title: runtime asset prune test",
-        "- reviewer_model: gpt-5.5",
-        "- reviewer_reasoning_effort: xhigh",
-        "- reviewer_service_tier: fast",
-        "- prompt_path: `runtime/reviews/retention_prune_scope_review.prompt.md`",
-        "- command: `codex exec --model gpt-5.5 -c 'service_tier=\"fast\"' -c 'model_reasoning_effort=\"xhigh\"'`",
+        *metadata,
+        "- command: `codex exec --strict-config --sandbox read-only`",
         "- contract_docs_considered: `AGENTS.md`, `docs/INDEPENDENT_REVIEW_GATE.md`",
         "",
         "Reviewed scope:",
@@ -87,14 +323,8 @@ def _write_scope_review_artifact(workspace: Path, plan: dict[str, object]) -> st
         "## Reviewer Output",
         "",
     ]
-    for artifact in list(evidence.get("review_required_artifacts") or []):
-        payload = dict(artifact or {})
-        lines.append(f"- `{payload.get('path')}` sha256 `{payload.get('sha256')}`")
-    for token in list(evidence.get("review_required_tokens") or []):
-        lines.append(f"- `{token}`")
-    lines.append("GO")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    path.write_bytes(("\n".join(lines) + "\n").encode("utf-8") + raw_output)
     return str(path.relative_to(workspace))
 
 
@@ -273,7 +503,10 @@ def test_runtime_prune_plan_reclassifies_signoff_like_markers_before_cold_filter
     assert skipped["runtime/test_env/smoke_gpt55_openai_agent_20260505"] == "retention_class_not_allowed_for_plan"
     assert skipped["runtime/test_env/board_runtime_pg_closeout_20260506"] == "retention_class_not_allowed_for_plan"
     assert skipped["runtime/test_env/openai_agent_scripted_20260508_review10"] == "retention_class_not_allowed_for_plan"
-    assert skipped["runtime/test_env/profile_contract_pg_lovable_rerun71_20260509"] == "retention_class_not_allowed_for_plan"
+    assert (
+        skipped["runtime/test_env/profile_contract_pg_lovable_rerun71_20260509"]
+        == "retention_class_not_allowed_for_plan"
+    )
 
 
 def test_runtime_prune_apply_is_dry_run_by_default_and_requires_reviewed(tmp_path: Path) -> None:
@@ -354,7 +587,9 @@ def test_runtime_prune_plan_from_cold_bundle_manifest_uses_exact_archive_scope(t
         include_name_markers=["nightly"],
         min_size_bytes=1,
     )
-    bundled_item = next(item for item in audit["directories"] if item["path"] == "runtime/test_env/nightly_rerun_bundled")
+    bundled_item = next(
+        item for item in audit["directories"] if item["path"] == "runtime/test_env/nightly_rerun_bundled"
+    )
     bundle_manifest = _cold_bundle_manifest_for_items([bundled_item])
     bundle_path = workspace / "runtime" / "asset_governance" / "bundle.json"
     bundle_path.parent.mkdir(parents=True, exist_ok=True)
@@ -386,7 +621,9 @@ def test_runtime_prune_apply_requires_review_artifact_to_cover_exact_bundle_and_
         include_name_markers=["nightly"],
         min_size_bytes=1,
     )
-    bundled_item = next(item for item in audit["directories"] if item["path"] == "runtime/test_env/nightly_rerun_bundled")
+    bundled_item = next(
+        item for item in audit["directories"] if item["path"] == "runtime/test_env/nightly_rerun_bundled"
+    )
     bundle_manifest = _cold_bundle_manifest_for_items([bundled_item])
     bundle_path = workspace / "runtime" / "asset_governance" / "bundle.json"
     bundle_path.parent.mkdir(parents=True, exist_ok=True)
@@ -422,7 +659,9 @@ def test_runtime_prune_apply_derives_bundle_review_tokens_even_if_plan_omits_the
         include_name_markers=["nightly"],
         min_size_bytes=1,
     )
-    bundled_item = next(item for item in audit["directories"] if item["path"] == "runtime/test_env/nightly_rerun_bundled")
+    bundled_item = next(
+        item for item in audit["directories"] if item["path"] == "runtime/test_env/nightly_rerun_bundled"
+    )
     bundle_manifest = _cold_bundle_manifest_for_items([bundled_item])
     bundle_path = workspace / "runtime" / "asset_governance" / "bundle.json"
     bundle_path.parent.mkdir(parents=True, exist_ok=True)
@@ -771,7 +1010,11 @@ def test_runtime_prune_blocks_wrong_action_and_stale_manifest(tmp_path: Path) ->
     assert stale["status"] == "blocked"
     assert "operation_preflight_failed" in stale["blockers"]
     assert stale["summary"]["removed_count"] == 0
-    assert stale["results"][0]["reason"] in {"size_drift_detected", "file_count_drift_detected", "latest_mtime_drift_detected"}
+    assert stale["results"][0]["reason"] in {
+        "size_drift_detected",
+        "file_count_drift_detected",
+        "latest_mtime_drift_detected",
+    }
     assert old_case.exists()
 
 
@@ -998,7 +1241,9 @@ def test_runtime_prune_apply_rejects_missing_and_incomplete_cold_copy_manifest(t
         incomplete_plan["operations"],
         omit_first=True,
     )
-    incomplete = apply_runtime_asset_prune_plan(plan=incomplete_plan, workspace_root=workspace, apply=True, reviewed=True)
+    incomplete = apply_runtime_asset_prune_plan(
+        plan=incomplete_plan, workspace_root=workspace, apply=True, reviewed=True
+    )
 
     assert incomplete["status"] == "blocked"
     assert "cold_copy_manifest_missing_operations:1" in incomplete["blockers"]
@@ -1151,6 +1396,62 @@ def test_runtime_prune_apply_rejects_review_artifact_missing_runner_model_tier_m
     assert "review_artifact_missing_metadata:reviewer_service_tier" in report["blockers"]
     assert "review_artifact_missing_metadata:prompt_path" in report["blockers"]
     assert old_case.exists()
+
+
+def test_runtime_prune_verifier_rejects_old_self_reported_go_artifact(tmp_path: Path) -> None:
+    workspace = tmp_path / "repo"
+    path = workspace / "runtime" / "reviews" / "old-self-reported-go.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "## Review Metadata\n\n"
+        "- title: runtime asset prune test\n"
+        "- reviewer_model: gpt-5.6-sol\n"
+        "- reviewer_reasoning_effort: ultra\n"
+        "- reviewer_service_tier: priority\n"
+        "- prompt_path: `runtime/reviews/old.prompt.md`\n"
+        "- command: `codex exec --strict-config --sandbox read-only`\n"
+        "- contract_docs_considered: `docs/INDEPENDENT_REVIEW_GATE.md`\n\n"
+        "Reviewed scope: `src/sourcing_agent/runtime_asset_retention_prune.py`\n\n"
+        "## Reviewer Output\n\nGO\n",
+        encoding="utf-8",
+    )
+
+    blockers = prune_module.validate_independent_review_artifact(
+        artifact_path=path,
+        workspace_root=workspace,
+        expected_title="runtime asset prune test",
+        required_files=["src/sourcing_agent/runtime_asset_retention_prune.py"],
+    )
+
+    assert "review_artifact_missing_metadata:reviewer_exit_code" in blockers
+    assert "review_artifact_missing_metadata:reviewer_effective_config_path" in blockers
+    assert "review_artifact_effective_config_evidence_missing" in blockers
+
+
+def test_runtime_prune_verifier_recomputes_effective_config_and_rollout_hashes(tmp_path: Path) -> None:
+    workspace = tmp_path / "repo"
+    artifact_path = workspace / _review_artifact(workspace)
+    metadata = prune_module.parse_independent_review_artifact_metadata(artifact_path.read_text(encoding="utf-8"))
+    evidence_path = workspace / metadata["reviewer_effective_config_path"]
+    rollout_path = workspace / metadata["reviewer_rollout_path"]
+
+    rollout_path.write_bytes(rollout_path.read_bytes() + b"{}\n")
+    rollout_blockers = prune_module.validate_independent_review_artifact(
+        artifact_path=artifact_path,
+        workspace_root=workspace,
+        expected_title="runtime asset prune test",
+        required_files=["src/sourcing_agent/runtime_asset_retention_prune.py"],
+    )
+    assert "review_artifact_rollout_sha256_mismatch" in rollout_blockers
+
+    evidence_path.write_bytes(evidence_path.read_bytes() + b"\n")
+    evidence_blockers = prune_module.validate_independent_review_artifact(
+        artifact_path=artifact_path,
+        workspace_root=workspace,
+        expected_title="runtime asset prune test",
+        required_files=["src/sourcing_agent/runtime_asset_retention_prune.py"],
+    )
+    assert "review_artifact_effective_config_sha256_mismatch" in evidence_blockers
 
 
 def test_runtime_prune_apply_rejects_default_review_prompt_and_command_metadata(tmp_path: Path) -> None:
@@ -1634,7 +1935,10 @@ def test_runtime_prune_apply_detects_runtime_daemon_from_pid_file_without_path_i
 
     assert report["status"] == "blocked"
     assert "active_runtime_processes_detected" in report["blockers"]
-    assert "runtime process reference: runtime/test_env/service_logs/dev-worker-daemon.pid" in report["active_processes"][0]["command"]
+    assert (
+        "runtime process reference: runtime/test_env/service_logs/dev-worker-daemon.pid"
+        in report["active_processes"][0]["command"]
+    )
     assert old_case.exists()
 
 
@@ -1684,14 +1988,14 @@ def test_runtime_prune_apply_detects_nested_runtime_status_reference_without_pat
 
     assert report["status"] == "blocked"
     assert "active_runtime_processes_detected" in report["blockers"]
-    expected_reference = "runtime process reference: runtime/test_env/w6_google_old_case/scenario/services/job-recovery-abc/status.json"
+    expected_reference = (
+        "runtime process reference: runtime/test_env/w6_google_old_case/scenario/services/job-recovery-abc/status.json"
+    )
     assert expected_reference in report["active_processes"][0]["command"]
     assert old_case.exists()
 
 
-def test_runtime_prune_apply_skips_stale_reference_when_live_pid_is_unrecognized(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_runtime_prune_apply_skips_stale_reference_when_live_pid_is_unrecognized(tmp_path: Path, monkeypatch) -> None:
     workspace = tmp_path / "repo"
     old_case = workspace / "runtime" / "test_env" / "w6_google_old_case"
     _write_bytes(old_case / "artifact.json", 128)
@@ -1750,7 +2054,9 @@ def test_runtime_prune_apply_ignores_stopped_service_status_pid_reuse(tmp_path: 
     old_case = workspace / "runtime" / "test_env" / "google_old_case"
     _write_bytes(old_case / "artifact.json", 128)
     _set_old_mtime(old_case)
-    status_path = workspace / "runtime" / "test_env" / "stopped_runtime" / "services" / "job-recovery-abc" / "status.json"
+    status_path = (
+        workspace / "runtime" / "test_env" / "stopped_runtime" / "services" / "job-recovery-abc" / "status.json"
+    )
     status_path.parent.mkdir(parents=True, exist_ok=True)
     status_path.write_text(
         prune_module.dumps_report(
@@ -1931,19 +2237,27 @@ def test_ttl_local_rebuildable_apply_blocks_tampered_protected_or_offroot_operat
 
     tampered_protected = copy.deepcopy(plan)
     tampered_protected["operations"][0]["path"] = "runtime/test_env/provider_cache"
-    blocked = apply_runtime_asset_prune_plan(plan=tampered_protected, workspace_root=workspace, apply=True, reviewed=True)
+    blocked = apply_runtime_asset_prune_plan(
+        plan=tampered_protected, workspace_root=workspace, apply=True, reviewed=True
+    )
     assert blocked["status"] == "blocked"
     assert "ttl_policy_protected_name:runtime/test_env/provider_cache" in blocked["blockers"]
 
     tampered_nested = copy.deepcopy(plan)
     tampered_nested["operations"][0]["path"] = "runtime/test_env/nightly_old_run_20260101/artifact_dir"
-    blocked_nested = apply_runtime_asset_prune_plan(plan=tampered_nested, workspace_root=workspace, apply=True, reviewed=True)
+    blocked_nested = apply_runtime_asset_prune_plan(
+        plan=tampered_nested, workspace_root=workspace, apply=True, reviewed=True
+    )
     assert blocked_nested["status"] == "blocked"
-    assert any(blocker.startswith("ttl_policy_path_not_top_level_test_env_dir:") for blocker in blocked_nested["blockers"])
+    assert any(
+        blocker.startswith("ttl_policy_path_not_top_level_test_env_dir:") for blocker in blocked_nested["blockers"]
+    )
 
     tampered_root = copy.deepcopy(plan)
     tampered_root["prune_root"] = "output"
-    blocked_root = apply_runtime_asset_prune_plan(plan=tampered_root, workspace_root=workspace, apply=True, reviewed=True)
+    blocked_root = apply_runtime_asset_prune_plan(
+        plan=tampered_root, workspace_root=workspace, apply=True, reviewed=True
+    )
     assert blocked_root["status"] == "blocked"
     assert "ttl_policy_prune_root_not_allowed" in blocked_root["blockers"]
 

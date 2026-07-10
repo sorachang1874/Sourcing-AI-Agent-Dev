@@ -1,11 +1,14 @@
+import hashlib
 import json
 import shutil
+import subprocess
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 from sourcing_agent.runtime_asset_retention_prune import (
     apply_runtime_asset_prune_plan,
+    build_independent_review_scope_evidence,
     build_runtime_asset_prune_plan_from_cold_bundle_manifest,
 )
 from sourcing_agent.runtime_asset_supersession_cold_bundle import (
@@ -50,7 +53,9 @@ def test_supersession_cold_bundle_manifest_can_feed_reviewed_prune_apply() -> No
         assert "nightly_rerun1" in render_runtime_asset_supersession_cold_bundle_markdown(bundle_manifest)
 
         apply_report = apply_runtime_asset_prune_plan(
-            plan=_prune_plan(root=root, bundle_manifest=bundle_manifest, cold_copy_manifest="runtime/asset_governance/bundle.json"),
+            plan=_prune_plan(
+                root=root, bundle_manifest=bundle_manifest, cold_copy_manifest="runtime/asset_governance/bundle.json"
+            ),
             workspace_root=root,
             apply=True,
             reviewed=True,
@@ -90,7 +95,9 @@ def test_supersession_cold_bundle_apply_blocks_tampered_archive() -> None:
         _write_review_artifact(root)
 
         apply_report = apply_runtime_asset_prune_plan(
-            plan=_prune_plan(root=root, bundle_manifest=bundle_manifest, cold_copy_manifest="runtime/asset_governance/bundle.json"),
+            plan=_prune_plan(
+                root=root, bundle_manifest=bundle_manifest, cold_copy_manifest="runtime/asset_governance/bundle.json"
+            ),
             workspace_root=root,
             apply=True,
             reviewed=True,
@@ -133,7 +140,9 @@ def test_supersession_cold_bundle_apply_blocks_archive_under_prunable_root() -> 
         _write_review_artifact(root)
 
         apply_report = apply_runtime_asset_prune_plan(
-            plan=_prune_plan(root=root, bundle_manifest=bundle_manifest, cold_copy_manifest="runtime/asset_governance/bundle.json"),
+            plan=_prune_plan(
+                root=root, bundle_manifest=bundle_manifest, cold_copy_manifest="runtime/asset_governance/bundle.json"
+            ),
             workspace_root=root,
             apply=True,
             reviewed=True,
@@ -176,7 +185,9 @@ def test_supersession_cold_bundle_apply_blocks_archive_symlink_path() -> None:
         _write_review_artifact(root)
 
         apply_report = apply_runtime_asset_prune_plan(
-            plan=_prune_plan(root=root, bundle_manifest=bundle_manifest, cold_copy_manifest="runtime/asset_governance/bundle.json"),
+            plan=_prune_plan(
+                root=root, bundle_manifest=bundle_manifest, cold_copy_manifest="runtime/asset_governance/bundle.json"
+            ),
             workspace_root=root,
             apply=True,
             reviewed=True,
@@ -323,26 +334,262 @@ def _write_review_artifact(root: Path, plan: dict[str, object] | None = None) ->
         scope_lines.append(f"`{payload.get('sha256')}`")
     for token in list(evidence.get("review_required_tokens") or []):
         scope_lines.append(f"`{token}`")
-    review_path.write_text(
+    files = [
+        "src/sourcing_agent/runtime_asset_supersession_cold_bundle.py",
+        "src/sourcing_agent/runtime_asset_retention_prune.py",
+    ]
+    raw_output = (
         "\n".join(
             [
-                "## Review Metadata",
-                "- title: test-cold-bundle-apply",
-                "- reviewer_model: gpt-5.5",
-                "- reviewer_reasoning_effort: xhigh",
-                "- reviewer_service_tier: fast",
-                "- prompt_path: `runtime/reviews/go.prompt.md`",
-                "- command: `codex exec --model gpt-5.5 -c 'service_tier=\"fast\"' -c 'model_reasoning_effort=\"xhigh\"'`",
-                "- contract_docs_considered: `docs/INDEPENDENT_REVIEW_GATE.md`",
-                "## Reviewer Output",
                 "`src/sourcing_agent/runtime_asset_supersession_cold_bundle.py`",
                 "`src/sourcing_agent/runtime_asset_retention_prune.py`",
                 "docs/INDEPENDENT_REVIEW_GATE.md",
                 *scope_lines,
                 "GO",
             ]
-        ),
+        )
+        + "\n"
+    ).encode("utf-8")
+    metadata = _verified_review_metadata(
+        root,
+        stem="go",
+        title="test-cold-bundle-apply",
+        files=files,
+        raw_output=raw_output,
+    )
+    review_path.write_text(
+        "\n".join(
+            [
+                "## Review Metadata",
+                "- title: test-cold-bundle-apply",
+                *metadata,
+                "- command: `codex exec --strict-config --sandbox read-only`",
+                "- contract_docs_considered: `docs/INDEPENDENT_REVIEW_GATE.md`",
+                "## Reviewer Output",
+                "",
+                raw_output.decode("utf-8").rstrip("\n"),
+            ]
+        )
+        + "\n",
         encoding="utf-8",
+    )
+
+
+def _verified_review_metadata(
+    root: Path,
+    *,
+    stem: str,
+    title: str,
+    files: list[str],
+    raw_output: bytes,
+) -> list[str]:
+    review_dir = root / "runtime" / "reviews"
+    review_dir.mkdir(parents=True, exist_ok=True)
+    base = _ensure_review_git_scope(root, files=files)
+    scope = build_independent_review_scope_evidence(
+        workspace_root=root,
+        title=title,
+        base_ref=base,
+        files=files,
+        extra_context="",
+    )
+    thread_id = "019f0000-0000-7000-8000-000000000002"
+    config_relative = f"runtime/reviews/{stem}.config.toml"
+    config_raw = ('model = "gpt-5.6-sol"\nmodel_reasoning_effort = "ultra"\nservice_tier = "fast"\n').encode("utf-8")
+    (root / config_relative).write_bytes(config_raw)
+    prompt_relative = f"runtime/reviews/{stem}.prompt.md"
+    prompt_raw = _verified_review_prompt(scope).encode("utf-8")
+    (root / prompt_relative).write_bytes(prompt_raw)
+    normalized_final = raw_output.decode("utf-8").rstrip("\r\n")
+    turn_id = "019f0000-0000-7000-8000-000000000012"
+    rollout_relative = f"runtime/reviews/{stem}.rollout-{thread_id}.jsonl"
+    rollout_events = [
+        {
+            "type": "session_meta",
+            "payload": {"id": thread_id, "cli_version": "0.144.0", "source": "exec"},
+        },
+        {"type": "event_msg", "payload": {"type": "task_started", "turn_id": turn_id}},
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": prompt_raw.decode("utf-8")}],
+            },
+        },
+        {
+            "type": "event_msg",
+            "payload": {"type": "user_message", "message": prompt_raw.decode("utf-8")},
+        },
+        {
+            "type": "event_msg",
+            "payload": {
+                "type": "thread_settings_applied",
+                "thread_settings": {
+                    "model": "gpt-5.6-sol",
+                    "reasoning_effort": "ultra",
+                    "service_tier": "priority",
+                },
+            },
+        },
+        {
+            "type": "event_msg",
+            "payload": {
+                "type": "agent_message",
+                "phase": "final_answer",
+                "message": normalized_final,
+            },
+        },
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "phase": "final_answer",
+                "content": [{"type": "output_text", "text": normalized_final}],
+            },
+        },
+        {
+            "type": "event_msg",
+            "payload": {
+                "type": "task_complete",
+                "turn_id": turn_id,
+                "last_agent_message": normalized_final,
+            },
+        },
+    ]
+    rollout_raw = "".join(json.dumps(event, sort_keys=True) + "\n" for event in rollout_events).encode("utf-8")
+    (root / rollout_relative).write_bytes(rollout_raw)
+    rollout_sha = hashlib.sha256(rollout_raw).hexdigest()
+    causal_binding = {
+        "turn_id": turn_id,
+        "prompt_sha256": hashlib.sha256(prompt_raw).hexdigest(),
+        "normalized_final_output_sha256": hashlib.sha256(normalized_final.encode("utf-8")).hexdigest(),
+        "rollout_json_valid": True,
+        "text_utf8_valid": True,
+        "session_source_exec": True,
+        "single_task_turn": True,
+        "no_abort": True,
+        "prompt_response_item_exact": True,
+        "prompt_event_message_exact": True,
+        "final_response_item_exact": True,
+        "final_event_message_exact": True,
+        "task_complete_final_exact": True,
+    }
+    events_relative = f"runtime/reviews/{stem}.events.jsonl"
+    events_raw = (json.dumps({"type": "thread.started", "thread_id": thread_id}) + "\n").encode("utf-8")
+    (root / events_relative).write_bytes(events_raw)
+    raw_output_relative = f"runtime/reviews/{stem}.raw-output.md"
+    (root / raw_output_relative).write_bytes(raw_output)
+    evidence_relative = f"runtime/reviews/{stem}.effective-config.json"
+    evidence_payload = {
+        "contract_version": "independent_review_effective_config_v2",
+        "config": {
+            "path": config_relative,
+            "sha256": hashlib.sha256(config_raw).hexdigest(),
+            "model": "gpt-5.6-sol",
+            "reasoning_effort": "ultra",
+            "service_tier": "fast",
+        },
+        "session": {
+            "session_id": thread_id,
+            "thread_id": thread_id,
+            "codex_cli_version": "0.144.0",
+            "rollout_path": rollout_relative,
+            "rollout_sha256": rollout_sha,
+        },
+        "process": {"reviewer_exit_code": 0},
+        "effective": {
+            "model": "gpt-5.6-sol",
+            "reasoning_effort": "ultra",
+            "service_tier": "priority",
+            "source": {
+                "model": ["thread_settings_applied"],
+                "reasoning_effort": ["thread_settings_applied"],
+                "service_tier": ["thread_settings_applied"],
+            },
+        },
+        "model_reroutes": [],
+        "causal_binding": causal_binding,
+        "scope": scope,
+        "artifacts": {
+            "prompt": {"path": prompt_relative, "sha256": hashlib.sha256(prompt_raw).hexdigest()},
+            "events": {"path": events_relative, "sha256": hashlib.sha256(events_raw).hexdigest()},
+            "raw_output": {
+                "path": raw_output_relative,
+                "sha256": hashlib.sha256(raw_output).hexdigest(),
+            },
+        },
+    }
+    evidence_raw = (json.dumps(evidence_payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    (root / evidence_relative).write_bytes(evidence_raw)
+    return [
+        "- reviewer_model: gpt-5.6-sol",
+        "- reviewer_reasoning_effort: ultra",
+        "- reviewer_service_tier: priority",
+        f"- reviewer_config_path: `{config_relative}`",
+        f"- reviewer_config_sha256: {hashlib.sha256(config_raw).hexdigest()}",
+        "- reviewer_exit_code: 0",
+        "- reviewer_codex_cli_version: 0.144.0",
+        f"- reviewer_thread_id: {thread_id}",
+        f"- reviewer_rollout_path: `{rollout_relative}`",
+        f"- reviewer_rollout_sha256: {rollout_sha}",
+        f"- reviewer_effective_config_path: `{evidence_relative}`",
+        f"- reviewer_effective_config_sha256: {hashlib.sha256(evidence_raw).hexdigest()}",
+        f"- review_scope_mode: {scope['scope_mode']}",
+        f"- review_base_ref: {scope['base_ref']}",
+        f"- review_resolved_base_commit: {scope['resolved_base_commit']}",
+        f"- review_resolved_head_commit: {scope['resolved_head_commit']}",
+        f"- review_git_diff_sha256: {scope['git_diff_sha256']}",
+        f"- review_git_tree_sha256: {scope['git_tree_sha256']}",
+        f"- review_extra_context_sha256: {scope['extra_context_sha256']}",
+        f"- review_scope_digest_sha256: {scope['scope_digest_sha256']}",
+        f"- prompt_path: `{prompt_relative}`",
+        f"- prompt_sha256: {hashlib.sha256(prompt_raw).hexdigest()}",
+        f"- events_path: `{events_relative}`",
+        f"- events_sha256: {hashlib.sha256(events_raw).hexdigest()}",
+        f"- raw_output_path: `{raw_output_relative}`",
+        f"- raw_output_sha256: {hashlib.sha256(raw_output).hexdigest()}",
+    ]
+
+
+def _ensure_review_git_scope(root: Path, *, files: list[str]) -> str:
+    if not (root / ".git").exists():
+        root.mkdir(parents=True, exist_ok=True)
+        (root / ".gitignore").write_text("runtime/\noutput/\n", encoding="utf-8")
+        for relative in files:
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=root, check=True)
+        subprocess.run(["git", "add", ".gitignore", *files], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True)
+        for relative in files:
+            (root / relative).write_text("reviewed\n", encoding="utf-8")
+        subprocess.run(["git", "add", *files], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-qm", "reviewed"], cwd=root, check=True)
+    return subprocess.run(
+        ["git", "rev-list", "--max-parents=0", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _verified_review_prompt(scope: dict[str, object]) -> str:
+    files = "\n".join(f"- `{path}`" for path in list(scope["files"]))
+    return (
+        "# Review brief\n\n## Review Scope\n\n"
+        f"Title: {scope['title']}\n\n"
+        f"Base/ref: {scope['base_ref']}\n\n"
+        f"Resolved base commit: {scope['resolved_base_commit']}\n\n"
+        f"Resolved head commit: {scope['resolved_head_commit']}\n\n"
+        f"Scope digest: {scope['scope_digest_sha256']}\n\n"
+        f"Files or scope:\n{files}\n\n"
+        "Additional context:\nNone.\n\nRun read-only inspection commands as needed.\n"
     )
 
 

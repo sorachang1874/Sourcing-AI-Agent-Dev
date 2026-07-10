@@ -21,7 +21,7 @@ Current foundation implemented on 2026-05-19:
 
 - `serving_projections`, `serving_projection_members`, and `projection_manifest_shards` exist in the control-plane schema.
 - `run_projection_links` and `collection_authoritative_pointers` exist in the control-plane schema as foundation records for `/runs/{run_id}` to `/projections/{projection_id}` linking and collection-first local asset entry resolution.
-- `ControlPlaneStore` has storage APIs for projection upsert/list/get, member upsert/replace/list/count, manifest shard upsert/list/get, run/projection link upsert/list/get, and collection authoritative pointer upsert/get.
+- `store.repos.serving_projection` owns projection upsert/list/get, member upsert/replace/list/count, manifest shard upsert/list/get, run/projection link upsert/list/get, and collection authoritative pointer upsert/get; the retired `ControlPlaneStore` domain facades must not reappear.
 - `ServingProjectionWriter` is the first owner-facing writer facade for publishing run-scope projections and collection-authoritative projections through the storage foundation instead of scattering low-level table writes.
 - PG-only and mirror control-plane modes know these tables, and member counting uses a PG `COUNT(*)` path instead of scanning all rows.
 - `tests/test_serving_projection_storage.py` covers local storage semantics, member dedupe, field visibility defaults, and the rule that manifest shards are audit refs rather than online membership.

@@ -55,31 +55,37 @@ For changes inside the narrowed gate scope that are already covered by independe
 
 ## Codex Reviewer Command
 
-Use `codex exec` in read-only mode and write the review to a file. The project default is GPT-5.5 with `model_reasoning_effort="xhigh"` and Codex fast mode via `service_tier="fast"`. The runner writes the prompt to `runtime/reviews/*.prompt.md` and feeds that prompt file to Codex, so it does not wait for interactive stdin. Do not pipe through `head` or `tail`.
+Use `codex exec` in read-only mode and write the review to a file. The standing policy is the newest available model at its highest supported reasoning effort. The operator maintains model, effort, and service tier in `~/.codex/config.toml`; project scripts and docs must not pin or override those values. The runner writes the prompt to `runtime/reviews/*.prompt.md`, feeds it non-interactively, captures JSON events, and reconciles persisted `thread_settings_applied`, `session_configured`, and `turn_context` observations. Missing effective tier evidence, conflicting observations, or model reroute fails closed. Do not pipe through `head` or `tail`.
 
 ```sh
 make independent-review-gate \
-  REVIEW_TITLE="W7g Public Web model-provider hardening" \
-  REVIEW_FILES="src/sourcing_agent/model_provider.py tests/test_model_provider.py docs/PRE_AGENT_CONTRACT_REVIEW.md" \
+  REVIEW_TITLE="W7g CRM Public Web live product validation" \
+  REVIEW_BASE="<pinned-base-SHA>" \
+  REVIEW_FILES="Makefile scripts/run_crm_public_web_live_product_validation.py scripts/run_independent_review_gate.py src/sourcing_agent/model_provider.py src/sourcing_agent/public_web_runtime_core.py src/sourcing_agent/runtime_asset_retention_prune.py tests/test_model_provider.py tests/test_crm_public_web_runtime_boundary.py tests/test_independent_review_gate_runner.py tests/test_pre_agent_contract_review.py docs/PRE_AGENT_CONTRACT_REVIEW.md docs/DURABLE_EXECUTION_RUNTIME_CONTRACT.md docs/INDEPENDENT_REVIEW_GATE.md docs/TESTING_PLAYBOOK.md" \
+  REVIEW_EXTRA_CONTEXT="Review the W7g live gate, its review-runner/verifier trust root, mandatory force-refresh-before-request guard, invocation-bound batch/run evidence, and immutable gpt-5.6-sol provider-response model identity. Require exact title/scope digest and co-located latest-run phase metrics." \
   REVIEW_EXECUTE=1
 ```
+
+For this W7g command, replace `REVIEW_BASE="<pinned-base-SHA>"` with the exact base commit before launch; never omit it or substitute a moving branch. The immutable file scope includes `scripts/run_independent_review_gate.py`, the shared verifier in `src/sourcing_agent/runtime_asset_retention_prune.py`, and `tests/test_independent_review_gate_runner.py` because they create or validate the `GO` artifact consumed by W7g. The review must also verify that real execution requires exact `CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1` / `--force-refresh` and rejects the omission before provider health or any other backend request. The runner binds the resolved base and head commits, normalized file list, Git diff/tree content, title, scope mode, and extra-context digest into `review_scope_digest_sha256`. Record that emitted digest with the review request, then pass the exact value as `CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256` when the resulting artifact is used for live validation. An unpinned/current-working-tree request is reference-only. A pinned commit-object review remains signoff-capable while unrelated work continues, but any later scoped commit, staged change, unstaged change, or untracked replacement invalidates the artifact at consumption; index and worktree are checked separately so opposing changes cannot cancel. Commit the intended scope and launch a new pinned review for those gates.
 
 Equivalent direct shape. The Make/script path enforces the timeout through Python so it works on macOS without GNU `timeout`; add an external `timeout`/`gtimeout` only if your shell has it.
 
 ```sh
 codex exec \
+  --strict-config \
   --cd . \
   --sandbox read-only \
-  --model gpt-5.5 \
-  -c service_tier='"fast"' \
-  -c model_reasoning_effort='"xhigh"' \
+  --json \
   --output-last-message runtime/reviews/<review-id>.md \
   - \
   < runtime/reviews/<review-id>.prompt.md
 ```
 
-If `gpt-5.5` is unavailable, substitute per the Model Routing Table below and record that substitution in the review output. A same-family Codex/GPT fallback is allowed only through a separate non-author read-only session; the implementation author still cannot self-certify. If no reviewer session is reachable, defer the gate visibly in `docs/RESIDUAL_LEDGER.md` while unrelated work continues.
-The Make/script target defaults are `REVIEW_MODEL=gpt-5.5`, `REVIEW_REASONING_EFFORT=xhigh`, and `REVIEW_SERVICE_TIER=fast`. Override them only when the local reviewer environment cannot support that combination, and keep the substitution visible in the generated review artifact metadata.
+The canonical command has no model/effort/tier CLI overrides. Before execution, the runner requires explicit global values; after execution, it extracts the actual model, reasoning effort, and service tier from the persisted rollout and fails closed on missing metadata or a mismatch. It writes a redacted `*.effective-config.json` using `independent_review_effective_config_v2`; the evidence binds prompt, captured JSON events, raw reviewer output, global config, and source rollout by SHA-256, plus a canonical pinned-Git scope digest over title/base/head/files/diff/tree/extra-context. The shared verifier reparses the rollout instead of trusting the JSON copy, records Codex session/thread and CLI version, requires one completed root `source=exec` turn, and proves the exact prompt and final raw output appear in the independent rollout event shapes before accepting `reviewer_exit_code=0`. A requested alias therefore cannot be misreported as the applied tier, old real-session evidence cannot be repacked under another prompt/scope, and a nonzero Codex process cannot leave a valid-looking `GO`.
+
+This is a local integrity and anti-replay contract, not an external signature scheme. It does not claim cryptographic authenticity or remote attestation against a malicious author who can rewrite the repository and every local evidence file together; human/session independence and protected CI/PR storage remain the trust boundary for that threat.
+
+If the configured newest model is temporarily unavailable, follow the Model Routing Table: update the operator-owned global config to the designated fallback at that model's highest supported effort, record the fallback, and retry only the unfinished review. A same-family Codex/GPT fallback is allowed only through a separate non-author read-only session; the implementation author still cannot self-certify. If no reviewer session is reachable, defer the gate visibly in `docs/RESIDUAL_LEDGER.md` while unrelated work continues.
 
 ## Model Routing Table (checked-in 2026-07-09; owner-updated 2026-07-10)
 
@@ -92,7 +98,7 @@ pre-declared decision. Both `AGENTS.md` files point here; do not fork per-file c
 | Recon / scout (read-only fan-out) | execution-dense | author-session model | author family, lighter tier (e.g. Sonnet) | degrade to fallback; resume, don't rerun survivors |
 | Mechanical edit fan-out | execution-dense | author family, lighter tier | author-session model | degrade |
 | Adversarial verification / synthesis | reasoning-dense | author-session model | author family, deepest available | degrade |
-| **Independent review (this gate)** | reasoning-dense | GPT-5.5 in a separate read-only Codex session (`xhigh`, `fast`) | newest available Codex/GPT reasoning model in a separate read-only session | record the fallback or defer the review; continue unrelated work |
+| **Independent review (this gate)** | reasoning-dense | newest available Codex reviewer model at its highest supported effort, inherited from global config in a separate read-only session | operator-selected next newest/deepest available Codex reviewer in a separate read-only session | record the fallback or defer the review; continue unrelated work |
 
 Constraints:
 
@@ -104,7 +110,9 @@ Constraints:
 - Interrupted fan-outs resume from their run id (re-dispatch only unfinished lanes); a completed
   agent's output is never re-rolled by a full rerun.
 - Initial assignments dated 2026-07-09; owner changed the independent lane to Codex-first and explicitly
-  non-blocking for unrelated development on 2026-07-10. Revisit when the model lineup or reviewer transport changes.
+  non-blocking for unrelated development on 2026-07-10. The same playbook sync retired project-level
+  model/effort pins in favor of global latest+max inheritance. Revisit global config when the model lineup
+  changes; do not edit the runner or active docs to chase model versions.
 
 ## Required Evidence
 
@@ -113,14 +121,15 @@ The review output must record:
 - Reviewed files or diff scope.
 - Contract docs considered.
 - Validation already run by the author.
-- Command/model, reasoning effort, and service tier used for the independent review.
+- Command, `reviewer_exit_code=0`, Codex CLI/session/thread identity, global-config digest, rollout path/digest, and effective model, reasoning effort, and service tier used for the independent review.
+- A hash-bound `independent_review_effective_config_v2` JSON artifact with prompt/events/raw-output/rollout provenance, a recomputable pinned-Git scope digest, and an empty model-reroute chain.
 - Blocking findings or `GO` / `NO-GO`.
 - Accepted exceptions, if any, with user/founder approval context.
 - Residual risks that should be checked in W6/nightly, live validation, or manual product review.
 
 Store outputs under `runtime/reviews/<stamp>_<title>.md` or attach them to the PR/review thread. For milestone signoff, reference the artifact path from `docs/NEXT_TODO.md`, the relevant Contract doc, or the PR checklist. Do not treat an unrecorded chat answer, author summary, or normal implementation note as review evidence.
 A bare `NO-GO` without at least one prioritized finding is an invalid review artifact; rerun with a narrower scope or clearer prompt instead of treating it as a valid blocked review.
-Provider-costing live gates and milestone signoff runners must validate the artifact verdict, not just file existence: valid evidence is a runner-produced review artifact under `runtime/reviews/` with complete metadata, matching scope/title tokens and required files/contracts for the gate being unlocked, and a final `GO` verdict. `NO-GO`, timeout, no-output, invalid, prompt-file, missing-metadata, missing-scope-file, or unrelated artifacts must fail closed.
+Provider-costing live gates and milestone signoff runners must call the shared artifact verifier, not just check file existence or parse the final word: valid evidence is a runner-produced review artifact under `runtime/reviews/` with a zero reviewer exit, hash-verified effective-config/rollout evidence, complete metadata, matching scope/title tokens and required files/contracts, and a final `GO` verdict. `NO-GO`, timeout, no-output, nonzero-exit, rerouted, invalid, prompt-file, missing/tampered evidence, missing-scope-file, or unrelated artifacts fail closed.
 
 ## Independence Rule
 

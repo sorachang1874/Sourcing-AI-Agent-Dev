@@ -463,7 +463,7 @@ class AssetConsolidationAuditTest(PGControlPlaneStoreTestMixin, unittest.TestCas
                 "provenance": {"source_snapshot_id": "snap-repair-reference"},
             }
         )
-        self.store.upsert_serving_projection_members(
+        self.store.repos.serving_projection.upsert_members(
             "proj_openai_repair_reference",
             [
                 {

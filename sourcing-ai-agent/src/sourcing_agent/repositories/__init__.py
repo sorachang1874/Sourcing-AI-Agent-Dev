@@ -45,3 +45,9 @@ def linkedin_profile_registry_repo(store: Any) -> Any:
     """
 
     return getattr(getattr(store, "repos", None), "linkedin_profile_registry", None)
+
+
+def serving_projection_repo(store: Any) -> Any:
+    """Return the serving-projection repository exposed by a store-like object, if present."""
+
+    return getattr(getattr(store, "repos", None), "serving_projection", None)

@@ -347,7 +347,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
                 "state": "serving",
             }
         )
-        self.store.upsert_serving_projection_members(
+        self.store.repos.serving_projection.upsert_members(
             "proj-api-avatar-backfill",
             [
                 {

@@ -10,6 +10,48 @@
 
 ## 2026-07-10 (Asia/Shanghai)
 
+### CRM Public Web: gpt-5.6-sol product model and review-evidence hardening
+
+- Per owner decision, the startup-scoped shared `model_provider` and immutable W7g product target moved from
+  `gpt-5.5` to `gpt-5.6-sol`. OpenAI-compatible calls now retain requested/response/effective model identity and
+  a bounded token-usage allowlist. Every generic business call and legacy string API rejects missing or
+  mismatched provider response identity and opens the model circuit; Public Web and provider health retain the
+  raw structured result only so they can publish precise fail-closed diagnostics. Concurrent first health probes
+  for the same provider/base/model share one in-process flight.
+- W7g has no Make/environment model downgrade. Real execution additionally requires exact
+  `CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1` / `--force-refresh` before any backend/provider request, sends
+  `force_refresh=true`, and pins the returned batch plus exact record/run mapping through poll and detail before
+  export. The dry run remains request-free and reports the missing live prerequisites.
+- The Codex review runner now inherits the globally selected newest model/highest effort and records v2 evidence:
+  zero exit, effective settings from the persisted rollout, prompt/events/raw-output/rollout hashes, exact
+  prompt/final-output causal binding, and a pinned Git scope digest. The verifier independently recomputes those
+  claims; missing/deleted required files, later scoped commits, staged/unstaged/dirty/committed cancellation,
+  model reroute, nonzero/timeout, and old-session repacking all fail closed. This is local integrity evidence, not
+  a cryptographic signature or remote attestation against a malicious workspace author.
+- Two adversarial review rounds found and closed stale-scope replay, missing required-file, causal-repack,
+  index/worktree cancellation, shared business-model identity, and stale W7g batch reuse defects. Final reference
+  reviews returned GO. Validation: review-evidence group **124 passed**; model/settings/CRM/pre-agent group
+  **144 passed + 11 subtests**; final `ci-pre-agent-contract` **223 + 2/11/1/2 = 239 passed** with
+  `dry_run_ready failures=[]`; Ruff and compileall clean; mypy remains R-011's **87 errors / 4 files**. No live
+  provider validation was run, so relay acceptance, returned model identity, price, and product quality remain a
+  guarded post-review live proof rather than a checked-in claim.
+
+### Track B ②.3c: serving_projection_members repository cutover + D-4(a)
+
+- Eight members methods plus their bespoke mapper/payload/readiness helpers moved to
+  `store.repos.serving_projection`. All 56 external production calls and 39 test calls switched; the two
+  Store-internal calls disappeared with the old facade. Retired Store methods, helpers, two native dispatch
+  keys, and dynamic old-facade access are all zero; `storage.py` fell from 14,261 to 13,822 lines.
+- The frozen pinned-HEAD A/B battery produced byte-identical 11,783-byte output on both implementations
+  (SHA-256 `d139000b384d754d9d190193e83248b4a37c58799b1acef9b50d130dd2b33913`). Removing the rank clamp changed
+  the output to 11,785 bytes / `f10aacd3c8d13d4223e6890b3285931b79771867eafc8acf22b774116cccbca0`, so the battery caught the mutation.
+- D-4 option (a) is implemented: all four wrapper calls now pass `table_name=` and `rows=` explicitly, and a
+  global AST guard rejects positional bulk writes in `src/` and `scripts/`; four synthetic mutations fail loudly.
+- Focused validation passed 15 surface, 9 members, 57+4 live-PG, 7 writer, 22 asset, 20+4 projection CRM,
+  17 person/CRM, 34 CRM boundary, and 4 operation tests. Final stable-tree contract CI passed 223 plus 2/11/1/2
+  downstream gates (**239 total**) and a clean request-free dry run. Mypy remains at R-011's 87 errors. One
+  results count failure reproduces exactly on pinned HEAD (R-001/R-007/D-3).
+
 ### Track B ②.3b: projection_manifest_shards repository cutover
 
 - The three `projection_manifest_shards` methods and its bespoke mapper moved from `ControlPlaneStore` to
@@ -27,10 +69,14 @@
   contract lane passed 190/0 skip plus 2/11/1/2 downstream gates and a clean dry-run report. Ruff/format checked
   43 files, compileall passed, and mypy remained at R-011's 87 errors in the same four files.
 - D-4 records a separate pre-existing positional bulk-write fail-closed defect affecting the next members/search
-  batches plus two other tables. It awaits owner direction; ②.3b did not modify those write paths.
-- The ②.3b independent review scope is pinned to `b3818f0..aaf13fb`. The first Codex reviewer hit model
-  capacity while writing the artifact; two fallback sessions were stopped after they produced no artifact.
-  None of the chat-only/interrupted results counts as a verdict.
+  batches plus two other tables. The owner selected option (a) on 2026-07-10: fix all four sites and add a
+  global wrapper-call guard with ②.3c; ②.3b itself did not modify those write paths.
+- The ②.3b independent review scope is pinned to `b3818f0..aaf13fb`. Telemetry does not support the earlier
+  "5-hour quota exhausted" or "first reviewer capacity failure" wording: its 300-minute window reported
+  `used_percent=0.0` / no rate-limit type and the first session ended task-complete after producing a chat-only
+  GO body but no artifact; one later attempt reported model capacity and two were interrupted. A hardened-runner
+  retry on 2026-07-10 produced no reviewer output and timed out after 900 seconds, so its artifact is explicitly
+  invalid. None of the chat-only/interrupted/timeout results counts as a verdict.
   R-014 keeps the review pending and blocks only this scope's live/W6/manual/milestone signoff.
 
 ### Track B ②.3a: serving_projection catalog repository cutover

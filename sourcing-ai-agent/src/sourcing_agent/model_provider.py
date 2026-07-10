@@ -4,6 +4,9 @@ import json
 import os
 import re
 import time
+from concurrent.futures import Future
+from dataclasses import dataclass
+from threading import Lock
 from typing import Any, Protocol
 from urllib import error, request
 
@@ -22,6 +25,133 @@ _MODEL_PROVIDER_FAILURE_COOLDOWN_SECONDS_ENV = "SOURCING_MODEL_PROVIDER_FAILURE_
 _MODEL_PROVIDER_CIRCUIT_DISABLED_ENV = "SOURCING_MODEL_PROVIDER_CIRCUIT_DISABLED"
 _MODEL_PROVIDER_CALL_MAX_ATTEMPTS_ENV = "SOURCING_MODEL_PROVIDER_CALL_MAX_ATTEMPTS"
 _MODEL_PROVIDER_CIRCUITS: dict[tuple[str, str, str], dict[str, Any]] = {}
+_MODEL_PROVIDER_HEALTHCHECK_FLIGHTS: dict[
+    tuple[str, str, str], Future[dict[str, Any]]
+] = {}
+_MODEL_PROVIDER_HEALTHCHECK_FLIGHTS_LOCK = Lock()
+_MODEL_PROVIDER_USAGE_TOKEN_LIMIT = 1_000_000_000
+
+
+@dataclass(frozen=True, slots=True)
+class OpenAIModelUsage:
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    cached_input_tokens: int | None = None
+    reasoning_output_tokens: int | None = None
+
+    def to_record(self) -> dict[str, int]:
+        return {
+            key: value
+            for key, value in (
+                ("input_tokens", self.input_tokens),
+                ("output_tokens", self.output_tokens),
+                ("total_tokens", self.total_tokens),
+                ("cached_input_tokens", self.cached_input_tokens),
+                ("reasoning_output_tokens", self.reasoning_output_tokens),
+            )
+            if value is not None
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class OpenAIModelCallResult:
+    text: str
+    requested_model: str
+    response_model: str
+    usage: OpenAIModelUsage
+
+    @property
+    def effective_model(self) -> str:
+        return self.response_model
+
+    @property
+    def model_identity_provenance(self) -> str:
+        return "provider_response" if self.response_model else ""
+
+    def metadata(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "requested_model": self.requested_model,
+            "model_usage": self.usage.to_record(),
+        }
+        if self.response_model:
+            result.update(
+                {
+                    "response_model": self.response_model,
+                    "effective_model": self.response_model,
+                    "model_identity_provenance": "provider_response",
+                }
+            )
+        return result
+
+
+def _openai_model_identity_failure(
+    *,
+    requested_model: str,
+    response_model: str,
+) -> tuple[str, str]:
+    requested = str(requested_model or "").strip()
+    response = str(response_model or "").strip()
+    if not response:
+        return (
+            "model_identity_missing",
+            f"model_response_identity_missing: requested_model={requested}",
+        )
+    if response != requested:
+        return (
+            "model_identity_mismatch",
+            f"model_response_identity_mismatch: requested_model={requested} response_model={response}",
+        )
+    return "", ""
+
+
+def _bounded_usage_token_count(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return min(_MODEL_PROVIDER_USAGE_TOKEN_LIMIT, max(0, parsed))
+
+
+def _first_usage_token_count(*values: Any) -> int | None:
+    for value in values:
+        parsed = _bounded_usage_token_count(value)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _extract_openai_model_usage(payload: dict[str, Any]) -> OpenAIModelUsage:
+    raw_usage = payload.get("usage")
+    usage = dict(raw_usage) if isinstance(raw_usage, dict) else {}
+    raw_input_details = usage.get("input_tokens_details") or usage.get("prompt_tokens_details")
+    input_details = dict(raw_input_details) if isinstance(raw_input_details, dict) else {}
+    raw_output_details = usage.get("output_tokens_details") or usage.get("completion_tokens_details")
+    output_details = dict(raw_output_details) if isinstance(raw_output_details, dict) else {}
+    return OpenAIModelUsage(
+        input_tokens=_first_usage_token_count(usage.get("input_tokens"), usage.get("prompt_tokens")),
+        output_tokens=_first_usage_token_count(usage.get("output_tokens"), usage.get("completion_tokens")),
+        total_tokens=_first_usage_token_count(usage.get("total_tokens")),
+        cached_input_tokens=_first_usage_token_count(input_details.get("cached_tokens")),
+        reasoning_output_tokens=_first_usage_token_count(output_details.get("reasoning_tokens")),
+    )
+
+
+def _openai_model_call_result(
+    payload: dict[str, Any],
+    *,
+    requested_model: str,
+    text: str,
+) -> OpenAIModelCallResult:
+    raw_response_model = payload.get("model")
+    return OpenAIModelCallResult(
+        text=str(text or ""),
+        requested_model=str(requested_model or "").strip(),
+        response_model=raw_response_model.strip() if isinstance(raw_response_model, str) else "",
+        usage=_extract_openai_model_usage(payload),
+    )
 
 
 def _external_provider_mode() -> str:
@@ -68,6 +198,27 @@ def _model_provider_circuit_key(provider: str, base_url: str, model: str) -> tup
         str(base_url or "").strip().rstrip("/"),
         str(model or "").strip() or "unknown_model",
     )
+
+
+def _claim_model_provider_healthcheck_flight(
+    key: tuple[str, str, str],
+) -> tuple[Future[dict[str, Any]], bool]:
+    with _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS_LOCK:
+        existing = _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS.get(key)
+        if existing is not None:
+            return existing, False
+        flight: Future[dict[str, Any]] = Future()
+        _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS[key] = flight
+        return flight, True
+
+
+def _release_model_provider_healthcheck_flight(
+    key: tuple[str, str, str],
+    flight: Future[dict[str, Any]],
+) -> None:
+    with _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS_LOCK:
+        if _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS.get(key) is flight:
+            _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS.pop(key, None)
 
 
 def _model_provider_circuit_error(key: tuple[str, str, str]) -> str:
@@ -120,12 +271,17 @@ def _annotate_public_web_model_fallback(
     response: str,
     error: str,
     parsed: dict[str, Any],
+    fallback_reason_override: str = "",
 ) -> None:
     fallback_used = not bool(parsed)
     result["fallback_used"] = fallback_used
     if not fallback_used:
         return
-    reason = _model_fallback_reason(response=response, error=error, parsed=parsed)
+    reason = str(fallback_reason_override or "").strip() or _model_fallback_reason(
+        response=response,
+        error=error,
+        parsed=parsed,
+    )
     if reason:
         result["fallback_reason"] = reason
     if error:
@@ -1126,7 +1282,7 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         ttl = self._healthcheck_cache_seconds()
         result = dict(payload)
         result.setdefault("healthcheck_cache_seconds", ttl)
-        if ttl > 0 and str(result.get("status") or "").strip().lower() == "ready":
+        if ttl > 0:
             self._healthcheck_cache = dict(result)
             self._healthcheck_cache_expires_at = time.time() + ttl
         return result
@@ -1304,23 +1460,43 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
 
     def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]:
         fallback = super().analyze_public_web_candidate_signals(payload)
-        response, model_error = self._safe_text_prompt_with_error(
+        call_result, model_error = self._safe_public_web_prompt_result_with_error(
             _build_public_web_signal_adjudication_prompt(),
             json.dumps(payload, ensure_ascii=False),
             max_tokens=900,
         )
+        response = call_result.text if call_result is not None else ""
         parsed = _safe_json_object(response)
+        requested_model = str(self.settings.model or "").strip()
+        identity_fallback_reason = ""
+        if call_result is not None:
+            identity_fallback_reason, identity_error = _openai_model_identity_failure(
+                requested_model=requested_model,
+                response_model=call_result.response_model,
+            )
+            if identity_error:
+                _record_model_provider_failure(self._circuit_key(), identity_error)
+                model_error = identity_error
+                parsed = {}
         result = _normalize_public_web_signal_adjudication(parsed, fallback=fallback)
-        model_name = str(getattr(self, "model", "") or getattr(getattr(self, "settings", None), "model", "") or "").strip()
         result["provider"] = self.provider_name()
-        if model_name:
-            result["model"] = model_name
-            result["model_version"] = model_name
+        if requested_model:
+            # Legacy aliases remain available, but effective identity is carried
+            # separately and is only provider-authored when the response says so.
+            result["model"] = requested_model
+            result["model_version"] = requested_model
+            result["requested_model"] = requested_model
+        if call_result is not None:
+            result.update(call_result.metadata())
+            if call_result.effective_model and not identity_fallback_reason:
+                result["model"] = call_result.effective_model
+                result["model_version"] = call_result.effective_model
         _annotate_public_web_model_fallback(
             result,
             response=response,
             error=model_error,
             parsed=parsed,
+            fallback_reason_override=identity_fallback_reason,
         )
         return result
 
@@ -1414,6 +1590,27 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         return _normalize_outreach_profile_response(parsed)
 
     def healthcheck(self) -> dict[str, Any]:
+        circuit_key = self._circuit_key()
+        flight, is_leader = _claim_model_provider_healthcheck_flight(circuit_key)
+        if not is_leader:
+            shared_result = dict(flight.result())
+            if _model_provider_circuit_error(circuit_key):
+                return self._healthcheck_once()
+            shared_result.pop("cache_hit", None)
+            shared_result.pop("cache_expires_in_seconds", None)
+            return self._cache_healthcheck(shared_result)
+        try:
+            result = self._healthcheck_once()
+        except BaseException as exc:
+            flight.set_exception(exc)
+            raise
+        else:
+            flight.set_result(dict(result))
+            return result
+        finally:
+            _release_model_provider_healthcheck_flight(circuit_key, flight)
+
+    def _healthcheck_once(self) -> dict[str, Any]:
         cached = self._cached_healthcheck()
         if cached is not None:
             return cached
@@ -1424,11 +1621,13 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
                     "provider": self.provider_name(),
                     "status": "degraded",
                     "model": self.settings.model,
+                    "requested_model": self.settings.model,
                     "base_url": self.settings.base_url,
                     "models_status": "not_checked",
                     "chat_status": "circuit_open",
                     "error": circuit_error,
                     "available_models": [],
+                    "model_usage": {},
                     "circuit_open": True,
                 }
             )
@@ -1443,7 +1642,7 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
             models_status = "degraded"
             models_error = str(exc)
         try:
-            preview = self._call_prompt(
+            call_result = self._call_prompt_result(
                 [
                     {
                         "role": "system",
@@ -1456,20 +1655,42 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
                 ],
                 max_tokens=32,
             )
-            chat_status = "ready" if "MODEL_OK" in preview else "unexpected_response"
-            status = "ready" if chat_status == "ready" and models_status == "ready" else models_status
-            return self._cache_healthcheck(
-                {
-                    "provider": self.provider_name(),
-                    "status": status,
-                    "model": self.settings.model,
-                    "base_url": self.settings.base_url,
-                    "models_status": models_status,
-                    "chat_status": chat_status,
-                    "chat_preview": preview[:80],
-                    "available_models": models[:8],
-                }
+            preview = call_result.text
+            identity_failure_reason, identity_error = _openai_model_identity_failure(
+                requested_model=self.settings.model,
+                response_model=call_result.response_model,
             )
+            if identity_failure_reason:
+                chat_status = identity_failure_reason
+            else:
+                chat_status = "ready" if "MODEL_OK" in preview else "unexpected_response"
+            status = "ready" if chat_status == "ready" and models_status == "ready" else "degraded"
+            health_error = identity_error
+            if not health_error and chat_status == "unexpected_response":
+                health_error = "unexpected_model_healthcheck_response"
+            if not health_error and models_status != "ready":
+                health_error = (
+                    f"model_inventory_not_ready: status={models_status} requested_model={self.settings.model}"
+                )
+            if health_error:
+                _record_model_provider_failure(self._circuit_key(), health_error)
+            payload = {
+                "provider": self.provider_name(),
+                "status": status,
+                "model": call_result.effective_model or self.settings.model,
+                "model_version": call_result.effective_model or self.settings.model,
+                "base_url": self.settings.base_url,
+                "models_status": models_status,
+                "chat_status": chat_status,
+                "chat_preview": preview[:80],
+                "available_models": models[:8],
+                **call_result.metadata(),
+            }
+            if health_error:
+                payload["error"] = health_error
+            if models_error:
+                payload["models_error"] = models_error
+            return self._cache_healthcheck(payload)
         except Exception as exc:
             error_text = _model_call_error_message(exc)
             _record_model_provider_failure(self._circuit_key(), error_text)
@@ -1477,11 +1698,13 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
                 "provider": self.provider_name(),
                 "status": "degraded",
                 "model": self.settings.model,
+                "requested_model": self.settings.model,
                 "base_url": self.settings.base_url,
                 "models_status": models_status,
                 "chat_status": "degraded",
                 "error": error_text,
                 "available_models": models[:8],
+                "model_usage": {},
             }
             if models_error:
                 payload["models_error"] = models_error
@@ -1501,14 +1724,59 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         except Exception as exc:
             return "", _model_call_error_message(exc)
 
+    def _safe_public_web_prompt_result_with_error(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        max_tokens: int,
+    ) -> tuple[OpenAIModelCallResult | None, str]:
+        try:
+            return (
+                self._call_prompt_result(
+                    [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    max_tokens=max_tokens,
+                ),
+                "",
+            )
+        except Exception as exc:
+            return None, _model_call_error_message(exc)
+
     def _run_text_prompt(self, system_prompt: str, user_prompt: str, *, max_tokens: int) -> str:
-        return self._call_prompt(
-            [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=max_tokens,
+        return self._run_prompt_result(system_prompt, user_prompt, max_tokens=max_tokens).text
+
+    def _run_prompt_result(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        max_tokens: int,
+    ) -> OpenAIModelCallResult:
+        return self._require_business_model_identity(
+            self._call_prompt_result(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=max_tokens,
+            )
         )
+
+    def _require_business_model_identity(
+        self,
+        call_result: OpenAIModelCallResult,
+    ) -> OpenAIModelCallResult:
+        _failure_reason, identity_error = _openai_model_identity_failure(
+            requested_model=self.settings.model,
+            response_model=call_result.response_model,
+        )
+        if identity_error:
+            _record_model_provider_failure(self._circuit_key(), identity_error)
+            raise RuntimeError(identity_error)
+        return call_result
 
     def _list_models(self) -> dict[str, Any]:
         endpoint = f"{self.settings.base_url}/models"
@@ -1531,14 +1799,34 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
             raise RuntimeError(f"OpenAI-compatible request failed: {exc}") from exc
 
     def _call_prompt(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:
+        return self._require_business_model_identity(
+            self._call_prompt_result(messages, max_tokens=max_tokens)
+        ).text
+
+    def _call_prompt_result(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int,
+    ) -> OpenAIModelCallResult:
         api_style = str(self.settings.api_style or "openai_chat_completions").strip().lower()
         if api_style == "openai_responses":
-            return self._call_responses_api(messages, max_tokens=max_tokens)
+            return self._call_responses_api_result(messages, max_tokens=max_tokens)
         if api_style in {"", "openai_chat_completions"}:
-            return self._call_chat_completions(messages, max_tokens=max_tokens)
+            return self._call_chat_completions_result(messages, max_tokens=max_tokens)
         raise RuntimeError(f"Unsupported OpenAI-compatible api_style: {self.settings.api_style}")
 
     def _call_chat_completions(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:
+        return self._require_business_model_identity(
+            self._call_chat_completions_result(messages, max_tokens=max_tokens)
+        ).text
+
+    def _call_chat_completions_result(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int,
+    ) -> OpenAIModelCallResult:
         circuit_error = _model_provider_circuit_error(self._circuit_key())
         if circuit_error:
             raise RuntimeError(circuit_error)
@@ -1566,7 +1854,11 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
                 response.raise_for_status()
                 body = response.json()
                 _record_model_provider_success(self._circuit_key())
-                return _extract_openai_chat_text(body)
+                return _openai_model_call_result(
+                    body,
+                    requested_model=self.settings.model,
+                    text=_extract_openai_chat_text(body),
+                )
             except requests.HTTPError as exc:
                 detail = exc.response.text if exc.response is not None else str(exc)
                 status_code = exc.response.status_code if exc.response is not None else "?"
@@ -1584,6 +1876,16 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         raise RuntimeError("OpenAI-compatible request failed: no attempts executed")
 
     def _call_responses_api(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:
+        return self._require_business_model_identity(
+            self._call_responses_api_result(messages, max_tokens=max_tokens)
+        ).text
+
+    def _call_responses_api_result(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int,
+    ) -> OpenAIModelCallResult:
         circuit_error = _model_provider_circuit_error(self._circuit_key())
         if circuit_error:
             raise RuntimeError(circuit_error)
@@ -1615,7 +1917,11 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
                 response.raise_for_status()
                 body = response.json()
                 _record_model_provider_success(self._circuit_key())
-                return _extract_output_text(body)
+                return _openai_model_call_result(
+                    body,
+                    requested_model=self.settings.model,
+                    text=_extract_output_text(body),
+                )
             except requests.HTTPError as exc:
                 detail = exc.response.text if exc.response is not None else str(exc)
                 status_code = exc.response.status_code if exc.response is not None else "?"

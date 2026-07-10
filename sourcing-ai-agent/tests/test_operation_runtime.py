@@ -2814,7 +2814,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "state": "serving",
                 }
             )
-            api_store.upsert_serving_projection_members(
+            api_store.repos.serving_projection.upsert_members(
                 "proj-read",
                 [
                     {
@@ -6501,14 +6501,19 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
             )
             self.assertTrue(
-                all(command["workflow_run_id"] == completed_projection_command["workflow_run_id"] for command in downstream_projection_commands)
+                all(
+                    command["workflow_run_id"] == completed_projection_command["workflow_run_id"]
+                    for command in downstream_projection_commands
+                )
             )
             self.assertFalse(completed_projection_command["result"]["legacy_job_shell_created"])
             self.assertFalse(completed_projection_command["result"]["queue_workflow_called"])
             projection_id = completed_projection_command["result"]["projection_id"]
             self.assertTrue(projection_id)
-            self.assertEqual(api_store.count_serving_projection_members(projection_id, visible_only=True), 2)
-            run_projection_link = api_store.repos.serving_projection.get_run_link(completed_projection_command["workflow_run_id"])
+            self.assertEqual(api_store.repos.serving_projection.count_members(projection_id, visible_only=True), 2)
+            run_projection_link = api_store.repos.serving_projection.get_run_link(
+                completed_projection_command["workflow_run_id"]
+            )
             self.assertEqual(run_projection_link["projection_id"], projection_id)
             projection_member_deltas = api_store.list_workflow_entity_deltas(
                 activity_run_id=completed_projection_command["result"]["activity_run_id"],
@@ -7428,7 +7433,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "state": "serving",
                 }
             )
-            api_store.upsert_serving_projection_members(
+            api_store.repos.serving_projection.upsert_members(
                 "proj-crm-op",
                 [
                     {
@@ -8936,7 +8941,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "state": "serving",
                 }
             )
-            api_store.upsert_serving_projection_members(
+            api_store.repos.serving_projection.upsert_members(
                 "proj-avatar-backfill",
                 [
                     {

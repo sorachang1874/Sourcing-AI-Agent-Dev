@@ -196,7 +196,7 @@ class PersonAssetWriter:
         offset = 0
         while processed_count < resolved_max_members:
             page_limit = min(resolved_page_size, resolved_max_members - processed_count)
-            members = self.store.list_serving_projection_members(
+            members = self.store.repos.serving_projection.list_members(
                 normalized_projection_id,
                 offset=offset,
                 limit=page_limit,
@@ -328,7 +328,9 @@ class PersonAssetWriter:
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             return {"status": "invalid", "reason": "projection_id_required", "indexed_count": 0}
-        total_member_count = self.store.count_serving_projection_members(normalized_projection_id, visible_only=True)
+        total_member_count = self.store.repos.serving_projection.count_members(
+            normalized_projection_id, visible_only=True
+        )
         resolved_page_size = max(1, min(5000, int(member_page_size or 100)))
         resolved_max_members = max(1, int(max_members or 100_000))
         resolved_offset = max(0, int(offset or 0))
@@ -371,7 +373,7 @@ class PersonAssetWriter:
                 },
             }
         page_limit = min(resolved_page_size, effective_member_limit - resolved_offset)
-        members = self.store.list_serving_projection_members(
+        members = self.store.repos.serving_projection.list_members(
             normalized_projection_id,
             offset=resolved_offset,
             limit=page_limit,

@@ -1,11 +1,10 @@
 # Track B ② Repository 迁移 Handbook(新一轮的入口文档)
 
 > Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
-> 状态:**②.3b 完成(2026-07-10)** —— `projection_manifest_shards` 3 公共方法 + bespoke mapper 已退役到
-> `store.repos.serving_projection`,storage.py 14,355 → 14,261 行,调用方 tests 4 / production 0,
-> 合同 lane 190/0 skip、A/B 变异自检和 pinned-worktree 字节对照全过。批记录:
-> `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。下一批:②.3c members / ②.3d search-index,3d 后整域闭合;
-> c/d 实施方向受待裁决 D-4 约束,裁决前只做只读 Scout/测试设计。
+> 状态:**②.3c 完成(2026-07-10)** —— `serving_projection_members` 8 公共方法 + bespoke helpers 已退役到
+> `store.repos.serving_projection`,storage.py 14,261 → 13,822 行,97 direct calls 全部迁移且旧 facade/dispatch 清零。
+> D-4(a) 同批关闭:4 个 `bulk_upsert_rows` wrapper 调用改显式 keyword,全局 AST guard + 四点变异自检已落地。
+> 批记录:`TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。下一批:②.3d person search index,完成后整域闭合。
 > B4.3 影子拆除 100% 完成(commit 952f9ee)。本文档是路线图
 > **②「Repository 查询方法建设 + 按域迁移调用方」** 这一轮的执行手册。
 > 设计依据:`docs/TRACK_B_B4_2_PG_NATIVE_STORE_DESIGN.md`(B4.2 设计,owner 已 ratify);历史全记录:`docs/TRACK_B_PG_PURE_STORE_DESIGN.md` §6。
@@ -13,10 +12,10 @@
 
 ## 1. 当前基底(起点事实,勿再重推导)
 
-- `storage.py` = 14,261 行(②.3b 后;②.3a 后 14,355,②.2 后 14,635,②.1 后 15,091,②.0 后 16,382,试点前 19,187),**PG-pure**:零 sqlite3 / 零 `_connection` / 零 `_lock`。
+- `storage.py` = 13,822 行(②.3c 后;②.3b 后 14,261,②.3a 后 14,355,②.2 后 14,635,②.1 后 15,091,②.0 后 16,382,试点前 19,187),**PG-pure**:零 sqlite3 / 零 `_connection` / 零 `_lock`。
   已整体退役的域:linkedin_profile_registry(②.0)、criteria/confidence(②.1,`store.repos.criteria_confidence`)、
   manual_review(②.2,`store.repos.manual_review`);serving_projection 的 catalog 三表与 manifest shards 已退役(②.3a/b),
-  members/search-index 按 c/d 子批继续;
+  members 已由 ②.3c 退役,search-index 按 ②.3d 继续;
   其余域仍在 God-class 门面上,按批推进。共享纯函数 `matching_bundle_payload`/`request_signature_context` 已外提到
   `request_matching.py`(storage 留别名 import)。
 - PG schema 唯一来源 = `migrations/0001_baseline.sql` + `migration_runner.py`(adapter `ensure_bootstrapped()` 驱动);遗留迁移表由 adapter 内字面 DDL(`_LEGACY_TARGET_PUBLIC_WEB_MIGRATION_TABLE_DDL`)按需建。
@@ -45,7 +44,7 @@
 1. ~~**②.0 试点收口**~~ **DONE 2026-07-02**:linkedin_profile_registry 域全量搬迁 + 域迁移协议定型(§4);批记录见 TRACK_B doc §6 末条。
 2. ~~**②.1 criteria/confidence**~~ **DONE 2026-07-06**(8 表 24 方法;批记录见 TRACK_B doc §6 末条)。
 3. ~~**②.2 manual_review**~~ **DONE 2026-07-10**(1 表 7 公共方法;批记录见 Track B doc §6 末条)。
-4. **②.3 serving_projection 分子批推进**:~~②.3a catalog 三表~~ DONE → ~~②.3b manifest shards~~ DONE → ②.3c members → ②.3d person search index(3d 后整域闭合);再进 workflow_runtime(commands/workers/leases,调用面最宽,最后;`_call_native_write` 基座已就位)。c/d 先等 D-4 方向裁决;裁决前可做只读 Scout/测试设计。每子批先跑清单命令(§5)定界、每表零双轨并独立记 A/B 数字与异步 review scope。
+4. **②.3 serving_projection 分子批推进**:~~②.3a catalog 三表~~ DONE → ~~②.3b manifest shards~~ DONE → ~~②.3c members + D-4(a)~~ DONE → ②.3d person search index(3d 后整域闭合);再进 workflow_runtime(commands/workers/leases,调用面最宽,最后;`_call_native_write` 基座已就位)。D-4 的四点显式 keyword 修复和全局 guard 已随 ②.3c 完成。每子批先跑清单命令(§5)定界、每表零双轨并独立记 A/B 数字与异步 review scope。
 5. **随批机会主义**:37 个 IRREGULAR read-mapper 里"软 irregular"(subscript 形式等价)可在其域批内顺手转 descriptor(harness 全列模式验证)。
    **②.1 反例警示**:criteria/confidence 的 8 个 mapper 看似可转,实为 None 直通 + 写路径真写 NULL FK —— Kind.INT 会 None→0 炸字节等价;
    判定"软 irregular"必须核对**写路径是否产 NULL** 与 mapper 的 default 语义,不能只看 subscript 形状。
@@ -194,6 +193,8 @@ rg -n '^    def .*projection' src/sourcing_agent/storage.py
 
 ### D-4 positional `bulk_upsert_rows` 的 fail-closed 修复范围
 
+> **状态: owner 已于 2026-07-10 选择 (a),②.3c 已实施并验证完成。** 保留以下决策卡作为审计记录。
+
 - **单一问题**:是否批准在 serving members/search-index 迁移前,把所有经
   `_call_control_plane_postgres_native` 的 positional `bulk_upsert_rows` 调用改为显式
   `table_name=` / `rows=`,并用 fast guard 禁止复发?
@@ -203,6 +204,6 @@ rg -n '^    def .*projection' src/sourcing_agent/storage.py
   (b) 只在 ②.3c/d 修前两点 —— 改动最小,但同一根因仍留两点;(c) 扩 wrapper 从 positional args 推断表 ——
   兼容现状,但把隐藏 heuristic 固化进共享基座,并与 repository 的显式 table contract 分叉。
 - **推荐**:(a)。4 点修复有界,同时退休根因;不要扩大 shared inference。
-- **截止**:2026-07-31;**决策人**:owner。
-- **超时默认**:执行 (a) 的显式 keyword 修复与 fast guard,不改 shared positional inference。落地前四个受影响
+- **裁决**:2026-07-10 owner 选择 (a);不等待原 2026-07-31 截止。
+- **实施约束**:执行 (a) 的显式 keyword 修复与 fast guard,不改 shared positional inference。落地前四个受影响
   写面不得进入 live/W6/manual/里程碑签收;②.3b 与其他模块开发不受阻。

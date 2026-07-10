@@ -59,11 +59,11 @@ LIVE_LARGE_ORG_CASES ?= xai_full_roster xai_coding_all_members_scoped
 CRM_PUBLIC_WEB_LIVE_BASE_URL ?= $(LIVE_TEST_API_BASE_URL)
 CRM_PUBLIC_WEB_LIVE_RECORD_IDS ?=
 CRM_PUBLIC_WEB_LIVE_REPORT_JSON ?= output/w7g_crm_public_web_live_product_validation.json
-CRM_PUBLIC_WEB_LIVE_EXPECTED_MODEL ?= gpt-5.5
 CRM_PUBLIC_WEB_LIVE_DRY_RUN ?= 1
 CRM_PUBLIC_WEB_LIVE_RECORD_IDS_REVIEWED ?= 0
 CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED ?= 0
 CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT ?=
+CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256 ?=
 CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH ?= 0
 CRM_PUBLIC_WEB_LIVE_POLL_TIMEOUT_SECONDS ?= 600
 CRM_PUBLIC_WEB_LIVE_MAX_FETCHES_PER_CANDIDATE ?= 10
@@ -76,9 +76,6 @@ REVIEW_TITLE ?= independent-review
 REVIEW_FILES ?=
 REVIEW_BASE ?=
 REVIEW_EXTRA_CONTEXT ?=
-REVIEW_MODEL ?= gpt-5.5
-REVIEW_REASONING_EFFORT ?= xhigh
-REVIEW_SERVICE_TIER ?= fast
 REVIEW_TIMEOUT_SECONDS ?= 420
 REVIEW_OUTPUT ?=
 REVIEW_EXECUTE ?= 0
@@ -137,12 +134,12 @@ CI_PG_CONTRACT_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING_REQUIRE_T
 CI_WORKFLOW_FAKE_PROVIDER_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING_REQUIRE_TESTCONTAINERS=1 SOURCING_RUN_TESTCONTAINERS=1 TESTCONTAINERS_RYUK_DISABLED=1 SOURCING_TESTCONTAINERS_POSTGRES_IMAGE="$(TESTCONTAINERS_POSTGRES_IMAGE)" "$(TEST_PYTHON_BIN)" -m unittest tests.testcontainers_workflow_fake_provider -v
 CI_FRONTEND_BROWSER_GATE_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING_REQUIRE_TESTCONTAINERS=1 SOURCING_RUN_TESTCONTAINERS=1 TESTCONTAINERS_RYUK_DISABLED=1 SOURCING_TESTCONTAINERS_POSTGRES_IMAGE="$(TESTCONTAINERS_POSTGRES_IMAGE)" "$(TEST_PYTHON_BIN)" -m unittest tests.testcontainers_frontend_browser_gate -v
 CI_WORKFLOW_BROWSER_GATE_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING_REQUIRE_TESTCONTAINERS=1 SOURCING_RUN_TESTCONTAINERS=1 TESTCONTAINERS_RYUK_DISABLED=1 SOURCING_TESTCONTAINERS_POSTGRES_IMAGE="$(TESTCONTAINERS_POSTGRES_IMAGE)" "$(TEST_PYTHON_BIN)" -m unittest tests.testcontainers_workflow_browser_gate -v
-CI_PRE_AGENT_CONTRACT_CMD = export SOURCING_REQUIRE_PG_STORE_TESTS=1 SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1 && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_pre_agent_contract_review.py tests/test_operation_runtime.py tests/test_crm_public_web_runtime_boundary.py tests/test_legacy_public_web_retirement_audit.py tests/test_storage_surface_guardrails.py tests/test_pg_onconflict_guard.py -q && SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1 PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_enrichment.py -k 'isolates_retry_wait or retry_wait_as_isolated_batch' -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_dataforseo_client.py tests/test_search_provider.py tests/test_public_web_search.py tests/test_seed_discovery.py tests/test_exploratory_enrichment.py -k 'partial_task_errors or dataforseo_provider_submit_batch_retries_only_failed_query_item or dataforseo_provider_submit_batch_fails_closed_without_provider_identity or batch_provider_requires_stable_query_identity_key or provider_chain_rejects_missing_query_identity_before_fallback or dataforseo_provider_fetch_ready_batch_preserves_success_when_one_task_get_fails or batch_queue_submit_failure_is_query_level_not_whole_batch or public_web_batch_query_identity_is_candidate_query_scoped_not_order_scoped or search_seed_worker_key_uses_query_identity_not_order_ordinal or exploration_query_task_key_uses_query_identity_not_order_ordinal or model_native_search_provider_order_fails_closed_without_contract' -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_projection_crm_api_contracts.py -k asset_backfill_http_routes_are_explicit_migration_paths -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_scripted_smoke_signoff.py -k durable_command_owner_contract -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" ./scripts/run_crm_public_web_live_product_validation.py --expected-model "$(CRM_PUBLIC_WEB_LIVE_EXPECTED_MODEL)" --report-json "$(CRM_PUBLIC_WEB_LIVE_REPORT_JSON)"
+CI_PRE_AGENT_CONTRACT_CMD = export SOURCING_REQUIRE_PG_STORE_TESTS=1 SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1 && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_pre_agent_contract_review.py tests/test_independent_review_gate_runner.py tests/test_operation_runtime.py tests/test_crm_public_web_runtime_boundary.py tests/test_legacy_public_web_retirement_audit.py tests/test_storage_surface_guardrails.py tests/test_pg_onconflict_guard.py -q && SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1 PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_enrichment.py -k 'isolates_retry_wait or retry_wait_as_isolated_batch' -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_dataforseo_client.py tests/test_search_provider.py tests/test_public_web_search.py tests/test_seed_discovery.py tests/test_exploratory_enrichment.py -k 'partial_task_errors or dataforseo_provider_submit_batch_retries_only_failed_query_item or dataforseo_provider_submit_batch_fails_closed_without_provider_identity or batch_provider_requires_stable_query_identity_key or provider_chain_rejects_missing_query_identity_before_fallback or dataforseo_provider_fetch_ready_batch_preserves_success_when_one_task_get_fails or batch_queue_submit_failure_is_query_level_not_whole_batch or public_web_batch_query_identity_is_candidate_query_scoped_not_order_scoped or search_seed_worker_key_uses_query_identity_not_order_ordinal or exploration_query_task_key_uses_query_identity_not_order_ordinal or model_native_search_provider_order_fails_closed_without_contract' -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_projection_crm_api_contracts.py -k asset_backfill_http_routes_are_explicit_migration_paths -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_scripted_smoke_signoff.py -k durable_command_owner_contract -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" ./scripts/run_crm_public_web_live_product_validation.py --report-json "$(CRM_PUBLIC_WEB_LIVE_REPORT_JSON)"
 LOCAL_CONTAINER_SMOKE_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING_RUN_TESTCONTAINERS=1 TESTCONTAINERS_RYUK_DISABLED=1 SOURCING_TESTCONTAINERS_POSTGRES_IMAGE="$(TESTCONTAINERS_POSTGRES_IMAGE)" "$(TEST_PYTHON_BIN)" -m unittest tests.testcontainers_pg_contract -v
 LIVE_TEST_BACKEND_CMD = SOURCING_RUNTIME_ENVIRONMENT="$(LIVE_TEST_RUNTIME_ENVIRONMENT)" SOURCING_EXTERNAL_PROVIDER_MODE="live" SOURCING_LIVE_PROVIDER_CONFIRM="1" SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS="1" SOURCING_ALLOW_TEST_REPO_POSTGRES_ENV="1" SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE="postgres_only" SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES="1" SOURCING_PG_ONLY_SQLITE_BACKEND="shared_memory" SOURCING_SECRETS_FILE="$(abspath $(LIVE_TEST_SECRETS_FILE))" OBJECT_STORAGE_PREFIX="$(LIVE_TEST_OBJECT_STORAGE_PREFIX)" bash ./scripts/dev_backend.sh --runtime-dir "$(LIVE_TEST_RUNTIME_DIR)" --host "$(HOST)" --port "$(LIVE_TEST_API_PORT)" $(foreach port,$(LIVE_TEST_ALLOWED_FRONTEND_PORTS),--frontend-port "$(port)") $(if $(ALLOW_ORIGIN),--allow-origin "$(ALLOW_ORIGIN)") $(LIVE_TEST_EXTRA_BACKEND_ARGS)
 TEST_LIVE_LARGE_ORG_CMD = PYTHONPATH=src SOURCING_LIVE_PROVIDER_CONFIRM="1" SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS="1" "$(PYTHON_BIN)" ./scripts/run_live_large_org_regression.py --base-url "$(LIVE_TEST_API_BASE_URL)" $(foreach case,$(LIVE_LARGE_ORG_CASES),--case "$(case)") --confirm-live-provider-cost --strict
-CRM_PUBLIC_WEB_LIVE_VALIDATION_CMD = PYTHONPATH=src "$(PYTHON_BIN)" ./scripts/run_crm_public_web_live_product_validation.py --base-url "$(CRM_PUBLIC_WEB_LIVE_BASE_URL)" $(foreach record,$(CRM_PUBLIC_WEB_LIVE_RECORD_IDS),--crm-record-id "$(record)") --expected-model "$(CRM_PUBLIC_WEB_LIVE_EXPECTED_MODEL)" --report-json "$(CRM_PUBLIC_WEB_LIVE_REPORT_JSON)" --poll-timeout-seconds "$(CRM_PUBLIC_WEB_LIVE_POLL_TIMEOUT_SECONDS)" --max-fetches-per-candidate "$(CRM_PUBLIC_WEB_LIVE_MAX_FETCHES_PER_CANDIDATE)" --max-ai-evidence-documents "$(CRM_PUBLIC_WEB_LIVE_MAX_AI_EVIDENCE_DOCUMENTS)" --max-ai-entry-links "$(CRM_PUBLIC_WEB_LIVE_MAX_AI_ENTRY_LINKS)" --max-remote-search-wait-seconds "$(CRM_PUBLIC_WEB_LIVE_MAX_REMOTE_SEARCH_WAIT_SECONDS)" --max-provider-pending-wait-seconds "$(CRM_PUBLIC_WEB_LIVE_MAX_PROVIDER_PENDING_WAIT_SECONDS)" --max-concurrent-candidate-analyses "$(CRM_PUBLIC_WEB_LIVE_MAX_CONCURRENT_CANDIDATE_ANALYSES)" $(if $(filter 1,$(CRM_PUBLIC_WEB_LIVE_RECORD_IDS_REVIEWED)),--reviewed-crm-record-ids,) $(if $(filter 1,$(CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH)),--force-refresh,) $(if $(filter 0,$(CRM_PUBLIC_WEB_LIVE_DRY_RUN)),--execute-live --confirm-live-provider-cost,)
-INDEPENDENT_REVIEW_GATE_CMD = PYTHONPATH=src "$(PYTHON_BIN)" ./scripts/run_independent_review_gate.py --title "$(REVIEW_TITLE)" --files "$(REVIEW_FILES)" --base "$(REVIEW_BASE)" --extra-context "$(REVIEW_EXTRA_CONTEXT)" --model "$(REVIEW_MODEL)" --reasoning-effort "$(REVIEW_REASONING_EFFORT)" --service-tier "$(REVIEW_SERVICE_TIER)" --timeout-seconds "$(REVIEW_TIMEOUT_SECONDS)" $(if $(REVIEW_OUTPUT),--output "$(REVIEW_OUTPUT)",) $(if $(filter 1,$(REVIEW_EXECUTE)),--execute,)
+CRM_PUBLIC_WEB_LIVE_VALIDATION_CMD = PYTHONPATH=src "$(PYTHON_BIN)" ./scripts/run_crm_public_web_live_product_validation.py --base-url "$(CRM_PUBLIC_WEB_LIVE_BASE_URL)" $(foreach record,$(CRM_PUBLIC_WEB_LIVE_RECORD_IDS),--crm-record-id "$(record)") --report-json "$(CRM_PUBLIC_WEB_LIVE_REPORT_JSON)" --poll-timeout-seconds "$(CRM_PUBLIC_WEB_LIVE_POLL_TIMEOUT_SECONDS)" --max-fetches-per-candidate "$(CRM_PUBLIC_WEB_LIVE_MAX_FETCHES_PER_CANDIDATE)" --max-ai-evidence-documents "$(CRM_PUBLIC_WEB_LIVE_MAX_AI_EVIDENCE_DOCUMENTS)" --max-ai-entry-links "$(CRM_PUBLIC_WEB_LIVE_MAX_AI_ENTRY_LINKS)" --max-remote-search-wait-seconds "$(CRM_PUBLIC_WEB_LIVE_MAX_REMOTE_SEARCH_WAIT_SECONDS)" --max-provider-pending-wait-seconds "$(CRM_PUBLIC_WEB_LIVE_MAX_PROVIDER_PENDING_WAIT_SECONDS)" --max-concurrent-candidate-analyses "$(CRM_PUBLIC_WEB_LIVE_MAX_CONCURRENT_CANDIDATE_ANALYSES)" $(if $(filter 1,$(CRM_PUBLIC_WEB_LIVE_RECORD_IDS_REVIEWED)),--reviewed-crm-record-ids,) $(if $(filter 1,$(CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH)),--force-refresh,) $(if $(filter 0,$(CRM_PUBLIC_WEB_LIVE_DRY_RUN)),--execute-live --confirm-live-provider-cost,)
+INDEPENDENT_REVIEW_GATE_CMD = PYTHONPATH=src "$(PYTHON_BIN)" ./scripts/run_independent_review_gate.py --title "$(REVIEW_TITLE)" --files "$(REVIEW_FILES)" --base "$(REVIEW_BASE)" --extra-context "$(REVIEW_EXTRA_CONTEXT)" --timeout-seconds "$(REVIEW_TIMEOUT_SECONDS)" $(if $(REVIEW_OUTPUT),--output "$(REVIEW_OUTPUT)",) $(if $(filter 1,$(REVIEW_EXECUTE)),--execute,)
 ASSET_MEDIA_BACKFILL_ARGS = --runtime-dir "$(ASSET_MEDIA_BACKFILL_RUNTIME_DIR)" --limit "$(ASSET_MEDIA_BACKFILL_LIMIT)" $(foreach collection,$(ASSET_MEDIA_BACKFILL_COLLECTION_IDS),--collection-id "$(collection)") $(foreach projection,$(ASSET_MEDIA_BACKFILL_PROJECTION_IDS),--projection-id "$(projection)") $(foreach company,$(ASSET_MEDIA_BACKFILL_COMPANIES),--company "$(company)") $(foreach run_id,$(ASSET_MEDIA_BACKFILL_PUBLIC_WEB_RUN_IDS),--public-web-run-id "$(run_id)") $(foreach mapping,$(ASSET_MEDIA_BACKFILL_LOGO_SOURCE_URLS),--company-logo-source-url "$(mapping)") $(if $(filter 1,$(ASSET_MEDIA_BACKFILL_INCLUDE_HOMEPAGE_FAVICON)),--include-homepage-favicon,) $(if $(filter 1,$(ASSET_MEDIA_BACKFILL_RUN_NOW)),--run-now,)
 ASSET_MEDIA_BACKFILL_DRY_RUN_CMD = PYTHONPATH=src "$(PYTHON_BIN)" ./scripts/backfill_person_company_asset_media.py $(ASSET_MEDIA_BACKFILL_ARGS) --output-json "$(ASSET_MEDIA_BACKFILL_OUTPUT_JSON)" --strict
 ASSET_MEDIA_BACKFILL_APPLY_CMD = PYTHONPATH=src "$(PYTHON_BIN)" ./scripts/backfill_person_company_asset_media.py $(ASSET_MEDIA_BACKFILL_ARGS) --output-json "$(ASSET_MEDIA_BACKFILL_APPLY_OUTPUT_JSON)" --apply --reviewed --strict
@@ -232,7 +229,7 @@ help:
 	  '  make test-crm-public-web-live-product-validation CRM_PUBLIC_WEB_LIVE_RECORD_IDS="crm_..."' \
 	  '  make asset-media-backfill-dry-run ASSET_MEDIA_BACKFILL_COLLECTION_IDS="company:openai" ASSET_MEDIA_BACKFILL_PROJECTION_IDS="proj_..."' \
 	  '  make asset-media-backfill-apply ASSET_MEDIA_BACKFILL_REVIEWED=1 ASSET_MEDIA_BACKFILL_RUN_NOW=1' \
-	  '  LIVE_CONFIRM=1 make test-crm-public-web-live-product-validation CRM_PUBLIC_WEB_LIVE_DRY_RUN=0 CRM_PUBLIC_WEB_LIVE_RECORD_IDS="crm_..."'
+	  '  LIVE_CONFIRM=1 make test-crm-public-web-live-product-validation CRM_PUBLIC_WEB_LIVE_DRY_RUN=0 CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1 CRM_PUBLIC_WEB_LIVE_RECORD_IDS="crm_..."'
 
 bootstrap-test-env:
 	@$(BOOTSTRAP_TEST_ENV_CMD)
@@ -404,6 +401,10 @@ test-live-large-org-manual:
 	@$(TEST_LIVE_LARGE_ORG_CMD)
 
 test-crm-public-web-live-product-validation:
+	@if [ "$(CRM_PUBLIC_WEB_LIVE_DRY_RUN)" = "0" ] && [ "$(CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH)" != "1" ]; then \
+	  printf 'Refusing to execute CRM Public Web live validation without CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1\n' >&2; \
+	  exit 1; \
+	fi
 	@if [ "$(CRM_PUBLIC_WEB_LIVE_DRY_RUN)" = "0" ] && [ "$(LIVE_CONFIRM)" != "1" ]; then \
 	  printf 'Refusing to execute CRM Public Web live validation without LIVE_CONFIRM=1\n' >&2; \
 	  exit 1; \
@@ -424,6 +425,10 @@ test-crm-public-web-live-product-validation:
 	  printf 'Refusing to execute CRM Public Web live validation without CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT\n' >&2; \
 	  exit 1; \
 	fi
+	@if [ "$(CRM_PUBLIC_WEB_LIVE_DRY_RUN)" = "0" ] && ! printf '%s' "$(CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256)" | grep -Eq '^[0-9a-f]{64}$$'; then \
+	  printf 'Refusing to execute CRM Public Web live validation without a valid CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256\n' >&2; \
+	  exit 1; \
+	fi
 	@if [ "$(CRM_PUBLIC_WEB_LIVE_DRY_RUN)" = "0" ] && [ ! -f "$(CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT)" ]; then \
 	  printf 'Refusing to execute CRM Public Web live validation because CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT does not exist: %s\n' "$(CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT)" >&2; \
 	  exit 1; \
@@ -431,7 +436,7 @@ test-crm-public-web-live-product-validation:
 	@if [ "$(CRM_PUBLIC_WEB_LIVE_DRY_RUN)" = "0" ]; then \
 	  printf 'Running ci-pre-agent-contract before CRM Public Web live provider validation\n' >&2; \
 	  $(CI_PRE_AGENT_CONTRACT_CMD) || exit $$?; \
-	  CRM_PUBLIC_WEB_LIVE_PRE_AGENT_CONTRACT_PASSED=1 CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED=1 CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT="$(CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT)" $(CRM_PUBLIC_WEB_LIVE_VALIDATION_CMD); \
+	  CRM_PUBLIC_WEB_LIVE_PRE_AGENT_CONTRACT_PASSED=1 CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED=1 CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT="$(CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT)" CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256="$(CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256)" $(CRM_PUBLIC_WEB_LIVE_VALIDATION_CMD); \
 	else \
 	  $(CRM_PUBLIC_WEB_LIVE_VALIDATION_CMD); \
 	fi

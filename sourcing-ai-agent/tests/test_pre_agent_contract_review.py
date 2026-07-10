@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import json
+import hashlib
 import importlib.util
+import json
 import os
 import re
 import subprocess
@@ -10,28 +11,28 @@ from functools import lru_cache
 from pathlib import Path
 
 from sourcing_agent.durable_runtime import (
-    ACTIVITY_SPINE_LEGACY_INTERNAL,
-    ACTIVITY_SPINE_REQUIRED,
-    ACTIVITY_SPINE_CONTROL_PLANE,
-    DEFAULT_COMMAND_OWNER_REGISTRY,
     ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
     ACQUISITION_PLAN_BUILD_COMMAND_TYPE,
     ACQUISITION_PLAN_COMMIT_COMMAND_TYPE,
     ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE,
     ACQUISITION_RUN_CREATE_COMMAND_TYPE,
     ACQUISITION_SCALE_PLAN_COMMAND_TYPE,
+    ACTIVITY_SPINE_CONTROL_PLANE,
+    ACTIVITY_SPINE_LEGACY_INTERNAL,
+    ACTIVITY_SPINE_REQUIRED,
     COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
     COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
     COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
     CRM_PUBLIC_WEB_DOCUMENTS_FETCH_COMMAND_TYPE,
     CRM_PUBLIC_WEB_EVIDENCE_ADJUDICATE_COMMAND_TYPE,
     CRM_PUBLIC_WEB_MODEL_SAFE_FINALIZE_COMMAND_TYPE,
-    CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE,
     CRM_PUBLIC_WEB_PHASE_COMMAND_TYPES,
-    CRM_PUBLIC_WEB_SEARCH_SUBMIT_COMMAND_TYPE,
-    DOMAIN_MUTATION_COMMAND_TYPES,
+    CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE,
     CRM_PUBLIC_WEB_SEARCH_POLL_FETCH_COMMAND_TYPE,
+    CRM_PUBLIC_WEB_SEARCH_SUBMIT_COMMAND_TYPE,
     CRM_PUBLIC_WEB_SIGNALS_MATERIALIZE_COMMAND_TYPE,
+    DEFAULT_COMMAND_OWNER_REGISTRY,
+    DOMAIN_MUTATION_COMMAND_TYPES,
     EXCEL_INTAKE_RUN_COMMAND_TYPE,
     EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE,
     EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
@@ -39,9 +40,9 @@ from sourcing_agent.durable_runtime import (
     MEDIA_ASSET_CACHE_COMMAND_TYPE,
     ORCHESTRATION_COMMAND_TYPES,
     PROVIDER_ATTEMPT_COMMAND_TYPES,
+    workflow_command_activity_spine_policy,
     workflow_command_control_policy,
     workflow_command_control_state,
-    workflow_command_activity_spine_policy,
     workflow_command_display_contract,
     workflow_command_running_control_categories,
 )
@@ -50,9 +51,7 @@ from sourcing_agent.operation_runtime import (
     DEFAULT_ACTION_REGISTRY,
     operation_run_control_state,
 )
-
 from tests.source_inspection import all_source_files, find_class_method
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOC_PATH = REPO_ROOT / "docs" / "PRE_AGENT_CONTRACT_REVIEW.md"
@@ -307,58 +306,81 @@ def test_independent_review_gate_is_documented_and_executable() -> None:
 
     assert "Independent Review Gate" in agents
     assert "reviewer must not be the author" in agents
-    assert "codex exec --sandbox read-only" in agents
+    assert "codex exec --strict-config --sandbox read-only" in agents
     assert "NO-GO" in gate
     assert "reviewer that did not author the change" in gate
     assert "docs/INDEPENDENT_REVIEW_BRIEF.md" in gate
-    assert "feeds that prompt file to Codex" in gate
+    assert "feeds it non-interactively" in gate
     assert "< runtime/reviews/<review-id>.prompt.md" in gate
     assert "Python so it works on macOS without GNU `timeout`" in gate
-    assert "REVIEW_MODEL=gpt-5.5" in gate
-    assert "REVIEW_REASONING_EFFORT=xhigh" in gate
-    assert "REVIEW_SERVICE_TIER=fast" in gate
+    assert "newest available model" in gate
+    assert "highest supported reasoning effort" in gate
+    assert "~/.codex/config.toml" in gate
     assert "codex exec \\" in gate
-    assert "-c service_tier='\"fast\"'" in gate
-    assert "-c model_reasoning_effort='\"xhigh\"'" in gate
+    assert "--strict-config" in gate
+    assert "no model/effort/tier CLI overrides" in gate
+    assert 'REVIEW_BASE="<pinned-base-SHA>"' in gate
+    assert "review_scope_digest_sha256" in gate
+    assert "unrelated work continues" in gate
+    assert "any later commit or working-tree change to one of its scoped files invalidates the artifact" in gate
     assert "Provider cost safety" in brief
     assert "Product runtime model calls currently do not use model-native web search or tool calls" in (
         REPO_ROOT / "docs" / "DURABLE_EXECUTION_RUNTIME_CONTRACT.md"
     ).read_text(encoding="utf-8")
-    assert "subprocess.DEVNULL" in runner
+    assert "stdout=subprocess.PIPE" in runner
     assert "timeout=timeout_seconds" in runner
-    assert "\"bash\", \"-lc\", shell_command" in runner
+    assert "stdin=prompt_handle" in runner
     assert "## Review Metadata" in runner
     assert "contract_docs_considered" in runner
     assert "author_validation" in runner
-    assert "DEFAULT_REVIEWER_MODEL = \"gpt-5.5\"" in runner
-    assert "DEFAULT_REVIEWER_REASONING_EFFORT = \"xhigh\"" in runner
-    assert "DEFAULT_REVIEWER_SERVICE_TIER = \"fast\"" in runner
+    assert "DEFAULT_REVIEWER_MODEL" not in runner
+    assert "DEFAULT_REVIEWER_REASONING_EFFORT" not in runner
+    assert "DEFAULT_REVIEWER_SERVICE_TIER" not in runner
+    assert "_load_reviewer_configuration" in runner
+    assert "_load_effective_reviewer_configuration" in runner
+    assert "thread_settings_applied" in runner
     assert "_build_codex_args" in runner
     assert "INVALID_REVIEW_ARTIFACT: bare NO-GO" in runner
     assert "reviewer produced no output" in runner
-    assert "review_body == \"NO-GO\"" in runner
+    assert 'review_body.strip() == "NO-GO"' in runner
     assert "No such file or directory: 'timeout'" not in runner
     assert "--sandbox" in runner
     assert "read-only" in runner
     assert "INDEPENDENT_REVIEW_GATE_CMD" in makefile
     assert "independent-review-gate" in makefile
-    assert "REVIEW_MODEL ?= gpt-5.5" in makefile
-    assert "REVIEW_REASONING_EFFORT ?= xhigh" in makefile
-    assert "REVIEW_SERVICE_TIER ?= fast" in makefile
-    assert '--reasoning-effort "$(REVIEW_REASONING_EFFORT)"' in makefile
-    assert '--service-tier "$(REVIEW_SERVICE_TIER)"' in makefile
+    assert "REVIEW_MODEL ?=" not in makefile
+    assert "REVIEW_REASONING_EFFORT ?=" not in makefile
+    assert "REVIEW_SERVICE_TIER ?=" not in makefile
+    assert "--reasoning-effort" not in makefile
+    assert "--service-tier" not in makefile
     assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED ?= 0" in makefile
     assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT ?=" in makefile
+    assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256 ?=" in makefile
     assert "Refusing to execute CRM Public Web live validation without CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED=1" in makefile
     assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT does not exist" in makefile
+    assert "without a valid CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256" in makefile
     assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED=1 CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT=" in makefile
     assert 'INDEPENDENT_REVIEW_PASSED_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED"' in live_runner
     assert 'INDEPENDENT_REVIEW_ARTIFACT_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT"' in live_runner
     assert "_validate_independent_review_artifact" in live_runner
     assert 'INDEPENDENT_REVIEW_SCOPE_TOKENS_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_TOKENS"' in live_runner
     assert 'INDEPENDENT_REVIEW_REQUIRED_FILES_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_REQUIRED_FILES"' in live_runner
-    assert 'DEFAULT_INDEPENDENT_REVIEW_SCOPE_TOKENS = ("W7g", "CRM Public Web", "live")' in live_runner
-    assert "DEFAULT_INDEPENDENT_REVIEW_REQUIRED_FILES" in live_runner
+    assert (
+        'INDEPENDENT_REVIEW_SCOPE_DIGEST_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256"'
+        in live_runner
+    )
+    assert 'EXPECTED_INDEPENDENT_REVIEW_TITLE = "W7g CRM Public Web live product validation"' in live_runner
+    assert 'MINIMUM_INDEPENDENT_REVIEW_SCOPE_TOKENS = ("W7g", "CRM Public Web", "live")' in live_runner
+    assert "MINIMUM_INDEPENDENT_REVIEW_REQUIRED_FILES" in live_runner
+    for trust_root_file in (
+        "scripts/run_independent_review_gate.py",
+        "src/sourcing_agent/runtime_asset_retention_prune.py",
+        "tests/test_independent_review_gate_runner.py",
+    ):
+        assert trust_root_file in live_runner
+        assert trust_root_file in gate
+    assert "expected_title=EXPECTED_INDEPENDENT_REVIEW_TITLE" in live_runner
+    assert "expected_scope_digest=expected_scope_digest" in live_runner
     assert "_missing_review_metadata_fields" in live_runner
     assert "independent review artifact is not a valid GO review" in live_runner
     assert "independent review artifact must be under runtime/reviews" in live_runner
@@ -369,42 +391,75 @@ def test_independent_review_gate_is_documented_and_executable() -> None:
     assert '"independent_review": {' in live_runner
 
 
-def test_independent_review_runner_defaults_to_gpt55_xhigh_fast_mode() -> None:
+def test_independent_review_runner_inherits_codex_global_config_without_cli_pins(tmp_path: Path) -> None:
     runner = _load_independent_review_runner_module()
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        'model = "gpt-5.6-sol"\nmodel_reasoning_effort = "ultra"\nservice_tier = "priority"\n',
+        encoding="utf-8",
+    )
+    configured = runner._load_reviewer_configuration(config_path)
 
     codex_args = runner._build_codex_args(
         root=REPO_ROOT,
         output_path=Path("runtime/reviews/pytest_review.md"),
-        model=runner.DEFAULT_REVIEWER_MODEL,
-        reasoning_effort=runner.DEFAULT_REVIEWER_REASONING_EFFORT,
-        service_tier=runner.DEFAULT_REVIEWER_SERVICE_TIER,
     )
 
-    assert codex_args[:6] == ["codex", "exec", "--cd", str(REPO_ROOT), "--sandbox", "read-only"]
-    assert codex_args[codex_args.index("--model") : codex_args.index("--model") + 2] == [
-        "--model",
-        "gpt-5.5",
+    assert configured.settings == runner.ReviewerSettings("gpt-5.6-sol", "ultra", "priority")
+    assert configured.sha256
+    assert codex_args[:7] == [
+        "codex",
+        "exec",
+        "--strict-config",
+        "--cd",
+        str(REPO_ROOT),
+        "--sandbox",
+        "read-only",
     ]
-    assert 'service_tier="fast"' in codex_args
-    assert 'model_reasoning_effort="xhigh"' in codex_args
-    assert codex_args.count("-c") == 2
-
-
-def test_independent_review_runner_can_explicitly_inherit_codex_defaults() -> None:
-    runner = _load_independent_review_runner_module()
-
-    codex_args = runner._build_codex_args(
-        root=REPO_ROOT,
-        output_path=Path("runtime/reviews/pytest_review.md"),
-        model="default",
-        reasoning_effort="inherit",
-        service_tier="auto",
-    )
-
+    assert "--json" in codex_args
     assert "--model" not in codex_args
     assert "-c" not in codex_args
-    assert "--sandbox" in codex_args
-    assert "read-only" in codex_args
+
+
+def test_independent_review_runner_records_effective_rollout_settings(tmp_path: Path) -> None:
+    runner = _load_independent_review_runner_module()
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        'model = "gpt-5.6-sol"\nmodel_reasoning_effort = "ultra"\nservice_tier = "fast"\n',
+        encoding="utf-8",
+    )
+    configured = runner._load_reviewer_configuration(config_path)
+    codex_home = tmp_path / "codex-home"
+    thread_id = "019f0000-0000-7000-8000-000000000001"
+    rollout_path = codex_home / "sessions" / "2026" / "07" / "10" / f"rollout-test-{thread_id}.jsonl"
+    rollout_path.parent.mkdir(parents=True)
+    rollout_path.write_text(
+        json.dumps(
+            {
+                "type": "event_msg",
+                "payload": {
+                    "type": "thread_settings_applied",
+                    "thread_settings": {
+                        "model": "gpt-5.6-sol",
+                        "reasoning_effort": "ultra",
+                        "service_tier": "priority",
+                    },
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    effective = runner._load_effective_reviewer_configuration(
+        events_text=json.dumps({"type": "thread.started", "thread_id": thread_id}),
+        configured=configured,
+        codex_home=codex_home,
+    )
+
+    assert effective.settings == runner.ReviewerSettings("gpt-5.6-sol", "ultra", "priority")
+    assert effective.thread_id == thread_id
+    assert effective.rollout_path == rollout_path
 
 
 def test_independent_review_gate_has_mandatory_contract_and_milestone_triggers() -> None:
@@ -662,6 +717,7 @@ def test_pre_agent_contract_gate_is_single_fast_entrypoint() -> None:
     assert "ci-pre-agent-contract" in makefile
     assert "CI_PRE_AGENT_CONTRACT_CMD" in makefile
     assert "tests/test_pre_agent_contract_review.py" in makefile
+    assert "tests/test_independent_review_gate_runner.py" in makefile
     assert "tests/test_operation_runtime.py" in makefile
     assert "tests/test_crm_public_web_runtime_boundary.py" in makefile
     assert "tests/test_legacy_public_web_retirement_audit.py" in makefile
@@ -678,10 +734,11 @@ def test_pre_agent_contract_gate_is_single_fast_entrypoint() -> None:
     assert "exploration_query_task_key_uses_query_identity_not_order_ordinal" in makefile
     assert "dataforseo_provider_fetch_ready_batch_preserves_success_when_one_task_get_fails" in makefile
     assert "batch_queue_submit_failure_is_query_level_not_whole_batch" in makefile
-    assert "run_crm_public_web_live_product_validation.py --expected-model" in makefile
+    assert "run_crm_public_web_live_product_validation.py --report-json" in makefile
     ci_pre_agent_contract = re.search(r"^CI_PRE_AGENT_CONTRACT_CMD = (.+)$", makefile, re.M)
     assert ci_pre_agent_contract is not None
     ci_pre_agent_contract_cmd = ci_pre_agent_contract.group(1)
+    assert "tests/test_independent_review_gate_runner.py" in ci_pre_agent_contract_cmd
     assert "tests/test_enrichment.py -k 'isolates_retry_wait or retry_wait_as_isolated_batch'" in ci_pre_agent_contract_cmd
     assert "SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1" in ci_pre_agent_contract_cmd
     assert "dataforseo_provider_submit_batch_retries_only_failed_query_item" in ci_pre_agent_contract_cmd
@@ -693,7 +750,7 @@ def test_pre_agent_contract_gate_is_single_fast_entrypoint() -> None:
     assert "exploration_query_task_key_uses_query_identity_not_order_ordinal" in ci_pre_agent_contract_cmd
     assert "dataforseo_provider_fetch_ready_batch_preserves_success_when_one_task_get_fails" in ci_pre_agent_contract_cmd
     assert "run_crm_public_web_live_product_validation.py" in ci_pre_agent_contract_cmd
-    assert "--expected-model" in ci_pre_agent_contract_cmd
+    assert "--expected-model" not in ci_pre_agent_contract_cmd
     assert "--report-json" in ci_pre_agent_contract_cmd
     assert "--execute-live" not in ci_pre_agent_contract_cmd
     assert "--confirm-live-provider-cost" not in ci_pre_agent_contract_cmd
@@ -717,7 +774,9 @@ def test_w7g_crm_public_web_live_validation_has_guarded_runner() -> None:
     assert "test-crm-public-web-live-product-validation" in makefile
     assert "CRM_PUBLIC_WEB_LIVE_DRY_RUN ?= 1" in makefile
     assert "CRM_PUBLIC_WEB_LIVE_RECORD_IDS_REVIEWED ?= 0" in makefile
+    assert "CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH ?= 0" in makefile
     assert "CRM_PUBLIC_WEB_LIVE_POLL_TIMEOUT_SECONDS ?= 600" in makefile
+    assert "CRM_PUBLIC_WEB_LIVE_EXPECTED_MODEL" not in makefile
     assert "LIVE_CONFIRM" in makefile
     assert 'SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE="postgres_only"' in makefile
     assert 'SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES="1"' in makefile
@@ -729,6 +788,8 @@ def test_w7g_crm_public_web_live_validation_has_guarded_runner() -> None:
     assert "CRM_PUBLIC_WEB_LIVE_RECORD_IDS_REVIEWED=1" in makefile
     assert "--confirm-live-provider-cost" in makefile
     assert "--reviewed-crm-record-ids" in makefile
+    assert "CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1" in makefile
+    assert '[ "$(CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH)" != "1" ]' in makefile
     assert "/api/crm/records/public-web-search" in script
     assert "/api/crm/records/public-web-search/poll" in script
     assert "/api/crm/records/{crm_record_id}/public-web-search" in script
@@ -742,13 +803,14 @@ def test_w7g_crm_public_web_live_validation_has_guarded_runner() -> None:
     assert "--execute-live" in script
     assert "--confirm-live-provider-cost" in script
     assert "--reviewed-crm-record-ids" in script
+    assert "--execute-live requires --force-refresh" in script
     assert "--poll-timeout-seconds" in script
     assert "MODEL_VERIFIABLE_RUN_STATUSES" in script
     assert "_nonterminal_run_summaries" in script
     assert "LIVE_CONFIRM" in script
     assert "SOURCING_LIVE_PROVIDER_CONFIRM" in script
     assert "CRM_PUBLIC_WEB_LIVE_PRE_AGENT_CONTRACT_PASSED" in script
-    assert "gpt-5.5" in script
+    assert "gpt-5.6-sol" in script
     assert "target_candidate_public_web_v1" in script
     assert "live_prerequisites" in script
     assert "record_id_selection_guidance" in script
@@ -761,6 +823,9 @@ def test_w7g_crm_public_web_live_validation_has_guarded_runner() -> None:
     assert "live_prerequisites.missing_or_required_before_live" in playbook
     assert "live_prerequisites.record_id_selection_guidance" in playbook
     assert "live_prerequisites.recommended_make_command" in playbook
+    assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256" in playbook
+    assert "latest_run.analysis.phase_metrics" in playbook
+    assert "Provider-health evidence is checked in its own `providers.model` object" in playbook
     assert "CRM_PUBLIC_WEB_LIVE_RECORD_IDS_REVIEWED=1" in playbook
     assert "CRM_PUBLIC_WEB_LIVE_POLL_TIMEOUT_SECONDS" in playbook
     assert "must not be conflated with model fallback" in playbook
@@ -775,6 +840,8 @@ def test_w7g_crm_public_web_live_validation_has_guarded_runner() -> None:
     assert "guarded W7g runner dry-run" in review_doc
     assert "live_prerequisites" in review_doc
     assert "CRM_PUBLIC_WEB_LIVE_RECORD_IDS=\"...\"" in review_doc
+    assert "immutable required-file set" in review_doc
+    assert "fields spread across unrelated payload objects" in review_doc
 
 
 def test_w7g_live_runner_requires_pre_agent_contract_gate_env(tmp_path: Path) -> None:
@@ -835,10 +902,83 @@ def test_w7g_live_runner_dry_run_reports_next_live_prerequisites(tmp_path: Path)
     assert report["status"] == "dry_run_ready"
     prerequisites = report["live_prerequisites"]
     assert prerequisites["ready_to_execute_live_with_current_args"] is False
+    assert report["responses"] == {}
     assert "CRM_PUBLIC_WEB_LIVE_RECORD_IDS" in prerequisites["missing_or_required_before_live"]
     assert "CRM_PUBLIC_WEB_LIVE_RECORD_IDS_REVIEWED=1" in prerequisites["missing_or_required_before_live"]
-    assert "Use reviewed CRMRecord ids, not legacy target-candidate ids." in prerequisites["record_id_selection_guidance"]
+    assert "CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1" in prerequisites["missing_or_required_before_live"]
+    assert (
+        "Use reviewed CRMRecord ids, not legacy target-candidate ids." in prerequisites["record_id_selection_guidance"]
+    )
     assert "make test-crm-public-web-live-product-validation" in prerequisites["recommended_make_command"]
+    assert "CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1" in prerequisites["recommended_make_command"]
+
+
+def test_w7g_live_runner_environment_cannot_replace_force_refresh_cli_guard(tmp_path: Path) -> None:
+    report_path = tmp_path / "w7g_force_refresh_env_bypass_report.json"
+    env = os.environ.copy()
+    env["CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH"] = "1"
+    env.pop("LIVE_CONFIRM", None)
+    env.pop("SOURCING_LIVE_PROVIDER_CONFIRM", None)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(CRM_PUBLIC_WEB_LIVE_VALIDATION_SCRIPT_PATH),
+            "--execute-live",
+            "--confirm-live-provider-cost",
+            "--reviewed-crm-record-ids",
+            "--crm-record-id",
+            "crm_record_for_force_refresh_guard_test",
+            "--base-url",
+            "http://127.0.0.1:1",
+            "--report-json",
+            str(report_path),
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 1
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["status"] == "failed"
+    assert report["force_refresh"] is False
+    assert report["responses"] == {}
+    assert any("--execute-live requires --force-refresh" in failure for failure in report["guard_failures"])
+
+
+def test_w7g_live_runner_rejects_product_model_override_before_requests(tmp_path: Path) -> None:
+    report_path = tmp_path / "w7g_model_override_report.json"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(CRM_PUBLIC_WEB_LIVE_VALIDATION_SCRIPT_PATH),
+            "--expected-model",
+            "gpt-5.5",
+            "--report-json",
+            str(report_path),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 1
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["status"] == "failed"
+    assert report["expected_model"] == "gpt-5.6-sol"
+    assert report["configured_expected_model"] == "gpt-5.5"
+    assert report["responses"] == {}
+    assert report["guard_failures"] == [
+        "--expected-model is compatibility-only and must equal the immutable CRM Public Web product model "
+        "gpt-5.6-sol; received gpt-5.5"
+    ]
 
 
 def test_w7g_live_runner_requires_reviewed_crm_record_ids(tmp_path: Path) -> None:
@@ -875,8 +1015,141 @@ def test_w7g_live_runner_requires_reviewed_crm_record_ids(tmp_path: Path) -> Non
     assert any("--reviewed-crm-record-ids" in failure for failure in report["guard_failures"])
 
 
+def _verified_w7g_review_metadata(review_dir: Path, *, stem: str) -> tuple[list[str], list[Path]]:
+    thread_id = "019f0000-0000-7000-8000-000000000077"
+    config_path = review_dir / f"{stem}.config.toml"
+    config_raw = ('model = "gpt-5.6-sol"\nmodel_reasoning_effort = "ultra"\nservice_tier = "fast"\n').encode("utf-8")
+    config_path.write_bytes(config_raw)
+    rollout_path = review_dir / f"{stem}.rollout-{thread_id}.jsonl"
+    rollout_raw = (
+        json.dumps(
+            {"type": "session_meta", "payload": {"id": thread_id, "cli_version": "0.144.0"}},
+            sort_keys=True,
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "type": "event_msg",
+                "payload": {
+                    "type": "thread_settings_applied",
+                    "thread_settings": {
+                        "model": "gpt-5.6-sol",
+                        "reasoning_effort": "ultra",
+                        "service_tier": "priority",
+                    },
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("utf-8")
+    rollout_path.write_bytes(rollout_raw)
+    config_relative = str(config_path.relative_to(REPO_ROOT))
+    rollout_relative = str(rollout_path.relative_to(REPO_ROOT))
+    rollout_sha = hashlib.sha256(rollout_raw).hexdigest()
+    evidence_path = review_dir / f"{stem}.effective-config.json"
+    evidence_payload = {
+        "contract_version": "independent_review_effective_config_v1",
+        "config": {
+            "path": config_relative,
+            "sha256": hashlib.sha256(config_raw).hexdigest(),
+            "model": "gpt-5.6-sol",
+            "reasoning_effort": "ultra",
+            "service_tier": "fast",
+        },
+        "session": {
+            "session_id": thread_id,
+            "thread_id": thread_id,
+            "codex_cli_version": "0.144.0",
+            "rollout_path": rollout_relative,
+            "rollout_sha256": rollout_sha,
+        },
+        "process": {"reviewer_exit_code": 0},
+        "effective": {
+            "model": "gpt-5.6-sol",
+            "reasoning_effort": "ultra",
+            "service_tier": "priority",
+            "source": {
+                "model": ["thread_settings_applied"],
+                "reasoning_effort": ["thread_settings_applied"],
+                "service_tier": ["thread_settings_applied"],
+            },
+        },
+        "model_reroutes": [],
+    }
+    evidence_raw = (json.dumps(evidence_payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    evidence_path.write_bytes(evidence_raw)
+    evidence_relative = str(evidence_path.relative_to(REPO_ROOT))
+    metadata = [
+        "- reviewer_model: gpt-5.6-sol",
+        "- reviewer_reasoning_effort: ultra",
+        "- reviewer_service_tier: priority",
+        f"- reviewer_config_path: `{config_relative}`",
+        f"- reviewer_config_sha256: {hashlib.sha256(config_raw).hexdigest()}",
+        "- reviewer_exit_code: 0",
+        "- reviewer_codex_cli_version: 0.144.0",
+        f"- reviewer_thread_id: {thread_id}",
+        f"- reviewer_rollout_path: `{rollout_relative}`",
+        f"- reviewer_rollout_sha256: {rollout_sha}",
+        f"- reviewer_effective_config_path: `{evidence_relative}`",
+        f"- reviewer_effective_config_sha256: {hashlib.sha256(evidence_raw).hexdigest()}",
+    ]
+    return metadata, [config_path, rollout_path, evidence_path]
+
+
+def test_w7g_review_scope_environment_can_only_add_requirements(monkeypatch) -> None:
+    runner = _load_crm_public_web_live_validation_module()
+    monkeypatch.setenv("CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_TOKENS", "unrelated, W7g")
+    monkeypatch.setenv(
+        "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_REQUIRED_FILES",
+        "docs/OTHER_CONTRACT.md,scripts/run_crm_public_web_live_product_validation.py",
+    )
+
+    assert runner._required_independent_review_scope_tokens() == [
+        "W7g",
+        "CRM Public Web",
+        "live",
+        "unrelated",
+    ]
+    assert runner._required_independent_review_files() == [
+        "Makefile",
+        "docs/DURABLE_EXECUTION_RUNTIME_CONTRACT.md",
+        "docs/INDEPENDENT_REVIEW_GATE.md",
+        "docs/PRE_AGENT_CONTRACT_REVIEW.md",
+        "docs/TESTING_PLAYBOOK.md",
+        "scripts/run_crm_public_web_live_product_validation.py",
+        "scripts/run_independent_review_gate.py",
+        "src/sourcing_agent/model_provider.py",
+        "src/sourcing_agent/public_web_runtime_core.py",
+        "src/sourcing_agent/runtime_asset_retention_prune.py",
+        "tests/test_crm_public_web_runtime_boundary.py",
+        "tests/test_independent_review_gate_runner.py",
+        "tests/test_model_provider.py",
+        "tests/test_pre_agent_contract_review.py",
+        "docs/OTHER_CONTRACT.md",
+    ]
+
+
 def test_w7g_live_runner_accepts_only_valid_go_independent_review_artifacts(tmp_path: Path, monkeypatch) -> None:
     runner = _load_crm_public_web_live_validation_module()
+    scope_digest = "1" * 64
+    minimum_required_files = list(runner.MINIMUM_INDEPENDENT_REVIEW_REQUIRED_FILES)
+    reviewed_scope = "\n".join(f"- `{path}`" for path in minimum_required_files)
+    shared_verifier_calls: list[dict[str, object]] = []
+
+    def fake_shared_verifier(**kwargs) -> list[str]:
+        shared_verifier_calls.append(dict(kwargs))
+        text = Path(str(kwargs["artifact_path"])).read_text(encoding="utf-8")
+        title_match = re.search(r"^- title:\s*(.+)$", text, re.MULTILINE)
+        digest_match = re.search(r"^- review_scope_digest_sha256:\s*([0-9a-f]+)$", text, re.MULTILINE)
+        blockers: list[str] = []
+        if not title_match or title_match.group(1).strip() != kwargs["expected_title"]:
+            blockers.append("review_artifact_title_mismatch")
+        if not digest_match or digest_match.group(1) != kwargs["expected_scope_digest"]:
+            blockers.append("review_artifact_expected_scope_digest_mismatch")
+        return blockers
+
+    monkeypatch.setattr(runner, "validate_independent_review_artifact", fake_shared_verifier)
     review_dir = REPO_ROOT / "runtime" / "reviews"
     review_dir.mkdir(parents=True, exist_ok=True)
     go_artifact = review_dir / f"pytest_{tmp_path.name}_go.md"
@@ -884,26 +1157,35 @@ def test_w7g_live_runner_accepts_only_valid_go_independent_review_artifacts(tmp_
     missing_reasoning_artifact = review_dir / f"pytest_{tmp_path.name}_missing_reasoning_go.md"
     missing_service_tier_artifact = review_dir / f"pytest_{tmp_path.name}_missing_service_tier_go.md"
     unrelated_in_reviews_artifact = review_dir / f"pytest_{tmp_path.name}_unrelated_go.md"
+    wrong_title_artifact = review_dir / f"pytest_{tmp_path.name}_wrong_title_go.md"
+    wrong_scope_digest_artifact = review_dir / f"pytest_{tmp_path.name}_wrong_scope_digest_go.md"
     missing_scope_file_artifact = review_dir / f"pytest_{tmp_path.name}_missing_scope_file_go.md"
     unrelated_artifact = tmp_path / "unrelated_go.md"
     prompt_artifact = review_dir / f"pytest_{tmp_path.name}.prompt.md"
+    legacy_self_reported_artifact = review_dir / f"pytest_{tmp_path.name}_legacy_self_reported_go.md"
+    verified_metadata, support_artifacts = _verified_w7g_review_metadata(
+        review_dir,
+        stem=f"pytest_{tmp_path.name}_w7g",
+    )
     artifacts = [
         go_artifact,
         no_go_artifact,
         missing_reasoning_artifact,
         missing_service_tier_artifact,
         unrelated_in_reviews_artifact,
+        wrong_title_artifact,
+        wrong_scope_digest_artifact,
         missing_scope_file_artifact,
         unrelated_artifact,
         prompt_artifact,
+        legacy_self_reported_artifact,
+        *support_artifacts,
     ]
     go_artifact.write_text(
         "## Review Metadata\n\n"
         "- title: W7g CRM Public Web live product validation\n"
-        "- base/ref: current working tree\n"
-        "- reviewer_model: gpt-5.5\n"
-        "- reviewer_reasoning_effort: xhigh\n"
-        "- reviewer_service_tier: fast\n"
+        "- base/ref: current working tree\n" + "\n".join(verified_metadata) + "\n"
+        f"- review_scope_digest_sha256: {scope_digest}\n"
         "- timeout_seconds: 600\n"
         "- prompt_path: `runtime/reviews/pytest.prompt.md`\n"
         "- command: `codex exec --sandbox read-only ...`\n"
@@ -911,8 +1193,7 @@ def test_w7g_live_runner_accepts_only_valid_go_independent_review_artifacts(tmp_
         "- author_validation: targeted tests\n"
         "- accepted_exceptions: none\n\n"
         "Reviewed scope:\n"
-        "- `scripts/run_crm_public_web_live_product_validation.py`\n"
-        "- `docs/PRE_AGENT_CONTRACT_REVIEW.md`\n\n"
+        f"{reviewed_scope}\n\n"
         "## Reviewer Output\n\n- Reviewed scope: W7g CRM Public Web live validation\n\nGO\n",
         encoding="utf-8",
     )
@@ -922,47 +1203,39 @@ def test_w7g_live_runner_accepts_only_valid_go_independent_review_artifacts(tmp_
         encoding="utf-8",
     )
     missing_reasoning_artifact.write_text(
-        scoped_review_body.replace("- reviewer_reasoning_effort: xhigh\n", ""),
+        scoped_review_body.replace("- reviewer_reasoning_effort: ultra\n", ""),
         encoding="utf-8",
     )
     missing_service_tier_artifact.write_text(
-        scoped_review_body.replace("- reviewer_service_tier: fast\n", ""),
+        scoped_review_body.replace("- reviewer_service_tier: priority\n", ""),
         encoding="utf-8",
     )
     unrelated_in_reviews_artifact.write_text(
-        "## Review Metadata\n\n"
-        "- title: storage documentation review\n"
-        "- base/ref: current working tree\n"
-        "- reviewer_model: gpt-5.5\n"
-        "- reviewer_reasoning_effort: xhigh\n"
-        "- reviewer_service_tier: fast\n"
-        "- timeout_seconds: 600\n"
-        "- prompt_path: `runtime/reviews/unrelated.prompt.md`\n"
-        "- command: `codex exec --sandbox read-only ...`\n"
-        "- contract_docs_considered: `docs/OTHER_CONTRACT.md`\n"
-        "- author_validation: targeted tests\n"
-        "- accepted_exceptions: none\n\n"
-        "Reviewed scope:\n"
-        "- `docs/OTHER_CONTRACT.md`\n\n"
-        "## Reviewer Output\n\nGO\n",
+        scoped_review_body.replace(
+            "W7g CRM Public Web live product validation",
+            "storage documentation review",
+        )
+        .replace("W7g CRM Public Web live validation", "storage documentation review")
+        .replace("scripts/run_crm_public_web_live_product_validation.py", "docs/OTHER_CONTRACT.md")
+        .replace("docs/PRE_AGENT_CONTRACT_REVIEW.md", "docs/OTHER_CONTRACT.md"),
+        encoding="utf-8",
+    )
+    wrong_title_artifact.write_text(
+        scoped_review_body.replace(
+            "- title: W7g CRM Public Web live product validation",
+            "- title: unrelated storage review",
+        ),
+        encoding="utf-8",
+    )
+    wrong_scope_digest_artifact.write_text(
+        scoped_review_body.replace(scope_digest, "2" * 64),
         encoding="utf-8",
     )
     missing_scope_file_artifact.write_text(
-        "## Review Metadata\n\n"
-        "- title: W7g CRM Public Web live review\n"
-        "- base/ref: current working tree\n"
-        "- reviewer_model: gpt-5.5\n"
-        "- reviewer_reasoning_effort: xhigh\n"
-        "- reviewer_service_tier: fast\n"
-        "- timeout_seconds: 600\n"
-        "- prompt_path: `runtime/reviews/missing-file.prompt.md`\n"
-        "- command: `codex exec --sandbox read-only ...`\n"
-        "- contract_docs_considered: `docs/OTHER_CONTRACT.md`\n"
-        "- author_validation: targeted tests\n"
-        "- accepted_exceptions: none\n\n"
-        "Reviewed scope:\n"
-        "- `docs/OTHER_CONTRACT.md`\n\n"
-        "## Reviewer Output\n\nGO\n",
+        scoped_review_body.replace(
+            "scripts/run_crm_public_web_live_product_validation.py",
+            "docs/OTHER_CONTRACT.md",
+        ).replace("docs/PRE_AGENT_CONTRACT_REVIEW.md", "docs/OTHER_CONTRACT.md"),
         encoding="utf-8",
     )
     unrelated_artifact.write_text(
@@ -973,6 +1246,24 @@ def test_w7g_live_runner_accepts_only_valid_go_independent_review_artifacts(tmp_
         scoped_review_body,
         encoding="utf-8",
     )
+    legacy_self_reported_artifact.write_text(
+        "## Review Metadata\n\n"
+        "- title: W7g CRM Public Web live product validation\n"
+        "- base/ref: current working tree\n"
+        "- reviewer_model: gpt-5.6-sol\n"
+        "- reviewer_reasoning_effort: ultra\n"
+        "- reviewer_service_tier: priority\n"
+        "- timeout_seconds: 600\n"
+        "- prompt_path: `runtime/reviews/legacy.prompt.md`\n"
+        "- command: `codex exec --strict-config --sandbox read-only`\n"
+        "- contract_docs_considered: `docs/PRE_AGENT_CONTRACT_REVIEW.md`, `docs/INDEPENDENT_REVIEW_GATE.md`\n"
+        "- author_validation: targeted tests\n\n"
+        "Reviewed scope:\n"
+        "- `scripts/run_crm_public_web_live_product_validation.py`\n"
+        "- `docs/PRE_AGENT_CONTRACT_REVIEW.md`\n\n"
+        "## Reviewer Output\n\nReviewed scope: W7g CRM Public Web live validation\n\nGO\n",
+        encoding="utf-8",
+    )
     args = type(
         "Args",
         (),
@@ -981,6 +1272,7 @@ def test_w7g_live_runner_accepts_only_valid_go_independent_review_artifacts(tmp_
             "confirm_live_provider_cost": True,
             "crm_record_ids": ["crmrec_review_gate_test"],
             "reviewed_crm_record_ids": True,
+            "force_refresh": True,
             "max_fetches_per_candidate": 10,
             "max_ai_evidence_documents": 10,
             "max_ai_entry_links": 10,
@@ -994,6 +1286,7 @@ def test_w7g_live_runner_accepts_only_valid_go_independent_review_artifacts(tmp_
         monkeypatch.setenv("LIVE_CONFIRM", "1")
         monkeypatch.setenv("CRM_PUBLIC_WEB_LIVE_PRE_AGENT_CONTRACT_PASSED", "1")
         monkeypatch.setenv("CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED", "1")
+        monkeypatch.setenv("CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256", scope_digest)
         monkeypatch.delenv("SOURCING_EXTERNAL_PROVIDER_MODE", raising=False)
 
         monkeypatch.setenv(
@@ -1005,6 +1298,17 @@ def test_w7g_live_runner_accepts_only_valid_go_independent_review_artifacts(tmp_
         readiness = runner._live_prerequisites_report(args)
         assert readiness["ready_to_execute_live_with_current_args"] is True
         assert readiness["independent_review_artifact_validation"]["valid_go"] is True
+        assert shared_verifier_calls[-1]["expected_title"] == "W7g CRM Public Web live product validation"
+        assert shared_verifier_calls[-1]["expected_scope_digest"] == scope_digest
+        assert shared_verifier_calls[-1]["required_files"] == [
+            *minimum_required_files,
+        ]
+        assert shared_verifier_calls[-1]["required_tokens"] == ["W7g", "CRM Public Web", "live"]
+
+        monkeypatch.delenv("CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256")
+        failures, _warnings = runner._guard_report(args)
+        assert any("must be a nonempty lowercase SHA-256 digest" in failure for failure in failures)
+        monkeypatch.setenv("CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256", scope_digest)
 
         monkeypatch.setenv(
             "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT",
@@ -1036,6 +1340,20 @@ def test_w7g_live_runner_accepts_only_valid_go_independent_review_artifacts(tmp_
 
         monkeypatch.setenv(
             "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT",
+            str(wrong_title_artifact.relative_to(REPO_ROOT)),
+        )
+        failures, _warnings = runner._guard_report(args)
+        assert any("review_artifact_title_mismatch" in failure for failure in failures)
+
+        monkeypatch.setenv(
+            "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT",
+            str(wrong_scope_digest_artifact.relative_to(REPO_ROOT)),
+        )
+        failures, _warnings = runner._guard_report(args)
+        assert any("review_artifact_expected_scope_digest_mismatch" in failure for failure in failures)
+
+        monkeypatch.setenv(
+            "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT",
             str(missing_scope_file_artifact.relative_to(REPO_ROOT)),
         )
         failures, _warnings = runner._guard_report(args)
@@ -1051,6 +1369,13 @@ def test_w7g_live_runner_accepts_only_valid_go_independent_review_artifacts(tmp_
         )
         failures, _warnings = runner._guard_report(args)
         assert any("points to a prompt file" in failure for failure in failures)
+
+        monkeypatch.setenv(
+            "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT",
+            str(legacy_self_reported_artifact.relative_to(REPO_ROOT)),
+        )
+        failures, _warnings = runner._guard_report(args)
+        assert any("reviewer_config_path" in failure for failure in failures)
     finally:
         for artifact in artifacts:
             artifact.unlink(missing_ok=True)
@@ -1073,7 +1398,7 @@ def test_w7g_live_runner_skips_model_check_for_nonterminal_latest_run() -> None:
                 "fallback_used": False,
             },
         },
-        expected_model="gpt-5.5",
+        expected_model="gpt-5.6-sol",
         warnings=warnings,
         failures=failures,
     )
@@ -1093,12 +1418,242 @@ def test_w7g_live_runner_skips_model_check_for_nonterminal_latest_run() -> None:
                 "fallback_used": False,
             },
         },
-        expected_model="gpt-5.5",
+        expected_model="gpt-5.6-sol",
         warnings=warnings,
         failures=failures,
     )
 
-    assert any("no model field was present" in failure for failure in failures)
+    assert any("latest_run.analysis.phase_metrics was missing" in failure for failure in failures)
+
+
+def test_w7g_live_runner_rejects_model_alias_or_suffix() -> None:
+    runner = _load_crm_public_web_live_validation_module()
+    failures: list[str] = []
+
+    runner._validate_model_fields(
+        "detail:crmrec_model_alias",
+        {
+            "model": "gpt-5.6-sol-preview",
+            "model_version": "gpt-5.6-sol",
+            "requested_model": "gpt-5.6-sol",
+            "response_model": "gpt-5.6-sol",
+            "effective_model": "gpt-5.6-sol",
+            "model_identity_provenance": "provider_response",
+            "model_fallback_used": False,
+        },
+        expected_model="gpt-5.6-sol",
+        warnings=[],
+        failures=failures,
+    )
+
+    assert failures == ["detail:crmrec_model_alias: model gpt-5.6-sol-preview does not match gpt-5.6-sol"]
+
+
+def test_w7g_live_runner_requires_provider_response_model_provenance() -> None:
+    runner = _load_crm_public_web_live_validation_module()
+    failures: list[str] = []
+
+    runner._validate_model_fields(
+        "detail:crmrec_requested_only",
+        {
+            "model": "gpt-5.6-sol",
+            "model_version": "gpt-5.6-sol",
+            "requested_model": "gpt-5.6-sol",
+            "model_fallback_used": False,
+        },
+        expected_model="gpt-5.6-sol",
+        warnings=[],
+        failures=failures,
+    )
+
+    assert "detail:crmrec_requested_only: response_model missing does not match gpt-5.6-sol" in failures
+    assert "detail:crmrec_requested_only: effective_model missing does not match gpt-5.6-sol" in failures
+    assert any("model_identity_provenance missing is not provider_response" in failure for failure in failures)
+
+    valid_failures: list[str] = []
+    runner._validate_model_fields(
+        "detail:crmrec_effective",
+        {
+            "model": "gpt-5.6-sol",
+            "model_version": "gpt-5.6-sol",
+            "requested_model": "gpt-5.6-sol",
+            "response_model": "gpt-5.6-sol",
+            "effective_model": "gpt-5.6-sol",
+            "model_identity_provenance": "provider_response",
+            "model_fallback_used": False,
+        },
+        expected_model="gpt-5.6-sol",
+        warnings=[],
+        failures=valid_failures,
+    )
+
+    assert valid_failures == []
+
+
+def test_w7g_live_runner_rejects_empty_or_missing_response_model_identity() -> None:
+    runner = _load_crm_public_web_live_validation_module()
+    empty_failures: list[str] = []
+    runner._validate_model_fields(
+        "detail:crmrec_empty_identity",
+        {
+            "model": "",
+            "model_version": "",
+            "requested_model": "",
+            "response_model": "",
+            "effective_model": "",
+            "model_identity_provenance": "",
+            "model_fallback_used": False,
+        },
+        expected_model="gpt-5.6-sol",
+        warnings=[],
+        failures=empty_failures,
+    )
+    assert len(empty_failures) == 6
+    assert all("missing" in failure for failure in empty_failures)
+
+    missing_response_failures: list[str] = []
+    runner._validate_model_fields(
+        "detail:crmrec_missing_response",
+        {
+            "model": "gpt-5.6-sol",
+            "model_version": "gpt-5.6-sol",
+            "requested_model": "gpt-5.6-sol",
+            "effective_model": "gpt-5.6-sol",
+            "model_identity_provenance": "provider_response",
+            "model_fallback_used": False,
+        },
+        expected_model="gpt-5.6-sol",
+        warnings=[],
+        failures=missing_response_failures,
+    )
+    assert missing_response_failures == [
+        "detail:crmrec_missing_response: response_model missing does not match gpt-5.6-sol"
+    ]
+
+
+def test_w7g_live_runner_requires_colocated_latest_run_phase_model_identity() -> None:
+    runner = _load_crm_public_web_live_validation_module()
+    failures: list[str] = []
+    runner._validate_model_fields_for_terminal_detail(
+        "detail:crmrec_split_identity",
+        {
+            "latest_run": {
+                "status": "completed",
+                "analysis": {
+                    "phase_metrics": {
+                        "model": "gpt-5.6-sol",
+                        "requested_model": "gpt-5.6-sol",
+                        "model_fallback_used": False,
+                    }
+                },
+            },
+            "person_asset": {
+                "summary": {
+                    "phase_metrics": {
+                        "model_version": "gpt-5.6-sol",
+                        "response_model": "gpt-5.6-sol",
+                        "effective_model": "gpt-5.6-sol",
+                        "model_identity_provenance": "provider_response",
+                    }
+                }
+            },
+            "providers": {
+                "model": {
+                    "response_model": "gpt-5.6-sol",
+                    "effective_model": "gpt-5.6-sol",
+                    "model_identity_provenance": "provider_response",
+                }
+            },
+        },
+        expected_model="gpt-5.6-sol",
+        warnings=[],
+        failures=failures,
+    )
+
+    assert "detail:crmrec_split_identity: model_version missing does not match gpt-5.6-sol" in failures
+    assert "detail:crmrec_split_identity: response_model missing does not match gpt-5.6-sol" in failures
+    assert "detail:crmrec_split_identity: effective_model missing does not match gpt-5.6-sol" in failures
+    assert any("model_identity_provenance missing" in failure for failure in failures)
+
+    valid_failures: list[str] = []
+    runner._validate_model_fields_for_terminal_detail(
+        "detail:crmrec_colocated_identity",
+        {
+            "latest_run": {
+                "status": "completed",
+                "analysis": {
+                    "phase_metrics": {
+                        "model": "gpt-5.6-sol",
+                        "model_version": "gpt-5.6-sol",
+                        "requested_model": "gpt-5.6-sol",
+                        "response_model": "gpt-5.6-sol",
+                        "effective_model": "gpt-5.6-sol",
+                        "model_identity_provenance": "provider_response",
+                        "model_fallback_used": False,
+                    }
+                },
+            }
+        },
+        expected_model="gpt-5.6-sol",
+        warnings=[],
+        failures=valid_failures,
+    )
+    assert valid_failures == []
+
+
+def test_w7g_live_runner_rejects_conflicting_colocated_model_identity() -> None:
+    runner = _load_crm_public_web_live_validation_module()
+    failures: list[str] = []
+    runner._validate_model_fields_for_terminal_detail(
+        "detail:crmrec_conflicting_identity",
+        {
+            "latest_run": {
+                "status": "completed",
+                "analysis": {
+                    "phase_metrics": {
+                        "model": "gpt-5.6-sol",
+                        "model_version": "gpt-5.6-sol",
+                        "requested_model": "gpt-5.6-sol",
+                        "response_model": "gpt-5.5",
+                        "effective_model": "gpt-5.6-sol",
+                        "model_identity_provenance": "provider_response",
+                        "model_fallback_used": False,
+                    }
+                },
+            },
+            "provider_health": {"response_model": "gpt-5.6-sol"},
+        },
+        expected_model="gpt-5.6-sol",
+        warnings=[],
+        failures=failures,
+    )
+
+    assert failures == ["detail:crmrec_conflicting_identity: response_model gpt-5.5 does not match gpt-5.6-sol"]
+
+
+def test_w7g_provider_health_requires_its_own_response_model_identity() -> None:
+    runner = _load_crm_public_web_live_validation_module()
+    failures: list[str] = []
+    runner._validate_provider_health(
+        {
+            "status": "ok",
+            "providers": {
+                "model": {
+                    "status": "ready",
+                    "chat_status": "ready",
+                    "model": "gpt-5.6-sol",
+                    "requested_model": "gpt-5.6-sol",
+                    "effective_model": "gpt-5.6-sol",
+                    "model_identity_provenance": "provider_response",
+                }
+            },
+            "latest_run": {"response_model": "gpt-5.6-sol"},
+        },
+        expected_model="gpt-5.6-sol",
+        failures=failures,
+    )
+
+    assert failures == ["provider_health: response_model missing does not match gpt-5.6-sol"]
 
 
 def test_w7g_live_runner_fails_fast_on_http_error_payload() -> None:
@@ -1119,6 +1674,259 @@ def test_w7g_live_runner_fails_fast_on_http_error_payload() -> None:
     assert failed is True
     assert any("start: endpoint returned non-success response" in failure for failure in failures)
     assert any("crm_record_not_found" in failure for failure in failures)
+
+
+def _w7g_live_runner_args(*, force_refresh: bool = True):
+    return type(
+        "Args",
+        (),
+        {
+            "base_url": "http://w7g.invalid",
+            "crm_record_ids": ["crmrec_invocation_binding"],
+            "expected_model": "gpt-5.6-sol",
+            "force_refresh": force_refresh,
+            "poll_timeout_seconds": 1,
+            "poll_interval_seconds": 0,
+            "max_fetches_per_candidate": 10,
+            "max_ai_evidence_documents": 10,
+            "max_ai_entry_links": 10,
+            "max_remote_search_wait_seconds": 420,
+            "max_provider_pending_wait_seconds": 420,
+            "max_concurrent_candidate_analyses": 1,
+            "export_mode": "promoted_only",
+        },
+    )()
+
+
+def _w7g_proven_model_identity() -> dict[str, object]:
+    return {
+        "model": "gpt-5.6-sol",
+        "model_version": "gpt-5.6-sol",
+        "requested_model": "gpt-5.6-sol",
+        "response_model": "gpt-5.6-sol",
+        "effective_model": "gpt-5.6-sol",
+        "model_identity_provenance": "provider_response",
+        "model_fallback_used": False,
+    }
+
+
+def _w7g_ready_provider_health() -> dict[str, object]:
+    model_identity = _w7g_proven_model_identity()
+    model_identity.pop("model_version")
+    model_identity.pop("model_fallback_used")
+    return {
+        "status": "ok",
+        "providers": {
+            "model": {
+                "status": "ready",
+                "chat_status": "ready",
+                "circuit_open": False,
+                **model_identity,
+            }
+        },
+    }
+
+
+def _w7g_started_response() -> dict[str, object]:
+    return {
+        "status": "queued",
+        "batch": {"batch_id": "crm-public-web-batch-this-invocation"},
+        "runs": [
+            {
+                "batch_id": "crm-public-web-batch-this-invocation",
+                "run_id": "crm-public-web-run-this-invocation",
+                "crm_record_id": "crmrec_invocation_binding",
+                "status": "queued",
+            }
+        ],
+    }
+
+
+def _w7g_terminal_poll(*, run_id: str = "crm-public-web-run-this-invocation") -> dict[str, object]:
+    return {
+        "status": "ok",
+        "batches": [{"batch_id": "crm-public-web-batch-this-invocation", "status": "completed"}],
+        "runs": [
+            {
+                "batch_id": "crm-public-web-batch-this-invocation",
+                "run_id": run_id,
+                "crm_record_id": "crmrec_invocation_binding",
+                "status": "completed",
+            }
+        ],
+    }
+
+
+def _w7g_terminal_detail(*, run_id: str = "crm-public-web-run-this-invocation") -> dict[str, object]:
+    return {
+        "status": "ok",
+        "crm_record_id": "crmrec_invocation_binding",
+        "latest_run": {
+            "batch_id": "crm-public-web-batch-this-invocation",
+            "run_id": run_id,
+            "status": "completed",
+            "analysis": {"phase_metrics": _w7g_proven_model_identity()},
+        },
+    }
+
+
+def test_w7g_live_runner_binds_poll_and_detail_to_start_identity(monkeypatch) -> None:
+    runner = _load_crm_public_web_live_validation_module()
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+    def fake_request_json(method: str, _base_url: str, endpoint: str, payload=None):
+        calls.append((method, endpoint, payload))
+        if endpoint == runner.CANONICAL_ENDPOINTS["provider_health"]:
+            return _w7g_ready_provider_health()
+        if endpoint == runner.CANONICAL_ENDPOINTS["start"]:
+            return _w7g_started_response()
+        if endpoint == runner.CANONICAL_ENDPOINTS["poll"]:
+            return _w7g_terminal_poll()
+        return _w7g_terminal_detail()
+
+    monkeypatch.setattr(runner, "_request_json", fake_request_json)
+    monkeypatch.setattr(runner, "_request_bytes", lambda *_args, **_kwargs: {"status": "ok"})
+    failures: list[str] = []
+    result = runner._run_live(_w7g_live_runner_args(), failures, [])
+
+    assert failures == []
+    assert result["invocation_identity"] == {
+        "batch_id": "crm-public-web-batch-this-invocation",
+        "run_ids_by_crm_record_id": {
+            "crmrec_invocation_binding": "crm-public-web-run-this-invocation",
+        },
+    }
+    poll_calls = [call for call in calls if call[1] == runner.CANONICAL_ENDPOINTS["poll"]]
+    assert poll_calls == [
+        ("POST", runner.CANONICAL_ENDPOINTS["poll"], {"batch_id": "crm-public-web-batch-this-invocation"})
+    ]
+    start_calls = [call for call in calls if call[1] == runner.CANONICAL_ENDPOINTS["start"]]
+    assert len(start_calls) == 1
+    assert start_calls[0][2]["force_refresh"] is True
+
+
+def test_w7g_run_live_rejects_missing_force_refresh_before_any_request(monkeypatch) -> None:
+    runner = _load_crm_public_web_live_validation_module()
+    request_calls: list[tuple[object, ...]] = []
+    monkeypatch.setattr(runner, "_request_json", lambda *args, **_kwargs: request_calls.append(args))
+    failures: list[str] = []
+
+    result = runner._run_live(_w7g_live_runner_args(force_refresh=False), failures, [])
+
+    assert request_calls == []
+    assert failures == ["--execute-live requires --force-refresh before any backend or provider request"]
+    assert result == {"provider_health": {}, "start": {}, "poll_history": [], "details": {}, "export": {}}
+
+
+def test_w7g_live_runner_rejects_stale_poll_run_identity(monkeypatch) -> None:
+    runner = _load_crm_public_web_live_validation_module()
+    detail_called = False
+    export_called = False
+
+    def fake_request_json(method: str, _base_url: str, endpoint: str, payload=None):
+        nonlocal detail_called
+        if endpoint == runner.CANONICAL_ENDPOINTS["provider_health"]:
+            return _w7g_ready_provider_health()
+        if endpoint == runner.CANONICAL_ENDPOINTS["start"]:
+            return _w7g_started_response()
+        if endpoint == runner.CANONICAL_ENDPOINTS["poll"]:
+            return _w7g_terminal_poll(run_id="crm-public-web-run-stale")
+        detail_called = True
+        return _w7g_terminal_detail()
+
+    def fake_request_bytes(*_args, **_kwargs):
+        nonlocal export_called
+        export_called = True
+        return {"status": "ok"}
+
+    monkeypatch.setattr(runner, "_request_json", fake_request_json)
+    monkeypatch.setattr(runner, "_request_bytes", fake_request_bytes)
+    failures: list[str] = []
+    result = runner._run_live(_w7g_live_runner_args(), failures, [])
+
+    assert any("poll: returned run identities do not match this invocation" in failure for failure in failures)
+    assert detail_called is False
+    assert export_called is False
+    assert result["details"] == {}
+    assert result["export"] == {}
+
+
+def test_w7g_live_runner_rejects_concurrent_latest_run_as_model_proof(monkeypatch) -> None:
+    runner = _load_crm_public_web_live_validation_module()
+    export_called = False
+
+    def fake_request_json(method: str, _base_url: str, endpoint: str, payload=None):
+        if endpoint == runner.CANONICAL_ENDPOINTS["provider_health"]:
+            return _w7g_ready_provider_health()
+        if endpoint == runner.CANONICAL_ENDPOINTS["start"]:
+            return _w7g_started_response()
+        if endpoint == runner.CANONICAL_ENDPOINTS["poll"]:
+            return _w7g_terminal_poll()
+        return _w7g_terminal_detail(run_id="crm-public-web-run-concurrent-newer")
+
+    def fake_request_bytes(*_args, **_kwargs):
+        nonlocal export_called
+        export_called = True
+        return {"status": "ok"}
+
+    monkeypatch.setattr(runner, "_request_json", fake_request_json)
+    monkeypatch.setattr(runner, "_request_bytes", fake_request_bytes)
+    failures: list[str] = []
+    result = runner._run_live(_w7g_live_runner_args(), failures, [])
+
+    assert failures == [
+        "detail:crmrec_invocation_binding: latest_run.run_id crm-public-web-run-concurrent-newer "
+        "does not match this invocation crm-public-web-run-this-invocation"
+    ]
+    assert export_called is False
+    assert result["export"] == {}
+
+
+def test_w7g_live_runner_never_exports_after_poll_or_model_proof_failure(monkeypatch) -> None:
+    runner = _load_crm_public_web_live_validation_module()
+
+    for scenario, expected_failure in (
+        ("poll_http", "poll: endpoint returned non-success response"),
+        ("poll_failed_batch", "batch reached failed/cancelled terminal state"),
+        ("poll_failed_run", "runs reached failed/cancelled terminal states"),
+        ("detail_http", "detail:crmrec_invocation_binding: endpoint returned non-success response"),
+        ("model_mismatch", "response_model gpt-5.5 does not match gpt-5.6-sol"),
+    ):
+        export_calls: list[dict[str, object]] = []
+
+        def fake_request_json(method: str, _base_url: str, endpoint: str, payload=None):
+            if endpoint == runner.CANONICAL_ENDPOINTS["provider_health"]:
+                return _w7g_ready_provider_health()
+            if endpoint == runner.CANONICAL_ENDPOINTS["start"]:
+                return _w7g_started_response()
+            if endpoint == runner.CANONICAL_ENDPOINTS["poll"]:
+                if scenario == "poll_http":
+                    return {"status": "http_error", "http_status": 503, "reason": "temporary outage"}
+                poll = _w7g_terminal_poll()
+                if scenario == "poll_failed_batch":
+                    poll["batches"][0]["status"] = "failed"
+                if scenario == "poll_failed_run":
+                    poll["runs"][0]["status"] = "failed"
+                return poll
+            if scenario == "detail_http":
+                return {"status": "http_error", "http_status": 503, "reason": "temporary outage"}
+            detail = _w7g_terminal_detail()
+            if scenario == "model_mismatch":
+                detail["latest_run"]["analysis"]["phase_metrics"]["response_model"] = "gpt-5.5"
+            return detail
+
+        def fake_request_bytes(_method: str, _base_url: str, _endpoint: str, payload: dict[str, object]):
+            export_calls.append(payload)
+            return {"status": "ok"}
+
+        monkeypatch.setattr(runner, "_request_json", fake_request_json)
+        monkeypatch.setattr(runner, "_request_bytes", fake_request_bytes)
+        failures: list[str] = []
+        result = runner._run_live(_w7g_live_runner_args(), failures, [])
+
+        assert any(expected_failure in failure for failure in failures), scenario
+        assert export_calls == [], scenario
+        assert result["export"] == {}, scenario
 
 
 def test_person_and_company_asset_media_contract_tracks_unfinished_boundaries() -> None:

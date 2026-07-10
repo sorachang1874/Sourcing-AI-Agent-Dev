@@ -6698,7 +6698,7 @@ class SourcingOrchestrator:
         offset = 0
         page_size = 500
         while True:
-            members = self.store.list_serving_projection_members(
+            members = self.store.repos.serving_projection.list_members(
                 projection_id,
                 visible_only=True,
                 offset=offset,
@@ -6751,7 +6751,7 @@ class SourcingOrchestrator:
         existing = dict(existing_projection or {})
         if not existing:
             return False
-        existing_member_count = self.store.count_serving_projection_members(
+        existing_member_count = self.store.repos.serving_projection.count_members(
             str(existing.get("projection_id") or "").strip(),
             visible_only=True,
         )
@@ -6868,10 +6868,10 @@ class SourcingOrchestrator:
                 "reason": "projection_members_empty",
                 "projection_id": projection_id,
             }
-        before_visible_count = self.store.count_serving_projection_members(projection_id, visible_only=True)
-        updated_member_count = self.store.upsert_serving_projection_members(projection_id, members)
-        after_visible_count = self.store.count_serving_projection_members(projection_id, visible_only=True)
-        readiness_counts = self.store.count_serving_projection_members_by_readiness(
+        before_visible_count = self.store.repos.serving_projection.count_members(projection_id, visible_only=True)
+        updated_member_count = self.store.repos.serving_projection.upsert_members(projection_id, members)
+        after_visible_count = self.store.repos.serving_projection.count_members(projection_id, visible_only=True)
+        readiness_counts = self.store.repos.serving_projection.count_members_by_readiness(
             projection_id,
             visible_only=True,
         )
@@ -6994,8 +6994,8 @@ class SourcingOrchestrator:
         if not candidate_ids:
             return [dict(member) for member in list(members or []) if isinstance(member, dict)]
 
-        existing_count = self.store.count_serving_projection_members(normalized_projection_id, visible_only=False)
-        existing_members = self.store.list_serving_projection_members(
+        existing_count = self.store.repos.serving_projection.count_members(normalized_projection_id, visible_only=False)
+        existing_members = self.store.repos.serving_projection.list_members(
             normalized_projection_id,
             visible_only=False,
             limit=max(existing_count + len(list(members or [])) + 10, 100),
@@ -7865,7 +7865,7 @@ class SourcingOrchestrator:
         normalized_job_id = str(job_id or "").strip()
         if not normalized_job_id or not projection_id or not collection_id:
             return {"status": "skipped", "reason": "collection_merge_scope_missing"}
-        member_count = self.store.count_serving_projection_members(projection_id, visible_only=True)
+        member_count = self.store.repos.serving_projection.count_members(projection_id, visible_only=True)
         if member_count <= 0:
             member_count = _coerce_int(dict(projection.get("counts") or {}).get("visible_member_count"), 0)
         projection_input_version = self._projection_person_search_index_input_version(
@@ -8303,7 +8303,7 @@ class SourcingOrchestrator:
             }
         normalized_job_id = str(job_id or projection.get("source_run_id") or normalized_projection_id).strip()
         projection_updated_at = str(projection.get("updated_at") or "").strip()
-        member_count = self.store.count_serving_projection_members(normalized_projection_id, visible_only=True)
+        member_count = self.store.repos.serving_projection.count_members(normalized_projection_id, visible_only=True)
         projection_index_input_version = self._projection_person_search_index_input_version(
             projection,
             member_count=member_count,
@@ -8527,7 +8527,7 @@ class SourcingOrchestrator:
         normalized_person_key = str(person_identity_key or "").strip()
         if not normalized_person_key:
             return {"status": "skipped", "reason": "person_identity_key_missing", "enqueued_count": 0}
-        members = self.store.list_serving_projection_members_by_person_identity(
+        members = self.store.repos.serving_projection.list_members_by_person_identity(
             normalized_person_key,
             limit=1000,
         )
@@ -8594,7 +8594,7 @@ class SourcingOrchestrator:
                 )
             )
             return {"status": "deferred", "reason": "projection_missing", "item": failed_item}
-        current_member_count = self.store.count_serving_projection_members(projection_id, visible_only=True)
+        current_member_count = self.store.repos.serving_projection.count_members(projection_id, visible_only=True)
         item_projection_index_input_version = str(metadata.get("projection_index_input_version") or "").strip()
         current_projection_index_input_version = self._projection_person_search_index_input_version(
             projection,
@@ -9267,7 +9267,7 @@ class SourcingOrchestrator:
         offset = 0
         resolved_page_size = max(1, min(5000, int(page_size or 1000)))
         while True:
-            page = self.store.list_serving_projection_members(
+            page = self.store.repos.serving_projection.list_members(
                 normalized_projection_id,
                 offset=offset,
                 limit=resolved_page_size,
@@ -10478,7 +10478,7 @@ class SourcingOrchestrator:
         run_projection_id = str(run_projection_link.get("projection_id") or "").strip()
         run_projection = self.store.repos.serving_projection.get(run_projection_id) if run_projection_id else {}
         run_projection_member_count = (
-            self.store.count_serving_projection_members(run_projection_id, visible_only=True)
+            self.store.repos.serving_projection.count_members(run_projection_id, visible_only=True)
             if run_projection_id
             else 0
         )
@@ -17569,7 +17569,7 @@ class SourcingOrchestrator:
         existing_link = self.store.repos.serving_projection.get_run_link(workflow_run_id)
         existing_projection_id = str(existing_link.get("projection_id") or "").strip()
         existing_visible_count = (
-            self.store.count_serving_projection_members(existing_projection_id, visible_only=True)
+            self.store.repos.serving_projection.count_members(existing_projection_id, visible_only=True)
             if existing_projection_id
             else 0
         )
@@ -17724,10 +17724,10 @@ class SourcingOrchestrator:
         projection = dict(publication.get("projection") or {})
         projection_id = str(projection.get("projection_id") or "").strip()
         visible_count = (
-            self.store.count_serving_projection_members(projection_id, visible_only=True) if projection_id else 0
+            self.store.repos.serving_projection.count_members(projection_id, visible_only=True) if projection_id else 0
         )
         readiness_counts = (
-            self.store.count_serving_projection_members_by_readiness(projection_id) if projection_id else {}
+            self.store.repos.serving_projection.count_members_by_readiness(projection_id) if projection_id else {}
         )
         if projection_id:
             self.store.repos.serving_projection.upsert(
@@ -20048,7 +20048,9 @@ class SourcingOrchestrator:
         overlay_path_value = str(overlay_info_payload.get("path") or "").strip()
         projection_member_count = 0
         if use_projection_source:
-            projection_member_count = self.store.count_serving_projection_members(projection_id, visible_only=True)
+            projection_member_count = self.store.repos.serving_projection.count_members(
+                projection_id, visible_only=True
+            )
             if projection_member_count <= 0:
                 return {"status": "skipped", "reason": "projection_build_members_missing"}
             projection_payload = dict(projection or {})
@@ -20339,7 +20341,7 @@ class SourcingOrchestrator:
                 )
             )
             return {"status": "deferred", "reason": "serving_projection_missing", "item": failed_item}
-        total_count = self.store.count_serving_projection_members(projection_id, visible_only=True)
+        total_count = self.store.repos.serving_projection.count_members(projection_id, visible_only=True)
         if total_count <= 0:
             completed_metadata = {
                 "completed_by": str(lease_owner or "").strip(),
@@ -20417,7 +20419,7 @@ class SourcingOrchestrator:
             ),
         )
         started_monotonic = time.perf_counter()
-        members = self.store.list_serving_projection_members(
+        members = self.store.repos.serving_projection.list_members(
             projection_id,
             offset=cursor,
             limit=resolved_chunk_size,
@@ -20545,7 +20547,9 @@ class SourcingOrchestrator:
                     },
                 }
             )
-        updated_member_count = self.store.upsert_serving_projection_members(projection_id, updates) if updates else 0
+        updated_member_count = (
+            self.store.repos.serving_projection.upsert_members(projection_id, updates) if updates else 0
+        )
         cursor += len(members)
         elapsed_ms = int(max(0.0, (time.perf_counter() - started_monotonic) * 1000))
         state.update(
@@ -27939,11 +27943,13 @@ class SourcingOrchestrator:
         members: list[dict[str, Any]] = []
         if keys:
             for key in keys[:250]:
-                member = self.store.get_serving_projection_member(normalized_projection_id, key)
+                member = self.store.repos.serving_projection.get_member(normalized_projection_id, key)
                 if member:
                     members.append(member)
         else:
-            members = self.store.list_serving_projection_members(normalized_projection_id, limit=250, visible_only=True)
+            members = self.store.repos.serving_projection.list_members(
+                normalized_projection_id, limit=250, visible_only=True
+            )
         person_keys = [
             str(member.get("person_identity_key") or "").strip()
             for member in members
@@ -28832,13 +28838,13 @@ class SourcingOrchestrator:
         members: list[dict[str, Any]] = []
         if requested_candidate_keys:
             for candidate_key in requested_candidate_keys[:limit]:
-                member = self.store.get_serving_projection_member(projection_id, candidate_key)
+                member = self.store.repos.serving_projection.get_member(projection_id, candidate_key)
                 if member and str(member.get("visibility_state") or "visible") == "visible":
                     members.append(member)
         else:
             offset = 0
             while len(members) < limit:
-                page = self.store.list_serving_projection_members(
+                page = self.store.repos.serving_projection.list_members(
                     projection_id,
                     offset=offset,
                     limit=min(page_size, limit - len(members)),
@@ -29284,7 +29290,7 @@ class SourcingOrchestrator:
                 "person_avatar_media_backfill_"
                 + hashlib.sha1(f"{projection_id}:{limit}:{force}".encode("utf-8")).hexdigest()[:16]
             )
-        members = self.store.list_serving_projection_members(
+        members = self.store.repos.serving_projection.list_members(
             projection_id,
             visible_only=True,
             limit=limit,
@@ -59760,7 +59766,7 @@ class SourcingOrchestrator:
             return False
         if str(projection.get("source_run_id") or "").strip() != normalized_job_id:
             return False
-        member_count = self.store.count_serving_projection_members(projection_id, visible_only=True)
+        member_count = self.store.repos.serving_projection.count_members(projection_id, visible_only=True)
         return member_count == served_candidate_count
 
     def _ensure_terminal_result_view_projection_proof(
@@ -59799,7 +59805,9 @@ class SourcingOrchestrator:
                 return {}
             if str(projection.get("source_run_id") or "").strip() != normalized_job_id:
                 return {}
-            member_count = self.store.count_serving_projection_members(normalized_projection_id, visible_only=True)
+            member_count = self.store.repos.serving_projection.count_members(
+                normalized_projection_id, visible_only=True
+            )
             if member_count != expected_count:
                 return {}
             return {
@@ -59897,7 +59905,7 @@ class SourcingOrchestrator:
                 "reason": "run_scope_projection_source_run_mismatch",
                 "projection_id": projection_id,
             }
-        member_count = self.store.count_serving_projection_members(projection_id, visible_only=True)
+        member_count = self.store.repos.serving_projection.count_members(projection_id, visible_only=True)
         if member_count != expected_count:
             return {
                 "status": "missing",

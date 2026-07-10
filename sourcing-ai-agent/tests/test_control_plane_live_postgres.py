@@ -205,6 +205,7 @@ class _FakeLiveControlPlanePostgresAdapter:
         "snapshot_materialization_runs",
         "serving_projections",
         "serving_projection_members",
+        "projection_person_search_index",
         "projection_manifest_shards",
         "run_projection_links",
         "collection_authoritative_pointers",
@@ -258,6 +259,7 @@ class _FakeLiveControlPlanePostgresAdapter:
         "snapshot_materialization_runs": ("run_id",),
         "serving_projections": ("projection_id",),
         "serving_projection_members": ("projection_id", "candidate_identity_key"),
+        "projection_person_search_index": ("projection_id", "candidate_identity_key"),
         "projection_manifest_shards": ("shard_id",),
         "run_projection_links": ("run_id", "link_type"),
         "collection_authoritative_pointers": ("collection_id",),
@@ -1499,7 +1501,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 "counts": {"candidate_count": 1},
             }
         )
-        member_count = store.upsert_serving_projection_members(
+        member_count = store.repos.serving_projection.upsert_members(
             "proj_pg_foundation",
             [
                 {
@@ -1524,8 +1526,8 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(shard["manifest_ref"], "s3://cold-path/proj_pg_foundation/shard-000.json")
         # postgres_only: serving-projection writes go through native writers (not the upsert/
         # bulk-upsert mirror); the return values above + the read-back below prove they reached PG.
-        self.assertEqual(store.count_serving_projection_members("proj_pg_foundation"), 1)
-        rows = store.list_serving_projection_members("proj_pg_foundation")
+        self.assertEqual(store.repos.serving_projection.count_members("proj_pg_foundation"), 1)
+        rows = store.repos.serving_projection.list_members("proj_pg_foundation")
         # postgres_only native read returns the store-enriched member summary (display_name /
         # person_identity_key derived); assert the round-tripped name rather than the raw input dict.
         self.assertEqual(rows[0]["public_summary"]["name"], "Test Candidate")
@@ -1552,6 +1554,65 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertIn("run_projection_links", {table_name for table_name, _row in adapter.upserts})
         self.assertIn("collection_authoritative_pointers", {table_name for table_name, _row in adapter.upserts})
 
+    def test_bulk_upsert_failures_are_loud_at_all_explicit_table_call_sites(self) -> None:
+        store = self._build_store(mode="postgres_only")
+        adapter = store._control_plane_postgres
+        assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
+
+        cases = [
+            (
+                "serving_projection_members",
+                lambda: store.repos.serving_projection.upsert_members(
+                    "proj-bulk-failure",
+                    [{"candidate_identity_key": "candidate:bulk-failure"}],
+                ),
+            ),
+            (
+                "projection_person_search_index",
+                lambda: store.upsert_projection_person_search_index_rows(
+                    "proj-bulk-failure",
+                    [{"candidate_identity_key": "candidate:bulk-failure", "indexed_text": "Bulk Failure"}],
+                ),
+            ),
+            (
+                "asset_membership_index",
+                lambda: store.register_asset_materialization(
+                    target_company="Bulk Failure Co",
+                    snapshot_id="snapshot-bulk-failure",
+                    asset_view="canonical_merged",
+                    artifact_kind="organization_asset",
+                    artifact_key="current",
+                    members=[{"member_key": "candidate:bulk-failure"}],
+                ),
+            ),
+            (
+                "candidate_materialization_state",
+                lambda: store.bulk_upsert_candidate_materialization_states(
+                    states=[
+                        {
+                            "target_company": "Bulk Failure Co",
+                            "snapshot_id": "snapshot-bulk-failure",
+                            "asset_view": "canonical_merged",
+                            "candidate_id": "candidate-bulk-failure",
+                        }
+                    ]
+                ),
+            ),
+        ]
+
+        for table_name, call in cases:
+            with self.subTest(table_name=table_name):
+                with mock.patch.object(
+                    adapter,
+                    "bulk_upsert_rows",
+                    side_effect=RuntimeError("bulk-upsert-boom"),
+                ):
+                    with self.assertRaises(RuntimeError) as raised:
+                        call()
+                self.assertIn(table_name, str(raised.exception))
+                self.assertIn("bulk_upsert_rows", str(raised.exception))
+                self.assertIn("bulk-upsert-boom", str(raised.exception))
+
     def test_serving_projection_foundation_mirrors_sqlite_writes(self) -> None:
         store = self._build_store(mode="postgres_only")
         adapter = store._control_plane_postgres
@@ -1566,7 +1627,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 "state": "serving",
             }
         )
-        store.upsert_serving_projection_members(
+        store.repos.serving_projection.upsert_members(
             "proj_pg_mirror",
             [
                 {

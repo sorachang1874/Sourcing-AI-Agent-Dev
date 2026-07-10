@@ -249,6 +249,8 @@ Before any live-provider CRM Public Web product validation, run the fast Contrac
 make ci-pre-agent-contract
 ```
 
+Then launch the canonical asynchronous W7g review command from `docs/INDEPENDENT_REVIEW_GATE.md` with an explicit `REVIEW_BASE="<pinned-base-SHA>"`. The review title, minimum files/tokens, and extra context in that command are contract inputs; environment variables may add W7g requirements but cannot replace the minimum. Record the runner-emitted `review_scope_digest_sha256`. Dirty-working-tree review output is reference-only and cannot unlock live/W6/manual or milestone signoff.
+
 `ci-pre-agent-contract` includes the guarded W7g dry-run entrypoint, so canonical endpoint planning, live-cost guards, legacy-path blockers, expected adjudication model metadata, and report generation are checked before any live provider pass. You can also run the dry-run target directly while preparing reviewed record ids:
 
 ```bash
@@ -256,7 +258,9 @@ make test-crm-public-web-live-product-validation \
   CRM_PUBLIC_WEB_LIVE_RECORD_IDS="crm_record_id_for_manual_validation"
 ```
 
-The dry-run report is the operator checklist for the real pass. It must include `live_prerequisites.ready_to_execute_live_with_current_args`, `live_prerequisites.missing_or_required_before_live`, `live_prerequisites.record_id_selection_guidance`, and `live_prerequisites.recommended_make_command`. Use that report to select 1-3 reviewed `CRMRecord` ids; do not use legacy target-candidate ids or dry-run evidence as live product-quality evidence.
+The dry-run report is the operator checklist for the real pass. It must include `live_prerequisites.ready_to_execute_live_with_current_args`, `live_prerequisites.missing_or_required_before_live`, `live_prerequisites.record_id_selection_guidance`, and `live_prerequisites.recommended_make_command`. A default dry run remains `dry_run_ready` without backend/provider access, while its prerequisite list explicitly includes `CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1`. Use that report to select 1-3 reviewed `CRMRecord` ids; do not use legacy target-candidate ids or dry-run evidence as live product-quality evidence.
+
+The real pass additionally requires `CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256=<review_scope_digest_sha256>` from that exact pinned request and `CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1`. The guarded runner checks the exact W7g title and scope digest through the shared artifact verifier and rejects missing force refresh before even requesting provider health. A prior or unrelated `GO`, a digest copied from another request, an environment value passed to the direct script instead of its `--force-refresh` flag, or an environment value that tries to replace the immutable W7g minimum fails closed. The product model is immutable at `gpt-5.6-sol`: Make exposes no expected-model override, and the direct CLI compatibility flag fails before backend/provider access unless it is exactly that value. For model-verifiable terminal runs, identity evidence must be co-located in `latest_run.analysis.phase_metrics`: `model`, `model_version`, `requested_model`, `response_model`, and `effective_model` must all exactly equal `gpt-5.6-sol`, `model_identity_provenance` must be `provider_response`, and fallback must be false. Provider-health evidence is checked in its own `providers.model` object and cannot fill missing run fields. The runner also binds the start response's nonempty `batch_id` and exact per-record `run_id` mapping into every poll and detail read; a missing identity, a record-scoped poll fallback, or a newer/stale `latest_run` fails closed and cannot supply model proof for this invocation.
 
 The live runner must preflight `GET /api/providers/health` before it creates a CRM Public Web batch. A cached provider-health `ready` response is not sufficient if the in-process model circuit is open; model-provider health must fail visibly with `provider_health` evidence and must not start DataForSEO or model adjudication work. This keeps relay outage, usage-limit, DNS, and circuit-open incidents separate from Public Web quality evaluation.
 
@@ -271,6 +275,7 @@ LIVE_CONFIRM=1 make test-env-backend-live
 LIVE_CONFIRM=1 make test-crm-public-web-live-product-validation \
   CRM_PUBLIC_WEB_LIVE_DRY_RUN=0 \
   CRM_PUBLIC_WEB_LIVE_RECORD_IDS_REVIEWED=1 \
+  CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1 \
   CRM_PUBLIC_WEB_LIVE_MAX_FETCHES_PER_CANDIDATE=10 \
   CRM_PUBLIC_WEB_LIVE_MAX_AI_ENTRY_LINKS=10 \
   CRM_PUBLIC_WEB_LIVE_MAX_AI_EVIDENCE_DOCUMENTS=10 \
@@ -288,7 +293,7 @@ SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA=public LIVE_CONFIRM=1 make test-env-backe
 
 Do not rely on SQLite fallback or ambient runtime inheritance. The live backend target must inject `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only` and `SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1` (it still exports the legacy `SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory` token, which is now an inert no-op — storage is PG-pure); a startup failure here is a contract failure, not a reason to bypass PG-only durable runtime.
 
-Set `CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1` when validating a model/provider metadata contract change, so the live pass regenerates Public Web artifacts instead of reusing already-terminal runs.
+Every real W7g pass must set `CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1`, so the live pass proves the current provider/model and product path instead of reusing an already-terminal run. The Make target requires that exact value and passes `--force-refresh`; direct `--execute-live` also requires its CLI flag and does not accept the environment variable as a substitute. The start request therefore always sends `force_refresh=true`.
 
 Use `CRM_PUBLIC_WEB_LIVE_MAX_FETCHES_PER_CANDIDATE` together with `CRM_PUBLIC_WEB_LIVE_MAX_AI_ENTRY_LINKS` and `CRM_PUBLIC_WEB_LIVE_MAX_AI_EVIDENCE_DOCUMENTS` for Public Web quality validation. The default guarded live pass uses `10/10/10` so the model sees a source-diversified search-result and document evidence packet large enough to evaluate provider recall and adjudication quality; lowering one side can make a poor result indistinguishable from an undersized model-input window.
 
@@ -296,11 +301,11 @@ Use `CRM_PUBLIC_WEB_LIVE_POLL_TIMEOUT_SECONDS=<seconds>` for force-refresh passe
 
 CRM Public Web phase commands are bounded activities, not generic "advance one step" calls. The owner must enforce expected input status per command, quarantine stale superseded-batch commands as no-op, plan missing downstream commands only when the same-batch run has already advanced, and put commands into `retry_wait` when prerequisites are not met. If live validation finds a phase command that re-runs a neighboring phase, self-links as its downstream command, or mutates a run from an older force-refresh batch, stop and add a fast operation-runtime regression before increasing `CRM_PUBLIC_WEB_LIVE_POLL_TIMEOUT_SECONDS`.
 
-`scripts/run_crm_public_web_live_product_validation.py` is the only guarded runner for this pass. It must use canonical CRM endpoints only, must reject `SOURCING_ALLOW_LEGACY_TARGET_PUBLIC_WEB_ENDPOINTS=1`, must require the configured expected model, currently `gpt-5.5`, in returned model metadata for model-verifiable terminal runs, must fail if model fallback is reported, and must write `output/w7g_crm_public_web_live_product_validation.json` by default. Do not use the retired `/api/target-candidates/public-web...` aliases for product validation.
+`scripts/run_crm_public_web_live_product_validation.py` is the only guarded runner for this pass. It must use canonical CRM endpoints only, must reject `SOURCING_ALLOW_LEGACY_TARGET_PUBLIC_WEB_ENDPOINTS=1`, and must require exact `requested_model == effective_model == expected_model` plus `model_identity_provenance=provider_response` in provider health and every model-verifiable terminal result. The immutable product model is `gpt-5.6-sol`; missing response identity, any mismatch, or model fallback fails the gate. The runner writes `output/w7g_crm_public_web_live_product_validation.json` by default. Do not use the retired `/api/target-candidates/public-web...` aliases for product validation.
 
 - Scope must stay small: 1-3 existing CRM records with LinkedIn/profile identity already visible on a projection board. Do not use a large candidate selection for the first live pass.
-- Preconditions: `MODEL_PROVIDER_MODEL` or local `model_provider.model` resolves to `gpt-5.5`; DataForSEO credentials are configured; provider mode is live/empty rather than `scripted` / `simulate` / `replay`.
-- Start through canonical CRM APIs only: `POST /api/crm/records/public-web-search` with `crm_record_ids`, then poll `POST /api/crm/records/public-web-search/poll`. Do not enable `SOURCING_ALLOW_LEGACY_TARGET_PUBLIC_WEB_ENDPOINTS`.
+- Preconditions: `MODEL_PROVIDER_MODEL` or local `model_provider.model` resolves to `gpt-5.6-sol`; the service was restarted after the configuration change; DataForSEO credentials are configured; provider mode is live/empty rather than `scripted` / `simulate` / `replay`. The first post-upgrade pass must prove `/models` availability, an actual Responses generation, exact returned model provenance, and no fallback; the checked-in dry run does not make that live claim.
+- Start through canonical CRM APIs only: `POST /api/crm/records/public-web-search` with `crm_record_ids` and `force_refresh=true`, then poll `POST /api/crm/records/public-web-search/poll`. Do not enable `SOURCING_ALLOW_LEGACY_TARGET_PUBLIC_WEB_ENDPOINTS`.
 - Drive recovery through the normal worker/recovery owner until the batch is terminal. Service metrics must show `public_web_storage_owner=crm_public_web_v1`, `public_web_execution_backend=crm_public_web_v1`, and a succeeded `crm.public_web.queue_batch` command owned by `crm_public_web_owner`.
 - Inspect at least one detail drawer payload from `GET /api/crm/records/{crm_record_id}/public-web-search`; verify signals are model-safe, evidence links are usable, dirty URL-shape warnings are visible, and raw HTML/PDF/search payloads are not exposed.
 - Promote one clean publishable signal if available, or verify the manual override path requires `override_reason` for a non-publishable/dirty signal. Promotion must write CRM-owned promotion + `PersonAssertion` + CRM event without creating target-candidate bridge rows.

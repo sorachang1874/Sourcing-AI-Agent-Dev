@@ -6,7 +6,7 @@ import os
 import re
 import threading
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from hashlib import sha1
 from pathlib import Path
 from typing import Any
@@ -29,31 +29,21 @@ from .control_plane_live_postgres import (
     LiveControlPlanePostgresAdapter,
     resolve_control_plane_postgres_live_mode,
 )
-from .domain import Candidate, EvidenceRecord, JobRequest, normalize_candidate
-from .linkedin_url_normalization import (
-    normalize_linkedin_profile_url_key as _normalize_linkedin_profile_url_key,
-)
+from .control_plane_serde import json_safe_payload as _control_plane_json_safe_payload
 from .control_plane_time import (
     is_sqlite_timestamp_expired as _is_sqlite_timestamp_expired,
 )
 from .control_plane_time import (
     parse_sqlite_timestamp as _parse_sqlite_timestamp,
 )
-from .local_postgres import resolve_control_plane_postgres_dsn
-from .control_plane_serde import json_safe_payload as _control_plane_json_safe_payload
-from .repositories import ControlPlaneRepositories
-from .repositories import public_web as _public_web_repo
-from .repositories import serving_projection as _serving_projection_repo
-from .repositories import workflow_runtime as _workflow_runtime_repo
-from .repositories import person_company_assets as _person_company_assets_repo
-from .repositories import crm_core as _crm_core_repo
-from .person_identity import (
-    build_person_summary_view as _build_person_summary_view,
+from .domain import Candidate, EvidenceRecord, JobRequest, normalize_candidate
+from .linkedin_url_normalization import (
+    normalize_linkedin_profile_url_key as _normalize_linkedin_profile_url_key,
 )
+from .local_postgres import resolve_control_plane_postgres_dsn
 from .person_identity import (
     resolve_candidate_identity_key as _resolve_candidate_identity_key,
 )
-from .public_web_signal_identity import public_web_signal_id_for_identity
 from .person_identity import resolve_person_identity_key as _resolve_person_identity_key
 from .person_identity import resolve_profile_url_key as _resolve_profile_url_key
 from .public_candidate_facets import (
@@ -61,11 +51,16 @@ from .public_candidate_facets import (
 )
 from .public_candidate_facets import candidate_page_filter_active as _candidate_page_filter_active
 from .public_candidate_facets import candidate_page_filter_text as _candidate_page_filter_text
+from .public_web_signal_identity import public_web_signal_id_for_identity
+from .repositories import ControlPlaneRepositories
+from .repositories import crm_core as _crm_core_repo
+from .repositories import person_company_assets as _person_company_assets_repo
+from .repositories import public_web as _public_web_repo
+from .repositories import serving_projection as _serving_projection_repo
+from .repositories import workflow_runtime as _workflow_runtime_repo
 from .request_matching import (
     MATCH_THRESHOLD,
     build_request_family_match_explanation,
-    build_request_matching_bundle,
-    matching_request_family_signature,
     matching_request_signature,
     request_family_score,
     request_family_signature,
@@ -169,8 +164,6 @@ _CONTROL_PLANE_POSTGRES_NATIVE_TABLES = {
     "reawaken_waiting_prerequisite_job_materialization_items": "job_materialization_items",
     "list_latest_target_candidate_public_web_runs_by_record_ids": "target_candidate_public_web_runs",
     "list_latest_crm_public_web_runs_by_record_ids": "crm_public_web_runs",
-    "upsert_serving_projection_members": "serving_projection_members",
-    "replace_serving_projection_members": "serving_projection_members",
     "replace_projection_person_search_index": "projection_person_search_index",
     "upsert_raw_profile_index": "raw_profile_index",
     "upsert_candidate_evidence_index": "candidate_evidence_index",
@@ -9870,404 +9863,8 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] if "updated_at" in row_keys else dict(row).get("updated_at") or ""),
         }
 
-    def _serving_projection_member_from_row(self, row: Any) -> dict[str, Any]:
-        if row is None:
-            return {}
-        return {
-            "projection_id": str(_row_value(row, "projection_id") or ""),
-            "candidate_identity_key": str(_row_value(row, "candidate_identity_key") or ""),
-            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
-            "profile_url_key": str(_row_value(row, "profile_url_key") or ""),
-            "candidate_id": str(_row_value(row, "candidate_id") or ""),
-            "rank_index": _normalize_projection_rank_index(_row_value(row, "rank_index")),
-            "rank_key": str(_row_value(row, "rank_key") or ""),
-            "lane": str(_row_value(row, "lane") or ""),
-            "employment_scope": str(_row_value(row, "employment_scope") or ""),
-            "source_shard_key": str(_row_value(row, "source_shard_key") or ""),
-            "source_run_id": str(_row_value(row, "source_run_id") or ""),
-            "row_readiness": str(_row_value(row, "row_readiness") or ""),
-            "profile_readiness": str(_row_value(row, "profile_readiness") or ""),
-            "card_readiness": str(_row_value(row, "card_readiness") or ""),
-            "visibility_state": str(_row_value(row, "visibility_state") or ""),
-            "public_summary": _loads_json_dict(_row_value(row, "public_summary_json")),
-            "projection_metrics": _loads_json_dict(_row_value(row, "projection_metrics_json")),
-            "crm_overlay_summary": _loads_json_dict(_row_value(row, "crm_overlay_summary_json")),
-            "provenance": _loads_json_dict(_row_value(row, "provenance_json")),
-            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
-            "published_at": str(_row_value(row, "published_at") or ""),
-            "created_at": str(_row_value(row, "created_at") or ""),
-            "updated_at": str(_row_value(row, "updated_at") or ""),
-        }
-
     def _projection_person_search_index_from_row(self, row: Any) -> dict[str, Any]:
         return _serving_projection_repo.PROJECTION_PERSON_SEARCH_INDEX.from_row(row)
-
-    def _serving_projection_member_row_payload(
-        self,
-        projection_id: str,
-        member: dict[str, Any],
-        *,
-        existing: dict[str, Any] | None = None,
-        now: str = "",
-    ) -> dict[str, Any]:
-        normalized_member = dict(member or {})
-        public_summary = _normalize_json_object_payload(
-            normalized_member.get("public_summary") or normalized_member.get("public_summary_json")
-        )
-        profile_url_key = _resolve_profile_url_key(
-            normalized_member.get("profile_url_key"),
-            public_summary.get("profile_url_key"),
-            normalized_member.get("linkedin_url"),
-            public_summary.get("linkedin_url"),
-            public_summary.get("profile_url"),
-        )
-        candidate_id = str(normalized_member.get("candidate_id") or public_summary.get("candidate_id") or "").strip()
-        person_identity_key = _resolve_person_identity_key(
-            person_identity_key=str(normalized_member.get("person_identity_key") or ""),
-            profile_url_key=profile_url_key,
-            linkedin_url=str(normalized_member.get("linkedin_url") or public_summary.get("linkedin_url") or ""),
-            candidate_identity_key=str(normalized_member.get("candidate_identity_key") or ""),
-            candidate_id=candidate_id,
-        )
-        candidate_identity_key = _resolve_candidate_identity_key(
-            candidate_identity_key=str(normalized_member.get("candidate_identity_key") or ""),
-            person_identity_key=person_identity_key,
-            profile_url_key=profile_url_key,
-            linkedin_url=str(normalized_member.get("linkedin_url") or public_summary.get("linkedin_url") or ""),
-            candidate_id=candidate_id,
-        )
-        public_summary = {
-            **public_summary,
-            **_build_person_summary_view(
-                public_summary,
-                candidate_id=candidate_id,
-                profile_url_key=profile_url_key,
-                person_identity_key=person_identity_key,
-                source_projection_id=projection_id,
-                source_run_id=str(normalized_member.get("source_run_id") or ""),
-            ),
-        }
-        timestamp = str(now or _utc_now_timestamp())
-        return {
-            "projection_id": projection_id,
-            "candidate_identity_key": candidate_identity_key,
-            "person_identity_key": person_identity_key or candidate_identity_key,
-            "profile_url_key": profile_url_key,
-            "candidate_id": candidate_id,
-            "rank_index": _normalize_projection_rank_index(normalized_member.get("rank_index")),
-            "rank_key": str(normalized_member.get("rank_key") or "").strip(),
-            "lane": str(normalized_member.get("lane") or "").strip(),
-            "employment_scope": _normalize_employment_scope(normalized_member.get("employment_scope")),
-            "source_shard_key": str(normalized_member.get("source_shard_key") or "").strip(),
-            "source_run_id": str(normalized_member.get("source_run_id") or "").strip(),
-            "row_readiness": str(normalized_member.get("row_readiness") or "ready").strip() or "ready",
-            "profile_readiness": str(normalized_member.get("profile_readiness") or "unknown").strip() or "unknown",
-            "card_readiness": str(normalized_member.get("card_readiness") or "unknown").strip() or "unknown",
-            "visibility_state": str(normalized_member.get("visibility_state") or "visible").strip() or "visible",
-            "public_summary_json": json.dumps(public_summary, ensure_ascii=False),
-            "projection_metrics_json": json.dumps(
-                _normalize_json_object_payload(
-                    normalized_member.get("projection_metrics") or normalized_member.get("projection_metrics_json")
-                ),
-                ensure_ascii=False,
-            ),
-            "crm_overlay_summary_json": json.dumps(
-                _normalize_json_object_payload(
-                    normalized_member.get("crm_overlay_summary") or normalized_member.get("crm_overlay_summary_json")
-                ),
-                ensure_ascii=False,
-            ),
-            "provenance_json": json.dumps(
-                _normalize_json_object_payload(normalized_member.get("provenance") or normalized_member.get("provenance_json")),
-                ensure_ascii=False,
-            ),
-            "metadata_json": json.dumps(
-                _normalize_json_object_payload(normalized_member.get("metadata") or normalized_member.get("metadata_json")),
-                ensure_ascii=False,
-            ),
-            "published_at": str(normalized_member.get("published_at") or "").strip(),
-            "created_at": str((existing or {}).get("created_at") or normalized_member.get("created_at") or timestamp),
-            "updated_at": timestamp,
-        }
-
-    def upsert_serving_projection_members(
-        self,
-        projection_id: str,
-        members: list[dict[str, Any]] | tuple[dict[str, Any], ...],
-    ) -> int:
-        normalized_projection_id = str(projection_id or "").strip()
-        if not normalized_projection_id:
-            return 0
-        normalized_by_key: dict[str, dict[str, Any]] = {}
-        for member in list(members or []):
-            if not isinstance(member, dict):
-                continue
-            public_summary = _normalize_json_object_payload(member.get("public_summary") or member.get("public_summary_json"))
-            profile_url_key = _resolve_profile_url_key(
-                member.get("profile_url_key"),
-                public_summary.get("profile_url_key"),
-                member.get("linkedin_url"),
-                public_summary.get("linkedin_url"),
-                public_summary.get("profile_url"),
-            )
-            candidate_identity_key = _resolve_candidate_identity_key(
-                candidate_identity_key=str(member.get("candidate_identity_key") or ""),
-                person_identity_key=str(member.get("person_identity_key") or ""),
-                profile_url_key=profile_url_key,
-                linkedin_url=str(member.get("linkedin_url") or public_summary.get("linkedin_url") or ""),
-                candidate_id=str(member.get("candidate_id") or public_summary.get("candidate_id") or ""),
-            )
-            if not candidate_identity_key:
-                continue
-            normalized_by_key[candidate_identity_key] = dict(member)
-        if not normalized_by_key:
-            return 0
-        now = _utc_now_timestamp()
-        if self._control_plane_postgres_should_prefer_read("serving_projection_members"):
-            member_keys = list(normalized_by_key.keys())
-            existing_by_key = {
-                str(item.get("candidate_identity_key") or "").strip(): item
-                for item in self.list_serving_projection_members_by_identity_keys(
-                    normalized_projection_id,
-                    member_keys,
-                )
-                if str(item.get("candidate_identity_key") or "").strip()
-            }
-            row_payloads = [
-                self._serving_projection_member_row_payload(
-                    normalized_projection_id,
-                    member,
-                    existing=existing_by_key.get(candidate_identity_key),
-                    now=now,
-                )
-                for candidate_identity_key, member in normalized_by_key.items()
-            ]
-            return int(
-                self._call_control_plane_postgres_native(
-                    "bulk_upsert_rows",
-                    "serving_projection_members",
-                    row_payloads,
-                )
-                or 0
-            )
-        raise RuntimeError(
-            "postgres-only invariant violated for serving_projection_members in upsert_serving_projection_members: should_prefer_read "
-            "returned False; legacy SQLite tail retired (B4)"
-        )
-
-    def replace_serving_projection_members(
-        self,
-        projection_id: str,
-        members: list[dict[str, Any]] | tuple[dict[str, Any], ...],
-    ) -> int:
-        normalized_projection_id = str(projection_id or "").strip()
-        if not normalized_projection_id:
-            return 0
-        if self._control_plane_postgres_should_prefer_read("serving_projection_members"):
-            try:
-                self._call_control_plane_postgres_native(
-                    "delete_rows",
-                    table_name="serving_projection_members",
-                    where_sql="projection_id = %s",
-                    params=[normalized_projection_id],
-                )
-                return self.upsert_serving_projection_members(normalized_projection_id, members)
-            except Exception as exc:
-                if self._control_plane_postgres_should_skip_sqlite_fallback("serving_projection_members"):
-                    self._raise_control_plane_postgres_write_failure(
-                        table_name="serving_projection_members",
-                        method_name="replace_serving_projection_members",
-                        reason=f"{type(exc).__name__}: {exc}",
-                        error=exc,
-                    )
-        raise RuntimeError(
-            "postgres-only invariant violated for serving_projection_members in replace_serving_projection_members: should_prefer_read "
-            "returned False; legacy SQLite tail retired (B4)"
-        )
-
-    def list_serving_projection_members(
-        self,
-        projection_id: str,
-        *,
-        limit: int = 100,
-        offset: int = 0,
-        visible_only: bool = True,
-    ) -> list[dict[str, Any]]:
-        normalized_projection_id = str(projection_id or "").strip()
-        if not normalized_projection_id:
-            return []
-        normalized_limit = max(1, int(limit or 100))
-        normalized_offset = max(0, int(offset or 0))
-        clauses = ["projection_id = ?"]
-        params: list[Any] = [normalized_projection_id]
-        if visible_only:
-            clauses.append("visibility_state = ?")
-            params.append("visible")
-        where_sqlite = " AND ".join(clauses)
-        postgres_rows = self._select_control_plane_rows(
-            "serving_projection_members",
-            row_builder=self._serving_projection_member_from_row,
-            where_sql=where_sqlite.replace("?", "%s"),
-            params=params,
-            order_by_sql="rank_index ASC, candidate_identity_key ASC",
-            limit=normalized_limit,
-            offset=normalized_offset,
-        )
-        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only, so
-        # should_skip_sqlite_fallback is always true and the SQLite fallback below is dead. Removed;
-        # the PG read is authoritative.
-        if not postgres_rows:
-            return []
-        return postgres_rows
-
-    def list_serving_projection_members_by_identity_keys(
-        self,
-        projection_id: str,
-        candidate_identity_keys: list[str] | tuple[str, ...] | set[str],
-    ) -> list[dict[str, Any]]:
-        normalized_projection_id = str(projection_id or "").strip()
-        if not normalized_projection_id:
-            return []
-        normalized_keys = [
-            str(key or "").strip()
-            for key in dict.fromkeys(candidate_identity_keys or [])
-            if str(key or "").strip()
-        ]
-        if not normalized_keys:
-            return []
-
-        rows: list[dict[str, Any]] = []
-        # Keep parameter counts comfortably below very large postgres IN clauses on
-        # production-scale projection publish paths.
-        # Track B B3.2: PG is authoritative under postgres_only; the parallel SQLite chunk loop is dead
-        # and removed.
-        chunk_size = 500
-        for offset in range(0, len(normalized_keys), chunk_size):
-            chunk = normalized_keys[offset : offset + chunk_size]
-            placeholders = ", ".join("%s" for _ in chunk)
-            rows.extend(
-                self._select_control_plane_rows(
-                    "serving_projection_members",
-                    row_builder=self._serving_projection_member_from_row,
-                    where_sql=f"projection_id = %s AND candidate_identity_key IN ({placeholders})",
-                    params=[normalized_projection_id, *chunk],
-                    order_by_sql="rank_index ASC, candidate_identity_key ASC",
-                    limit=0,
-                )
-            )
-        return rows
-
-    def list_serving_projection_members_by_person_identity(
-        self,
-        person_identity_key: str,
-        *,
-        limit: int = 100,
-    ) -> list[dict[str, Any]]:
-        normalized_person_key = str(person_identity_key or "").strip()
-        if not normalized_person_key:
-            return []
-        normalized_limit = max(1, int(limit or 100))
-        postgres_rows = self._select_control_plane_rows(
-            "serving_projection_members",
-            row_builder=self._serving_projection_member_from_row,
-            where_sql="person_identity_key = %s",
-            params=[normalized_person_key],
-            order_by_sql="updated_at DESC, projection_id ASC, rank_index ASC",
-            limit=normalized_limit,
-        )
-        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
-        # fallback below is dead and removed.
-        if not postgres_rows:
-            return []
-        return postgres_rows
-
-    def count_serving_projection_members_by_readiness(
-        self,
-        projection_id: str,
-        *,
-        visible_only: bool = True,
-    ) -> dict[str, int]:
-        normalized_projection_id = str(projection_id or "").strip()
-        if not normalized_projection_id:
-            return {}
-        clauses = ["projection_id = ?"]
-        params: list[Any] = [normalized_projection_id]
-        if visible_only:
-            clauses.append("visibility_state = ?")
-            params.append("visible")
-        where_sqlite = " AND ".join(clauses)
-        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
-        # fallback below is dead and removed. should_prefer_read / should_skip_sqlite_fallback are always
-        # true, so a PG error returns the empty sentinel rather than falling through to SQLite (behavior
-        # preserved exactly).
-        try:
-            rows = self._control_plane_postgres.select_many(
-                "serving_projection_members",
-                where_sql=where_sqlite.replace("?", "%s"),
-                params=params,
-                order_by_sql="profile_readiness ASC, card_readiness ASC",
-                limit=0,
-            )
-            return _serving_projection_readiness_counts(
-                [self._serving_projection_member_from_row(row) for row in rows]
-            )
-        except Exception:
-            return {}
-
-    def get_serving_projection_member(self, projection_id: str, candidate_identity_key: str) -> dict[str, Any]:
-        normalized_projection_id = str(projection_id or "").strip()
-        normalized_candidate_key = str(candidate_identity_key or "").strip()
-        if not normalized_projection_id or not normalized_candidate_key:
-            return {}
-        postgres_row = self._select_control_plane_row(
-            "serving_projection_members",
-            row_builder=self._serving_projection_member_from_row,
-            where_sql="projection_id = %s AND candidate_identity_key = %s",
-            params=[normalized_projection_id, normalized_candidate_key],
-        )
-        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
-        # fallback below is dead and removed.
-        if postgres_row is None:
-            return {}
-        return postgres_row
-
-    def count_serving_projection_members(self, projection_id: str, *, visible_only: bool = True) -> int:
-        normalized_projection_id = str(projection_id or "").strip()
-        if not normalized_projection_id:
-            return 0
-        clauses = ["projection_id = ?"]
-        params: list[Any] = [normalized_projection_id]
-        if visible_only:
-            clauses.append("visibility_state = ?")
-            params.append("visible")
-        where_sqlite = " AND ".join(clauses)
-        # Track B B3.2: PG is the sole authoritative control-plane store under postgres_only; the SQLite
-        # COUNT(*) fallback below is dead and removed. count_rows is preferred; the select_many length is
-        # the fallback when the adapter lacks count_rows. A PG error returns 0 (the prior skip-fallback
-        # sentinel; behavior preserved exactly).
-        try:
-            count_rows = getattr(self._control_plane_postgres, "count_rows", None)
-            if callable(count_rows):
-                return int(
-                    count_rows(
-                        "serving_projection_members",
-                        where_sql=where_sqlite.replace("?", "%s"),
-                        params=params,
-                    )
-                    or 0
-                )
-        except Exception:
-            return 0
-        try:
-            rows = self._control_plane_postgres.select_many(
-                "serving_projection_members",
-                where_sql=where_sqlite.replace("?", "%s"),
-                params=params,
-                limit=0,
-            )
-            return len(rows)
-        except Exception:
-            return 0
 
     def replace_projection_person_search_index(
         self,
@@ -10338,8 +9935,8 @@ class ControlPlaneStore:
                 if normalized_rows:
                     self._call_control_plane_postgres_native(
                         "bulk_upsert_rows",
-                        "projection_person_search_index",
-                        normalized_rows,
+                        table_name="projection_person_search_index",
+                        rows=normalized_rows,
                     )
                 return {
                     "status": "indexed",
@@ -10860,7 +10457,11 @@ class ControlPlaneStore:
             if str(item.get("member_key") or "").strip()
         ]
         if payload_rows:
-            self._call_control_plane_postgres_native("bulk_upsert_rows", "asset_membership_index", payload_rows)
+            self._call_control_plane_postgres_native(
+                "bulk_upsert_rows",
+                table_name="asset_membership_index",
+                rows=payload_rows,
+            )
 
     def register_asset_materialization(
         self,
@@ -11492,8 +11093,8 @@ class ControlPlaneStore:
                 return int(
                     self._call_control_plane_postgres_native(
                         "bulk_upsert_rows",
-                        "candidate_materialization_state",
-                        payload_rows,
+                        table_name="candidate_materialization_state",
+                        rows=payload_rows,
                     )
                     or 0
                 )
@@ -13158,39 +12759,6 @@ def _dedupe_preserve_order(values: list[str]) -> list[str]:
     return deduped
 
 
-def _serving_projection_readiness_counts(members: list[dict[str, Any]]) -> dict[str, int]:
-    row_count = 0
-    profile_ready_count = 0
-    card_ready_count = 0
-    profile_required_count = 0
-    for member in members:
-        if not isinstance(member, dict):
-            continue
-        row_count += 1
-        profile_readiness = str(member.get("profile_readiness") or "").strip().lower()
-        card_readiness = str(member.get("card_readiness") or "").strip().lower()
-        projection_metrics = dict(member.get("projection_metrics") or {})
-        public_summary = dict(member.get("public_summary") or {})
-        profile_required = bool(
-            projection_metrics.get("profile_required")
-            or projection_metrics.get("needs_profile_completion")
-            or public_summary.get("needs_profile_completion")
-            or profile_readiness not in {"", "not_required", "skipped"}
-        )
-        if profile_required:
-            profile_required_count += 1
-        if profile_readiness in {"ready", "complete", "completed", "fetched", "available"}:
-            profile_ready_count += 1
-        if card_readiness in {"ready", "complete", "completed", "materialized", "display_ready"}:
-            card_ready_count += 1
-    return {
-        "row_count": row_count,
-        "profile_required_count": profile_required_count,
-        "profile_ready_count": profile_ready_count,
-        "card_ready_count": card_ready_count,
-    }
-
-
 def _candidate_richness_score_for_store_match(candidate: Candidate) -> int:
     score = 0
     for value in (
@@ -13473,13 +13041,6 @@ def _normalize_json_object_payload(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return dict(_json_safe_payload(value))
     return _loads_json_dict(value)
-
-
-def _normalize_projection_rank_index(value: Any) -> int:
-    try:
-        return max(0, int(value or 0))
-    except (TypeError, ValueError):
-        return 0
 
 
 def _normalize_public_web_string_list(value: Any) -> list[str]:

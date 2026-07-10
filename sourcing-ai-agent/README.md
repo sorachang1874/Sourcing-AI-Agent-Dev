@@ -59,12 +59,10 @@ Agent-native 在本项目中的含义是：底层服务从一开始就提供 too
 - M0.9 destructive apply 尚未执行。旧的 v8/v9/v10 review artifacts 不能作为当前 destructive apply 前置条件；下一步必须先为当前代码、文档和 prune scope 生成新的有效 `GO` Independent Review artifact，再用该 artifact 重新生成 prune plan 并确认 scope digest 不变。当前 dev backend/worker/frontend 仍在运行，apply 会被 active runtime process check 正确阻塞。
 - 不要手动删除 runtime 目录。继续治理时按 [docs/RUNTIME_ASSET_RETENTION_GOVERNANCE.md](docs/RUNTIME_ASSET_RETENTION_GOVERNANCE.md) 的 plan -> dry-run -> reviewed apply 顺序执行。
 
-当前 Independent Review Gate 默认配置：
-
-- reviewer model: `gpt-5.5`
-- reasoning effort: `xhigh`
-- service tier: `fast`
-- artifact metadata 必须记录上述字段；live/provider signoff 会 fail closed 拒绝缺失这些字段的旧 artifact。
+当前 Independent Review Gate 从 operator-owned `~/.codex/config.toml` 继承最新可用 reviewer model、
+该模型支持的最高 reasoning effort 和 service tier；项目脚本不再 pin 具体值。artifact 必须绑定
+Codex session/rollout 的 durable effective-config 证据；live/provider signoff 会 fail closed 拒绝
+缺失实际配置证据或 reviewer 非零退出的 artifact。
 
 当前常用验证入口：
 
@@ -855,14 +853,24 @@ PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-se
 1. `MODEL_PROVIDER_API_KEY`、`MODEL_PROVIDER_BASE_URL`、`MODEL_PROVIDER_MODEL` 等环境变量
 2. `runtime/secrets/providers.local.json` 中的 `model_provider`
 
-当前已验证可用的 relay 形态：
+当前 relay 配置与验证边界：
 
 1. OpenAI-compatible Responses base URL：`https://new.sharedchat.cc/codex`
-2. model：`gpt-5.5`
+2. owner-selected target model：`gpt-5.6-sol`；2026-07-10 已更新本地共享 `model_provider` 配置，
+   但 relay 的实际支持与返回模型仍需后续 guarded live healthcheck/force-refresh W7g 证明
 3. `model_provider.api_style` 必须设为 `openai_responses`；该 relay 的 `/models` 可用，但 `/chat/completions` 不作为正常路径
 4. Public Web adjudication 属于长上下文生成，`model_provider.timeout_seconds` 建议至少 `120`
 5. `model_provider.api_key_file` 可引用本地 key 文件，避免把 relay key 复制进 `providers.local.json`
 6. `test-model` 会优先 healthcheck `model_provider`，若未配置则回退到 `qwen`
+
+`model_provider` 在服务启动时构造并由多个规划/补全/Public Web 路径共享；修改本地 secret 或
+`MODEL_PROVIDER_MODEL` 后必须重启服务。Review Gate 的 model/effort/tier 配置是独立控制面，
+不会自动进入产品请求。
+
+模型审计字段区分请求意图和实际执行：`requested_model` 来自配置，`response_model` / `effective_model`
+只来自 provider generation response，且只有响应身份存在时才写
+`model_identity_provenance=provider_response`。缺失或错配会打开 circuit，并让 Public Web adjudication
+走 deterministic fail-closed fallback；`model/model_version` 是兼容字段，不能单独作为实际模型证明。
 
 Qwen 读取优先级：
 

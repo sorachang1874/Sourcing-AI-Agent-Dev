@@ -47,9 +47,9 @@ class ServingProjectionWriter:
         projection = self.store.repos.serving_projection.upsert(projection_payload)
         persisted_projection_id = _require_non_empty(projection.get("projection_id"), "projection_id")
         if replace_members:
-            member_count = self.store.replace_serving_projection_members(persisted_projection_id, members)
+            member_count = self.store.repos.serving_projection.replace_members(persisted_projection_id, members)
         else:
-            member_count = self.store.upsert_serving_projection_members(persisted_projection_id, members)
+            member_count = self.store.repos.serving_projection.upsert_members(persisted_projection_id, members)
         link = self.store.repos.serving_projection.upsert_run_link(
             {
                 "run_id": normalized_run_id,
@@ -110,9 +110,9 @@ class ServingProjectionWriter:
         )
         persisted_projection_id = _require_non_empty(projection.get("projection_id"), "projection_id")
         if replace_members:
-            member_count = self.store.replace_serving_projection_members(persisted_projection_id, members)
+            member_count = self.store.repos.serving_projection.replace_members(persisted_projection_id, members)
         else:
-            member_count = self.store.upsert_serving_projection_members(persisted_projection_id, members)
+            member_count = self.store.repos.serving_projection.upsert_members(persisted_projection_id, members)
         pointer = self.store.repos.serving_projection.upsert_authoritative_pointer(
             {
                 "collection_id": normalized_collection_id,

@@ -166,7 +166,7 @@ class AssetConsolidationRepairApplyTest(PGControlPlaneStoreTestMixin, unittest.T
         company = dict(report["companies"][0])
         projection_id = str(company["planned_projection_id"])
         pointer = self.store.repos.serving_projection.get_authoritative_pointer("company:openai")
-        members = self.store.list_serving_projection_members(projection_id, limit=10)
+        members = self.store.repos.serving_projection.list_members(projection_id, limit=10)
 
         self.assertEqual(report["status"], "applied")
         self.assertFalse(report["read_only"])

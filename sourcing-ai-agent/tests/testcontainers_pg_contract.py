@@ -43,7 +43,7 @@ class TestcontainersPostgresContractTest(unittest.TestCase):
                             "counts": {"candidate_count": 1},
                         }
                     )
-                    store.upsert_serving_projection_members(
+                    store.repos.serving_projection.upsert_members(
                         "proj_container_pg",
                         [
                             {

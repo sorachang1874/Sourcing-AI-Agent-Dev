@@ -1,9 +1,11 @@
 import ast
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from sourcing_agent.repositories import serving_projection_repo
 from sourcing_agent.repositories.manual_review import ManualReviewRepository
 from sourcing_agent.repositories.serving_projection import ServingProjectionRepository
 
@@ -42,6 +44,16 @@ _RETIRED_SERVING_PROJECTION_STORE_METHODS = {
     "get_projection_manifest_shard",
     "list_projection_manifest_shards",
     "_projection_manifest_shard_from_row",
+    "upsert_serving_projection_members",
+    "replace_serving_projection_members",
+    "list_serving_projection_members",
+    "list_serving_projection_members_by_identity_keys",
+    "list_serving_projection_members_by_person_identity",
+    "count_serving_projection_members_by_readiness",
+    "get_serving_projection_member",
+    "count_serving_projection_members",
+    "_serving_projection_member_from_row",
+    "_serving_projection_member_row_payload",
 }
 _RETIRED_SERVING_PROJECTION_CALL_ATTRIBUTES = {
     name for name in _RETIRED_SERVING_PROJECTION_STORE_METHODS if not name.startswith("_")
@@ -51,6 +63,8 @@ _RETIRED_SERVING_PROJECTION_NATIVE_DISPATCH_KEYS = {
     "upsert_run_projection_link",
     "upsert_collection_authoritative_pointer",
     "upsert_projection_manifest_shard",
+    "upsert_serving_projection_members",
+    "replace_serving_projection_members",
 }
 _SERVING_PROJECTION_REPOSITORY_METHODS = {
     "upsert",
@@ -69,6 +83,16 @@ _SERVING_PROJECTION_REPOSITORY_METHODS = {
     "get_manifest_shard",
     "list_manifest_shards",
     "_manifest_shard_from_row",
+    "upsert_members",
+    "replace_members",
+    "list_members",
+    "list_members_by_identity_keys",
+    "list_members_by_person_identity",
+    "count_members_by_readiness",
+    "get_member",
+    "count_members",
+    "_member_from_row",
+    "_member_row_payload",
 }
 
 
@@ -121,13 +145,31 @@ def _retired_serving_projection_references(tree: ast.AST) -> list[tuple[int, str
     return offenders
 
 
+def _invalid_bulk_upsert_wrapper_calls(tree: ast.AST) -> list[tuple[int, str]]:
+    offenders: list[tuple[int, str]] = []
+    wrapper_names = {"_call_control_plane_postgres_native", "_call_native_write"}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr not in wrapper_names or not node.args:
+            continue
+        method_arg = node.args[0]
+        if not isinstance(method_arg, ast.Constant) or method_arg.value != "bulk_upsert_rows":
+            continue
+        keyword_names = {keyword.arg for keyword in node.keywords if keyword.arg is not None}
+        if len(node.args) != 1 or not {"table_name", "rows"} <= keyword_names:
+            offenders.append((node.lineno, node.func.attr))
+    return offenders
+
+
 class _CatalogFaultAdapter:
-    def __init__(self, *, authoritative: bool, failing_method: str) -> None:
+    def __init__(self, *, authoritative: bool, failing_method: str, prefer_read: bool = True) -> None:
         self.authoritative = authoritative
         self.failing_method = failing_method
+        self.prefer_read = prefer_read
 
     def should_prefer_read(self, table_name: str) -> bool:
-        return True
+        return self.prefer_read
 
     def is_authoritative(self, table_name: str) -> bool:
         return self.authoritative
@@ -146,6 +188,18 @@ class _CatalogFaultAdapter:
 
     def upsert_row(self, table_name: str, row: dict[str, object]) -> None:
         self._raise_if_failing("upsert_row")
+
+    def bulk_upsert_rows(self, *, table_name: str, rows: list[dict[str, object]]) -> int:
+        self._raise_if_failing("bulk_upsert_rows")
+        return len(rows)
+
+    def delete_rows(self, *, table_name: str, **kwargs: object) -> int:
+        self._raise_if_failing("delete_rows")
+        return 1
+
+    def count_rows(self, table_name: str, **kwargs: object) -> int:
+        self._raise_if_failing("count_rows")
+        return 0
 
 
 def _runtime_error(callable_) -> RuntimeError:
@@ -269,6 +323,15 @@ def test_serving_projection_catalog_storage_facade_is_retired_to_repository() ->
     assert "self.serving_projection = ServingProjectionRepository(adapter)" in namespace_source
 
 
+def test_serving_projection_duck_accessor_never_falls_back_to_retired_store_facade() -> None:
+    repository = object()
+    canonical_store = SimpleNamespace(repos=SimpleNamespace(serving_projection=repository))
+    legacy_only_store = SimpleNamespace(get_serving_projection_member=lambda *_args: {})
+
+    assert serving_projection_repo(canonical_store) is repository
+    assert serving_projection_repo(legacy_only_store) is None
+
+
 def test_serving_projection_retired_calls_and_native_dispatch_keys_cannot_return() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     checked_roots = [repo_root / "src" / "sourcing_agent", repo_root / "scripts"]
@@ -303,6 +366,45 @@ def test_serving_projection_retired_calls_and_native_dispatch_keys_cannot_return
     )
     assert offenders == []
     assert native_dispatch_keys.isdisjoint(_RETIRED_SERVING_PROJECTION_NATIVE_DISPATCH_KEYS)
+
+
+def test_bulk_upsert_wrapper_calls_require_explicit_table_and_rows_keywords() -> None:
+    valid_source = (
+        'self._call_control_plane_postgres_native("bulk_upsert_rows", table_name="members", rows=payload_rows)'
+    )
+    assert _invalid_bulk_upsert_wrapper_calls(ast.parse(valid_source)) == []
+
+    mutated_source = valid_source.replace('table_name="members"', '"members"')
+    assert _invalid_bulk_upsert_wrapper_calls(ast.parse(mutated_source)) == [(1, "_call_control_plane_postgres_native")]
+
+    synthetic = ast.parse(
+        "\n".join(
+            [
+                'self._call_control_plane_postgres_native("bulk_upsert_rows", "members", payload_rows)',
+                'self._call_native_write("bulk_upsert_rows", table_name="members")',
+                'self._call_native_write("bulk_upsert_rows", rows=payload_rows)',
+                valid_source,
+            ]
+        )
+    )
+    assert _invalid_bulk_upsert_wrapper_calls(synthetic) == [
+        (1, "_call_control_plane_postgres_native"),
+        (2, "_call_native_write"),
+        (3, "_call_native_write"),
+    ]
+
+    repo_root = Path(__file__).resolve().parents[1]
+    checked_roots = [repo_root / "src" / "sourcing_agent", repo_root / "scripts"]
+    offenders: list[str] = []
+    for root in checked_roots:
+        for path in root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            offenders.extend(
+                f"{path.relative_to(repo_root)}:{line}:{wrapper}"
+                for line, wrapper in _invalid_bulk_upsert_wrapper_calls(tree)
+            )
+
+    assert offenders == []
 
 
 def test_serving_projection_catalog_repository_preserves_all_tier_a_b_fault_contracts() -> None:
@@ -380,6 +482,155 @@ def test_serving_projection_catalog_repository_preserves_all_tier_a_b_fault_cont
         checks += 1
 
     assert checks == 18
+
+
+def test_serving_projection_manifest_repository_preserves_all_tier_a_b_fault_contracts() -> None:
+    read_cases = [
+        ("select_one", lambda repo: repo.get_manifest_shard("manifest:1"), {}),
+        ("select_many", lambda repo: repo.list_manifest_shards("proj"), []),
+    ]
+    checks = 0
+    for primitive, call, sentinel in read_cases:
+        strict_repo = ServingProjectionRepository(_CatalogFaultAdapter(authoritative=True, failing_method=primitive))
+        strict_error = _runtime_error(lambda: call(strict_repo))
+        assert str(strict_error) == (
+            "Postgres authoritative read failed for projection_manifest_shards "
+            f"via {primitive}: RuntimeError: {primitive}-boom"
+        )
+        assert isinstance(strict_error.__cause__, RuntimeError)
+        checks += 1
+
+        non_authoritative_repo = ServingProjectionRepository(
+            _CatalogFaultAdapter(authoritative=False, failing_method=primitive)
+        )
+        assert call(non_authoritative_repo) == sentinel
+        checks += 1
+
+    payload = {"projection_id": "proj", "shard_id": "manifest:1"}
+    strict_write_repo = ServingProjectionRepository(
+        _CatalogFaultAdapter(authoritative=True, failing_method="upsert_row")
+    )
+    strict_write_error = _runtime_error(lambda: strict_write_repo.upsert_manifest_shard(payload))
+    assert str(strict_write_error) == (
+        "Postgres authoritative write failed for projection_manifest_shards via upsert_row: "
+        "RuntimeError: upsert_row-boom"
+    )
+    assert isinstance(strict_write_error.__cause__, RuntimeError)
+    checks += 1
+
+    non_authoritative_write_repo = ServingProjectionRepository(
+        _CatalogFaultAdapter(authoritative=False, failing_method="upsert_row")
+    )
+    no_confirmation = _runtime_error(lambda: non_authoritative_write_repo.upsert_manifest_shard(payload))
+    assert str(no_confirmation) == (
+        "Postgres authoritative write failed for projection_manifest_shards via upsert_projection_manifest_shard: "
+        "postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)"
+    )
+    assert no_confirmation.__cause__ is None
+    checks += 1
+
+    assert checks == 6
+
+
+def test_serving_projection_member_repository_preserves_tier_a_b_and_count_sentinels() -> None:
+    read_cases = [
+        ("select_many", lambda repo: repo.list_members("proj"), []),
+        ("select_many", lambda repo: repo.list_members_by_identity_keys("proj", ["candidate:1"]), []),
+        ("select_many", lambda repo: repo.list_members_by_person_identity("person:1"), []),
+        ("select_one", lambda repo: repo.get_member("proj", "candidate:1"), {}),
+    ]
+    checks = 0
+    for primitive, call, sentinel in read_cases:
+        strict_repo = ServingProjectionRepository(_CatalogFaultAdapter(authoritative=True, failing_method=primitive))
+        strict_error = _runtime_error(lambda: call(strict_repo))
+        assert str(strict_error) == (
+            "Postgres authoritative read failed for serving_projection_members "
+            f"via {primitive}: RuntimeError: {primitive}-boom"
+        )
+        assert isinstance(strict_error.__cause__, RuntimeError)
+        checks += 1
+
+        non_authoritative_repo = ServingProjectionRepository(
+            _CatalogFaultAdapter(authoritative=False, failing_method=primitive)
+        )
+        assert call(non_authoritative_repo) == sentinel
+        checks += 1
+
+    strict_bulk_repo = ServingProjectionRepository(
+        _CatalogFaultAdapter(authoritative=True, failing_method="bulk_upsert_rows")
+    )
+    bulk_error = _runtime_error(
+        lambda: strict_bulk_repo.upsert_members("proj", [{"candidate_identity_key": "candidate:1"}])
+    )
+    assert str(bulk_error) == (
+        "Postgres authoritative write failed for serving_projection_members via bulk_upsert_rows: "
+        "RuntimeError: bulk_upsert_rows-boom"
+    )
+    assert isinstance(bulk_error.__cause__, RuntimeError)
+    checks += 1
+
+    non_authoritative_bulk_repo = ServingProjectionRepository(
+        _CatalogFaultAdapter(authoritative=False, failing_method="bulk_upsert_rows")
+    )
+    assert non_authoritative_bulk_repo.upsert_members("proj", [{"candidate_identity_key": "candidate:1"}]) == 0
+    checks += 1
+
+    strict_readiness_repo = ServingProjectionRepository(
+        _CatalogFaultAdapter(authoritative=True, failing_method="select_many")
+    )
+    assert strict_readiness_repo.count_members_by_readiness("proj") == {}
+    checks += 1
+
+    strict_count_repo = ServingProjectionRepository(
+        _CatalogFaultAdapter(authoritative=True, failing_method="count_rows")
+    )
+    assert strict_count_repo.count_members("proj") == 0
+    checks += 1
+
+    invariant_repo = ServingProjectionRepository(
+        _CatalogFaultAdapter(authoritative=True, failing_method="", prefer_read=False)
+    )
+    invariant_error = _runtime_error(
+        lambda: invariant_repo.upsert_members("proj", [{"candidate_identity_key": "candidate:1"}])
+    )
+    assert str(invariant_error) == (
+        "postgres-only invariant violated for serving_projection_members in upsert_serving_projection_members: "
+        "should_prefer_read returned False; legacy SQLite tail retired (B4)"
+    )
+    checks += 1
+
+    assert checks == 13
+
+
+def test_serving_projection_member_mapper_preserves_irregular_read_contract() -> None:
+    repository = ServingProjectionRepository(object())
+    row = {
+        "projection_id": "proj-guard",
+        "candidate_identity_key": "candidate:1",
+        "rank_index": -7,
+        "public_summary_json": '{"name":"Ada"}',
+        "projection_metrics_json": "{",
+        "crm_overlay_summary_json": "[]",
+        "provenance_json": None,
+        "metadata_json": '{"source":"guard"}',
+    }
+
+    class BrokenRow:
+        def __getitem__(self, key: str) -> object:
+            raise RuntimeError(key)
+
+    mapped = repository._member_from_row(row)
+    assert mapped["rank_index"] == 0
+    assert mapped["public_summary"] == {"name": "Ada"}
+    assert mapped["projection_metrics"] == {}
+    assert mapped["crm_overlay_summary"] == {}
+    assert mapped["provenance"] == {}
+    assert mapped["metadata"] == {"source": "guard"}
+    assert repository._member_from_row(None) == {}
+    broken = repository._member_from_row(BrokenRow())
+    assert broken["projection_id"] == ""
+    assert broken["rank_index"] == 0
+    assert broken["public_summary"] == {}
 
 
 def test_serving_projection_catalog_repository_mappers_preserve_descriptor_contract() -> None:

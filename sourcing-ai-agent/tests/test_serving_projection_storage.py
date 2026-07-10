@@ -4,7 +4,6 @@ from pathlib import Path
 from unittest import mock
 
 import sourcing_agent.repositories.serving_projection as serving_projection_repository
-
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
@@ -171,7 +170,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
             }
         )
 
-        written = self.store.upsert_serving_projection_members(
+        written = self.store.repos.serving_projection.upsert_members(
             "proj_members",
             [
                 {
@@ -201,10 +200,10 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
             ],
         )
 
-        members = self.store.list_serving_projection_members("proj_members", limit=10)
+        members = self.store.repos.serving_projection.list_members("proj_members", limit=10)
 
         self.assertEqual(written, 2)
-        self.assertEqual(self.store.count_serving_projection_members("proj_members"), 2)
+        self.assertEqual(self.store.repos.serving_projection.count_members("proj_members"), 2)
         self.assertEqual([member["candidate_identity_key"] for member in members], ["linkedin:ada", "linkedin:grace"])
         self.assertEqual(members[0]["public_summary"]["name"], "Ada Updated")
         self.assertEqual(members[0]["public_summary"]["person_identity_key"], "linkedin:ada")
@@ -223,7 +222,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
                 "state": "serving",
             }
         )
-        self.store.upsert_serving_projection_members(
+        self.store.repos.serving_projection.upsert_members(
             "proj_member_keys",
             [
                 {
@@ -236,7 +235,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
             ],
         )
 
-        members = self.store.list_serving_projection_members_by_identity_keys(
+        members = self.store.repos.serving_projection.list_members_by_identity_keys(
             "proj_member_keys",
             ["linkedin:person-7", "linkedin:person-2", "linkedin:missing", "linkedin:person-2"],
         )
@@ -273,7 +272,7 @@ class ServingProjectionStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCa
             self.store.repos.serving_projection.list_manifest_shards("proj_manifest")[0]["manifest_ref"],
             shard["manifest_ref"],
         )
-        self.assertEqual(self.store.count_serving_projection_members("proj_manifest"), 0)
+        self.assertEqual(self.store.repos.serving_projection.count_members("proj_manifest"), 0)
 
     def test_manifest_shard_repository_preserves_normalization_order_and_update_contract(self) -> None:
         repository = self.store.repos.serving_projection

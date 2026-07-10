@@ -244,8 +244,10 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
 
         self.assertEqual(result["status"], "backfilled")
         self.assertEqual(result["member_count"], 2)
-        self.assertEqual(self.store.repos.serving_projection.get_run_link("job-legacy")["projection_id"], result["projection_id"])
-        self.assertEqual(self.store.count_serving_projection_members(result["projection_id"]), 2)
+        self.assertEqual(
+            self.store.repos.serving_projection.get_run_link("job-legacy")["projection_id"], result["projection_id"]
+        )
+        self.assertEqual(self.store.repos.serving_projection.count_members(result["projection_id"]), 2)
 
     def test_person_summary_backfill_repairs_legacy_projection_rows_without_reader_fallback(self) -> None:
         payload_path = self.runtime_dir / "company_assets" / "legacy" / "snap" / "normalized_artifacts"
@@ -281,7 +283,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
                 "provenance": {"candidate_payload_path": str(candidate_payload_path)},
             }
         )
-        self.store.upsert_serving_projection_members(
+        self.store.repos.serving_projection.upsert_members(
             "proj_legacy_summary",
             [
                 {
@@ -294,7 +296,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
                 }
             ],
         )
-        before = self.store.get_serving_projection_member("proj_legacy_summary", "legacy-row-ada")
+        before = self.store.repos.serving_projection.get_member("proj_legacy_summary", "legacy-row-ada")
         self.assertEqual(before["person_identity_key"], "linkedin:https://www.linkedin.com/in/legacy-summary-ada")
         legacy_summary = dict(before["public_summary"])
         legacy_summary.pop("source_projection_id", None)
@@ -313,7 +315,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         backfill = ServingProjectionMigrationBackfill(self.store)
 
         result = backfill.backfill_person_summary_views(projection_ids=["proj_legacy_summary"])
-        row = self.store.get_serving_projection_member("proj_legacy_summary", "legacy-row-ada")
+        row = self.store.repos.serving_projection.get_member("proj_legacy_summary", "legacy-row-ada")
 
         self.assertEqual(result["status"], "backfilled")
         self.assertEqual(result["changed_member_count"], 1)
@@ -399,7 +401,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         )
         new_pointer = self.store.repos.serving_projection.get_authoritative_pointer("company:newco")
         existing_pointer = self.store.repos.serving_projection.get_authoritative_pointer("company:existingco")
-        new_members = self.store.list_serving_projection_members(new_pointer["active_projection_id"], limit=10)
+        new_members = self.store.repos.serving_projection.list_members(new_pointer["active_projection_id"], limit=10)
 
         self.assertEqual(result["status"], "backfilled")
         self.assertEqual(result["planned_count"], 1)
@@ -436,7 +438,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         backfill = ServingProjectionMigrationBackfill(self.store, writer_id="collection_layer_backfill_test")
 
         result = backfill.backfill_projection_layer_assignments(projection_ids=["proj_collection_layer"])
-        row = self.store.get_serving_projection_member("proj_collection_layer", "linkedin:zhang-wei-layer")
+        row = self.store.repos.serving_projection.get_member("proj_collection_layer", "linkedin:zhang-wei-layer")
         projection = self.store.repos.serving_projection.get("proj_collection_layer")
 
         self.assertEqual(result["status"], "backfilled")

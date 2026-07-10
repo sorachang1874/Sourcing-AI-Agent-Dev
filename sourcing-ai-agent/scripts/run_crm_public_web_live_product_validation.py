@@ -13,7 +13,6 @@ import argparse
 import json
 import os
 import re
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -21,8 +20,9 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urljoin
 from urllib.request import Request, urlopen
 
+from sourcing_agent.runtime_asset_retention_prune import validate_independent_review_artifact
 
-EXPECTED_PUBLIC_WEB_MODEL = "gpt-5.5"
+EXPECTED_PUBLIC_WEB_MODEL = "gpt-5.6-sol"
 EXPECTED_OWNER = "crm_public_web_v1"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INDEPENDENT_REVIEW_ARTIFACT_ROOT = REPO_ROOT / "runtime" / "reviews"
@@ -31,10 +31,24 @@ INDEPENDENT_REVIEW_PASSED_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED"
 INDEPENDENT_REVIEW_ARTIFACT_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT"
 INDEPENDENT_REVIEW_SCOPE_TOKENS_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_TOKENS"
 INDEPENDENT_REVIEW_REQUIRED_FILES_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_REQUIRED_FILES"
-DEFAULT_INDEPENDENT_REVIEW_SCOPE_TOKENS = ("W7g", "CRM Public Web", "live")
-DEFAULT_INDEPENDENT_REVIEW_REQUIRED_FILES = (
-    "scripts/run_crm_public_web_live_product_validation.py",
+INDEPENDENT_REVIEW_SCOPE_DIGEST_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256"
+EXPECTED_INDEPENDENT_REVIEW_TITLE = "W7g CRM Public Web live product validation"
+MINIMUM_INDEPENDENT_REVIEW_SCOPE_TOKENS = ("W7g", "CRM Public Web", "live")
+MINIMUM_INDEPENDENT_REVIEW_REQUIRED_FILES = (
+    "Makefile",
+    "docs/DURABLE_EXECUTION_RUNTIME_CONTRACT.md",
+    "docs/INDEPENDENT_REVIEW_GATE.md",
     "docs/PRE_AGENT_CONTRACT_REVIEW.md",
+    "docs/TESTING_PLAYBOOK.md",
+    "scripts/run_crm_public_web_live_product_validation.py",
+    "scripts/run_independent_review_gate.py",
+    "src/sourcing_agent/model_provider.py",
+    "src/sourcing_agent/public_web_runtime_core.py",
+    "src/sourcing_agent/runtime_asset_retention_prune.py",
+    "tests/test_crm_public_web_runtime_boundary.py",
+    "tests/test_independent_review_gate_runner.py",
+    "tests/test_model_provider.py",
+    "tests/test_pre_agent_contract_review.py",
 )
 CANONICAL_ENDPOINTS = {
     "provider_health": "/api/providers/health",
@@ -107,18 +121,37 @@ def _review_verdict_line(line: str) -> str:
     return ""
 
 
+def _dedupe_nonempty(values: list[str] | tuple[str, ...]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = str(value or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(normalized)
+    return result
+
+
+def _csv_environment_additions(name: str) -> list[str]:
+    raw = str(os.environ.get(name) or "").strip()
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 def _required_independent_review_scope_tokens() -> list[str]:
-    raw = str(os.environ.get(INDEPENDENT_REVIEW_SCOPE_TOKENS_ENV) or "").strip()
-    if raw:
-        return [token.strip() for token in raw.split(",") if token.strip()]
-    return list(DEFAULT_INDEPENDENT_REVIEW_SCOPE_TOKENS)
+    return _dedupe_nonempty(
+        [*MINIMUM_INDEPENDENT_REVIEW_SCOPE_TOKENS, *_csv_environment_additions(INDEPENDENT_REVIEW_SCOPE_TOKENS_ENV)]
+    )
 
 
 def _required_independent_review_files() -> list[str]:
-    raw = str(os.environ.get(INDEPENDENT_REVIEW_REQUIRED_FILES_ENV) or "").strip()
-    if raw:
-        return [item.strip() for item in raw.split(",") if item.strip()]
-    return list(DEFAULT_INDEPENDENT_REVIEW_REQUIRED_FILES)
+    return _dedupe_nonempty(
+        [*MINIMUM_INDEPENDENT_REVIEW_REQUIRED_FILES, *_csv_environment_additions(INDEPENDENT_REVIEW_REQUIRED_FILES_ENV)]
+    )
+
+
+def _required_independent_review_scope_digest() -> str:
+    return str(os.environ.get(INDEPENDENT_REVIEW_SCOPE_DIGEST_ENV) or "").strip()
 
 
 def _missing_review_metadata_fields(text: str) -> list[str]:
@@ -128,6 +161,16 @@ def _missing_review_metadata_fields(text: str) -> list[str]:
         "- reviewer_model:",
         "- reviewer_reasoning_effort:",
         "- reviewer_service_tier:",
+        "- reviewer_config_path:",
+        "- reviewer_config_sha256:",
+        "- reviewer_exit_code:",
+        "- reviewer_codex_cli_version:",
+        "- reviewer_thread_id:",
+        "- reviewer_rollout_path:",
+        "- reviewer_rollout_sha256:",
+        "- reviewer_effective_config_path:",
+        "- reviewer_effective_config_sha256:",
+        "- review_scope_digest_sha256:",
         "- timeout_seconds:",
         "- prompt_path:",
         "- command:",
@@ -140,12 +183,19 @@ def _missing_review_metadata_fields(text: str) -> list[str]:
 
 def _validate_independent_review_artifact(value: str) -> dict[str, Any]:
     artifact = str(value or "").strip()
+    scope_tokens = _required_independent_review_scope_tokens()
+    required_files = _required_independent_review_files()
+    expected_scope_digest = _required_independent_review_scope_digest()
     result: dict[str, Any] = {
         "artifact": artifact,
         "exists": False,
         "valid_go": False,
         "verdict": "missing",
         "reason": "",
+        "expected_title": EXPECTED_INDEPENDENT_REVIEW_TITLE,
+        "expected_scope_digest_sha256": expected_scope_digest,
+        "required_scope_tokens": scope_tokens,
+        "required_files": required_files,
     }
     if not artifact:
         result["reason"] = f"{INDEPENDENT_REVIEW_ARTIFACT_ENV} is empty"
@@ -188,8 +238,10 @@ def _validate_independent_review_artifact(value: str) -> dict[str, Any]:
         result["verdict"] = "invalid"
         result["reason"] = "independent review artifact is missing metadata fields: " + ", ".join(missing_metadata)
         return result
-    scope_tokens = _required_independent_review_scope_tokens()
-    result["required_scope_tokens"] = scope_tokens
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_scope_digest):
+        result["verdict"] = "invalid"
+        result["reason"] = f"{INDEPENDENT_REVIEW_SCOPE_DIGEST_ENV} must be a nonempty lowercase SHA-256 digest"
+        return result
     text_lower = text.lower()
     missing_scope_tokens = [token for token in scope_tokens if token.lower() not in text_lower]
     if missing_scope_tokens:
@@ -199,14 +251,11 @@ def _validate_independent_review_artifact(value: str) -> dict[str, Any]:
             + ", ".join(missing_scope_tokens)
         )
         return result
-    required_files = _required_independent_review_files()
-    result["required_files"] = required_files
     missing_required_files = [item for item in required_files if item.lower() not in text_lower]
     if missing_required_files:
         result["verdict"] = "invalid"
-        result["reason"] = (
-            "independent review artifact does not cover required live validation files: "
-            + ", ".join(missing_required_files)
+        result["reason"] = "independent review artifact does not cover required live validation files: " + ", ".join(
+            missing_required_files
         )
         return result
     if "INVALID_REVIEW_ARTIFACT" in text:
@@ -225,6 +274,21 @@ def _validate_independent_review_artifact(value: str) -> dict[str, Any]:
             break
     result["verdict"] = verdict or "invalid"
     if verdict == "go":
+        evidence_blockers = validate_independent_review_artifact(
+            artifact_path=path,
+            workspace_root=REPO_ROOT,
+            expected_title=EXPECTED_INDEPENDENT_REVIEW_TITLE,
+            expected_scope_digest=expected_scope_digest,
+            required_files=required_files,
+            required_tokens=scope_tokens,
+        )
+        if evidence_blockers:
+            result["verdict"] = "invalid"
+            result["reason"] = "independent review artifact failed durable evidence validation: " + ", ".join(
+                evidence_blockers
+            )
+            result["evidence_blockers"] = evidence_blockers
+            return result
         result["valid_go"] = True
         return result
     if verdict == "no_go":
@@ -372,9 +436,7 @@ def _run_summary(run: dict[str, Any]) -> str:
 def _nonterminal_run_summaries(payload: dict[str, Any]) -> list[str]:
     runs = [item for item in list(payload.get("runs") or []) if isinstance(item, dict)]
     return [
-        _run_summary(run)
-        for run in runs
-        if str(run.get("status") or "").strip().lower() not in TERMINAL_RUN_STATUSES
+        _run_summary(run) for run in runs if str(run.get("status") or "").strip().lower() not in TERMINAL_RUN_STATUSES
     ]
 
 
@@ -385,6 +447,159 @@ def _failed_terminal_run_summaries(payload: dict[str, Any]) -> list[str]:
         for run in runs
         if str(run.get("status") or "").strip().lower() in LIVE_VALIDATION_FAILED_RUN_STATUSES
     ]
+
+
+def _failed_terminal_batch_summaries(payload: dict[str, Any]) -> list[str]:
+    batches = [item for item in list(payload.get("batches") or []) if isinstance(item, dict)]
+    return [
+        ":".join(
+            part
+            for part in (
+                str(batch.get("batch_id") or "").strip(),
+                str(batch.get("status") or "").strip() or "unknown",
+            )
+            if part
+        )
+        for batch in batches
+        if str(batch.get("status") or "").strip().lower() in LIVE_VALIDATION_FAILED_RUN_STATUSES
+    ]
+
+
+def _crm_record_id_from_run(run: dict[str, Any]) -> str:
+    return str(run.get("crm_record_id") or run.get("record_id") or "").strip()
+
+
+def _start_invocation_identity(
+    payload: dict[str, Any],
+    *,
+    requested_crm_record_ids: list[str],
+    failures: list[str],
+) -> dict[str, Any]:
+    batch_id = str(dict(payload.get("batch") or {}).get("batch_id") or "").strip()
+    expected_record_ids = _dedupe_nonempty(requested_crm_record_ids)
+    runs = [dict(item) for item in list(payload.get("runs") or []) if isinstance(item, dict)]
+    run_ids_by_record_id: dict[str, str] = {}
+    observed_run_ids: set[str] = set()
+
+    if not batch_id:
+        failures.append("start: batch.batch_id is required to bind live validation to this invocation")
+    if len(expected_record_ids) != len(requested_crm_record_ids):
+        failures.append("start: requested CRM record ids must be nonempty and unique")
+
+    for run in runs:
+        record_id = _crm_record_id_from_run(run)
+        run_id = str(run.get("run_id") or "").strip()
+        run_batch_id = str(run.get("batch_id") or "").strip()
+        if not record_id:
+            failures.append("start: returned run is missing crm_record_id/record_id")
+            continue
+        if not run_id:
+            failures.append(f"start:{record_id}: returned run is missing run_id")
+            continue
+        if run_batch_id != batch_id:
+            failures.append(
+                f"start:{record_id}: run batch_id {run_batch_id or 'missing'} does not match returned batch {batch_id or 'missing'}"
+            )
+        if record_id not in expected_record_ids:
+            failures.append(f"start:{record_id}: returned run was not requested by this invocation")
+        if record_id in run_ids_by_record_id:
+            failures.append(f"start:{record_id}: multiple runs were returned for one requested record")
+        if run_id in observed_run_ids:
+            failures.append(f"start:{record_id}: run_id {run_id} was returned for multiple records")
+        run_ids_by_record_id[record_id] = run_id
+        observed_run_ids.add(run_id)
+
+    missing_record_ids = [record_id for record_id in expected_record_ids if record_id not in run_ids_by_record_id]
+    if missing_record_ids:
+        failures.append("start: no returned run identity for requested records: " + ", ".join(missing_record_ids))
+
+    return {
+        "batch_id": batch_id,
+        "run_ids_by_crm_record_id": run_ids_by_record_id,
+    }
+
+
+def _validate_poll_invocation_identity(
+    payload: dict[str, Any],
+    *,
+    invocation_identity: dict[str, Any],
+    failures: list[str],
+) -> bool:
+    initial_failure_count = len(failures)
+    expected_batch_id = str(invocation_identity.get("batch_id") or "").strip()
+    expected_runs = {
+        str(record_id): str(run_id)
+        for record_id, run_id in dict(invocation_identity.get("run_ids_by_crm_record_id") or {}).items()
+    }
+    batches = [dict(item) for item in list(payload.get("batches") or []) if isinstance(item, dict)]
+    observed_batch_ids = [str(batch.get("batch_id") or "").strip() for batch in batches]
+    if observed_batch_ids != [expected_batch_id]:
+        failures.append(
+            "poll: returned batch identity does not match this invocation: "
+            f"expected {expected_batch_id}, observed {observed_batch_ids or ['missing']}"
+        )
+
+    observed_runs: dict[str, str] = {}
+    observed_run_ids: set[str] = set()
+    for item in list(payload.get("runs") or []):
+        if not isinstance(item, dict):
+            continue
+        run = dict(item)
+        record_id = _crm_record_id_from_run(run)
+        run_id = str(run.get("run_id") or "").strip()
+        run_batch_id = str(run.get("batch_id") or "").strip()
+        if not record_id or not run_id:
+            failures.append("poll: returned run is missing crm_record_id/record_id or run_id")
+            continue
+        if run_batch_id != expected_batch_id:
+            failures.append(
+                f"poll:{record_id}: run batch_id {run_batch_id or 'missing'} does not match this invocation {expected_batch_id}"
+            )
+        if record_id in observed_runs or run_id in observed_run_ids:
+            failures.append(f"poll:{record_id}: duplicate record or run identity was returned")
+        observed_runs[record_id] = run_id
+        observed_run_ids.add(run_id)
+
+    if observed_runs != expected_runs:
+        failures.append(
+            "poll: returned run identities do not match this invocation: "
+            f"expected {expected_runs}, observed {observed_runs}"
+        )
+    return len(failures) == initial_failure_count
+
+
+def _validate_detail_invocation_identity(
+    record_id: str,
+    payload: dict[str, Any],
+    *,
+    invocation_identity: dict[str, Any],
+    failures: list[str],
+) -> bool:
+    initial_failure_count = len(failures)
+    response_record_id = str(payload.get("crm_record_id") or payload.get("record_id") or "").strip()
+    expected_batch_id = str(invocation_identity.get("batch_id") or "").strip()
+    expected_run_id = str(
+        dict(invocation_identity.get("run_ids_by_crm_record_id") or {}).get(record_id) or ""
+    ).strip()
+    latest_run = payload.get("latest_run")
+    if response_record_id != record_id:
+        failures.append(
+            f"detail:{record_id}: response record identity {response_record_id or 'missing'} does not match request"
+        )
+    if not isinstance(latest_run, dict):
+        failures.append(f"detail:{record_id}: latest_run is missing for this invocation")
+        return False
+    latest_run_id = str(latest_run.get("run_id") or "").strip()
+    latest_batch_id = str(latest_run.get("batch_id") or "").strip()
+    if latest_run_id != expected_run_id:
+        failures.append(
+            f"detail:{record_id}: latest_run.run_id {latest_run_id or 'missing'} does not match this invocation {expected_run_id or 'missing'}"
+        )
+    if latest_batch_id != expected_batch_id:
+        failures.append(
+            f"detail:{record_id}: latest_run.batch_id {latest_batch_id or 'missing'} does not match this invocation {expected_batch_id or 'missing'}"
+        )
+    return len(failures) == initial_failure_count
 
 
 def _latest_run_status(payload: dict[str, Any]) -> str:
@@ -433,19 +648,28 @@ def _validate_model_fields(
     warnings: list[str],
     failures: list[str],
 ) -> None:
-    fallback_values = _collect_field_values(payload, {"fallback_used", "model_fallback_used"})
-    if any(str(value).strip().lower() in {"1", "true", "yes", "y", "on"} for value in fallback_values):
-        failures.append(f"{name}: model adjudication reported fallback_used=true")
-    model_values = _collect_field_values(
-        payload,
-        {"model", "model_name", "model_version", "llm_model", "qwen_model", "provider_model"},
-    )
-    if not model_values:
-        failures.append(f"{name}: no model field was present; model version could not be proven from response")
-        return
-    mismatches = [value for value in model_values if value and expected_model not in value]
-    if mismatches:
-        failures.append(f"{name}: model fields did not match {expected_model}: {sorted(set(mismatches))}")
+    del warnings
+    if payload.get("model_fallback_used") is not False:
+        value = payload.get("model_fallback_used")
+        failures.append(f"{name}: model_fallback_used must be false: {value if value is not None else 'missing'}")
+    for field in ("model", "model_version", "requested_model", "response_model", "effective_model"):
+        value = str(payload.get(field) or "").strip()
+        if value != expected_model:
+            failures.append(f"{name}: {field} {value or 'missing'} does not match {expected_model}")
+    provenance = str(payload.get("model_identity_provenance") or "").strip()
+    if provenance != "provider_response":
+        failures.append(f"{name}: model_identity_provenance {provenance or 'missing'} is not provider_response")
+
+
+def _latest_run_model_phase_metrics(payload: dict[str, Any]) -> dict[str, Any]:
+    latest_run = payload.get("latest_run")
+    if not isinstance(latest_run, dict):
+        return {}
+    analysis = latest_run.get("analysis")
+    if not isinstance(analysis, dict):
+        return {}
+    phase_metrics = analysis.get("phase_metrics")
+    return dict(phase_metrics) if isinstance(phase_metrics, dict) else {}
 
 
 def _validate_model_fields_for_terminal_detail(
@@ -463,9 +687,13 @@ def _validate_model_fields_for_terminal_detail(
             "poll timeout or terminal failure is the primary contract signal"
         )
         return
+    phase_metrics = _latest_run_model_phase_metrics(payload)
+    if not phase_metrics:
+        failures.append(f"{name}: latest_run.analysis.phase_metrics was missing for model-verifiable run")
+        return
     _validate_model_fields(
         name,
-        payload,
+        phase_metrics,
         expected_model=expected_model,
         warnings=warnings,
         failures=failures,
@@ -487,14 +715,35 @@ def _validate_provider_health(
     status = str(model_payload.get("status") or "").strip().lower()
     chat_status = str(model_payload.get("chat_status") or "").strip().lower()
     model = str(model_payload.get("model") or "").strip()
+    requested_model = str(model_payload.get("requested_model") or "").strip()
+    response_model = str(model_payload.get("response_model") or "").strip()
+    effective_model = str(model_payload.get("effective_model") or "").strip()
+    model_identity_provenance = str(model_payload.get("model_identity_provenance") or "").strip()
     if bool(model_payload.get("circuit_open")):
         failures.append(f"provider_health: model provider circuit is open: {model_payload.get('error') or ''}")
     if status != "ready":
         failures.append(f"provider_health: model provider status is {status or 'missing'}")
     if chat_status and chat_status != "ready":
         failures.append(f"provider_health: model chat_status is {chat_status}")
-    if expected_model and expected_model not in model:
+    if expected_model and model != expected_model:
         failures.append(f"provider_health: model {model or 'missing'} does not match {expected_model}")
+    if requested_model != expected_model:
+        failures.append(
+            f"provider_health: requested_model {requested_model or 'missing'} does not match {expected_model}"
+        )
+    if response_model != expected_model:
+        failures.append(
+            f"provider_health: response_model {response_model or 'missing'} does not match {expected_model}"
+        )
+    if effective_model != expected_model:
+        failures.append(
+            f"provider_health: effective_model {effective_model or 'missing'} does not match {expected_model}"
+        )
+    if model_identity_provenance != "provider_response":
+        failures.append(
+            "provider_health: model_identity_provenance "
+            f"{model_identity_provenance or 'missing'} is not provider_response"
+        )
 
 
 def _write_report(path: Path, report: dict[str, Any]) -> None:
@@ -508,16 +757,28 @@ def _guard_report(args: argparse.Namespace) -> tuple[list[str], list[str]]:
     review_artifact_validation = _validate_independent_review_artifact(
         str(os.environ.get(INDEPENDENT_REVIEW_ARTIFACT_ENV) or "")
     )
+    configured_expected_model = str(getattr(args, "expected_model", EXPECTED_PUBLIC_WEB_MODEL) or "").strip()
+    if configured_expected_model != EXPECTED_PUBLIC_WEB_MODEL:
+        failures.append(
+            "--expected-model is compatibility-only and must equal the immutable CRM Public Web product model "
+            f"{EXPECTED_PUBLIC_WEB_MODEL}; received {configured_expected_model or 'empty'}"
+        )
     for name in sorted(LEGACY_REENABLE_ENVS):
         if _truthy(os.environ.get(name)):
             failures.append(f"{name}=1 would re-enable a retired legacy Public Web path")
     if args.execute_live:
+        if not args.force_refresh:
+            failures.append(
+                "--execute-live requires --force-refresh so this invocation cannot reuse a prior terminal run"
+            )
         if not args.confirm_live_provider_cost:
             failures.append("--execute-live requires --confirm-live-provider-cost")
         if not (_truthy(os.environ.get("LIVE_CONFIRM")) or _truthy(os.environ.get("SOURCING_LIVE_PROVIDER_CONFIRM"))):
             failures.append("--execute-live requires LIVE_CONFIRM=1 or SOURCING_LIVE_PROVIDER_CONFIRM=1")
         if not _truthy(os.environ.get(PRE_AGENT_CONTRACT_PASSED_ENV)):
-            failures.append(f"--execute-live requires {PRE_AGENT_CONTRACT_PASSED_ENV}=1 from the Makefile pre-agent gate")
+            failures.append(
+                f"--execute-live requires {PRE_AGENT_CONTRACT_PASSED_ENV}=1 from the Makefile pre-agent gate"
+            )
         if not _truthy(os.environ.get(INDEPENDENT_REVIEW_PASSED_ENV)):
             failures.append(
                 f"--execute-live requires {INDEPENDENT_REVIEW_PASSED_ENV}=1 from the independent review gate"
@@ -548,8 +809,11 @@ def _live_prerequisites_report(args: argparse.Namespace) -> dict[str, Any]:
         missing.append("CRM_PUBLIC_WEB_LIVE_RECORD_IDS")
     if not args.reviewed_crm_record_ids:
         missing.append("CRM_PUBLIC_WEB_LIVE_RECORD_IDS_REVIEWED=1")
+    if not args.force_refresh:
+        missing.append("CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1")
     missing.append("CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED=1")
     missing.append("CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT")
+    missing.append("CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256")
     missing.extend(
         [
             "LIVE_CONFIRM=1",
@@ -559,12 +823,15 @@ def _live_prerequisites_report(args: argparse.Namespace) -> dict[str, Any]:
         ]
     )
     record_ids = " ".join(args.crm_record_ids) if args.crm_record_ids else "crm_record_id_1 crm_record_id_2"
+    review_scope_digest = _required_independent_review_scope_digest() or "<review_scope_digest_sha256>"
     command = (
         "LIVE_CONFIRM=1 make test-crm-public-web-live-product-validation "
         "CRM_PUBLIC_WEB_LIVE_DRY_RUN=0 "
         "CRM_PUBLIC_WEB_LIVE_RECORD_IDS_REVIEWED=1 "
+        "CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH=1 "
         "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED=1 "
         'CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT="runtime/reviews/<review>.md" '
+        f'CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256="{review_scope_digest}" '
         f"CRM_PUBLIC_WEB_LIVE_MAX_FETCHES_PER_CANDIDATE={args.max_fetches_per_candidate} "
         f"CRM_PUBLIC_WEB_LIVE_MAX_AI_EVIDENCE_DOCUMENTS={args.max_ai_evidence_documents} "
         f"CRM_PUBLIC_WEB_LIVE_MAX_AI_ENTRY_LINKS={args.max_ai_entry_links} "
@@ -577,6 +844,7 @@ def _live_prerequisites_report(args: argparse.Namespace) -> dict[str, Any]:
         "ready_to_execute_live_with_current_args": bool(
             args.crm_record_ids
             and args.reviewed_crm_record_ids
+            and args.force_refresh
             and _truthy(os.environ.get(INDEPENDENT_REVIEW_PASSED_ENV))
             and review_artifact_validation["valid_go"]
         ),
@@ -601,18 +869,22 @@ def _live_prerequisites_report(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _run_live(args: argparse.Namespace, failures: list[str], warnings: list[str]) -> dict[str, Any]:
+    if not args.force_refresh:
+        failures.append("--execute-live requires --force-refresh before any backend or provider request")
+        return {"provider_health": {}, "start": {}, "poll_history": [], "details": {}, "export": {}}
+
     provider_health = _request_json("GET", args.base_url, CANONICAL_ENDPOINTS["provider_health"])
-    _validate_provider_health(provider_health, expected_model=args.expected_model, failures=failures)
+    _validate_provider_health(provider_health, expected_model=EXPECTED_PUBLIC_WEB_MODEL, failures=failures)
     if failures:
         return {"provider_health": provider_health, "start": {}, "poll_history": [], "details": {}, "export": {}}
 
     start_payload = {
         "crm_record_ids": args.crm_record_ids,
-        "force_refresh": bool(args.force_refresh),
+        "force_refresh": True,
         "requested_by": "w7g_crm_public_web_live_product_validation",
         "options": {
             "validation_scope": "w7g_crm_public_web_live_product_validation",
-            "expected_model": args.expected_model,
+            "expected_model": EXPECTED_PUBLIC_WEB_MODEL,
             "max_fetches_per_candidate": args.max_fetches_per_candidate,
             "max_ai_evidence_documents": args.max_ai_evidence_documents,
             "max_ai_entry_links": args.max_ai_entry_links,
@@ -625,52 +897,128 @@ def _run_live(args: argparse.Namespace, failures: list[str], warnings: list[str]
     _validate_no_legacy_or_raw_payload("start", start_response, failures)
     _validate_owner_fields("start", start_response, failures)
     if _append_http_failure("start", start_response, failures):
-        return {"provider_health": provider_health, "start": start_response, "poll_history": [], "details": {}, "export": {}}
+        return {
+            "provider_health": provider_health,
+            "start": start_response,
+            "poll_history": [],
+            "details": {},
+            "export": {},
+        }
 
-    poll_payload: dict[str, Any] = {"crm_record_ids": args.crm_record_ids}
-    batch_id = str(dict(start_response.get("batch") or {}).get("batch_id") or "").strip()
-    if batch_id:
-        poll_payload["batch_id"] = batch_id
+    invocation_identity = _start_invocation_identity(
+        start_response,
+        requested_crm_record_ids=args.crm_record_ids,
+        failures=failures,
+    )
+    if failures:
+        return {
+            "provider_health": provider_health,
+            "start": start_response,
+            "invocation_identity": invocation_identity,
+            "poll_history": [],
+            "details": {},
+            "export": {},
+        }
+
+    batch_id = str(invocation_identity["batch_id"])
+    poll_payload: dict[str, Any] = {"batch_id": batch_id}
     poll_history: list[dict[str, Any]] = []
+    poll_chain_valid = True
     deadline = time.monotonic() + args.poll_timeout_seconds
     while True:
+        poll_failure_count = len(failures)
         poll_response = _request_json("POST", args.base_url, CANONICAL_ENDPOINTS["poll"], poll_payload)
         poll_history.append(poll_response)
         _validate_no_legacy_or_raw_payload("poll", poll_response, failures)
         _validate_owner_fields("poll", poll_response, failures)
         if _append_http_failure("poll", poll_response, failures):
+            poll_chain_valid = False
+            break
+        if len(failures) != poll_failure_count:
+            poll_chain_valid = False
+            break
+        poll_chain_valid = _validate_poll_invocation_identity(
+            poll_response,
+            invocation_identity=invocation_identity,
+            failures=failures,
+        )
+        if not poll_chain_valid:
+            break
+        failed_batches = _failed_terminal_batch_summaries(poll_response)
+        if failed_batches:
+            failures.append(
+                "poll: CRM Public Web batch reached failed/cancelled terminal state: " + ", ".join(failed_batches)
+            )
+            poll_chain_valid = False
             break
         if _runs_are_terminal(poll_response):
             failed_runs = _failed_terminal_run_summaries(poll_response)
             if failed_runs:
                 failures.append(
-                    "poll: CRM Public Web runs reached failed/cancelled terminal states: "
-                    + ", ".join(failed_runs)
+                    "poll: CRM Public Web runs reached failed/cancelled terminal states: " + ", ".join(failed_runs)
                 )
+                poll_chain_valid = False
             break
         if time.monotonic() >= deadline:
             nonterminal_runs = _nonterminal_run_summaries(poll_response)
             detail = f": {', '.join(nonterminal_runs)}" if nonterminal_runs else ""
             failures.append(f"poll: timed out before all CRM Public Web runs reached terminal state{detail}")
+            poll_chain_valid = False
             break
         time.sleep(args.poll_interval_seconds)
 
+    if not poll_chain_valid:
+        return {
+            "provider_health": provider_health,
+            "start": start_response,
+            "invocation_identity": invocation_identity,
+            "poll_history": poll_history,
+            "details": {},
+            "export": {},
+        }
+
     detail_responses: dict[str, dict[str, Any]] = {}
+    detail_chain_valid = True
     for record_id in args.crm_record_ids:
+        detail_failure_count = len(failures)
         endpoint = CANONICAL_ENDPOINTS["detail"].format(crm_record_id=quote(record_id, safe=""))
         detail_response = _request_json("GET", args.base_url, endpoint)
         detail_responses[record_id] = detail_response
         _validate_no_legacy_or_raw_payload(f"detail:{record_id}", detail_response, failures)
         _validate_owner_fields(f"detail:{record_id}", detail_response, failures)
         if _append_http_failure(f"detail:{record_id}", detail_response, failures):
+            detail_chain_valid = False
+            continue
+        if len(failures) != detail_failure_count:
+            detail_chain_valid = False
+            continue
+        if not _validate_detail_invocation_identity(
+            record_id,
+            detail_response,
+            invocation_identity=invocation_identity,
+            failures=failures,
+        ):
+            detail_chain_valid = False
             continue
         _validate_model_fields_for_terminal_detail(
             f"detail:{record_id}",
             detail_response,
-            expected_model=args.expected_model,
+            expected_model=EXPECTED_PUBLIC_WEB_MODEL,
             warnings=warnings,
             failures=failures,
         )
+        if len(failures) != detail_failure_count:
+            detail_chain_valid = False
+
+    if not detail_chain_valid or failures:
+        return {
+            "provider_health": provider_health,
+            "start": start_response,
+            "invocation_identity": invocation_identity,
+            "poll_history": poll_history,
+            "details": detail_responses,
+            "export": {},
+        }
 
     export_response = _request_bytes(
         "POST",
@@ -684,6 +1032,7 @@ def _run_live(args: argparse.Namespace, failures: list[str], warnings: list[str]
     return {
         "provider_health": provider_health,
         "start": start_response,
+        "invocation_identity": invocation_identity,
         "poll_history": poll_history,
         "details": detail_responses,
         "export": export_response,
@@ -721,12 +1070,16 @@ def main() -> int:
         "legacy_endpoint_marker_forbidden": LEGACY_ENDPOINT_MARKER,
         "legacy_owner_marker_forbidden": LEGACY_OWNER_MARKER,
         "expected_owner": EXPECTED_OWNER,
-        "expected_model": args.expected_model,
+        "expected_model": EXPECTED_PUBLIC_WEB_MODEL,
+        "configured_expected_model": args.expected_model,
         "crm_record_ids": args.crm_record_ids,
         "crm_record_ids_reviewed": bool(args.reviewed_crm_record_ids),
+        "force_refresh": bool(args.force_refresh),
         "independent_review": {
             "passed": _truthy(os.environ.get(INDEPENDENT_REVIEW_PASSED_ENV)),
             "artifact": str(os.environ.get(INDEPENDENT_REVIEW_ARTIFACT_ENV) or "").strip(),
+            "expected_title": EXPECTED_INDEPENDENT_REVIEW_TITLE,
+            "expected_scope_digest_sha256": _required_independent_review_scope_digest(),
             "artifact_validation": _validate_independent_review_artifact(
                 str(os.environ.get(INDEPENDENT_REVIEW_ARTIFACT_ENV) or "")
             ),
@@ -742,7 +1095,11 @@ def main() -> int:
     report["warnings"] = warnings
     report["status"] = "failed" if failures else ("live_validation_passed" if args.execute_live else "dry_run_ready")
     _write_report(Path(args.report_json), report)
-    print(json.dumps({"status": report["status"], "report_json": args.report_json, "failures": failures}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {"status": report["status"], "report_json": args.report_json, "failures": failures}, ensure_ascii=False
+        )
+    )
     return 1 if failures else 0
 
 

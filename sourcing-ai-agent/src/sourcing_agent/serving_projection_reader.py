@@ -58,8 +58,8 @@ class ServingProjectionReader:
                 projection_id=normalized_projection_id,
                 projection=projection,
             )
-        visible_count = self.store.count_serving_projection_members(normalized_projection_id, visible_only=True)
-        readiness_counts = self.store.count_serving_projection_members_by_readiness(
+        visible_count = self.store.repos.serving_projection.count_members(normalized_projection_id, visible_only=True)
+        readiness_counts = self.store.repos.serving_projection.count_members_by_readiness(
             normalized_projection_id,
             visible_only=True,
         )
@@ -140,7 +140,7 @@ class ServingProjectionReader:
             filter_fallback_reason = str(filtered.get("filter_fallback_reason") or "").strip()
         else:
             filtered_count = total_count
-            members = self.store.list_serving_projection_members(
+            members = self.store.repos.serving_projection.list_members(
                 normalized_projection_id,
                 offset=normalized_offset,
                 limit=normalized_limit,
@@ -224,7 +224,7 @@ class ServingProjectionReader:
         normalized_candidate_key = str(candidate_identity_key or "").strip()
         if not normalized_candidate_key:
             return self._projection_error("candidate_identity_key_required", projection_id=normalized_projection_id)
-        member = self.store.get_serving_projection_member(normalized_projection_id, normalized_candidate_key)
+        member = self.store.repos.serving_projection.get_member(normalized_projection_id, normalized_candidate_key)
         if not member:
             return self._projection_error("projection_member_not_found", projection_id=normalized_projection_id)
         person_key = str(member.get("person_identity_key") or "").strip()
@@ -305,7 +305,7 @@ class ServingProjectionReader:
         members = [
             member
             for key in keys
-            if (member := self.store.get_serving_projection_member(normalized_projection_id, key))
+            if (member := self.store.repos.serving_projection.get_member(normalized_projection_id, key))
         ]
         crm_overlays_by_person = self._crm_overlays_for_members(members)
         if crm_overlays_by_person:
@@ -351,7 +351,7 @@ class ServingProjectionReader:
         normalized_person_key = str(person_identity_key or "").strip()
         if not normalized_person_key:
             return {"status": "invalid", "reason": "person_identity_key_required"}
-        members = self.store.list_serving_projection_members_by_person_identity(
+        members = self.store.repos.serving_projection.list_members_by_person_identity(
             normalized_person_key,
             limit=max(1, int(limit or 25)),
         )
@@ -484,7 +484,7 @@ class ServingProjectionReader:
         filtered_count = 0
         selected: list[dict[str, Any]] = []
         while True:
-            page = self.store.list_serving_projection_members(
+            page = self.store.repos.serving_projection.list_members(
                 projection_id,
                 offset=scan_offset,
                 limit=page_size,
@@ -547,9 +547,7 @@ class ServingProjectionReader:
             if str(key or "").strip()
         ]
         members = [
-            member
-            for key in keys
-            if (member := self.store.get_serving_projection_member(projection_id, key))
+            member for key in keys if (member := self.store.repos.serving_projection.get_member(projection_id, key))
         ]
         return {
             "status": "ready",

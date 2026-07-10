@@ -57,7 +57,7 @@ class CRMWriter:
                 "reason": "projection_not_found",
                 "projection_id": normalized_projection_id,
             }
-        member = self.store.get_serving_projection_member(normalized_projection_id, normalized_candidate_key)
+        member = self.store.repos.serving_projection.get_member(normalized_projection_id, normalized_candidate_key)
         if not member:
             return {
                 "status": "not_found",

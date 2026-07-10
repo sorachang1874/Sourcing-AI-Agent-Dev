@@ -27,7 +27,7 @@ OpenClaw, Codex, Claude Code, LangGraph, or other general Agents may become oute
 - Do not manually delete runtime assets. Use reviewed manifests, cold-copy/hash proof, dry-run, active-process checks, and `--apply --reviewed`.
 - Do not `git add .`. The worktree is dirty and long-unsynced; use scoped branches/PRs and inspect staged files before commit.
 - Contract-heavy changes need targeted tests, then Independent Review Gate, then any live/provider/manual signoff.
-- Independent Review Gate default is GPT-5.5 with `model_reasoning_effort=xhigh` and `service_tier=fast`. Artifacts must record reviewer model, reasoning effort, and service tier.
+- Independent Review Gate inherits the operator-owned newest available reviewer model, its highest supported reasoning effort, and service tier from `~/.codex/config.toml`; project commands do not pin those values. Artifacts must bind durable evidence of the actual session settings and a zero reviewer exit code.
 - Frontend must consume backend-owned display/control contracts. Do not re-derive run status, retry/cancel capability, export readiness, or Public Web phase wording from raw command type/status.
 - Agent-native Search/fetch/browser can be a supplemental evidence source, but results must enter the same ProviderTask/Evidence/EntityDelta/adjudication path as DataForSEO/API providers.
 - Public Web manual promotions and PersonAssertions are durable assets. Retry or force refresh must not erase confirmed user state.
@@ -86,7 +86,7 @@ M0.9 prepared but not applied:
 
 M0.9 is blocked until:
 
-- A fresh current-scope Independent Review artifact returns `GO` with complete GPT-5.5/xhigh/fast metadata.
+- A fresh current-scope Independent Review artifact returns `GO` with complete, durable effective-session metadata and `reviewer_exit_code=0`.
 - The prune plan is regenerated with that fresh `GO` review artifact.
 - The regenerated plan has the same scope digest.
 - Dry-run succeeds.

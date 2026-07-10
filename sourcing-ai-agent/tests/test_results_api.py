@@ -723,8 +723,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertNotIn("layer_assignments", partial_state)
 
         with mock.patch.object(
-            self.store,
-            "get_serving_projection_member",
+            self.store.repos.serving_projection,
+            "get_member",
             side_effect=AssertionError("projection layer publish must bulk-fetch members"),
         ):
             second = self.orchestrator._run_projection_facet_layering_queue_once(  # noqa: SLF001
@@ -748,7 +748,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             completed_item["metadata"]["legacy_overlay_publication"]["reason"],
             "canonical_projection_member_source",
         )
-        projection_members = self.store.list_serving_projection_members(projection_id, limit=10)
+        projection_members = self.store.repos.serving_projection.list_members(projection_id, limit=10)
         self.assertTrue(all("outreach_layer" in dict(member["public_summary"]) for member in projection_members))
         lifecycle = self.store.get_job_result_lifecycle(job_id) or {}
         self.assertEqual(lifecycle["outreach_layering_status"], "completed")
@@ -980,7 +980,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         completed_state = json.loads(Path(completed_item["metadata"]["state_path"]).read_text(encoding="utf-8"))
         self.assertEqual(completed_state["checkpoint_contract"], "projection_member_layer_counts_v1")
         self.assertNotIn("layer_assignments", completed_state)
-        projection_members = self.store.list_serving_projection_members(
+        projection_members = self.store.repos.serving_projection.list_members(
             "proj_projection_layering_without_overlay",
             limit=10,
         )
@@ -1693,8 +1693,10 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(proof.get("source"), "job_result_view_lifecycle+run_scope_projection")
         self.assertTrue(str(proof.get("projection_id") or "").startswith("proj_"))
         self.assertEqual(proof.get("projection_member_count"), 7384)
-        self.assertEqual(self.store.count_serving_projection_members(str(proof.get("projection_id"))), 7384)
-        released_command = self.store.get_workflow_command(str(snapshot_compaction_command.get("command_id") or "")) or {}
+        self.assertEqual(self.store.repos.serving_projection.count_members(str(proof.get("projection_id"))), 7384)
+        released_command = (
+            self.store.get_workflow_command(str(snapshot_compaction_command.get("command_id") or "")) or {}
+        )
         self.assertEqual(released_command.get("status"), "queued")
         command_metadata = dict(dict(released_command.get("payload") or {}).get("materialization_metadata") or {})
         self.assertFalse(command_metadata.get("pending_until_workflow_completion"))
@@ -2500,7 +2502,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         link = self.store.repos.serving_projection.get_run_link(job_id)
         projection_id = str(dict(link or {}).get("projection_id") or "")
         self.assertTrue(projection_id.startswith("proj_"))
-        self.assertEqual(self.store.count_serving_projection_members(projection_id), 7384)
+        self.assertEqual(self.store.repos.serving_projection.count_members(projection_id), 7384)
 
     def test_save_job_preserves_existing_artifact_path_when_update_has_empty_pointer(self) -> None:
         job_id = "job_artifact_path_durable_pointer"
@@ -3179,7 +3181,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
         self.assertEqual(persisted["metadata"]["run_scope_projection"]["status"], "published")
         self.assertTrue(projection_id.startswith("proj_"))
-        self.assertEqual(self.store.count_serving_projection_members(projection_id), 1)
+        self.assertEqual(self.store.repos.serving_projection.count_members(projection_id), 1)
         projection = self.store.repos.serving_projection.get(projection_id)
         public_facet_counts = dict(dict(projection.get("counts") or {}).get("public_facet_counts") or {})
         self.assertEqual(public_facet_counts["candidate_count"], 1)
@@ -3305,7 +3307,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(serving_finalized.get("status"), "proved")
         self.assertTrue(projection_id.startswith("proj_"))
         self.assertEqual(stored_projection["projection_id"], projection_id)
-        self.assertEqual(self.store.count_serving_projection_members(projection_id), 1)
+        self.assertEqual(self.store.repos.serving_projection.count_members(projection_id), 1)
 
     def test_run_scope_projection_finalize_tick_promotes_acquiring_terminal_proof(self) -> None:
         job_id = "job-projection-finalize-promotes-terminal-proof"
@@ -3608,7 +3610,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             {"job_id": "job-merge-run", "owner_id": "test-merge-owner"}
         )
         pointer = self.store.repos.serving_projection.get_authoritative_pointer("company:openai")
-        members = self.store.list_serving_projection_members(pointer["active_projection_id"], limit=10)
+        members = self.store.repos.serving_projection.list_members(pointer["active_projection_id"], limit=10)
         names = {member["candidate_identity_key"]: member["public_summary"].get("name") for member in members}
 
         self.assertEqual(queue_result["completed_count"], 1)
@@ -3617,7 +3619,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(queue_result["legacy_bridge_used"], False)
         self.assertEqual(pointer["previous_projection_id"], first["projection"]["projection_id"])
         self.assertNotEqual(pointer["active_projection_id"], first["projection"]["projection_id"])
-        self.assertEqual(self.store.count_serving_projection_members(pointer["active_projection_id"]), 2)
+        self.assertEqual(self.store.repos.serving_projection.count_members(pointer["active_projection_id"]), 2)
         self.assertEqual(names["linkedin:existing"], "Existing Updated")
         self.assertEqual(names["linkedin:new"], "New")
 
@@ -22312,7 +22314,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(row_publication["served_candidate_count"], 25)
         projection_id = str(self.store.repos.serving_projection.get_run_link(job_id).get("projection_id") or "")
         self.assertTrue(projection_id.startswith("proj_"))
-        self.assertEqual(self.store.count_serving_projection_members(projection_id, visible_only=True), 25)
+        self.assertEqual(self.store.repos.serving_projection.count_members(projection_id, visible_only=True), 25)
         self.store.upsert_job_result_lifecycle(
             job_id=job_id,
             fields={
@@ -22337,7 +22339,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         extension = dict(patch.get("canonical_projection_extension") or {})
         self.assertEqual(extension["status"], "updated")
         self.assertEqual(extension["after_visible_member_count"], 140)
-        self.assertEqual(self.store.count_serving_projection_members(projection_id, visible_only=True), 140)
+        self.assertEqual(self.store.repos.serving_projection.count_members(projection_id, visible_only=True), 140)
         projection_page = self.orchestrator.get_serving_projection_candidate_page(projection_id, offset=0, limit=250)
         assert projection_page is not None
         self.assertEqual(projection_page["read_contract"]["source"], "serving_projection_members")
@@ -22433,7 +22435,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             readiness={"row": "complete", "row_count": 2},
         )
         projection_id = str(dict(publication.get("projection") or {}).get("projection_id") or "")
-        self.assertEqual(self.store.count_serving_projection_members(projection_id, visible_only=True), 2)
+        self.assertEqual(self.store.repos.serving_projection.count_members(projection_id, visible_only=True), 2)
 
         profile_ready_records = [
             {
@@ -22460,7 +22462,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(extension["status"], "updated")
         self.assertEqual(extension["before_visible_member_count"], 2)
         self.assertEqual(extension["after_visible_member_count"], 2)
-        members = self.store.list_serving_projection_members(projection_id, visible_only=True, limit=10)
+        members = self.store.repos.serving_projection.list_members(projection_id, visible_only=True, limit=10)
         self.assertEqual(len(members), 2)
         self.assertEqual({member["candidate_id"] for member in members}, {"lovable_identity_1", "lovable_identity_2"})
         self.assertTrue(all(str(member["profile_readiness"]) == "ready" for member in members))

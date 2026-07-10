@@ -48,7 +48,7 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
 
         projection = result["projection"]
         link = result["link"]
-        members = self.store.list_serving_projection_members(projection["projection_id"])
+        members = self.store.repos.serving_projection.list_members(projection["projection_id"])
 
         self.assertEqual(projection["projection_type"], "run_scope_projection")
         self.assertEqual(projection["source_run_id"], "job-openai-agent")
@@ -108,7 +108,7 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
 
         self.assertEqual(first["projection"]["projection_id"], "proj_existing_run_scope")
         self.assertEqual(second["projection"]["projection_id"], "proj_existing_run_scope")
-        self.assertEqual(self.store.count_serving_projection_members("proj_existing_run_scope"), 1)
+        self.assertEqual(self.store.repos.serving_projection.count_members("proj_existing_run_scope"), 1)
 
     def test_reader_fails_closed_and_serves_only_public_projection_fields(self) -> None:
         missing = self.reader.get_projection("proj_missing")
@@ -314,8 +314,8 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
         )
 
         with mock.patch.object(
-            self.store,
-            "list_serving_projection_members",
+            self.store.repos.serving_projection,
+            "list_members",
             side_effect=AssertionError("active projection filters must not scan membership rows without an index"),
         ):
             page = self.reader.get_projection_candidates(

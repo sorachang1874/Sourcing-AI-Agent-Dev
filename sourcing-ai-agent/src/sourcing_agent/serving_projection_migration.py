@@ -159,7 +159,7 @@ class ServingProjectionMigrationBackfill:
             offset = 0
             while processed_count < resolved_max_members:
                 page_limit = min(resolved_page_size, resolved_max_members - processed_count)
-                members = self.store.list_serving_projection_members(
+                members = self.store.repos.serving_projection.list_members(
                     projection_id,
                     offset=offset,
                     limit=page_limit,
@@ -182,12 +182,14 @@ class ServingProjectionMigrationBackfill:
                         changed_count += 1
                     normalized_members.append(normalized_member)
                 if normalized_members and not dry_run:
-                    self.store.upsert_serving_projection_members(projection_id, normalized_members)
+                    self.store.repos.serving_projection.upsert_members(projection_id, normalized_members)
                 processed_count += len(members)
                 if len(members) < page_limit:
                     break
                 offset += len(members)
-            truncated = self.store.count_serving_projection_members(projection_id, visible_only=False) > processed_count
+            truncated = (
+                self.store.repos.serving_projection.count_members(projection_id, visible_only=False) > processed_count
+            )
             projection_results.append(
                 {
                     "projection_id": projection_id,
@@ -237,7 +239,7 @@ class ServingProjectionMigrationBackfill:
             projection_id = str(projection.get("projection_id") or "").strip()
             if not projection_id:
                 continue
-            member_count = self.store.count_serving_projection_members(projection_id, visible_only=True)
+            member_count = self.store.repos.serving_projection.count_members(projection_id, visible_only=True)
             index_count = self.store.count_projection_person_search_index(projection_id)
             readiness = dict(projection.get("readiness") or {})
             already_exact = (
@@ -464,7 +466,7 @@ class ServingProjectionMigrationBackfill:
             projection_id = str(projection.get("projection_id") or "").strip()
             if not projection_id:
                 continue
-            member_count = self.store.count_serving_projection_members(projection_id, visible_only=True)
+            member_count = self.store.repos.serving_projection.count_members(projection_id, visible_only=True)
             if dry_run:
                 projection_results.append(
                     {
@@ -541,7 +543,7 @@ class ServingProjectionMigrationBackfill:
                     max(1, int(member_page_size or 1000)),
                     max(1, int(max_members_per_projection or 100_000)) - processed_count,
                 )
-                members = self.store.list_serving_projection_members(
+                members = self.store.repos.serving_projection.list_members(
                     projection_id,
                     offset=offset,
                     limit=page_limit,
@@ -615,7 +617,7 @@ class ServingProjectionMigrationBackfill:
                         }
                     )
                 if updates and not dry_run:
-                    updated_count += self.store.upsert_serving_projection_members(projection_id, updates)
+                    updated_count += self.store.repos.serving_projection.upsert_members(projection_id, updates)
                 else:
                     updated_count += len(updates)
                 processed_count += len(members)
