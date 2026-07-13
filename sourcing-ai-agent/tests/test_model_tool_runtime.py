@@ -326,57 +326,18 @@ def _static_string(node: ast.AST) -> str | None:
     return None
 
 
-def _is_runtime_module_reference(node: ast.AST, aliases: set[str]) -> bool:
-    if isinstance(node, ast.Name):
-        return node.id in aliases
-    if isinstance(node, ast.Attribute):
-        dotted: list[str] = []
-        current: ast.AST = node
-        while isinstance(current, ast.Attribute):
-            dotted.append(current.attr)
-            current = current.value
-        if isinstance(current, ast.Name):
-            dotted.append(current.id)
-        return ".".join(reversed(dotted)).endswith("model_tool_runtime")
-    return False
-
-
-def _is_runtime_namespace(node: ast.AST, aliases: set[str]) -> bool:
-    return _is_runtime_module_reference(node, aliases) or (
-        isinstance(node, ast.Attribute)
-        and node.attr == "__dict__"
-        and _is_runtime_module_reference(node.value, aliases)
+def _is_runtime_module_loader(node: ast.AST) -> bool:
+    if not isinstance(node, ast.Call) or not node.args:
+        return False
+    is_loader = (isinstance(node.func, ast.Name) and node.func.id == "__import__") or (
+        isinstance(node.func, ast.Attribute) and node.func.attr == "import_module"
     )
+    module_name = _static_string(node.args[0])
+    return is_loader and module_name is not None and module_name.endswith("model_tool_runtime")
 
 
 def _temporary_usage_reference_lines(source: str) -> tuple[int, ...]:
     tree = ast.parse(source)
-    runtime_aliases: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name.endswith("model_tool_runtime") and alias.asname:
-                    runtime_aliases.add(alias.asname)
-        elif isinstance(node, ast.ImportFrom) and str(node.module or "").endswith("sourcing_agent"):
-            for alias in node.names:
-                if alias.name == "model_tool_runtime":
-                    runtime_aliases.add(alias.asname or alias.name)
-
-    changed = True
-    while changed:
-        changed = False
-        for node in ast.walk(tree):
-            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
-                continue
-            value = node.value
-            if value is None or not _is_runtime_module_reference(value, runtime_aliases):
-                continue
-            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-            for target in targets:
-                if isinstance(target, ast.Name) and target.id not in runtime_aliases:
-                    runtime_aliases.add(target.id)
-                    changed = True
-
     lines: set[int] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Name) and node.id == "ModelTurnUsage":
@@ -385,26 +346,21 @@ def _temporary_usage_reference_lines(source: str) -> tuple[int, ...]:
             lines.add(node.lineno)
         elif _static_string(node) == "ModelTurnUsage":
             lines.add(node.lineno)
+        elif isinstance(node, ast.Import) and any(
+            alias.name.endswith("model_tool_runtime") for alias in node.names
+        ):
+            lines.add(node.lineno)
         elif isinstance(node, ast.ImportFrom):
             module_name = str(node.module or "")
             if module_name.endswith("model_tool_runtime") and any(
                 alias.name in {"ModelTurnUsage", "*"} for alias in node.names
             ):
                 lines.add(node.lineno)
-        elif (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "getattr"
-            and len(node.args) >= 2
-            and _is_runtime_module_reference(node.args[0], runtime_aliases)
-            and (_static_string(node.args[1]) in {None, "ModelTurnUsage"})
-        ):
-            lines.add(node.lineno)
-        elif (
-            isinstance(node, ast.Subscript)
-            and _is_runtime_namespace(node.value, runtime_aliases)
-            and (_static_string(node.slice) in {None, "ModelTurnUsage"})
-        ):
+            elif module_name.endswith("sourcing_agent") and any(
+                alias.name == "model_tool_runtime" for alias in node.names
+            ):
+                lines.add(node.lineno)
+        elif _is_runtime_module_loader(node):
             lines.add(node.lineno)
     return tuple(sorted(lines))
 
@@ -1215,8 +1171,24 @@ def test_temporary_usage_type_cannot_escape_into_production_modules() -> None:
     assert _temporary_usage_reference_lines(
         "import sourcing_agent.model_tool_runtime as runtime\nname = get_name()\nUsage = runtime.__dict__[name]"
     )
+    assert _temporary_usage_reference_lines(
+        "import sourcing_agent.model_tool_runtime as runtime\n"
+        "namespace = runtime.__dict__\nname = get_name()\nUsage = namespace[name]"
+    )
+    assert _temporary_usage_reference_lines(
+        "import sourcing_agent.model_tool_runtime as runtime\n"
+        "name = get_name()\nUsage = vars(runtime)[name]"
+    )
+    assert _temporary_usage_reference_lines(
+        'runtime = __import__("sourcing_agent." + "model_tool_runtime", fromlist=["*"])\n'
+        "name = get_name()\nUsage = getattr(runtime, name)"
+    )
+    assert _temporary_usage_reference_lines(
+        'import importlib\nruntime = importlib.import_module("sourcing_agent.model_tool_runtime")\n'
+        "name = get_name()\nUsage = getattr(runtime, name)"
+    )
     assert not _temporary_usage_reference_lines("from .model_tool_runtime import ToolSpec")
-    assert not _temporary_usage_reference_lines(
+    assert _temporary_usage_reference_lines(
         'import sourcing_agent.model_tool_runtime as runtime\nTool = getattr(runtime, "ToolSpec")'
     )
 
@@ -1228,8 +1200,6 @@ def test_temporary_usage_type_cannot_escape_into_production_modules() -> None:
         if path == owner_path:
             continue
         source = path.read_text()
-        if "ModelTurnUsage" not in source and "model_tool_runtime" not in source:
-            continue
         references = _temporary_usage_reference_lines(source)
         if references:
             violations[str(path.relative_to(repository_root))] = references

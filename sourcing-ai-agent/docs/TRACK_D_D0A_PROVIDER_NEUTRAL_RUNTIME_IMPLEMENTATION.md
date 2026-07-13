@@ -43,9 +43,11 @@ must move to a provider-neutral module, both owners must import that single type
 Until that deletion condition is met, D0a remains non-live and no downstream contract may accept either type by duck
 typing or add a third usage representation. `docs/NEXT_TODO.md` records this as a mandatory predecessor of the first
 transport/product integration. A production-source AST/reference ratchet prevents the temporary type from escaping
-its D0a owner: it follows runtime-module aliases, folds bounded static string expressions, and rejects unresolved
-dynamic `getattr`/subscript access on that module. This focused D0 test and implementation documentation remain the
-only allowed non-owner references.
+its D0a owner: until the shared type extraction, production modules may use selective symbol imports from
+`model_tool_runtime`, but may not acquire its module object through a normal or statically resolvable dynamic import.
+The ratchet also folds bounded static string expressions that spell the temporary type. This removes reflective
+`getattr`, `vars`, and `__dict__` namespace escape routes instead of trying to enumerate every alias form. This focused
+D0 test and implementation documentation remain the only allowed non-owner references.
 
 ## 3. Parser state and authorization boundary
 
