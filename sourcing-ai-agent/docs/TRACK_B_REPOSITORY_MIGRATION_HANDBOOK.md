@@ -1,14 +1,16 @@
 # Track B ② Repository 迁移 Handbook(新一轮的入口文档)
 
 > Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
-> 状态:**②.4d 完成(2026-07-13,implementation `7048d83`)** —— workflow runtime read-model trio
-> (`workflow_events` / `workflow_current_state` / `runtime_outbox`)已退役到 `store.repos.workflow_runtime`;
-> 当前分支 `storage.py` 12,190 → 11,959 行,production 9 + tests 22 个旧调用全部迁移,旧 6 facade / 3 mapper /
-> 3 descriptor dispatch keys / 4 native keys 清零。event sequence/identity、current-state checkpoint+sparse merge、
-> outbox identity/dispatch owner fence 已落地；`DurableRuntimeWriter` 四表多提交和 same-checkpoint count coherence
-> 继续归 R-019，future outbox claim ABA 归 R-023；R-025 固定 `889848e..7048d83` 异步 Codex review，
-> 只冻结本 scope 的 live/W6/manual/里程碑签收。批记录见 `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。
-> 下一批按既定顺序为 **②.4 workflow recovery intents**；commands 仍为本域最后一批并闭合 R-019。
+> 状态:**②.4e 完成(2026-07-13,implementation `f09ffbd`)** —— `workflow_recovery_intents` 已退役到
+> `store.repos.workflow_runtime`；当前分支 `storage.py` 11,959 → 11,829 行，workflow repository
+> 2,195 → 2,307 行，旧 4 public facade + 1 mapper / 1 descriptor dispatch key / 3 Store native keys 和
+> production 3 + tests 35 个旧 receiver 全部清零。latest-wins re-arm、single-winner claim、过期 reclaim 与
+> claim-identity consume fence 保持原合同，3 个 PG native writer 另以显式 `table_name` authority fail-closed。
+> R-026 以 base `dbb40f3`、carrier/head `a30f600` 固定 8 个 implementation/test 文件的待执行异步 Codex review；
+> implementation 为 `f09ffbd`，runner 4 文件不在该 scope。有效 GO 前只冻结本批 live/W6/manual/里程碑签收。
+> R-025 的 runner executable 根因已由 carrier `a30f600` 修复但 ②.4d re-review 仍 pending。批记录见
+> `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。下一批按既定顺序为 **②.4f session/trace**；commands
+> 仍为本域最后一批并闭合 R-019。
 > B4.3 影子拆除 100% 完成(commit 952f9ee)。本文档是路线图
 > **②「Repository 查询方法建设 + 按域迁移调用方」** 这一轮的执行手册。
 > 设计依据:`docs/TRACK_B_B4_2_PG_NATIVE_STORE_DESIGN.md`(B4.2 设计,owner 已 ratify);历史全记录:`docs/TRACK_B_PG_PURE_STORE_DESIGN.md` §6。
@@ -16,13 +18,13 @@
 
 ## 1. 当前基底(起点事实,勿再重推导)
 
-- `storage.py` = 11,959 行(②.4d 后;②.4d 起点 12,190,②.4c 起点 12,564,②.4b 起点 12,809,②.4a 当前分支起点 13,296,②.3d 当前分支起点 13,835,②.3c settled tree 13,822,
+- `storage.py` = 11,829 行(②.4e 后;②.4e 起点 11,959,②.4d 起点 12,190,②.4c 起点 12,564,②.4b 起点 12,809,②.4a 当前分支起点 13,296,②.3d 当前分支起点 13,835,②.3c settled tree 13,822,
   ②.3b 后 14,261,②.3a 后 14,355,②.2 后 14,635,②.1 后 15,091,②.0 后 16,382,试点前 19,187),
   **PG-pure**:零 sqlite3 / 零 `_connection` / 零 `_lock`。
   已整体退役的域:linkedin_profile_registry(②.0)、criteria/confidence(②.1,`store.repos.criteria_confidence`)、
   manual_review(②.2,`store.repos.manual_review`);serving_projection 的 catalog、manifest、members、person search index
   已由 ②.3a-d 整域退役到 `store.repos.serving_projection`;
-  workflow_runtime 的 operation-control、acquisition-control、activity spine 与 read-model trio 已由 ②.4a-d
+  workflow_runtime 的 operation-control、acquisition-control、activity spine、read-model trio 与 recovery intents 已由 ②.4a-e
   退役到 `store.repos.workflow_runtime`;
   其余域仍在 God-class 门面上,按批推进。共享纯函数 `matching_bundle_payload`/`request_signature_context` 已外提到
   `request_matching.py`(storage 留别名 import)。
@@ -56,8 +58,8 @@
    ~~②.3c members + D-4(a)~~ DONE → ~~②.3d person search index~~ DONE。serving_projection 整域闭合。
    D-4 的四点显式 keyword 修复和全局 guard 已随 ②.3c 完成。
 5. **②.4 workflow_runtime 分子批**:~~②.4a operation-control~~ DONE → ~~②.4b acquisition-control~~ DONE →
-   ~~②.4c activity spine + R-020 fixed-forward~~ DONE → ~~②.4d read-model trio~~ DONE → **recovery intents** →
-   session/trace → job leases → workers → commands(last，闭合 R-019)。
+   ~~②.4c activity spine + R-020 fixed-forward~~ DONE → ~~②.4d read-model trio~~ DONE →
+   ~~②.4e recovery intents~~ DONE → **②.4f session/trace** → job leases → workers → commands(last，闭合 R-019)。
    每个分子批重新 Scout;不得因共享一个 repository 文件而合并状态机或跨批删除。
 6. **随批机会主义**:37 个 IRREGULAR read-mapper 里"软 irregular"(subscript 形式等价)可在其域批内顺手转 descriptor(harness 全列模式验证)。
    **②.1 反例警示**:criteria/confidence 的 8 个 mapper 看似可转,实为 None 直通 + 写路径真写 NULL FK —— Kind.INT 会 None→0 炸字节等价;
@@ -222,6 +224,17 @@ rg -n '^    def .*workflow_(current_state|event)|^    def .*runtime_outbox' src/
   blocker read、module update 与 command transition 放在同一 cursor/transaction,并返回结构化 committed outcome;
   handler 不得在事务外重做 module writes 或把 blocked/conflict 报成 success;(d) exact replay、legacy partial repair、
   injected rollback 与 corrupt identity 必须同组验证,否则“幂等”可能只覆盖 command row 而漏 module rows。
+- **②.4d 新增经验**:(a) event sequence、current-state checkpoint 与 outbox dispatch 都是并发状态机合同，不能只做
+  facade 搬家；sequence 分配和 identity replay 要在同一 workflow lock 下，sparse state merge 要区分低/同/高 checkpoint，
+  outbox dispatch 则必须钉住 committed timestamp 与当前 lease owner；(b) old/new 共用 descriptor 时同树 A/B 不足，
+  必须保留 pinned hash mutation；(c) 单表锁定不把 `DurableRuntimeWriter` 的 event→commands→outbox→state 多提交升级成
+  四表事务，command count coherence 仍由 R-019、future outbox claim generation 由 R-023 跟踪。
+- **②.4e 新增经验**:(a) recovery intent 的 consume `{job_id, lease_owner, claimed_at}` 是防 ABA 的 claim identity，
+  `None`/空 row 是 newer intent re-arm 后的预期 fenced no-op，不能被 repository 通用 write-confirmation 误报为故障；
+  (b) adapter-native 写也要显式传入并验证 authority `table_name`，否则 Repository cutover 后仍会保留隐藏 Store dispatch；
+  (c) latest-wins re-arm、claim limit/order、过期 reclaim、malformed JSON 与 raw PG dump 必须进入同一 frozen battery，
+  并对 consume fence 做受控变异；(d) `test_pipeline` 精确节点仍须 current/pinned 成对跑，已删 `_lock/_connection`
+  的同基线失败归 R-009，不能为迁移恢复 SQLite-era 白盒缝隙。
 
 ## 7. Owner 决策卡(决策卡格式,2026-07-09 升级;D-1/D-2 已决，D-3 待决)
 

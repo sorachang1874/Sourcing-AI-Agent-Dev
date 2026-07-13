@@ -975,3 +975,37 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     R-025 已登记并启动 pinned `889848e..7048d83` scope-local async Codex review；它只冻结本批
     live/W6/manual/里程碑签收，不阻断后续分子批。
     D-1 已由 owner 选择 (a)、D-2 选择 (b)并写回权威决策卡；D-3 仍待 owner 裁决，截止 **2026-07-31**。
+
+- **2026-07-13 ②.4e 完成 —— `workflow_recovery_intents` 退役到 `store.repos.workflow_runtime`**:
+  - **范围/Scout/删除**:原 Store 的 4 public（upsert/claim/consume/get）+ 1 mapper 整体迁成 Repository 的
+    `upsert_recovery_intent` / `claim_recovery_intents` / `mark_recovery_intent_consumed` /
+    `get_recovery_intent` + `_recovery_intent_from_row`；旧 5 Store 方法、1 descriptor dispatch key 与 3 Store
+    native-dispatch key 同批删除，不留双轨。旧 receiver **38 → 0**，其中 production **3**、tests **35**；
+    direct/getattr/hasattr/`mock.patch.object`/unbound Store call 均纳入 receiver-aware AST guard。`storage.py`
+    **11,959 → 11,829**(-130)，workflow repository **2,195 → 2,307** 行。3 个 adapter-native writer 保留为
+    PG authority 实现，但现在必须接收并验证 keyword-only `table_name="workflow_recovery_intents"`。
+  - **A/B + 变异**:frozen real-PG battery 覆盖 invalid/missing、upsert、claim limit/order、latest-wins re-arm、
+    stale consume fencing、expired reclaim、malformed JSON 与 raw PG dump。旧 Store@`dbb40f3` 与新 Repository
+    快照均为 **6,062 bytes**，SHA-256
+    **`d0359eef480fb4ac2322cbd1f03a9a4ad59f1b9fd372d67994ec795d60f3f2b3`**，`cmp=0`；受控破坏
+    consume claim-identity fence 后变为 **5,859 bytes**，SHA-256
+    **`a187e04aad42a58461fde1204badfe1dacd568d49a87e8ae414730df046b429e`**，`cmp=1`，恢复后回到原 hash。
+  - **语义保持/边界收紧**:latest-wins upsert 继续把 consumed/claimed row re-arm 为 pending；claim 保持 limit/order、
+    single-winner 与 expired-lease reclaim；consume 继续绑定 `{job_id, lease_owner, claimed_at}`，newer same-job intent
+    到达后 stale consume 返回空 row 是预期 fenced no-op，不被误作 authoritative write failure。Repository 的 PG-only
+    invariant 与 native fault chain 保持 fail-closed；空 job/owner sentinel、malformed JSON public mapping 与 raw row 均已钉住。
+  - **永久守卫/验证**:takeover + signal-only **21 passed**；tick/drain/event-wakeup **38 passed**；storage surface
+    **59 passed**；live-PG adapter **61 passed + 4 subtests**。四个 recovery pipeline 精确节点当前为
+    **3 passed / 1 failed**，pinned `dbb40f3` 同为 **3 passed / 1 failed**；唯一失败在
+    `test_get_job_progress_triggers_auto_recovery_when_runner_is_not_alive` 的 SQLite-era
+    `ControlPlaneStore._lock/_connection` 白盒访问（`tests/test_pipeline.py:9782`），归既有 R-009，不恢复退役影子。
+    最终 `make ci-pre-agent-contract` 为 **321 passed / 0 skip** + 后续门 **2/11/1/2 passed**；`make lint`
+    **58 files** 的 Ruff 段全绿，compileall 通过，mypy 保持 R-011 基线 **87 errors / 4 files**。
+  - **评审/接续**:implementation=`f09ffbd`；修复 caller PATH Codex executable discovery 的 runner carrier/head 为
+    `a30f600`。R-026 固定 `REVIEW_BASE=dbb40f3`，`REVIEW_FILES` 仅含
+    `src/sourcing_agent/control_plane_live_postgres.py`、`src/sourcing_agent/orchestrator.py`、
+    `src/sourcing_agent/repositories/workflow_runtime.py`、`src/sourcing_agent/storage.py`、`tests/test_pipeline.py`、
+    `tests/test_recovery_takeover_intent.py`、`tests/test_recovery_trigger_signal_only.py`、
+    `tests/test_storage_surface_guardrails.py`；因此 carrier 的 4 个 runner 文件不混入 ②.4e review scope。
+    尚未发送 reviewer、无 verdict/artifact；有效 GO 前只冻结本批 live/W6/manual/里程碑签收，不阻断
+    **②.4f session/trace** 与其他非 live 开发。R-025 的 runner 根因虽已由 `a30f600` 修复，②.4d re-review 仍 pending。
