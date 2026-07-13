@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import replace
+from dataclasses import fields, replace
 from pathlib import Path
 from typing import Mapping
 
 import pytest
 
+from sourcing_agent.model_provider import OpenAIModelUsage
 from sourcing_agent.model_route_registry import (
     DEFAULT_MODEL_ROUTE_SPECS,
     MODEL_ROUTE_SPECS_BY_ID,
@@ -21,10 +22,16 @@ from sourcing_agent.model_route_registry import (
 from sourcing_agent.model_tool_runtime import (
     D0A_EFFECT_AUTHORIZATION_AVAILABLE,
     MAX_SSE_CHUNKS,
+    MAX_SSE_LINES,
+    MAX_SSE_PENDING_BYTES,
+    MAX_TOOL_SCHEMA_BYTES,
+    MAX_TOOL_SPECS,
+    MAX_TOTAL_TOOL_SCHEMA_BYTES,
     ModelToolProtocolError,
     ModelToolRequestBindingError,
     ModelToolRuntimeError,
     ModelToolSchemaError,
+    ModelTurnUsage,
     ScriptedToolReplayError,
     ScriptedToolTurnSession,
     ScriptedToolTurnTranscript,
@@ -102,6 +109,17 @@ def _tools(*, additional_properties: bool = False):
             approval_policy="none_simulated",
             budget_required=False,
         ),
+    )
+
+
+def _tool_spec(name: str, *, description: str = "Synthetic tool.") -> ToolSpec:
+    return ToolSpec(
+        name=name,
+        description=description,
+        input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        schema_version="synthetic_v1",
+        approval_policy="none_simulated",
+        budget_required=False,
     )
 
 
@@ -254,6 +272,15 @@ def test_route_registry_is_content_revisioned_and_draft_only() -> None:
     assert _route().revision == _route().revision
 
 
+def test_public_route_registry_is_immutable() -> None:
+    with pytest.raises(TypeError):
+        MODEL_ROUTE_SPECS_BY_ID["agent.planner.mutable"] = _route()  # type: ignore[index]
+
+    validated = validate_model_route_specs(DEFAULT_MODEL_ROUTE_SPECS, require_draft_only=True)
+    with pytest.raises(TypeError):
+        validated["agent.planner.mutable"] = _route()  # type: ignore[index]
+
+
 def test_route_registry_rejects_non_draft_declaration_for_d0a() -> None:
     active = replace(_route(), route_id="agent.planner.active-test", rollout_state="active")
 
@@ -383,6 +410,87 @@ def test_canonical_request_hash_changes_for_message_or_tool_order() -> None:
     assert canonical_tool_turn_request_hash(request, messages, (tool_b, tool_a)) != baseline
 
 
+def test_message_collector_stops_at_first_byte_overflow() -> None:
+    consumed: list[int] = []
+
+    def oversized_messages():
+        for index in range(6):
+            if index > 4:
+                raise AssertionError("message collector consumed beyond the first over-limit item")
+            consumed.append(index)
+            yield UserMessage("m" * 60_000)
+
+    with pytest.raises(ModelToolRuntimeError, match="messages_too_large"):
+        canonical_tool_turn_request_hash(_request(), oversized_messages(), _tools())
+
+    assert consumed == [0, 1, 2, 3, 4]
+
+
+def test_tool_collector_stops_at_first_count_overflow() -> None:
+    consumed: list[int] = []
+
+    def oversized_tools():
+        for index in range(MAX_TOOL_SPECS + 2):
+            if index > MAX_TOOL_SPECS:
+                raise AssertionError("tool collector consumed beyond the first over-limit item")
+            consumed.append(index)
+            yield _tool_spec(f"tool_{index:03d}")
+
+    with pytest.raises(ModelToolRuntimeError, match="tools_too_many"):
+        canonical_tool_turn_request_hash(_request(), _messages(), oversized_tools())
+
+    assert consumed == list(range(MAX_TOOL_SPECS + 1))
+
+
+def test_tool_collector_stops_at_first_total_schema_overflow() -> None:
+    description = "d" * 16_000
+    prototype = _tool_spec("tool_000", description=description)
+    record_bytes = len(
+        json.dumps(
+            prototype.to_fingerprint_record(),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    encoded_array_bytes = 2
+    allowed_items = 0
+    while encoded_array_bytes + (1 if allowed_items else 0) + record_bytes <= MAX_TOTAL_TOOL_SCHEMA_BYTES:
+        encoded_array_bytes += (1 if allowed_items else 0) + record_bytes
+        allowed_items += 1
+    assert allowed_items < MAX_TOOL_SPECS
+
+    consumed: list[int] = []
+
+    def oversized_tools():
+        for index in range(allowed_items + 2):
+            if index > allowed_items:
+                raise AssertionError("tool collector consumed beyond the first schema-over-limit item")
+            consumed.append(index)
+            yield _tool_spec(f"tool_{index:03d}", description=description)
+
+    with pytest.raises(ModelToolRuntimeError, match="tools_schema_too_large"):
+        canonical_tool_turn_request_hash(_request(), _messages(), oversized_tools())
+
+    assert consumed == list(range(allowed_items + 1))
+
+
+def test_single_tool_schema_has_a_hard_byte_bound() -> None:
+    with pytest.raises(ModelToolSchemaError, match="schema_too_large"):
+        ToolSpec(
+            name="oversized_schema_tool",
+            description="Rejected before registry collection.",
+            input_schema={
+                "type": "object",
+                "description": "s" * MAX_TOOL_SCHEMA_BYTES,
+                "properties": {},
+            },
+            schema_version="v1",
+            approval_policy="none_simulated",
+            budget_required=False,
+        )
+
+
 def test_tool_schema_definition_rejects_unsupported_or_ambiguous_keywords() -> None:
     with pytest.raises(ModelToolSchemaError, match="keyword_unsupported"):
         ToolSpec(
@@ -448,6 +556,31 @@ def test_parser_reassembles_arbitrary_sse_chunking_to_one_canonical_result() -> 
     assert whole.advisory_events[-1].result == whole.terminal_result
 
 
+def test_parser_large_complete_line_chunk_is_chunk_boundary_independent() -> None:
+    comment_line = b":" + (b"x" * (64 * 1024)) + b"\n"
+    payload = (comment_line * 9) + _tool_turn_bytes()
+    assert len(payload) > MAX_SSE_PENDING_BYTES
+    split_chunks = tuple(payload[offset : offset + 64 * 1024] for offset in range(0, len(payload), 64 * 1024))
+    request = _request(transcript=payload)
+
+    whole = parse_openai_chat_sse((payload,), request=request, messages=_messages(), tools=_tools())
+    split = parse_openai_chat_sse(split_chunks, request=request, messages=_messages(), tools=_tools())
+
+    assert split == whole
+
+
+def test_parser_bounds_complete_sse_lines_separately_from_pending_remainder() -> None:
+    payload = (b":\n" * (MAX_SSE_LINES + 1)) + _tool_turn_bytes()
+
+    with pytest.raises(ModelToolProtocolError, match="sse_lines_too_many"):
+        parse_openai_chat_sse(
+            (payload,),
+            request=_request(transcript=payload),
+            messages=_messages(),
+            tools=_tools(),
+        )
+
+
 def test_parser_emits_end_turn_result_without_action() -> None:
     payload = _text_turn_bytes()
     parsed = parse_openai_chat_sse(
@@ -478,13 +611,17 @@ def test_missing_provider_call_identity_cannot_enter_policy_evaluation() -> None
     assert D0A_EFFECT_AUTHORIZATION_AVAILABLE is False
 
 
-def test_direct_parser_rejects_live_before_reading_stream() -> None:
+def test_direct_parser_rejects_live_before_reading_any_caller_iterable() -> None:
+    def unread_iterable():
+        raise AssertionError("live fence must run before consuming caller iterables")
+        yield None
+
     with pytest.raises(ModelRouteExecutionRejected, match="live_unavailable"):
         parse_openai_chat_sse(
-            [b"not even SSE"],
+            unread_iterable(),  # type: ignore[arg-type]
             request=_request(provider_mode="live", transcript=b"not even SSE"),
-            messages=_messages(),
-            tools=_tools(),
+            messages=unread_iterable(),  # type: ignore[arg-type]
+            tools=unread_iterable(),  # type: ignore[arg-type]
         )
 
 
@@ -787,8 +924,39 @@ def test_scripted_session_rejects_live_before_transcript_parse() -> None:
         )
     )
 
+    def unread_iterable():
+        raise AssertionError("live fence must run before consuming caller iterables")
+        yield None
+
     with pytest.raises(ModelRouteExecutionRejected, match="live_unavailable"):
-        session.run_tool_turn(with_provider_mode(request, "live"), _messages(), _tools())
+        session.run_tool_turn(
+            with_provider_mode(request, "live"),
+            unread_iterable(),  # type: ignore[arg-type]
+            unread_iterable(),  # type: ignore[arg-type]
+        )
+    with pytest.raises(ModelRouteExecutionRejected, match="live_unavailable"):
+        tuple(
+            session.stream_tool_turn(
+                with_provider_mode(request, "live"),
+                unread_iterable(),  # type: ignore[arg-type]
+                unread_iterable(),  # type: ignore[arg-type]
+            )
+        )
+
+
+def test_temporary_usage_type_matches_existing_valid_value_contract() -> None:
+    assert [item.name for item in fields(ModelTurnUsage)] == [item.name for item in fields(OpenAIModelUsage)]
+    values = {
+        "input_tokens": 12,
+        "output_tokens": 7,
+        "total_tokens": 19,
+        "cached_input_tokens": 2,
+        "reasoning_output_tokens": 3,
+    }
+    assert ModelTurnUsage(**values).to_record() == OpenAIModelUsage(**values).to_record()
+    assert ModelTurnUsage().to_record() == OpenAIModelUsage().to_record() == {}
+    with pytest.raises(ModelToolProtocolError, match="usage_value_invalid"):
+        ModelTurnUsage(input_tokens=-1)
 
 
 def test_d0a_modules_have_no_transport_or_environment_dependency() -> None:

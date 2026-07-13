@@ -11,7 +11,8 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Iterable
+from types import MappingProxyType
+from typing import Iterable, Mapping
 
 MODEL_ROUTE_REGISTRY_SCHEMA_VERSION = "model_route_registry_v1"
 MODEL_ROUTE_ROLLOUT_DRAFT = "draft"
@@ -137,7 +138,7 @@ def validate_model_route_specs(
     specs: Iterable[ModelRouteSpec],
     *,
     require_draft_only: bool,
-) -> dict[str, ModelRouteSpec]:
+) -> Mapping[str, ModelRouteSpec]:
     """Validate uniqueness and the current batch's draft-only rollout fence."""
 
     routes: dict[str, ModelRouteSpec] = {}
@@ -149,7 +150,7 @@ def validate_model_route_specs(
         routes[spec.route_id] = spec
     if not routes:
         raise ModelRouteRegistryError("model_route_registry_empty")
-    return routes
+    return MappingProxyType(routes)
 
 
 MODEL_ROUTE_SPECS_BY_ID = validate_model_route_specs(

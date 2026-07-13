@@ -32,10 +32,14 @@ D0A_EFFECT_AUTHORIZATION_AVAILABLE = False
 
 MAX_MESSAGE_CONTENT_BYTES = 64 * 1024
 MAX_TOTAL_MESSAGE_BYTES = 256 * 1024
+MAX_TOOL_SCHEMA_BYTES = 128 * 1024
+MAX_TOTAL_TOOL_SCHEMA_BYTES = 512 * 1024
+MAX_TOOL_SPECS = 128
 MAX_SSE_FRAME_BYTES = 256 * 1024
 MAX_SSE_PENDING_BYTES = 512 * 1024
 MAX_SSE_TOTAL_BYTES = 4 * 1024 * 1024
 MAX_SSE_CHUNKS = 128 * 1024
+MAX_SSE_LINES = 64 * 1024
 MAX_SSE_FRAMES = 4096
 MAX_TOOL_ARGUMENT_BYTES = 64 * 1024
 MAX_TOOL_CALLS = 16
@@ -297,7 +301,10 @@ class ToolSpec:
         if not isinstance(self.budget_required, bool):
             raise ModelToolSchemaError("model_tool_budget_required_invalid")
         try:
-            copied_schema = _json_loads_strict(_canonical_json(self.input_schema))
+            encoded_schema = _canonical_json(self.input_schema)
+            if len(encoded_schema.encode("utf-8")) > MAX_TOOL_SCHEMA_BYTES:
+                raise ModelToolSchemaError("model_tool_schema_too_large")
+            copied_schema = _json_loads_strict(encoded_schema)
         except (json.JSONDecodeError, ValueError) as exc:
             raise ModelToolSchemaError("model_tool_schema_not_json") from exc
         if not isinstance(copied_schema, dict):
@@ -602,25 +609,63 @@ def _message_record(message: ModelTurnMessage) -> dict[str, object]:
     raise ModelToolRuntimeError("model_tool_message_type_unsupported")
 
 
-def canonical_tool_turn_request_payload(
-    request: ToolTurnRequest,
+def _collect_message_records(
     messages: Iterable[ModelTurnMessage],
-    tools: Iterable[ToolSpec],
-) -> dict[str, object]:
-    message_records = [_message_record(message) for message in messages]
-    if not message_records:
+) -> tuple[tuple[ModelTurnMessage, ...], list[dict[str, object]]]:
+    """Collect messages with an exact incremental canonical-JSON byte bound."""
+
+    collected: list[ModelTurnMessage] = []
+    records: list[dict[str, object]] = []
+    encoded_array_bytes = 2  # ``[]``
+    for message in messages:
+        record = _message_record(message)
+        record_bytes = len(_canonical_json(record).encode("utf-8"))
+        candidate_bytes = encoded_array_bytes + (1 if records else 0) + record_bytes
+        if candidate_bytes > MAX_TOTAL_MESSAGE_BYTES:
+            raise ModelToolRuntimeError("model_tool_messages_too_large")
+        encoded_array_bytes = candidate_bytes
+        collected.append(message)
+        records.append(record)
+    if not records:
         raise ModelToolRuntimeError("model_tool_messages_required")
-    message_bytes = len(_canonical_json(message_records).encode("utf-8"))
-    if message_bytes > MAX_TOTAL_MESSAGE_BYTES:
-        raise ModelToolRuntimeError("model_tool_messages_too_large")
+    return tuple(collected), records
 
-    tool_records = [tool.to_fingerprint_record() for tool in tools]
-    if not tool_records:
+
+def _collect_tool_records(
+    tools: Iterable[ToolSpec],
+) -> tuple[tuple[ToolSpec, ...], list[dict[str, object]]]:
+    """Collect a bounded tool registry without exhausting an untrusted iterable."""
+
+    collected: list[ToolSpec] = []
+    records: list[dict[str, object]] = []
+    names: set[str] = set()
+    encoded_array_bytes = 2  # ``[]``
+    for tool in tools:
+        if len(collected) >= MAX_TOOL_SPECS:
+            raise ModelToolRuntimeError("model_tool_tools_too_many")
+        if not isinstance(tool, ToolSpec):
+            raise ModelToolRuntimeError("model_tool_tool_spec_invalid")
+        if tool.name in names:
+            raise ModelToolRuntimeError(f"model_tool_duplicate_tool_name:{tool.name}")
+        record = tool.to_fingerprint_record()
+        record_bytes = len(_canonical_json(record).encode("utf-8"))
+        candidate_bytes = encoded_array_bytes + (1 if records else 0) + record_bytes
+        if candidate_bytes > MAX_TOTAL_TOOL_SCHEMA_BYTES:
+            raise ModelToolRuntimeError("model_tool_tools_schema_too_large")
+        encoded_array_bytes = candidate_bytes
+        collected.append(tool)
+        records.append(record)
+        names.add(tool.name)
+    if not records:
         raise ModelToolRuntimeError("model_tool_tools_required")
-    names = [str(record["name"]) for record in tool_records]
-    if len(names) != len(set(names)):
-        raise ModelToolRuntimeError("model_tool_duplicate_tool_name")
+    return tuple(collected), records
 
+
+def _canonical_tool_turn_request_payload_from_records(
+    request: ToolTurnRequest,
+    message_records: list[dict[str, object]],
+    tool_records: list[dict[str, object]],
+) -> dict[str, object]:
     return {
         "schema_version": MODEL_TOOL_REQUEST_HASH_SCHEMA_VERSION,
         "route_id": request.route_id,
@@ -646,6 +691,16 @@ def canonical_tool_turn_request_payload(
         "runtime_namespace": request.runtime_namespace,
         "provider_mode": request.provider_mode,
     }
+
+
+def canonical_tool_turn_request_payload(
+    request: ToolTurnRequest,
+    messages: Iterable[ModelTurnMessage],
+    tools: Iterable[ToolSpec],
+) -> dict[str, object]:
+    _, message_records = _collect_message_records(messages)
+    _, tool_records = _collect_tool_records(tools)
+    return _canonical_tool_turn_request_payload_from_records(request, message_records, tool_records)
 
 
 def canonical_tool_turn_request_hash(
@@ -868,8 +923,10 @@ def _iter_sse_data_frames(chunks: Iterable[bytes]) -> Iterator[str]:
     decoder = codecs.getincrementaldecoder("utf-8")("strict")
     pending = ""
     data_lines: list[str] = []
+    data_frame_bytes = 0
     total_bytes = 0
     chunk_count = 0
+    line_count = 0
     frame_count = 0
     try:
         for chunk in chunks:
@@ -878,26 +935,28 @@ def _iter_sse_data_frames(chunks: Iterable[bytes]) -> Iterator[str]:
                 raise ModelToolProtocolError("model_tool_sse_chunks_too_many")
             if type(chunk) is not bytes:
                 raise ModelToolProtocolError("model_tool_sse_chunks_must_be_bytes")
-            decoded = decoder.decode(chunk)
-            total_bytes += len(decoded.encode("utf-8"))
+            total_bytes += len(chunk)
             if total_bytes > MAX_SSE_TOTAL_BYTES:
                 raise ModelToolProtocolError("model_tool_sse_total_too_large")
+            decoded = decoder.decode(chunk)
             pending += decoded
-            if len(pending.encode("utf-8")) > MAX_SSE_PENDING_BYTES:
-                raise ModelToolProtocolError("model_tool_sse_pending_too_large")
-            while "\n" in pending:
-                raw_line, pending = pending.split("\n", 1)
+            complete_line_count = pending.count("\n")
+            if line_count + complete_line_count > MAX_SSE_LINES:
+                raise ModelToolProtocolError("model_tool_sse_lines_too_many")
+            complete_lines = pending.split("\n")
+            pending = complete_lines.pop()
+            line_count += complete_line_count
+            for raw_line in complete_lines:
                 line = raw_line[:-1] if raw_line.endswith("\r") else raw_line
                 if line == "":
                     if data_lines:
                         frame = "\n".join(data_lines)
-                        if len(frame.encode("utf-8")) > MAX_SSE_FRAME_BYTES:
-                            raise ModelToolProtocolError("model_tool_sse_frame_too_large")
                         frame_count += 1
                         if frame_count > MAX_SSE_FRAMES:
                             raise ModelToolProtocolError("model_tool_sse_frames_too_many")
                         yield frame
                         data_lines = []
+                        data_frame_bytes = 0
                     continue
                 if line.startswith(":"):
                     continue
@@ -906,7 +965,18 @@ def _iter_sse_data_frames(chunks: Iterable[bytes]) -> Iterator[str]:
                     continue
                 if separator and field_value.startswith(" "):
                     field_value = field_value[1:]
+                candidate_frame_bytes = (
+                    data_frame_bytes + (1 if data_lines else 0) + len(field_value.encode("utf-8"))
+                )
+                if candidate_frame_bytes > MAX_SSE_FRAME_BYTES:
+                    raise ModelToolProtocolError("model_tool_sse_frame_too_large")
                 data_lines.append(field_value)
+                data_frame_bytes = candidate_frame_bytes
+            # Complete lines are consumed before this bound is applied. A large
+            # transport chunk containing many complete frames is therefore
+            # equivalent to smaller chunking; only the unfinished line remains.
+            if len(pending.encode("utf-8")) > MAX_SSE_PENDING_BYTES:
+                raise ModelToolProtocolError("model_tool_sse_pending_too_large")
         pending += decoder.decode(b"", final=True)
     except UnicodeDecodeError as exc:
         raise ModelToolProtocolError("model_tool_sse_utf8_invalid") from exc
@@ -970,9 +1040,11 @@ def parse_openai_chat_sse(
     transcript_sha256 = canonical_model_turn_transcript_sha256(chunk_tuple)
     if transcript_sha256 != request.transcript_digest:
         raise ModelToolRequestBindingError("model_tool_transcript_content_digest_mismatch")
-    message_tuple = tuple(messages)
-    tool_tuple = tuple(tools)
-    request_sha256 = canonical_tool_turn_request_hash(request, message_tuple, tool_tuple)
+    _, message_records = _collect_message_records(messages)
+    tool_tuple, tool_records = _collect_tool_records(tools)
+    request_sha256 = _sha256_json(
+        _canonical_tool_turn_request_payload_from_records(request, message_records, tool_records)
+    )
     tool_specs = _tool_specs_by_name(tool_tuple)
 
     advisory_events: list[AgentTurnEvent] = []
@@ -1243,8 +1315,10 @@ class ScriptedToolTurnSession:
         messages: Iterable[ModelTurnMessage],
         tools: Iterable[ToolSpec],
     ) -> ToolTurnResult:
-        message_tuple = tuple(messages)
-        tool_tuple = tuple(tools)
+        # Fence live/unknown routes before touching caller-owned iterables.
+        _assert_d0a_request_route_binding(request)
+        message_tuple, _ = _collect_message_records(messages)
+        tool_tuple, _ = _collect_tool_records(tools)
         self._prepare(request, message_tuple, tool_tuple)
         result = parse_openai_chat_sse(
             self._transcript.chunks,
@@ -1262,8 +1336,10 @@ class ScriptedToolTurnSession:
         messages: Iterable[ModelTurnMessage],
         tools: Iterable[ToolSpec],
     ) -> Iterator[AgentTurnEvent]:
-        message_tuple = tuple(messages)
-        tool_tuple = tuple(tools)
+        # Fence live/unknown routes before touching caller-owned iterables.
+        _assert_d0a_request_route_binding(request)
+        message_tuple, _ = _collect_message_records(messages)
+        tool_tuple, _ = _collect_tool_records(tools)
         self._prepare(request, message_tuple, tool_tuple)
         parsed = parse_openai_chat_sse(
             self._transcript.chunks,
