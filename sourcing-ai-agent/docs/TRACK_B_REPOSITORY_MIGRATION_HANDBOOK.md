@@ -1,12 +1,13 @@
 # Track B ② Repository 迁移 Handbook(新一轮的入口文档)
 
 > Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
-> 状态:**②.4d 完成(2026-07-13,implementation commit 待本批收口)** —— workflow runtime read-model trio
+> 状态:**②.4d 完成(2026-07-13,implementation `7048d83`)** —— workflow runtime read-model trio
 > (`workflow_events` / `workflow_current_state` / `runtime_outbox`)已退役到 `store.repos.workflow_runtime`;
 > 当前分支 `storage.py` 12,190 → 11,959 行,production 9 + tests 22 个旧调用全部迁移,旧 6 facade / 3 mapper /
 > 3 descriptor dispatch keys / 4 native keys 清零。event sequence/identity、current-state checkpoint+sparse merge、
 > outbox identity/dispatch owner fence 已落地；`DurableRuntimeWriter` 四表多提交和 same-checkpoint count coherence
-> 继续归 R-019，future outbox claim ABA 归 R-023。批记录见 `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。
+> 继续归 R-019，future outbox claim ABA 归 R-023；R-025 固定 `889848e..7048d83` 异步 Codex review，
+> 只冻结本 scope 的 live/W6/manual/里程碑签收。批记录见 `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。
 > 下一批按既定顺序为 **②.4 workflow recovery intents**；commands 仍为本域最后一批并闭合 R-019。
 > B4.3 影子拆除 100% 完成(commit 952f9ee)。本文档是路线图
 > **②「Repository 查询方法建设 + 按域迁移调用方」** 这一轮的执行手册。

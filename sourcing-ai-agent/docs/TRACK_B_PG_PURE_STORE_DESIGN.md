@@ -971,6 +971,7 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     四表单事务；相同 event checkpoint 的 command counts 仍可能被延迟 reducer last-writer 覆盖，继续由 R-019 在
     `workflow_commands` 分子批闭合。outbox 目前无 production claim/consumer，owner-name dispatch fence 缺
     attempt/generation token 的未来 ABA 风险登记 R-023，Track C 5d 前必须修。owner 已轮换 Apify Token/API Keys，
-    当前版本没有可用新凭据且未授权 live，故未运行 live provider/W6/manual signoff。②.4d implementation commit 后
-    登记 scope-local async Codex review；它只冻结本批 live/W6/manual/里程碑签收，不阻断 commands 分子批。
+    当前版本没有可用新凭据且未授权 live，故未运行 live provider/W6/manual signoff。implementation=`7048d83`；
+    R-025 已登记并启动 pinned `889848e..7048d83` scope-local async Codex review；它只冻结本批
+    live/W6/manual/里程碑签收，不阻断后续分子批。
     D-1 已由 owner 选择 (a)、D-2 选择 (b)并写回权威决策卡；D-3 仍待 owner 裁决，截止 **2026-07-31**。
