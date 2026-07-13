@@ -243,7 +243,11 @@ intent 在 **claim 完成且 ActivityAttempt 创建之后**绑定；generic 控�
 只动 runtime 现态，域侧 supersession 经 owner 控制事件 → reducer → 域命令完成（不假设控制面
 直接原子改域行）。存储 plan bundle hash + fingerprint + `accepted_policy_version` +
 route/schema revisions + **effective_route_snapshot digest（§6 共享契约）** + expected
-decision_generation；`intent_state ∈ {pending, applied, cancelled, timed_out, superseded}`。
+decision_generation；`intent_state ∈ {pending, awaiting_budget, applied, cancelled, timed_out,
+superseded}`（v8 补 `awaiting_budget` 入枚举与迁移：pending→awaiting_budget【record 非授权分支，
+evidence_insufficient 且 grant 不可用】；awaiting_budget→pending【grant 授予事件 → reducer 计划
+后继 verify.evidence，新 phase generation 绑定】；awaiting_budget→cancelled/timed_out/superseded
+【控制转移同 pending——永无 grant 时经 timeout 收敛，不悬挂】）。
 - retry、resume、cancel、timeout、plan 重编译、人工决定——每种经上述事件→reducer→域命令路径
   **原子 supersede 旧 intent**（含 generic retry：requeue 触发的域命令在同 UoW 铸新 intent）；
 - **record 命令 owner 的单 UoW 全条件 CAS**（v6 修正 R5#2 两向问题）：`workspace_id 匹配 AND

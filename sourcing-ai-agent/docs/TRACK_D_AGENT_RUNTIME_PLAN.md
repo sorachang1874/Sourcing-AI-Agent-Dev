@@ -129,11 +129,14 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
 ### D3 — 第一垂直切片：公司身份自验证 loop（详设 v2：`TRACK_D_D3_COMPANY_IDENTITY_SELF_VERIFICATION_DESIGN.md`）
 
 - v4 要点（与 D3 详设 v4 严格同词汇，历经三轮评审收敛）：
-  - **事件驱动 W11 接入（review-first，v6 与 D3 详设逐字对齐）**：plan.build 结果事件 → reducer
+  - **事件驱动 W11 接入（review-first，v8 与 D3 详设逐字对齐）**：plan.build 结果事件 → reducer
     计划 plan_review.request → session 创建事件 → reducer 计划 `company.identity.verify.evidence`
-    → 验证 terminal 事件 → reducer 计划 **`company.identity.verification.record`**（验证 owner
-    写验证聚合，全条件 CAS）→ recorded 域事件（仅 applied）→ reducer 计划
-    `plan_review.identity_result.apply`（plan review owner 写 gate，generation watermark 围栏，
+    → 验证 terminal 事件**判别化路由**（final_adjudication → record 授权分支；
+    evidence_insufficient → grant 可用则 search.expand、否则 record 非授权分支 + intent
+    `awaiting_budget`【grant 授予事件续跑】；失败/超时 → record 非授权分支）→
+    `company.identity.verification.record`（验证 owner，三分支：授权/非授权【needs_human 等
+    真实域写】/not_applied【仅 stale 围栏失配】）→ recorded 域事件（授权与非授权分支均触发）→
+    reducer 计划 `plan_review.identity_result.apply`（plan review owner 写 gate，watermark 单调，
     阻塞方向恒占优）；commit owner 同事务复查 canonical 验证行；legacy 前门同一共享 helper。
   - **身份专属 gate reason**（TD-7）：`company_identity_unverified` OR 组合、只清自己；Phase 1
     shadow（`shadow_would_verify` 非授权态 + 人一键确认）→ 统计门 + owner GO + 逐行 revalidation
@@ -218,15 +221,12 @@ exception 收官；同时要求方法论化解决逐层下潜问题。→ v6 起
 `docs/DESIGN_INVARIANT_CHECKLIST.md`（v2 十类）：作者先做机制×不变量全深度自查，评审改
 checklist 驱动单遍扫描；终止规则见该文 §2.3。
 
-**round-7 状态（artifact `20260713T151524Z_*`，NO-GO 9 阻断 + 2 非阻断 re-raise）与下一迭代
-工作清单**：机制类 4 条——R7#1 多工具重试等价与子 action 身份（结果槽多 call 语义补
-per-call 子槽或集合级重试等价）、R7#2 `identity_result.apply` 的 runtime_namespace 隔离传播、
-R7#3 非授权 phase 结果（needs_human_budget 等）的 durable 事件→reducer 路由补全、R7#4 不完整
-manifest 如何产生 needs_human 终态的机制（缺席兄弟候选时由谁写 needs_human——应为 record 命令
-的 manifest-incomplete 分支）；簿记类 5 条——R7#5 矩阵/计划的 request-schema 过时格重生成、
-R7#6 `human_transition_pending` 补进矩阵机制清单、R7#7/#8 已修（清单 v2 十列自指 + 过时格
-规则）、R7#9 义务稳定 ID 化并映射计划 §6、R7#10 已修（计划谓词同步）。下一迭代 = 修 4 机制项
-→ 矩阵重生成（含新机制行 + 义务 ID）→ round 8。
+**round-7 处置（v8 已全部完成）**：机制类 4 条全修——R7#1 outcome digest + occurrence 身份、
+R7#2 apply 全路径 namespace/mode 绑定、R7#3 判别化终态路由 + `awaiting_budget` durable 态、
+R7#4 manifest 预创建 + owner 终态化 + record 非授权分支产生 needs_human；簿记类全修——
+R7#5/#6/#8/#9 经矩阵 v3 重生成（200 格、含新机制行、OB-ID 稳定编号）、R7#7/#10 文字同步。
+TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。**round 8 = 对 v8 的 checklist 驱动
+评审**（阻断集若空或全为 OB-ID 已记录项 ⇒ GO 带义务，触发终止规则）。
 
 ## 6. 实施批义务清单（round-4 校准裁定：非设计阻断，随各实施批执行并逐条验收）
 
