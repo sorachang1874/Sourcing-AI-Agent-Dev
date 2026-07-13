@@ -185,7 +185,7 @@ class CommandKernel:
         normalized_owner = str(owner or "").strip()
         normalized_phase = str(phase or "").strip()
         workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
-        activity = self._store.upsert_workflow_activity_run(
+        activity = self._store.repos.workflow_runtime.upsert_activity_run(
             {
                 "workspace_id": workspace_id,
                 "workflow_run_id": workflow_run_id,
@@ -216,7 +216,7 @@ class CommandKernel:
         attempt_key = hashlib.sha1(
             f"{normalized_activity_type}:{normalized_suffix}:{attempt_number}".encode("utf-8")
         ).hexdigest()[:24]
-        attempt = self._store.upsert_workflow_activity_attempt(
+        attempt = self._store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 "workspace_id": workspace_id,
                 "activity_run_id": activity_run_id,
@@ -257,18 +257,14 @@ class CommandKernel:
         if not activity or not attempt:
             return {}, {}
         normalized_artifact_refs = [
-            str(ref or "").strip()
-            for ref in list(artifact_refs or [])
-            if str(ref or "").strip()
+            str(ref or "").strip() for ref in list(artifact_refs or []) if str(ref or "").strip()
         ]
         normalized_status = str(status or "").strip() or "succeeded"
         normalized_attempt_status = str(attempt_status or normalized_status).strip() or normalized_status
         completed_at = (
-            _utc_now_iso()
-            if normalized_attempt_status in {"succeeded", "failed", "retry_wait", "cancelled"}
-            else ""
+            _utc_now_iso() if normalized_attempt_status in {"succeeded", "failed", "retry_wait", "cancelled"} else ""
         )
-        final_attempt = self._store.upsert_workflow_activity_attempt(
+        final_attempt = self._store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 **attempt,
                 "status": normalized_attempt_status,
@@ -278,7 +274,7 @@ class CommandKernel:
                 "artifact_refs": normalized_artifact_refs or list(attempt.get("artifact_refs") or []),
             }
         )
-        final_activity = self._store.upsert_workflow_activity_run(
+        final_activity = self._store.repos.workflow_runtime.upsert_activity_run(
             {
                 **activity,
                 "status": normalized_status,
@@ -518,7 +514,9 @@ class CommandKernel:
                 metadata_patch={"last_operation_command_status": command_status},
             )
         event = self._store.repos.workflow_runtime.append_operation_event(
-            workspace_id=str(operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default").strip()
+            workspace_id=str(
+                operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default"
+            ).strip()
             or "default",
             event_stream_id=operation_run_id,
             operation_run_id=operation_run_id,
@@ -574,7 +572,7 @@ class CommandKernel:
         normalized_entity_key = str(entity_key or "").strip()
         if not workflow_run_id or not command_id or not normalized_entity_type or not normalized_delta_kind:
             return {}
-        return self._store.upsert_workflow_entity_delta(
+        return self._store.repos.workflow_runtime.upsert_entity_delta(
             {
                 "workspace_id": str(dict(command_payload.get("payload") or {}).get("workspace_id") or "default").strip()
                 or "default",
@@ -592,9 +590,7 @@ class CommandKernel:
                 "entity_payload": dict(entity_payload or {}),
                 "projection_effect": dict(projection_effect or {"entered_projection": False}),
                 "artifact_refs": [
-                    str(ref or "").strip()
-                    for ref in list(artifact_refs or [])
-                    if str(ref or "").strip()
+                    str(ref or "").strip() for ref in list(artifact_refs or []) if str(ref or "").strip()
                 ],
                 "metadata": {
                     **dict(metadata or {}),

@@ -938,7 +938,6 @@ class SourcingOrchestrator:
             acquisition_engine=self.acquisition_engine,
             upsert_acquisition_run_phase=self._upsert_acquisition_run_phase,
             sync_operation_run_from_workflow_command_control=self._sync_operation_run_from_workflow_command_control,
-            workflow_command_downstream_commands=self._workflow_command_downstream_commands,
             restore_roster_snapshot_from_snapshot_dir=self._restore_roster_snapshot_from_snapshot_dir,
             plan_operation_native_projection_admission_command=self._plan_operation_native_projection_admission_command,
             # These two stay on the orchestrator (instance-patched by existing
@@ -961,7 +960,6 @@ class SourcingOrchestrator:
             # attribute names so moved bodies stay verbatim.
             upsert_acquisition_run_phase=self._upsert_acquisition_run_phase,
             sync_operation_run_from_workflow_command_control=self._sync_operation_run_from_workflow_command_control,
-            workflow_command_downstream_commands=self._workflow_command_downstream_commands,
         )
         # Recovery-tick drain bindings, frozen in the exact pre-registry call
         # order. Validated against ``self`` so a renamed drain wrapper fails
@@ -9074,7 +9072,7 @@ class SourcingOrchestrator:
             if result_status == "partial"
             else "projection_person_search_index_not_applied"
         )
-        entity_delta = self.store.upsert_workflow_entity_delta(
+        entity_delta = self.store.repos.workflow_runtime.upsert_entity_delta(
             {
                 "workspace_id": str(payload.get("workspace_id") or "default").strip() or "default",
                 "workflow_run_id": str(running_command.get("workflow_run_id") or "").strip(),
@@ -9774,7 +9772,7 @@ class SourcingOrchestrator:
             if result_status == "completed"
             else "collection_authoritative_merge_not_applied"
         )
-        entity_delta = self.store.upsert_workflow_entity_delta(
+        entity_delta = self.store.repos.workflow_runtime.upsert_entity_delta(
             {
                 "workspace_id": str(payload.get("workspace_id") or "default").strip() or "default",
                 "workflow_run_id": str(running_command.get("workflow_run_id") or "").strip(),
@@ -16421,7 +16419,7 @@ class SourcingOrchestrator:
         query_text = str(payload.get("query") or "").strip()
         target_company = str(payload.get("target_company") or "").strip()
         attempt_number = max(1, _coerce_int(command_payload.get("attempt"), 1))
-        attempt = self.store.upsert_workflow_activity_attempt(
+        attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 "workspace_id": str(payload.get("workspace_id") or "default").strip() or "default",
                 "activity_run_id": activity_run_id,
@@ -16457,9 +16455,9 @@ class SourcingOrchestrator:
                 },
             }
         )
-        activity = self.store.get_workflow_activity_run(activity_run_id) if activity_run_id else {}
+        activity = self.store.repos.workflow_runtime.get_activity_run(activity_run_id) if activity_run_id else {}
         if activity:
-            self.store.upsert_workflow_activity_run(
+            self.store.repos.workflow_runtime.upsert_activity_run(
                 {
                     **activity,
                     "status": "waiting_owner_implementation",
@@ -16496,7 +16494,7 @@ class SourcingOrchestrator:
                     },
                 }
             )
-        entity_delta = self.store.upsert_workflow_entity_delta(
+        entity_delta = self.store.repos.workflow_runtime.upsert_entity_delta(
             {
                 "workspace_id": str(payload.get("workspace_id") or "default").strip() or "default",
                 "workflow_run_id": workflow_run_id,
@@ -16767,7 +16765,7 @@ class SourcingOrchestrator:
         workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
         query_text = str(payload.get("query") or "").strip()
         target_company = str(payload.get("target_company") or "").strip()
-        activity = self.store.get_workflow_activity_run(activity_run_id) if activity_run_id else {}
+        activity = self.store.repos.workflow_runtime.get_activity_run(activity_run_id) if activity_run_id else {}
         lane = self.store.repos.workflow_runtime.get_discovery_lane(lane_id) if lane_id else {}
         acquisition_run = (
             self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
@@ -16829,7 +16827,7 @@ class SourcingOrchestrator:
             identity = CompanyIdentity(**identity_payload)
         else:
             identity = resolve_company_identity(target_company)
-        running_attempt = self.store.upsert_workflow_activity_attempt(
+        running_attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 "workspace_id": workspace_id,
                 "activity_run_id": activity_run_id,
@@ -16865,7 +16863,7 @@ class SourcingOrchestrator:
                 },
             }
         )
-        self.store.upsert_workflow_activity_run(
+        self.store.repos.workflow_runtime.upsert_activity_run(
             {
                 **activity,
                 "status": "running",
@@ -16914,7 +16912,7 @@ class SourcingOrchestrator:
                 )
             )
         except Exception as exc:
-            failed_attempt = self.store.upsert_workflow_activity_attempt(
+            failed_attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
                 {
                     **running_attempt,
                     "status": "retry_wait",
@@ -16930,9 +16928,9 @@ class SourcingOrchestrator:
                     },
                 }
             )
-            self.store.upsert_workflow_activity_run(
+            self.store.repos.workflow_runtime.upsert_activity_run(
                 {
-                    **self.store.get_workflow_activity_run(activity_run_id),
+                    **self.store.repos.workflow_runtime.get_activity_run(activity_run_id),
                     "status": "retry_wait",
                     "phase": "provider_discovery_retry_wait",
                     "output": {"latest_attempt_id": str(failed_attempt.get("attempt_id") or "").strip()},
@@ -16996,7 +16994,7 @@ class SourcingOrchestrator:
             if raw_path:
                 artifact_refs.append({"kind": "provider_raw", "path": raw_path})
         if retryable_summary is not None:
-            retry_attempt = self.store.upsert_workflow_activity_attempt(
+            retry_attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
                 {
                     **running_attempt,
                     "status": "retry_wait",
@@ -17013,9 +17011,9 @@ class SourcingOrchestrator:
                     },
                 }
             )
-            self.store.upsert_workflow_activity_run(
+            self.store.repos.workflow_runtime.upsert_activity_run(
                 {
-                    **self.store.get_workflow_activity_run(activity_run_id),
+                    **self.store.repos.workflow_runtime.get_activity_run(activity_run_id),
                     "status": "retry_wait",
                     "phase": "provider_discovery_retry_wait",
                     "output": {"latest_attempt_id": str(retry_attempt.get("attempt_id") or "").strip()},
@@ -17055,7 +17053,7 @@ class SourcingOrchestrator:
                 fallback_seed=f"{activity_run_id}:{index}:{entry}",
             )
             entity_deltas.append(
-                self.store.upsert_workflow_entity_delta(
+                self.store.repos.workflow_runtime.upsert_entity_delta(
                     {
                         "workspace_id": workspace_id,
                         "workflow_run_id": workflow_run_id,
@@ -17094,7 +17092,7 @@ class SourcingOrchestrator:
             )
         if not entity_deltas:
             entity_deltas.append(
-                self.store.upsert_workflow_entity_delta(
+                self.store.repos.workflow_runtime.upsert_entity_delta(
                     {
                         "workspace_id": workspace_id,
                         "workflow_run_id": workflow_run_id,
@@ -17129,7 +17127,7 @@ class SourcingOrchestrator:
                     }
                 )
             )
-        completed_attempt = self.store.upsert_workflow_activity_attempt(
+        completed_attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 **running_attempt,
                 "status": "succeeded",
@@ -17147,9 +17145,9 @@ class SourcingOrchestrator:
             }
         )
         entity_counts = {"candidate_count": len(entries), "profile_url_count": len(profile_urls)}
-        completed_activity = self.store.upsert_workflow_activity_run(
+        completed_activity = self.store.repos.workflow_runtime.upsert_activity_run(
             {
-                **self.store.get_workflow_activity_run(activity_run_id),
+                **self.store.repos.workflow_runtime.get_activity_run(activity_run_id),
                 "status": "succeeded",
                 "phase": "provider_discovery_completed",
                 "output": {
@@ -17160,7 +17158,10 @@ class SourcingOrchestrator:
                 "artifact_refs": artifact_refs,
                 "entity_counts": entity_counts,
                 "metadata": {
-                    **dict((self.store.get_workflow_activity_run(activity_run_id) or {}).get("metadata") or {}),
+                    **dict(
+                        (self.store.repos.workflow_runtime.get_activity_run(activity_run_id) or {}).get("metadata")
+                        or {}
+                    ),
                     "provider_called": True,
                     "legacy_job_shell_created": False,
                     "latest_attempt_id": str(completed_attempt.get("attempt_id") or "").strip(),
@@ -17486,7 +17487,7 @@ class SourcingOrchestrator:
         ).strip()
         source_delta_ids = _dedupe_texts(payload.get("source_entity_delta_ids") or [])
         if source_activity_run_id and not source_delta_ids:
-            source_deltas = self.store.list_workflow_entity_deltas(
+            source_deltas = self.store.repos.workflow_runtime.list_entity_deltas(
                 activity_run_id=source_activity_run_id,
                 entity_type="profile",
                 statuses=["recorded"],
@@ -17507,7 +17508,7 @@ class SourcingOrchestrator:
                 "provider_called": False,
                 "legacy_job_shell_created": False,
             }
-        source_activity = self.store.get_workflow_activity_run(source_activity_run_id)
+        source_activity = self.store.repos.workflow_runtime.get_activity_run(source_activity_run_id)
         if not source_activity:
             return {
                 "status": "failed",
@@ -17525,7 +17526,7 @@ class SourcingOrchestrator:
         collection_id = str(payload.get("collection_id") or "").strip() or (
             f"company:{normalize_company_key(target_company)}" if target_company else ""
         )
-        activity = self.store.upsert_workflow_activity_run(
+        activity = self.store.repos.workflow_runtime.upsert_activity_run(
             {
                 "workspace_id": workspace_id,
                 "workflow_run_id": workflow_run_id,
@@ -17558,7 +17559,7 @@ class SourcingOrchestrator:
         )
         activity_run_id = str(activity.get("activity_run_id") or "").strip()
         attempt_number = max(1, _coerce_int(command_payload.get("attempt"), 1))
-        attempt = self.store.upsert_workflow_activity_attempt(
+        attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 "workspace_id": workspace_id,
                 "activity_run_id": activity_run_id,
@@ -17588,7 +17589,9 @@ class SourcingOrchestrator:
             direct_source_delta_id = str(source_ref.get("source_entity_delta_id") or "").strip()
             candidate_delta_ids: list[str] = []
             source_delta = (
-                self.store.get_workflow_entity_delta(direct_source_delta_id) if direct_source_delta_id else {}
+                self.store.repos.workflow_runtime.get_entity_delta(direct_source_delta_id)
+                if direct_source_delta_id
+                else {}
             )
             source_delta_kind = str(dict(source_delta or {}).get("delta_kind") or "").strip()
             if source_delta_kind == "profile_cache_hit":
@@ -17600,7 +17603,7 @@ class SourcingOrchestrator:
                     dict(source_delta.get("source_ref") or {}).get("source_entity_delta_ids") or []
                 )
                 for required_delta_id in required_delta_ids:
-                    required_delta = self.store.get_workflow_entity_delta(required_delta_id)
+                    required_delta = self.store.repos.workflow_runtime.get_entity_delta(required_delta_id)
                     if required_delta:
                         candidate_delta_ids.extend(
                             _dedupe_texts(
@@ -17610,13 +17613,13 @@ class SourcingOrchestrator:
             else:
                 candidate_delta_ids = _dedupe_texts(source_ref.get("source_entity_delta_ids") or [])
             for candidate_delta_id in _dedupe_texts(candidate_delta_ids):
-                candidate_delta = self.store.get_workflow_entity_delta(candidate_delta_id)
+                candidate_delta = self.store.repos.workflow_runtime.get_entity_delta(candidate_delta_id)
                 if candidate_delta and str(candidate_delta.get("entity_type") or "") == "candidate":
                     return dict(candidate_delta.get("entity_payload") or {})
             return {}
 
         terminal_deltas = [
-            self.store.get_workflow_entity_delta(delta_id)
+            self.store.repos.workflow_runtime.get_entity_delta(delta_id)
             for delta_id in source_delta_ids
             if str(delta_id or "").strip()
         ]
@@ -17709,7 +17712,7 @@ class SourcingOrchestrator:
             )
             admitted_delta_ids.append(str(terminal_delta.get("delta_id") or "").strip())
         if not members:
-            completed_attempt = self.store.upsert_workflow_activity_attempt(
+            completed_attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
                 {
                     **attempt,
                     "status": "succeeded",
@@ -17718,9 +17721,9 @@ class SourcingOrchestrator:
                     "error": {},
                 }
             )
-            final_activity = self.store.upsert_workflow_activity_run(
+            final_activity = self.store.repos.workflow_runtime.upsert_activity_run(
                 {
-                    **(self.store.get_workflow_activity_run(activity_run_id) or activity),
+                    **(self.store.repos.workflow_runtime.get_activity_run(activity_run_id) or activity),
                     "status": "succeeded",
                     "phase": "projection_admission_noop",
                     "output": {"latest_attempt_id": str(completed_attempt.get("attempt_id") or "").strip()},
@@ -17845,7 +17848,7 @@ class SourcingOrchestrator:
         admitted_projection_delta_ids: list[str] = []
         for member in members:
             member_key = str(member.get("candidate_identity_key") or "").strip()
-            delta = self.store.upsert_workflow_entity_delta(
+            delta = self.store.repos.workflow_runtime.upsert_entity_delta(
                 {
                     "workspace_id": workspace_id,
                     "workflow_run_id": workflow_run_id,
@@ -17889,7 +17892,7 @@ class SourcingOrchestrator:
             )
             if delta:
                 admitted_projection_delta_ids.append(str(delta.get("delta_id") or "").strip())
-        completed_attempt = self.store.upsert_workflow_activity_attempt(
+        completed_attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 **attempt,
                 "status": "succeeded",
@@ -17903,9 +17906,9 @@ class SourcingOrchestrator:
                 "error": {},
             }
         )
-        final_activity = self.store.upsert_workflow_activity_run(
+        final_activity = self.store.repos.workflow_runtime.upsert_activity_run(
             {
-                **(self.store.get_workflow_activity_run(activity_run_id) or activity),
+                **(self.store.repos.workflow_runtime.get_activity_run(activity_run_id) or activity),
                 "status": "succeeded",
                 "phase": "projection_admitted",
                 "output": {
@@ -43284,17 +43287,17 @@ class SourcingOrchestrator:
         payload = dict(record.get("payload") or {})
         workspace_id = str(payload.get("workspace_id") or record.get("workspace_id") or "default").strip() or "default"
         bounded_limit = max(1, min(50, int(sample_limit or 20)))
-        activities = self.store.list_workflow_activity_runs(
+        activities = self.store.repos.workflow_runtime.list_activity_runs(
             workspace_id=workspace_id,
             command_id=command_id,
             limit=bounded_limit,
         )
-        attempts = self.store.list_workflow_activity_attempts(
+        attempts = self.store.repos.workflow_runtime.list_activity_attempts(
             workspace_id=workspace_id,
             command_id=command_id,
             limit=bounded_limit,
         )
-        deltas = self.store.list_workflow_entity_deltas(
+        deltas = self.store.repos.workflow_runtime.list_entity_deltas(
             workspace_id=workspace_id,
             command_id=command_id,
             limit=bounded_limit,
@@ -43402,7 +43405,7 @@ class SourcingOrchestrator:
         command_type = str(record.get("activity_type") or "").strip()
         if not command_type:
             activity_run_id = str(record.get("activity_run_id") or "").strip()
-            activity = self.store.get_workflow_activity_run(activity_run_id) if activity_run_id else {}
+            activity = self.store.repos.workflow_runtime.get_activity_run(activity_run_id) if activity_run_id else {}
             if activity:
                 command_type = str(activity.get("activity_type") or "").strip()
                 record.setdefault("activity_type", command_type)
@@ -43418,7 +43421,7 @@ class SourcingOrchestrator:
         record = dict(delta or {})
         activity_run_id = str(record.get("activity_run_id") or "").strip()
         command_id = str(record.get("command_id") or "").strip()
-        activity = self.store.get_workflow_activity_run(activity_run_id) if activity_run_id else {}
+        activity = self.store.repos.workflow_runtime.get_activity_run(activity_run_id) if activity_run_id else {}
         if activity:
             if not str(record.get("activity_type") or "").strip():
                 record["activity_type"] = str(activity.get("activity_type") or "").strip()
@@ -43443,7 +43446,9 @@ class SourcingOrchestrator:
         normalized_activity_run_id = str(activity_run_id or "").strip()
         command = self.store.get_workflow_command(normalized_command_id) if normalized_command_id else {}
         activity = (
-            self.store.get_workflow_activity_run(normalized_activity_run_id) if normalized_activity_run_id else {}
+            self.store.repos.workflow_runtime.get_activity_run(normalized_activity_run_id)
+            if normalized_activity_run_id
+            else {}
         )
         if not command and activity:
             normalized_command_id = str(activity.get("command_id") or "").strip()
@@ -43579,7 +43584,7 @@ class SourcingOrchestrator:
             status_values = [item.strip() for item in statuses.split(",") if item.strip()]
         else:
             status_values = [str(item or "").strip() for item in list(statuses or []) if str(item or "").strip()]
-        activities = self.store.list_workflow_activity_runs(
+        activities = self.store.repos.workflow_runtime.list_activity_runs(
             workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
             workflow_run_id=str(payload.get("workflow_run_id") or "").strip(),
             operation_run_id=str(payload.get("operation_run_id") or payload.get("operation_id") or "").strip(),
@@ -43599,11 +43604,15 @@ class SourcingOrchestrator:
     def get_workflow_activity_api(self, activity_run_id: str) -> dict[str, Any]:
         normalized_activity_run_id = str(activity_run_id or "").strip()
         activity = (
-            self.store.get_workflow_activity_run(normalized_activity_run_id) if normalized_activity_run_id else {}
+            self.store.repos.workflow_runtime.get_activity_run(normalized_activity_run_id)
+            if normalized_activity_run_id
+            else {}
         )
         if not activity:
             return {"status": "not_found", "activity_run_id": normalized_activity_run_id}
-        attempts = self.store.list_workflow_activity_attempts(activity_run_id=normalized_activity_run_id, limit=100)
+        attempts = self.store.repos.workflow_runtime.list_activity_attempts(
+            activity_run_id=normalized_activity_run_id, limit=100
+        )
         return {
             "status": "ok",
             "workflow_activity": self._workflow_activity_api_record(activity),
@@ -43621,7 +43630,7 @@ class SourcingOrchestrator:
             status_values = [item.strip() for item in statuses.split(",") if item.strip()]
         else:
             status_values = [str(item or "").strip() for item in list(statuses or []) if str(item or "").strip()]
-        attempts = self.store.list_workflow_activity_attempts(
+        attempts = self.store.repos.workflow_runtime.list_activity_attempts(
             workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
             activity_run_id=str(payload.get("activity_run_id") or "").strip(),
             workflow_run_id=str(payload.get("workflow_run_id") or "").strip(),
@@ -43638,7 +43647,11 @@ class SourcingOrchestrator:
 
     def get_workflow_activity_attempt_api(self, attempt_id: str) -> dict[str, Any]:
         normalized_attempt_id = str(attempt_id or "").strip()
-        attempt = self.store.get_workflow_activity_attempt(normalized_attempt_id) if normalized_attempt_id else {}
+        attempt = (
+            self.store.repos.workflow_runtime.get_activity_attempt(normalized_attempt_id)
+            if normalized_attempt_id
+            else {}
+        )
         if not attempt:
             return {"status": "not_found", "attempt_id": normalized_attempt_id}
         return {
@@ -43657,7 +43670,7 @@ class SourcingOrchestrator:
             status_values = [item.strip() for item in statuses.split(",") if item.strip()]
         else:
             status_values = [str(item or "").strip() for item in list(statuses or []) if str(item or "").strip()]
-        deltas = self.store.list_workflow_entity_deltas(
+        deltas = self.store.repos.workflow_runtime.list_entity_deltas(
             workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
             workflow_run_id=str(payload.get("workflow_run_id") or "").strip(),
             operation_run_id=str(payload.get("operation_run_id") or payload.get("operation_id") or "").strip(),
@@ -43679,7 +43692,7 @@ class SourcingOrchestrator:
 
     def get_workflow_entity_delta_api(self, delta_id: str) -> dict[str, Any]:
         normalized_delta_id = str(delta_id or "").strip()
-        delta = self.store.get_workflow_entity_delta(normalized_delta_id) if normalized_delta_id else {}
+        delta = self.store.repos.workflow_runtime.get_entity_delta(normalized_delta_id) if normalized_delta_id else {}
         if not delta:
             return {"status": "not_found", "delta_id": normalized_delta_id}
         return {
@@ -43833,7 +43846,7 @@ class SourcingOrchestrator:
                 "owner_specific_control": True,
                 "contract": "w11_workflow_command_owner_specific_control_v1",
             }
-        activities = self.store.list_workflow_activity_runs(
+        activities = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=50,
@@ -43845,9 +43858,11 @@ class SourcingOrchestrator:
         ]
         attempts: list[dict[str, Any]] = []
         for activity_id in activity_ids:
-            attempts.extend(self.store.list_workflow_activity_attempts(activity_run_id=activity_id, limit=50))
+            attempts.extend(
+                self.store.repos.workflow_runtime.list_activity_attempts(activity_run_id=activity_id, limit=50)
+            )
         attempt_count = len(attempts)
-        entity_delta_count = len(self.store.list_workflow_entity_deltas(command_id=command_id, limit=1))
+        entity_delta_count = len(self.store.repos.workflow_runtime.list_entity_deltas(command_id=command_id, limit=1))
         if entity_delta_count:
             return {
                 "status": "invalid",
@@ -43890,7 +43905,7 @@ class SourcingOrchestrator:
                         "module_state_mutated": False,
                     }
                 )
-                cancelled_activity = self.store.upsert_workflow_activity_run(
+                cancelled_activity = self.store.repos.workflow_runtime.upsert_activity_run(
                     {
                         **activity,
                         "status": "cancelled_poll_stopped",
@@ -43933,7 +43948,7 @@ class SourcingOrchestrator:
                         "remote_result_acceptance": "quarantined_if_late",
                     }
                 )
-                cancelled_attempt = self.store.upsert_workflow_activity_attempt(
+                cancelled_attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
                     {
                         **attempt,
                         "status": "cancelled_remote_ignored",
@@ -44012,7 +44027,7 @@ class SourcingOrchestrator:
                     "provider_entity_delta_recorded": False,
                 }
             )
-            cancelled_activity = self.store.upsert_workflow_activity_run(
+            cancelled_activity = self.store.repos.workflow_runtime.upsert_activity_run(
                 {
                     **activity,
                     "status": "cancelled_before_provider_attempt",
@@ -44110,7 +44125,7 @@ class SourcingOrchestrator:
                 "owner_specific_control": True,
                 "contract": "w11_workflow_command_owner_specific_control_v1",
             }
-        activities = self.store.list_workflow_activity_runs(
+        activities = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=50,
@@ -44122,8 +44137,10 @@ class SourcingOrchestrator:
         ]
         attempt_count = 0
         for activity_id in activity_ids:
-            attempt_count += len(self.store.list_workflow_activity_attempts(activity_run_id=activity_id, limit=1))
-        entity_delta_count = len(self.store.list_workflow_entity_deltas(command_id=command_id, limit=1))
+            attempt_count += len(
+                self.store.repos.workflow_runtime.list_activity_attempts(activity_run_id=activity_id, limit=1)
+            )
+        entity_delta_count = len(self.store.repos.workflow_runtime.list_entity_deltas(command_id=command_id, limit=1))
         if attempt_count or entity_delta_count:
             return {
                 "status": "invalid",
@@ -44148,7 +44165,7 @@ class SourcingOrchestrator:
                     "domain_mutation_entity_delta_recorded": False,
                 }
             )
-            cancelled_activity = self.store.upsert_workflow_activity_run(
+            cancelled_activity = self.store.repos.workflow_runtime.upsert_activity_run(
                 {
                     **activity,
                     "status": "cancelled_before_domain_mutation",
@@ -44245,7 +44262,7 @@ class SourcingOrchestrator:
                 "owner_specific_control": True,
                 "contract": "w11_workflow_command_owner_specific_control_v1",
             }
-        activities = self.store.list_workflow_activity_runs(
+        activities = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
             limit=50,
@@ -44257,8 +44274,10 @@ class SourcingOrchestrator:
         ]
         attempt_count = 0
         for activity_id in activity_ids:
-            attempt_count += len(self.store.list_workflow_activity_attempts(activity_run_id=activity_id, limit=1))
-        entity_delta_count = len(self.store.list_workflow_entity_deltas(command_id=command_id, limit=1))
+            attempt_count += len(
+                self.store.repos.workflow_runtime.list_activity_attempts(activity_run_id=activity_id, limit=1)
+            )
+        entity_delta_count = len(self.store.repos.workflow_runtime.list_entity_deltas(command_id=command_id, limit=1))
         if attempt_count or entity_delta_count:
             return {
                 "status": "invalid",
@@ -44283,7 +44302,7 @@ class SourcingOrchestrator:
                     "company_asset_entity_delta_recorded": False,
                 }
             )
-            cancelled_activity = self.store.upsert_workflow_activity_run(
+            cancelled_activity = self.store.repos.workflow_runtime.upsert_activity_run(
                 {
                     **activity,
                     "status": "cancelled_before_company_asset_sync",
@@ -44380,7 +44399,7 @@ class SourcingOrchestrator:
                 "owner_specific_control": True,
                 "contract": "w11_workflow_command_owner_specific_control_v1",
             }
-        activities = self.store.list_workflow_activity_runs(
+        activities = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=50,
@@ -44392,8 +44411,10 @@ class SourcingOrchestrator:
         ]
         attempt_count = 0
         for activity_id in activity_ids:
-            attempt_count += len(self.store.list_workflow_activity_attempts(activity_run_id=activity_id, limit=1))
-        entity_delta_count = len(self.store.list_workflow_entity_deltas(command_id=command_id, limit=1))
+            attempt_count += len(
+                self.store.repos.workflow_runtime.list_activity_attempts(activity_run_id=activity_id, limit=1)
+            )
+        entity_delta_count = len(self.store.repos.workflow_runtime.list_entity_deltas(command_id=command_id, limit=1))
         if attempt_count or entity_delta_count:
             return {
                 "status": "invalid",
@@ -44418,7 +44439,7 @@ class SourcingOrchestrator:
                     "crm_writer_entity_delta_recorded": False,
                 }
             )
-            cancelled_activity = self.store.upsert_workflow_activity_run(
+            cancelled_activity = self.store.repos.workflow_runtime.upsert_activity_run(
                 {
                     **activity,
                     "status": "cancelled_before_crm_mutation",
@@ -44513,7 +44534,7 @@ class SourcingOrchestrator:
                 "owner_specific_control": True,
                 "contract": "w11_workflow_command_owner_specific_control_v1",
             }
-        activities = self.store.list_workflow_activity_runs(
+        activities = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=MEDIA_ASSET_CACHE_COMMAND_TYPE,
             limit=50,
@@ -44525,8 +44546,10 @@ class SourcingOrchestrator:
         ]
         attempt_count = 0
         for activity_id in activity_ids:
-            attempt_count += len(self.store.list_workflow_activity_attempts(activity_run_id=activity_id, limit=1))
-        entity_delta_count = len(self.store.list_workflow_entity_deltas(command_id=command_id, limit=1))
+            attempt_count += len(
+                self.store.repos.workflow_runtime.list_activity_attempts(activity_run_id=activity_id, limit=1)
+            )
+        entity_delta_count = len(self.store.repos.workflow_runtime.list_entity_deltas(command_id=command_id, limit=1))
         if attempt_count or entity_delta_count:
             return {
                 "status": "invalid",
@@ -44551,7 +44574,7 @@ class SourcingOrchestrator:
                     "media_asset_entity_delta_recorded": False,
                 }
             )
-            cancelled_activity = self.store.upsert_workflow_activity_run(
+            cancelled_activity = self.store.repos.workflow_runtime.upsert_activity_run(
                 {
                     **activity,
                     "status": "cancelled_before_fetch_upload",
@@ -44639,9 +44662,6 @@ class SourcingOrchestrator:
         return self._acquisition_command_owner._cancel_running_acquisition_scale_plan_before_discovery(
             command, payload=payload
         )
-
-    def _find_acquisition_run_for_command(self, command: dict[str, Any]) -> dict[str, Any]:
-        return self._acquisition_command_owner._find_acquisition_run_for_command(command)
 
     def _cancel_running_acquisition_plan_commit_before_probe(
         self,
@@ -44819,14 +44839,14 @@ class SourcingOrchestrator:
                 "contract": "w11_workflow_command_owner_specific_control_v1",
             }
         context = self._export_cancel_context(command_payload)
-        activity_rows = self.store.list_workflow_activity_runs(
+        activity_rows = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=1,
         )
         activity = dict(activity_rows[0]) if activity_rows else {}
         attempts = (
-            self.store.list_workflow_activity_attempts(
+            self.store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=str(activity.get("activity_run_id") or ""),
                 limit=1,
             )
@@ -44961,14 +44981,14 @@ class SourcingOrchestrator:
             }
         target_company = str(body.get("target_company") or body.get("company") or "").strip()
         company_key = str(body.get("company_key") or "").strip()
-        activity_rows = self.store.list_workflow_activity_runs(
+        activity_rows = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=1,
         )
         activity = dict(activity_rows[0]) if activity_rows else {}
         attempts = (
-            self.store.list_workflow_activity_attempts(
+            self.store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=str(activity.get("activity_run_id") or ""),
                 limit=1,
             )
@@ -45128,14 +45148,14 @@ class SourcingOrchestrator:
                 "owner_specific_control": True,
                 "contract": "w11_workflow_command_owner_specific_control_v1",
             }
-        activity_rows = self.store.list_workflow_activity_runs(
+        activity_rows = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=1,
         )
         activity = dict(activity_rows[0]) if activity_rows else {}
         attempts = (
-            self.store.list_workflow_activity_attempts(
+            self.store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=str(activity.get("activity_run_id") or ""),
                 limit=1,
             )
@@ -45284,14 +45304,14 @@ class SourcingOrchestrator:
                 "contract": "w11_workflow_command_owner_specific_control_v1",
             }
         body = dict(command_payload.get("payload") or {})
-        activity_rows = self.store.list_workflow_activity_runs(
+        activity_rows = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=1,
         )
         activity = dict(activity_rows[0]) if activity_rows else {}
         attempts = (
-            self.store.list_workflow_activity_attempts(
+            self.store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=str(activity.get("activity_run_id") or ""),
                 limit=1,
             )
@@ -45454,14 +45474,14 @@ class SourcingOrchestrator:
             or command_id
         ).strip()
         asset_type = str(body.get("asset_type") or "").strip()
-        activity_rows = self.store.list_workflow_activity_runs(
+        activity_rows = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=1,
         )
         activity = dict(activity_rows[0]) if activity_rows else {}
         attempts = (
-            self.store.list_workflow_activity_attempts(
+            self.store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=str(activity.get("activity_run_id") or ""),
                 limit=1,
             )
@@ -45620,14 +45640,14 @@ class SourcingOrchestrator:
         target_company = str(body.get("target_company") or body.get("company") or "").strip()
         company_key = str(body.get("company_key") or "").strip()
         run_id = str(body.get("run_id") or "").strip()
-        activity_rows = self.store.list_workflow_activity_runs(
+        activity_rows = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=1,
         )
         activity = dict(activity_rows[0]) if activity_rows else {}
         attempts = (
-            self.store.list_workflow_activity_attempts(
+            self.store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=str(activity.get("activity_run_id") or ""),
                 limit=1,
             )
@@ -45796,14 +45816,14 @@ class SourcingOrchestrator:
             if candidate_keys
             else str(body.get("person_identity_key") or body.get("candidate_identity_key") or command_id).strip()
         )
-        activity_rows = self.store.list_workflow_activity_runs(
+        activity_rows = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=1,
         )
         activity = dict(activity_rows[0]) if activity_rows else {}
         attempts = (
-            self.store.list_workflow_activity_attempts(
+            self.store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=str(activity.get("activity_run_id") or ""),
                 limit=1,
             )
@@ -45975,14 +45995,14 @@ class SourcingOrchestrator:
             or body.get("collection_id")
             or command_id
         ).strip()
-        activity_rows = self.store.list_workflow_activity_runs(
+        activity_rows = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=1,
         )
         activity = dict(activity_rows[0]) if activity_rows else {}
         attempts = (
-            self.store.list_workflow_activity_attempts(
+            self.store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=str(activity.get("activity_run_id") or ""),
                 limit=1,
             )
@@ -46278,14 +46298,14 @@ class SourcingOrchestrator:
         actor = str(payload.get("actor") or payload.get("operator") or "api").strip() or "api"
         reason = str(payload.get("reason") or "cancelled_by_owner_specific_command_control").strip()
         context = self._export_cancel_context(command_payload)
-        activity_rows = self.store.list_workflow_activity_runs(
+        activity_rows = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=1,
         )
         activity = dict(activity_rows[0]) if activity_rows else {}
         attempts = (
-            self.store.list_workflow_activity_attempts(
+            self.store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=str(activity.get("activity_run_id") or ""),
                 limit=1,
             )
@@ -46402,6 +46422,23 @@ class SourcingOrchestrator:
         current_status = str(command.get("status") or "").strip()
         if current_status in {"claimed", "running"}:
             return self._cancel_running_workflow_command_via_owner(command, payload=payload)
+        if current_status == "cancelled":
+            command_result = dict(command.get("result") or {})
+            owner_cancel_kind = str(
+                command_result.get("owner_cancel_kind") or command_result.get("cancel_boundary") or ""
+            ).strip()
+            if (
+                owner_cancel_kind
+                in {
+                    "acquisition_plan_commit_before_probe",
+                    "acquisition_scale_plan_before_discovery",
+                    "profile_fetch_activity_before_cache_lookup_attempt",
+                }
+                and str(command_result.get("control_source") or "").strip()
+                == "api.workflow_command_owner_specific_cancel"
+                and command_result.get("owner_specific_control") is True
+            ):
+                return self._cancel_running_workflow_command_via_owner(command, payload=payload)
         if current_status not in {"queued", "retry_wait"}:
             return {
                 "status": "invalid",
@@ -47468,7 +47505,7 @@ class SourcingOrchestrator:
                 or []
             )
             if activity_run_id and not source_delta_ids:
-                delta_rows = self.store.list_workflow_entity_deltas(
+                delta_rows = self.store.repos.workflow_runtime.list_entity_deltas(
                     activity_run_id=activity_run_id,
                     entity_type="profile",
                     statuses=["recorded"],
@@ -47481,7 +47518,7 @@ class SourcingOrchestrator:
                         if str(delta.get("delta_kind") or "") == "profile_terminal_recorded"
                     ]
                 )
-            activity = self.store.get_workflow_activity_run(activity_run_id) if activity_run_id else {}
+            activity = self.store.repos.workflow_runtime.get_activity_run(activity_run_id) if activity_run_id else {}
             acquisition_run_id = str(
                 input_payload.get("acquisition_run_id")
                 or target_ref.get("acquisition_run_id")
@@ -47561,7 +47598,7 @@ class SourcingOrchestrator:
                 or []
             )
             if activity_run_id and not source_delta_ids:
-                delta_rows = self.store.list_workflow_entity_deltas(
+                delta_rows = self.store.repos.workflow_runtime.list_entity_deltas(
                     activity_run_id=activity_run_id,
                     entity_type="profile",
                     statuses=["recorded"],
@@ -47574,7 +47611,7 @@ class SourcingOrchestrator:
                         if str(delta.get("delta_kind") or "") in {"profile_cache_hit", "profile_provider_fetched"}
                     ]
                 )
-            activity = self.store.get_workflow_activity_run(activity_run_id) if activity_run_id else {}
+            activity = self.store.repos.workflow_runtime.get_activity_run(activity_run_id) if activity_run_id else {}
             acquisition_run_id = str(
                 input_payload.get("acquisition_run_id")
                 or target_ref.get("acquisition_run_id")
@@ -47598,7 +47635,7 @@ class SourcingOrchestrator:
             )
             if source_delta_ids and not profile_urls:
                 source_deltas = [
-                    self.store.get_workflow_entity_delta(delta_id)
+                    self.store.repos.workflow_runtime.get_entity_delta(delta_id)
                     for delta_id in source_delta_ids
                     if str(delta_id or "").strip()
                 ]
@@ -47670,7 +47707,7 @@ class SourcingOrchestrator:
                 or []
             )
             if activity_run_id and not profile_urls:
-                delta_rows = self.store.list_workflow_entity_deltas(
+                delta_rows = self.store.repos.workflow_runtime.list_entity_deltas(
                     activity_run_id=activity_run_id,
                     entity_type="profile",
                     statuses=["not_applied"],
@@ -47689,14 +47726,14 @@ class SourcingOrchestrator:
                 )
             if source_delta_ids and not profile_urls:
                 delta_rows = [
-                    self.store.get_workflow_entity_delta(delta_id)
+                    self.store.repos.workflow_runtime.get_entity_delta(delta_id)
                     for delta_id in source_delta_ids
                     if str(delta_id or "").strip()
                 ]
                 profile_urls = _dedupe_texts(
                     [dict(delta.get("entity_payload") or {}).get("profile_url") for delta in delta_rows if delta]
                 )
-            activity = self.store.get_workflow_activity_run(activity_run_id) if activity_run_id else {}
+            activity = self.store.repos.workflow_runtime.get_activity_run(activity_run_id) if activity_run_id else {}
             acquisition_run_id = str(
                 input_payload.get("acquisition_run_id")
                 or target_ref.get("acquisition_run_id")
@@ -47778,7 +47815,7 @@ class SourcingOrchestrator:
                 or []
             )
             if source_activity_run_id and not profile_urls:
-                source_deltas = self.store.list_workflow_entity_deltas(
+                source_deltas = self.store.repos.workflow_runtime.list_entity_deltas(
                     activity_run_id=source_activity_run_id,
                     entity_type="candidate",
                     statuses=["recorded"],
@@ -47796,7 +47833,7 @@ class SourcingOrchestrator:
                 )
             if source_delta_ids and not profile_urls:
                 delta_payloads = [
-                    self.store.get_workflow_entity_delta(delta_id)
+                    self.store.repos.workflow_runtime.get_entity_delta(delta_id)
                     for delta_id in source_delta_ids
                     if str(delta_id or "").strip()
                 ]
@@ -47809,7 +47846,9 @@ class SourcingOrchestrator:
                     ]
                 )
             source_activity = (
-                self.store.get_workflow_activity_run(source_activity_run_id) if source_activity_run_id else {}
+                self.store.repos.workflow_runtime.get_activity_run(source_activity_run_id)
+                if source_activity_run_id
+                else {}
             )
             acquisition_run_id = str(
                 input_payload.get("acquisition_run_id")
@@ -47962,7 +48001,9 @@ class SourcingOrchestrator:
             )
             if acquisition_run:
                 workflow_run_id = workflow_run_id or str(acquisition_run.get("workflow_run_id") or "").strip()
-            activity_run = self.store.get_workflow_activity_run(activity_run_id) if activity_run_id else {}
+            activity_run = (
+                self.store.repos.workflow_runtime.get_activity_run(activity_run_id) if activity_run_id else {}
+            )
             if activity_run:
                 workflow_run_id = workflow_run_id or str(activity_run.get("workflow_run_id") or "").strip()
                 acquisition_run_id = acquisition_run_id or str(activity_run.get("acquisition_run_id") or "").strip()

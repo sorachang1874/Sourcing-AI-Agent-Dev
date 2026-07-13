@@ -3857,9 +3857,9 @@ def test_operation_and_command_status_summaries_do_not_read_domain_tables() -> N
     for allowed in (
         "list_operation_events",
         "list_workflow_commands",
-        "list_workflow_activity_runs",
-        "list_workflow_activity_attempts",
-        "list_workflow_entity_deltas",
+        "list_activity_runs",
+        "list_activity_attempts",
+        "list_entity_deltas",
     ):
         assert allowed in operation_summary_block + command_summary_block
     assert "Operation queue summaries must be operation/runtime-owned" in review_doc

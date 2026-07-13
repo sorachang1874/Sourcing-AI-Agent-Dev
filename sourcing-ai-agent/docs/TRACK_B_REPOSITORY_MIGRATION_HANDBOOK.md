@@ -1,13 +1,14 @@
 # Track B ② Repository 迁移 Handbook(新一轮的入口文档)
 
 > Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
-> 状态:**②.4b 完成(2026-07-13,implementation `d6e1e2a`)** —— workflow_runtime 的 acquisition-control
-> (`acquisition_runs` / `acquisition_discovery_lanes`)已退役到 `store.repos.workflow_runtime`;
-> 当前分支 `storage.py` 12,809 → 12,564 行,production 38 + tests 15 个旧调用全部迁移,
-> 旧 6 facade / 2 mapper / 2 descriptor dispatch keys 清零。单行写现已具有 identity collision fail-closed、
-> 锁内 JSON merge 与 terminal stale-writer fence;跨 acquisition run / lane / activity / command 的 cancel 原子化
-> 另见 R-020,不得把单行加固误读为 owner cancel UoW。批记录见
-> `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。下一批为 **②.4c activity spine + R-020 fixed-forward**。
+> 状态:**②.4c 完成(2026-07-13)** —— workflow_runtime 的 activity spine
+> (`workflow_activity_runs` / `workflow_activity_attempts` / `workflow_entity_deltas`)已退役到
+> `store.repos.workflow_runtime`;当前分支 `storage.py` 12,564 → 12,190 行,production 165 + tests 134 个旧调用
+> 全部迁移,旧 9 facade / 3 mapper / 3 descriptor dispatch keys 清零。五表共享 identity/terminal/write-once
+> 原语已落地,plan-commit / scale-plan / profile-fetch 三条 owner cancel 现由 command/run/activity/lane 单事务 UoW
+> 闭合 R-020。该 UoW 不提供提交后 phantom child/attempt ownership fence,linked Operation post-commit sync 也仍在
+> R-019;不得误读为 acquisition 全链原子化。批记录见 `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。
+> 下一批为 **②.4 workflow_runtime read-model trio**。
 > B4.3 影子拆除 100% 完成(commit 952f9ee)。本文档是路线图
 > **②「Repository 查询方法建设 + 按域迁移调用方」** 这一轮的执行手册。
 > 设计依据:`docs/TRACK_B_B4_2_PG_NATIVE_STORE_DESIGN.md`(B4.2 设计,owner 已 ratify);历史全记录:`docs/TRACK_B_PG_PURE_STORE_DESIGN.md` §6。
@@ -15,13 +16,14 @@
 
 ## 1. 当前基底(起点事实,勿再重推导)
 
-- `storage.py` = 12,564 行(②.4b 后;②.4b 起点 12,809,②.4a 当前分支起点 13,296,②.3d 当前分支起点 13,835,②.3c settled tree 13,822,
+- `storage.py` = 12,190 行(②.4c 后;②.4c 起点 12,564,②.4b 起点 12,809,②.4a 当前分支起点 13,296,②.3d 当前分支起点 13,835,②.3c settled tree 13,822,
   ②.3b 后 14,261,②.3a 后 14,355,②.2 后 14,635,②.1 后 15,091,②.0 后 16,382,试点前 19,187),
   **PG-pure**:零 sqlite3 / 零 `_connection` / 零 `_lock`。
   已整体退役的域:linkedin_profile_registry(②.0)、criteria/confidence(②.1,`store.repos.criteria_confidence`)、
   manual_review(②.2,`store.repos.manual_review`);serving_projection 的 catalog、manifest、members、person search index
   已由 ②.3a-d 整域退役到 `store.repos.serving_projection`;
-  workflow_runtime 的 operation-control 与 acquisition-control 已由 ②.4a-b 退役到 `store.repos.workflow_runtime`;
+  workflow_runtime 的 operation-control、acquisition-control 与 activity spine 已由 ②.4a-c 退役到
+  `store.repos.workflow_runtime`;
   其余域仍在 God-class 门面上,按批推进。共享纯函数 `matching_bundle_payload`/`request_signature_context` 已外提到
   `request_matching.py`(storage 留别名 import)。
 - PG schema 唯一来源 = `migrations/0001_baseline.sql` + `migration_runner.py`(adapter `ensure_bootstrapped()` 驱动);遗留迁移表由 adapter 内字面 DDL(`_LEGACY_TARGET_PUBLIC_WEB_MIGRATION_TABLE_DDL`)按需建。
@@ -54,7 +56,7 @@
    ~~②.3c members + D-4(a)~~ DONE → ~~②.3d person search index~~ DONE。serving_projection 整域闭合。
    D-4 的四点显式 keyword 修复和全局 guard 已随 ②.3c 完成。
 5. **②.4 workflow_runtime 分子批**:~~②.4a operation-control~~ DONE → ~~②.4b acquisition-control~~ DONE →
-   **②.4c activity spine + R-020 fixed-forward** → read-model trio → recovery intents → session/trace → job leases → workers → commands(last)。
+   ~~②.4c activity spine + R-020 fixed-forward~~ DONE → **read-model trio** → recovery intents → session/trace → job leases → workers → commands(last)。
    每个分子批重新 Scout;不得因共享一个 repository 文件而合并状态机或跨批删除。
 6. **随批机会主义**:37 个 IRREGULAR read-mapper 里"软 irregular"(subscript 形式等价)可在其域批内顺手转 descriptor(harness 全列模式验证)。
    **②.1 反例警示**:criteria/confidence 的 8 个 mapper 看似可转,实为 None 直通 + 写路径真写 NULL FK —— Kind.INT 会 None→0 炸字节等价;
@@ -89,6 +91,12 @@
      顺序取 row lock,锁内判断 expected/terminal 状态、合并 patch、写 event,最后一次 commit。CAS miss、身份碰撞或 event
      写失败均不得留下状态或关联 action 的部分提交。普通 action/run 更新的 expected-status CAS 只防 stale terminal reopen;
      它不等于锁内 JSON merge,也不替代 command/action/event UoW(R-019)。
+     acquisition owner cancel 也是固定业务 UoW:调用方只选择 adapter allowlist 内的 plan-commit / scale-plan /
+     profile-fetch cancel kind,adapter 按 command→run→activity/lane→attempt/delta/downstream 锁序验证 identity、lease、
+     terminal winner 与 effect 空集,再一次提交 module rows + command。成功只能来自 committed `applied` / `repaired` /
+     `already_applied`;blocked/conflict/not-found 不得由 handler 改写为成功。exact replay 保持时间戳,异常整笔 rollback。
+     这关闭 R-020 的既有行部分提交窗口,但不阻止事务提交后 stale owner 新建 phantom child/attempt,也不把 linked
+     OperationRun/AgentAction sync 纳入同事务;这两项继续由 R-019 跟踪。
      onconflict 守卫已扩展(②.1):
      AST generated-id 扫描 + 字面扫描均覆盖 `repositories/*.py`,带非主键 conflict target 的方法可安全迁移。
    - "软 irregular" read-mapper 可顺手转 descriptor(全列 battery 验证)。
@@ -141,8 +149,8 @@ SOURCING_TEST_PG_ISOLATED_SCHEMA=1 \
 # REQUIRE flags 内建于 lane 命令 —— PG 不可用时 fail-closed 变红,Docker daemon 宕不再静默假绿)
 make ci-pre-agent-contract
 
-# 下一分子域方法清单(activity spine;落批前仍须按 §4 Scout 扩成精确方法映射)
-rg -n '^    def .*workflow_(activity|entity_delta)' src/sourcing_agent/storage.py
+# 下一分子域方法清单(read-model trio;落批前仍须按 §4 Scout 扩成精确方法映射)
+rg -n '^    def .*workflow_(current_state|event)|^    def .*runtime_outbox' src/sourcing_agent/storage.py
 ```
 
 ## 6. 已验证的 gotchas(付过学费的)
@@ -206,6 +214,13 @@ rg -n '^    def .*workflow_(activity|entity_delta)' src/sourcing_agent/storage.p
   acquisition run 写为 canonical terminal status;profile retry exhausted 曾留在 `profile_fetch_provider_retry_wait`,
   会绕过仅看 status 的 terminal fence;(d) 单行原语不提供 run/lane/activity/command 跨表 rollback,
   owner-specific cancel UoW 已登记 R-020,且在 activity spine/commands 分子批或 acquisition signoff 前触发。
+- **②.4c 新增经验**:(a) ActivityRun/ActivityAttempt 与 acquisition run/lane 应复用同一 allowlist identity primitive,
+  但 EntityDelta 是 append-only effect evidence,必须由显式 `write_once` 握手禁止 replay 改写,不能仅靠空 terminal set;
+  (b) terminal fence 只能保护已存在的 activity row,不能阻止 stale owner 在 cancel commit 后第一次插入 attempt/child;
+  后者需要 parent-command generation/lease-token ownership fence,继续归 R-019;(c) owner-specific 多表 cancel 必须把
+  blocker read、module update 与 command transition 放在同一 cursor/transaction,并返回结构化 committed outcome;
+  handler 不得在事务外重做 module writes 或把 blocked/conflict 报成 success;(d) exact replay、legacy partial repair、
+  injected rollback 与 corrupt identity 必须同组验证,否则“幂等”可能只覆盖 command row 而漏 module rows。
 
 ## 7. 待 owner 决策(决策卡格式,2026-07-09 升级;每卡一问、有推荐、有截止、有超时默认)
 

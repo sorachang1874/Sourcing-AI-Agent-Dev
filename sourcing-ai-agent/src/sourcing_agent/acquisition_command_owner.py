@@ -132,7 +132,6 @@ class AcquisitionCommandOwner:
         durable_runtime_writer: Any,
         upsert_acquisition_run_phase: Callable[..., dict[str, Any]],
         sync_operation_run_from_workflow_command_control: Callable[..., dict[str, Any]],
-        workflow_command_downstream_commands: Callable[..., list[dict[str, Any]]],
     ) -> None:
         self.store = store
         self._kernel = command_kernel
@@ -144,7 +143,85 @@ class AcquisitionCommandOwner:
         # ``ProfileFetchOwner`` already receives it as an injected callable.
         self._upsert_acquisition_run_phase = upsert_acquisition_run_phase
         self._sync_operation_run_from_workflow_command_control = sync_operation_run_from_workflow_command_control
-        self._workflow_command_downstream_commands = workflow_command_downstream_commands
+
+    def _cancel_acquisition_owner_command_uow(
+        self,
+        command: dict[str, Any],
+        *,
+        payload: dict[str, Any],
+        cancel_kind: str,
+    ) -> dict[str, Any]:
+        command_payload = dict(command or {})
+        actor = str(payload.get("actor") or payload.get("operator") or "api").strip() or "api"
+        default_reason = {
+            "acquisition_plan_commit_before_probe": "cancelled_before_probe_command_planned",
+            "acquisition_scale_plan_before_discovery": "cancelled_before_discovery_command_planned",
+        }[cancel_kind]
+        reason = str(payload.get("reason") or default_reason).strip()
+        force = _coerce_bool(payload.get("force"), False)
+        result = self.store.repos.workflow_runtime.cancel_acquisition_owner_command(
+            str(command_payload.get("command_id") or "").strip(),
+            cancel_kind=cancel_kind,
+            actor=actor,
+            reason=reason,
+            force=force,
+        )
+        outcome = str(result.get("outcome") or "conflict").strip() or "conflict"
+        latest = dict(result.get("workflow_command") or command_payload)
+        response_base = {
+            "workflow_command": self._kernel._workflow_command_api_record(latest),
+            **self._kernel._workflow_command_control_response_policy_records(latest),
+            "uow_outcome": outcome,
+            "module_state_mutated": bool(result.get("module_state_mutated")),
+            "owner_specific_control": True,
+            "contract": "w11_workflow_command_owner_specific_control_v1",
+        }
+        if outcome == "not_found":
+            return {"status": "not_found", "reason": "workflow_command_not_found", **response_base}
+        if outcome not in {"applied", "repaired", "already_applied"}:
+            invalid = {
+                "status": "invalid",
+                "reason": str(result.get("reason") or "workflow_command_owner_specific_cancel_not_applied").strip(),
+                **response_base,
+            }
+            if result.get("downstream_command_ids"):
+                invalid.update(
+                    {
+                        "downstream_command_count": len(result["downstream_command_ids"]),
+                        "downstream_command_ids": list(result["downstream_command_ids"]),
+                    }
+                )
+            if cancel_kind == "acquisition_scale_plan_before_discovery":
+                invalid.update(
+                    {
+                        "activity_attempt_count": int(result.get("activity_attempt_count") or 0),
+                        "entity_delta_count": int(result.get("entity_delta_count") or 0),
+                        "lane_downstream_command_ids": list(result.get("lane_downstream_command_ids") or []),
+                    }
+                )
+            return invalid
+        operation_sync = {}
+        if outcome != "already_applied":
+            operation_sync = self._sync_operation_run_from_workflow_command_control(
+                latest,
+                control_action="cancel",
+                actor=actor,
+                source="api.workflow_command_owner_specific_cancel",
+            )
+        response = {
+            "status": "cancelled",
+            "operation_sync": operation_sync,
+            "acquisition_run": dict(result.get("acquisition_run") or {}),
+            **response_base,
+        }
+        if cancel_kind == "acquisition_scale_plan_before_discovery":
+            response.update(
+                {
+                    "workflow_activity_runs": list(result.get("workflow_activity_runs") or []),
+                    "acquisition_discovery_lanes": list(result.get("acquisition_discovery_lanes") or []),
+                }
+            )
+        return response
 
     def _cancel_running_acquisition_scale_plan_before_discovery(
         self,
@@ -152,231 +229,11 @@ class AcquisitionCommandOwner:
         *,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        command_payload = dict(command or {})
-        command_id = str(command_payload.get("command_id") or "").strip()
-        actor = str(payload.get("actor") or payload.get("operator") or "api").strip() or "api"
-        reason = str(payload.get("reason") or "cancelled_before_discovery_command_planned").strip()
-        force = _coerce_bool(payload.get("force"), False)
-        downstream = self._workflow_command_downstream_commands(command_payload)
-        if downstream:
-            return {
-                "status": "invalid",
-                "reason": "acquisition_scale_plan_cancel_blocked_after_discovery_planned",
-                "downstream_command_count": len(downstream),
-                "downstream_command_ids": [
-                    str(row.get("command_id") or "").strip()
-                    for row in downstream
-                    if str(row.get("command_id") or "").strip()
-                ],
-                "workflow_command": self._kernel._workflow_command_api_record(command_payload),
-                **self._kernel._workflow_command_control_response_policy_records(command_payload),
-                "module_state_mutated": False,
-                "owner_specific_control": True,
-                "contract": "w11_workflow_command_owner_specific_control_v1",
-            }
-        if self._kernel._workflow_command_lease_active(command_payload) and not force:
-            return {
-                "status": "invalid",
-                "reason": "workflow_command_running_cancel_requires_expired_lease_or_force",
-                "workflow_command": self._kernel._workflow_command_api_record(command_payload),
-                **self._kernel._workflow_command_control_response_policy_records(command_payload),
-                "module_state_mutated": False,
-                "owner_specific_control": True,
-                "contract": "w11_workflow_command_owner_specific_control_v1",
-            }
-        acquisition_run = self._find_acquisition_run_for_command(command_payload)
-        acquisition_run_id = str(acquisition_run.get("acquisition_run_id") or "").strip()
-        lanes = (
-            self.store.repos.workflow_runtime.list_discovery_lanes(
-                acquisition_run_id=acquisition_run_id,
-                source_command_id=command_id,
-                limit=500,
-            )
-            if acquisition_run_id
-            else []
+        return self._cancel_acquisition_owner_command_uow(
+            command,
+            payload=payload,
+            cancel_kind="acquisition_scale_plan_before_discovery",
         )
-        activities = (
-            self.store.list_workflow_activity_runs(
-                acquisition_run_id=acquisition_run_id,
-                command_id=command_id,
-                limit=500,
-            )
-            if acquisition_run_id
-            else []
-        )
-        activity_by_id = {
-            str(activity.get("activity_run_id") or "").strip(): dict(activity or {})
-            for activity in activities
-            if str(activity.get("activity_run_id") or "").strip()
-        }
-        for lane in lanes:
-            activity_run_id = str(lane.get("activity_run_id") or "").strip()
-            if activity_run_id and activity_run_id not in activity_by_id:
-                activity = self.store.get_workflow_activity_run(activity_run_id)
-                if activity:
-                    activity_by_id[activity_run_id] = activity
-        activity_ids = [activity_id for activity_id in activity_by_id if activity_id]
-        attempt_count = 0
-        for activity_id in activity_ids:
-            attempt_count += len(self.store.list_workflow_activity_attempts(activity_run_id=activity_id, limit=1))
-        lane_downstream_ids = [
-            str(downstream_id or "").strip()
-            for lane in lanes
-            for downstream_id in list(lane.get("downstream_command_ids") or [])
-            if str(downstream_id or "").strip()
-        ]
-        if attempt_count or lane_downstream_ids:
-            return {
-                "status": "invalid",
-                "reason": "acquisition_scale_plan_cancel_blocked_after_discovery_started",
-                "activity_attempt_count": attempt_count,
-                "lane_downstream_command_ids": lane_downstream_ids,
-                "workflow_command": self._kernel._workflow_command_api_record(command_payload),
-                **self._kernel._workflow_command_control_response_policy_records(command_payload),
-                "module_state_mutated": False,
-                "owner_specific_control": True,
-                "contract": "w11_workflow_command_owner_specific_control_v1",
-            }
-
-        cancelled_activities: list[dict[str, Any]] = []
-        for activity in activity_by_id.values():
-            metadata = dict(activity.get("metadata") or {})
-            metadata.update(
-                {
-                    "cancelled_by": actor,
-                    "cancel_reason": reason,
-                    "control_source": "api.workflow_command_owner_specific_cancel",
-                    "discovery_command_planned": False,
-                }
-            )
-            cancelled_activity = self.store.upsert_workflow_activity_run(
-                {
-                    **activity,
-                    "status": "cancelled_before_discovery",
-                    "phase": "cancelled",
-                    "metadata": metadata,
-                }
-            )
-            if cancelled_activity:
-                cancelled_activities.append(cancelled_activity)
-        cancelled_lanes: list[dict[str, Any]] = []
-        for lane in lanes:
-            metadata = dict(lane.get("metadata") or {})
-            metadata.update(
-                {
-                    "cancelled_by": actor,
-                    "cancel_reason": reason,
-                    "control_source": "api.workflow_command_owner_specific_cancel",
-                    "discovery_command_planned": False,
-                }
-            )
-            lane_plan = dict(lane.get("lane_plan") or {})
-            lane_plan["status"] = "cancelled_before_discovery"
-            lane_plan["phase"] = "cancelled"
-            cancelled_lane = self.store.repos.workflow_runtime.upsert_discovery_lane(
-                {
-                    **lane,
-                    "status": "cancelled_before_discovery",
-                    "phase": "cancelled",
-                    "lane_plan": lane_plan,
-                    "metadata": metadata,
-                }
-            )
-            if cancelled_lane:
-                cancelled_lanes.append(cancelled_lane)
-        cancelled_run: dict[str, Any] = {}
-        if acquisition_run:
-            cancelled_run = self._upsert_acquisition_run_phase(
-                acquisition_run=acquisition_run,
-                command=command_payload,
-                status="cancelled_before_discovery",
-                current_phase="cancelled",
-                metadata_patch={
-                    "cancelled_by": actor,
-                    "cancel_reason": reason,
-                    "control_source": "api.workflow_command_owner_specific_cancel",
-                    "discovery_command_planned": False,
-                    "cancelled_activity_run_count": len(cancelled_activities),
-                    "cancelled_discovery_lane_count": len(cancelled_lanes),
-                },
-            )
-        updated = self.store.cancel_workflow_command(
-            command_id,
-            reason=reason,
-            actor=actor,
-            result={
-                "control_source": "api.workflow_command_owner_specific_cancel",
-                "control_action": "cancel",
-                "owner_specific_control": True,
-                "cancel_boundary": "acquisition_scale_plan_before_discovery",
-                "acquisition_run_id": str((cancelled_run or acquisition_run).get("acquisition_run_id") or "").strip(),
-                "acquisition_run_cancelled": bool(cancelled_run),
-                "activity_run_cancelled_count": len(cancelled_activities),
-                "discovery_lane_cancelled_count": len(cancelled_lanes),
-                "downstream_command_planned": False,
-                "activity_attempt_started": False,
-                "force": force,
-            },
-            from_statuses=("claimed", "running"),
-        )
-        if not updated:
-            latest = self.store.get_workflow_command(command_id) or command_payload
-            return {
-                "status": "invalid",
-                "reason": "workflow_command_owner_specific_cancel_not_applied",
-                "workflow_command": self._kernel._workflow_command_api_record(latest),
-                **self._kernel._workflow_command_control_response_policy_records(latest),
-                "acquisition_run": cancelled_run or acquisition_run,
-                "module_state_mutated": bool(cancelled_run or cancelled_activities or cancelled_lanes),
-                "owner_specific_control": True,
-                "contract": "w11_workflow_command_owner_specific_control_v1",
-            }
-        operation_sync = self._sync_operation_run_from_workflow_command_control(
-            updated,
-            control_action="cancel",
-            actor=actor,
-            source="api.workflow_command_owner_specific_cancel",
-        )
-        return {
-            "status": "cancelled",
-            "workflow_command": self._kernel._workflow_command_api_record(updated),
-            "operation_sync": operation_sync,
-            "acquisition_run": cancelled_run or acquisition_run,
-            "workflow_activity_runs": cancelled_activities,
-            "acquisition_discovery_lanes": cancelled_lanes,
-            **self._kernel._workflow_command_control_response_policy_records(updated),
-            "module_state_mutated": bool(cancelled_run or cancelled_activities or cancelled_lanes),
-            "owner_specific_control": True,
-            "contract": "w11_workflow_command_owner_specific_control_v1",
-        }
-
-    def _find_acquisition_run_for_command(self, command: dict[str, Any]) -> dict[str, Any]:
-        command_payload = dict(command or {})
-        command_id = str(command_payload.get("command_id") or "").strip()
-        payload = dict(command_payload.get("payload") or {})
-        acquisition_run_id = str(
-            payload.get("acquisition_run_id") or (command_payload.get("result") or {}).get("acquisition_run_id") or ""
-        ).strip()
-        if acquisition_run_id:
-            run = self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id)
-            if run:
-                return run
-        candidate_runs: list[dict[str, Any]] = []
-        operation_id = str(command_payload.get("operation_id") or payload.get("operation_run_id") or "").strip()
-        workflow_run_id = str(command_payload.get("workflow_run_id") or "").strip()
-        if operation_id:
-            candidate_runs.extend(
-                self.store.repos.workflow_runtime.list_acquisition_runs(operation_run_id=operation_id, limit=50)
-            )
-        if workflow_run_id:
-            candidate_runs.extend(
-                self.store.repos.workflow_runtime.list_acquisition_runs(workflow_run_id=workflow_run_id, limit=50)
-            )
-        for run in candidate_runs:
-            metadata = dict((run or {}).get("metadata") or {})
-            if str(metadata.get("source_command_id") or "").strip() == command_id:
-                return dict(run or {})
-        return {}
 
     def _cancel_running_acquisition_plan_commit_before_probe(
         self,
@@ -384,97 +241,11 @@ class AcquisitionCommandOwner:
         *,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        command_payload = dict(command or {})
-        command_id = str(command_payload.get("command_id") or "").strip()
-        actor = str(payload.get("actor") or payload.get("operator") or "api").strip() or "api"
-        reason = str(payload.get("reason") or "cancelled_before_probe_command_planned").strip()
-        force = _coerce_bool(payload.get("force"), False)
-        downstream = self._workflow_command_downstream_commands(command_payload)
-        if downstream:
-            return {
-                "status": "invalid",
-                "reason": "acquisition_plan_commit_cancel_blocked_after_probe_planned",
-                "downstream_command_count": len(downstream),
-                "downstream_command_ids": [
-                    str(row.get("command_id") or "").strip()
-                    for row in downstream
-                    if str(row.get("command_id") or "").strip()
-                ],
-                "workflow_command": self._kernel._workflow_command_api_record(command_payload),
-                **self._kernel._workflow_command_control_response_policy_records(command_payload),
-                "module_state_mutated": False,
-                "owner_specific_control": True,
-                "contract": "w11_workflow_command_owner_specific_control_v1",
-            }
-        if self._kernel._workflow_command_lease_active(command_payload) and not force:
-            return {
-                "status": "invalid",
-                "reason": "workflow_command_running_cancel_requires_expired_lease_or_force",
-                "workflow_command": self._kernel._workflow_command_api_record(command_payload),
-                **self._kernel._workflow_command_control_response_policy_records(command_payload),
-                "module_state_mutated": False,
-                "owner_specific_control": True,
-                "contract": "w11_workflow_command_owner_specific_control_v1",
-            }
-        acquisition_run = self._find_acquisition_run_for_command(command_payload)
-        cancelled_run: dict[str, Any] = {}
-        if acquisition_run:
-            cancelled_run = self._upsert_acquisition_run_phase(
-                acquisition_run=acquisition_run,
-                command=command_payload,
-                status="cancelled_before_probe",
-                current_phase="cancelled",
-                metadata_patch={
-                    "cancelled_by": actor,
-                    "cancel_reason": reason,
-                    "control_source": "api.workflow_command_owner_specific_cancel",
-                    "probe_command_planned": False,
-                },
-            )
-        updated = self.store.cancel_workflow_command(
-            command_id,
-            reason=reason,
-            actor=actor,
-            result={
-                "control_source": "api.workflow_command_owner_specific_cancel",
-                "control_action": "cancel",
-                "owner_specific_control": True,
-                "cancel_boundary": "acquisition_plan_commit_before_probe",
-                "acquisition_run_id": str((cancelled_run or acquisition_run).get("acquisition_run_id") or "").strip(),
-                "acquisition_run_cancelled": bool(cancelled_run),
-                "downstream_command_planned": False,
-                "force": force,
-            },
-            from_statuses=("claimed", "running"),
+        return self._cancel_acquisition_owner_command_uow(
+            command,
+            payload=payload,
+            cancel_kind="acquisition_plan_commit_before_probe",
         )
-        if not updated:
-            latest = self.store.get_workflow_command(command_id) or command_payload
-            return {
-                "status": "invalid",
-                "reason": "workflow_command_owner_specific_cancel_not_applied",
-                "workflow_command": self._kernel._workflow_command_api_record(latest),
-                **self._kernel._workflow_command_control_response_policy_records(latest),
-                "acquisition_run": cancelled_run or acquisition_run,
-                "module_state_mutated": bool(cancelled_run),
-                "owner_specific_control": True,
-                "contract": "w11_workflow_command_owner_specific_control_v1",
-            }
-        operation_sync = self._sync_operation_run_from_workflow_command_control(
-            updated,
-            control_action="cancel",
-            actor=actor,
-            source="api.workflow_command_owner_specific_cancel",
-        )
-        return {
-            "status": "cancelled",
-            "workflow_command": self._kernel._workflow_command_api_record(updated),
-            "operation_sync": operation_sync,
-            "acquisition_run": cancelled_run or acquisition_run,
-            **self._kernel._workflow_command_control_response_policy_records(updated),
-            "module_state_mutated": bool(cancelled_run),
-            "owner_specific_control": True,
-            "contract": "w11_workflow_command_owner_specific_control_v1",
-        }
 
     def _cancel_running_acquisition_plan_review_request_command(
         self,
@@ -2625,7 +2396,7 @@ class AcquisitionCommandOwner:
                 )
             ).hexdigest()[:24]
         )
-        activity_run = self.store.upsert_workflow_activity_run(
+        activity_run = self.store.repos.workflow_runtime.upsert_activity_run(
             {
                 "workspace_id": str(acquisition_run.get("workspace_id") or "default").strip() or "default",
                 "workflow_run_id": workflow_run_id,

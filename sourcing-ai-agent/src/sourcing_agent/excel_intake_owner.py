@@ -26,7 +26,6 @@ import json
 import os
 import threading
 import uuid
-
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,7 +46,6 @@ from .public_candidate_facets import (
     EXCEL_INTAKE_CURRENT_JOB_MARKER_LABEL,
 )
 from .storage import _json_safe_payload as _storage_json_safe_payload
-
 
 # NOTE: the helpers below duplicate small module-level helpers in
 # ``orchestrator.py`` (which imports this module — importing them back from
@@ -453,9 +451,7 @@ class ExcelIntakeOwner:
                 "attach_to_snapshot": bool(attach_to_snapshot),
                 "build_artifacts": bool(build_artifacts),
                 "source_companies": [
-                    str(item or "").strip()
-                    for item in list(source_companies or [])
-                    if str(item or "").strip()
+                    str(item or "").strip() for item in list(source_companies or []) if str(item or "").strip()
                 ],
                 **dict(prepared_batch_contract or {}),
             },
@@ -489,9 +485,7 @@ class ExcelIntakeOwner:
         execution_bundle = dict(job.get("execution_bundle") or {})
         excel_bundle = dict(execution_bundle.get("excel_intake") or {})
         prepared_batch_path = str(
-            fallback_payload.get("prepared_contact_batch_path")
-            or excel_bundle.get("prepared_contact_batch_path")
-            or ""
+            fallback_payload.get("prepared_contact_batch_path") or excel_bundle.get("prepared_contact_batch_path") or ""
         ).strip()
         prepared_batch = dict(fallback_payload.get("prepared_contact_batch") or {})
         if not prepared_batch and prepared_batch_path:
@@ -660,14 +654,20 @@ class ExcelIntakeOwner:
                 "prepared_contact_count": len(prepared_contacts),
             },
         )
-        command_result = self._run_excel_intake_run_command(command) if command else {
-            "status": "failed",
-            "reason": "excel_intake_run_command_enqueue_failed",
-            "command_type": EXCEL_INTAKE_RUN_COMMAND_TYPE,
-            "owner": EXCEL_INTAKE_RUN_OWNER,
-            "report_visible": True,
-        }
-        command_observation = dict(command_result.get("workflow_command") or {}) if isinstance(command_result, dict) else {}
+        command_result = (
+            self._run_excel_intake_run_command(command)
+            if command
+            else {
+                "status": "failed",
+                "reason": "excel_intake_run_command_enqueue_failed",
+                "command_type": EXCEL_INTAKE_RUN_COMMAND_TYPE,
+                "owner": EXCEL_INTAKE_RUN_OWNER,
+                "report_visible": True,
+            }
+        )
+        command_observation = (
+            dict(command_result.get("workflow_command") or {}) if isinstance(command_result, dict) else {}
+        )
         if not command_observation:
             command_observation = self._kernel._workflow_command_observation(
                 command,
@@ -935,31 +935,34 @@ class ExcelIntakeOwner:
         current_status = str(command.get("status") or "").strip().lower()
         updated = command
         if current_status not in {"cancelled", "canceled"}:
-            updated = self.store.cancel_workflow_command(
-                normalized_command_id,
-                reason=cancel_reason,
-                actor=str(actor or EXCEL_INTAKE_RUN_OWNER).strip() or EXCEL_INTAKE_RUN_OWNER,
-                result={
-                    "control_source": "api.workflow_command_owner_specific_cancel",
-                    "control_action": "cancel",
-                    "owner_specific_control": True,
-                    "job_id": normalized_job_id,
-                    "activity_run_id": str(dict(activity or {}).get("activity_run_id") or "").strip(),
-                    "activity_attempt_id": str(dict(attempt or {}).get("attempt_id") or "").strip(),
-                    "thread_terminal_checkpoint": True,
-                    "module_state_mutated": True,
-                },
-                from_statuses=("claimed", "running"),
-            ) or command
+            updated = (
+                self.store.cancel_workflow_command(
+                    normalized_command_id,
+                    reason=cancel_reason,
+                    actor=str(actor or EXCEL_INTAKE_RUN_OWNER).strip() or EXCEL_INTAKE_RUN_OWNER,
+                    result={
+                        "control_source": "api.workflow_command_owner_specific_cancel",
+                        "control_action": "cancel",
+                        "owner_specific_control": True,
+                        "job_id": normalized_job_id,
+                        "activity_run_id": str(dict(activity or {}).get("activity_run_id") or "").strip(),
+                        "activity_attempt_id": str(dict(attempt or {}).get("attempt_id") or "").strip(),
+                        "thread_terminal_checkpoint": True,
+                        "module_state_mutated": True,
+                    },
+                    from_statuses=("claimed", "running"),
+                )
+                or command
+            )
         if not activity or not attempt:
-            activity_rows = self.store.list_workflow_activity_runs(
+            activity_rows = self.store.repos.workflow_runtime.list_activity_runs(
                 command_id=normalized_command_id,
                 activity_type=EXCEL_INTAKE_RUN_COMMAND_TYPE,
                 limit=1,
             )
             activity = dict(activity_rows[0]) if activity_rows else {}
             attempts = (
-                self.store.list_workflow_activity_attempts(
+                self.store.repos.workflow_runtime.list_activity_attempts(
                     activity_run_id=str(activity.get("activity_run_id") or ""),
                     limit=1,
                 )
@@ -1035,7 +1038,9 @@ class ExcelIntakeOwner:
         )
         return {
             "status": "cancelled",
-            "workflow_command": self._kernel._workflow_command_api_record(self.store.get_workflow_command(normalized_command_id) or updated or command),
+            "workflow_command": self._kernel._workflow_command_api_record(
+                self.store.get_workflow_command(normalized_command_id) or updated or command
+            ),
             "operation_sync": operation_sync,
             "workflow_activity": final_activity or dict(activity or {}),
             "workflow_activity_attempt": final_attempt or dict(attempt or {}),
@@ -1071,9 +1076,7 @@ class ExcelIntakeOwner:
                 "workflow_command_id": normalized_command_id,
             },
         )
-        raise _ExcelIntakeCommandCancelled(
-            f"excel_intake_command_cancelled:{str(checkpoint or 'checkpoint').strip()}"
-        )
+        raise _ExcelIntakeCommandCancelled(f"excel_intake_command_cancelled:{str(checkpoint or 'checkpoint').strip()}")
 
     def _run_excel_intake_workflow_command_thread(
         self,
@@ -1119,7 +1122,8 @@ class ExcelIntakeOwner:
                     attempt_status="succeeded",
                 )
                 entity_delta = self._kernel._record_command_activity_entity_delta(
-                    command=self.store.get_workflow_command(normalized_command_id) or {"command_id": normalized_command_id},
+                    command=self.store.get_workflow_command(normalized_command_id)
+                    or {"command_id": normalized_command_id},
                     activity=final_activity or dict(activity or {}),
                     attempt=final_attempt or dict(attempt or {}),
                     entity_type="excel_intake_job",
@@ -1142,8 +1146,12 @@ class ExcelIntakeOwner:
                         "job_id": job_id,
                         "job_status": status,
                         "completed_async": True,
-                        "activity_run_id": str((final_activity or dict(activity or {})).get("activity_run_id") or "").strip(),
-                        "activity_attempt_id": str((final_attempt or dict(attempt or {})).get("attempt_id") or "").strip(),
+                        "activity_run_id": str(
+                            (final_activity or dict(activity or {})).get("activity_run_id") or ""
+                        ).strip(),
+                        "activity_attempt_id": str(
+                            (final_attempt or dict(attempt or {})).get("attempt_id") or ""
+                        ).strip(),
                         "entity_delta_id": str(entity_delta.get("delta_id") or "").strip(),
                         "row_count": int(payload.get("row_count") or payload.get("prepared_contact_count") or 0),
                         "migration_phase": "W7_excel_intake_run_command_owner",
@@ -1171,7 +1179,8 @@ class ExcelIntakeOwner:
                     attempt_status="failed",
                 )
                 self._kernel._record_command_activity_entity_delta(
-                    command=self.store.get_workflow_command(normalized_command_id) or {"command_id": normalized_command_id},
+                    command=self.store.get_workflow_command(normalized_command_id)
+                    or {"command_id": normalized_command_id},
                     activity=final_activity or dict(activity or {}),
                     attempt=final_attempt or dict(attempt or {}),
                     entity_type="excel_intake_job",
@@ -1276,9 +1285,7 @@ class ExcelIntakeOwner:
         for command in ready_commands:
             results.append(self._run_excel_intake_run_command(command))
         started_count = sum(
-            1
-            for result in results
-            if str(dict(result).get("reason") or "").strip() == "excel_intake_run_command_owner"
+            1 for result in results if str(dict(result).get("reason") or "").strip() == "excel_intake_run_command_owner"
         )
         skipped_count = sum(1 for result in results if str(dict(result).get("status") or "") == "skipped")
         failed_count = sum(1 for result in results if str(dict(result).get("status") or "") == "failed")
@@ -1365,8 +1372,7 @@ class ExcelIntakeOwner:
             "snapshot_id": snapshot_id,
             "candidate_doc_path": str(public_stage.get("candidate_doc_path") or "").strip(),
             "reason": str(
-                public_stage.get("artifact_build_deferred_reason")
-                or "excel_workflow_serves_result_view_overlay"
+                public_stage.get("artifact_build_deferred_reason") or "excel_workflow_serves_result_view_overlay"
             ).strip(),
             "public_web_stage_2": public_stage,
         }
@@ -1392,9 +1398,7 @@ class ExcelIntakeOwner:
             or ""
         ).strip()
         item_id = (
-            self._snapshot_full_materialization_item_id(job_id=job_id, snapshot_id=snapshot_id)
-            if snapshot_id
-            else ""
+            self._snapshot_full_materialization_item_id(job_id=job_id, snapshot_id=snapshot_id) if snapshot_id else ""
         )
         existing_item = self.store.get_job_materialization_item(item_id) if item_id else {}
         dry_run = _coerce_bool(payload.get("dry_run"), True)
@@ -1431,7 +1435,9 @@ class ExcelIntakeOwner:
         )
         result = {
             "status": "enqueued" if item else "failed",
-            "reason": "excel_artifact_materialization_item_enqueued" if item else "excel_artifact_materialization_enqueue_failed",
+            "reason": "excel_artifact_materialization_item_enqueued"
+            if item
+            else "excel_artifact_materialization_enqueue_failed",
             "item": item,
             **base_result,
         }
@@ -1484,8 +1490,7 @@ class ExcelIntakeOwner:
             or 0
         )
         review_row_count = int(
-            row_manifest.get("review_row_count")
-            or (manual_review_row_count + unresolved_row_count + invalid_row_count)
+            row_manifest.get("review_row_count") or (manual_review_row_count + unresolved_row_count + invalid_row_count)
         )
         target_candidate_count = int(
             linkedin_stage.get("excel_import_candidate_count")
@@ -1558,7 +1563,11 @@ class ExcelIntakeOwner:
             result["workflow_command"] = self._kernel._workflow_command_api_record(
                 self.store.get_workflow_command(command_id) or command_payload
             )
-        result.update(self._kernel._workflow_command_control_response_policy_records(self.store.get_workflow_command(command_id) or command_payload))
+        result.update(
+            self._kernel._workflow_command_control_response_policy_records(
+                self.store.get_workflow_command(command_id) or command_payload
+            )
+        )
         return result
 
     def _resume_running_excel_intake_command(
@@ -1585,14 +1594,14 @@ class ExcelIntakeOwner:
                 "contract": "w11_workflow_command_owner_specific_control_v1",
             }
         job_id = str(body.get("job_id") or command_payload.get("workflow_run_id") or command_id).strip()
-        activity_rows = self.store.list_workflow_activity_runs(
+        activity_rows = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=1,
         )
         activity = dict(activity_rows[0]) if activity_rows else {}
         attempts = (
-            self.store.list_workflow_activity_attempts(
+            self.store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=str(activity.get("activity_run_id") or ""),
                 limit=1,
             )
@@ -1819,7 +1828,9 @@ class ExcelIntakeOwner:
                     or ""
                 ).strip(),
                 "title": str(candidate_payload.get("title") or candidate_payload.get("headline") or "").strip(),
-                "linkedin_url": str(candidate_payload.get("linkedin_url") or candidate_payload.get("profile_url") or "").strip(),
+                "linkedin_url": str(
+                    candidate_payload.get("linkedin_url") or candidate_payload.get("profile_url") or ""
+                ).strip(),
                 "match_score": candidate_payload.get("match_score"),
                 "match_reason": str(candidate_payload.get("match_reason") or "").strip(),
             }.items()
@@ -1863,7 +1874,9 @@ class ExcelIntakeOwner:
                 "ranked_candidate_count": len(
                     [item for item in list(search_result.get("ranked_candidates") or []) if isinstance(item, dict)]
                 ),
-                "attempt_count": len([item for item in list(search_result.get("attempts") or []) if isinstance(item, dict)]),
+                "attempt_count": len(
+                    [item for item in list(search_result.get("attempts") or []) if isinstance(item, dict)]
+                ),
             }
             compact["search_result"] = {
                 key: value for key, value in compact["search_result"].items() if value not in (None, "", [])
@@ -2151,16 +2164,25 @@ class ExcelIntakeOwner:
                     )
                     continue
                 if command and command_status in {"claimed", "running", "retry_wait"}:
-                    command = self.store.mark_workflow_command_partial_progress(
-                        str(command.get("command_id") or ""),
-                        result={
-                            "status": "requeued_for_excel_intake_stale_recovery",
-                            "job_id": job_id,
-                            "recovery_source": "excel_intake_recovery",
-                            "requeued_at": _utc_now_iso(),
-                        },
-                    ) or command
-                if not command or command_status in {"succeeded", "failed_terminal", "cancelled", "canceled", "superseded"}:
+                    command = (
+                        self.store.mark_workflow_command_partial_progress(
+                            str(command.get("command_id") or ""),
+                            result={
+                                "status": "requeued_for_excel_intake_stale_recovery",
+                                "job_id": job_id,
+                                "recovery_source": "excel_intake_recovery",
+                                "requeued_at": _utc_now_iso(),
+                            },
+                        )
+                        or command
+                    )
+                if not command or command_status in {
+                    "succeeded",
+                    "failed_terminal",
+                    "cancelled",
+                    "canceled",
+                    "superseded",
+                }:
                     recovery_payload.update(
                         {
                             "run_scope": "stale_recovery",
@@ -2182,7 +2204,9 @@ class ExcelIntakeOwner:
                         payload=recovery_payload,
                     )
                 if not command:
-                    results.append({"job_id": job_id, "status": "failed", "reason": "excel_intake_run_command_enqueue_failed"})
+                    results.append(
+                        {"job_id": job_id, "status": "failed", "reason": "excel_intake_run_command_enqueue_failed"}
+                    )
                     continue
                 self.store.append_job_event(
                     job_id,
@@ -2192,9 +2216,7 @@ class ExcelIntakeOwner:
                     {
                         "workflow_kind": "excel_intake",
                         "recovery_source": "excel_intake_run_command_owner",
-                        "prepared_contact_batch_path": str(
-                            recovery_payload.get("prepared_contact_batch_path") or ""
-                        ),
+                        "prepared_contact_batch_path": str(recovery_payload.get("prepared_contact_batch_path") or ""),
                         "workflow_command": self._kernel._workflow_command_observation(
                             command,
                             migration_phase="W7_excel_intake_run_command_owner",

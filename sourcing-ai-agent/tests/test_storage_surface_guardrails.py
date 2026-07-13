@@ -99,6 +99,37 @@ _ACQUISITION_CONTROL_REPOSITORY_METHODS = {
     "_acquisition_run_from_row",
     "_discovery_lane_from_row",
 }
+_RETIRED_ACTIVITY_SPINE_STORE_METHODS = {
+    "upsert_workflow_activity_run",
+    "get_workflow_activity_run",
+    "list_workflow_activity_runs",
+    "upsert_workflow_activity_attempt",
+    "get_workflow_activity_attempt",
+    "list_workflow_activity_attempts",
+    "upsert_workflow_entity_delta",
+    "get_workflow_entity_delta",
+    "list_workflow_entity_deltas",
+    "_workflow_activity_run_from_row",
+    "_workflow_activity_attempt_from_row",
+    "_workflow_entity_delta_from_row",
+}
+_RETIRED_ACTIVITY_SPINE_CALL_ATTRIBUTES = {
+    name for name in _RETIRED_ACTIVITY_SPINE_STORE_METHODS if not name.startswith("_")
+}
+_ACTIVITY_SPINE_REPOSITORY_METHODS = {
+    "upsert_activity_run",
+    "get_activity_run",
+    "list_activity_runs",
+    "upsert_activity_attempt",
+    "get_activity_attempt",
+    "list_activity_attempts",
+    "upsert_entity_delta",
+    "get_entity_delta",
+    "list_entity_deltas",
+    "_activity_run_from_row",
+    "_activity_attempt_from_row",
+    "_entity_delta_from_row",
+}
 _RETIRED_SERVING_PROJECTION_STORE_METHODS = {
     "upsert_serving_projection",
     "get_serving_projection",
@@ -288,6 +319,28 @@ def _retired_acquisition_control_references(tree: ast.AST) -> list[tuple[int, st
     return offenders
 
 
+def _retired_activity_spine_references(tree: ast.AST) -> list[tuple[int, str]]:
+    offenders: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr in _RETIRED_ACTIVITY_SPINE_CALL_ATTRIBUTES
+            and _is_store_receiver(node.value)
+        ):
+            offenders.append((node.lineno, node.attr))
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and len(node.args) >= 2
+            and _is_store_receiver(node.args[0])
+            and isinstance(node.args[1], ast.Constant)
+            and node.args[1].value in _RETIRED_ACTIVITY_SPINE_CALL_ATTRIBUTES
+        ):
+            offenders.append((node.lineno, f"getattr:{node.args[1].value}"))
+    return offenders
+
+
 def _workflow_runtime_state_update_count(tree: ast.AST) -> int:
     count = 0
     for node in ast.walk(tree):
@@ -469,14 +522,24 @@ class _OperationControlFaultAdapter:
         self._raise_if_failing("upsert_agent_action")
         return None
 
-    def upsert_acquisition_runtime_row(
+    def upsert_workflow_runtime_identity_row(
         self,
         *,
         table_name: str,
         row: dict[str, object],
         **_kwargs: object,
     ) -> None:
-        self._raise_if_failing("upsert_acquisition_runtime_row")
+        self._raise_if_failing("upsert_workflow_runtime_identity_row")
+        return None
+
+    def cancel_acquisition_owner_command(
+        self,
+        command_id: str,
+        *,
+        table_name: str = "workflow_commands",
+        **_kwargs: object,
+    ) -> None:
+        self._raise_if_failing("cancel_acquisition_owner_command")
         return None
 
 
@@ -740,14 +803,23 @@ def test_acquisition_control_storage_facade_is_retired_to_workflow_runtime_repos
     assert descriptor_dispatch_keys.isdisjoint({"_acquisition_run_from_row", "_acquisition_discovery_lane_from_row"})
 
 
-def test_acquisition_control_native_writer_requires_explicit_authority_table() -> None:
+def test_workflow_runtime_identity_writer_requires_explicit_contract_handshake() -> None:
     from sourcing_agent.control_plane_live_postgres import LiveControlPlanePostgresAdapter
 
-    parameter = inspect.signature(LiveControlPlanePostgresAdapter.upsert_acquisition_runtime_row).parameters[
+    parameters = inspect.signature(LiveControlPlanePostgresAdapter.upsert_workflow_runtime_identity_row).parameters
+    for name in ("table_name", "id_column", "immutable_columns", "terminal_statuses", "write_once"):
+        assert parameters[name].kind is inspect.Parameter.KEYWORD_ONLY
+        assert parameters[name].default is inspect.Parameter.empty
+
+
+def test_acquisition_owner_cancel_writer_is_bound_to_workflow_commands() -> None:
+    from sourcing_agent.control_plane_live_postgres import LiveControlPlanePostgresAdapter
+
+    parameter = inspect.signature(LiveControlPlanePostgresAdapter.cancel_acquisition_owner_command).parameters[
         "table_name"
     ]
     assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
-    assert parameter.default is inspect.Parameter.empty
+    assert parameter.default == "workflow_commands"
 
 
 def test_acquisition_control_repository_preserves_authority_write_fault_contract() -> None:
@@ -759,14 +831,14 @@ def test_acquisition_control_repository_preserves_authority_write_fault_contract
     repository = WorkflowRuntimeRepository(
         _OperationControlFaultAdapter(
             authoritative=True,
-            failing_method="upsert_acquisition_runtime_row",
+            failing_method="upsert_workflow_runtime_identity_row",
         )
     )
     with pytest.raises(
         RuntimeError,
         match=(
             "Postgres authoritative write failed for acquisition_runs via "
-            "upsert_acquisition_runtime_row: RuntimeError: upsert_acquisition_runtime_row-boom"
+            "upsert_workflow_runtime_identity_row: RuntimeError: upsert_workflow_runtime_identity_row-boom"
         ),
     ):
         repository.upsert_acquisition_run(payload)
@@ -781,10 +853,49 @@ def test_acquisition_control_repository_preserves_authority_write_fault_contract
         RuntimeError,
         match=(
             "Postgres authoritative write failed for acquisition_runs via "
-            "upsert_acquisition_runtime_row: postgres-only: authoritative upsert returned no row"
+            "upsert_workflow_runtime_identity_row: postgres-only: authoritative upsert returned no row"
         ),
     ):
         no_confirmation_repository.upsert_acquisition_run(payload)
+
+
+def test_acquisition_owner_cancel_preserves_authority_write_fault_contract() -> None:
+    repository = WorkflowRuntimeRepository(
+        _OperationControlFaultAdapter(
+            authoritative=True,
+            failing_method="cancel_acquisition_owner_command",
+        )
+    )
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "Postgres authoritative write failed for workflow_commands via "
+            "cancel_acquisition_owner_command: RuntimeError: cancel_acquisition_owner_command-boom"
+        ),
+    ):
+        repository.cancel_acquisition_owner_command(
+            "command-1",
+            cancel_kind="plan_commit",
+            actor="api",
+            reason="operator_cancelled",
+        )
+
+    no_confirmation_repository = WorkflowRuntimeRepository(
+        _OperationControlFaultAdapter(authoritative=True, failing_method="")
+    )
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "Postgres authoritative write failed for workflow_commands via "
+            "cancel_acquisition_owner_command: postgres-only: authoritative cancellation returned no outcome"
+        ),
+    ):
+        no_confirmation_repository.cancel_acquisition_owner_command(
+            "command-1",
+            cancel_kind="plan_commit",
+            actor="api",
+            reason="operator_cancelled",
+        )
 
 
 def test_acquisition_control_retired_store_calls_cannot_return() -> None:
@@ -816,6 +927,60 @@ def test_acquisition_control_retired_store_calls_cannot_return() -> None:
             offenders.extend(
                 f"{path.relative_to(repo_root)}:{line}:{label}"
                 for line, label in _retired_acquisition_control_references(tree)
+            )
+
+    assert offenders == []
+
+
+def test_activity_spine_storage_facade_is_retired_to_workflow_runtime_repository() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    storage_path = repo_root / "src" / "sourcing_agent" / "storage.py"
+    repository_path = repo_root / "src" / "sourcing_agent" / "repositories" / "workflow_runtime.py"
+    storage_methods = _class_method_names(storage_path, "ControlPlaneStore")
+    repository_methods = _class_method_names(repository_path, "WorkflowRuntimeRepository")
+    descriptor_dispatch_keys = _assigned_literal_dict_keys(repository_path, "FROM_ROW_DESCRIPTORS")
+
+    assert storage_methods.isdisjoint(_RETIRED_ACTIVITY_SPINE_STORE_METHODS)
+    assert _ACTIVITY_SPINE_REPOSITORY_METHODS <= repository_methods
+    assert descriptor_dispatch_keys.isdisjoint(
+        {
+            "_workflow_activity_run_from_row",
+            "_workflow_activity_attempt_from_row",
+            "_workflow_entity_delta_from_row",
+        }
+    )
+
+
+def test_activity_spine_retired_store_calls_cannot_return() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    synthetic = ast.parse(
+        "\n".join(
+            [
+                'store.get_workflow_activity_run("run")',
+                "callback = api_store.list_workflow_activity_attempts",
+                'dynamic = getattr(self.store, "upsert_workflow_entity_delta")',
+                'store.repos.workflow_runtime.get_activity_run("run")',
+                'api.get_workflow_activity_attempt("attempt")',
+            ]
+        )
+    )
+    assert {label for _line, label in _retired_activity_spine_references(synthetic)} == {
+        "get_workflow_activity_run",
+        "list_workflow_activity_attempts",
+        "getattr:upsert_workflow_entity_delta",
+    }
+
+    offenders: list[str] = []
+    checked_roots = [repo_root / "src" / "sourcing_agent", repo_root / "scripts", repo_root / "tests"]
+    current_test = Path(__file__).resolve()
+    for root in checked_roots:
+        for path in root.rglob("*.py"):
+            if path.resolve() == current_test:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            offenders.extend(
+                f"{path.relative_to(repo_root)}:{line}:{label}"
+                for line, label in _retired_activity_spine_references(tree)
             )
 
     assert offenders == []

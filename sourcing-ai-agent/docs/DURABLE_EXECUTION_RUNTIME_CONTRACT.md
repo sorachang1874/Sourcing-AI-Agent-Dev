@@ -44,14 +44,15 @@ W8 operation persistence contract:
 - Budget-required actions require explicit budget before persistence.
 - Operation-layer persistence must not create `workflow_commands`, CRM rows, projection rows, person assets/evidence/assertions, provider registry rows, or export artifacts. Those remain module-owner effects.
 - W9 backend operation controls may approve, reject, query, and cancel operation state through operation runtime tables and append-only events. They must still not execute module side effects or bypass workflow command owners.
-- `store.repos.workflow_runtime` is the public storage owner for `agent_actions`, `operation_runs`, and
-  `operation_events`, and for acquisition current-state rows in `acquisition_runs` and
-  `acquisition_discovery_lanes`; the retired `ControlPlaneStore` operation/acquisition facades must not be restored.
-- Acquisition run/lane writes lock both primary-key and `(workspace_id, idempotency_key)` identity scopes in a
-  deterministic order. Primary/idempotency identity collisions fail closed; immutable workflow/operation/command/
-  activity ownership cannot drift; JSON object patches merge under the row lock; and a terminal run/lane cannot be
-  reopened or rewritten by a stale writer. `acquisition_discovery_lanes` remains a domain read model and never owns
-  retry/cancel/resume semantics.
+- `store.repos.workflow_runtime` is the public storage owner for `agent_actions`, `operation_runs`, `operation_events`,
+  `acquisition_runs`, `acquisition_discovery_lanes`, `workflow_activity_runs`, `workflow_activity_attempts`, and
+  `workflow_entity_deltas`; the retired `ControlPlaneStore` operation/acquisition/activity facades must not be restored.
+- Acquisition run/lane and ActivityRun/ActivityAttempt writes lock both primary-key and
+  `(workspace_id, idempotency_key)` identity scopes in a deterministic order. Primary/idempotency identity collisions
+  fail closed; immutable workflow/operation/command/activity ownership cannot drift; JSON object patches merge under
+  the row lock; and terminal rows cannot be reopened or rewritten by a stale writer. EntityDelta rows are write-once
+  effect evidence: exact replay returns the committed row and a later payload cannot rewrite the recorded fact.
+  `acquisition_discovery_lanes` remains a domain read model and never owns retry/cancel/resume semantics.
 - Ordinary action/run state updates use expected-status compare-and-set and return the committed row. Callers
   must validate the committed target before emitting a success event or reporting success. A stale writer must
   not reopen `completed`, `failed`, `cancelled`, or `rejected` action state, or a terminal operation run.
@@ -64,9 +65,17 @@ W8 operation persistence contract:
   returns `status=conflict` and HTTP 409 and must not create a loser success event. This guarantee is bounded to
   the implemented reject/cancel UoWs plus committed-target guards for approve/resume/retry. Command planning and
   generic operation+action+event synchronization still require the UoWs tracked by `RESIDUAL_LEDGER.md` R-019.
-- Owner-specific acquisition cancel paths that touch an acquisition run, discovery lane/activity rows, and a workflow
-  command are not yet one PG UoW. A command CAS conflict or process failure can therefore leave module state cancelled
-  before the command transition commits; this separate boundary is tracked by `RESIDUAL_LEDGER.md` R-020.
+- Owner-specific acquisition plan-commit, scale-plan, and profile-fetch pre-effect cancellation is one fixed PG UoW.
+  It locks the command, acquisition run, relevant activity/lane rows, and attempt/delta/downstream blockers; validates
+  command type/owner, causal identity, lease or explicit force, terminal winner, and the no-effect boundary; then
+  commits every module row and the workflow-command cancellation together. It returns only structured committed
+  outcomes (`applied`, `repaired`, `already_applied`, `blocked`, `conflict`, `not_found`). Exact replay preserves
+  timestamps, matching legacy partial state can be repaired, and faults roll back the entire transition. This closes
+  `RESIDUAL_LEDGER.md` R-020's existing-row partial-commit boundary.
+- This UoW does not fence a stale owner from first creating a new downstream child or ActivityAttempt after the cancel
+  transaction commits, and it does not include linked OperationRun/AgentAction post-commit synchronization. Those
+  guarantees require parent-command generation/lease-token ownership fencing and operation synchronization under
+  `RESIDUAL_LEDGER.md` R-019; R-020 closure must not be used as evidence that the wider acquisition chain is atomic.
 
 ### Workflow Layer
 

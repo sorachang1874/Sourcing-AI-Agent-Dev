@@ -423,7 +423,7 @@ _OPERATION_RUNTIME_TABLES = {
     "acquisition_discovery_lanes",
     "operation_events",
 }
-_ACQUISITION_RUNTIME_UPSERT_CONFIG = {
+_WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG = {
     "acquisition_runs": {
         "id_column": "acquisition_run_id",
         "columns": (
@@ -467,6 +467,7 @@ _ACQUISITION_RUNTIME_UPSERT_CONFIG = {
             "failed",
             "cancelled",
         ),
+        "write_once": False,
     },
     "acquisition_discovery_lanes": {
         "id_column": "lane_id",
@@ -516,6 +517,208 @@ _ACQUISITION_RUNTIME_UPSERT_CONFIG = {
             "failed",
             "cancelled",
         ),
+        "write_once": False,
+    },
+    "workflow_activity_runs": {
+        "id_column": "activity_run_id",
+        "columns": (
+            "activity_run_id",
+            "workspace_id",
+            "workflow_run_id",
+            "operation_run_id",
+            "acquisition_run_id",
+            "command_id",
+            "parent_activity_run_id",
+            "activity_type",
+            "owner",
+            "status",
+            "phase",
+            "idempotency_key",
+            "provider_ref_json",
+            "input_json",
+            "output_json",
+            "artifact_refs_json",
+            "entity_counts_json",
+            "metadata_json",
+            "created_at",
+            "updated_at",
+        ),
+        "immutable_columns": (
+            "activity_run_id",
+            "workspace_id",
+            "workflow_run_id",
+            "operation_run_id",
+            "acquisition_run_id",
+            "command_id",
+            "parent_activity_run_id",
+            "activity_type",
+            "owner",
+            "idempotency_key",
+        ),
+        "json_object_columns": (
+            "provider_ref_json",
+            "input_json",
+            "output_json",
+            "entity_counts_json",
+            "metadata_json",
+        ),
+        "terminal_statuses": (
+            "succeeded",
+            "completed",
+            "failed",
+            "cancelled",
+            "cancelled_before_discovery",
+            "cancelled_before_cache_lookup",
+            "cancelled_poll_stopped",
+            "cancelled_before_provider_attempt",
+            "cancelled_before_domain_mutation",
+            "cancelled_before_company_asset_sync",
+            "cancelled_before_crm_mutation",
+            "cancelled_before_fetch_upload",
+        ),
+        "write_once": False,
+    },
+    "workflow_activity_attempts": {
+        "id_column": "attempt_id",
+        "columns": (
+            "attempt_id",
+            "workspace_id",
+            "activity_run_id",
+            "workflow_run_id",
+            "command_id",
+            "attempt_number",
+            "status",
+            "provider",
+            "provider_request_ref",
+            "provider_run_ref",
+            "started_at",
+            "completed_at",
+            "next_retry_at",
+            "rate_limit_ref_json",
+            "error_json",
+            "input_json",
+            "output_json",
+            "artifact_refs_json",
+            "idempotency_key",
+            "metadata_json",
+            "created_at",
+            "updated_at",
+        ),
+        "immutable_columns": (
+            "attempt_id",
+            "workspace_id",
+            "activity_run_id",
+            "workflow_run_id",
+            "command_id",
+            "attempt_number",
+            "provider",
+            "idempotency_key",
+        ),
+        "json_object_columns": (
+            "rate_limit_ref_json",
+            "error_json",
+            "input_json",
+            "output_json",
+            "metadata_json",
+        ),
+        "terminal_statuses": (
+            "succeeded",
+            "completed",
+            "failed",
+            "cancelled",
+            "cancelled_remote_ignored",
+        ),
+        "write_once": False,
+    },
+    "workflow_entity_deltas": {
+        "id_column": "delta_id",
+        "columns": (
+            "delta_id",
+            "workspace_id",
+            "workflow_run_id",
+            "operation_run_id",
+            "command_id",
+            "activity_run_id",
+            "attempt_id",
+            "acquisition_run_id",
+            "entity_type",
+            "entity_key",
+            "delta_kind",
+            "status",
+            "reason",
+            "source_ref_json",
+            "entity_payload_json",
+            "projection_effect_json",
+            "artifact_refs_json",
+            "idempotency_key",
+            "metadata_json",
+            "created_at",
+            "updated_at",
+        ),
+        "immutable_columns": (
+            "delta_id",
+            "workspace_id",
+            "workflow_run_id",
+            "operation_run_id",
+            "command_id",
+            "activity_run_id",
+            "attempt_id",
+            "acquisition_run_id",
+            "entity_type",
+            "entity_key",
+            "delta_kind",
+            "idempotency_key",
+        ),
+        "json_object_columns": (
+            "source_ref_json",
+            "entity_payload_json",
+            "projection_effect_json",
+            "metadata_json",
+        ),
+        "terminal_statuses": (),
+        "write_once": True,
+    },
+}
+
+# Fixed owner-specific cancellation modes. Callers choose a semantic boundary;
+# table names, command identity, statuses, and patches remain adapter-owned so
+# this UoW cannot become a caller-supplied cross-table mutation primitive.
+_ACQUISITION_OWNER_CANCEL_CONFIG = {
+    "acquisition_plan_commit_before_probe": {
+        "command_type": "acquisition.plan.commit",
+        "owner": "acquisition_planner",
+        "run_status": "cancelled_before_probe",
+        "run_metadata_flags": {"probe_command_planned": False},
+        "activity_type": "",
+        "activity_status": "",
+        "downstream_block_reason": "acquisition_plan_commit_cancel_blocked_after_probe_planned",
+        "effect_block_reason": "acquisition_plan_commit_cancel_blocked_after_probe_started",
+        "resolve_run_from_command": True,
+    },
+    "acquisition_scale_plan_before_discovery": {
+        "command_type": "acquisition.scale.plan",
+        "owner": "acquisition_scale_planner",
+        "run_status": "cancelled_before_discovery",
+        "run_metadata_flags": {"discovery_command_planned": False},
+        "activity_type": "",
+        "activity_status": "cancelled_before_discovery",
+        "downstream_block_reason": "acquisition_scale_plan_cancel_blocked_after_discovery_planned",
+        "effect_block_reason": "acquisition_scale_plan_cancel_blocked_after_discovery_started",
+        "resolve_run_from_command": True,
+    },
+    "profile_fetch_activity_before_cache_lookup_attempt": {
+        "command_type": "linkedin.profile_fetch.activity.run",
+        "owner": "linkedin_profile_activity_owner",
+        "run_status": "cancelled_before_profile_fetch_activity",
+        "run_metadata_flags": {
+            "activity_attempt_started": False,
+            "profile_entity_delta_recorded": False,
+        },
+        "activity_type": "linkedin.profile_fetch.activity.run",
+        "activity_status": "cancelled_before_cache_lookup",
+        "downstream_block_reason": "profile_fetch_activity_cancel_blocked_after_downstream_planned",
+        "effect_block_reason": "profile_fetch_activity_cancel_blocked_after_cache_lookup_started",
+        "resolve_run_from_command": False,
     },
 }
 _RUNNING_RECOVERABLE_WAIT_STAGES = {
@@ -4485,7 +4688,7 @@ class LiveControlPlanePostgresAdapter:
             connection.commit()
         return existing
 
-    def upsert_acquisition_runtime_row(
+    def upsert_workflow_runtime_identity_row(
         self,
         row: dict[str, Any] | None = None,
         *,
@@ -4493,20 +4696,26 @@ class LiveControlPlanePostgresAdapter:
         id_column: str,
         immutable_columns: tuple[str, ...],
         terminal_statuses: tuple[str, ...],
+        write_once: bool,
     ) -> dict[str, Any] | None:
         normalized_table = _normalize_postgres_identifier(table_name)
-        config = _ACQUISITION_RUNTIME_UPSERT_CONFIG.get(normalized_table)
+        config = _WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG.get(normalized_table)
         if config is None:
-            raise ValueError("upsert_acquisition_runtime_row requires an acquisition runtime table")
+            raise ValueError("upsert_workflow_runtime_identity_row requires a registered workflow runtime table")
         configured_id_column = str(config["id_column"])
         configured_immutable_columns = tuple(config["immutable_columns"])
         configured_terminal_statuses = tuple(config["terminal_statuses"])
+        configured_write_once = bool(config["write_once"])
         if _normalize_postgres_identifier(id_column) != configured_id_column:
-            raise ValueError(f"upsert_acquisition_runtime_row invalid id_column for {normalized_table}")
+            raise ValueError(f"upsert_workflow_runtime_identity_row invalid id_column for {normalized_table}")
         if tuple(immutable_columns) != configured_immutable_columns:
-            raise ValueError(f"upsert_acquisition_runtime_row immutable contract mismatch for {normalized_table}")
+            raise ValueError(f"upsert_workflow_runtime_identity_row immutable contract mismatch for {normalized_table}")
         if tuple(terminal_statuses) != configured_terminal_statuses:
-            raise ValueError(f"upsert_acquisition_runtime_row terminal contract mismatch for {normalized_table}")
+            raise ValueError(f"upsert_workflow_runtime_identity_row terminal contract mismatch for {normalized_table}")
+        if bool(write_once) != configured_write_once:
+            raise ValueError(
+                f"upsert_workflow_runtime_identity_row write-once contract mismatch for {normalized_table}"
+            )
         if not self._require_operation_runtime_table(normalized_table):
             return None
 
@@ -4515,7 +4724,7 @@ class LiveControlPlanePostgresAdapter:
         unknown_columns = set(payload) - set(configured_columns)
         if unknown_columns:
             raise ValueError(
-                f"upsert_acquisition_runtime_row unknown columns for {normalized_table}: "
+                f"upsert_workflow_runtime_identity_row unknown columns for {normalized_table}: "
                 + ", ".join(sorted(unknown_columns))
             )
         row_id = str(payload.get(configured_id_column) or "").strip()
@@ -4537,11 +4746,8 @@ class LiveControlPlanePostgresAdapter:
                     with connection.cursor() as cursor:
                         lock_keys = sorted(
                             {
-                                f"acquisition_runtime:{normalized_table}:id:{row_id}",
-                                (
-                                    f"acquisition_runtime:{normalized_table}:idempotency:"
-                                    f"{workspace_id}:{idempotency_key}"
-                                ),
+                                f"workflow_runtime:{normalized_table}:id:{row_id}",
+                                (f"workflow_runtime:{normalized_table}:idempotency:{workspace_id}:{idempotency_key}"),
                             }
                         )
                         for lock_key in lock_keys:
@@ -4592,7 +4798,7 @@ class LiveControlPlanePostgresAdapter:
                                         f"{normalized_table} immutable identity collision for {row_id}: {column}"
                                     )
                             current_status = str(current.get("status") or "").strip()
-                            if current_status in configured_terminal_statuses:
+                            if configured_write_once or current_status in configured_terminal_statuses:
                                 connection.commit()
                                 return current
 
@@ -5856,6 +6062,765 @@ class LiveControlPlanePostgresAdapter:
                 *allowed_statuses,
             ),
         )
+
+    def cancel_acquisition_owner_command(
+        self,
+        command_id: str,
+        *,
+        table_name: str = "workflow_commands",
+        cancel_kind: str,
+        actor: str = "",
+        reason: str = "",
+        force: bool = False,
+    ) -> dict[str, Any] | None:
+        """Cancel one acquisition owner command and its pre-effect module rows atomically."""
+
+        if _normalize_postgres_identifier(table_name) != "workflow_commands":
+            raise ValueError("cancel_acquisition_owner_command requires table_name=workflow_commands")
+        if not self.should_prefer_read("workflow_commands"):
+            return None
+        self._ensure_runtime_coordination_schema()
+        for required_table in (
+            "acquisition_runs",
+            "workflow_activity_runs",
+            "workflow_activity_attempts",
+            "workflow_entity_deltas",
+            "acquisition_discovery_lanes",
+        ):
+            if not self._require_operation_runtime_table(required_table):
+                return None
+        normalized_command_id = str(command_id or "").strip()
+        normalized_cancel_kind = str(cancel_kind or "").strip()
+        config = _ACQUISITION_OWNER_CANCEL_CONFIG.get(normalized_cancel_kind)
+        if config is None:
+            raise ValueError("cancel_acquisition_owner_command requires a registered cancel_kind")
+        if not normalized_command_id:
+            return None
+        normalized_actor = str(actor or "api").strip() or "api"
+        normalized_reason = str(reason or "cancelled_by_command_control").strip() or "cancelled_by_command_control"
+        force_cancel = bool(force)
+        activity_terminal_statuses = set(
+            _WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG["workflow_activity_runs"]["terminal_statuses"]
+        )
+        run_terminal_statuses = set(_WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG["acquisition_runs"]["terminal_statuses"])
+        lane_terminal_statuses = set(
+            _WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG["acquisition_discovery_lanes"]["terminal_statuses"]
+        )
+
+        def response(
+            *,
+            outcome: str,
+            reason_code: str,
+            command: dict[str, Any] | None,
+            acquisition_run: dict[str, Any] | None = None,
+            activity_runs: list[dict[str, Any]] | None = None,
+            discovery_lanes: list[dict[str, Any]] | None = None,
+            downstream_command_ids: list[str] | None = None,
+            lane_downstream_command_ids: list[str] | None = None,
+            activity_attempt_count: int = 0,
+            entity_delta_count: int = 0,
+            module_state_mutated: bool = False,
+        ) -> dict[str, Any]:
+            return {
+                "outcome": outcome,
+                "applied": outcome == "applied",
+                "reason": reason_code,
+                "command": command,
+                "acquisition_run": acquisition_run,
+                "activity_runs": list(activity_runs or []),
+                "discovery_lanes": list(discovery_lanes or []),
+                "downstream_command_ids": list(downstream_command_ids or []),
+                "lane_downstream_command_ids": list(lane_downstream_command_ids or []),
+                "activity_attempt_count": max(0, int(activity_attempt_count or 0)),
+                "entity_delta_count": max(0, int(entity_delta_count or 0)),
+                "module_state_mutated": bool(module_state_mutated),
+            }
+
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT * FROM workflow_commands WHERE command_id = %s FOR UPDATE",
+                            (normalized_command_id,),
+                        )
+                        command = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if command is None:
+                            connection.commit()
+                            return response(outcome="not_found", reason_code="workflow_command_not_found", command=None)
+
+                        command_type = str(command.get("command_type") or "").strip()
+                        command_owner = str(command.get("owner") or "").strip()
+                        if command_type != config["command_type"] or command_owner != config["owner"]:
+                            connection.commit()
+                            return response(
+                                outcome="conflict",
+                                reason_code="workflow_command_owner_specific_cancel_identity_mismatch",
+                                command=command,
+                            )
+
+                        command_payload = _json_load_dict(command.get("payload_json"))
+                        command_result = _json_load_dict(command.get("result_json"))
+                        command_status = str(command.get("status") or "").strip()
+                        persisted_cancel_kind = str(
+                            command_result.get("owner_cancel_kind") or command_result.get("cancel_boundary") or ""
+                        ).strip()
+                        command_target_applied = bool(
+                            command_status == "cancelled"
+                            and persisted_cancel_kind == normalized_cancel_kind
+                            and str(command_result.get("control_source") or "").strip()
+                            == "api.workflow_command_owner_specific_cancel"
+                            and command_result.get("owner_specific_control") is True
+                        )
+                        if command_target_applied:
+                            stored_actor = str(command_result.get("control_actor") or "").strip()
+                            stored_reason = str(command_result.get("control_reason") or "").strip()
+                            if (
+                                (stored_actor and stored_actor != normalized_actor)
+                                or (stored_reason and stored_reason != normalized_reason)
+                                or ("force" in command_result and bool(command_result.get("force")) != force_cancel)
+                            ):
+                                connection.commit()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code="workflow_command_owner_specific_cancel_audit_identity_conflict",
+                                    command=command,
+                                )
+                        if command_status == "cancelled" and not command_target_applied:
+                            connection.commit()
+                            return response(
+                                outcome="conflict",
+                                reason_code="workflow_command_owner_specific_cancel_boundary_conflict",
+                                command=command,
+                            )
+                        if not command_target_applied and command_status not in {"claimed", "running"}:
+                            connection.commit()
+                            return response(
+                                outcome="conflict",
+                                reason_code="workflow_command_owner_specific_cancel_not_applied",
+                                command=command,
+                            )
+                        lease_owner = str(command.get("lease_owner") or "").strip()
+                        lease_expires_at = str(command.get("lease_expires_at") or "").strip()
+                        lease_active = bool(
+                            lease_owner and lease_expires_at and not _timestamp_is_expired(lease_expires_at)
+                        )
+                        if lease_active and not force_cancel and not command_target_applied:
+                            connection.commit()
+                            return response(
+                                outcome="blocked",
+                                reason_code="workflow_command_running_cancel_requires_expired_lease_or_force",
+                                command=command,
+                            )
+
+                        downstream_ids = {
+                            str(item or "").strip()
+                            for item in [
+                                *_json_load_list(command.get("downstream_command_ids_json")),
+                                *list(command_result.get("downstream_command_ids") or []),
+                            ]
+                            if str(item or "").strip()
+                        }
+
+                        workflow_run_id = str(command.get("workflow_run_id") or "").strip()
+                        operation_run_id = str(
+                            command.get("operation_id") or command_payload.get("operation_run_id") or ""
+                        ).strip()
+                        requested_workspace_id = str(command_payload.get("workspace_id") or "").strip()
+                        requested_run_id = str(
+                            command_payload.get("acquisition_run_id") or command_result.get("acquisition_run_id") or ""
+                        ).strip()
+                        acquisition_run = None
+                        if requested_run_id:
+                            cursor.execute(
+                                "SELECT * FROM acquisition_runs WHERE acquisition_run_id = %s FOR UPDATE",
+                                (requested_run_id,),
+                            )
+                            acquisition_run = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if acquisition_run is None and bool(config["resolve_run_from_command"]):
+                            candidate_clauses: list[str] = []
+                            candidate_params: list[Any] = []
+                            if operation_run_id:
+                                candidate_clauses.append("operation_run_id = %s")
+                                candidate_params.append(operation_run_id)
+                            if workflow_run_id:
+                                candidate_clauses.append("workflow_run_id = %s")
+                                candidate_params.append(workflow_run_id)
+                            candidate_rows: list[dict[str, Any]] = []
+                            if candidate_clauses:
+                                cursor.execute(
+                                    "SELECT * FROM acquisition_runs WHERE "
+                                    + " OR ".join(candidate_clauses)
+                                    + " ORDER BY acquisition_run_id FOR UPDATE",
+                                    tuple(candidate_params),
+                                )
+                                candidate_rows = _fetch_all_dict_rows(cursor)
+                            matching_runs = [
+                                row
+                                for row in candidate_rows
+                                if str(_json_load_dict(row.get("metadata_json")).get("source_command_id") or "").strip()
+                                == normalized_command_id
+                            ]
+                            if len(matching_runs) > 1:
+                                connection.commit()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code="acquisition_owner_cancel_run_identity_ambiguous",
+                                    command=command,
+                                )
+                            acquisition_run = matching_runs[0] if matching_runs else None
+                        run_workspace_id = (
+                            str((acquisition_run or {}).get("workspace_id") or "default").strip() or "default"
+                        )
+                        scope_workspace_id = requested_workspace_id or run_workspace_id or "default"
+                        if acquisition_run is not None:
+                            run_workflow_id = str(acquisition_run.get("workflow_run_id") or "").strip()
+                            run_operation_id = str(acquisition_run.get("operation_run_id") or "").strip()
+                            if (
+                                (requested_workspace_id and run_workspace_id != scope_workspace_id)
+                                or (workflow_run_id and run_workflow_id != workflow_run_id)
+                                or (operation_run_id and run_operation_id and run_operation_id != operation_run_id)
+                            ):
+                                connection.commit()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code="acquisition_owner_cancel_run_identity_mismatch",
+                                    command=command,
+                                    acquisition_run=acquisition_run,
+                                )
+
+                        acquisition_run_id = str(
+                            (acquisition_run or {}).get("acquisition_run_id") or requested_run_id or ""
+                        ).strip()
+                        activities: list[dict[str, Any]] = []
+                        if normalized_cancel_kind == "acquisition_scale_plan_before_discovery" and acquisition_run:
+                            cursor.execute(
+                                """
+                                SELECT * FROM workflow_activity_runs
+                                WHERE (acquisition_run_id = %s AND command_id = %s)
+                                   OR activity_run_id IN (
+                                       SELECT activity_run_id
+                                       FROM acquisition_discovery_lanes
+                                       WHERE acquisition_run_id = %s
+                                         AND source_command_id = %s
+                                         AND activity_run_id <> ''
+                                   )
+                                ORDER BY activity_run_id
+                                FOR UPDATE
+                                """,
+                                (
+                                    acquisition_run_id,
+                                    normalized_command_id,
+                                    acquisition_run_id,
+                                    normalized_command_id,
+                                ),
+                            )
+                            activities = _fetch_all_dict_rows(cursor)
+                        elif normalized_cancel_kind == "profile_fetch_activity_before_cache_lookup_attempt":
+                            activity_clauses = [
+                                "workflow_run_id = %s",
+                                "command_id = %s",
+                                "activity_type = %s",
+                            ]
+                            activity_params: list[Any] = [
+                                workflow_run_id,
+                                normalized_command_id,
+                                str(config["activity_type"]),
+                            ]
+                            if acquisition_run_id:
+                                activity_clauses.append("acquisition_run_id = %s")
+                                activity_params.append(acquisition_run_id)
+                            cursor.execute(
+                                "SELECT * FROM workflow_activity_runs WHERE "
+                                + " AND ".join(activity_clauses)
+                                + " ORDER BY activity_run_id FOR UPDATE",
+                                tuple(activity_params),
+                            )
+                            activities = _fetch_all_dict_rows(cursor)
+
+                        lanes: list[dict[str, Any]] = []
+                        if normalized_cancel_kind == "acquisition_scale_plan_before_discovery" and acquisition_run:
+                            cursor.execute(
+                                """
+                                SELECT * FROM acquisition_discovery_lanes
+                                WHERE acquisition_run_id = %s AND source_command_id = %s
+                                ORDER BY lane_id
+                                FOR UPDATE
+                                """,
+                                (acquisition_run_id, normalized_command_id),
+                            )
+                            lanes = _fetch_all_dict_rows(cursor)
+
+                        lane_activity_ids = {
+                            str(lane.get("activity_run_id") or "").strip()
+                            for lane in lanes
+                            if str(lane.get("activity_run_id") or "").strip()
+                        }
+                        for activity in activities:
+                            activity_id = str(activity.get("activity_run_id") or "").strip()
+                            activity_workspace_id = str(activity.get("workspace_id") or "default").strip() or "default"
+                            activity_workflow_id = str(activity.get("workflow_run_id") or "").strip()
+                            activity_operation_id = str(activity.get("operation_run_id") or "").strip()
+                            activity_acquisition_id = str(activity.get("acquisition_run_id") or "").strip()
+                            activity_command_id = str(activity.get("command_id") or "").strip()
+                            command_matches = activity_command_id == normalized_command_id
+                            lane_link_matches = activity_id in lane_activity_ids
+                            if (
+                                activity_workspace_id != scope_workspace_id
+                                or (workflow_run_id and activity_workflow_id != workflow_run_id)
+                                or (
+                                    operation_run_id
+                                    and activity_operation_id
+                                    and activity_operation_id != operation_run_id
+                                )
+                                or (
+                                    acquisition_run_id
+                                    and activity_acquisition_id
+                                    and activity_acquisition_id != acquisition_run_id
+                                )
+                                or not (command_matches or lane_link_matches)
+                            ):
+                                connection.commit()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code="acquisition_owner_cancel_activity_identity_mismatch",
+                                    command=command,
+                                    acquisition_run=acquisition_run,
+                                    activity_runs=activities,
+                                    discovery_lanes=lanes,
+                                )
+                        for lane in lanes:
+                            if (
+                                (str(lane.get("workspace_id") or "default").strip() or "default") != scope_workspace_id
+                                or str(lane.get("workflow_run_id") or "").strip() != workflow_run_id
+                                or str(lane.get("acquisition_run_id") or "").strip() != acquisition_run_id
+                                or str(lane.get("source_command_id") or "").strip() != normalized_command_id
+                                or (
+                                    operation_run_id
+                                    and str(lane.get("operation_run_id") or "").strip()
+                                    and str(lane.get("operation_run_id") or "").strip() != operation_run_id
+                                )
+                            ):
+                                connection.commit()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code="acquisition_owner_cancel_lane_identity_mismatch",
+                                    command=command,
+                                    acquisition_run=acquisition_run,
+                                    activity_runs=activities,
+                                    discovery_lanes=lanes,
+                                )
+
+                        activity_ids = [
+                            str(row.get("activity_run_id") or "").strip()
+                            for row in activities
+                            if str(row.get("activity_run_id") or "").strip()
+                        ]
+                        attempt_rows: list[dict[str, Any]] = []
+                        if activity_ids:
+                            placeholders = ", ".join(["%s"] * len(activity_ids))
+                            cursor.execute(
+                                f"SELECT * FROM workflow_activity_attempts "
+                                f"WHERE command_id = %s OR activity_run_id IN ({placeholders}) "
+                                "ORDER BY attempt_id FOR UPDATE",
+                                (normalized_command_id, *activity_ids),
+                            )
+                        else:
+                            cursor.execute(
+                                """
+                                SELECT * FROM workflow_activity_attempts
+                                WHERE command_id = %s
+                                ORDER BY attempt_id
+                                FOR UPDATE
+                                """,
+                                (normalized_command_id,),
+                            )
+                        attempt_rows = _fetch_all_dict_rows(cursor)
+                        delta_params: list[Any] = [normalized_command_id]
+                        delta_where = "command_id = %s"
+                        if activity_ids:
+                            delta_placeholders = ", ".join(["%s"] * len(activity_ids))
+                            delta_where += f" OR activity_run_id IN ({delta_placeholders})"
+                            delta_params.extend(activity_ids)
+                        cursor.execute(
+                            "SELECT * FROM workflow_entity_deltas WHERE "
+                            + delta_where
+                            + " ORDER BY delta_id FOR UPDATE",
+                            tuple(delta_params),
+                        )
+                        entity_delta_rows = _fetch_all_dict_rows(cursor)
+                        child_params: list[Any] = [normalized_command_id]
+                        child_where = "parent_command_id = %s"
+                        if downstream_ids:
+                            child_placeholders = ", ".join(["%s"] * len(downstream_ids))
+                            child_where += f" OR command_id IN ({child_placeholders})"
+                            child_params.extend(sorted(downstream_ids))
+                        cursor.execute(
+                            "SELECT * FROM workflow_commands WHERE " + child_where + " ORDER BY command_id FOR UPDATE",
+                            tuple(child_params),
+                        )
+                        downstream_rows = _fetch_all_dict_rows(cursor)
+                        downstream_ids.update(
+                            str(row.get("command_id") or "").strip()
+                            for row in downstream_rows
+                            if str(row.get("command_id") or "").strip()
+                        )
+                        sorted_downstream_ids = sorted(downstream_ids)
+                        lane_downstream_ids = sorted(
+                            {
+                                str(item or "").strip()
+                                for lane in lanes
+                                for item in _json_load_list(lane.get("downstream_command_ids_json"))
+                                if str(item or "").strip()
+                            }
+                        )
+                        if sorted_downstream_ids:
+                            connection.commit()
+                            return response(
+                                outcome="blocked",
+                                reason_code=str(config["downstream_block_reason"]),
+                                command=command,
+                                acquisition_run=acquisition_run,
+                                activity_runs=activities,
+                                discovery_lanes=lanes,
+                                downstream_command_ids=sorted_downstream_ids,
+                                lane_downstream_command_ids=lane_downstream_ids,
+                                activity_attempt_count=len(attempt_rows),
+                                entity_delta_count=len(entity_delta_rows),
+                            )
+                        if attempt_rows or entity_delta_rows or lane_downstream_ids:
+                            connection.commit()
+                            return response(
+                                outcome="blocked",
+                                reason_code=str(config["effect_block_reason"]),
+                                command=command,
+                                acquisition_run=acquisition_run,
+                                activity_runs=activities,
+                                discovery_lanes=lanes,
+                                lane_downstream_command_ids=lane_downstream_ids,
+                                activity_attempt_count=len(attempt_rows),
+                                entity_delta_count=len(entity_delta_rows),
+                            )
+
+                        run_target_status = str(config["run_status"])
+                        if acquisition_run is not None:
+                            current_run_status = str(acquisition_run.get("status") or "").strip()
+                            if current_run_status in run_terminal_statuses and current_run_status != run_target_status:
+                                connection.commit()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code="acquisition_owner_cancel_terminal_state_won",
+                                    command=command,
+                                    acquisition_run=acquisition_run,
+                                    activity_runs=activities,
+                                    discovery_lanes=lanes,
+                                )
+                        activity_target_status = str(config["activity_status"])
+                        for activity in activities:
+                            current_activity_status = str(activity.get("status") or "").strip()
+                            if (
+                                current_activity_status in activity_terminal_statuses
+                                and current_activity_status != activity_target_status
+                            ):
+                                connection.commit()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code="acquisition_owner_cancel_terminal_state_won",
+                                    command=command,
+                                    acquisition_run=acquisition_run,
+                                    activity_runs=activities,
+                                    discovery_lanes=lanes,
+                                )
+                        for lane in lanes:
+                            current_lane_status = str(lane.get("status") or "").strip()
+                            if (
+                                current_lane_status in lane_terminal_statuses
+                                and current_lane_status != activity_target_status
+                            ):
+                                connection.commit()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code="acquisition_owner_cancel_terminal_state_won",
+                                    command=command,
+                                    acquisition_run=acquisition_run,
+                                    activity_runs=activities,
+                                    discovery_lanes=lanes,
+                                )
+                        target_rows = [
+                            (acquisition_run, run_target_status),
+                            *((activity, activity_target_status) for activity in activities),
+                            *((lane, activity_target_status) for lane in lanes),
+                        ]
+                        for target_row, target_status in target_rows:
+                            if target_row is None or str(target_row.get("status") or "").strip() != target_status:
+                                continue
+                            target_metadata = _json_load_dict(target_row.get("metadata_json"))
+                            persisted_actor = str(target_metadata.get("cancelled_by") or "").strip()
+                            persisted_reason = str(target_metadata.get("cancel_reason") or "").strip()
+                            if (persisted_actor and persisted_actor != normalized_actor) or (
+                                persisted_reason and persisted_reason != normalized_reason
+                            ):
+                                connection.commit()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code="acquisition_owner_cancel_audit_identity_conflict",
+                                    command=command,
+                                    acquisition_run=acquisition_run,
+                                    activity_runs=activities,
+                                    discovery_lanes=lanes,
+                                )
+
+                        now = _utc_now_sql_timestamp()
+                        control_metadata = {
+                            "cancelled_by": normalized_actor,
+                            "cancel_reason": normalized_reason,
+                            "control_source": "api.workflow_command_owner_specific_cancel",
+                        }
+                        module_changed = False
+                        partial_target_seen = command_target_applied
+                        if acquisition_run is not None:
+                            run_metadata = _json_load_dict(acquisition_run.get("metadata_json"))
+                            run_was_target = str(acquisition_run.get("status") or "").strip() == run_target_status
+                            partial_target_seen = partial_target_seen or run_was_target
+                            desired_run_metadata = dict(run_metadata)
+                            for key, value in control_metadata.items():
+                                if not run_was_target or not desired_run_metadata.get(key):
+                                    desired_run_metadata[key] = value
+                            desired_run_metadata.update(dict(config["run_metadata_flags"]))
+                            desired_run_metadata.update(
+                                {
+                                    "last_phase_command_id": normalized_command_id,
+                                    "last_phase_command_type": command_type,
+                                    "normal_path_executes_queue_workflow_inline": False,
+                                    "legacy_job_shell_created": False,
+                                }
+                            )
+                            if normalized_cancel_kind == "acquisition_scale_plan_before_discovery":
+                                desired_run_metadata.update(
+                                    {
+                                        "cancelled_activity_run_count": len(activities),
+                                        "cancelled_discovery_lane_count": len(lanes),
+                                    }
+                                )
+                            run_needs_update = (
+                                str(acquisition_run.get("status") or "").strip() != run_target_status
+                                or str(acquisition_run.get("current_phase") or "").strip() != "cancelled"
+                                or desired_run_metadata != run_metadata
+                            )
+                            if run_needs_update:
+                                cursor.execute(
+                                    """
+                                    UPDATE acquisition_runs
+                                    SET status = %s, current_phase = 'cancelled', metadata_json = %s, updated_at = %s
+                                    WHERE acquisition_run_id = %s
+                                    RETURNING *
+                                    """,
+                                    (
+                                        run_target_status,
+                                        _json_dump(desired_run_metadata),
+                                        now,
+                                        acquisition_run_id,
+                                    ),
+                                )
+                                acquisition_run = _fetch_one_dict_row(cursor, cursor.fetchone())
+                                if acquisition_run is None:
+                                    raise RuntimeError("acquisition owner cancel lost the locked acquisition run")
+                                module_changed = True
+
+                        updated_activities: list[dict[str, Any]] = []
+                        for activity in activities:
+                            activity_metadata = _json_load_dict(activity.get("metadata_json"))
+                            activity_was_target = str(activity.get("status") or "").strip() == activity_target_status
+                            partial_target_seen = partial_target_seen or activity_was_target
+                            desired_activity_metadata = dict(activity_metadata)
+                            for key, value in control_metadata.items():
+                                if not activity_was_target or not desired_activity_metadata.get(key):
+                                    desired_activity_metadata[key] = value
+                            if normalized_cancel_kind == "acquisition_scale_plan_before_discovery":
+                                desired_activity_metadata["discovery_command_planned"] = False
+                            else:
+                                desired_activity_metadata.update(
+                                    {
+                                        "activity_attempt_started": False,
+                                        "profile_entity_delta_recorded": False,
+                                    }
+                                )
+                            activity_needs_update = (
+                                str(activity.get("status") or "").strip() != activity_target_status
+                                or str(activity.get("phase") or "").strip() != "cancelled"
+                                or desired_activity_metadata != activity_metadata
+                            )
+                            if activity_needs_update:
+                                cursor.execute(
+                                    """
+                                    UPDATE workflow_activity_runs
+                                    SET status = %s, phase = 'cancelled', metadata_json = %s, updated_at = %s
+                                    WHERE activity_run_id = %s
+                                    RETURNING *
+                                    """,
+                                    (
+                                        activity_target_status,
+                                        _json_dump(desired_activity_metadata),
+                                        now,
+                                        str(activity.get("activity_run_id") or "").strip(),
+                                    ),
+                                )
+                                activity = _fetch_one_dict_row(cursor, cursor.fetchone())
+                                if activity is None:
+                                    raise RuntimeError("acquisition owner cancel lost a locked activity run")
+                                module_changed = True
+                            updated_activities.append(activity)
+                        activities = updated_activities
+
+                        updated_lanes: list[dict[str, Any]] = []
+                        for lane in lanes:
+                            lane_metadata = _json_load_dict(lane.get("metadata_json"))
+                            lane_was_target = str(lane.get("status") or "").strip() == activity_target_status
+                            partial_target_seen = partial_target_seen or lane_was_target
+                            desired_lane_metadata = dict(lane_metadata)
+                            for key, value in control_metadata.items():
+                                if not lane_was_target or not desired_lane_metadata.get(key):
+                                    desired_lane_metadata[key] = value
+                            desired_lane_metadata["discovery_command_planned"] = False
+                            lane_plan = _json_load_dict(lane.get("lane_plan_json"))
+                            desired_lane_plan = {
+                                **lane_plan,
+                                "status": activity_target_status,
+                                "phase": "cancelled",
+                            }
+                            lane_needs_update = (
+                                str(lane.get("status") or "").strip() != activity_target_status
+                                or str(lane.get("phase") or "").strip() != "cancelled"
+                                or desired_lane_metadata != lane_metadata
+                                or desired_lane_plan != lane_plan
+                            )
+                            if lane_needs_update:
+                                cursor.execute(
+                                    """
+                                    UPDATE acquisition_discovery_lanes
+                                    SET status = %s,
+                                        phase = 'cancelled',
+                                        lane_plan_json = %s,
+                                        metadata_json = %s,
+                                        updated_at = %s
+                                    WHERE lane_id = %s
+                                    RETURNING *
+                                    """,
+                                    (
+                                        activity_target_status,
+                                        _json_dump(desired_lane_plan),
+                                        _json_dump(desired_lane_metadata),
+                                        now,
+                                        str(lane.get("lane_id") or "").strip(),
+                                    ),
+                                )
+                                lane = _fetch_one_dict_row(cursor, cursor.fetchone())
+                                if lane is None:
+                                    raise RuntimeError("acquisition owner cancel lost a locked discovery lane")
+                                module_changed = True
+                            updated_lanes.append(lane)
+                        lanes = updated_lanes
+
+                        result_patch: dict[str, Any] = {
+                            "control_source": "api.workflow_command_owner_specific_cancel",
+                            "control_action": "cancel",
+                            "owner_specific_control": True,
+                            "owner_cancel_kind": normalized_cancel_kind,
+                            "cancel_boundary": normalized_cancel_kind,
+                            "acquisition_run_id": acquisition_run_id,
+                            "acquisition_run_cancelled": bool(acquisition_run),
+                            "downstream_command_planned": False,
+                            "force": force_cancel,
+                        }
+                        if normalized_cancel_kind == "acquisition_scale_plan_before_discovery":
+                            result_patch.update(
+                                {
+                                    "activity_run_cancelled_count": len(activities),
+                                    "discovery_lane_cancelled_count": len(lanes),
+                                    "activity_attempt_started": False,
+                                }
+                            )
+                        elif normalized_cancel_kind == "profile_fetch_activity_before_cache_lookup_attempt":
+                            result_patch.update(
+                                {
+                                    "activity_run_cancelled_count": len(activities),
+                                    "activity_attempt_started": False,
+                                    "profile_entity_delta_recorded": False,
+                                }
+                            )
+                        desired_result = {**command_result, **result_patch}
+                        if command_target_applied:
+                            desired_result["force"] = command_result.get("force", force_cancel)
+                        desired_result.update(
+                            {
+                                "control_action": "cancel",
+                                "control_reason": command_result.get("control_reason", normalized_reason)
+                                if command_target_applied
+                                else normalized_reason,
+                                "control_actor": command_result.get("control_actor", normalized_actor)
+                                if command_target_applied
+                                else normalized_actor,
+                            }
+                        )
+                        command_needs_update = (
+                            command_status != "cancelled"
+                            or str(command.get("lease_owner") or "").strip()
+                            or str(command.get("lease_expires_at") or "").strip()
+                            or str(command.get("not_before_at") or "").strip()
+                            or str(command.get("last_error") or "").strip()
+                            != str(desired_result.get("control_reason") or "").strip()
+                            or desired_result != command_result
+                        )
+                        command_changed = False
+                        if command_needs_update:
+                            cursor.execute(
+                                """
+                                UPDATE workflow_commands
+                                SET status = 'cancelled',
+                                    lease_owner = '',
+                                    lease_expires_at = '',
+                                    heartbeat_at = %s,
+                                    not_before_at = '',
+                                    last_error = %s,
+                                    result_json = %s,
+                                    updated_at = %s
+                                WHERE command_id = %s
+                                RETURNING *
+                                """,
+                                (
+                                    now,
+                                    str(desired_result.get("control_reason") or "").strip(),
+                                    _json_dump(desired_result),
+                                    now,
+                                    normalized_command_id,
+                                ),
+                            )
+                            command = _fetch_one_dict_row(cursor, cursor.fetchone())
+                            if command is None:
+                                raise RuntimeError("acquisition owner cancel lost the locked workflow command")
+                            command_changed = True
+                    connection.commit()
+                    if not module_changed and not command_changed:
+                        outcome = "already_applied"
+                    elif partial_target_seen:
+                        outcome = "repaired"
+                    else:
+                        outcome = "applied"
+                    return response(
+                        outcome=outcome,
+                        reason_code="",
+                        command=command,
+                        acquisition_run=acquisition_run,
+                        activity_runs=activities,
+                        discovery_lanes=lanes,
+                        module_state_mutated=module_changed,
+                    )
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
     def cancel_workflow_command(
         self,

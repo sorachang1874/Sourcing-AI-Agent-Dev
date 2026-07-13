@@ -5583,7 +5583,10 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 self.queued_url = queued_url
                 self.raw_path = raw_path
                 self._backing = backing
-                self.repos = SimpleNamespace(linkedin_profile_registry=self)
+                self.repos = SimpleNamespace(
+                    linkedin_profile_registry=self,
+                    workflow_runtime=backing.repos.workflow_runtime,
+                )
 
             def get_bulk(self, profile_urls):
                 rows = {}

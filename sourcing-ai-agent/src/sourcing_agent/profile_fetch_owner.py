@@ -177,7 +177,6 @@ class ProfileFetchOwner:
         acquisition_engine: Any,
         upsert_acquisition_run_phase: Callable[..., Any],
         sync_operation_run_from_workflow_command_control: Callable[..., dict[str, Any]],
-        workflow_command_downstream_commands: Callable[..., list[dict[str, Any]]],
         restore_roster_snapshot_from_snapshot_dir: Callable[..., Any],
         plan_operation_native_projection_admission_command: Callable[..., Any],
         queue_background_profile_prefetch_from_available_baselines: Callable[..., dict[str, Any]],
@@ -192,7 +191,6 @@ class ProfileFetchOwner:
         # moved bodies already use so the bodies stay verbatim.
         self._upsert_acquisition_run_phase = upsert_acquisition_run_phase
         self._sync_operation_run_from_workflow_command_control = sync_operation_run_from_workflow_command_control
-        self._workflow_command_downstream_commands = workflow_command_downstream_commands
         self._restore_roster_snapshot_from_snapshot_dir = restore_roster_snapshot_from_snapshot_dir
         self._plan_operation_native_projection_admission_command = plan_operation_native_projection_admission_command
         # These two spine methods stay orchestrator-side and are instance-patched
@@ -203,6 +201,71 @@ class ProfileFetchOwner:
             queue_background_profile_prefetch_from_available_baselines
         )
         self._run_profile_completion_next_submit_opportunity = run_profile_completion_next_submit_opportunity
+
+    def _cancel_profile_fetch_owner_command_uow(
+        self,
+        command: dict[str, Any],
+        *,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        command_payload = dict(command or {})
+        actor = str(payload.get("actor") or payload.get("operator") or "api").strip() or "api"
+        reason = str(payload.get("reason") or "cancelled_before_profile_fetch_activity_attempt").strip()
+        force = _coerce_bool(payload.get("force"), False)
+        result = self.store.repos.workflow_runtime.cancel_acquisition_owner_command(
+            str(command_payload.get("command_id") or "").strip(),
+            cancel_kind="profile_fetch_activity_before_cache_lookup_attempt",
+            actor=actor,
+            reason=reason,
+            force=force,
+        )
+        outcome = str(result.get("outcome") or "conflict").strip() or "conflict"
+        latest = dict(result.get("workflow_command") or command_payload)
+        response_base = {
+            "workflow_command": self._kernel._workflow_command_api_record(latest),
+            **self._kernel._workflow_command_control_response_policy_records(latest),
+            "uow_outcome": outcome,
+            "module_state_mutated": bool(result.get("module_state_mutated")),
+            "owner_specific_control": True,
+            "contract": "w11_workflow_command_owner_specific_control_v1",
+        }
+        if outcome == "not_found":
+            return {"status": "not_found", "reason": "workflow_command_not_found", **response_base}
+        if outcome not in {"applied", "repaired", "already_applied"}:
+            invalid = {
+                "status": "invalid",
+                "reason": str(result.get("reason") or "workflow_command_owner_specific_cancel_not_applied").strip(),
+                **response_base,
+            }
+            if result.get("downstream_command_ids"):
+                invalid.update(
+                    {
+                        "downstream_command_count": len(result["downstream_command_ids"]),
+                        "downstream_command_ids": list(result["downstream_command_ids"]),
+                    }
+                )
+            invalid.update(
+                {
+                    "activity_attempt_count": int(result.get("activity_attempt_count") or 0),
+                    "entity_delta_count": int(result.get("entity_delta_count") or 0),
+                }
+            )
+            return invalid
+        operation_sync = {}
+        if outcome != "already_applied":
+            operation_sync = self._sync_operation_run_from_workflow_command_control(
+                latest,
+                control_action="cancel",
+                actor=actor,
+                source="api.workflow_command_owner_specific_cancel",
+            )
+        return {
+            "status": "cancelled",
+            "operation_sync": operation_sync,
+            "workflow_activity_runs": list(result.get("workflow_activity_runs") or []),
+            "acquisition_run": dict(result.get("acquisition_run") or {}),
+            **response_base,
+        }
 
     @staticmethod
     def _operation_native_profile_slug(profile_url: str) -> str:
@@ -567,7 +630,7 @@ class ProfileFetchOwner:
                 "provider_called": False,
                 "legacy_job_shell_created": False,
             }
-        activity = self.store.upsert_workflow_activity_run(
+        activity = self.store.repos.workflow_runtime.upsert_activity_run(
             {
                 "workspace_id": workspace_id,
                 "workflow_run_id": workflow_run_id,
@@ -599,7 +662,7 @@ class ProfileFetchOwner:
         )
         activity_run_id = str(activity.get("activity_run_id") or "").strip()
         attempt_number = max(1, _coerce_int(command_payload.get("attempt"), 1))
-        attempt = self.store.upsert_workflow_activity_attempt(
+        attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 "workspace_id": workspace_id,
                 "activity_run_id": activity_run_id,
@@ -658,7 +721,7 @@ class ProfileFetchOwner:
                 delta_status = "not_applied"
                 reason = "operation_native_profile_fetch_provider_owner_pending"
                 projection_effect_reason = "provider_profile_fetch_activity_not_yet_implemented"
-            delta = self.store.upsert_workflow_entity_delta(
+            delta = self.store.repos.workflow_runtime.upsert_entity_delta(
                 {
                     "workspace_id": workspace_id,
                     "workflow_run_id": workflow_run_id,
@@ -712,7 +775,7 @@ class ProfileFetchOwner:
         cache_hit_count = len(cache_hit_urls)
         final_activity_status = "planned_pending_provider_owner" if fetch_required_count else "succeeded"
         final_activity_phase = "provider_profile_fetch_pending" if fetch_required_count else "profile_cache_resolved"
-        completed_attempt = self.store.upsert_workflow_activity_attempt(
+        completed_attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 **attempt,
                 "status": "succeeded",
@@ -782,9 +845,9 @@ class ProfileFetchOwner:
             for command in (downstream_provider_command, downstream_terminal_command)
             if command
         ]
-        final_activity = self.store.upsert_workflow_activity_run(
+        final_activity = self.store.repos.workflow_runtime.upsert_activity_run(
             {
-                **self.store.get_workflow_activity_run(activity_run_id),
+                **self.store.repos.workflow_runtime.get_activity_run(activity_run_id),
                 "status": final_activity_status,
                 "phase": final_activity_phase,
                 "output": {
@@ -803,7 +866,10 @@ class ProfileFetchOwner:
                     "fetch_required_count": fetch_required_count,
                 },
                 "metadata": {
-                    **dict((self.store.get_workflow_activity_run(activity_run_id) or {}).get("metadata") or {}),
+                    **dict(
+                        (self.store.repos.workflow_runtime.get_activity_run(activity_run_id) or {}).get("metadata")
+                        or {}
+                    ),
                     "latest_attempt_id": str(completed_attempt.get("attempt_id") or "").strip(),
                     "provider_owner_required": fetch_required_count > 0,
                     "downstream_command_ids": downstream_command_ids,
@@ -881,7 +947,7 @@ class ProfileFetchOwner:
         ).strip()
         source_delta_ids = _dedupe_texts(payload.get("source_entity_delta_ids") or [])
         source_delta_rows = [
-            self.store.get_workflow_entity_delta(delta_id)
+            self.store.repos.workflow_runtime.get_entity_delta(delta_id)
             for delta_id in source_delta_ids
             if str(delta_id or "").strip()
         ]
@@ -916,7 +982,7 @@ class ProfileFetchOwner:
                 "provider_called": False,
                 "legacy_job_shell_created": False,
             }
-        activity = self.store.get_workflow_activity_run(activity_run_id)
+        activity = self.store.repos.workflow_runtime.get_activity_run(activity_run_id)
         if not activity:
             return {
                 "status": "failed",
@@ -928,7 +994,7 @@ class ProfileFetchOwner:
         activity_output = dict(activity.get("output") or {})
         activity_metadata = dict(activity.get("metadata") or {})
         started_at = _utc_now_iso()
-        self.store.upsert_workflow_activity_run(
+        self.store.repos.workflow_runtime.upsert_activity_run(
             {
                 **activity,
                 "status": "running",
@@ -945,7 +1011,7 @@ class ProfileFetchOwner:
         )
         attempt_number = max(1, _coerce_int(command_payload.get("attempt"), 1))
         activity_root = self.runtime_dir / "operation_activities" / activity_run_id / "profile_fetch"
-        attempt = self.store.upsert_workflow_activity_attempt(
+        attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 "workspace_id": workspace_id,
                 "activity_run_id": activity_run_id,
@@ -980,7 +1046,7 @@ class ProfileFetchOwner:
         )
         fetch_profile = getattr(profile_connector, "fetch_profile", None)
         if not callable(fetch_profile):
-            completed_attempt = self.store.upsert_workflow_activity_attempt(
+            completed_attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
                 {
                     **attempt,
                     "status": "retry_wait",
@@ -988,9 +1054,9 @@ class ProfileFetchOwner:
                     "error": {"reason": "profile_detail_connector_unavailable"},
                 }
             )
-            self.store.upsert_workflow_activity_run(
+            self.store.repos.workflow_runtime.upsert_activity_run(
                 {
-                    **(self.store.get_workflow_activity_run(activity_run_id) or activity),
+                    **(self.store.repos.workflow_runtime.get_activity_run(activity_run_id) or activity),
                     "status": "retry_wait",
                     "phase": "provider_profile_fetch_retry_wait",
                     "metadata": {
@@ -1053,7 +1119,7 @@ class ProfileFetchOwner:
                     run_id=f"activity:{activity_run_id}",
                     dataset_id=f"command:{command_id}",
                 )
-            delta = self.store.upsert_workflow_entity_delta(
+            delta = self.store.repos.workflow_runtime.upsert_entity_delta(
                 {
                     "workspace_id": workspace_id,
                     "workflow_run_id": workflow_run_id,
@@ -1117,7 +1183,7 @@ class ProfileFetchOwner:
             failed_reason = error_by_profile_key.get(failed_key) or "profile_provider_fetch_failed"
             delta_kind = "profile_provider_retry_exhausted" if retry_exhausted else "profile_provider_retry_bucketed"
             delta_status = "failed_terminal" if retry_exhausted else "retry_wait"
-            delta = self.store.upsert_workflow_entity_delta(
+            delta = self.store.repos.workflow_runtime.upsert_entity_delta(
                 {
                     "workspace_id": workspace_id,
                     "workflow_run_id": workflow_run_id,
@@ -1178,7 +1244,7 @@ class ProfileFetchOwner:
             if retry_exhausted and fetched_count == 0
             else "partial_success"
         )
-        completed_attempt = self.store.upsert_workflow_activity_attempt(
+        completed_attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 **attempt,
                 "status": attempt_status,
@@ -1213,9 +1279,9 @@ class ProfileFetchOwner:
             if retry_exhausted and fetched_count == 0
             else "provider_profile_fetch_partial_retry_planned"
         )
-        final_activity = self.store.upsert_workflow_activity_run(
+        final_activity = self.store.repos.workflow_runtime.upsert_activity_run(
             {
-                **(self.store.get_workflow_activity_run(activity_run_id) or activity),
+                **(self.store.repos.workflow_runtime.get_activity_run(activity_run_id) or activity),
                 "status": final_status,
                 "phase": final_phase,
                 "output": {
@@ -1310,7 +1376,7 @@ class ProfileFetchOwner:
             downstream_command_ids.append(str(downstream_retry_command.get("command_id") or "").strip())
         downstream_command_ids = [command_id for command_id in downstream_command_ids if command_id]
         if downstream_command_ids:
-            final_activity = self.store.upsert_workflow_activity_run(
+            final_activity = self.store.repos.workflow_runtime.upsert_activity_run(
                 {
                     **final_activity,
                     "output": {
@@ -1437,7 +1503,7 @@ class ProfileFetchOwner:
         ).strip()
         source_delta_ids = _dedupe_texts(payload.get("source_entity_delta_ids") or [])
         if source_activity_run_id and not source_delta_ids:
-            source_deltas = self.store.list_workflow_entity_deltas(
+            source_deltas = self.store.repos.workflow_runtime.list_entity_deltas(
                 activity_run_id=source_activity_run_id,
                 entity_type="profile",
                 statuses=["recorded"],
@@ -1458,7 +1524,7 @@ class ProfileFetchOwner:
                 "provider_called": False,
                 "legacy_job_shell_created": False,
             }
-        source_activity = self.store.get_workflow_activity_run(source_activity_run_id)
+        source_activity = self.store.repos.workflow_runtime.get_activity_run(source_activity_run_id)
         if not source_activity:
             return {
                 "status": "failed",
@@ -1467,7 +1533,7 @@ class ProfileFetchOwner:
                 "provider_called": False,
                 "legacy_job_shell_created": False,
             }
-        activity = self.store.upsert_workflow_activity_run(
+        activity = self.store.repos.workflow_runtime.upsert_activity_run(
             {
                 "workspace_id": workspace_id,
                 "workflow_run_id": workflow_run_id,
@@ -1498,7 +1564,7 @@ class ProfileFetchOwner:
         )
         activity_run_id = str(activity.get("activity_run_id") or "").strip()
         attempt_number = max(1, _coerce_int(command_payload.get("attempt"), 1))
-        attempt = self.store.upsert_workflow_activity_attempt(
+        attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 "workspace_id": workspace_id,
                 "activity_run_id": activity_run_id,
@@ -1523,7 +1589,7 @@ class ProfileFetchOwner:
             }
         )
         source_deltas = [
-            self.store.get_workflow_entity_delta(delta_id)
+            self.store.repos.workflow_runtime.get_entity_delta(delta_id)
             for delta_id in source_delta_ids
             if str(delta_id or "").strip()
         ]
@@ -1542,7 +1608,7 @@ class ProfileFetchOwner:
             ).strip()
             raw_path = str(entity_payload.get("raw_path") or "").strip()
             admitted_profile_urls.append(profile_url)
-            terminal_delta = self.store.upsert_workflow_entity_delta(
+            terminal_delta = self.store.repos.workflow_runtime.upsert_entity_delta(
                 {
                     "workspace_id": workspace_id,
                     "workflow_run_id": workflow_run_id,
@@ -1589,7 +1655,7 @@ class ProfileFetchOwner:
             )
             if terminal_delta:
                 admitted_delta_ids.append(str(terminal_delta.get("delta_id") or "").strip())
-        completed_attempt = self.store.upsert_workflow_activity_attempt(
+        completed_attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 **attempt,
                 "status": "succeeded",
@@ -1605,9 +1671,9 @@ class ProfileFetchOwner:
                 "error": {},
             }
         )
-        final_activity = self.store.upsert_workflow_activity_run(
+        final_activity = self.store.repos.workflow_runtime.upsert_activity_run(
             {
-                **(self.store.get_workflow_activity_run(activity_run_id) or activity),
+                **(self.store.repos.workflow_runtime.get_activity_run(activity_run_id) or activity),
                 "status": "succeeded",
                 "phase": "profile_terminal_admitted_pending_projection",
                 "output": {
@@ -1660,7 +1726,7 @@ class ProfileFetchOwner:
                     "migration_phase": "W11g_operation_native_projection_admission",
                 }
             downstream_command_ids = [str(downstream_projection_command.get("command_id") or "").strip()]
-            final_activity = self.store.upsert_workflow_activity_run(
+            final_activity = self.store.repos.workflow_runtime.upsert_activity_run(
                 {
                     **final_activity,
                     "output": {
@@ -1934,157 +2000,7 @@ class ProfileFetchOwner:
         *,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        command_payload = dict(command or {})
-        command_id = str(command_payload.get("command_id") or "").strip()
-        body = dict(command_payload.get("payload") or {})
-        actor = str(payload.get("actor") or payload.get("operator") or "api").strip() or "api"
-        reason = str(payload.get("reason") or "cancelled_before_profile_fetch_activity_attempt").strip()
-        force = _coerce_bool(payload.get("force"), False)
-        downstream = self._workflow_command_downstream_commands(command_payload)
-        if downstream:
-            return {
-                "status": "invalid",
-                "reason": "profile_fetch_activity_cancel_blocked_after_downstream_planned",
-                "downstream_command_count": len(downstream),
-                "downstream_command_ids": [
-                    str(row.get("command_id") or "").strip()
-                    for row in downstream
-                    if str(row.get("command_id") or "").strip()
-                ],
-                "workflow_command": self._kernel._workflow_command_api_record(command_payload),
-                **self._kernel._workflow_command_control_response_policy_records(command_payload),
-                "module_state_mutated": False,
-                "owner_specific_control": True,
-                "contract": "w11_workflow_command_owner_specific_control_v1",
-            }
-        if self._kernel._workflow_command_lease_active(command_payload) and not force:
-            return {
-                "status": "invalid",
-                "reason": "workflow_command_running_cancel_requires_expired_lease_or_force",
-                "workflow_command": self._kernel._workflow_command_api_record(command_payload),
-                **self._kernel._workflow_command_control_response_policy_records(command_payload),
-                "module_state_mutated": False,
-                "owner_specific_control": True,
-                "contract": "w11_workflow_command_owner_specific_control_v1",
-            }
-        workflow_run_id = str(command_payload.get("workflow_run_id") or body.get("workflow_run_id") or "").strip()
-        acquisition_run_id = str(body.get("acquisition_run_id") or "").strip()
-        activities = self.store.list_workflow_activity_runs(
-            workflow_run_id=workflow_run_id,
-            acquisition_run_id=acquisition_run_id,
-            command_id=command_id,
-            activity_type=LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE,
-            limit=50,
-        )
-        activity_ids = [
-            str(activity.get("activity_run_id") or "").strip()
-            for activity in activities
-            if str(activity.get("activity_run_id") or "").strip()
-        ]
-        attempt_count = 0
-        for activity_id in activity_ids:
-            attempt_count += len(self.store.list_workflow_activity_attempts(activity_run_id=activity_id, limit=1))
-        entity_delta_count = len(self.store.list_workflow_entity_deltas(command_id=command_id, limit=1))
-        if attempt_count or entity_delta_count:
-            return {
-                "status": "invalid",
-                "reason": "profile_fetch_activity_cancel_blocked_after_cache_lookup_started",
-                "activity_attempt_count": attempt_count,
-                "entity_delta_count": entity_delta_count,
-                "workflow_command": self._kernel._workflow_command_api_record(command_payload),
-                **self._kernel._workflow_command_control_response_policy_records(command_payload),
-                "module_state_mutated": False,
-                "owner_specific_control": True,
-                "contract": "w11_workflow_command_owner_specific_control_v1",
-            }
-        cancelled_activities: list[dict[str, Any]] = []
-        for activity in activities:
-            metadata = dict(activity.get("metadata") or {})
-            metadata.update(
-                {
-                    "cancelled_by": actor,
-                    "cancel_reason": reason,
-                    "control_source": "api.workflow_command_owner_specific_cancel",
-                    "activity_attempt_started": False,
-                    "profile_entity_delta_recorded": False,
-                }
-            )
-            cancelled_activity = self.store.upsert_workflow_activity_run(
-                {
-                    **activity,
-                    "status": "cancelled_before_cache_lookup",
-                    "phase": "cancelled",
-                    "metadata": metadata,
-                }
-            )
-            if cancelled_activity:
-                cancelled_activities.append(cancelled_activity)
-        cancelled_run: dict[str, Any] = {}
-        if acquisition_run_id:
-            acquisition_run = self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id) or {}
-            if acquisition_run:
-                cancelled_run = self._upsert_acquisition_run_phase(
-                    acquisition_run=acquisition_run,
-                    command=command_payload,
-                    status="cancelled_before_profile_fetch_activity",
-                    current_phase="cancelled",
-                    metadata_patch={
-                        "cancelled_by": actor,
-                        "cancel_reason": reason,
-                        "control_source": "api.workflow_command_owner_specific_cancel",
-                        "activity_attempt_started": False,
-                        "profile_entity_delta_recorded": False,
-                    },
-                )
-        updated = self.store.cancel_workflow_command(
-            command_id,
-            reason=reason,
-            actor=actor,
-            result={
-                "control_source": "api.workflow_command_owner_specific_cancel",
-                "control_action": "cancel",
-                "owner_specific_control": True,
-                "cancel_boundary": "profile_fetch_activity_before_cache_lookup_attempt",
-                "activity_run_cancelled_count": len(cancelled_activities),
-                "activity_attempt_started": False,
-                "profile_entity_delta_recorded": False,
-                "acquisition_run_id": acquisition_run_id,
-                "acquisition_run_cancelled": bool(cancelled_run),
-                "downstream_command_planned": False,
-                "force": force,
-            },
-            from_statuses=("claimed", "running"),
-        )
-        if not updated:
-            latest = self.store.get_workflow_command(command_id) or command_payload
-            return {
-                "status": "invalid",
-                "reason": "workflow_command_owner_specific_cancel_not_applied",
-                "workflow_command": self._kernel._workflow_command_api_record(latest),
-                **self._kernel._workflow_command_control_response_policy_records(latest),
-                "workflow_activity_runs": cancelled_activities,
-                "acquisition_run": cancelled_run,
-                "module_state_mutated": bool(cancelled_activities or cancelled_run),
-                "owner_specific_control": True,
-                "contract": "w11_workflow_command_owner_specific_control_v1",
-            }
-        operation_sync = self._sync_operation_run_from_workflow_command_control(
-            updated,
-            control_action="cancel",
-            actor=actor,
-            source="api.workflow_command_owner_specific_cancel",
-        )
-        return {
-            "status": "cancelled",
-            "workflow_command": self._kernel._workflow_command_api_record(updated),
-            "operation_sync": operation_sync,
-            "workflow_activity_runs": cancelled_activities,
-            "acquisition_run": cancelled_run,
-            **self._kernel._workflow_command_control_response_policy_records(updated),
-            "module_state_mutated": bool(cancelled_activities or cancelled_run),
-            "owner_specific_control": True,
-            "contract": "w11_workflow_command_owner_specific_control_v1",
-        }
+        return self._cancel_profile_fetch_owner_command_uow(command, payload=payload)
 
     def _queue_background_profile_prefetch_from_search_seed_snapshot(
         self,

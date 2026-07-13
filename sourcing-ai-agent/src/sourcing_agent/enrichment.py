@@ -2668,7 +2668,7 @@ class MultiSourceEnricher:
         activity: dict[str, Any] = {}
         activity_attempt: dict[str, Any] = {}
         if workflow_run_id:
-            activity = self.store.upsert_workflow_activity_run(
+            activity = self.store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "workspace_id": workspace_id,
                     "workflow_run_id": workflow_run_id,
@@ -2704,7 +2704,7 @@ class MultiSourceEnricher:
             )
             activity_run_id = str(activity.get("activity_run_id") or "").strip()
             if activity_run_id:
-                activity_attempt = self.store.upsert_workflow_activity_attempt(
+                activity_attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
                     {
                         "workspace_id": workspace_id,
                         "activity_run_id": activity_run_id,
@@ -2722,8 +2722,7 @@ class MultiSourceEnricher:
                             "entry_count": len(entries),
                         },
                         "idempotency_key": (
-                            f"workflow_activity_attempt:{command_id}:"
-                            f"profile_url_terminal_record:{attempt_number}"
+                            f"workflow_activity_attempt:{command_id}:profile_url_terminal_record:{attempt_number}"
                         ),
                         "metadata": {
                             "activity_boundary": "profile_url_terminal_record",
@@ -2748,16 +2747,20 @@ class MultiSourceEnricher:
                 return {}
             completed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
             normalized_attempt_status = str(attempt_status or status).strip() or status
-            final_attempt = self.store.upsert_workflow_activity_attempt(
-                {
-                    **activity_attempt,
-                    "status": normalized_attempt_status,
-                    "completed_at": completed_at,
-                    "output": dict(output or {}),
-                    "error": dict(error or {}),
-                }
-            ) if activity_attempt else {}
-            final_activity = self.store.upsert_workflow_activity_run(
+            final_attempt = (
+                self.store.repos.workflow_runtime.upsert_activity_attempt(
+                    {
+                        **activity_attempt,
+                        "status": normalized_attempt_status,
+                        "completed_at": completed_at,
+                        "output": dict(output or {}),
+                        "error": dict(error or {}),
+                    }
+                )
+                if activity_attempt
+                else {}
+            )
+            final_activity = self.store.repos.workflow_runtime.upsert_activity_run(
                 {
                     **activity,
                     "status": status,
@@ -2787,7 +2790,7 @@ class MultiSourceEnricher:
                         continue
                     profile_url_key = normalize_linkedin_profile_url_key(profile_url) or profile_url
                     terminal_status = str(entry.get("status") or "").strip() or "unknown"
-                    delta = self.store.upsert_workflow_entity_delta(
+                    delta = self.store.repos.workflow_runtime.upsert_entity_delta(
                         {
                             "workspace_id": workspace_id,
                             "workflow_run_id": workflow_run_id,
@@ -2836,7 +2839,7 @@ class MultiSourceEnricher:
                     if delta.get("delta_id"):
                         delta_ids.append(str(delta.get("delta_id") or ""))
             else:
-                delta = self.store.upsert_workflow_entity_delta(
+                delta = self.store.repos.workflow_runtime.upsert_entity_delta(
                     {
                         "workspace_id": workspace_id,
                         "workflow_run_id": workflow_run_id,
@@ -3145,7 +3148,7 @@ class MultiSourceEnricher:
         activity: dict[str, Any] = {}
         activity_attempt: dict[str, Any] = {}
         if workflow_run_id:
-            activity = self.store.upsert_workflow_activity_run(
+            activity = self.store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "workspace_id": workspace_id,
                     "workflow_run_id": workflow_run_id,
@@ -3179,7 +3182,7 @@ class MultiSourceEnricher:
             )
             activity_run_id = str(activity.get("activity_run_id") or "").strip()
             if activity_run_id:
-                activity_attempt = self.store.upsert_workflow_activity_attempt(
+                activity_attempt = self.store.repos.workflow_runtime.upsert_activity_attempt(
                     {
                         "workspace_id": workspace_id,
                         "activity_run_id": activity_run_id,
@@ -3197,8 +3200,7 @@ class MultiSourceEnricher:
                             "profile_url_count": len(profile_url_chunk),
                         },
                         "idempotency_key": (
-                            f"workflow_activity_attempt:{command_id}:"
-                            f"profile_refill_submit:{attempt_number}"
+                            f"workflow_activity_attempt:{command_id}:profile_refill_submit:{attempt_number}"
                         ),
                         "metadata": {
                             "activity_boundary": "profile_refill_submit",
@@ -3223,17 +3225,21 @@ class MultiSourceEnricher:
             if not activity or not workflow_run_id:
                 return {}
             completed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            final_attempt = self.store.upsert_workflow_activity_attempt(
-                {
-                    **activity_attempt,
-                    "status": status,
-                    "completed_at": completed_at,
-                    "output": dict(output or {}),
-                    "error": dict(error or {}),
-                    "artifact_refs": list(artifact_refs or []),
-                }
-            ) if activity_attempt else {}
-            final_activity = self.store.upsert_workflow_activity_run(
+            final_attempt = (
+                self.store.repos.workflow_runtime.upsert_activity_attempt(
+                    {
+                        **activity_attempt,
+                        "status": status,
+                        "completed_at": completed_at,
+                        "output": dict(output or {}),
+                        "error": dict(error or {}),
+                        "artifact_refs": list(artifact_refs or []),
+                    }
+                )
+                if activity_attempt
+                else {}
+            )
+            final_activity = self.store.repos.workflow_runtime.upsert_activity_run(
                 {
                     **activity,
                     "status": status,
@@ -3264,7 +3270,7 @@ class MultiSourceEnricher:
                 if str(profile_url or "").strip()
             ]:
                 profile_url_key = normalize_linkedin_profile_url_key(profile_url) or profile_url
-                delta = self.store.upsert_workflow_entity_delta(
+                delta = self.store.repos.workflow_runtime.upsert_entity_delta(
                     {
                         "workspace_id": workspace_id,
                         "workflow_run_id": workflow_run_id,
@@ -3338,7 +3344,9 @@ class MultiSourceEnricher:
                     "planned_deferred_url_count": int(payload.get("planned_deferred_url_count") or 0),
                     "planned_dispatch_worker_count": int(payload.get("planned_dispatch_worker_count") or 0),
                     "batch_plan_reason": str(payload.get("batch_plan_reason") or ""),
-                    "allow_under_target_final_tail_dispatch": bool(payload.get("allow_under_target_final_tail_dispatch")),
+                    "allow_under_target_final_tail_dispatch": bool(
+                        payload.get("allow_under_target_final_tail_dispatch")
+                    ),
                     "chunk_index": chunk_index,
                     "retry_isolation": bool(payload.get("retry_isolated_refill")),
                     "nonblocking_submit": bool(payload.get("nonblocking_submit")),
@@ -3515,7 +3523,9 @@ class MultiSourceEnricher:
             deferred_url_count += len(list(dispatch_result.get("deferred_urls") or []))
             results.append(result)
         return {
-            "status": "active" if dispatched_url_count > 0 or queued_worker_count > 0 or deferred_url_count > 0 else "idle",
+            "status": "active"
+            if dispatched_url_count > 0 or queued_worker_count > 0 or deferred_url_count > 0
+            else "idle",
             "reason": "linkedin_profile_owner_submit_command_drain",
             "command_count": len(ready_commands),
             "executed_command_count": len(results),
@@ -8070,11 +8080,9 @@ class MultiSourceEnricher:
                 )
                 updated_output["summary"] = updated_summary
             terminal_record_payload = dict(terminal_record or {})
-            if (
-                str(terminal_record_payload.get("status") or "") == "failed"
-                or int(terminal_record_payload.get("recorded_count") or 0)
-                < int(terminal_record_payload.get("entry_count") or 0)
-            ):
+            if str(terminal_record_payload.get("status") or "") == "failed" or int(
+                terminal_record_payload.get("recorded_count") or 0
+            ) < int(terminal_record_payload.get("entry_count") or 0):
                 release_url_claims()
                 release_runtime_provider_limiter_slot(self.store, provider_limiter_lease)
                 updated_summary["status"] = "running"

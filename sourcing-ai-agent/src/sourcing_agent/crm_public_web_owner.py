@@ -20,7 +20,6 @@ import os
 import re
 import uuid
 import zipfile
-
 from collections import (
     Counter,
     defaultdict,
@@ -34,6 +33,12 @@ from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
+from .async_task_contract import (
+    async_task_accepted,
+    async_task_artifact,
+    async_task_status,
+)
+from .command_kernel import CommandKernel
 from .crm_public_web_runtime import (
     CRM_PUBLIC_WEB_EXECUTION_BACKEND,
     CRM_PUBLIC_WEB_JOB_TYPE,
@@ -49,11 +54,6 @@ from .crm_public_web_runtime import (
     public_web_worker_key,
     start_crm_public_web_batch,
     sync_crm_public_web_batch_summary,
-)
-from .async_task_contract import (
-    async_task_accepted,
-    async_task_artifact,
-    async_task_status,
 )
 from .domain import JobRequest
 from .durable_runtime import (
@@ -83,20 +83,20 @@ from .person_asset_writer import PersonAssetWriter
 from .public_web_runtime_core import utc_compact_timestamp
 from .storage import _json_safe_payload as _storage_json_safe_payload
 
-from .command_kernel import CommandKernel
-
-
 # NOTE: the helpers below duplicate small module-level helpers in
 # ``orchestrator.py`` (which imports this module — importing them back from
 # orchestrator would create a cycle).  The bodies are copied verbatim; several
 # other ``sourcing_agent`` modules already carry the same local copies.
 _CHINA_TIME_ZONE = ZoneInfo("Asia/Shanghai")
 
+
 def _china_now_iso() -> str:
     return datetime.now(_CHINA_TIME_ZONE).isoformat(timespec="seconds")
 
+
 def _china_local_filename_timestamp() -> str:
     return datetime.now(_CHINA_TIME_ZONE).strftime("%Y%m%dT%H%M")
+
 
 def _build_csv_bytes(rows: list[dict[str, str]], fieldnames: list[str]) -> bytes:
     output = io.StringIO(newline="")
@@ -105,6 +105,7 @@ def _build_csv_bytes(rows: list[dict[str, str]], fieldnames: list[str]) -> bytes
     for row in rows:
         writer.writerow({field_name: str(row.get(field_name) or "") for field_name in fieldnames})
     return output.getvalue().encode("utf-8-sig")
+
 
 def _coerce_bool(value: Any, default: bool) -> bool:
     if value is None:
@@ -120,6 +121,7 @@ def _coerce_bool(value: Any, default: bool) -> bool:
         return False
     return bool(value)
 
+
 def _coerce_int(value: Any, default: int) -> int:
     if value is None:
         return default
@@ -132,6 +134,7 @@ def _coerce_int(value: Any, default: int) -> int:
         return int(raw)
     except (TypeError, ValueError):
         return default
+
 
 def _dedupe_texts(values: Any) -> list[str]:
     result: list[str] = []
@@ -147,6 +150,7 @@ def _dedupe_texts(values: Any) -> list[str]:
         result.append(text)
     return result
 
+
 def _env_bool(name: str, default: bool) -> bool:
     raw = str(os.getenv(name) or "").strip().lower()
     if not raw:
@@ -156,6 +160,7 @@ def _env_bool(name: str, default: bool) -> bool:
     if raw in {"0", "false", "no", "off"}:
         return False
     return default
+
 
 def _env_int(name: str, default: int) -> int:
     raw = str(os.getenv(name) or "").strip()
@@ -597,7 +602,9 @@ def _crm_public_web_retry_nonce(
     workspace_id: str,
     requested_by: str,
 ) -> str:
-    normalized_source_run_ids = sorted(str(run_id or "").strip() for run_id in source_run_ids if str(run_id or "").strip())
+    normalized_source_run_ids = sorted(
+        str(run_id or "").strip() for run_id in source_run_ids if str(run_id or "").strip()
+    )
     payload = {
         "source_run_ids": normalized_source_run_ids,
         "reason": str(reason or "").strip(),
@@ -1083,7 +1090,10 @@ class CrmPublicWebOwner:
     ) -> dict[str, Any]:
         batch_payload = dict(batch or {})
         batch_id = str(batch_payload.get("batch_id") or "").strip()
-        workspace_id = str(batch_payload.get("workspace_id") or request_payload.get("workspace_id") or "default").strip() or "default"
+        workspace_id = (
+            str(batch_payload.get("workspace_id") or request_payload.get("workspace_id") or "default").strip()
+            or "default"
+        )
         run_payloads = [dict(run) for run in list(runs or []) if isinstance(run, dict)]
         run_ids = _dedupe_texts(str(run.get("run_id") or "") for run in run_payloads)
         if not batch_id or not run_ids:
@@ -1098,9 +1108,7 @@ class CrmPublicWebOwner:
         )
         if not workflow_run_id or not operation_id or not command_idempotency_key:
             return {}
-        record_ids = _dedupe_texts(
-            str(run.get("crm_record_id") or run.get("record_id") or "") for run in run_payloads
-        )
+        record_ids = _dedupe_texts(str(run.get("crm_record_id") or run.get("record_id") or "") for run in run_payloads)
         materialization_metadata = {
             "command_payload_storage": "workflow_commands",
             "write_owner": CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER,
@@ -1303,7 +1311,9 @@ class CrmPublicWebOwner:
     ) -> dict[str, Any]:
         operation_run_id = str(operation_run.get("operation_run_id") or "").strip()
         action_id = str(action.get("action_id") or "").strip()
-        workspace_id = str(operation_run.get("workspace_id") or request_payload.get("workspace_id") or "default").strip()
+        workspace_id = str(
+            operation_run.get("workspace_id") or request_payload.get("workspace_id") or "default"
+        ).strip()
         workspace_id = workspace_id or "default"
         normalized_record_ids = _dedupe_texts(str(record_id or "").strip() for record_id in list(record_ids or []))
         if not operation_run_id or not action_id or not normalized_record_ids:
@@ -1557,7 +1567,9 @@ class CrmPublicWebOwner:
             "attempt": _coerce_int(payload.get("attempt"), 0),
             "max_attempts": _coerce_int(payload.get("max_attempts"), 0),
             "stage_id": str(payload.get("stage_id") or "").strip(),
-            "causal_group_id": str(payload.get("causal_group_id") or command_payload.get("causal_group_id") or "").strip(),
+            "causal_group_id": str(
+                payload.get("causal_group_id") or command_payload.get("causal_group_id") or ""
+            ).strip(),
             "parent_command_id": str(
                 payload.get("parent_command_id") or command_payload.get("parent_command_id") or ""
             ).strip(),
@@ -1593,12 +1605,12 @@ class CrmPublicWebOwner:
         disabled_reasons: dict[str, str] = {}
         if not can_cancel:
             disabled_reasons["cancel"] = (
-                "public_web_run_terminal" if status in set(PUBLIC_WEB_TERMINAL_STATUSES) else "public_web_run_status_missing"
+                "public_web_run_terminal"
+                if status in set(PUBLIC_WEB_TERMINAL_STATUSES)
+                else "public_web_run_status_missing"
             )
         if not can_retry:
-            disabled_reasons["retry"] = (
-                "public_web_run_not_retryable" if status else "public_web_run_status_missing"
-            )
+            disabled_reasons["retry"] = "public_web_run_not_retryable" if status else "public_web_run_status_missing"
         return {
             "schema_version": "crm_public_web_run_control_state_v1",
             "source_of_truth": "crm_public_web_owner.run_control_state",
@@ -1636,9 +1648,7 @@ class CrmPublicWebOwner:
     def _crm_public_web_phase_command_display_line(self, phase_commands: dict[str, Any]) -> str:
         summary = dict(phase_commands or {})
         phase_order = [
-            str(item or "").strip()
-            for item in list(summary.get("phase_order") or [])
-            if str(item or "").strip()
+            str(item or "").strip() for item in list(summary.get("phase_order") or []) if str(item or "").strip()
         ]
         phase_total = len(phase_order)
         if not phase_total:
@@ -1721,11 +1731,7 @@ class CrmPublicWebOwner:
         workspace_id: str = "default",
     ) -> dict[str, dict[str, Any]]:
         run_payloads = [dict(run or {}) for run in list(runs or []) if isinstance(run, dict)]
-        run_ids = {
-            str(run.get("run_id") or "").strip()
-            for run in run_payloads
-            if str(run.get("run_id") or "").strip()
-        }
+        run_ids = {str(run.get("run_id") or "").strip() for run in run_payloads if str(run.get("run_id") or "").strip()}
         if not run_ids:
             return {}
         batch_ids = _dedupe_texts(str(run.get("batch_id") or "").strip() for run in run_payloads)
@@ -1797,8 +1803,7 @@ class CrmPublicWebOwner:
                 (
                     item
                     for item in items
-                    if str(item.get("status") or "").strip()
-                    not in {"succeeded", "failed", "cancelled", "skipped"}
+                    if str(item.get("status") or "").strip() not in {"succeeded", "failed", "cancelled", "skipped"}
                 ),
                 items[-1] if items else {},
             )
@@ -1872,14 +1877,14 @@ class CrmPublicWebOwner:
                 reason=reason,
                 operator=actor,
             )
-        activity_rows = self.store.list_workflow_activity_runs(
+        activity_rows = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=1,
         )
         activity = dict(activity_rows[0]) if activity_rows else {}
         attempts = (
-            self.store.list_workflow_activity_attempts(
+            self.store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=str(activity.get("activity_run_id") or ""),
                 limit=1,
             )
@@ -2040,7 +2045,9 @@ class CrmPublicWebOwner:
                 "owner_specific_control": True,
                 "contract": "w11_workflow_command_owner_specific_control_v1",
             }
-        workspace_id = str(body.get("workspace_id") or result_payload.get("workspace_id") or "default").strip() or "default"
+        workspace_id = (
+            str(body.get("workspace_id") or result_payload.get("workspace_id") or "default").strip() or "default"
+        )
         batch_id = str(body.get("batch_id") or result_payload.get("batch_id") or "").strip()
         run_ids = [
             str(item or "").strip()
@@ -2207,14 +2214,14 @@ class CrmPublicWebOwner:
                 "owner_specific_control": True,
                 "contract": "w11_workflow_command_owner_specific_control_v1",
             }
-        activity_rows = self.store.list_workflow_activity_runs(
+        activity_rows = self.store.repos.workflow_runtime.list_activity_runs(
             command_id=command_id,
             activity_type=command_type,
             limit=1,
         )
         activity = dict(activity_rows[0]) if activity_rows else {}
         attempts = (
-            self.store.list_workflow_activity_attempts(
+            self.store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=str(activity.get("activity_run_id") or ""),
                 limit=1,
             )
@@ -2341,9 +2348,10 @@ class CrmPublicWebOwner:
         action: dict[str, Any],
         actor: str,
     ) -> dict[str, Any]:
-        if str(action.get("approval_policy") or "").strip() == "required" and str(
-            action.get("approval_status") or ""
-        ).strip() != "approved":
+        if (
+            str(action.get("approval_policy") or "").strip() == "required"
+            and str(action.get("approval_status") or "").strip() != "approved"
+        ):
             return {
                 "status": "approval_required",
                 "action": action,
@@ -2566,10 +2574,7 @@ class CrmPublicWebOwner:
         )
         if not batch_id or batch is None:
             command_status = str(refreshed_command.get("status") or "").strip()
-            reason = (
-                str(worker_summary.get("reason") or "").strip()
-                or "crm_public_web_queue_batch_pending_owner"
-            )
+            reason = str(worker_summary.get("reason") or "").strip() or "crm_public_web_queue_batch_pending_owner"
             failed_without_owner = reason == "crm_public_web_queue_batch_command_owner_disabled"
             return self._with_crm_public_web_contract(
                 {
@@ -2625,7 +2630,9 @@ class CrmPublicWebOwner:
         if isinstance(workspace_result, dict):
             return self._with_crm_public_web_contract(workspace_result, operation="poll", read=True)
         workspace_id = workspace_result
-        record_id_input = normalized.get("crm_record_ids") or normalized.get("record_ids") or normalized.get("record_id")
+        record_id_input = (
+            normalized.get("crm_record_ids") or normalized.get("record_ids") or normalized.get("record_id")
+        )
         record_ids = _coerce_public_web_record_ids(record_id_input)
         if not record_ids and not str(normalized.get("batch_id") or "").strip():
             return self._with_crm_public_web_contract(
@@ -2667,9 +2674,7 @@ class CrmPublicWebOwner:
         summary = dict(enriched.get("summary") or {})
         phase_metrics = dict(summary.get("phase_metrics") or {})
         status = str(enriched.get("status") or summary.get("status") or "").strip()
-        has_all_materialized_metrics = all(
-            key in phase_metrics for key in _PUBLIC_WEB_MATERIALIZED_SIGNAL_METRIC_KEYS
-        )
+        has_all_materialized_metrics = all(key in phase_metrics for key in _PUBLIC_WEB_MATERIALIZED_SIGNAL_METRIC_KEYS)
         terminal_run = status in PUBLIC_WEB_TERMINAL_STATUSES
         if signal_rows is None and has_all_materialized_metrics:
             return enriched
@@ -2842,7 +2847,9 @@ class CrmPublicWebOwner:
             json.dumps(
                 {
                     "workspace_id": str(workspace_id or "default").strip() or "default",
-                    "crm_record_ids": sorted({str(item or "").strip() for item in crm_record_ids if str(item or "").strip()}),
+                    "crm_record_ids": sorted(
+                        {str(item or "").strip() for item in crm_record_ids if str(item or "").strip()}
+                    ),
                     "export_mode": str(export_mode or "promoted_only").strip() or "promoted_only",
                     "export_contract_version": str(export_contract_version or "").strip(),
                     "export_input_watermark_hash": str(export_input_watermark_hash or "").strip(),
@@ -2866,7 +2873,9 @@ class CrmPublicWebOwner:
             json.dumps(
                 {
                     "workspace_id": str(workspace_id or "default").strip() or "default",
-                    "crm_record_ids": sorted({str(item or "").strip() for item in crm_record_ids if str(item or "").strip()}),
+                    "crm_record_ids": sorted(
+                        {str(item or "").strip() for item in crm_record_ids if str(item or "").strip()}
+                    ),
                     "export_mode": str(export_mode or "promoted_only").strip() or "promoted_only",
                     "export_contract_version": str(export_contract_version or "").strip(),
                     "export_input_watermark_hash": str(export_input_watermark_hash or "").strip(),
@@ -3044,11 +3053,15 @@ class CrmPublicWebOwner:
             )
             latest_run = dict(latest_runs[0] if latest_runs else {})
             latest_run_id = str(latest_run.get("run_id") or "").strip()
-            signals = self.store.list_person_public_web_signals(
-                run_id=latest_run_id,
-                record_id=record_id,
-                limit=5000,
-            ) if latest_run_id else []
+            signals = (
+                self.store.list_person_public_web_signals(
+                    run_id=latest_run_id,
+                    record_id=record_id,
+                    limit=5000,
+                )
+                if latest_run_id
+                else []
+            )
             promotions = self.store.list_crm_public_web_promotions(
                 crm_record_id=record_id,
                 workspace_id=normalized_workspace_id,
@@ -3171,7 +3184,11 @@ class CrmPublicWebOwner:
         workspace_id: str = "default",
     ) -> dict[str, Any]:
         command_payload = self._normalize_crm_public_web_export_command_payload(payload, workspace_id=workspace_id)
-        crm_record_ids = [str(item or "").strip() for item in list(command_payload.get("crm_record_ids") or []) if str(item or "").strip()]
+        crm_record_ids = [
+            str(item or "").strip()
+            for item in list(command_payload.get("crm_record_ids") or [])
+            if str(item or "").strip()
+        ]
         normalized_workspace_id = str(command_payload.get("workspace_id") or "default").strip() or "default"
         export_mode = str(command_payload.get("mode") or "promoted_only").strip() or "promoted_only"
         if not crm_record_ids:
@@ -3264,7 +3281,9 @@ class CrmPublicWebOwner:
 
     def _crm_public_web_export_artifact_path(self, command_id: str, filename: str) -> Path:
         safe_command_id = _target_candidate_archive_name_component(str(command_id or ""), fallback="command")
-        safe_filename = _target_candidate_archive_name_component(str(filename or ""), fallback="crm-public-web-export.zip")
+        safe_filename = _target_candidate_archive_name_component(
+            str(filename or ""), fallback="crm-public-web-export.zip"
+        )
         if not safe_filename.endswith(".zip"):
             safe_filename = f"{safe_filename}.zip"
         return Path(self.runtime_dir) / "exports" / "crm_public_web" / safe_command_id / safe_filename
@@ -3295,7 +3314,9 @@ class CrmPublicWebOwner:
             "content_type": "application/zip",
             "body": path.read_bytes(),
             "record_count": int(result.get("record_count") or 0),
-            "export_mode": str(result.get("export_mode") or dict(command.get("payload") or {}).get("mode") or "promoted_only"),
+            "export_mode": str(
+                result.get("export_mode") or dict(command.get("payload") or {}).get("mode") or "promoted_only"
+            ),
             "export_contract_version": str(
                 result.get("export_contract_version")
                 or dict(command.get("payload") or {}).get("export_contract_version")
@@ -3486,9 +3507,7 @@ class CrmPublicWebOwner:
         workspace_id = str(latest_payload.get("workspace_id") or "default").strip() or "default"
         export_input_watermark = dict(latest_payload.get("export_input_watermark") or {})
         export_input_watermark_hash = str(
-            latest_payload.get("export_input_watermark_hash")
-            or export_input_watermark.get("watermark_hash")
-            or ""
+            latest_payload.get("export_input_watermark_hash") or export_input_watermark.get("watermark_hash") or ""
         ).strip()
         activity, attempt = self._kernel._start_workflow_command_activity_attempt(
             latest_command,
@@ -3602,7 +3621,9 @@ class CrmPublicWebOwner:
             )
             result["public_web_storage_owner"] = "crm_public_web_v1"
             return result
-        artifact_path = self._crm_public_web_export_artifact_path(command_id, str(result.get("filename") or "crm-public-web.zip"))
+        artifact_path = self._crm_public_web_export_artifact_path(
+            command_id, str(result.get("filename") or "crm-public-web.zip")
+        )
         publish_result = self._publish_export_artifact_if_command_active(
             command_id=command_id,
             artifact_path=artifact_path,
@@ -3838,7 +3859,9 @@ class CrmPublicWebOwner:
         explicit_nonce = str(payload.get("refresh_nonce") or payload.get("nonce") or "").strip()
         requested_by = str(payload.get("operator") or payload.get("requested_by") or "operator").strip() or "operator"
         workspace_id = str(payload.get("workspace_id") or "").strip()
-        source_run_ids = [str(run.get("run_id") or "").strip() for run in source_runs if str(run.get("run_id") or "").strip()]
+        source_run_ids = [
+            str(run.get("run_id") or "").strip() for run in source_runs if str(run.get("run_id") or "").strip()
+        ]
         nonce = explicit_nonce or _crm_public_web_retry_nonce(
             source_run_ids=source_run_ids,
             reason=reason,
@@ -3917,7 +3940,9 @@ class CrmPublicWebOwner:
         normalized_workspace_id = str(workspace_id or query.get("workspace_id") or "default").strip() or "default"
         batch_id = str(query.get("batch_id") or "").strip()
         record_id = str(query.get("record_id") or "").strip()
-        record_ids = _coerce_public_web_record_ids(query.get("record_ids") or query.get("crm_record_ids") or query.get("record_id"))
+        record_ids = _coerce_public_web_record_ids(
+            query.get("record_ids") or query.get("crm_record_ids") or query.get("record_id")
+        )
         status = str(query.get("status") or "").strip()
         limit = min(max(_coerce_int(query.get("limit"), 100), 1), 1000)
         batches = []
@@ -4005,7 +4030,9 @@ class CrmPublicWebOwner:
         linkedin_url_key = str(latest_run.get("linkedin_url_key") or "").strip() or normalize_linkedin_profile_url_key(
             str(record.get("linkedin_url") or "")
         )
-        person_identity_key = str(latest_run.get("person_identity_key") or record.get("person_identity_key") or "").strip()
+        person_identity_key = str(
+            latest_run.get("person_identity_key") or record.get("person_identity_key") or ""
+        ).strip()
         if not person_identity_key and linkedin_url_key:
             person_identity_key = f"linkedin:{linkedin_url_key}"
         asset = None
@@ -4092,7 +4119,9 @@ class CrmPublicWebOwner:
             [latest_run],
             workspace_id=str(crm_record.get("workspace_id") or "default"),
         ).get(signal_run_id or str(latest_run.get("run_id") or ""), {})
-        latest_run_api = self._crm_public_web_run_api_record(latest_run, phase_commands=phase_commands) if latest_run else {}
+        latest_run_api = (
+            self._crm_public_web_run_api_record(latest_run, phase_commands=phase_commands) if latest_run else {}
+        )
         latest_run_detail = _public_web_run_detail(latest_run_api) if latest_run_api else None
         if latest_run_detail is not None:
             latest_run_detail["phase_commands"] = phase_commands
@@ -4321,7 +4350,10 @@ class CrmPublicWebOwner:
         if action == "promote":
             assertion_type = _public_web_signal_assertion_type(signal)
             person_identity_key = str(
-                signal.get("person_identity_key") or promotion.get("person_identity_key") or record.get("person_identity_key") or ""
+                signal.get("person_identity_key")
+                or promotion.get("person_identity_key")
+                or record.get("person_identity_key")
+                or ""
             ).strip()
             if assertion_type and person_identity_key:
                 assertion = self.person_asset_writer.record_assertion(
@@ -4336,7 +4368,9 @@ class CrmPublicWebOwner:
                         "person_identity_key": person_identity_key,
                         "assertion_type": assertion_type,
                         "value": promoted_value,
-                        "normalized_value": promoted_value.lower() if assertion_type == "primary_email" else promoted_value,
+                        "normalized_value": promoted_value.lower()
+                        if assertion_type == "primary_email"
+                        else promoted_value,
                         "authority": "operator_confirmed",
                         "verification_status": "active",
                         "source_run_id": signal_run_id,
@@ -4376,7 +4410,9 @@ class CrmPublicWebOwner:
                     job_id=signal_run_id,
                     reason="crm_public_web_person_assertion_promoted",
                 )
-        refreshed_record = self._public_crm_record_payload(self.store.get_crm_record(normalized_record_id) or crm_record)
+        refreshed_record = self._public_crm_record_payload(
+            self.store.get_crm_record(normalized_record_id) or crm_record
+        )
         detail = self._get_crm_record_public_web_search_detail_from_owner(normalized_record_id)
         return {
             "status": "promoted" if action == "promote" else "rejected",
@@ -4977,7 +5013,11 @@ class CrmPublicWebOwner:
                     continue
                 filtered_run_ids.append(item)
             if not filtered_run_ids:
-                return {"status": "skipped", "reason": "all selected Public Web runs are already terminal", "runs": skipped}
+                return {
+                    "status": "skipped",
+                    "reason": "all selected Public Web runs are already terminal",
+                    "runs": skipped,
+                }
             normalized_run_ids = filtered_run_ids
         return normalized_run_ids, reason
 
@@ -5494,7 +5534,9 @@ class CrmPublicWebOwner:
         batch_id = str(payload.get("batch_id") or "").strip()
         if not workflow_run_id and batch_id:
             workflow_run_id = self._crm_public_web_workflow_run_id(batch_id)
-        limit = max(1, _coerce_int(payload.get("command_limit") or payload.get("crm_public_web_queue_batch_command_limit"), 20))
+        limit = max(
+            1, _coerce_int(payload.get("command_limit") or payload.get("crm_public_web_queue_batch_command_limit"), 20)
+        )
         ready_commands = self.store.list_ready_workflow_commands(
             workflow_run_id=workflow_run_id,
             owner=CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER,
@@ -5657,7 +5699,7 @@ class CrmPublicWebOwner:
             artifact_refs.append(artifact_root)
         readiness_effect = default_readiness_effect_for_command_type(normalized_command_type)
         normalized_status = str(delta_status or "recorded").strip() or "recorded"
-        return self.store.upsert_workflow_entity_delta(
+        return self.store.repos.workflow_runtime.upsert_entity_delta(
             {
                 "workspace_id": str(workspace_id or "default").strip() or "default",
                 "workflow_run_id": workflow_run_id,
@@ -5865,9 +5907,7 @@ class CrmPublicWebOwner:
                     "person_identity_key": person_identity_key,
                     "asset_id": str(asset.get("asset_id") or asset_id),
                     "evidence_type": str(
-                        signal_payload.get("signal_kind")
-                        or signal_payload.get("signal_type")
-                        or "public_web_signal"
+                        signal_payload.get("signal_kind") or signal_payload.get("signal_type") or "public_web_signal"
                     ).strip()
                     or "public_web_signal",
                     "value": str(signal_payload.get("value") or normalized_value).strip(),
@@ -6025,9 +6065,7 @@ class CrmPublicWebOwner:
                     str(index),
                 ]
             )
-            document_key = "public_web_document:" + hashlib.sha1(
-                document_key_seed.encode("utf-8")
-            ).hexdigest()[:24]
+            document_key = "public_web_document:" + hashlib.sha1(document_key_seed.encode("utf-8")).hexdigest()[:24]
             artifact_refs = [str(payload_path)]
             for url_value in (source_url, final_url):
                 if url_value:
@@ -6041,7 +6079,9 @@ class CrmPublicWebOwner:
                 entity_key=document_key,
                 delta_kind="crm_public_web_document_fetched",
                 status=delta_status,
-                reason="crm_public_web_documents_fetched" if delta_status == "recorded" else "crm_public_web_document_fetch_error",
+                reason="crm_public_web_documents_fetched"
+                if delta_status == "recorded"
+                else "crm_public_web_document_fetch_error",
                 source_ref={
                     "batch_id": str(batch_id or "").strip(),
                     "run_id": normalized_run_id,
@@ -6131,7 +6171,9 @@ class CrmPublicWebOwner:
             return {
                 "status": "failed",
                 "reason": "crm_public_web_phase_missing_run_id",
-                "workflow_command": self._kernel._workflow_command_observation(failed or latest_command, migration_phase=migration_phase),
+                "workflow_command": self._kernel._workflow_command_observation(
+                    failed or latest_command, migration_phase=migration_phase
+                ),
             }
         activity, attempt = self._kernel._start_workflow_command_activity_attempt(
             latest_command,
@@ -6226,7 +6268,9 @@ class CrmPublicWebOwner:
                 "completed_count": 1,
                 "failed_count": 0,
                 "no_op_reason": "crm_public_web_phase_stale_batch_superseded",
-                "workflow_command": self._kernel._workflow_command_observation(succeeded or latest_command, migration_phase=migration_phase),
+                "workflow_command": self._kernel._workflow_command_observation(
+                    succeeded or latest_command, migration_phase=migration_phase
+                ),
                 "legacy_bridge_used": False,
                 "migration_phase": migration_phase,
             }
@@ -6308,13 +6352,19 @@ class CrmPublicWebOwner:
                     "completed_count": 1,
                     "failed_count": 0,
                     "no_op_reason": "crm_public_web_phase_stale_run_superseded",
-                    "workflow_command": self._kernel._workflow_command_observation(succeeded or latest_command, migration_phase=migration_phase),
+                    "workflow_command": self._kernel._workflow_command_observation(
+                        succeeded or latest_command, migration_phase=migration_phase
+                    ),
                     "legacy_bridge_used": False,
                     "migration_phase": migration_phase,
                 }
         status_relation = self._crm_public_web_phase_status_relation(command_type, current_run_status)
         if status_relation in {"already_advanced", "terminal"}:
-            next_command_type = "" if status_relation == "terminal" else self._next_crm_public_web_phase_command_type(current_run_status)
+            next_command_type = (
+                ""
+                if status_relation == "terminal"
+                else self._next_crm_public_web_phase_command_type(current_run_status)
+            )
             next_command: dict[str, Any] = {}
             if next_command_type and next_command_type != command_type:
                 next_command = self._plan_crm_public_web_run_phase_command(
@@ -6328,9 +6378,11 @@ class CrmPublicWebOwner:
                     request_payload=dict(payload.get("request_payload") or {}),
                     source="crm_public_web_phase_owner_status_guard",
                 )
-            downstream_ids = [
-                str(next_command.get("command_id") or "").strip()
-            ] if str(next_command.get("command_id") or "").strip() else []
+            downstream_ids = (
+                [str(next_command.get("command_id") or "").strip()]
+                if str(next_command.get("command_id") or "").strip()
+                else []
+            )
             no_op_reason = (
                 "crm_public_web_phase_terminal_already_reached"
                 if status_relation == "terminal"
@@ -6410,7 +6462,9 @@ class CrmPublicWebOwner:
                 "completed_count": 1,
                 "failed_count": 0,
                 "no_op_reason": no_op_reason,
-                "workflow_command": self._kernel._workflow_command_observation(succeeded or latest_command, migration_phase=migration_phase),
+                "workflow_command": self._kernel._workflow_command_observation(
+                    succeeded or latest_command, migration_phase=migration_phase
+                ),
                 "legacy_bridge_used": False,
                 "migration_phase": migration_phase,
             }
@@ -6477,7 +6531,9 @@ class CrmPublicWebOwner:
                 "claimed_count": 1,
                 "completed_count": 0,
                 "failed_count": 0,
-                "workflow_command": self._kernel._workflow_command_observation(waiting or latest_command, migration_phase=migration_phase),
+                "workflow_command": self._kernel._workflow_command_observation(
+                    waiting or latest_command, migration_phase=migration_phase
+                ),
                 "legacy_bridge_used": False,
                 "migration_phase": migration_phase,
             }
@@ -6537,7 +6593,9 @@ class CrmPublicWebOwner:
                 "status": "failed",
                 "reason": "crm_public_web_phase_command_failed",
                 "error": str(exc),
-                "workflow_command": self._kernel._workflow_command_observation(failed or latest_command, migration_phase=migration_phase),
+                "workflow_command": self._kernel._workflow_command_observation(
+                    failed or latest_command, migration_phase=migration_phase
+                ),
             }
         run_status = str(phase_result.get("run_status") or "").strip()
         worker_status = str(phase_result.get("worker_status") or "").strip()
@@ -6596,7 +6654,9 @@ class CrmPublicWebOwner:
                 "run_id": run_id,
                 "batch_id": batch_id,
                 "run_status": run_status,
-                "workflow_command": self._kernel._workflow_command_observation(waiting or latest_command, migration_phase=migration_phase),
+                "workflow_command": self._kernel._workflow_command_observation(
+                    waiting or latest_command, migration_phase=migration_phase
+                ),
             }
         if run_status in {"failed", "cancelled"}:
             final_activity, final_attempt = self._kernel._finish_workflow_command_activity_attempt(
@@ -6648,7 +6708,9 @@ class CrmPublicWebOwner:
                 "run_id": run_id,
                 "batch_id": batch_id,
                 "run_status": run_status,
-                "workflow_command": self._kernel._workflow_command_observation(failed or latest_command, migration_phase=migration_phase),
+                "workflow_command": self._kernel._workflow_command_observation(
+                    failed or latest_command, migration_phase=migration_phase
+                ),
             }
         next_command_type = self._next_crm_public_web_phase_command_type(run_status)
         next_command: dict[str, Any] = {}
@@ -6664,9 +6726,11 @@ class CrmPublicWebOwner:
                 request_payload=dict(payload.get("request_payload") or {}),
                 source="crm_public_web_phase_owner",
             )
-        downstream_ids = [
-            str(next_command.get("command_id") or "").strip()
-        ] if str(next_command.get("command_id") or "").strip() else []
+        downstream_ids = (
+            [str(next_command.get("command_id") or "").strip()]
+            if str(next_command.get("command_id") or "").strip()
+            else []
+        )
         phase_metrics = dict(dict(dict(phase_result or {}).get("summary") or {}).get("phase_metrics") or {})
         final_activity, final_attempt = self._kernel._finish_workflow_command_activity_attempt(
             activity=activity,
@@ -6801,7 +6865,9 @@ class CrmPublicWebOwner:
             "person_asset_sync_evidence_count": int(person_asset_sync.get("evidence_count") or 0),
             "person_asset_sync_entity_delta_count": int(person_asset_sync.get("entity_delta_count") or 0),
             "document_entity_delta_count": len(document_deltas),
-            "workflow_command": self._kernel._workflow_command_observation(succeeded or latest_command, migration_phase=migration_phase),
+            "workflow_command": self._kernel._workflow_command_observation(
+                succeeded or latest_command, migration_phase=migration_phase
+            ),
             "legacy_bridge_used": False,
             "migration_phase": migration_phase,
         }
@@ -6815,7 +6881,9 @@ class CrmPublicWebOwner:
         batch_id = str(payload.get("batch_id") or "").strip()
         if not workflow_run_id and batch_id:
             workflow_run_id = self._crm_public_web_workflow_run_id(batch_id)
-        limit = max(1, _coerce_int(payload.get("command_limit") or payload.get("crm_public_web_phase_command_limit"), 20))
+        limit = max(
+            1, _coerce_int(payload.get("command_limit") or payload.get("crm_public_web_phase_command_limit"), 20)
+        )
         ready_commands: list[dict[str, Any]] = []
         remaining = limit
         for command_type in CRM_PUBLIC_WEB_PHASE_COMMAND_TYPES:
@@ -6898,7 +6966,9 @@ class CrmPublicWebOwner:
             record_result(result)
         return {
             "status": "active" if executed_command_count > 0 or claimed_count > 0 else "idle",
-            "reason": "crm_public_web_phase_command_owner" if ready_commands else "no_ready_crm_public_web_phase_commands",
+            "reason": "crm_public_web_phase_command_owner"
+            if ready_commands
+            else "no_ready_crm_public_web_phase_commands",
             "workflow_run_id": workflow_run_id,
             "command_count": len(ready_commands),
             "executed_command_count": executed_command_count,

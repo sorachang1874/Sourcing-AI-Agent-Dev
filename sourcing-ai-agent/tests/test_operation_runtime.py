@@ -6,6 +6,7 @@ import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest import mock
 from urllib import error as urllib_error
 from urllib import request as urllib_request
@@ -131,6 +132,137 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
     def tearDown(self) -> None:
         self._stop_pg_durable_runtime()
         self.tempdir.cleanup()
+
+    def _build_r020_orchestrator(self) -> SourcingOrchestrator:
+        settings = AppSettings(
+            project_root=self.runtime_dir,
+            runtime_dir=self.runtime_dir,
+            secrets_file=self.runtime_dir / "secrets.toml",
+            db_path=self.runtime_dir / "r020-cancel.db",
+            jobs_dir=self.runtime_dir / "jobs",
+            company_assets_dir=self.runtime_dir / "company_assets",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        catalog = AssetCatalog.discover()
+        return SourcingOrchestrator(
+            catalog=catalog,
+            store=self.store,
+            jobs_dir=settings.jobs_dir,
+            model_client=DeterministicModelClient(),
+            semantic_provider=LocalSemanticProvider(),
+            acquisition_engine=AcquisitionEngine(
+                catalog,
+                settings,
+                self.store,
+                DeterministicModelClient(),
+            ),
+        )
+
+    def _seed_r020_scale_scope(
+        self,
+        suffix: str,
+        *,
+        run_status: str = "scale_planned_pending_discovery",
+        activity_status: str = "planned_pending_owner",
+        command_downstream_ids: list[str] | None = None,
+        lane_downstream_ids: list[str] | None = None,
+        run_source_command_id: str | None = None,
+        run_workspace_id: str = "default",
+    ) -> dict[str, dict[str, Any]]:
+        workflow_run_id = f"wf-r020-{suffix}"
+        operation_run_id = f"op-r020-{suffix}"
+        acquisition_run_id = f"acqrun-r020-{suffix}"
+        command = self.store.upsert_workflow_command(
+            workflow_run_id=workflow_run_id,
+            operation_id=operation_run_id,
+            command_type=ACQUISITION_SCALE_PLAN_COMMAND_TYPE,
+            owner=ACQUISITION_SCALE_PLAN_OWNER,
+            idempotency_key=f"workflow_command:r020:{suffix}",
+            payload={
+                "workspace_id": "default",
+                "acquisition_run_id": acquisition_run_id,
+                "target_company": "OpenAI",
+                "query": "OpenAI research",
+                "causality": {"downstream_command_ids": list(command_downstream_ids or [])},
+            },
+        )
+        acquisition_run = self.store.repos.workflow_runtime.upsert_acquisition_run(
+            {
+                "acquisition_run_id": acquisition_run_id,
+                "workspace_id": run_workspace_id,
+                "operation_run_id": operation_run_id,
+                "workflow_run_id": workflow_run_id,
+                "target_company": "OpenAI",
+                "query": "OpenAI research",
+                "status": run_status,
+                "current_phase": "cancelled" if run_status == "cancelled_before_discovery" else "discovery_pending",
+                "idempotency_key": f"acquisition_run:r020:{suffix}",
+                "metadata": {"source_command_id": run_source_command_id or command["command_id"]},
+            }
+        )
+        activity = self.store.repos.workflow_runtime.upsert_activity_run(
+            {
+                "activity_run_id": f"actrun-r020-{suffix}",
+                "workspace_id": "default",
+                "workflow_run_id": workflow_run_id,
+                "operation_run_id": operation_run_id,
+                "acquisition_run_id": acquisition_run_id,
+                "command_id": command["command_id"],
+                "activity_type": LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
+                "owner": LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
+                "status": activity_status,
+                "phase": "completed" if activity_status == "completed" else "discovery_query_planned",
+                "idempotency_key": f"workflow_activity:r020:{suffix}",
+                "metadata": {"provider_called": False},
+            }
+        )
+        lane = self.store.repos.workflow_runtime.upsert_discovery_lane(
+            {
+                "lane_id": f"lane-r020-{suffix}",
+                "workspace_id": "default",
+                "acquisition_run_id": acquisition_run_id,
+                "workflow_run_id": workflow_run_id,
+                "operation_run_id": operation_run_id,
+                "source_command_id": command["command_id"],
+                "activity_run_id": activity["activity_run_id"],
+                "target_company": "OpenAI",
+                "query": "OpenAI research",
+                "provider": "linkedin",
+                "status": "planned_pending_owner",
+                "phase": "discovery_query_planned",
+                "lane_plan": {"status": "planned_pending_owner", "phase": "discovery_query_planned"},
+                "downstream_command_ids": list(lane_downstream_ids or []),
+                "idempotency_key": f"acquisition_discovery_lane:r020:{suffix}",
+                "metadata": {"provider_called": False},
+            }
+        )
+        lease_owner = f"unit-test-r020-{suffix}"
+        self.store.claim_workflow_command(command["command_id"], lease_owner=lease_owner)
+        running_command = self.store.mark_workflow_command_running(
+            command["command_id"],
+            lease_owner=lease_owner,
+        )
+        return {
+            "command": running_command,
+            "acquisition_run": acquisition_run,
+            "activity": activity,
+            "lane": lane,
+        }
+
+    def _read_r020_scale_scope(
+        self,
+        scope: dict[str, dict[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
+        return {
+            "command": self.store.get_workflow_command(scope["command"]["command_id"]),
+            "acquisition_run": self.store.repos.workflow_runtime.get_acquisition_run(
+                scope["acquisition_run"]["acquisition_run_id"]
+            ),
+            "activity": self.store.repos.workflow_runtime.get_activity_run(scope["activity"]["activity_run_id"]),
+            "lane": self.store.repos.workflow_runtime.get_discovery_lane(scope["lane"]["lane_id"]),
+        }
 
     def test_acquisition_run_repository_fences_identity_terminal_reopen_and_merges_json(self) -> None:
         repository = self.store.repos.workflow_runtime
@@ -388,6 +520,377 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             stored = repository.get_discovery_lane(row["lane_id"])
             self.assertEqual(stored["idempotency_key"], row["idempotency_key"])
 
+    def test_activity_run_repository_terminal_state_blocks_stale_reopen(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        payload = {
+            "activity_run_id": "actrun-identity-terminal",
+            "workspace_id": "default",
+            "workflow_run_id": "wf-identity-terminal",
+            "operation_run_id": "op-identity-terminal",
+            "acquisition_run_id": "acqrun-identity-terminal",
+            "command_id": "cmd-identity-terminal",
+            "activity_type": LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
+            "owner": LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
+            "status": "running",
+            "phase": "provider_poll",
+            "idempotency_key": "workflow_activity:identity-terminal",
+            "output": {"partial": True},
+            "metadata": {"initial_writer": True},
+        }
+        repository.upsert_activity_run(payload)
+        terminal = repository.upsert_activity_run(
+            {
+                **payload,
+                "status": "completed",
+                "phase": "completed",
+                "output": {"entity_count": 2},
+                "metadata": {"terminal_writer": True},
+            }
+        )
+
+        stale = repository.upsert_activity_run(
+            {
+                **payload,
+                "output": {"stale_output": True},
+                "metadata": {"stale_writer": True},
+            }
+        )
+
+        self.assertEqual(stale, terminal)
+        self.assertEqual(stale["status"], "completed")
+        self.assertEqual(stale["phase"], "completed")
+        self.assertNotIn("stale_writer", stale["metadata"])
+
+    def test_activity_attempt_repository_terminal_state_blocks_stale_reopen(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        payload = {
+            "attempt_id": "actattempt-identity-terminal",
+            "workspace_id": "default",
+            "activity_run_id": "actrun-identity-terminal",
+            "workflow_run_id": "wf-identity-terminal",
+            "command_id": "cmd-identity-terminal",
+            "attempt_number": 1,
+            "provider": "linkedin_simulated",
+            "status": "running",
+            "idempotency_key": "workflow_activity_attempt:identity-terminal",
+            "output": {"partial": True},
+            "metadata": {"initial_writer": True},
+        }
+        repository.upsert_activity_attempt(payload)
+        terminal = repository.upsert_activity_attempt(
+            {
+                **payload,
+                "status": "succeeded",
+                "completed_at": "2026-07-13 12:00:00",
+                "output": {"entity_count": 2},
+                "metadata": {"terminal_writer": True},
+            }
+        )
+
+        stale = repository.upsert_activity_attempt(
+            {
+                **payload,
+                "output": {"stale_output": True},
+                "metadata": {"stale_writer": True},
+            }
+        )
+
+        self.assertEqual(stale, terminal)
+        self.assertEqual(stale["status"], "succeeded")
+        self.assertEqual(stale["completed_at"], "2026-07-13 12:00:00")
+        self.assertNotIn("stale_writer", stale["metadata"])
+
+    def test_entity_delta_repository_is_write_once_and_rejects_identity_collisions(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        payload = {
+            "delta_id": "entitydelta-write-once",
+            "workspace_id": "default",
+            "workflow_run_id": "wf-write-once",
+            "operation_run_id": "op-write-once",
+            "command_id": "cmd-write-once",
+            "activity_run_id": "actrun-write-once",
+            "attempt_id": "actattempt-write-once",
+            "acquisition_run_id": "acqrun-write-once",
+            "entity_type": "candidate_profile",
+            "entity_key": "candidate-1",
+            "delta_kind": "profile_observed",
+            "status": "recorded",
+            "reason": "initial_observation",
+            "entity_payload": {"name": "Ada"},
+            "idempotency_key": "workflow_entity_delta:write-once",
+            "metadata": {"initial_writer": True},
+        }
+        created = repository.upsert_entity_delta(payload)
+
+        replayed = repository.upsert_entity_delta(
+            {
+                **payload,
+                "status": "superseded",
+                "reason": "stale_rewrite",
+                "entity_payload": {"name": "Changed"},
+                "metadata": {"stale_writer": True},
+            }
+        )
+
+        self.assertEqual(replayed, created)
+        self.assertEqual(replayed["reason"], "initial_observation")
+        self.assertEqual(replayed["entity_payload"], {"name": "Ada"})
+        with self.assertRaises(RuntimeError):
+            repository.upsert_entity_delta({**payload, "entity_key": "candidate-2"})
+        with self.assertRaises(RuntimeError):
+            repository.upsert_entity_delta(
+                {
+                    **payload,
+                    "delta_id": "entitydelta-idempotency-collision",
+                }
+            )
+
+    def test_r020_public_exact_replay_is_already_applied_and_preserves_uow_timestamps(self) -> None:
+        scope = self._seed_r020_scale_scope(
+            "exact-replay",
+            run_source_command_id="cmd-r020-earlier-plan-commit",
+        )
+        orchestrator = self._build_r020_orchestrator()
+        control = {"actor": "r020-review", "reason": "exact_replay", "force": True}
+
+        first = orchestrator.cancel_workflow_command_api(scope["command"]["command_id"], control)
+
+        self.assertEqual(first["status"], "cancelled")
+        self.assertEqual(first["uow_outcome"], "applied")
+        first_rows = self._read_r020_scale_scope(scope)
+        first_timestamps = {name: (row["created_at"], row["updated_at"]) for name, row in first_rows.items()}
+        with mock.patch(
+            "sourcing_agent.control_plane_live_postgres._utc_now_sql_timestamp",
+            return_value="2099-01-01 00:00:00",
+        ):
+            replay = orchestrator.cancel_workflow_command_api(scope["command"]["command_id"], control)
+
+        self.assertEqual(replay["status"], "cancelled")
+        self.assertEqual(replay["uow_outcome"], "already_applied")
+        self.assertFalse(replay["module_state_mutated"])
+        self.assertEqual(replay["operation_sync"], {})
+        replayed_rows = self._read_r020_scale_scope(scope)
+        self.assertEqual(
+            {name: (row["created_at"], row["updated_at"]) for name, row in replayed_rows.items()},
+            first_timestamps,
+        )
+
+    def test_r020_explicit_run_scope_mismatch_is_structured_conflict_and_zero_write(self) -> None:
+        scope = self._seed_r020_scale_scope(
+            "scope-mismatch",
+            run_workspace_id="workspace-r020-corrupt",
+        )
+        before = self._read_r020_scale_scope(scope)
+
+        response = self._build_r020_orchestrator().cancel_workflow_command_api(
+            scope["command"]["command_id"],
+            {"actor": "r020-corruption", "reason": "scope_mismatch", "force": True},
+        )
+
+        self.assertEqual(response["status"], "invalid")
+        self.assertEqual(response["uow_outcome"], "conflict")
+        self.assertEqual(response["reason"], "acquisition_owner_cancel_run_identity_mismatch")
+        self.assertFalse(response["module_state_mutated"])
+        self.assertEqual(self._read_r020_scale_scope(scope), before)
+
+    def test_r020_legacy_partial_cancel_is_repaired_in_one_public_uow(self) -> None:
+        scope = self._seed_r020_scale_scope(
+            "partial-repair",
+            run_status="cancelled_before_discovery",
+        )
+        orchestrator = self._build_r020_orchestrator()
+
+        response = orchestrator.cancel_workflow_command_api(
+            scope["command"]["command_id"],
+            {"actor": "r020-repair", "reason": "repair_legacy_partial", "force": True},
+        )
+
+        self.assertEqual(response["status"], "cancelled")
+        self.assertEqual(response["uow_outcome"], "repaired")
+        self.assertTrue(response["module_state_mutated"])
+        repaired_run = self.store.repos.workflow_runtime.get_acquisition_run(
+            scope["acquisition_run"]["acquisition_run_id"]
+        )
+        repaired_activity = self.store.repos.workflow_runtime.get_activity_run(scope["activity"]["activity_run_id"])
+        repaired_lane = self.store.repos.workflow_runtime.get_discovery_lane(scope["lane"]["lane_id"])
+        self.assertEqual(repaired_run["status"], "cancelled_before_discovery")
+        self.assertEqual(repaired_run["metadata"]["cancelled_by"], "r020-repair")
+        self.assertEqual(repaired_activity["status"], "cancelled_before_discovery")
+        self.assertEqual(repaired_lane["status"], "cancelled_before_discovery")
+        self.assertEqual(
+            self.store.get_workflow_command(scope["command"]["command_id"])["status"],
+            "cancelled",
+        )
+
+    def test_r020_active_lease_without_force_is_zero_write_then_force_applies(self) -> None:
+        scope = self._seed_r020_scale_scope("lease-force")
+        orchestrator = self._build_r020_orchestrator()
+        before = self._read_r020_scale_scope(scope)
+
+        blocked = orchestrator.cancel_workflow_command_api(
+            scope["command"]["command_id"],
+            {"actor": "r020-lease", "reason": "lease_active"},
+        )
+
+        self.assertEqual(blocked["status"], "invalid")
+        self.assertEqual(blocked["uow_outcome"], "blocked")
+        self.assertEqual(
+            blocked["reason"],
+            "workflow_command_running_cancel_requires_expired_lease_or_force",
+        )
+        after_block = self._read_r020_scale_scope(scope)
+        self.assertEqual(after_block, before)
+
+        applied = orchestrator.cancel_workflow_command_api(
+            scope["command"]["command_id"],
+            {"actor": "r020-lease", "reason": "lease_active", "force": True},
+        )
+
+        self.assertEqual(applied["status"], "cancelled")
+        self.assertEqual(applied["uow_outcome"], "applied")
+
+    def test_r020_declared_missing_downstream_command_id_blocks_without_writes(self) -> None:
+        scope = self._seed_r020_scale_scope(
+            "missing-downstream",
+            command_downstream_ids=["cmd-r020-declared-but-missing"],
+        )
+        before = self._read_r020_scale_scope(scope)
+
+        response = self._build_r020_orchestrator().cancel_workflow_command_api(
+            scope["command"]["command_id"],
+            {"actor": "r020-blocker", "reason": "declared_downstream", "force": True},
+        )
+
+        self.assertEqual(response["status"], "invalid")
+        self.assertEqual(response["uow_outcome"], "blocked")
+        self.assertEqual(
+            response["reason"],
+            "acquisition_scale_plan_cancel_blocked_after_discovery_planned",
+        )
+        self.assertEqual(response["downstream_command_ids"], ["cmd-r020-declared-but-missing"])
+        self.assertEqual(self._read_r020_scale_scope(scope), before)
+
+    def test_r020_lane_downstream_blocker_is_zero_write(self) -> None:
+        scope = self._seed_r020_scale_scope(
+            "lane-downstream",
+            lane_downstream_ids=["cmd-r020-lane-downstream"],
+        )
+        before = self._read_r020_scale_scope(scope)
+
+        response = self._build_r020_orchestrator().cancel_workflow_command_api(
+            scope["command"]["command_id"],
+            {"actor": "r020-blocker", "reason": "lane_downstream", "force": True},
+        )
+
+        self.assertEqual(response["status"], "invalid")
+        self.assertEqual(response["uow_outcome"], "blocked")
+        self.assertEqual(
+            response["reason"],
+            "acquisition_scale_plan_cancel_blocked_after_discovery_started",
+        )
+        self.assertEqual(response["lane_downstream_command_ids"], ["cmd-r020-lane-downstream"])
+        self.assertEqual(self._read_r020_scale_scope(scope), before)
+
+    def test_r020_non_target_terminal_activity_wins_without_mixed_state(self) -> None:
+        scope = self._seed_r020_scale_scope(
+            "terminal-winner",
+            activity_status="completed",
+        )
+        before = self._read_r020_scale_scope(scope)
+
+        response = self._build_r020_orchestrator().cancel_workflow_command_api(
+            scope["command"]["command_id"],
+            {"actor": "r020-winner", "reason": "terminal_won", "force": True},
+        )
+
+        self.assertEqual(response["status"], "invalid")
+        self.assertEqual(response["uow_outcome"], "conflict")
+        self.assertEqual(response["reason"], "acquisition_owner_cancel_terminal_state_won")
+        self.assertEqual(self._read_r020_scale_scope(scope), before)
+
+    def test_r020_command_final_update_failure_rolls_back_all_module_rows(self) -> None:
+        scope = self._seed_r020_scale_scope("rollback")
+        before = self._read_r020_scale_scope(scope)
+        adapter = self.store._control_plane_postgres
+        with adapter._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    CREATE FUNCTION r020_fail_cancel_command_update() RETURNS trigger AS $$
+                    BEGIN
+                        IF NEW.status = 'cancelled' THEN
+                            RAISE EXCEPTION 'r020 injected command final update failure';
+                        END IF;
+                        RETURN NEW;
+                    END;
+                    $$ LANGUAGE plpgsql
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TRIGGER r020_fail_cancel_command_update
+                    BEFORE UPDATE ON workflow_commands
+                    FOR EACH ROW EXECUTE FUNCTION r020_fail_cancel_command_update()
+                    """
+                )
+            connection.commit()
+
+        with self.assertRaisesRegex(RuntimeError, "r020 injected command final update failure"):
+            self.store.repos.workflow_runtime.cancel_acquisition_owner_command(
+                scope["command"]["command_id"],
+                cancel_kind="acquisition_scale_plan_before_discovery",
+                actor="r020-rollback",
+                reason="inject_final_write_failure",
+                force=True,
+            )
+
+        after = self._read_r020_scale_scope(scope)
+        self.assertEqual(after, before)
+
+    def test_r020_concurrent_duplicate_cancel_converges_without_mixed_state(self) -> None:
+        scope = self._seed_r020_scale_scope("concurrent")
+        repository = self.store.repos.workflow_runtime
+        barrier = threading.Barrier(2)
+        outcomes: list[str] = []
+        errors: list[Exception] = []
+
+        def cancel() -> None:
+            try:
+                barrier.wait(timeout=5)
+                result = repository.cancel_acquisition_owner_command(
+                    scope["command"]["command_id"],
+                    cancel_kind="acquisition_scale_plan_before_discovery",
+                    actor="r020-concurrent",
+                    reason="duplicate_cancel",
+                    force=True,
+                )
+                outcomes.append(str(result["outcome"]))
+            except Exception as exc:  # pragma: no cover - asserted below.
+                errors.append(exc)
+
+        threads = [threading.Thread(target=cancel) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        self.assertEqual(errors, [])
+        self.assertEqual(sorted(outcomes), ["already_applied", "applied"])
+        command = self.store.get_workflow_command(scope["command"]["command_id"])
+        acquisition_run = self.store.repos.workflow_runtime.get_acquisition_run(
+            scope["acquisition_run"]["acquisition_run_id"]
+        )
+        activity = self.store.repos.workflow_runtime.get_activity_run(scope["activity"]["activity_run_id"])
+        lane = self.store.repos.workflow_runtime.get_discovery_lane(scope["lane"]["lane_id"])
+        self.assertEqual(command["status"], "cancelled")
+        self.assertEqual(acquisition_run["status"], "cancelled_before_discovery")
+        self.assertEqual(activity["status"], "cancelled_before_discovery")
+        self.assertEqual(lane["status"], "cancelled_before_discovery")
+        for row in (acquisition_run, activity, lane):
+            self.assertEqual(row["metadata"]["cancelled_by"], "r020-concurrent")
+            self.assertEqual(row["metadata"]["cancel_reason"], "duplicate_cancel")
+
     def test_profile_provider_retry_exhaustion_terminalizes_acquisition_run(self) -> None:
         settings = AppSettings(
             project_root=self.runtime_dir,
@@ -426,7 +929,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             "metadata": {"before_retry": True},
         }
         acquisition_run = repository.upsert_acquisition_run(acquisition_payload)
-        activity = self.store.upsert_workflow_activity_run(
+        activity = self.store.repos.workflow_runtime.upsert_activity_run(
             {
                 "activity_run_id": "actrun-profile-retry-exhausted",
                 "workspace_id": "default",
@@ -1270,7 +1773,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "metadata": {"source_command_id": command["command_id"]},
             }
         )
-        activity = self.store.upsert_workflow_activity_run(
+        activity = self.store.repos.workflow_runtime.upsert_activity_run(
             {
                 "activity_run_id": "actrun-scale-plan-cancel",
                 "workspace_id": "default",
@@ -1327,7 +1830,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         )
         self.assertEqual(response["workflow_command"]["result"]["activity_run_cancelled_count"], 1)
         self.assertEqual(response["workflow_command"]["result"]["discovery_lane_cancelled_count"], 1)
-        cancelled_activity = self.store.get_workflow_activity_run(activity["activity_run_id"])
+        cancelled_activity = self.store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
         self.assertEqual(cancelled_activity["status"], "cancelled_before_discovery")
         self.assertEqual(cancelled_activity["phase"], "cancelled")
         cancelled_lane = self.store.repos.workflow_runtime.get_discovery_lane(lane["lane_id"])
@@ -1382,7 +1885,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "metadata": {"source_command_id": command["command_id"]},
             }
         )
-        activity = self.store.upsert_workflow_activity_run(
+        activity = self.store.repos.workflow_runtime.upsert_activity_run(
             {
                 "activity_run_id": "actrun-scale-plan-cancel-attempt",
                 "workspace_id": "default",
@@ -1397,7 +1900,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "idempotency_key": "workflow_activity:scale-plan-cancel-attempt",
             }
         )
-        self.store.upsert_workflow_activity_attempt(
+        self.store.repos.workflow_runtime.upsert_activity_attempt(
             {
                 "activity_run_id": activity["activity_run_id"],
                 "workflow_run_id": "wf-scale-plan-cancel-attempt",
@@ -2169,7 +2672,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "profile_urls": ["https://www.linkedin.com/in/ada-lovelace/"],
             },
         )
-        activity = self.store.upsert_workflow_activity_run(
+        activity = self.store.repos.workflow_runtime.upsert_activity_run(
             {
                 "activity_run_id": "actrun-profile-fetch-activity-cancel",
                 "workspace_id": "default",
@@ -2207,7 +2710,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             "profile_fetch_activity_before_cache_lookup_attempt",
         )
         self.assertEqual(response["workflow_command"]["result"]["activity_run_cancelled_count"], 1)
-        cancelled_activity = self.store.get_workflow_activity_run(activity["activity_run_id"])
+        cancelled_activity = self.store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
         self.assertEqual(cancelled_activity["status"], "cancelled_before_cache_lookup")
         self.assertEqual(cancelled_activity["phase"], "cancelled")
 
@@ -2244,7 +2747,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "profile_urls": ["https://www.linkedin.com/in/grace-hopper/"],
             },
         )
-        activity = self.store.upsert_workflow_activity_run(
+        activity = self.store.repos.workflow_runtime.upsert_activity_run(
             {
                 "activity_run_id": "actrun-profile-fetch-activity-cancel-blocked",
                 "workspace_id": "default",
@@ -2258,7 +2761,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "idempotency_key": "workflow_activity:profile-fetch-activity-cancel-blocked",
             }
         )
-        self.store.upsert_workflow_entity_delta(
+        self.store.repos.workflow_runtime.upsert_entity_delta(
             {
                 "workspace_id": "default",
                 "workflow_run_id": "wf-profile-fetch-activity-cancel-blocked",
@@ -2288,7 +2791,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(response["reason"], "profile_fetch_activity_cancel_blocked_after_cache_lookup_started")
         self.assertEqual(response["entity_delta_count"], 1)
         self.assertFalse(response["module_state_mutated"])
-        self.assertEqual(self.store.get_workflow_activity_run(activity["activity_run_id"])["status"], "running")
+        self.assertEqual(
+            self.store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])["status"], "running"
+        )
 
     def test_read_only_projection_action_creates_idempotent_operation_without_module_side_effects(self) -> None:
         first = self.writer.submit_action(
@@ -3609,17 +4114,19 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(result["status"], "ok")
             self.assertEqual(completed_command["status"], "succeeded")
             self.assertEqual(completed_command["result"]["activity_run_id"][:7], "actrun_")
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command["command_id"],
                 activity_type=EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
             self.assertEqual(activities[0]["entity_counts"]["exported_record_count"], 1)
-            attempts = api_store.list_workflow_activity_attempts(activity_run_id=activities[0]["activity_run_id"])
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
+                activity_run_id=activities[0]["activity_run_id"]
+            )
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "succeeded")
-            deltas = api_store.list_workflow_entity_deltas(
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 activity_run_id=activities[0]["activity_run_id"],
                 entity_type="projection_export",
@@ -3707,7 +4214,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     / "projection-export.zip"
                 ).exists()
             )
-            deltas = api_store.list_workflow_entity_deltas(
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 entity_type="projection_export",
             )
@@ -3779,17 +4286,19 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(result["status"], "ok")
             self.assertEqual(completed_command["status"], "succeeded")
             self.assertEqual(completed_command["result"]["activity_run_id"][:7], "actrun_")
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command["command_id"],
                 activity_type=EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
             self.assertEqual(activities[0]["entity_counts"]["exported_signal_count"], 2)
-            attempts = api_store.list_workflow_activity_attempts(activity_run_id=activities[0]["activity_run_id"])
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
+                activity_run_id=activities[0]["activity_run_id"]
+            )
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "succeeded")
-            deltas = api_store.list_workflow_entity_deltas(
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 activity_run_id=activities[0]["activity_run_id"],
                 entity_type="crm_public_web_export",
@@ -3889,17 +4398,19 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             completed_command = api_store.get_workflow_command(command["command_id"])
             self.assertEqual(completed_command["status"], "succeeded")
             self.assertEqual(completed_command["result"]["activity_run_id"][:7], "actrun_")
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command["command_id"],
                 activity_type=EXCEL_INTAKE_RUN_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
             self.assertEqual(activities[0]["phase"], "excel_intake_completed")
-            attempts = api_store.list_workflow_activity_attempts(activity_run_id=activities[0]["activity_run_id"])
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
+                activity_run_id=activities[0]["activity_run_id"]
+            )
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "succeeded")
-            deltas = api_store.list_workflow_entity_deltas(
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 activity_run_id=activities[0]["activity_run_id"],
                 entity_type="excel_intake_job",
@@ -3999,16 +4510,18 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             completed_command = api_store.get_workflow_command(command["command_id"])
             self.assertEqual(completed_command["status"], "cancelled")
             self.assertEqual(api_store.get_job("excel-job-running-cancel")["status"], "cancelled")
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command["command_id"],
                 activity_type=EXCEL_INTAKE_RUN_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "cancelled")
-            attempts = api_store.list_workflow_activity_attempts(activity_run_id=activities[0]["activity_run_id"])
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
+                activity_run_id=activities[0]["activity_run_id"]
+            )
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "cancelled")
-            deltas = api_store.list_workflow_entity_deltas(
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 activity_run_id=activities[0]["activity_run_id"],
                 entity_type="excel_intake_job",
@@ -4421,19 +4934,19 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 api_store.get_workflow_command(phase_commands[0]["command_id"])["status"],
                 "succeeded",
             )
-            phase_activities = api_store.list_workflow_activity_runs(
+            phase_activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=phase_commands[0]["command_id"],
                 activity_type="crm.public_web.search.submit",
             )
             self.assertEqual(len(phase_activities), 1)
             self.assertEqual(phase_activities[0]["status"], "succeeded")
             self.assertEqual(phase_activities[0]["owner"], "crm_public_web_owner")
-            phase_attempts = api_store.list_workflow_activity_attempts(
+            phase_attempts = api_store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=phase_activities[0]["activity_run_id"],
             )
             self.assertEqual(len(phase_attempts), 1)
             self.assertEqual(phase_attempts[0]["status"], "succeeded")
-            phase_deltas = api_store.list_workflow_entity_deltas(
+            phase_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=phase_commands[0]["command_id"],
                 activity_run_id=phase_activities[0]["activity_run_id"],
                 entity_type="crm_public_web_run",
@@ -4744,7 +5257,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             final_operation = api_store.repos.workflow_runtime.get_operation(operation_run_id)
             self.assertEqual(final_operation["status"], "completed")
             self.assertEqual(final_operation["progress"]["phase"], "workflow_command_succeeded")
-            phase_activities = api_store.list_workflow_activity_runs(
+            phase_activities = api_store.repos.workflow_runtime.list_activity_runs(
                 workflow_run_id=workflow_run_id,
                 limit=100,
             )
@@ -4763,11 +5276,11 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     CRM_PUBLIC_WEB_SIGNALS_MATERIALIZE_COMMAND_TYPE,
                 },
             )
-            document_deltas = api_store.list_workflow_entity_deltas(
+            document_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 workflow_run_id=workflow_run_id,
                 entity_type="public_web_document",
             )
-            signal_deltas = api_store.list_workflow_entity_deltas(
+            signal_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 workflow_run_id=workflow_run_id,
                 entity_type="public_web_signal",
             )
@@ -5037,7 +5550,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
             self.assertEqual(
                 len(
-                    api_store.list_workflow_activity_runs(
+                    api_store.repos.workflow_runtime.list_activity_runs(
                         workflow_run_id=workflow_run_id,
                         activity_type=CRM_PUBLIC_WEB_EVIDENCE_ADJUDICATE_COMMAND_TYPE,
                     )
@@ -5046,7 +5559,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
             self.assertEqual(
                 len(
-                    api_store.list_workflow_activity_runs(
+                    api_store.repos.workflow_runtime.list_activity_runs(
                         workflow_run_id=workflow_run_id,
                         activity_type=CRM_PUBLIC_WEB_SIGNALS_MATERIALIZE_COMMAND_TYPE,
                     )
@@ -5296,13 +5809,15 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 api_store.get_crm_public_web_run(run_id="run-public-web-running-cancel")["status"],
                 "cancelled",
             )
-            activities = api_store.list_workflow_activity_runs(command_id=command["command_id"])
+            activities = api_store.repos.workflow_runtime.list_activity_runs(command_id=command["command_id"])
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "cancelled")
-            attempts = api_store.list_workflow_activity_attempts(activity_run_id=activities[0]["activity_run_id"])
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
+                activity_run_id=activities[0]["activity_run_id"]
+            )
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "cancelled")
-            deltas = api_store.list_workflow_entity_deltas(
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 entity_type="crm_public_web_run",
             )
@@ -5377,13 +5892,13 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(deferred["reason"], "crm_public_web_remote_search_not_ready")
             self.assertEqual(waiting_command["status"], "retry_wait")
             self.assertEqual(waiting_command["result"]["reason"], "crm_public_web_remote_search_not_ready")
-            retry_activities = api_store.list_workflow_activity_runs(
+            retry_activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command["command_id"],
                 activity_type="crm.public_web.search.poll_fetch",
             )
             self.assertEqual(len(retry_activities), 1)
             self.assertEqual(retry_activities[0]["status"], "retry_wait")
-            retry_deltas = api_store.list_workflow_entity_deltas(
+            retry_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 activity_run_id=retry_activities[0]["activity_run_id"],
                 entity_type="crm_public_web_run",
@@ -5440,7 +5955,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(forced_resume["workflow_command"]["result"]["control_action"], "resume")
             self.assertEqual(forced_resume["workflow_command"]["result"]["resume_mode"], "owner_specific_requeue")
             self.assertEqual(forced_resume["operation_sync"]["status"], "skipped")
-            forced_deltas = api_store.list_workflow_entity_deltas(
+            forced_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=running_command["command_id"],
                 entity_type="crm_public_web_run",
             )
@@ -5483,7 +5998,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 documents_forced_resume["workflow_command"]["result"]["resume_mode"],
                 "owner_specific_requeue",
             )
-            documents_deltas = api_store.list_workflow_entity_deltas(
+            documents_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=documents_command["command_id"],
                 entity_type="crm_public_web_run",
             )
@@ -5694,7 +6209,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 payload={"activity_run_id": "actrun-provider-cancel", "provider": "harvest"},
                 max_attempts=6,
             )
-            activity = api_store.upsert_workflow_activity_run(
+            activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": "actrun-provider-cancel",
                     "workspace_id": "default",
@@ -5727,10 +6242,12 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 response["workflow_command"]["result"]["cancel_boundary"], "provider_attempt_before_activity_attempt"
             )
             self.assertEqual(response["workflow_command"]["result"]["activity_run_cancelled_count"], 1)
-            cancelled_activity = api_store.get_workflow_activity_run(activity["activity_run_id"])
+            cancelled_activity = api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
             self.assertEqual(cancelled_activity["status"], "cancelled_before_provider_attempt")
             self.assertEqual(cancelled_activity["phase"], "cancelled")
-            self.assertEqual(api_store.list_workflow_activity_attempts(activity_run_id=activity["activity_run_id"]), [])
+            self.assertEqual(
+                api_store.repos.workflow_runtime.list_activity_attempts(activity_run_id=activity["activity_run_id"]), []
+            )
         finally:
             api_store.close()
 
@@ -5770,7 +6287,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 payload={"activity_run_id": "actrun-provider-cancel-blocked", "provider": "harvest"},
                 max_attempts=6,
             )
-            activity = api_store.upsert_workflow_activity_run(
+            activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": "actrun-provider-cancel-blocked",
                     "workspace_id": "default",
@@ -5784,7 +6301,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "workflow_activity:provider-cancel-blocked",
                 }
             )
-            api_store.upsert_workflow_activity_attempt(
+            api_store.repos.workflow_runtime.upsert_activity_attempt(
                 {
                     "attempt_id": "actattempt-provider-cancel-blocked",
                     "workspace_id": "default",
@@ -5822,11 +6339,11 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
             self.assertFalse(response["module_state_mutated"])
             self.assertEqual(
-                api_store.get_workflow_activity_run(activity["activity_run_id"])["status"],
+                api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])["status"],
                 "cancelled_poll_stopped",
             )
             self.assertEqual(
-                api_store.get_workflow_activity_attempt("actattempt-provider-cancel-blocked")["status"],
+                api_store.repos.workflow_runtime.get_activity_attempt("actattempt-provider-cancel-blocked")["status"],
                 "cancelled_remote_ignored",
             )
         finally:
@@ -5868,7 +6385,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 payload={"activity_run_id": "actrun-provider-cancel-delta", "provider": "harvest"},
                 max_attempts=6,
             )
-            activity = api_store.upsert_workflow_activity_run(
+            activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": "actrun-provider-cancel-delta",
                     "workspace_id": "default",
@@ -5882,7 +6399,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "workflow_activity:provider-cancel-delta",
                 }
             )
-            api_store.upsert_workflow_activity_attempt(
+            api_store.repos.workflow_runtime.upsert_activity_attempt(
                 {
                     "attempt_id": "actattempt-provider-cancel-delta",
                     "workspace_id": "default",
@@ -5895,7 +6412,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "workflow_activity_attempt:provider-cancel-delta",
                 }
             )
-            api_store.upsert_workflow_entity_delta(
+            api_store.repos.workflow_runtime.upsert_entity_delta(
                 {
                     "workflow_run_id": "wf-provider-cancel-delta",
                     "operation_run_id": "op-provider-cancel-delta",
@@ -5922,9 +6439,11 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(response["activity_attempt_count"], 1)
             self.assertEqual(response["entity_delta_count"], 1)
             self.assertFalse(response["module_state_mutated"])
-            self.assertEqual(api_store.get_workflow_activity_run(activity["activity_run_id"])["status"], "running")
             self.assertEqual(
-                api_store.get_workflow_activity_attempt("actattempt-provider-cancel-delta")["status"],
+                api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])["status"], "running"
+            )
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_attempt("actattempt-provider-cancel-delta")["status"],
                 "running",
             )
         finally:
@@ -5973,7 +6492,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 progress={"phase": "operation_native_profile_provider_fetch_pending"},
                 idempotency_key="operation-native-profile-partial",
             )
-            activity = api_store.upsert_workflow_activity_run(
+            activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": activity_run_id,
                     "workspace_id": "default",
@@ -5995,7 +6514,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
             source_delta_ids: list[str] = []
             for profile_url in profile_urls:
-                delta = api_store.upsert_workflow_entity_delta(
+                delta = api_store.repos.workflow_runtime.upsert_entity_delta(
                     {
                         "workspace_id": "default",
                         "workflow_run_id": workflow_run_id,
@@ -6100,13 +6619,15 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(retry_commands[0]["payload"]["retry_wave_index"], 1)
             self.assertEqual(retry_commands[0]["max_attempts"], 1)
 
-            activity_after = api_store.get_workflow_activity_run(activity_run_id)
+            activity_after = api_store.repos.workflow_runtime.get_activity_run(activity_run_id)
             self.assertEqual(activity_after["status"], "partial_success")
             self.assertEqual(activity_after["phase"], "provider_profile_fetch_partial_retry_planned")
             self.assertEqual(activity_after["metadata"]["retry_wave_planned"], True)
-            attempts = api_store.list_workflow_activity_attempts(activity_run_id=activity_run_id)
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(activity_run_id=activity_run_id)
             self.assertEqual([attempt["status"] for attempt in attempts], ["partial_success"])
-            deltas = api_store.list_workflow_entity_deltas(activity_run_id=activity_run_id, entity_type="profile")
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
+                activity_run_id=activity_run_id, entity_type="profile"
+            )
             delta_kinds = {delta["delta_kind"] for delta in deltas}
             self.assertIn("profile_provider_fetched", delta_kinds)
             self.assertIn("profile_provider_retry_bucketed", delta_kinds)
@@ -6243,7 +6764,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
                 max_attempts=6,
             )
-            activity = api_store.upsert_workflow_activity_run(
+            activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": "actrun-domain-cancel",
                     "workspace_id": "default",
@@ -6278,7 +6799,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 response["workflow_command"]["result"]["cancel_boundary"], "domain_mutation_before_attempt"
             )
             self.assertEqual(response["workflow_command"]["result"]["activity_run_cancelled_count"], 1)
-            cancelled_activity = api_store.get_workflow_activity_run(activity["activity_run_id"])
+            cancelled_activity = api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
             self.assertEqual(cancelled_activity["status"], "cancelled_before_domain_mutation")
             self.assertEqual(cancelled_activity["phase"], "cancelled")
             self.assertEqual(
@@ -6327,7 +6848,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
                 max_attempts=6,
             )
-            activity = api_store.upsert_workflow_activity_run(
+            activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": "actrun-domain-cancel-blocked",
                     "workspace_id": "default",
@@ -6341,7 +6862,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "workflow_activity:domain-cancel-blocked",
                 }
             )
-            api_store.upsert_workflow_activity_attempt(
+            api_store.repos.workflow_runtime.upsert_activity_attempt(
                 {
                     "attempt_id": "actattempt-domain-cancel-blocked",
                     "workspace_id": "default",
@@ -6368,7 +6889,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(response["reason"], "domain_mutation_cancel_blocked_after_attempt_started")
             self.assertEqual(response["activity_attempt_count"], 1)
             self.assertFalse(response["module_state_mutated"])
-            self.assertEqual(api_store.get_workflow_activity_run(activity["activity_run_id"])["status"], "running")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])["status"], "running"
+            )
             self.assertEqual(
                 api_store.repos.serving_projection.count_person_search_index(
                     projection_id="proj-domain-cancel-blocked"
@@ -6812,7 +7335,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(succeeded["result"]["signal_entity_delta_count"], 1)
             self.assertEqual(succeeded["result"]["person_asset_sync_asset_count"], 1)
             self.assertEqual(succeeded["result"]["person_asset_sync_evidence_count"], 1)
-            signal_deltas = api_store.list_workflow_entity_deltas(
+            signal_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 entity_type="public_web_signal",
                 entity_key="signal-public-web-materialized-1",
@@ -6839,7 +7362,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(person_evidence[0]["evidence_type"], "email_candidate")
             self.assertEqual(person_evidence[0]["normalized_value"], "person@example.com")
             self.assertTrue(person_evidence[0]["publishable"])
-            evidence_deltas = api_store.list_workflow_entity_deltas(
+            evidence_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 entity_type="person_evidence",
                 entity_key=person_evidence[0]["evidence_id"],
@@ -7071,12 +7594,12 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(result["document_entity_delta_count"], 1)
             succeeded = api_store.get_workflow_command(command["command_id"])
             self.assertEqual(succeeded["result"]["document_entity_delta_count"], 1)
-            document_deltas = api_store.list_workflow_entity_deltas(
+            document_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 entity_type="public_web_document",
             )
             self.assertEqual(len(document_deltas), 1)
-            run_deltas = api_store.list_workflow_entity_deltas(
+            run_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 entity_type="crm_public_web_run",
             )
@@ -7451,7 +7974,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertFalse(terminal_scale_plan_command["result"]["provider_called"])
             self.assertFalse(terminal_scale_plan_command["result"]["queue_workflow_called"])
             self.assertFalse(terminal_scale_plan_command["result"]["legacy_job_shell_created"])
-            activity_runs = api_store.list_workflow_activity_runs(
+            activity_runs = api_store.repos.workflow_runtime.list_activity_runs(
                 acquisition_run_id=acquisition_run["acquisition_run_id"],
                 activity_type=LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
             )
@@ -7461,7 +7984,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(activity_runs[0]["command_id"], scale_plan_command["command_id"])
             self.assertEqual(activity_runs[0]["metadata"]["attempt_envelope_table"], "workflow_activity_attempts")
             self.assertEqual(
-                api_store.list_workflow_activity_attempts(activity_run_id=activity_runs[0]["activity_run_id"]),
+                api_store.repos.workflow_runtime.list_activity_attempts(
+                    activity_run_id=activity_runs[0]["activity_run_id"]
+                ),
                 [],
             )
             discovery_lanes = api_store.repos.workflow_runtime.list_discovery_lanes(
@@ -7604,7 +8129,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertFalse(profile_fetch_command["payload"]["queue_workflow_called"])
             self.assertFalse(profile_fetch_command["payload"]["normal_path_executes_legacy_profile_refill_owner"])
             self.assertNotIn("job_id", profile_fetch_command["payload"])
-            completed_activity = api_store.get_workflow_activity_run(activity_runs[0]["activity_run_id"])
+            completed_activity = api_store.repos.workflow_runtime.get_activity_run(activity_runs[0]["activity_run_id"])
             self.assertEqual(completed_activity["status"], "succeeded")
             self.assertEqual(completed_activity["phase"], "provider_discovery_completed")
             self.assertEqual(completed_activity["entity_counts"]["candidate_count"], 2)
@@ -7612,11 +8137,15 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(completed_lane["status"], "provider_discovery_completed")
             self.assertEqual(completed_lane["phase"], "provider_discovery_completed")
             self.assertEqual(completed_lane["entity_counts"]["profile_url_count"], 2)
-            attempts = api_store.list_workflow_activity_attempts(activity_run_id=activity_runs[0]["activity_run_id"])
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
+                activity_run_id=activity_runs[0]["activity_run_id"]
+            )
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "succeeded")
             self.assertEqual(attempts[0]["output"]["entry_count"], 2)
-            entity_deltas = api_store.list_workflow_entity_deltas(activity_run_id=activity_runs[0]["activity_run_id"])
+            entity_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
+                activity_run_id=activity_runs[0]["activity_run_id"]
+            )
             self.assertEqual(len(entity_deltas), 2)
             self.assertEqual({delta["entity_type"] for delta in entity_deltas}, {"candidate"})
             self.assertEqual({delta["delta_kind"] for delta in entity_deltas}, {"provider_discovered"})
@@ -7657,7 +8186,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertFalse(provider_fetch_command["payload"]["legacy_job_shell_created"])
             self.assertFalse(provider_fetch_command["payload"]["queue_workflow_called"])
             self.assertFalse(provider_fetch_command["payload"]["normal_path_executes_legacy_profile_refill_owner"])
-            profile_activities = api_store.list_workflow_activity_runs(
+            profile_activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=profile_fetch_command["command_id"],
                 activity_type=LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE,
             )
@@ -7668,13 +8197,13 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(profile_activities[0]["parent_activity_run_id"], activity_runs[0]["activity_run_id"])
             self.assertEqual(profile_activities[0]["entity_counts"]["profile_url_count"], 2)
             self.assertEqual(profile_activities[0]["entity_counts"]["fetch_required_count"], 2)
-            profile_attempts = api_store.list_workflow_activity_attempts(
+            profile_attempts = api_store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=profile_activities[0]["activity_run_id"],
             )
             self.assertEqual(len(profile_attempts), 1)
             self.assertEqual(profile_attempts[0]["status"], "succeeded")
             self.assertEqual(profile_attempts[0]["output"]["fetch_required_count"], 2)
-            profile_deltas = api_store.list_workflow_entity_deltas(
+            profile_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 activity_run_id=profile_activities[0]["activity_run_id"],
                 entity_type="profile",
             )
@@ -7728,16 +8257,18 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertFalse(terminal_admit_command["payload"]["legacy_job_shell_created"])
             self.assertFalse(terminal_admit_command["payload"]["queue_workflow_called"])
             self.assertFalse(terminal_admit_command["payload"]["normal_path_mutates_projection"])
-            final_profile_activity = api_store.get_workflow_activity_run(profile_activities[0]["activity_run_id"])
+            final_profile_activity = api_store.repos.workflow_runtime.get_activity_run(
+                profile_activities[0]["activity_run_id"]
+            )
             self.assertEqual(final_profile_activity["status"], "succeeded")
             self.assertEqual(final_profile_activity["phase"], "provider_profile_fetch_completed")
             self.assertEqual(final_profile_activity["entity_counts"]["provider_fetched_count"], 2)
-            final_profile_attempts = api_store.list_workflow_activity_attempts(
+            final_profile_attempts = api_store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=profile_activities[0]["activity_run_id"],
             )
             self.assertEqual(len(final_profile_attempts), 2)
             self.assertIn("linkedin_profile_detail", {attempt["provider"] for attempt in final_profile_attempts})
-            final_profile_deltas = api_store.list_workflow_entity_deltas(
+            final_profile_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 activity_run_id=profile_activities[0]["activity_run_id"],
                 entity_type="profile",
             )
@@ -7794,7 +8325,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertFalse(completed_terminal_command["result"]["queue_workflow_called"])
             self.assertFalse(completed_terminal_command["result"]["normal_path_mutates_projection"])
             self.assertEqual(completed_terminal_command["result"]["admitted_count"], 2)
-            terminal_deltas = api_store.list_workflow_entity_deltas(
+            terminal_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 entity_type="profile",
                 activity_run_id=completed_terminal_command["result"]["activity_run_id"],
             )
@@ -7859,7 +8390,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 completed_projection_command["workflow_run_id"]
             )
             self.assertEqual(run_projection_link["projection_id"], projection_id)
-            projection_member_deltas = api_store.list_workflow_entity_deltas(
+            projection_member_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 activity_run_id=completed_projection_command["result"]["activity_run_id"],
                 entity_type="projection_member",
             )
@@ -7882,13 +8413,13 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
             self.assertEqual(completed_index_command["status"], "succeeded")
             self.assertEqual(completed_index_command["result"]["activity_run_id"][:7], "actrun_")
-            index_activities = api_store.list_workflow_activity_runs(
+            index_activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=completed_index_command["command_id"],
                 activity_type=PROJECTION_PERSON_SEARCH_INDEX_BUILD_COMMAND_TYPE,
             )
             self.assertEqual(len(index_activities), 1)
             self.assertEqual(index_activities[0]["status"], "succeeded")
-            index_deltas = api_store.list_workflow_entity_deltas(
+            index_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=completed_index_command["command_id"],
                 entity_type="projection_index",
             )
@@ -7902,13 +8433,13 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
             self.assertEqual(completed_collection_command["status"], "succeeded")
             self.assertEqual(completed_collection_command["result"]["activity_run_id"][:7], "actrun_")
-            collection_activities = api_store.list_workflow_activity_runs(
+            collection_activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=completed_collection_command["command_id"],
                 activity_type=COLLECTION_AUTHORITATIVE_MERGE_COMMAND_TYPE,
             )
             self.assertEqual(len(collection_activities), 1)
             self.assertEqual(collection_activities[0]["status"], "succeeded")
-            collection_deltas = api_store.list_workflow_entity_deltas(
+            collection_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=completed_collection_command["command_id"],
                 entity_type="collection_projection",
             )
@@ -8056,19 +8587,19 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(stored_command["status"], "succeeded")
             self.assertEqual(stored_command["result"]["activity_run_id"][:7], "actrun_")
             self.assertTrue(stored_command["result"]["entity_delta_id"].startswith("entitydelta_"))
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command["command_id"],
                 activity_type=PROJECTION_RUN_SCOPE_FINALIZE_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
             self.assertEqual(activities[0]["phase"], "unit_test_projection_published")
-            attempts = api_store.list_workflow_activity_attempts(
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=activities[0]["activity_run_id"],
             )
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "succeeded")
-            deltas = api_store.list_workflow_entity_deltas(
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 entity_type="run_scope_projection",
             )
@@ -8160,18 +8691,18 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(stored_command["status"], "succeeded")
             self.assertEqual(stored_command["result"]["activity_run_id"][:7], "actrun_")
             self.assertTrue(stored_command["result"]["entity_delta_id"].startswith("entitydelta_"))
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command["command_id"],
                 activity_type=PROJECTION_FACET_LAYERING_BUILD_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
-            attempts = api_store.list_workflow_activity_attempts(
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=activities[0]["activity_run_id"],
             )
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "succeeded")
-            deltas = api_store.list_workflow_entity_deltas(
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 entity_type="facet_layering",
             )
@@ -8250,19 +8781,19 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(stored_command["status"], "succeeded")
             self.assertEqual(stored_command["result"]["activity_run_id"][:7], "actrun_")
             self.assertTrue(stored_command["result"]["entity_delta_id"].startswith("entitydelta_"))
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command["command_id"],
                 activity_type=SNAPSHOT_COMPACTION_RUN_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
             self.assertEqual(activities[0]["entity_counts"]["candidate_count"], 17)
-            attempts = api_store.list_workflow_activity_attempts(
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=activities[0]["activity_run_id"],
             )
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "succeeded")
-            deltas = api_store.list_workflow_entity_deltas(
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 entity_type="snapshot_compaction",
             )
@@ -8339,18 +8870,18 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(stored_command["status"], "succeeded")
             self.assertEqual(stored_command["result"]["activity_run_id"][:7], "actrun_")
             self.assertTrue(stored_command["result"]["entity_delta_id"].startswith("entitydelta_"))
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command["command_id"],
                 activity_type=PROJECTION_BOARD_VISIBLE_PATCH_PUBLISH_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
-            attempts = api_store.list_workflow_activity_attempts(
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=activities[0]["activity_run_id"],
             )
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "succeeded")
-            deltas = api_store.list_workflow_entity_deltas(
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 entity_type="board_visible_patch",
             )
@@ -8431,18 +8962,18 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(stored_command["status"], "succeeded")
             self.assertEqual(stored_command["result"]["activity_run_id"][:7], "actrun_")
             self.assertTrue(stored_command["result"]["entity_delta_id"].startswith("entitydelta_"))
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command["command_id"],
                 activity_type=LINKEDIN_LOCAL_PROFILE_DELTA_APPLY_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
-            attempts = api_store.list_workflow_activity_attempts(
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=activities[0]["activity_run_id"],
             )
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "succeeded")
-            deltas = api_store.list_workflow_entity_deltas(
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 entity_type="local_profile_delta",
             )
@@ -8533,20 +9064,20 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(stored_command["status"], "succeeded")
             self.assertEqual(stored_command["result"]["activity_run_id"][:7], "actrun_")
             self.assertEqual(stored_command["result"]["entity_delta_count"], 2)
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command["command_id"],
                 activity_type=LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
             self.assertEqual(activities[0]["entity_counts"]["queued_url_count"], 2)
-            attempts = api_store.list_workflow_activity_attempts(
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=activities[0]["activity_run_id"],
             )
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "succeeded")
             self.assertEqual(attempts[0]["provider"], "harvest_profile")
-            deltas = api_store.list_workflow_entity_deltas(
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 entity_type="profile_refill_submit",
             )
@@ -8635,19 +9166,19 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(stored_command["status"], "succeeded")
             self.assertEqual(stored_command["result"]["activity_run_id"][:7], "actrun_")
             self.assertEqual(stored_command["result"]["entity_delta_count"], 2)
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command["command_id"],
                 activity_type=LINKEDIN_PROFILE_URL_TERMINAL_RECORD_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
             self.assertEqual(activities[0]["entity_counts"]["recorded_count"], 2)
-            attempts = api_store.list_workflow_activity_attempts(
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(
                 activity_run_id=activities[0]["activity_run_id"],
             )
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "succeeded")
-            deltas = api_store.list_workflow_entity_deltas(
+            deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command["command_id"],
                 entity_type="profile_url_terminal_record",
             )
@@ -8834,17 +9365,17 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             command_after_owner = api_store.get_workflow_command(dispatched["workflow_command"]["command_id"])
             activity_run_id = command_after_owner["result"]["activity_run_id"]
             self.assertTrue(activity_run_id.startswith("actrun_"))
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command_after_owner["command_id"],
                 activity_type=CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
             self.assertEqual(activities[0]["entity_counts"]["crm_record_count"], 1)
-            attempts = api_store.list_workflow_activity_attempts(activity_run_id=activity_run_id)
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(activity_run_id=activity_run_id)
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "succeeded")
-            crm_record_deltas = api_store.list_workflow_entity_deltas(
+            crm_record_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command_after_owner["command_id"],
                 activity_run_id=activity_run_id,
                 entity_type="crm_record",
@@ -8993,17 +9524,17 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             command_after_owner = api_store.get_workflow_command(planned["workflow_command"]["command_id"])
             activity_run_id = command_after_owner["result"]["activity_run_id"]
             self.assertTrue(activity_run_id.startswith("actrun_"))
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command_after_owner["command_id"],
                 activity_type=CRM_TASK_CREATE_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
             self.assertEqual(activities[0]["entity_counts"]["crm_task_count"], 1)
-            attempts = api_store.list_workflow_activity_attempts(activity_run_id=activity_run_id)
+            attempts = api_store.repos.workflow_runtime.list_activity_attempts(activity_run_id=activity_run_id)
             self.assertEqual(len(attempts), 1)
             self.assertEqual(attempts[0]["status"], "succeeded")
-            task_deltas = api_store.list_workflow_entity_deltas(
+            task_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command_after_owner["command_id"],
                 activity_run_id=activity_run_id,
                 entity_type="crm_task",
@@ -9148,7 +9679,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
                 max_attempts=6,
             )
-            activity = api_store.upsert_workflow_activity_run(
+            activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": "actrun-crm-writer-cancel",
                     "workspace_id": "default",
@@ -9181,7 +9712,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 response["workflow_command"]["result"]["cancel_boundary"], "crm_writer_before_mutation_attempt"
             )
             self.assertEqual(response["workflow_command"]["result"]["activity_run_cancelled_count"], 1)
-            cancelled_activity = api_store.get_workflow_activity_run(activity["activity_run_id"])
+            cancelled_activity = api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
             self.assertEqual(cancelled_activity["status"], "cancelled_before_crm_mutation")
             self.assertEqual(cancelled_activity["phase"], "cancelled")
             self.assertEqual(api_store.list_crm_tasks(crm_record_id=record["crm_record_id"]), [])
@@ -9233,7 +9764,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
                 max_attempts=6,
             )
-            activity = api_store.upsert_workflow_activity_run(
+            activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": "actrun-crm-writer-cancel-blocked",
                     "workspace_id": "default",
@@ -9247,7 +9778,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "workflow_activity:crm-writer-cancel-blocked",
                 }
             )
-            api_store.upsert_workflow_activity_attempt(
+            api_store.repos.workflow_runtime.upsert_activity_attempt(
                 {
                     "attempt_id": "actattempt-crm-writer-cancel-blocked",
                     "workspace_id": "default",
@@ -9272,7 +9803,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(response["reason"], "crm_writer_cancel_blocked_after_mutation_attempt_started")
             self.assertEqual(response["activity_attempt_count"], 1)
             self.assertFalse(response["module_state_mutated"])
-            self.assertEqual(api_store.get_workflow_activity_run(activity["activity_run_id"])["status"], "running")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])["status"], "running"
+            )
             self.assertEqual(api_store.list_crm_tasks(crm_record_id=record["crm_record_id"]), [])
         finally:
             api_store.close()
@@ -9420,19 +9953,19 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 command_after_owner["result"]["activity_spine_contract"], "command_activity_attempt_entity_delta_v1"
             )
             activity_run_id = command_after_owner["result"]["activity_run_id"]
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=command_after_owner["command_id"],
                 activity_type=COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
             self.assertEqual(activities[0]["entity_counts"]["company_asset_count"], 1)
-            run_deltas = api_store.list_workflow_entity_deltas(
+            run_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command_after_owner["command_id"],
                 activity_run_id=activity_run_id,
                 entity_type="company_public_web_run",
             )
-            asset_deltas = api_store.list_workflow_entity_deltas(
+            asset_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=command_after_owner["command_id"],
                 activity_run_id=activity_run_id,
                 entity_type="company_asset",
@@ -9565,7 +10098,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
                 max_attempts=6,
             )
-            activity = api_store.upsert_workflow_activity_run(
+            activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": "actrun-company-public-web-source-cancel",
                     "workspace_id": "default",
@@ -9598,7 +10131,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 response["workflow_command"]["result"]["cancel_boundary"], "provider_attempt_before_activity_attempt"
             )
             self.assertEqual(response["workflow_command"]["result"]["activity_run_cancelled_count"], 1)
-            cancelled_activity = api_store.get_workflow_activity_run(activity["activity_run_id"])
+            cancelled_activity = api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
             self.assertEqual(cancelled_activity["status"], "cancelled_before_provider_attempt")
             self.assertEqual(cancelled_activity["phase"], "cancelled")
             self.assertEqual(api_store.list_company_assets(company_key="openai"), [])
@@ -9727,7 +10260,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
                 max_attempts=6,
             )
-            activity = api_store.upsert_workflow_activity_run(
+            activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": "actrun-company-public-web-materialize-cancel",
                     "workspace_id": "default",
@@ -9761,7 +10294,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "company_public_web_assets_materialize_before_sync",
             )
             self.assertEqual(response["workflow_command"]["result"]["activity_run_cancelled_count"], 1)
-            cancelled_activity = api_store.get_workflow_activity_run(activity["activity_run_id"])
+            cancelled_activity = api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
             self.assertEqual(cancelled_activity["status"], "cancelled_before_company_asset_sync")
             self.assertEqual(cancelled_activity["phase"], "cancelled")
             self.assertEqual(api_store.list_company_assets(company_key="openai"), [])
@@ -9808,7 +10341,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
                 max_attempts=6,
             )
-            activity = api_store.upsert_workflow_activity_run(
+            activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": "actrun-company-public-web-materialize-cancel-blocked",
                     "workspace_id": "default",
@@ -9822,7 +10355,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "workflow_activity:company-public-web-materialize-cancel-blocked",
                 }
             )
-            api_store.upsert_workflow_activity_attempt(
+            api_store.repos.workflow_runtime.upsert_activity_attempt(
                 {
                     "attempt_id": "actattempt-company-public-web-materialize-cancel-blocked",
                     "workspace_id": "default",
@@ -9850,7 +10383,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
             self.assertEqual(response["activity_attempt_count"], 1)
             self.assertFalse(response["module_state_mutated"])
-            self.assertEqual(api_store.get_workflow_activity_run(activity["activity_run_id"])["status"], "running")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])["status"], "running"
+            )
             self.assertEqual(api_store.list_company_assets(company_key="openai"), [])
         finally:
             api_store.close()
@@ -9974,18 +10509,18 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(
                 person_after["result"]["activity_spine_contract"], "command_activity_attempt_entity_delta_v1"
             )
-            activities = api_store.list_workflow_activity_runs(
+            activities = api_store.repos.workflow_runtime.list_activity_runs(
                 command_id=person_command["command_id"],
                 activity_type=MEDIA_ASSET_CACHE_COMMAND_TYPE,
             )
             self.assertEqual(len(activities), 1)
             self.assertEqual(activities[0]["status"], "succeeded")
-            person_deltas = api_store.list_workflow_entity_deltas(
+            person_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=person_command["command_id"],
                 activity_run_id=activities[0]["activity_run_id"],
                 entity_type="person_asset",
             )
-            company_deltas = api_store.list_workflow_entity_deltas(
+            company_deltas = api_store.repos.workflow_runtime.list_entity_deltas(
                 command_id=company_command["command_id"],
                 entity_type="company_asset",
             )
@@ -10123,7 +10658,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
                 max_attempts=6,
             )
-            activity = api_store.upsert_workflow_activity_run(
+            activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": "actrun-media-cache-cancel",
                     "workspace_id": "default",
@@ -10157,7 +10692,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "media_asset_cache_before_fetch_upload_attempt",
             )
             self.assertEqual(response["workflow_command"]["result"]["activity_run_cancelled_count"], 1)
-            cancelled_activity = api_store.get_workflow_activity_run(activity["activity_run_id"])
+            cancelled_activity = api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])
             self.assertEqual(cancelled_activity["status"], "cancelled_before_fetch_upload")
             self.assertEqual(cancelled_activity["phase"], "cancelled")
             self.assertEqual(
@@ -10211,7 +10746,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
                 max_attempts=6,
             )
-            activity = api_store.upsert_workflow_activity_run(
+            activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": "actrun-media-cache-cancel-blocked",
                     "workspace_id": "default",
@@ -10225,7 +10760,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "workflow_activity:media-cache-cancel-blocked",
                 }
             )
-            api_store.upsert_workflow_activity_attempt(
+            api_store.repos.workflow_runtime.upsert_activity_attempt(
                 {
                     "attempt_id": "actattempt-media-cache-cancel-blocked",
                     "workspace_id": "default",
@@ -10250,7 +10785,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(response["reason"], "media_asset_cache_cancel_blocked_after_fetch_upload_attempt_started")
             self.assertEqual(response["activity_attempt_count"], 1)
             self.assertFalse(response["module_state_mutated"])
-            self.assertEqual(api_store.get_workflow_activity_run(activity["activity_run_id"])["status"], "running")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_activity_run(activity["activity_run_id"])["status"], "running"
+            )
             self.assertEqual(
                 api_store.list_person_assets(
                     person_identity_key="linkedin:media-cache-cancel-blocked",
@@ -10858,7 +11395,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 retryable=True,
             )
 
-            api_activity = api_store.upsert_workflow_activity_run(
+            api_activity = api_store.repos.workflow_runtime.upsert_activity_run(
                 {
                     "activity_run_id": "actrun_api",
                     "workflow_run_id": "wf-api-activity",
@@ -10871,7 +11408,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "activity:api",
                 }
             )
-            api_attempt = api_store.upsert_workflow_activity_attempt(
+            api_attempt = api_store.repos.workflow_runtime.upsert_activity_attempt(
                 {
                     "attempt_id": "actattempt_api",
                     "activity_run_id": api_activity["activity_run_id"],
@@ -10882,7 +11419,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "activity_attempt:api",
                 }
             )
-            api_delta = api_store.upsert_workflow_entity_delta(
+            api_delta = api_store.repos.workflow_runtime.upsert_entity_delta(
                 {
                     "delta_id": "entitydelta_api",
                     "workflow_run_id": api_activity["workflow_run_id"],

@@ -885,3 +885,47 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     原语不等于跨表 cancel UoW；plan-commit、scale-plan、profile-fetch 三条 module-state→command 部分提交窗口单列
     R-020。下一分子批为 ②.4c activity spine + R-020 fixed-forward。D-1/D-2/D-3 截止仍为 **2026-07-31**；
     R-021 已登记 pinned `a1c2a99..d6e1e2a` 异步 Codex review，只冻结本 scope 的 live/W6/manual/里程碑签收。
+
+- **2026-07-13 ②.4c 完成 —— workflow_runtime activity spine 退役到 `store.repos.workflow_runtime`，R-020 有界闭环**:
+  - **范围/Scout/删除**:`workflow_activity_runs`、`workflow_activity_attempts`、`workflow_entity_deltas` 三表，
+    9 个原 Store public(upsert/get/list 三组) + 3 个 mapper 整体迁为 Repository 域内短名；旧 facade、mapper 与
+    3 个 descriptor dispatch key 同批删除，不留双轨。`storage.py` **12,564 → 12,190**(-374)，workflow repository
+    **1,436 → 1,938** 行。`workflow_commands` 仍按既定顺序留到本域最后一批，本批只增加下述固定 cancel UoW，
+    未把 command CRUD 越界合批。
+  - **调用面**:旧 Store receiver **299 → 0**；production **165 / 7 files**(orchestrator 101、profile-fetch owner 34、
+    enrichment 11、acquisition owner 5、command kernel 5、CRM Public Web owner 5、Excel intake owner 4)，tests
+    **134**，全部机械切到 `store.repos.workflow_runtime` 的短名方法。`tests/test_enrichment.py` 的 duck-typed fake
+    同步补 `repos.workflow_runtime` namespace；API 中同名 HTTP handler 保留，receiver-aware guard 不把它们误判为退役 facade。
+    质量清单 **53 → 57 files**。
+  - **A/B + 变异**:删除前真实 PG old/new battery 覆盖三表 write/get/list、默认 id/status、malformed JSON、tuple/list、
+    空 workspace、status/filter/order/limit/offset 与 raw dump，首跑 **3 passed**；把 activity-run list 排序从
+    `updated_at DESC` 受控变为 ASC 后为 **1 failed / 2 passed**，恢复后重新 **3 passed**。同一 frozen runner 在
+    pinned `af50f45` 旧 Store 与新 Repository 的组合快照均为 **14,680 bytes**，SHA-256
+    `7fc2308e29117071d72bac119f0cb4ca767e8796dd7648e6883975a6954ee44f`；临时件与 pinned worktree 均已删除。
+  - **共享 identity/terminal/write-once 原语**:②.4b 的 acquisition 双表原语泛化为 allowlist 驱动的
+    `upsert_workflow_runtime_identity_row`，五表统一验证 table/id/immutable/terminal/write-once 配置握手，并继续按
+    PK + `(workspace_id,idempotency_key)` 确定序 advisory lock 和 candidate row lock 防交叉身份碰撞。ActivityRun/
+    ActivityAttempt 的 immutable owner 字段 fail-closed、JSON object patch 锁内 merge、terminal stale writer 只读返回
+    committed row；EntityDelta 明确为 write-once effect evidence，exact replay 返回原行，不允许后写改写事实。
+  - **R-020 fixed-forward**:新增单一固定业务 UoW `cancel_acquisition_owner_command`，只接受三种 adapter-owned
+    cancel kind(plan-commit before probe、scale-plan before discovery、profile-fetch before cache lookup)。事务按
+    command → acquisition run → activity/lane → attempt/delta/downstream 的确定顺序锁定并验证 owner/type/workspace/
+    causality、lease、terminal winner 与 effect 空集；随后一次提交 run/activity/lane 和 command cancellation。
+    公开结果为 `applied` / `repaired` / `already_applied` / `blocked` / `conflict` / `not_found`，并携带 committed rows
+    与 blocker counts。相同 actor/reason/force 的 exact replay 不改时间戳；legacy partial target 可在同事务 repair；
+    fault 或 identity collision 整笔 rollback。三条 owner handler 已改为只按该 committed outcome 对外报告成功，R-020
+    的“module rows 已改但 command CAS/进程失败”窗口至此关闭。
+  - **永久守卫/验证**:storage surface guards **43 passed**，跨文件 contract guards **14 passed**，handler/spec
+    精确组 **25 passed**，R-020 + identity/terminal/write-once 真实 PG battery **12 passed**，完整
+    `test_operation_runtime.py`（含 corrupt-identity case）**127 passed**；positional bulk-write guard **3 passed**，
+    违规点保持 0。`make lint` **57 files** 全绿，mypy 保持 R-011 基线 **87 errors / 4 files**。最终
+    `make ci-pre-agent-contract` 为 **305 passed / 0 skip** + 后续门 **2/11/1/2 passed**，
+    `dry_run_ready failures=[]`。旧 receiver 299→0、质量目标 53→57 已静态复核；未运行 full
+    `test_pipeline.py`、W6 或 manual signoff。
+  - **边界/接续**:本 UoW 关闭的是“既有已锁 rows + workflow command”的同事务取消，不提供 command generation/
+    lease-token ownership fence；提交后 stale owner 仍可能尝试新建 phantom downstream child/ActivityAttempt，且 linked
+    OperationRun/AgentAction 的 post-commit sync 仍在事务外，二者继续由 **R-019** 跟踪，不得把 R-020 closed 解释为
+    acquisition 全链原子化。owner 已轮换 Apify Token/API Keys，当前版本未配置可用新凭据且未授权本批 live，故
+    live provider 验证显式延期；
+    provider simulation、local PG 与非 live 合同开发继续，不受异步 review 阻断。下一分子批为 workflow_runtime
+    read-model trio，settle 后按 scope-local async Codex lane 登记评审。D-1/D-2/D-3 截止仍为 **2026-07-31**。
