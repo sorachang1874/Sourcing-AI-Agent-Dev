@@ -103,7 +103,9 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
   三方消费同一份；schema 版本+digest 作为不可变 pin 落 durable 对象。
 - serve 的是 **`agent_tool_enabled` 子集**而非 ActionRegistry 全集（v2 修正）：schema 在 +
   dispatch adapter 在（dispatch 集合从 registry 派生，替换 `orchestrator.py:47091-47096` 的硬编码
-  字面集合）+ activity-spine/agent_callable 校验过 + simulate dispatch preflight 通过。当前
+  字面集合）+ activity-spine/agent_callable 校验过 + **已注册 revisioned `model_safe_result_schema`
+  在位（R7#10 同步 D0 谓词第 4 条）** + simulate dispatch preflight（含行使 model-safe 序列化器）
+  通过。当前
   `plan_acquisition`/`promote_person_assertion`/`external_intake` 均不可 dispatch（12/15），不 serve。
 - 守卫改为语义断言（v2 修正 v1 的空断言）：对每个 served command 断言
   `activity_spine_policy.requirement != legacy-internal` 且 `agent_callable`（复用注册期校验）。
@@ -214,8 +216,18 @@ plan review 对话化；intent→plan 前门流式化（依赖 D0+C4）；`model
 实施批 characterize-first + A/B + 变异自检 + per-batch gate 的处置对象。
 **owner 裁定（2026-07-13）**：Track D plan 不阻塞 Codex（瓶颈在其 Track C 执行），继续打磨而非
 exception 收官；同时要求方法论化解决逐层下潜问题。→ v6 起启用
-`docs/DESIGN_INVARIANT_CHECKLIST.md`（九类不变量，从五轮 findings 蒸馏）：作者先做机制×不变量
-全深度自查，评审改 checklist 驱动单遍扫描；终止规则见该文 §2.3。
+`docs/DESIGN_INVARIANT_CHECKLIST.md`（v2 十类）：作者先做机制×不变量全深度自查，评审改
+checklist 驱动单遍扫描；终止规则见该文 §2.3。
+
+**round-7 状态（artifact `20260713T151524Z_*`，NO-GO 9 阻断 + 2 非阻断 re-raise）与下一迭代
+工作清单**：机制类 4 条——R7#1 多工具重试等价与子 action 身份（结果槽多 call 语义补
+per-call 子槽或集合级重试等价）、R7#2 `identity_result.apply` 的 runtime_namespace 隔离传播、
+R7#3 非授权 phase 结果（needs_human_budget 等）的 durable 事件→reducer 路由补全、R7#4 不完整
+manifest 如何产生 needs_human 终态的机制（缺席兄弟候选时由谁写 needs_human——应为 record 命令
+的 manifest-incomplete 分支）；簿记类 5 条——R7#5 矩阵/计划的 request-schema 过时格重生成、
+R7#6 `human_transition_pending` 补进矩阵机制清单、R7#7/#8 已修（清单 v2 十列自指 + 过时格
+规则）、R7#9 义务稳定 ID 化并映射计划 §6、R7#10 已修（计划谓词同步）。下一迭代 = 修 4 机制项
+→ 矩阵重生成（含新机制行 + 义务 ID）→ round 8。
 
 ## 6. 实施批义务清单（round-4 校准裁定：非设计阻断，随各实施批执行并逐条验收）
 
