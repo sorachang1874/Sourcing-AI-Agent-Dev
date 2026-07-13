@@ -92,8 +92,10 @@
   超时用 `REVIEW_TIMEOUT_SECONDS=1800`。
 - [ ] ModelClient 升级：streaming + tool-calling（现有 14 个单发方法、阻塞 requests、无流式）。
 - [x] D0b characterize-first（2026-07-14）：新增语义 AST + synthetic transport 回归，冻结 `ModelClient`
-  14+3 签名、5 个 concrete surface/六方法 scripted-live delegation、24 个消费模块/27 个调用点及 chat /
-  responses / Qwen 三种现有 wire shape；零产品码、零网络、零 provider/model，formal review pending。
+  14+3 签名（含 sync/async + decorator）、自动发现的 5 个 concrete surface/factory return parity、全 17 方法
+  runtime spy 下的六方法 scripted-live delegation、25 个消费模块/29 个调用点及 chat / responses / Qwen 三种
+  完整现有 wire shape；零产品码、零网络、零 provider/model。首轮 pinned review `NO-GO` 后 fixed-forward 已完成，
+  复评 pending。
 - [x] D0 usage type 收敛门（2026-07-14）：`model_usage.py::ModelUsage` 现为无 transport/env/settings 依赖的
   单一五字段 immutable value owner，`model_provider.py` 与 `model_tool_runtime.py` 导入同一 class；
   `OpenAIModelUsage` 仅保留 object-identical compatibility alias，临时 runtime 类型及其 export/生产引用均已

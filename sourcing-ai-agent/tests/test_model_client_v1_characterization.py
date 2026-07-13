@@ -10,10 +10,9 @@ from unittest.mock import patch
 import pytest
 
 import sourcing_agent.model_provider as model_provider_module
+from sourcing_agent.domain import JobRequest
 from sourcing_agent.model_provider import (
     CRM_PUBLIC_WEB_PRODUCT_MODEL,
-    DeterministicModelClient,
-    OfflineModelClient,
     OpenAICompatibleChatModelClient,
     OpenAIModelCallResult,
     OpenAIModelUsage,
@@ -28,29 +27,41 @@ SOURCE_ROOT = REPO_ROOT / "src" / "sourcing_agent"
 MODEL_PROVIDER_PATH = SOURCE_ROOT / "model_provider.py"
 
 
-PROTOCOL_SIGNATURES = {
-    "summarize": "(self, request: JobRequest, matches: list[dict], total_matches: int) -> str",
-    "normalize_request": "(self, payload: dict[str, Any]) -> dict[str, Any]",
-    "normalize_spreadsheet_contacts": "(self, payload: dict[str, Any]) -> dict[str, Any]",
-    "normalize_review_instruction": "(self, payload: dict[str, Any]) -> dict[str, Any]",
-    "normalize_refinement_instruction": "(self, payload: dict[str, Any]) -> dict[str, Any]",
-    "interpret_intent": "(self, request: JobRequest, draft_plan: dict[str, Any]) -> str",
-    "draft_intent_brief": "(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]",
-    "plan_search_strategy": "(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]",
-    "analyze_page_asset": "(self, payload: dict[str, Any]) -> dict[str, Any]",
-    "analyze_public_web_candidate_signals": "(self, payload: dict[str, Any]) -> dict[str, Any]",
-    "judge_company_equivalence": "(self, payload: dict[str, Any]) -> dict[str, Any]",
-    "judge_profile_membership": "(self, payload: dict[str, Any]) -> dict[str, Any]",
-    "synthesize_manual_review": "(self, payload: dict[str, Any]) -> dict[str, Any]",
-    "evaluate_outreach_profile": "(self, payload: dict[str, Any]) -> dict[str, Any]",
-    "provider_name": "(self) -> str",
-    "supports_outreach_ai_verification": "(self) -> bool",
-    "healthcheck": "(self) -> dict[str, Any]",
+PROTOCOL_METHOD_CONTRACTS = {
+    "summarize": ("sync", "(self, request: JobRequest, matches: list[dict], total_matches: int) -> str", ()),
+    "normalize_request": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
+    "normalize_spreadsheet_contacts": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
+    "normalize_review_instruction": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
+    "normalize_refinement_instruction": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
+    "interpret_intent": ("sync", "(self, request: JobRequest, draft_plan: dict[str, Any]) -> str", ()),
+    "draft_intent_brief": (
+        "sync",
+        "(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]",
+        (),
+    ),
+    "plan_search_strategy": (
+        "sync",
+        "(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]",
+        (),
+    ),
+    "analyze_page_asset": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
+    "analyze_public_web_candidate_signals": (
+        "sync",
+        "(self, payload: dict[str, Any]) -> dict[str, Any]",
+        (),
+    ),
+    "judge_company_equivalence": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
+    "judge_profile_membership": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
+    "synthesize_manual_review": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
+    "evaluate_outreach_profile": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
+    "provider_name": ("sync", "(self) -> str", ()),
+    "supports_outreach_ai_verification": ("sync", "(self) -> bool", ()),
+    "healthcheck": ("sync", "(self) -> dict[str, Any]", ()),
 }
 
 
 CONCRETE_PROTOCOL_OVERRIDES = {
-    "DeterministicModelClient": frozenset(PROTOCOL_SIGNATURES),
+    "DeterministicModelClient": frozenset(PROTOCOL_METHOD_CONTRACTS),
     "OfflineModelClient": frozenset({"provider_name", "healthcheck"}),
     "ScriptedLivePlanningModelClient": frozenset(
         {
@@ -65,8 +76,8 @@ CONCRETE_PROTOCOL_OVERRIDES = {
             "healthcheck",
         }
     ),
-    "QwenResponsesModelClient": frozenset(PROTOCOL_SIGNATURES),
-    "OpenAICompatibleChatModelClient": frozenset(PROTOCOL_SIGNATURES),
+    "QwenResponsesModelClient": frozenset(PROTOCOL_METHOD_CONTRACTS),
+    "OpenAICompatibleChatModelClient": frozenset(PROTOCOL_METHOD_CONTRACTS),
 }
 
 
@@ -85,6 +96,7 @@ SCRIPTED_LIVE_DELEGATED_METHODS = frozenset(
 MODEL_CLIENT_CONSUMER_MODULES = frozenset(
     {
         "acquisition.py",
+        "asset_reuse_audit.py",
         "cli.py",
         "company_asset_completion.py",
         "company_asset_supplement.py",
@@ -126,10 +138,10 @@ MODEL_CLIENT_CALL_POINTS = Counter(
         ("orchestrator.py", "_prepare_request_payload_with_diagnostics", "normalize_request"): 1,
         ("orchestrator.py", "_run_outreach_layering_after_acquisition", "supports_outreach_ai_verification"): 1,
         ("orchestrator.py", "_execute_retrieval", "provider_name"): 1,
-        ("orchestrator.py", "_execute_retrieval", "summarize"): 1,
+        ("orchestrator.py", "_execute_retrieval", "summarize"): 2,
         ("orchestrator.py", "_persist_criteria_artifacts", "provider_name"): 1,
         ("outreach_layering.py", "_evaluate_candidate_with_model", "evaluate_outreach_profile"): 1,
-        ("planning.py", "build_sourcing_plan", "interpret_intent"): 1,
+        ("planning.py", "build_sourcing_plan", "interpret_intent"): 2,
         ("planning.py", "_build_intent_brief", "draft_intent_brief"): 1,
         ("post_acquisition_refinement.py", "compile_refinement_patch_from_instruction", "provider_name"): 1,
         (
@@ -154,15 +166,6 @@ MODEL_CLIENT_CALL_POINTS = Counter(
         ("seed_discovery.py", "_analyze_public_media_results", "analyze_page_asset"): 1,
     }
 )
-
-
-CONCRETE_CLIENTS = {
-    "DeterministicModelClient": DeterministicModelClient,
-    "OfflineModelClient": OfflineModelClient,
-    "ScriptedLivePlanningModelClient": ScriptedLivePlanningModelClient,
-    "QwenResponsesModelClient": QwenResponsesModelClient,
-    "OpenAICompatibleChatModelClient": OpenAICompatibleChatModelClient,
-}
 
 
 def _class_node(tree: ast.Module, class_name: str) -> ast.ClassDef:
@@ -202,22 +205,75 @@ def _canonical_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     return f"({', '.join(parts)}) -> {_annotation(node.returns)}"
 
 
-def _protocol_surface(tree: ast.Module) -> dict[str, str]:
+def _canonical_method_contract(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> tuple[str, str, tuple[str, ...]]:
+    return (
+        "async" if isinstance(node, ast.AsyncFunctionDef) else "sync",
+        _canonical_signature(node),
+        tuple(ast.unparse(decorator) for decorator in node.decorator_list),
+    )
+
+
+def _protocol_surface(tree: ast.Module) -> dict[str, tuple[str, str, tuple[str, ...]]]:
     protocol = _class_node(tree, "ModelClient")
     return {
-        node.name: _canonical_signature(node)
+        node.name: _canonical_method_contract(node)
         for node in protocol.body
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("_")
     }
 
 
-def _protocol_override_signatures(tree: ast.Module, class_name: str) -> dict[str, str]:
+def _protocol_override_contracts(
+    tree: ast.Module,
+    class_name: str,
+) -> dict[str, tuple[str, str, tuple[str, ...]]]:
     class_definition = _class_node(tree, class_name)
     return {
-        node.name: _canonical_signature(node)
+        node.name: _canonical_method_contract(node)
         for node in class_definition.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in PROTOCOL_SIGNATURES
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in PROTOCOL_METHOD_CONTRACTS
     }
+
+
+def _symbol_tail(node: ast.AST | None) -> str:
+    dotted = _dotted_name(node)
+    return dotted.rsplit(".", maxsplit=1)[-1] if dotted else ""
+
+
+def _concrete_client_population(tree: ast.Module) -> frozenset[str]:
+    protocol_methods = set(_protocol_surface(tree))
+    class_definitions = {node.name: node for node in tree.body if isinstance(node, ast.ClassDef)}
+    concrete = {
+        name
+        for name, class_definition in class_definitions.items()
+        if name != "ModelClient"
+        and protocol_methods
+        <= {node.name for node in class_definition.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    }
+    while True:
+        inherited = {
+            name
+            for name, class_definition in class_definitions.items()
+            if name != "ModelClient" and any(_symbol_tail(base) in concrete for base in class_definition.bases)
+        }
+        expanded = concrete | inherited
+        if expanded == concrete:
+            return frozenset(concrete)
+        concrete = expanded
+
+
+def _factory_return_population(tree: ast.Module) -> frozenset[str]:
+    factory = next(
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "build_model_client"
+    )
+    return frozenset(
+        _symbol_tail(node.value.func)
+        for node in _scope_nodes(factory)
+        if isinstance(node, ast.Return) and isinstance(node.value, ast.Call)
+    )
 
 
 def _delegated_return_target(tree: ast.Module, method_name: str) -> str:
@@ -277,49 +333,474 @@ def _dotted_name(node: ast.AST | None) -> str:
     return ""
 
 
-def _mentions_model_client(tree: ast.Module) -> bool:
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Name) and node.id == "model_client":
-            return True
-        if isinstance(node, ast.Attribute) and node.attr == "model_client":
-            return True
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "getattr"
-            and len(node.args) >= 2
-            and isinstance(node.args[1], ast.Constant)
-            and node.args[1].value == "model_client"
+def _model_provider_imports(
+    tree: ast.Module,
+    concrete: frozenset[str],
+) -> tuple[dict[str, str], frozenset[str]]:
+    imported_symbols: dict[str, str] = {}
+    module_aliases: set[str] = set()
+    recognized = {"ModelClient", "build_model_client", *concrete}
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and str(node.module or "").endswith("model_provider"):
+            for imported in node.names:
+                if imported.name in recognized:
+                    imported_symbols[imported.asname or imported.name] = imported.name
+        elif isinstance(node, ast.Import):
+            for imported in node.names:
+                if imported.name.endswith("model_provider"):
+                    module_aliases.add(imported.asname or imported.name.split(".")[-1])
+    return imported_symbols, frozenset(module_aliases)
+
+
+def _resolved_symbol(
+    node: ast.AST | None,
+    imported_symbols: dict[str, str],
+    module_aliases: frozenset[str],
+) -> str:
+    if isinstance(node, ast.Name):
+        return imported_symbols.get(node.id, node.id)
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id in module_aliases:
+        return node.attr
+    return _symbol_tail(node)
+
+
+def _local_model_protocols(tree: ast.Module, protocol_methods: frozenset[str]) -> frozenset[str]:
+    protocols: set[str] = set()
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef) or not any(_symbol_tail(base) == "Protocol" for base in node.bases):
+            continue
+        public_methods = {
+            item.name
+            for item in node.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
+        }
+        if public_methods and public_methods <= protocol_methods:
+            protocols.add(node.name)
+    return frozenset(protocols)
+
+
+def _annotation_mentions_model(
+    annotation: ast.expr | None,
+    *,
+    imported_symbols: dict[str, str],
+    module_aliases: frozenset[str],
+    model_types: frozenset[str],
+) -> bool:
+    if annotation is None:
+        return False
+    if isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
+        try:
+            annotation = ast.parse(annotation.value, mode="eval").body
+        except SyntaxError:
+            return False
+    return any(
+        isinstance(node, (ast.Name, ast.Attribute))
+        and _resolved_symbol(node, imported_symbols, module_aliases) in model_types
+        for node in ast.walk(annotation)
+    )
+
+
+def _local_model_helpers(
+    tree: ast.Module,
+    *,
+    imported_symbols: dict[str, str],
+    module_aliases: frozenset[str],
+    concrete: frozenset[str],
+    model_types: frozenset[str],
+) -> frozenset[str]:
+    helpers: set[str] = set()
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _annotation_mentions_model(
+            node.returns,
+            imported_symbols=imported_symbols,
+            module_aliases=module_aliases,
+            model_types=model_types,
+        ) or any(
+            isinstance(item, ast.Return)
+            and _is_constructor_or_factory(
+                item.value,
+                imported_symbols=imported_symbols,
+                module_aliases=module_aliases,
+                concrete=concrete,
+            )
+            for item in _scope_nodes(node)
         ):
-            return True
-    return False
+            helpers.add(node.name)
+    return frozenset(helpers)
 
 
-class _ModelClientCallVisitor(ast.NodeVisitor):
-    def __init__(self, module_name: str) -> None:
-        self.module_name = module_name
-        self.function_stack: list[str] = []
-        self.call_points: Counter[tuple[str, str, str]] = Counter()
+def _scope_nodes(root: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.AST]:
+    nodes: list[ast.AST] = []
+    pending = list(ast.iter_child_nodes(root))
+    while pending:
+        node = pending.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+            continue
+        nodes.append(node)
+        pending.extend(ast.iter_child_nodes(node))
+    return nodes
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        self.function_stack.append(node.name)
-        self.generic_visit(node)
-        self.function_stack.pop()
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        self.function_stack.append(node.name)
-        self.generic_visit(node)
-        self.function_stack.pop()
+def _target_keys(node: ast.AST | None) -> tuple[str, ...]:
+    if isinstance(node, (ast.Name, ast.Attribute)):
+        dotted = _dotted_name(node)
+        return (dotted,) if dotted else ()
+    if isinstance(node, (ast.Tuple, ast.List)):
+        return tuple(key for item in node.elts for key in _target_keys(item))
+    return ()
 
-    def visit_Call(self, node: ast.Call) -> None:
-        target = _dotted_name(node.func).split(".")
-        if len(target) >= 2 and target[-2] == "model_client":
-            owner = self.function_stack[-1] if self.function_stack else "<module>"
-            self.call_points[(self.module_name, owner, target[-1])] += 1
-        self.generic_visit(node)
+
+def _is_constructor_or_factory(
+    node: ast.AST | None,
+    *,
+    imported_symbols: dict[str, str],
+    module_aliases: frozenset[str],
+    concrete: frozenset[str],
+) -> bool:
+    return isinstance(node, ast.Call) and _resolved_symbol(node.func, imported_symbols, module_aliases) in {
+        "build_model_client",
+        *concrete,
+    }
+
+
+def _is_model_expression(
+    node: ast.AST | None,
+    *,
+    receivers: set[str],
+    imported_symbols: dict[str, str],
+    module_aliases: frozenset[str],
+    concrete: frozenset[str],
+) -> bool:
+    if isinstance(node, (ast.Name, ast.Attribute)) and _dotted_name(node) in receivers:
+        return True
+    if _is_constructor_or_factory(
+        node,
+        imported_symbols=imported_symbols,
+        module_aliases=module_aliases,
+        concrete=concrete,
+    ):
+        return True
+    if isinstance(node, ast.IfExp):
+        return _is_model_expression(
+            node.body,
+            receivers=receivers,
+            imported_symbols=imported_symbols,
+            module_aliases=module_aliases,
+            concrete=concrete,
+        ) or _is_model_expression(
+            node.orelse,
+            receivers=receivers,
+            imported_symbols=imported_symbols,
+            module_aliases=module_aliases,
+            concrete=concrete,
+        )
+    if isinstance(node, ast.BoolOp):
+        return any(
+            _is_model_expression(
+                value,
+                receivers=receivers,
+                imported_symbols=imported_symbols,
+                module_aliases=module_aliases,
+                concrete=concrete,
+            )
+            for value in node.values
+        )
+    return isinstance(node, ast.NamedExpr) and _is_model_expression(
+        node.value,
+        receivers=receivers,
+        imported_symbols=imported_symbols,
+        module_aliases=module_aliases,
+        concrete=concrete,
+    )
+
+
+def _method_reference(
+    node: ast.AST | None,
+    *,
+    receivers: set[str],
+    callable_aliases: dict[str, str],
+    imported_symbols: dict[str, str],
+    module_aliases: frozenset[str],
+    concrete: frozenset[str],
+    protocol_methods: frozenset[str],
+) -> str:
+    if isinstance(node, (ast.Name, ast.Attribute)):
+        alias = callable_aliases.get(_dotted_name(node), "")
+        if alias:
+            return alias
+    if (
+        isinstance(node, ast.Attribute)
+        and node.attr in protocol_methods
+        and _is_model_expression(
+            node.value,
+            receivers=receivers,
+            imported_symbols=imported_symbols,
+            module_aliases=module_aliases,
+            concrete=concrete,
+        )
+    ):
+        return node.attr
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "getattr"
+        and len(node.args) >= 2
+        and isinstance(node.args[1], ast.Constant)
+        and isinstance(node.args[1].value, str)
+        and node.args[1].value in protocol_methods
+        and _is_model_expression(
+            node.args[0],
+            receivers=receivers,
+            imported_symbols=imported_symbols,
+            module_aliases=module_aliases,
+            concrete=concrete,
+        )
+    ):
+        return node.args[1].value
+    return ""
+
+
+def _class_model_receivers(
+    tree: ast.Module,
+    *,
+    imported_symbols: dict[str, str],
+    module_aliases: frozenset[str],
+    concrete: frozenset[str],
+    model_types: frozenset[str],
+) -> dict[str, frozenset[str]]:
+    result: dict[str, frozenset[str]] = {}
+    for class_definition in (node for node in tree.body if isinstance(node, ast.ClassDef)):
+        attributes: set[str] = set()
+        for method in (
+            node for node in class_definition.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ):
+            receivers = {
+                arg.arg
+                for arg in [*method.args.posonlyargs, *method.args.args, *method.args.kwonlyargs]
+                if _annotation_mentions_model(
+                    arg.annotation,
+                    imported_symbols=imported_symbols,
+                    module_aliases=module_aliases,
+                    model_types=model_types,
+                )
+            }
+            scope = _scope_nodes(method)
+            changed = True
+            while changed:
+                changed = False
+                for node in scope:
+                    value: ast.AST | None = None
+                    targets: tuple[str, ...] = ()
+                    annotation: ast.expr | None = None
+                    if isinstance(node, ast.Assign):
+                        value = node.value
+                        targets = tuple(key for target in node.targets for key in _target_keys(target))
+                    elif isinstance(node, ast.AnnAssign):
+                        value = node.value
+                        targets = _target_keys(node.target)
+                        annotation = node.annotation
+                    if not targets:
+                        continue
+                    is_model = _annotation_mentions_model(
+                        annotation,
+                        imported_symbols=imported_symbols,
+                        module_aliases=module_aliases,
+                        model_types=model_types,
+                    ) or _is_model_expression(
+                        value,
+                        receivers=receivers,
+                        imported_symbols=imported_symbols,
+                        module_aliases=module_aliases,
+                        concrete=concrete,
+                    )
+                    if is_model:
+                        before = len(receivers)
+                        receivers.update(targets)
+                        changed |= len(receivers) != before
+            attributes.update(key for key in receivers if key.startswith("self."))
+        result[class_definition.name] = frozenset(attributes)
+    return result
+
+
+def _function_call_points(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+    *,
+    class_name: str,
+    class_receivers: dict[str, frozenset[str]],
+    imported_symbols: dict[str, str],
+    module_aliases: frozenset[str],
+    concrete: frozenset[str],
+    model_types: frozenset[str],
+    protocol_methods: frozenset[str],
+) -> Counter[str]:
+    receivers = set(class_receivers.get(class_name, ()))
+    receivers.update(
+        arg.arg
+        for arg in [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
+        if _annotation_mentions_model(
+            arg.annotation,
+            imported_symbols=imported_symbols,
+            module_aliases=module_aliases,
+            model_types=model_types,
+        )
+    )
+    callable_aliases: dict[str, str] = {}
+    scope = _scope_nodes(node)
+    changed = True
+    while changed:
+        changed = False
+        for item in scope:
+            value: ast.AST | None = None
+            targets: tuple[str, ...] = ()
+            annotation: ast.expr | None = None
+            if isinstance(item, ast.Assign):
+                value = item.value
+                targets = tuple(key for target in item.targets for key in _target_keys(target))
+            elif isinstance(item, ast.AnnAssign):
+                value = item.value
+                targets = _target_keys(item.target)
+                annotation = item.annotation
+            elif isinstance(item, ast.NamedExpr):
+                value = item.value
+                targets = _target_keys(item.target)
+            if not targets:
+                continue
+            if _annotation_mentions_model(
+                annotation,
+                imported_symbols=imported_symbols,
+                module_aliases=module_aliases,
+                model_types=model_types,
+            ) or _is_model_expression(
+                value,
+                receivers=receivers,
+                imported_symbols=imported_symbols,
+                module_aliases=module_aliases,
+                concrete=concrete,
+            ):
+                before = len(receivers)
+                receivers.update(targets)
+                changed |= len(receivers) != before
+            method = _method_reference(
+                value,
+                receivers=receivers,
+                callable_aliases=callable_aliases,
+                imported_symbols=imported_symbols,
+                module_aliases=module_aliases,
+                concrete=concrete,
+                protocol_methods=protocol_methods,
+            )
+            if method:
+                before = len(callable_aliases)
+                callable_aliases.update({target: method for target in targets})
+                changed |= len(callable_aliases) != before
+
+    calls: Counter[str] = Counter()
+    for item in scope:
+        if not isinstance(item, ast.Call):
+            continue
+        method = _method_reference(
+            item.func,
+            receivers=receivers,
+            callable_aliases=callable_aliases,
+            imported_symbols=imported_symbols,
+            module_aliases=module_aliases,
+            concrete=concrete,
+            protocol_methods=protocol_methods,
+        )
+        if method:
+            calls[method] += 1
+    return calls
+
+
+def _has_non_null_model_handoff(tree: ast.Module) -> bool:
+    return any(
+        isinstance(node, ast.Call)
+        and any(
+            keyword.arg == "model_client"
+            and not (isinstance(keyword.value, ast.Constant) and keyword.value.value is None)
+            for keyword in node.keywords
+        )
+        for node in ast.walk(tree)
+    )
+
+
+def _analyze_module(
+    tree: ast.Module,
+    *,
+    module_name: str,
+    concrete: frozenset[str],
+    protocol_methods: frozenset[str],
+) -> tuple[bool, Counter[tuple[str, str, str]]]:
+    imported_symbols, module_aliases = _model_provider_imports(tree, concrete)
+    local_protocols = _local_model_protocols(tree, protocol_methods)
+    model_types = frozenset({"ModelClient", *concrete, *local_protocols})
+    model_factories = concrete | _local_model_helpers(
+        tree,
+        imported_symbols=imported_symbols,
+        module_aliases=module_aliases,
+        concrete=concrete,
+        model_types=model_types,
+    )
+    class_receivers = _class_model_receivers(
+        tree,
+        imported_symbols=imported_symbols,
+        module_aliases=module_aliases,
+        concrete=model_factories,
+        model_types=model_types,
+    )
+    calls: Counter[tuple[str, str, str]] = Counter()
+    for top_level in tree.body:
+        if isinstance(top_level, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            function_calls = _function_call_points(
+                top_level,
+                class_name="",
+                class_receivers=class_receivers,
+                imported_symbols=imported_symbols,
+                module_aliases=module_aliases,
+                concrete=model_factories,
+                model_types=model_types,
+                protocol_methods=protocol_methods,
+            )
+            calls.update((module_name, top_level.name, method) for method in function_calls.elements())
+        elif isinstance(top_level, ast.ClassDef):
+            for method in (
+                node for node in top_level.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ):
+                function_calls = _function_call_points(
+                    method,
+                    class_name=top_level.name,
+                    class_receivers=class_receivers,
+                    imported_symbols=imported_symbols,
+                    module_aliases=module_aliases,
+                    concrete=model_factories,
+                    model_types=model_types,
+                    protocol_methods=protocol_methods,
+                )
+                calls.update((module_name, method.name, facade_method) for facade_method in function_calls.elements())
+    constructs_client = any(
+        _is_constructor_or_factory(
+            node,
+            imported_symbols=imported_symbols,
+            module_aliases=module_aliases,
+            concrete=model_factories,
+        )
+        for node in ast.walk(tree)
+    )
+    imports_facade = any(
+        symbol in {"ModelClient", "build_model_client", *concrete} for symbol in imported_symbols.values()
+    )
+    is_consumer = bool(
+        imports_facade or local_protocols or constructs_client or calls or _has_non_null_model_handoff(tree)
+    )
+    return is_consumer, calls
 
 
 def _consumer_inventory() -> tuple[frozenset[str], Counter[tuple[str, str, str]]]:
+    provider_tree = ast.parse(MODEL_PROVIDER_PATH.read_text(encoding="utf-8"), filename=str(MODEL_PROVIDER_PATH))
+    concrete = _concrete_client_population(provider_tree)
+    protocol_methods = frozenset(_protocol_surface(provider_tree))
     modules: set[str] = set()
     calls: Counter[tuple[str, str, str]] = Counter()
     for path in sorted(SOURCE_ROOT.rglob("*.py")):
@@ -327,11 +808,15 @@ def _consumer_inventory() -> tuple[frozenset[str], Counter[tuple[str, str, str]]
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         module_name = path.relative_to(SOURCE_ROOT).as_posix()
-        if _mentions_model_client(tree):
+        is_consumer, module_calls = _analyze_module(
+            tree,
+            module_name=module_name,
+            concrete=concrete,
+            protocol_methods=protocol_methods,
+        )
+        if is_consumer:
             modules.add(module_name)
-        visitor = _ModelClientCallVisitor(module_name)
-        visitor.visit(tree)
-        calls.update(visitor.call_points)
+        calls.update(module_calls)
     return frozenset(modules), calls
 
 
@@ -370,21 +855,39 @@ def _reset_model_circuits() -> None:
 def test_model_client_protocol_surface_matches_v1_golden() -> None:
     tree = ast.parse(MODEL_PROVIDER_PATH.read_text(encoding="utf-8"), filename=str(MODEL_PROVIDER_PATH))
 
-    assert _protocol_surface(tree) == PROTOCOL_SIGNATURES
-    assert len(PROTOCOL_SIGNATURES) == 17
+    assert _protocol_surface(tree) == PROTOCOL_METHOD_CONTRACTS
+    assert len(PROTOCOL_METHOD_CONTRACTS) == 17
 
 
-def test_concrete_clients_preserve_complete_protocol_surface_and_override_boundaries() -> None:
+def test_concrete_clients_and_factory_returns_preserve_complete_protocol_surface() -> None:
     tree = ast.parse(MODEL_PROVIDER_PATH.read_text(encoding="utf-8"), filename=str(MODEL_PROVIDER_PATH))
+    concrete = _concrete_client_population(tree)
 
-    for class_name, client_class in CONCRETE_CLIENTS.items():
-        override_signatures = _protocol_override_signatures(tree, class_name)
+    assert concrete == frozenset(CONCRETE_PROTOCOL_OVERRIDES)
+    assert _factory_return_population(tree) == concrete
+    for class_name in concrete:
+        client_class = getattr(model_provider_module, class_name)
+        override_contracts = _protocol_override_contracts(tree, class_name)
         expected_overrides = CONCRETE_PROTOCOL_OVERRIDES[class_name]
-        assert frozenset(override_signatures) == expected_overrides
-        assert override_signatures == {name: PROTOCOL_SIGNATURES[name] for name in expected_overrides}
-        assert {name for name in PROTOCOL_SIGNATURES if callable(getattr(client_class, name, None))} == set(
-            PROTOCOL_SIGNATURES
+        assert frozenset(override_contracts) == expected_overrides
+        assert override_contracts == {name: PROTOCOL_METHOD_CONTRACTS[name] for name in expected_overrides}
+        assert {name for name in PROTOCOL_METHOD_CONTRACTS if callable(getattr(client_class, name, None))} == set(
+            PROTOCOL_METHOD_CONTRACTS
         )
+
+
+def test_factory_return_population_fails_closed_on_unknown_direct_return_mutation() -> None:
+    source = MODEL_PROVIDER_PATH.read_text(encoding="utf-8")
+    assert "return DeterministicModelClient()" in source
+    mutated_tree = ast.parse(
+        source.replace("return DeterministicModelClient()", "return object()", 1),
+        filename=str(MODEL_PROVIDER_PATH),
+    )
+    concrete = _concrete_client_population(mutated_tree)
+    factory_returns = _factory_return_population(mutated_tree)
+
+    assert "object" in factory_returns
+    assert factory_returns != concrete
 
 
 def test_scripted_live_client_delegates_only_the_six_front_door_planning_methods() -> None:
@@ -399,13 +902,86 @@ def test_scripted_live_client_delegates_only_the_six_front_door_planning_methods
     assert SCRIPTED_LIVE_DELEGATED_METHODS < CONCRETE_PROTOCOL_OVERRIDES["ScriptedLivePlanningModelClient"]
 
 
+class _SpyModelDelegate:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def __getattr__(self, method_name: str):
+        if method_name not in PROTOCOL_METHOD_CONTRACTS:
+            raise AttributeError(method_name)
+
+        def record(*_args: object, **_kwargs: object) -> Any:
+            self.calls.append(method_name)
+            if method_name == "provider_name":
+                return "spy_delegate"
+            if method_name == "supports_outreach_ai_verification":
+                return True
+            if method_name in {"summarize", "interpret_intent"}:
+                return f"spy_{method_name}"
+            return {"spy_method": method_name}
+
+        return record
+
+
+def _scripted_live_runtime_delegate_graph() -> dict[str, tuple[str, ...]]:
+    delegate = _SpyModelDelegate()
+    client = ScriptedLivePlanningModelClient(delegate, mode="scripted")
+    request = JobRequest(raw_user_request="Find researchers", target_company="Example Lab")
+    calls = {
+        "summarize": lambda: client.summarize(
+            request,
+            [{"display_name": "A", "score": 1}],
+            1,
+        ),
+        "normalize_request": lambda: client.normalize_request({}),
+        "normalize_spreadsheet_contacts": lambda: client.normalize_spreadsheet_contacts({}),
+        "normalize_review_instruction": lambda: client.normalize_review_instruction({}),
+        "normalize_refinement_instruction": lambda: client.normalize_refinement_instruction({}),
+        "interpret_intent": lambda: client.interpret_intent(request, {}),
+        "draft_intent_brief": lambda: client.draft_intent_brief(request, {}),
+        "plan_search_strategy": lambda: client.plan_search_strategy(request, {}),
+        "analyze_page_asset": lambda: client.analyze_page_asset({}),
+        "analyze_public_web_candidate_signals": lambda: client.analyze_public_web_candidate_signals({}),
+        "judge_company_equivalence": lambda: client.judge_company_equivalence({}),
+        "judge_profile_membership": lambda: client.judge_profile_membership({}),
+        "synthesize_manual_review": lambda: client.synthesize_manual_review({}),
+        "evaluate_outreach_profile": lambda: client.evaluate_outreach_profile({}),
+        "provider_name": client.provider_name,
+        "supports_outreach_ai_verification": client.supports_outreach_ai_verification,
+        "healthcheck": client.healthcheck,
+    }
+    assert set(calls) == set(PROTOCOL_METHOD_CONTRACTS)
+    graph: dict[str, tuple[str, ...]] = {}
+    for method_name, invoke in calls.items():
+        start = len(delegate.calls)
+        invoke()
+        graph[method_name] = tuple(delegate.calls[start:])
+    return graph
+
+
+def test_scripted_live_runtime_spy_proves_the_complete_17_method_call_graph() -> None:
+    expected = {
+        method_name: ((method_name,) if method_name in SCRIPTED_LIVE_DELEGATED_METHODS else ())
+        for method_name in PROTOCOL_METHOD_CONTRACTS
+    }
+    expected["healthcheck"] = ("provider_name",)
+
+    graph = _scripted_live_runtime_delegate_graph()
+
+    assert graph == expected
+    assert Counter(method for methods in graph.values() for method in methods) == Counter(
+        {**{method: 1 for method in SCRIPTED_LIVE_DELEGATED_METHODS}, "provider_name": 1}
+    )
+
+
 def test_model_client_consumer_inventory_and_call_points_match_v1_golden() -> None:
     modules, calls = _consumer_inventory()
 
     assert modules == MODEL_CLIENT_CONSUMER_MODULES
     assert calls == MODEL_CLIENT_CALL_POINTS
-    assert sum(calls.values()) == 27
-    assert {method_name for _, _, method_name in calls} == set(PROTOCOL_SIGNATURES)
+    assert len(modules) == 25
+    assert sum(calls.values()) == 29
+    assert {method_name for _, _, method_name in calls} == set(PROTOCOL_METHOD_CONTRACTS)
 
 
 def test_openai_chat_completions_wire_shape_remains_v1() -> None:
@@ -434,12 +1010,19 @@ def test_openai_chat_completions_wire_shape_remains_v1() -> None:
     assert result.text == "OK"
     post.assert_called_once()
     assert post.call_args.args == ("https://model-characterization.test/v1/chat/completions",)
-    assert post.call_args.kwargs["timeout"] == 17
-    assert post.call_args.kwargs["json"] == {
-        "model": "gpt-characterization",
-        "messages": messages,
-        "max_tokens": 32,
-        "temperature": 0,
+    assert post.call_args.kwargs == {
+        "timeout": 17,
+        "headers": {
+            "Authorization": "Bearer sk-synthetic",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+        },
+        "json": {
+            "model": "gpt-characterization",
+            "messages": messages,
+            "max_tokens": 32,
+            "temperature": 0,
+        },
     }
 
 
@@ -469,12 +1052,19 @@ def test_openai_responses_wire_shape_and_role_flattening_remain_v1() -> None:
     assert result.text == "OK"
     post.assert_called_once()
     assert post.call_args.args == ("https://model-characterization.test/v1/responses",)
-    assert post.call_args.kwargs["timeout"] == 19
-    assert post.call_args.kwargs["json"] == {
-        "model": "gpt-characterization",
-        "input": "system: System\n\nuser: User",
-        "max_output_tokens": 65,
-        "temperature": 0,
+    assert post.call_args.kwargs == {
+        "timeout": 19,
+        "headers": {
+            "Authorization": "Bearer sk-synthetic",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+        },
+        "json": {
+            "model": "gpt-characterization",
+            "input": "system: System\n\nuser: User",
+            "max_output_tokens": 65,
+            "temperature": 0,
+        },
     }
 
 
@@ -531,6 +1121,11 @@ def test_qwen_responses_wire_shape_and_urllib_transport_remain_v1(
     urlopen.assert_called_once()
     request_object = urlopen.call_args.args[0]
     assert request_object.full_url == "https://qwen-characterization.test/v1/responses"
+    assert request_object.get_method() == "POST"
+    assert {key.lower(): value for key, value in request_object.header_items()} == {
+        "authorization": "Bearer sk-synthetic",
+        "content-type": "application/json",
+    }
     assert json.loads(request_object.data.decode("utf-8")) == expected_payload
     assert "temperature" not in expected_payload
     assert urlopen.call_args.kwargs == {"timeout": 23}
@@ -630,21 +1225,72 @@ def test_characterization_helpers_detect_semantic_protocol_and_call_mutations() 
         for node in protocol.body
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.name != "healthcheck"
     ]
-    assert _protocol_surface(protocol_tree) != PROTOCOL_SIGNATURES
+    assert _protocol_surface(protocol_tree) != PROTOCOL_METHOD_CONTRACTS
 
-    call_tree = ast.parse(
-        """
-def run(model_client):
-    return model_client.healthcheck()
+    async_method = ast.parse("async def healthcheck(self) -> dict[str, Any]: ...").body[0]
+    decorated_method = ast.parse("@staticmethod\ndef healthcheck(self) -> dict[str, Any]: ...").body[0]
+    assert isinstance(async_method, ast.AsyncFunctionDef)
+    assert isinstance(decorated_method, ast.FunctionDef)
+    assert _canonical_method_contract(async_method) != PROTOCOL_METHOD_CONTRACTS["healthcheck"]
+    assert _canonical_method_contract(decorated_method) != PROTOCOL_METHOD_CONTRACTS["healthcheck"]
+
+    provider_tree = ast.parse(MODEL_PROVIDER_PATH.read_text(encoding="utf-8"), filename=str(MODEL_PROVIDER_PATH))
+    concrete = _concrete_client_population(provider_tree)
+    protocol_methods = frozenset(_protocol_surface(provider_tree))
+    source = """
+from sourcing_agent.model_provider import DeterministicModelClient, ModelClient
+
+def helper(model_client: ModelClient):
+    client = model_client
+    direct = client.healthcheck()
+    callable_alias = client.healthcheck
+    aliased = callable_alias()
+    dynamic_alias = getattr(client, "provider_name")
+    dynamic = dynamic_alias()
+    return direct, aliased, dynamic
+
+def direct_concrete():
+    return DeterministicModelClient().healthcheck()
+
+def build_helper():
+    return DeterministicModelClient()
+
+def helper_receiver():
+    return build_helper().provider_name()
 """
-    )
-    visitor = _ModelClientCallVisitor("synthetic.py")
-    visitor.visit(call_tree)
-    assert visitor.call_points == Counter({("synthetic.py", "run", "healthcheck"): 1})
 
-    call = next(node for node in ast.walk(call_tree) if isinstance(node, ast.Call))
-    assert isinstance(call.func, ast.Attribute)
-    call.func.attr = "unknown_method"
-    mutated = _ModelClientCallVisitor("synthetic.py")
-    mutated.visit(call_tree)
-    assert mutated.call_points != visitor.call_points
+    def analyze(candidate: str) -> Counter[tuple[str, str, str]]:
+        _, calls = _analyze_module(
+            ast.parse(candidate),
+            module_name="synthetic.py",
+            concrete=concrete,
+            protocol_methods=protocol_methods,
+        )
+        return calls
+
+    baseline = analyze(source)
+    assert baseline == Counter(
+        {
+            ("synthetic.py", "helper", "healthcheck"): 2,
+            ("synthetic.py", "helper", "provider_name"): 1,
+            ("synthetic.py", "direct_concrete", "healthcheck"): 1,
+            ("synthetic.py", "helper_receiver", "provider_name"): 1,
+        }
+    )
+    assert analyze(source.replace("direct = client.healthcheck()", "direct = client.unknown_method()")) != baseline
+    assert analyze(source.replace('getattr(client, "provider_name")', 'getattr(client, "unknown_method")')) != baseline
+    assert analyze(source.replace("DeterministicModelClient().healthcheck()", "object().healthcheck()")) != baseline
+    assert analyze(source.replace("return DeterministicModelClient()\n", "return object()\n")) != baseline
+
+
+def test_scripted_runtime_spy_detects_a_new_delegate_side_effect_mutation() -> None:
+    original = ScriptedLivePlanningModelClient.analyze_page_asset
+
+    def mutated(self: ScriptedLivePlanningModelClient, payload: dict[str, Any]) -> dict[str, Any]:
+        self.delegate.judge_company_equivalence(payload)
+        return original(self, payload)
+
+    with patch.object(ScriptedLivePlanningModelClient, "analyze_page_asset", mutated):
+        graph = _scripted_live_runtime_delegate_graph()
+
+    assert graph["analyze_page_asset"] == ("judge_company_equivalence",)
