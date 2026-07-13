@@ -18,6 +18,11 @@ owner 时返回 retryable `503 plan_submit_owner_unavailable`，禁止同步 com
 helper，不属于 serving 链。共享 async-task adapter 的 public `task_id` 与 `artifact.handle` 均由 domain owner
 提供；adapter 不假设 handle 等于 command id，missing/unknown domain status 终止为 failed。C1b 不实现 schema、
 durable consumer、202 cutover、compute/publish split、TTL 或 replay；这些仍受 D-C1-1..4 与 C1c-e 顺序约束。
+Pinned advisory fixed-forward closes the process-local late-consumer snapshot/cleanup gap with a shared lock,
+owner-token retirement barrier, and successor rule; history writes are generation-guarded and authenticated unlinked
+Plan history submit/read/list/resubmit is provenance-gated. It does **not** close compiler side effects: a deterministic
+real-compiler race still produces orphan review/criteria rows after same-history supersession. That evidence is an
+explicit D-C1-3/C1d compute/publish blocker, not a reason to claim the legacy bridge is durable.
 
 ---
 

@@ -171,12 +171,18 @@ class EnvelopeBuilderTest(unittest.TestCase):
         self.assertEqual(env["artifact"]["byte_size"], 2048)
         self.assertEqual(env["artifact"]["headers"], {"X-Sourcing-Export-Record-Count": "3"})
 
-    def test_artifact_defaults_are_safe(self) -> None:
-        artifact = async_task_artifact(handle="", content_type="", filename="")
-        self.assertEqual(artifact["content_type"], "application/octet-stream")
-        self.assertEqual(artifact["filename"], "download.bin")
-        self.assertEqual(artifact["byte_size"], 0)
-        self.assertEqual(artifact["headers"], {})
+    def test_empty_artifact_handle_is_rejected_by_builder_and_dropped_by_status_adapter(self) -> None:
+        with self.assertRaisesRegex(ValueError, "artifact handle is required"):
+            async_task_artifact(handle="", content_type="", filename="")
+
+        env = async_task_status(
+            task_id="cmd-1",
+            task_type="export.projection",
+            domain_status="succeeded",
+            artifact={"handle": "   ", "filename": "must-not-leak.zip"},
+        )
+        self.assertEqual(env["status"], TASK_STATUS_SUCCEEDED)
+        self.assertIsNone(env["artifact"])
 
 
 if __name__ == "__main__":

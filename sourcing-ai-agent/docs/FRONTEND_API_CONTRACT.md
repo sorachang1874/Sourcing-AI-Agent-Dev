@@ -23,6 +23,7 @@ C1a 只收口现有异步 transport/client 语义，不改变 schema、provider/
 | export `task_id` | export command owner 返回的 submit envelope | 非空、无 trim drift、无 `%`/separator/query/fragment/control/dot segment；客户端把值作为 opaque handle 保存，不从其他字段推导 | 两个 public export wrapper、status poll、artifact validator | 非法或缺失时 submit 后立即失败，不 poll/download | normal path；task retention/deletion 由 durable export owner 管理，客户端无 shadow ID |
 | export `artifact.handle` | `GET /api/exports/{task_id}` 的 owner-supplied `artifact.handle` | 只接受 exact `/api/exports/${encodeURIComponent(task_id)}/artifact`；root-relative、同一 task、无 scheme/authority/query/fragment/dot/encoded separator | projection export 与 CRM Public Web export download | `succeeded` 但 handle 缺失或 near-miss 时不发 binary request；不拼 fallback URL，也不 fetch supplied alternate URL | C1a normal path；无兼容 source，artifact 过期/删除仍由 export owner 表达 terminal status |
 | Plan submit bridge status | `plan_submit_contract.py` + `submit_plan_workflow`；当前 `POST /api/plan/submit` top-level response | server 固定 HTTP `200` + `pending`；history `plan_generation` 只走 `queued -> running -> completed|failed`；client 暂时接受 `pending|queued` | API route、`SearchPage` initial plan 与 revision flow、history recovery | submit owner 缺失时 HTTP `503` + `plan_submit_owner_unavailable` + `fallback_used=false`；绝不回退同步 `plan_workflow` | C1b characterized bridge；C1e durable 202 cutover、旧 client 窗口结束且 preflight 证明无 `pending` 后删除 |
+| unlinked Plan history identity | API authentication state 是唯一 owner；`submit_plan_workflow` 只把 server provenance + exact `requester_id`/`tenant_id` 证明写入 history metadata | authenticated submit 覆盖 client identity/provenance；read/list/resubmit 必须同时匹配 `authenticated_request_state_v1`、requester 与 `user-<id>` tenant | Plan submit、frontend-history read/list/revision submit | authenticated mode 下 missing/partial/mismatch proof 一律 404 或从 list 排除；不得信任 body、姓名或 legacy metadata 推断 owner；旧 non-Plan unlinked row 可保持 read compatibility，但不能因此获得 Plan replacement authority；open mode 保持兼容 | C1b process-local bridge；C1c durable consumer identity 上线且 legacy unresolved inventory 清零后删除 metadata proof |
 
 Lane ownership 仍在后端 `src/sourcing_agent/api.py::_request_priority_lane`：只有 `POST
 /api/projections/export`、`POST /api/crm/records/public-web-export` 与 exact `GET /api/exports/{single-segment-id}`
@@ -33,9 +34,15 @@ Lane ownership 仍在后端 `src/sourcing_agent/api.py::_request_priority_lane`�
 C1b additionally pins the legacy Plan execution boundary. `submit_plan_workflow` is the only serving owner allowed to
 call `_queue_plan_hydration`; that queue owns the only `Thread(target=_run_plan_hydration)` creator, and the hydration
 runner is the only serving caller of `plan_workflow`. `sourcing-agent plan` remains an explicitly classified CLI
-one-shot helper, not a serving fallback. The source/AST preflight fails if another queue, thread, API compile caller,
-or CLI callsite appears. Current review creation, criteria compiler-run persistence, same-signature coalescing, and
-history queued/running/terminal projection remain unchanged until the owner-gated compute/publish split.
+one-shot helper, not a serving fallback. The source/AST preflight resolves callable aliases, `partial`/`getattr`,
+thread targets, and executor targets; it fails if another queue, thread/executor hydration target, API compile caller,
+or CLI callsite appears. Queue registration and owner retirement share one lock and owner token, so a late
+same-signature consumer is either drained by the current owner or starts one successor. Same-history queued/running/
+terminal publication is generation-guarded under that lock. This is deliberately bounded: the real compiler still
+creates review and criteria rows before the post-compile generation fence. A deterministic test records those orphan
+side effects, so D-C1-3/C1d compute/publish separation remains a blocker for durable cutover and milestone signoff.
+The Python async-task adapter also rejects an empty artifact handle at construction and drops malformed succeeded
+artifacts instead of publishing a blank handle.
 
 补充约定：
 

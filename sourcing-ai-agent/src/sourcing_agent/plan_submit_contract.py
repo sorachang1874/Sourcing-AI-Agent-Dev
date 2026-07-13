@@ -46,6 +46,15 @@ PLAN_SUBMIT_OWNER_UNAVAILABLE_STATUS = "failed"
 PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON = "plan_submit_owner_unavailable"
 PLAN_SUBMIT_OWNER_UNAVAILABLE_HTTP_STATUS = 503
 
+# The API strips this private transport key from every client payload, then sets
+# it only from authenticated request.state.  ``submit_plan_workflow`` consumes it
+# into history metadata and removes it before planning/signature input, giving
+# authenticated reads a provenance-bearing C1b owner scope without a schema
+# change or trust in client-supplied request identity.
+PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY = "_server_plan_submit_identity_provenance"
+PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER = "authenticated_request_state_v1"
+PLAN_SUBMIT_IDENTITY_METADATA_KEY = "plan_submit_identity"
+
 _PLAN_HYDRATION_SIGNATURE_IGNORED_KEYS = frozenset(
     {
         "history_id",
@@ -101,6 +110,35 @@ def build_plan_generation(
         generation["completed_at"] = str(completed_at or "").strip()
     generation.update(details)
     return generation
+
+
+def build_plan_submit_identity_metadata(
+    *,
+    provenance: str,
+    requester_id: str,
+    tenant_id: str,
+) -> dict[str, str]:
+    """Return the authenticated legacy-history owner proof, or no proof.
+
+    Only the API-authored provenance value is accepted.  Missing/partial scope
+    intentionally returns an empty mapping so authenticated history reads can
+    quarantine the row instead of trusting body identity.
+    """
+
+    normalized_provenance = str(provenance or "").strip()
+    normalized_requester_id = str(requester_id or "").strip()
+    normalized_tenant_id = str(tenant_id or "").strip()
+    if (
+        normalized_provenance != PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER
+        or not normalized_requester_id
+        or not normalized_tenant_id
+    ):
+        return {}
+    return {
+        "provenance": normalized_provenance,
+        "requester_id": normalized_requester_id,
+        "tenant_id": normalized_tenant_id,
+    }
 
 
 def _normalize_plan_hydration_signature_value(value: Any) -> Any:

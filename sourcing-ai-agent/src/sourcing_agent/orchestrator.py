@@ -221,7 +221,10 @@ from .plan_submit_contract import (
     PLAN_GENERATION_FAILED,
     PLAN_GENERATION_QUEUED,
     PLAN_GENERATION_RUNNING,
+    PLAN_SUBMIT_IDENTITY_METADATA_KEY,
+    PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY,
     build_plan_generation,
+    build_plan_submit_identity_metadata,
 )
 from .plan_submit_contract import (
     plan_hydration_request_signature as _plan_hydration_request_signature,
@@ -992,7 +995,12 @@ class SourcingOrchestrator:
         self._public_serving_artifact_proof_cache: dict[tuple[str, ...], tuple[float, dict[str, Any]]] = {}
         self._organization_asset_warmup_lock = threading.Lock()
         self._organization_asset_warmup_thread: threading.Thread | None = None
-        self._plan_hydration_lock = threading.Lock()
+        # C1b legacy bridge only: submit publication and hydration publication
+        # share one re-entrant lock so a same-history successor cannot be
+        # overwritten between the in-memory generation check and the PG history
+        # write.  This is deliberately process-local and is deleted at C1e; it is
+        # not a substitute for the owner-gated durable consumer/publication CAS.
+        self._plan_hydration_lock = threading.RLock()
         self._plan_hydration_inflight: dict[str, dict[str, Any]] = {}
         self._plan_hydration_signature_inflight: dict[str, dict[str, Any]] = {}
         self._plan_hydration_slots = threading.BoundedSemaphore(
@@ -1551,6 +1559,7 @@ class SourcingOrchestrator:
 
     def submit_plan_workflow(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized_payload = normalize_workflow_submission_payload(dict(payload or {}))
+        identity_provenance = str(normalized_payload.pop(PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY, "") or "").strip()
         history_id = str(normalized_payload.get("history_id") or uuid.uuid4()).strip()
         query_text = str(normalized_payload.get("raw_user_request") or "").strip()
         if not query_text:
@@ -1572,30 +1581,41 @@ class SourcingOrchestrator:
             request_id=plan_request_id,
             queued_at=queued_at,
         )
-        self._persist_frontend_history_link(
-            history_id=history_id,
-            query_text=query_text,
-            target_company=(
-                str(request_payload.get("target_company") or "").strip()
-                or str(existing_link.get("target_company") or "").strip()
-            ),
-            review_id=int(existing_link.get("review_id") or 0),
-            job_id=str(existing_link.get("job_id") or "").strip(),
-            phase="plan",
-            request_payload=request_payload,
-            plan_payload={},
-            metadata={
-                "source": "plan_workflow_submit",
-                "plan_generation": plan_generation,
-            },
-            merge_metadata=True,
+        plan_submit_identity = build_plan_submit_identity_metadata(
+            provenance=identity_provenance,
+            requester_id=str(normalized_payload.get("requester_id") or ""),
+            tenant_id=str(normalized_payload.get("tenant_id") or ""),
         )
-        self._queue_plan_hydration(
-            history_id=history_id,
-            payload={**dict(normalized_payload or {}), "history_id": history_id},
-            plan_request_id=plan_request_id,
-            queued_at=queued_at,
-        )
+        # The history projection and process-local generation registration must
+        # be ordered against the legacy worker's guarded writes.  Otherwise an
+        # older worker can pass its in-memory check, then overwrite this newer
+        # queued generation while this submit is registering it.
+        with self._plan_hydration_lock:
+            self._persist_frontend_history_link(
+                history_id=history_id,
+                query_text=query_text,
+                target_company=(
+                    str(request_payload.get("target_company") or "").strip()
+                    or str(existing_link.get("target_company") or "").strip()
+                ),
+                review_id=int(existing_link.get("review_id") or 0),
+                job_id=str(existing_link.get("job_id") or "").strip(),
+                phase="plan",
+                request_payload=request_payload,
+                plan_payload={},
+                metadata={
+                    "source": "plan_workflow_submit",
+                    "plan_generation": plan_generation,
+                    **({PLAN_SUBMIT_IDENTITY_METADATA_KEY: plan_submit_identity} if plan_submit_identity else {}),
+                },
+                merge_metadata=True,
+            )
+            self._queue_plan_hydration(
+                history_id=history_id,
+                payload={**dict(normalized_payload or {}), "history_id": history_id},
+                plan_request_id=plan_request_id,
+                queued_at=queued_at,
+            )
         return {
             "status": LEGACY_PLAN_SUBMIT_RESPONSE_STATUS,
             "history_id": history_id,
@@ -1677,6 +1697,50 @@ class SourcingOrchestrator:
             current = dict(self._plan_hydration_inflight.get(normalized_history_id) or {})
         return str(current.get("request_id") or "").strip() == normalized_request_id
 
+    def _persist_plan_hydration_if_current(
+        self,
+        *,
+        history_id: str,
+        plan_request_id: str,
+        **payload: Any,
+    ) -> bool:
+        """Publish one legacy history projection only for its current generation.
+
+        The check and PG write intentionally share the same process-local lock as
+        ``submit_plan_workflow``.  This closes the bounded in-process TOCTOU where
+        a stale hydration checked first and overwrote a newer queued generation
+        second.  Review/criteria side effects inside ``plan_workflow`` remain
+        outside this fence and require the D-C1-3 compute/publication split.
+        """
+
+        normalized_history_id = str(history_id or "").strip()
+        normalized_request_id = str(plan_request_id or "").strip()
+        if not normalized_history_id or not normalized_request_id:
+            return False
+        with self._plan_hydration_lock:
+            current = dict(self._plan_hydration_inflight.get(normalized_history_id) or {})
+            if str(current.get("request_id") or "").strip() != normalized_request_id:
+                return False
+            self._persist_frontend_history_link(history_id=normalized_history_id, **payload)
+            return True
+
+    def _plan_hydration_consumer_is_current_locked(
+        self,
+        *,
+        history_id: str,
+        record: dict[str, Any],
+        request_signature: str,
+    ) -> bool:
+        current = dict(self._plan_hydration_inflight.get(history_id) or {})
+        record_request_id = str(record.get("request_id") or "").strip()
+        current_request_id = str(current.get("request_id") or "").strip()
+        current_signature = str(current.get("request_signature") or "").strip()
+        return bool(
+            record_request_id
+            and current_request_id == record_request_id
+            and (not current_signature or current_signature == request_signature)
+        )
+
     def _current_plan_hydration_consumers(
         self,
         *,
@@ -1696,19 +1760,34 @@ class SourcingOrchestrator:
         }
         with self._plan_hydration_lock:
             signature_record = dict(self._plan_hydration_signature_inflight.get(normalized_signature) or {})
+            signature_owner_request_id = str(signature_record.get("primary_request_id") or "").strip()
+            expected_owner_request_id = str(fallback_plan_request_id or "").strip()
+            if (
+                signature_record
+                and signature_owner_request_id
+                and signature_owner_request_id != expected_owner_request_id
+            ):
+                # The prior owner retired and this signature now belongs to a
+                # successor.  An old worker must never inspect or clean it.
+                return []
             histories = dict(signature_record.get("histories") or {})
-            if not histories and fallback_record["history_id"]:
+            if not signature_record and fallback_record["history_id"]:
                 histories[fallback_record["history_id"]] = dict(fallback_record)
             consumers: list[dict[str, Any]] = []
+            current_histories: dict[str, dict[str, Any]] = {}
             for consumer_history_id, raw_record in histories.items():
                 record = dict(raw_record or {})
                 normalized_history_id = str(consumer_history_id or record.get("history_id") or "").strip()
                 normalized_request_id = str(record.get("request_id") or "").strip()
                 if not normalized_history_id or not normalized_request_id:
                     continue
-                current = dict(self._plan_hydration_inflight.get(normalized_history_id) or {})
-                if str(current.get("request_id") or "").strip() != normalized_request_id:
+                if not self._plan_hydration_consumer_is_current_locked(
+                    history_id=normalized_history_id,
+                    record=record,
+                    request_signature=normalized_signature,
+                ):
                     continue
+                current_histories[normalized_history_id] = record
                 consumers.append(
                     {
                         "history_id": normalized_history_id,
@@ -1718,34 +1797,107 @@ class SourcingOrchestrator:
                         "request_signature": normalized_signature,
                     }
                 )
+            if signature_record:
+                if current_histories:
+                    signature_record["histories"] = current_histories
+                    signature_record["updated_at"] = _utc_now_iso()
+                    self._plan_hydration_signature_inflight[normalized_signature] = signature_record
+                else:
+                    self._plan_hydration_signature_inflight.pop(normalized_signature, None)
         return consumers
 
-    def _clear_plan_hydration_inflight(self, history_id: str, plan_request_id: str) -> None:
-        normalized_history_id = str(history_id or "").strip()
-        normalized_request_id = str(plan_request_id or "").strip()
-        if not normalized_history_id or not normalized_request_id:
-            return
-        with self._plan_hydration_lock:
-            current = dict(self._plan_hydration_inflight.get(normalized_history_id) or {})
-            if str(current.get("request_id") or "").strip() == normalized_request_id:
-                self._plan_hydration_inflight.pop(normalized_history_id, None)
-                signature = str(current.get("request_signature") or "").strip()
-                signature_record = dict(self._plan_hydration_signature_inflight.get(signature) or {})
-                histories = dict(signature_record.get("histories") or {})
-                histories.pop(normalized_history_id, None)
-                if histories:
-                    signature_record["histories"] = histories
-                    signature_record["updated_at"] = _utc_now_iso()
-                    self._plan_hydration_signature_inflight[signature] = signature_record
-                elif signature:
-                    self._plan_hydration_signature_inflight.pop(signature, None)
+    def _advance_plan_hydration_owner(
+        self,
+        *,
+        request_signature: str,
+        owner_request_id: str,
+        completed_consumers: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Atomically retire a processed batch and return late current consumers.
 
-    def _clear_plan_hydration_consumers(self, consumers: list[dict[str, Any]]) -> None:
-        for consumer in consumers:
-            self._clear_plan_hydration_inflight(
-                str(consumer.get("history_id") or ""),
-                str(consumer.get("request_id") or ""),
+        Queue registration and this barrier use the same lock.  A submit that
+        arrives before the barrier is returned to this owner and consumes the
+        already-compiled result; a submit that arrives after owner retirement
+        creates one successor thread.  There is no snapshot/cleanup gap in which
+        a consumer can be registered without either owner.
+        """
+
+        normalized_signature = str(request_signature or "").strip()
+        normalized_owner_request_id = str(owner_request_id or "").strip()
+        completed_keys = {
+            (
+                str(consumer.get("history_id") or "").strip(),
+                str(consumer.get("request_id") or "").strip(),
             )
+            for consumer in completed_consumers
+            if str(consumer.get("history_id") or "").strip() and str(consumer.get("request_id") or "").strip()
+        }
+        with self._plan_hydration_lock:
+            signature_record = dict(self._plan_hydration_signature_inflight.get(normalized_signature) or {})
+            signature_owner_request_id = str(signature_record.get("primary_request_id") or "").strip()
+            if (
+                signature_record
+                and signature_owner_request_id
+                and signature_owner_request_id != normalized_owner_request_id
+            ):
+                return []
+            histories = dict(signature_record.get("histories") or {})
+            for history_id, request_id in completed_keys:
+                record = dict(histories.get(history_id) or {})
+                if str(record.get("request_id") or "").strip() == request_id:
+                    histories.pop(history_id, None)
+                current = dict(self._plan_hydration_inflight.get(history_id) or {})
+                if str(current.get("request_id") or "").strip() == request_id:
+                    self._plan_hydration_inflight.pop(history_id, None)
+
+            next_consumers: list[dict[str, Any]] = []
+            current_histories: dict[str, dict[str, Any]] = {}
+            for raw_history_id, raw_record in histories.items():
+                record = dict(raw_record or {})
+                history_id = str(raw_history_id or record.get("history_id") or "").strip()
+                if not history_id or not self._plan_hydration_consumer_is_current_locked(
+                    history_id=history_id,
+                    record=record,
+                    request_signature=normalized_signature,
+                ):
+                    continue
+                current_histories[history_id] = record
+                next_consumers.append(
+                    {
+                        "history_id": history_id,
+                        "request_id": str(record.get("request_id") or "").strip(),
+                        "queued_at": str(record.get("queued_at") or "").strip(),
+                        "payload": dict(record.get("payload") or {}),
+                        "request_signature": normalized_signature,
+                    }
+                )
+
+            if signature_record and current_histories:
+                signature_record["histories"] = current_histories
+                signature_record["updated_at"] = _utc_now_iso()
+                self._plan_hydration_signature_inflight[normalized_signature] = signature_record
+            elif signature_record:
+                self._plan_hydration_signature_inflight.pop(normalized_signature, None)
+            return next_consumers
+
+    def _retire_plan_hydration_owner(self, *, request_signature: str, owner_request_id: str) -> None:
+        """Best-effort owner-token cleanup after an unexpected persistence error."""
+
+        normalized_signature = str(request_signature or "").strip()
+        normalized_owner_request_id = str(owner_request_id or "").strip()
+        with self._plan_hydration_lock:
+            signature_record = dict(self._plan_hydration_signature_inflight.get(normalized_signature) or {})
+            signature_owner_request_id = str(signature_record.get("primary_request_id") or "").strip()
+            if signature_owner_request_id and signature_owner_request_id != normalized_owner_request_id:
+                return
+            for raw_history_id, raw_record in dict(signature_record.get("histories") or {}).items():
+                history_id = str(raw_history_id or "").strip()
+                request_id = str(dict(raw_record or {}).get("request_id") or "").strip()
+                current = dict(self._plan_hydration_inflight.get(history_id) or {})
+                if request_id and str(current.get("request_id") or "").strip() == request_id:
+                    self._plan_hydration_inflight.pop(history_id, None)
+            if signature_record:
+                self._plan_hydration_signature_inflight.pop(normalized_signature, None)
 
     def _run_plan_hydration(
         self,
@@ -1757,11 +1909,13 @@ class SourcingOrchestrator:
         request_signature: str = "",
     ) -> None:
         acquired_slot = False
+        owner_retired = False
         started_at = ""
         normalized_request_signature = str(request_signature or "").strip() or _plan_hydration_request_signature(
             payload
         )
         consumers: list[dict[str, Any]] = []
+        running_consumer_keys: set[tuple[str, str]] = set()
         try:
             self._plan_hydration_slots.acquire()
             acquired_slot = True
@@ -1773,6 +1927,7 @@ class SourcingOrchestrator:
                 fallback_queued_at=queued_at,
             )
             if not consumers:
+                owner_retired = True
                 return
 
             started_at = datetime.now(timezone.utc).isoformat()
@@ -1780,8 +1935,9 @@ class SourcingOrchestrator:
                 request_payload = dict(consumer.get("payload") or payload or {})
                 consumer_queued_at = str(consumer.get("queued_at") or queued_at or "").strip()
                 query_text = str(request_payload.get("raw_user_request") or "").strip()
-                self._persist_frontend_history_link(
+                persisted = self._persist_plan_hydration_if_current(
                     history_id=str(consumer.get("history_id") or ""),
+                    plan_request_id=str(consumer.get("request_id") or ""),
                     query_text=query_text,
                     target_company=str(request_payload.get("target_company") or "").strip(),
                     phase="plan",
@@ -1801,9 +1957,37 @@ class SourcingOrchestrator:
                     },
                     merge_metadata=True,
                 )
+                if persisted:
+                    running_consumer_keys.add(
+                        (
+                            str(consumer.get("history_id") or "").strip(),
+                            str(consumer.get("request_id") or "").strip(),
+                        )
+                    )
+
+            # A successor may have replaced every initial consumer while the
+            # running projections were being written.  Recheck immediately
+            # before entering the side-effecting legacy compiler.
+            consumers = self._current_plan_hydration_consumers(
+                request_signature=normalized_request_signature,
+                fallback_history_id=history_id,
+                fallback_payload=payload,
+                fallback_plan_request_id=plan_request_id,
+                fallback_queued_at=queued_at,
+            )
+            if not consumers:
+                owner_retired = True
+                return
 
             started_perf = time.perf_counter()
-            result = self.plan_workflow(dict(payload or {}))
+            # ``plan_workflow`` still creates review and criteria rows before a
+            # durable consumer fence exists.  Do not let it also publish the
+            # primary history row: history publication below is guarded by the
+            # process-local generation lock.  The remaining orphan-side-effect
+            # risk is explicitly blocked on D-C1-3/C1d compute-publish split.
+            compile_payload = dict(payload or {})
+            compile_payload.pop("history_id", None)
+            result = self.plan_workflow(compile_payload)
             total_ms = round((time.perf_counter() - started_perf) * 1000, 2)
             consumers = self._current_plan_hydration_consumers(
                 request_signature=normalized_request_signature,
@@ -1813,28 +1997,184 @@ class SourcingOrchestrator:
                 fallback_queued_at=queued_at,
             )
             if not consumers:
+                owner_retired = True
                 return
 
             result_status = str(result.get("status") or "").strip() or "invalid"
+            completed_at = datetime.now(timezone.utc).isoformat()
             if result_status == "invalid" or not dict(result.get("plan") or {}):
                 reason = str(result.get("reason") or "plan_generation_failed").strip() or "plan_generation_failed"
-                completed_at = datetime.now(timezone.utc).isoformat()
+                while consumers:
+                    batch_size = len(consumers)
+                    for consumer in consumers:
+                        consumer_key = (
+                            str(consumer.get("history_id") or "").strip(),
+                            str(consumer.get("request_id") or "").strip(),
+                        )
+                        request_payload = dict(result.get("request") or consumer.get("payload") or payload or {})
+                        consumer_payload = dict(consumer.get("payload") or {})
+                        consumer_queued_at = str(consumer.get("queued_at") or queued_at or "").strip()
+                        if consumer_key not in running_consumer_keys:
+                            if self._persist_plan_hydration_if_current(
+                                history_id=consumer_key[0],
+                                plan_request_id=consumer_key[1],
+                                query_text=str(consumer_payload.get("raw_user_request") or "").strip(),
+                                target_company=str(consumer_payload.get("target_company") or "").strip(),
+                                phase="plan",
+                                request_payload=consumer_payload,
+                                plan_payload={},
+                                metadata={
+                                    "source": "plan_workflow_async",
+                                    "plan_generation": build_plan_generation(
+                                        status=PLAN_GENERATION_RUNNING,
+                                        request_id=consumer_key[1],
+                                        queued_at=consumer_queued_at,
+                                        started_at=started_at,
+                                        request_signature=normalized_request_signature,
+                                        coalesced_count=batch_size,
+                                        queue_wait_ms=_milliseconds_between_iso(consumer_queued_at, started_at),
+                                    ),
+                                },
+                                merge_metadata=True,
+                            ):
+                                running_consumer_keys.add(consumer_key)
+                        query_text = str(
+                            request_payload.get("raw_user_request")
+                            or consumer_payload.get("raw_user_request")
+                            or payload.get("raw_user_request")
+                            or ""
+                        ).strip()
+                        self._persist_plan_hydration_if_current(
+                            history_id=consumer_key[0],
+                            plan_request_id=consumer_key[1],
+                            query_text=query_text,
+                            target_company=str(
+                                request_payload.get("target_company") or consumer_payload.get("target_company") or ""
+                            ).strip(),
+                            phase="plan",
+                            request_payload=request_payload,
+                            plan_payload={},
+                            metadata={
+                                "source": "plan_workflow_async_failed",
+                                "plan_generation": build_plan_generation(
+                                    status=PLAN_GENERATION_FAILED,
+                                    request_id=consumer_key[1],
+                                    queued_at=consumer_queued_at,
+                                    started_at=started_at,
+                                    completed_at=completed_at,
+                                    total_ms=total_ms,
+                                    error_message=reason,
+                                    request_signature=normalized_request_signature,
+                                    coalesced_count=batch_size,
+                                    queue_wait_ms=_milliseconds_between_iso(consumer_queued_at, started_at),
+                                ),
+                            },
+                            merge_metadata=True,
+                        )
+                    consumers = self._advance_plan_hydration_owner(
+                        request_signature=normalized_request_signature,
+                        owner_request_id=plan_request_id,
+                        completed_consumers=consumers,
+                    )
+                owner_retired = True
+                return
+
+            plan_payload = dict(result.get("plan") or {})
+            plan_review_session = dict(result.get("plan_review_session") or {})
+            while consumers:
+                batch_size = len(consumers)
                 for consumer in consumers:
-                    request_payload = dict(result.get("request") or consumer.get("payload") or payload or {})
+                    consumer_key = (
+                        str(consumer.get("history_id") or "").strip(),
+                        str(consumer.get("request_id") or "").strip(),
+                    )
                     consumer_payload = dict(consumer.get("payload") or {})
+                    consumer_queued_at = str(consumer.get("queued_at") or queued_at or "").strip()
+                    if consumer_key not in running_consumer_keys:
+                        if self._persist_plan_hydration_if_current(
+                            history_id=consumer_key[0],
+                            plan_request_id=consumer_key[1],
+                            query_text=str(consumer_payload.get("raw_user_request") or "").strip(),
+                            target_company=str(consumer_payload.get("target_company") or "").strip(),
+                            phase="plan",
+                            request_payload=consumer_payload,
+                            plan_payload={},
+                            metadata={
+                                "source": "plan_workflow_async",
+                                "plan_generation": build_plan_generation(
+                                    status=PLAN_GENERATION_RUNNING,
+                                    request_id=consumer_key[1],
+                                    queued_at=consumer_queued_at,
+                                    started_at=started_at,
+                                    request_signature=normalized_request_signature,
+                                    coalesced_count=batch_size,
+                                    queue_wait_ms=_milliseconds_between_iso(consumer_queued_at, started_at),
+                                ),
+                            },
+                            merge_metadata=True,
+                        ):
+                            running_consumer_keys.add(consumer_key)
+                    request_payload = dict(result.get("request") or consumer_payload or payload or {})
+                    if consumer_payload.get("history_id"):
+                        request_payload["history_id"] = str(consumer_payload.get("history_id") or "").strip()
                     query_text = str(
                         request_payload.get("raw_user_request")
                         or consumer_payload.get("raw_user_request")
                         or payload.get("raw_user_request")
                         or ""
                     ).strip()
-                    consumer_queued_at = str(consumer.get("queued_at") or queued_at or "").strip()
-                    self._persist_frontend_history_link(
-                        history_id=str(consumer.get("history_id") or ""),
+                    self._persist_plan_hydration_if_current(
+                        history_id=consumer_key[0],
+                        plan_request_id=consumer_key[1],
                         query_text=query_text,
-                        target_company=str(
-                            request_payload.get("target_company") or consumer_payload.get("target_company") or ""
-                        ).strip(),
+                        target_company=str(request_payload.get("target_company") or "").strip(),
+                        review_id=int(plan_review_session.get("review_id") or 0),
+                        phase="plan",
+                        request_payload=request_payload,
+                        plan_payload=plan_payload,
+                        metadata={
+                            "source": "plan_workflow_async_completed",
+                            **_frontend_plan_semantics_metadata(result),
+                            "plan_generation": build_plan_generation(
+                                status=PLAN_GENERATION_COMPLETED,
+                                request_id=consumer_key[1],
+                                queued_at=consumer_queued_at,
+                                started_at=started_at,
+                                completed_at=completed_at,
+                                total_ms=total_ms,
+                                plan_status=result_status,
+                                request_signature=normalized_request_signature,
+                                coalesced_count=batch_size,
+                                queue_wait_ms=_milliseconds_between_iso(consumer_queued_at, started_at),
+                            ),
+                        },
+                        merge_metadata=True,
+                    )
+                consumers = self._advance_plan_hydration_owner(
+                    request_signature=normalized_request_signature,
+                    owner_request_id=plan_request_id,
+                    completed_consumers=consumers,
+                )
+            owner_retired = True
+        except Exception as exc:
+            consumers = self._current_plan_hydration_consumers(
+                request_signature=normalized_request_signature,
+                fallback_history_id=history_id,
+                fallback_payload=payload,
+                fallback_plan_request_id=plan_request_id,
+                fallback_queued_at=queued_at,
+            )
+            completed_at = datetime.now(timezone.utc).isoformat()
+            while consumers:
+                batch_size = len(consumers)
+                for consumer in consumers:
+                    request_payload = dict(consumer.get("payload") or payload or {})
+                    consumer_queued_at = str(consumer.get("queued_at") or queued_at or "").strip()
+                    self._persist_plan_hydration_if_current(
+                        history_id=str(consumer.get("history_id") or ""),
+                        plan_request_id=str(consumer.get("request_id") or ""),
+                        query_text=str(request_payload.get("raw_user_request") or "").strip(),
+                        target_company=str(request_payload.get("target_company") or "").strip(),
                         phase="plan",
                         request_payload=request_payload,
                         plan_payload={},
@@ -1846,103 +2186,28 @@ class SourcingOrchestrator:
                                 queued_at=consumer_queued_at,
                                 started_at=started_at,
                                 completed_at=completed_at,
-                                total_ms=total_ms,
-                                error_message=reason,
+                                error_message=str(exc),
                                 request_signature=normalized_request_signature,
-                                coalesced_count=len(consumers),
+                                coalesced_count=batch_size,
                                 queue_wait_ms=_milliseconds_between_iso(consumer_queued_at, started_at),
                             ),
                         },
                         merge_metadata=True,
                     )
-                return
-
-            plan_payload = dict(result.get("plan") or {})
-            plan_review_session = dict(result.get("plan_review_session") or {})
-            completed_at = datetime.now(timezone.utc).isoformat()
-            for consumer in consumers:
-                consumer_payload = dict(consumer.get("payload") or {})
-                request_payload = dict(result.get("request") or consumer_payload or payload or {})
-                if consumer_payload.get("history_id"):
-                    request_payload["history_id"] = str(consumer_payload.get("history_id") or "").strip()
-                query_text = str(
-                    request_payload.get("raw_user_request")
-                    or consumer_payload.get("raw_user_request")
-                    or payload.get("raw_user_request")
-                    or ""
-                ).strip()
-                consumer_queued_at = str(consumer.get("queued_at") or queued_at or "").strip()
-                self._persist_frontend_history_link(
-                    history_id=str(consumer.get("history_id") or ""),
-                    query_text=query_text,
-                    target_company=str(request_payload.get("target_company") or "").strip(),
-                    review_id=int(plan_review_session.get("review_id") or 0),
-                    phase="plan",
-                    request_payload=request_payload,
-                    plan_payload=plan_payload,
-                    metadata={
-                        "source": "plan_workflow_async_completed",
-                        **_frontend_plan_semantics_metadata(result),
-                        "plan_generation": build_plan_generation(
-                            status=PLAN_GENERATION_COMPLETED,
-                            request_id=str(consumer.get("request_id") or ""),
-                            queued_at=consumer_queued_at,
-                            started_at=started_at,
-                            completed_at=completed_at,
-                            total_ms=total_ms,
-                            plan_status=result_status,
-                            request_signature=normalized_request_signature,
-                            coalesced_count=len(consumers),
-                            queue_wait_ms=_milliseconds_between_iso(consumer_queued_at, started_at),
-                        ),
-                    },
-                    merge_metadata=True,
+                consumers = self._advance_plan_hydration_owner(
+                    request_signature=normalized_request_signature,
+                    owner_request_id=plan_request_id,
+                    completed_consumers=consumers,
                 )
-        except Exception as exc:
-            consumers = self._current_plan_hydration_consumers(
-                request_signature=normalized_request_signature,
-                fallback_history_id=history_id,
-                fallback_payload=payload,
-                fallback_plan_request_id=plan_request_id,
-                fallback_queued_at=queued_at,
-            )
-            completed_at = datetime.now(timezone.utc).isoformat()
-            for consumer in consumers:
-                request_payload = dict(consumer.get("payload") or payload or {})
-                consumer_queued_at = str(consumer.get("queued_at") or queued_at or "").strip()
-                self._persist_frontend_history_link(
-                    history_id=str(consumer.get("history_id") or ""),
-                    query_text=str(request_payload.get("raw_user_request") or "").strip(),
-                    target_company=str(request_payload.get("target_company") or "").strip(),
-                    phase="plan",
-                    request_payload=request_payload,
-                    plan_payload={},
-                    metadata={
-                        "source": "plan_workflow_async_failed",
-                        "plan_generation": build_plan_generation(
-                            status=PLAN_GENERATION_FAILED,
-                            request_id=str(consumer.get("request_id") or ""),
-                            queued_at=consumer_queued_at,
-                            started_at=started_at,
-                            completed_at=completed_at,
-                            error_message=str(exc),
-                            request_signature=normalized_request_signature,
-                            coalesced_count=len(consumers),
-                            queue_wait_ms=_milliseconds_between_iso(consumer_queued_at, started_at),
-                        ),
-                    },
-                    merge_metadata=True,
-                )
+            owner_retired = True
         finally:
             if acquired_slot:
                 self._plan_hydration_slots.release()
-            consumers = consumers or [
-                {
-                    "history_id": history_id,
-                    "request_id": plan_request_id,
-                }
-            ]
-            self._clear_plan_hydration_consumers(consumers)
+            if not owner_retired:
+                self._retire_plan_hydration_owner(
+                    request_signature=normalized_request_signature,
+                    owner_request_id=plan_request_id,
+                )
 
     def explain_workflow(self, payload: dict[str, Any]) -> dict[str, Any]:
         started_at = time.perf_counter()

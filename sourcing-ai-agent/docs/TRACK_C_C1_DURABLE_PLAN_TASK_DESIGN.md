@@ -696,6 +696,32 @@ independent review because public status and download semantics change.
   `34`, `make lint` passed, and mypy remained at its `81 errors / 4 files` ratchet. The full fast contract lane passed
   `349+2+11+1+2` plus `dry_run_ready`; this author record is not a formal `GO`.
 
+#### C1b pinned advisory fixed-forward record (2026-07-14; formal gate still pending)
+
+- The legacy in-process owner now uses one re-entrant lock and an owner token for submit publication, current-generation
+  publication, late-consumer drain, and retirement. A late same-signature submit before the retirement barrier joins
+  the current compiled result; one arriving after retirement creates a successor. The regression injects the submit
+  inside terminal publication, the former snapshot/cleanup gap.
+- Same-history Plan history publication is now guarded by the same lock and the compiler is invoked without a
+  `history_id`, so an obsolete generation cannot overwrite the successor history row through `plan_workflow`.
+  This is not full closure: a deterministic real-compiler race proves the obsolete generation can still create an
+  orphan review session and criteria versions before the post-call fence. D-C1-3/C1d must split pure compute from
+  owner-gated publication; no durable/live/manual/product signoff may treat this C1b fence as that split.
+- The AST ratchet now follows callable aliases and `partial`/`getattr`, plus thread and executor targets. Mutation
+  fixtures prove aliased direct compile, aliased hydration thread, and executor submit bypasses are detected.
+- Authenticated unlinked Plan rows carry API-authored requester/tenant provenance. Submit, exact read, list, and
+  resubmit use one fail-closed matrix: missing, partial, mismatched, or body-authored ownership is 404/excluded; open
+  mode and non-Plan legacy rows retain compatibility. This bridge adds no schema and is deleted after durable consumer
+  identity and legacy-owner repair are authoritative.
+- Empty owner-supplied artifact handles are rejected at construction and malformed succeeded adapter payloads omit
+  the artifact. The current Plan bridge remains HTTP `200`/`pending`; only C1e may switch it to durable HTTP `202`.
+- Deterministic tests use event/barrier or publication injection, not timing sleeps: late-consumer ordering is tested
+  inside terminal publication, and a compiler-owner exception terminalizes every coalesced consumer as `failed` and
+  clears both process-local registries rather than leaving silent `pending` work. Fixed-forward evidence: contract/
+  identity `60 passed`, history recovery `32 passed`,
+  export/transport `15 passed`, CRM `26 passed + 4 subtests`, frontend contracts `13 passed`, frontend production
+  build and lint green, mypy unchanged at `81 errors / 4 files`, and `349+2+11+1+2` + `dry_run_ready` green.
+
 ### C1b: Characterize and contract preflight
 
 - Pin current HTTP 200/pending shape, history metadata transitions, plan/review/criteria side effects, same-signature

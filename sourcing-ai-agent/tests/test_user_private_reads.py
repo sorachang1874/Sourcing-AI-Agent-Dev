@@ -17,6 +17,10 @@ from urllib import request as urllib_request
 from urllib.error import HTTPError
 
 from sourcing_agent.api import _read_allowed_namespace, _read_allowed_requester, create_server
+from sourcing_agent.plan_submit_contract import (
+    PLAN_SUBMIT_IDENTITY_METADATA_KEY,
+    PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+)
 
 
 class _FakeState:
@@ -84,6 +88,7 @@ class _StubStore:
 class _StubOrchestrator:
     def __init__(self, store):
         self.store = store
+        self.plan_submit_count = 0
 
     def get_runtime_metrics(self, _query):
         return {"status": "ok"}
@@ -108,12 +113,12 @@ class _StubOrchestrator:
         return {"status": "ok", "history_id": history_id}
 
     def list_frontend_history(self, limit=24):
-        items = [
-            {"history_id": "h1", "job_id": "job-alice"},
-            {"history_id": "h2", "job_id": "job-legacy-empty"},
-            {"history_id": "h3", "job_id": ""},
-        ]
+        items = [{"history_id": history_id, **dict(link)} for history_id, link in self.store._links.items()]
         return {"history": items, "count": len(items)}
+
+    def submit_plan_workflow(self, payload):
+        self.plan_submit_count += 1
+        return {"status": "pending", "history_id": str(payload.get("history_id") or "new-history")}
 
 
 _TOKENS = json.dumps({"tok-alice": "alice", "tok-bob": "bob"})
@@ -137,9 +142,47 @@ class UserPrivateReadGateTest(unittest.TestCase):
                 "exp-projection": {"payload": {}},
             },
             links={
-                "hist-alice": {"job_id": "job-alice"},
-                "hist-legacy": {"job_id": "job-legacy-empty"},
-                "hist-unlinked": {"job_id": ""},
+                "hist-alice": {"job_id": "job-alice", "phase": "results"},
+                "hist-legacy": {"job_id": "job-legacy-empty", "phase": "results"},
+                "hist-unlinked-alice": {
+                    "job_id": "",
+                    "phase": "plan",
+                    "metadata": {
+                        PLAN_SUBMIT_IDENTITY_METADATA_KEY: {
+                            "provenance": PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+                            "requester_id": "alice",
+                            "tenant_id": "user-alice",
+                        }
+                    },
+                },
+                "hist-unlinked-bob": {
+                    "job_id": "",
+                    "phase": "plan",
+                    "metadata": {
+                        PLAN_SUBMIT_IDENTITY_METADATA_KEY: {
+                            "provenance": PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+                            "requester_id": "bob",
+                            "tenant_id": "user-bob",
+                        }
+                    },
+                },
+                "hist-unlinked-bad-tenant": {
+                    "job_id": "",
+                    "phase": "plan",
+                    "metadata": {
+                        PLAN_SUBMIT_IDENTITY_METADATA_KEY: {
+                            "provenance": PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+                            "requester_id": "alice",
+                            "tenant_id": "user-bob",
+                        }
+                    },
+                },
+                "hist-unlinked-unresolved": {
+                    "job_id": "",
+                    "phase": "plan",
+                    "metadata": {"plan_generation": {"status": "queued"}},
+                },
+                "hist-unlinked-nonplan": {"job_id": "", "phase": "results"},
             },
         )
         env_patch = patch.dict(os.environ, dict(env or {}))
@@ -160,6 +203,22 @@ class UserPrivateReadGateTest(unittest.TestCase):
     def _get(self, opener, url, *, token=None):
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         request = urllib_request.Request(url, headers=headers, method="GET")
+        try:
+            with opener.open(request, timeout=10) as response:
+                return response.status
+        except HTTPError as error:
+            return error.code
+
+    def _post(self, opener, url, body, *, token=None):
+        headers = {"Content-Type": "application/json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        request = urllib_request.Request(
+            url,
+            data=json.dumps(body).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
         try:
             with opener.open(request, timeout=10) as response:
                 return response.status
@@ -241,10 +300,51 @@ class UserPrivateReadGateTest(unittest.TestCase):
         base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
         self.assertEqual(self._get(opener, f"{base}/api/frontend-history/hist-alice", token="tok-bob"), 404)
 
-    def test_legacy_and_unlinked_history_readable(self) -> None:
+    def test_legacy_linked_history_remains_readable(self) -> None:
         base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
         self.assertEqual(self._get(opener, f"{base}/api/frontend-history/hist-legacy", token="tok-bob"), 200)
-        self.assertEqual(self._get(opener, f"{base}/api/frontend-history/hist-unlinked", token="tok-bob"), 200)
+
+    def test_authenticated_unlinked_plan_history_requires_exact_provenance_scope(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        self.assertEqual(
+            self._get(opener, f"{base}/api/frontend-history/hist-unlinked-alice", token="tok-alice"),
+            200,
+        )
+        self.assertEqual(
+            self._get(opener, f"{base}/api/frontend-history/hist-unlinked-alice", token="tok-bob"),
+            404,
+        )
+        self.assertEqual(
+            self._get(opener, f"{base}/api/frontend-history/hist-unlinked-bad-tenant", token="tok-alice"),
+            404,
+        )
+        self.assertEqual(
+            self._get(opener, f"{base}/api/frontend-history/hist-unlinked-unresolved", token="tok-alice"),
+            404,
+        )
+
+    def test_authenticated_plan_resubmit_cannot_take_over_unlinked_history(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        body = {"history_id": "hist-unlinked-alice", "raw_user_request": "find people"}
+        self.assertEqual(self._post(opener, f"{base}/api/plan/submit", body, token="tok-bob"), 404)
+        self.assertEqual(self._post(opener, f"{base}/api/plan/submit", body, token="tok-alice"), 200)
+
+    def test_authenticated_plan_resubmit_rejects_unresolved_legacy_owner(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        body = {"history_id": "hist-unlinked-unresolved", "raw_user_request": "find people"}
+        self.assertEqual(self._post(opener, f"{base}/api/plan/submit", body, token="tok-alice"), 404)
+
+    def test_authenticated_plan_submit_cannot_convert_existing_unlinked_nonplan_history(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        body = {"history_id": "hist-unlinked-nonplan", "raw_user_request": "find people"}
+        self.assertEqual(self._post(opener, f"{base}/api/plan/submit", body, token="tok-alice"), 404)
+
+    def test_unlinked_non_plan_history_retains_legacy_compatibility(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        self.assertEqual(
+            self._get(opener, f"{base}/api/frontend-history/hist-unlinked-nonplan", token="tok-bob"),
+            200,
+        )
 
     def test_non_owner_cannot_delete_history(self) -> None:
         base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
@@ -260,16 +360,21 @@ class UserPrivateReadGateTest(unittest.TestCase):
     def test_history_list_filters_out_other_users(self) -> None:
         base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
         alice = self._get_json(opener, f"{base}/api/frontend-history", token="tok-alice")
-        self.assertEqual({i["job_id"] for i in alice["history"]}, {"job-alice", "job-legacy-empty", ""})
+        self.assertEqual(
+            {i["history_id"] for i in alice["history"]},
+            {"hist-alice", "hist-legacy", "hist-unlinked-alice", "hist-unlinked-nonplan"},
+        )
         bob = self._get_json(opener, f"{base}/api/frontend-history", token="tok-bob")
-        # bob does not see alice's entry; legacy + unlinked stay visible.
-        self.assertEqual({i["job_id"] for i in bob["history"]}, {"job-legacy-empty", ""})
-        self.assertEqual(bob["count"], 2)
+        self.assertEqual(
+            {i["history_id"] for i in bob["history"]},
+            {"hist-legacy", "hist-unlinked-bob", "hist-unlinked-nonplan"},
+        )
+        self.assertEqual(bob["count"], 3)
 
     def test_history_list_open_mode_unfiltered(self) -> None:
         base, opener = self._start_server(env={})
         result = self._get_json(opener, f"{base}/api/frontend-history")
-        self.assertEqual(result["count"], 3)
+        self.assertEqual(result["count"], 7)
 
 
 if __name__ == "__main__":

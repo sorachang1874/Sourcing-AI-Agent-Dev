@@ -20,7 +20,9 @@ from sourcing_agent.plan_submit_contract import (
     PLAN_GENERATION_QUEUED,
     PLAN_GENERATION_RUNNING,
     PLAN_GENERATION_TERMINAL_STATUSES,
+    PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
     build_plan_generation,
+    build_plan_submit_identity_metadata,
     canonical_plan_compile_request,
     plan_hydration_request_signature,
 )
@@ -35,15 +37,66 @@ class _CallInventory(ast.NodeVisitor):
         self.if_stack: list[str] = []
         self.attribute_calls: list[dict[str, Any]] = []
         self.hydration_thread_creators: list[dict[str, Any]] = []
+        self.hydration_executor_targets: list[dict[str, Any]] = []
+        self._alias_scopes: list[dict[str, str]] = [{}]
+
+    def _bind_alias(self, name: str, target: str) -> None:
+        normalized_name = str(name or "").strip()
+        normalized_target = str(target or "").strip()
+        if normalized_name and normalized_target:
+            self._alias_scopes[-1][normalized_name] = normalized_target
+
+    def _lookup_alias(self, name: str) -> str:
+        for scope in reversed(self._alias_scopes):
+            if name in scope:
+                return scope[name]
+        return name
+
+    def _resolve_callable(self, node: ast.AST | None) -> str:
+        if isinstance(node, ast.Attribute):
+            return node.attr
+        if isinstance(node, ast.Name):
+            return self._lookup_alias(node.id)
+        if isinstance(node, ast.Call):
+            called = self._resolve_callable(node.func)
+            if called == "partial" and node.args:
+                return self._resolve_callable(node.args[0])
+            if called == "getattr" and len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
+                return str(node.args[1].value or "")
+        return ""
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            self._bind_alias(alias.asname or alias.name.split(".")[0], alias.name.split(".")[-1])
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        for alias in node.names:
+            self._bind_alias(alias.asname or alias.name, alias.name)
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        resolved = self._resolve_callable(node.value)
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                self._bind_alias(target.id, resolved)
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        if isinstance(node.target, ast.Name):
+            self._bind_alias(node.target.id, self._resolve_callable(node.value))
+        self.generic_visit(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self.function_stack.append(node.name)
+        self._alias_scopes.append({})
         self.generic_visit(node)
+        self._alias_scopes.pop()
         self.function_stack.pop()
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         self.function_stack.append(node.name)
+        self._alias_scopes.append({})
         self.generic_visit(node)
+        self._alias_scopes.pop()
         self.function_stack.pop()
 
     def visit_If(self, node: ast.If) -> None:
@@ -55,27 +108,77 @@ class _CallInventory(ast.NodeVisitor):
             self.visit(statement)
 
     def visit_Call(self, node: ast.Call) -> None:
-        if isinstance(node.func, ast.Attribute):
+        called = self._resolve_callable(node.func)
+        if called in {
+            LEGACY_PLAN_HYDRATION_QUEUE_METHOD,
+            LEGACY_PLAN_HYDRATION_RUN_METHOD,
+            "plan_workflow",
+        }:
             record = {
-                "attribute": node.func.attr,
+                "attribute": called,
                 "function": self.function_stack[-1] if self.function_stack else "<module>",
                 "if_tests": tuple(self.if_stack),
                 "lineno": node.lineno,
+                "kind": "direct_or_alias_call",
             }
             self.attribute_calls.append(record)
-            if node.func.attr == "Thread":
-                target = next(
-                    (keyword.value for keyword in node.keywords if keyword.arg == "target"),
-                    None,
+
+        if called in {"Thread", "start_new_thread"}:
+            target = next(
+                (keyword.value for keyword in node.keywords if keyword.arg == "target"),
+                node.args[0] if called == "start_new_thread" and node.args else None,
+            )
+            target_name = self._resolve_callable(target)
+            if target_name == LEGACY_PLAN_HYDRATION_RUN_METHOD:
+                self.hydration_thread_creators.append(
+                    {
+                        "attribute": called,
+                        "function": self.function_stack[-1] if self.function_stack else "<module>",
+                        "if_tests": tuple(self.if_stack),
+                        "lineno": node.lineno,
+                        "kind": "thread_target",
+                    }
                 )
-                if isinstance(target, ast.Attribute) and target.attr == LEGACY_PLAN_HYDRATION_RUN_METHOD:
-                    self.hydration_thread_creators.append(record)
+            if target_name == "plan_workflow":
+                self.attribute_calls.append(
+                    {
+                        "attribute": target_name,
+                        "function": self.function_stack[-1] if self.function_stack else "<module>",
+                        "if_tests": tuple(self.if_stack),
+                        "lineno": node.lineno,
+                        "kind": "thread_target",
+                    }
+                )
+
+        if called in {"submit", "map", "apply", "apply_async"}:
+            target = node.args[0] if node.args else next(
+                (keyword.value for keyword in node.keywords if keyword.arg in {"fn", "func"}),
+                None,
+            )
+            target_name = self._resolve_callable(target)
+            target_record = {
+                "attribute": target_name,
+                "function": self.function_stack[-1] if self.function_stack else "<module>",
+                "if_tests": tuple(self.if_stack),
+                "lineno": node.lineno,
+                "kind": "executor_target",
+            }
+            if target_name == LEGACY_PLAN_HYDRATION_RUN_METHOD:
+                self.hydration_executor_targets.append(target_record)
+            if target_name == "plan_workflow":
+                self.attribute_calls.append(target_record)
         self.generic_visit(node)
 
 
 def _inventory(path: Path) -> _CallInventory:
     inventory = _CallInventory()
     inventory.visit(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)))
+    return inventory
+
+
+def _inventory_source(source: str) -> _CallInventory:
+    inventory = _CallInventory()
+    inventory.visit(ast.parse(source))
     return inventory
 
 
@@ -120,6 +223,28 @@ def test_plan_generation_builder_preserves_one_lifecycle_shape() -> None:
             request_id="request-1",
             queued_at="2026-07-14T00:00:00+00:00",
         )
+
+
+def test_authenticated_plan_submit_identity_proof_is_total_and_fail_closed() -> None:
+    assert build_plan_submit_identity_metadata(
+        provenance=PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+        requester_id="alice",
+        tenant_id="user-alice",
+    ) == {
+        "provenance": "authenticated_request_state_v1",
+        "requester_id": "alice",
+        "tenant_id": "user-alice",
+    }
+    assert not build_plan_submit_identity_metadata(
+        provenance="client_claim",
+        requester_id="alice",
+        tenant_id="user-alice",
+    )
+    assert not build_plan_submit_identity_metadata(
+        provenance=PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+        requester_id="alice",
+        tenant_id="",
+    )
 
 
 def test_plan_compile_signature_excludes_consumer_transport_identity_only() -> None:
@@ -170,6 +295,13 @@ def test_source_ratchet_has_one_submit_owned_hydration_thread_and_no_api_compile
     ]
     assert thread_creators == [("orchestrator.py", LEGACY_PLAN_HYDRATION_QUEUE_METHOD)]
 
+    executor_targets = [
+        (path, target["function"])
+        for path, inventory in inventories.items()
+        for target in inventory.hydration_executor_targets
+    ]
+    assert executor_targets == []
+
     compile_callers = [
         (path, call["function"], call["if_tests"])
         for path, inventory in inventories.items()
@@ -184,3 +316,28 @@ def test_source_ratchet_has_one_submit_owned_hydration_thread_and_no_api_compile
     assert cli_call[1] == "main"
     assert "args.command == 'plan'" in cli_call[2]
     assert not any(path == "api.py" for path, _function, _if_tests in compile_callers)
+
+
+def test_source_ratchet_detects_callable_alias_thread_alias_and_executor_bypasses() -> None:
+    inventory = _inventory_source(
+        """
+import threading as thread_runtime
+
+def bypass(self, executor):
+    compile_alias = self.plan_workflow
+    compile_alias({})
+    run_alias = self._run_plan_hydration
+    thread_alias = thread_runtime.Thread
+    thread_alias(target=run_alias)
+    submit_alias = executor.submit
+    submit_alias(run_alias)
+    submit_alias(compile_alias, {})
+"""
+    )
+
+    compile_uses = [
+        call for call in inventory.attribute_calls if call["attribute"] == "plan_workflow"
+    ]
+    assert {call["kind"] for call in compile_uses} == {"direct_or_alias_call", "executor_target"}
+    assert len(inventory.hydration_thread_creators) == 1
+    assert len(inventory.hydration_executor_targets) == 1

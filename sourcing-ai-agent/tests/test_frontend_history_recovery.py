@@ -24,6 +24,11 @@ from sourcing_agent.durable_runtime import (
 from sourcing_agent.excel_intake_owner import ExcelIntakeOwner
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import SourcingOrchestrator, _plan_hydration_request_signature
+from sourcing_agent.plan_submit_contract import (
+    PLAN_SUBMIT_IDENTITY_METADATA_KEY,
+    PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY,
+    PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+)
 from sourcing_agent.semantic_provider import LocalSemanticProvider
 from sourcing_agent.settings import (
     AppSettings,
@@ -33,6 +38,7 @@ from sourcing_agent.settings import (
     SemanticProviderSettings,
 )
 from sourcing_agent.storage import ControlPlaneStore
+from sourcing_agent.workflow_submission import normalize_workflow_submission_payload
 from tests.pg_durable_runtime import PGDurableRuntimeTestMixin
 
 
@@ -176,6 +182,33 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             str(dict(link["metadata"].get("plan_generation") or {}).get("status") or ""),
             "queued",
         )
+
+    def test_submit_plan_workflow_consumes_authenticated_identity_provenance_into_metadata(self) -> None:
+        history_id = "history-plan-submit-identity-1"
+        with mock.patch.object(self.orchestrator, "_queue_plan_hydration", return_value=None) as queue_mock:
+            submitted = self.orchestrator.submit_plan_workflow(
+                {
+                    "raw_user_request": "Find OpenAI researchers",
+                    "history_id": history_id,
+                    "requester_id": "alice",
+                    "tenant_id": "user-alice",
+                    PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY: PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+                }
+            )
+
+        link = self.store.get_frontend_history_link(history_id)
+        assert link is not None
+        self.assertEqual(
+            dict(link["metadata"].get(PLAN_SUBMIT_IDENTITY_METADATA_KEY) or {}),
+            {
+                "provenance": PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+                "requester_id": "alice",
+                "tenant_id": "user-alice",
+            },
+        )
+        self.assertNotIn(PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY, submitted["request"])
+        queued_payload = dict(queue_mock.call_args.kwargs["payload"])
+        self.assertNotIn(PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY, queued_payload)
 
     def test_run_plan_hydration_promotes_pending_history_to_ready_plan(self) -> None:
         history_id = "history-plan-hydration-1"
@@ -424,6 +457,198 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "全量本地资产复用",
             )
 
+    def test_late_same_signature_consumer_is_drained_before_owner_retirement(self) -> None:
+        queued_at = "2026-07-14T00:00:00+00:00"
+        first_history_id = "history-plan-owner-barrier-first"
+        late_history_id = "history-plan-owner-barrier-late"
+        first_request_id = "request-plan-owner-barrier-first"
+        base_payload = normalize_workflow_submission_payload(
+            {"raw_user_request": "Find OpenAI reasoning researchers"}
+        )
+        first_payload = {**base_payload, "history_id": first_history_id}
+        request_signature = _plan_hydration_request_signature(first_payload)
+        first_record = {
+            "request_id": first_request_id,
+            "queued_at": queued_at,
+            "payload": first_payload,
+            "request_signature": request_signature,
+        }
+        self.store.upsert_frontend_history_link(
+            {
+                "history_id": first_history_id,
+                "query_text": str(first_payload["raw_user_request"]),
+                "phase": "plan",
+                "request": first_payload,
+                "metadata": {
+                    "source": "plan_workflow_submit",
+                    "plan_generation": {
+                        "status": "queued",
+                        "request_id": first_request_id,
+                        "queued_at": queued_at,
+                    },
+                },
+            }
+        )
+        with self.orchestrator._plan_hydration_lock:
+            self.orchestrator._plan_hydration_inflight[first_history_id] = dict(first_record)
+            self.orchestrator._plan_hydration_signature_inflight[request_signature] = {
+                "request_signature": request_signature,
+                "primary_history_id": first_history_id,
+                "primary_request_id": first_request_id,
+                "queued_at": queued_at,
+                "payload": first_payload,
+                "histories": {first_history_id: dict(first_record)},
+            }
+
+        fake_result = {
+            "status": "needs_plan_review",
+            "request": {"raw_user_request": str(base_payload["raw_user_request"]), "target_company": "OpenAI"},
+            "plan": {"target_company": "OpenAI", "acquisition_tasks": [{"task_id": "reasoning"}]},
+            "plan_review_session": {"review_id": 7654},
+        }
+        original_persist = self.orchestrator._persist_frontend_history_link
+        late_submit: dict[str, object] = {}
+
+        def persist_and_register_late_consumer(**kwargs: object):
+            persisted = original_persist(**kwargs)
+            generation = dict(dict(kwargs.get("metadata") or {}).get("plan_generation") or {})
+            if (
+                not late_submit
+                and str(kwargs.get("history_id") or "") == first_history_id
+                and str(generation.get("status") or "") == "completed"
+            ):
+                late_submit.update(
+                    self.orchestrator.submit_plan_workflow(
+                        {**base_payload, "history_id": late_history_id}
+                    )
+                )
+            return persisted
+
+        with (
+            mock.patch.object(self.orchestrator, "plan_workflow", return_value=fake_result) as plan_mock,
+            mock.patch.object(
+                self.orchestrator,
+                "_persist_frontend_history_link",
+                side_effect=persist_and_register_late_consumer,
+            ),
+        ):
+            self.orchestrator._run_plan_hydration(
+                history_id=first_history_id,
+                payload=first_payload,
+                plan_request_id=first_request_id,
+                queued_at=queued_at,
+                request_signature=request_signature,
+            )
+
+        plan_mock.assert_called_once()
+        self.assertEqual(str(late_submit.get("status") or ""), "pending")
+        self.assertFalse(self.orchestrator._plan_hydration_inflight)
+        self.assertFalse(self.orchestrator._plan_hydration_signature_inflight)
+        for history_id in (first_history_id, late_history_id):
+            link = self.store.get_frontend_history_link(history_id)
+            assert link is not None
+            generation = dict(link["metadata"].get("plan_generation") or {})
+            self.assertEqual(str(generation.get("status") or ""), "completed")
+            self.assertTrue(link["plan"])
+            self.assertEqual(int(link["review_id"] or 0), 7654)
+
+    def test_same_history_supersede_fences_history_but_characterizes_orphan_side_effect_blocker(self) -> None:
+        history_id = "history-plan-side-effect-fence"
+        first_request_id = "request-plan-side-effect-fence-first"
+        queued_at = "2026-07-14T00:00:00+00:00"
+        first_payload = {
+            "raw_user_request": "我想要OpenAI做Reasoning方向的人",
+            "history_id": history_id,
+        }
+        request_signature = _plan_hydration_request_signature(first_payload)
+        first_record = {
+            "request_id": first_request_id,
+            "queued_at": queued_at,
+            "payload": first_payload,
+            "request_signature": request_signature,
+        }
+        self._write_company_identity_snapshot(target_company="OpenAI", snapshot_id="20260714T000000")
+        self.store.upsert_frontend_history_link(
+            {
+                "history_id": history_id,
+                "query_text": str(first_payload["raw_user_request"]),
+                "phase": "plan",
+                "request": first_payload,
+                "metadata": {
+                    "source": "plan_workflow_submit",
+                    "plan_generation": {
+                        "status": "queued",
+                        "request_id": first_request_id,
+                        "queued_at": queued_at,
+                    },
+                },
+            }
+        )
+        with self.orchestrator._plan_hydration_lock:
+            self.orchestrator._plan_hydration_inflight[history_id] = dict(first_record)
+            self.orchestrator._plan_hydration_signature_inflight[request_signature] = {
+                "request_signature": request_signature,
+                "primary_history_id": history_id,
+                "primary_request_id": first_request_id,
+                "queued_at": queued_at,
+                "payload": first_payload,
+                "histories": {history_id: dict(first_record)},
+            }
+
+        explain_entered = threading.Event()
+        explain_release = threading.Event()
+        original_explain = self.orchestrator.explain_workflow
+
+        def blocked_explain(payload: dict[str, object]) -> dict[str, object]:
+            explain_entered.set()
+            self.assertTrue(explain_release.wait(timeout=10))
+            return original_explain(payload)
+
+        review_count_before = len(self.store.list_plan_review_sessions(limit=100))
+        criteria_count_before = len(self.store.repos.criteria_confidence.list_versions(target_company="OpenAI"))
+        worker = threading.Thread(
+            target=self.orchestrator._run_plan_hydration,
+            kwargs={
+                "history_id": history_id,
+                "payload": first_payload,
+                "plan_request_id": first_request_id,
+                "queued_at": queued_at,
+                "request_signature": request_signature,
+            },
+            daemon=True,
+        )
+        with mock.patch.object(self.orchestrator, "explain_workflow", side_effect=blocked_explain):
+            worker.start()
+            self.assertTrue(explain_entered.wait(timeout=5))
+            with mock.patch.object(self.orchestrator, "_run_plan_hydration", return_value=None):
+                successor = self.orchestrator.submit_plan_workflow(
+                    {
+                        "raw_user_request": "Find Anthropic pretraining researchers",
+                        "history_id": history_id,
+                    }
+                )
+            successor_request_id = str(successor["metadata"]["plan_generation"]["request_id"])
+            explain_release.set()
+            worker.join(timeout=20)
+        self.assertFalse(worker.is_alive())
+
+        link = self.store.get_frontend_history_link(history_id)
+        assert link is not None
+        generation = dict(link["metadata"].get("plan_generation") or {})
+        self.assertEqual(str(generation.get("request_id") or ""), successor_request_id)
+        self.assertEqual(str(generation.get("status") or ""), "queued")
+        self.assertFalse(link["plan"])
+        self.assertEqual(int(link["review_id"] or 0), 0)
+
+        # This is intentionally a blocker characterization, not a false closure:
+        # plan_workflow still created mutable review/criteria rows before the
+        # post-call generation fence. D-C1-3/C1d must split compute/publication.
+        self.assertEqual(len(self.store.list_plan_review_sessions(limit=100)), review_count_before + 1)
+        self.assertGreater(
+            len(self.store.repos.criteria_confidence.list_versions(target_company="OpenAI")),
+            criteria_count_before,
+        )
+
     def test_submit_plan_workflow_supersedes_same_history_before_stale_hydration_publish(self) -> None:
         history_id = "history-plan-supersede-1"
         hydration_release = threading.Event()
@@ -541,6 +766,86 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(str(generation.get("status") or ""), "failed")
         self.assertEqual(str(generation.get("error_message") or ""), "fixture_compile_failed")
         self.assertTrue(str(generation.get("completed_at") or ""))
+
+    def test_plan_hydration_owner_exception_terminalizes_all_consumers_without_pending(self) -> None:
+        queued_at = "2026-07-14T00:00:00+00:00"
+        first_history_id = "history-plan-owner-error-first"
+        second_history_id = "history-plan-owner-error-second"
+        first_request_id = "request-plan-owner-error-first"
+        second_request_id = "request-plan-owner-error-second"
+        base_payload = normalize_workflow_submission_payload(
+            {"raw_user_request": "Find OpenAI reasoning researchers"}
+        )
+        first_payload = {**base_payload, "history_id": first_history_id}
+        second_payload = {**base_payload, "history_id": second_history_id}
+        request_signature = _plan_hydration_request_signature(first_payload)
+        records = {
+            first_history_id: {
+                "request_id": first_request_id,
+                "queued_at": queued_at,
+                "payload": first_payload,
+                "request_signature": request_signature,
+            },
+            second_history_id: {
+                "request_id": second_request_id,
+                "queued_at": queued_at,
+                "payload": second_payload,
+                "request_signature": request_signature,
+            },
+        }
+        for history_id, record in records.items():
+            self.store.upsert_frontend_history_link(
+                {
+                    "history_id": history_id,
+                    "query_text": str(base_payload["raw_user_request"]),
+                    "phase": "plan",
+                    "request": dict(record["payload"]),
+                    "metadata": {
+                        "source": "plan_workflow_submit",
+                        "plan_generation": {
+                            "status": "queued",
+                            "request_id": str(record["request_id"]),
+                            "queued_at": queued_at,
+                        },
+                    },
+                }
+            )
+        with self.orchestrator._plan_hydration_lock:
+            self.orchestrator._plan_hydration_inflight.update(
+                {history_id: dict(record) for history_id, record in records.items()}
+            )
+            self.orchestrator._plan_hydration_signature_inflight[request_signature] = {
+                "request_signature": request_signature,
+                "primary_history_id": first_history_id,
+                "primary_request_id": first_request_id,
+                "queued_at": queued_at,
+                "payload": first_payload,
+                "histories": {history_id: dict(record) for history_id, record in records.items()},
+            }
+
+        with mock.patch.object(
+            self.orchestrator,
+            "plan_workflow",
+            side_effect=RuntimeError("fixture_owner_failed"),
+        ) as plan_mock:
+            self.orchestrator._run_plan_hydration(
+                history_id=first_history_id,
+                payload=first_payload,
+                plan_request_id=first_request_id,
+                queued_at=queued_at,
+                request_signature=request_signature,
+            )
+
+        plan_mock.assert_called_once()
+        self.assertFalse(self.orchestrator._plan_hydration_inflight)
+        self.assertFalse(self.orchestrator._plan_hydration_signature_inflight)
+        for history_id in records:
+            link = self.store.get_frontend_history_link(history_id)
+            assert link is not None
+            generation = dict(link["metadata"].get("plan_generation") or {})
+            self.assertEqual(str(generation.get("status") or ""), "failed")
+            self.assertEqual(str(generation.get("error_message") or ""), "fixture_owner_failed")
+            self.assertTrue(str(generation.get("completed_at") or ""))
 
     def test_start_workflow_persists_job_link_for_history(self) -> None:
         history_id = "history-workflow-1"

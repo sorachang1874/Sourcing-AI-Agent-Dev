@@ -28,6 +28,9 @@ from starlette.routing import Route
 from .orchestrator import SourcingOrchestrator
 from .plan_submit_contract import (
     LEGACY_PLAN_SUBMIT_HTTP_STATUS,
+    PLAN_SUBMIT_IDENTITY_METADATA_KEY,
+    PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY,
+    PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
     PLAN_SUBMIT_OWNER_UNAVAILABLE_HTTP_STATUS,
     PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON,
     PLAN_SUBMIT_OWNER_UNAVAILABLE_STATUS,
@@ -637,30 +640,81 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "task_id": command_id})
         return None
 
+    def _frontend_history_is_plan(link: Any) -> bool:
+        record = dict(link or {}) if isinstance(link, dict) else {}
+        metadata = dict(record.get("metadata") or {})
+        source = str(metadata.get("source") or "").strip()
+        return bool(
+            str(record.get("phase") or "").strip().lower() == "plan"
+            or isinstance(metadata.get("plan_generation"), dict)
+            or source.startswith("plan_workflow")
+        )
+
+    def _authenticated_unlinked_plan_history_owned(request: Request, link: Any) -> bool:
+        identity = _server_identity(request)
+        if identity is None:
+            return True
+        record = dict(link or {}) if isinstance(link, dict) else {}
+        proof = dict(dict(record.get("metadata") or {}).get(PLAN_SUBMIT_IDENTITY_METADATA_KEY) or {})
+        user_id = identity["user_id"]
+        return bool(
+            str(proof.get("provenance") or "").strip() == PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER
+            and str(proof.get("requester_id") or "").strip() == user_id
+            and str(proof.get("tenant_id") or "").strip() == _user_namespace(user_id)
+        )
+
     def _gate_frontend_history_owner(request: Request, history_id: str) -> Response | None:
         """C2.3-followup: 404 when the caller doesn't own a frontend-history entry.
 
-        frontend_history_links has no owner column; ownership is derived from the
-        linked job's requester_id. Readable when the link or its job is missing, or
-        the link has no job_id (legacy/unlinked). Open mode is a true no-op.
+        Linked rows derive ownership from the job.  An authenticated, unlinked
+        Plan row must instead carry the API-authored C1b identity proof in history
+        metadata; missing/partial/mismatched proof is quarantined as 404.  Other
+        legacy phases retain their prior compatibility behavior. Open mode is a
+        true no-op.
         """
         if _server_identity(request) is None:
             return None
         link = orchestrator.store.get_frontend_history_link(history_id)
         job_id = str((link or {}).get("job_id") or "").strip()
-        if not job_id:
-            return None
-        job_row = orchestrator.store.get_job(job_id)
-        if job_row is not None and not _read_allowed_requester(request, job_row.get("requester_id")):
+        if job_id:
+            job_row = orchestrator.store.get_job(job_id)
+            if job_row is not None and _read_allowed_requester(request, job_row.get("requester_id")):
+                return None
+            if job_row is None and not _frontend_history_is_plan(link):
+                return None
+            return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "history_id": history_id})
+        if _frontend_history_is_plan(link) and not _authenticated_unlinked_plan_history_owned(request, link):
             return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "history_id": history_id})
         return None
+
+    def _gate_plan_submit_history_owner(request: Request, history_id: str) -> Response | None:
+        """Reject authenticated replacement unless an existing row has exact owner proof.
+
+        Read compatibility for old non-Plan/unlinked rows must not become write
+        authority. A missing row is a new server-provenance-bearing Plan submit;
+        an existing linked row uses job ownership, and an existing unlinked Plan
+        row uses the C1b metadata proof. Every other existing row fails closed.
+        """
+
+        if _server_identity(request) is None:
+            return None
+        link = orchestrator.store.get_frontend_history_link(history_id)
+        if link is None:
+            return None
+        job_id = str((link or {}).get("job_id") or "").strip()
+        if job_id:
+            job_row = orchestrator.store.get_job(job_id)
+            if job_row is not None and _read_allowed_requester(request, job_row.get("requester_id")):
+                return None
+        elif _frontend_history_is_plan(link) and _authenticated_unlinked_plan_history_owned(request, link):
+            return None
+        return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "history_id": history_id})
 
     def _filter_frontend_history_for_owner(request: Request, result: dict[str, Any]) -> dict[str, Any]:
         """C2.3-followup: drop frontend-history list items the caller doesn't own.
 
-        Each item carries job_id; ownership is the linked job's requester_id (same
-        rule as _gate_frontend_history_owner). Unlinked items stay visible. Open
-        mode returns the list unchanged.
+        Uses the same linked-job or provenance-bearing unlinked-Plan matrix as
+        ``_gate_frontend_history_owner``. Open mode returns the list unchanged.
         """
         if _server_identity(request) is None:
             return result
@@ -670,11 +724,14 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         allowed: list[Any] = []
         for item in items:
             job_id = str((item or {}).get("job_id") or "").strip()
-            if not job_id:
-                allowed.append(item)
+            if job_id:
+                job_row = orchestrator.store.get_job(job_id)
+                if job_row is not None and _read_allowed_requester(request, job_row.get("requester_id")):
+                    allowed.append(item)
+                elif job_row is None and not _frontend_history_is_plan(item):
+                    allowed.append(item)
                 continue
-            job_row = orchestrator.store.get_job(job_id)
-            if job_row is None or _read_allowed_requester(request, job_row.get("requester_id")):
+            if not _frontend_history_is_plan(item) or _authenticated_unlinked_plan_history_owned(request, item):
                 allowed.append(item)
         return {**result, "history": allowed, "count": len(allowed)}
 
@@ -1542,11 +1599,22 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     # C1 (substrate-unify): the synchronous POST /api/plan route is deleted.
     # It ran the full LLM plan-compile inline on a shared request slot and is
     # fully redundant with the async POST /api/plan/submit path the live UI uses
-    # (submit -> 202/pending -> poll the frontend history link), whose worker
+    # (current bridge: submit -> 200/pending -> poll the frontend history link), whose worker
     # literally calls the same orchestrator.plan_workflow. plan_workflow itself
     # is retained as the internal compile function.
     def post_plan_submit(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+        # Never accept provenance from the request body.  In authenticated mode
+        # the API writes the one marker that submit consumes into history metadata;
+        # in open mode the private key stays absent.
+        payload.pop(PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY, None)
         _apply_server_identity(payload, request, requester=True, tenant=True)
+        if _server_identity(request) is not None:
+            payload[PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY] = PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER
+        history_id = str(payload.get("history_id") or "").strip()
+        if history_id:
+            denied = _gate_plan_submit_history_owner(request, history_id)
+            if denied is not None:
+                return denied
         submit_plan = getattr(orchestrator, "submit_plan_workflow", None)
         if not callable(submit_plan):
             return _json_response(

@@ -130,8 +130,11 @@ def async_task_artifact(
     never inlined into the poll body, so polls stay cheap.
     """
 
+    normalized_handle = str(handle or "").strip()
+    if not normalized_handle:
+        raise ValueError("artifact handle is required")
     return {
-        "handle": str(handle or "").strip(),
+        "handle": normalized_handle,
         "content_type": str(content_type or "application/octet-stream").strip() or "application/octet-stream",
         "filename": str(filename or "download.bin").strip() or "download.bin",
         "byte_size": max(0, int(byte_size or 0)),
@@ -191,7 +194,13 @@ def async_task_status(
     normalized_error = dict(error) if error and normalized_status == TASK_STATUS_FAILED else None
     if failure_reason:
         normalized_error = {"reason": failure_reason, "retryable": False}
-    normalized_artifact = dict(artifact) if artifact and normalized_status == TASK_STATUS_SUCCEEDED else None
+    normalized_artifact = None
+    if artifact and normalized_status == TASK_STATUS_SUCCEEDED:
+        artifact_candidate = dict(artifact)
+        artifact_handle = str(artifact_candidate.get("handle") or "").strip()
+        if artifact_handle:
+            artifact_candidate["handle"] = artifact_handle
+            normalized_artifact = artifact_candidate
     envelope: dict[str, Any] = {
         "task_id": str(task_id or "").strip(),
         "task_type": str(task_type or "").strip(),

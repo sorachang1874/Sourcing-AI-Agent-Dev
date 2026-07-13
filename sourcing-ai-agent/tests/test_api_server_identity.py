@@ -16,6 +16,10 @@ from urllib import request as urllib_request
 from urllib.error import HTTPError
 
 from sourcing_agent.api import _apply_server_identity, _user_namespace, create_server
+from sourcing_agent.plan_submit_contract import (
+    PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY,
+    PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+)
 
 
 class _FakeState:
@@ -117,6 +121,10 @@ class _CapturingOrchestrator:
         self.captured["explain"] = dict(payload)
         return {"status": "ok"}
 
+    def submit_plan_workflow(self, payload):
+        self.captured["plan_submit"] = dict(payload)
+        return {"status": "pending", "history_id": "history-1"}
+
     def start_crm_record_public_web_search(self, payload):
         self.captured["crm_search"] = dict(payload)
         return {"status": "queued"}
@@ -183,6 +191,47 @@ class ServerIdentityWiringTest(unittest.TestCase):
         self.assertEqual(captured["workspace_id"], "user-u1")
         self.assertEqual(captured["owner_user_id"], "u1")
         self.assertEqual(captured["requested_by"], "u1")
+
+    def test_authenticated_plan_submit_overrides_identity_and_adds_server_provenance(self) -> None:
+        orch = _CapturingOrchestrator()
+        base_url, opener = self._start_server(orch, env={"SOURCING_API_BEARER_TOKENS": self._TOKENS})
+        status = self._post(
+            opener,
+            f"{base_url}/api/plan/submit",
+            {
+                "raw_user_request": "find people",
+                "requester_id": "attacker",
+                "tenant_id": "foreign",
+                PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY: "client_claim",
+            },
+            headers={"Authorization": "Bearer tok-1"},
+        )
+        self.assertEqual(status, 200)
+        captured = orch.captured["plan_submit"]
+        self.assertEqual(captured["requester_id"], "u1")
+        self.assertEqual(captured["tenant_id"], "user-u1")
+        self.assertEqual(
+            captured[PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY],
+            PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+        )
+
+    def test_open_plan_submit_strips_spoofed_server_provenance(self) -> None:
+        orch = _CapturingOrchestrator()
+        base_url, opener = self._start_server(orch, env={})
+        status = self._post(
+            opener,
+            f"{base_url}/api/plan/submit",
+            {
+                "raw_user_request": "find people",
+                "requester_id": "legacy",
+                "tenant_id": "legacy-tenant",
+                PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY: PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+            },
+        )
+        self.assertEqual(status, 200)
+        captured = orch.captured["plan_submit"]
+        self.assertNotIn(PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY, captured)
+        self.assertEqual(captured["requester_id"], "legacy")
 
     def test_open_mode_preserves_client_requester(self) -> None:
         orch = _CapturingOrchestrator()
