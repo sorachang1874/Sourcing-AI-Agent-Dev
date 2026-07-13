@@ -673,6 +673,29 @@ independent review because public status and download semantics change.
   `make lint` passed. The mypy ratchet stayed at `81 errors / 4 files`; the contract lane passed
   `349+2+11+1+2` plus `dry_run_ready`. A formal `GO` must come from the repository review gate, not this author record.
 
+#### C1b author batch record (2026-07-14; independent review pending)
+
+- `plan_submit_contract.py` is the single compatibility authority for current HTTP `200` + top-level `pending`,
+  `plan_generation` states, compiler contract version, and the semantic coalescing signature. History identity,
+  request ids, idempotency fields, and transport timestamps remain excluded from that signature; trusted scope and
+  semantic request fields remain included. List order is intentionally preserved in this characterization slice.
+- The serving chain has one owner: `submit_plan_workflow -> _queue_plan_hydration ->
+  Thread(target=_run_plan_hydration) -> plan_workflow`. The API no longer calls synchronous `plan_workflow` when the
+  submit owner is missing; it fails closed as retryable HTTP `503 plan_submit_owner_unavailable` with
+  `fallback_used=false`. The CLI `plan` call remains explicitly classified as a non-serving one-shot helper.
+- A repository-wide AST/source ratchet pins exactly one hydration queue caller, exactly one hydration thread creator,
+  one serving compile caller, and the one classified CLI compile caller. At C1e the same guard is tightened to zero
+  legacy serving thread/compile callers after cutover.
+- Current history `queued -> running -> completed|failed`, same-signature coalescing, same-history current-request
+  selection, review creation, and criteria version/compiler-run side effects are characterized rather than migrated.
+  The shared async-task adapter now treats missing/unknown states as terminal failed with stable reasons, preserves
+  explicit retry/publish/cancel mappings, and treats public task/artifact handles as owner-supplied values.
+- Scope contains no schema, durable consumer/repository, provider/model invocation, live environment, HTTP 202 switch,
+  TTL, replay, or compute/publication split. D-C1-1..4 remain required before C1c-e. The post-change targeted contract
+  lane passed `19`, history recovery passed `28`, adjacent export/transport and CRM boundary lanes passed `15` and
+  `34`, `make lint` passed, and mypy remained at its `81 errors / 4 files` ratchet. The full fast contract lane passed
+  `349+2+11+1+2` plus `dry_run_ready`; this author record is not a formal `GO`.
+
 ### C1b: Characterize and contract preflight
 
 - Pin current HTTP 200/pending shape, history metadata transitions, plan/review/criteria side effects, same-signature

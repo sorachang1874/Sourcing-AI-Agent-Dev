@@ -4,7 +4,7 @@
 
 This document defines where progress numbers come from and how the frontend may display them. The goal is to avoid mixing provider discovery, profile fetch, local materialization, and frontend pagination into one ambiguous counter.
 
-## C1a frontend terminal-total status projection
+## C1a/C1b terminal-total status projection
 
 The backend workflow/progress owner remains the source of the raw workflow status. C1a adds one frontend projection
 registry at `frontend-demo/src/lib/workflowStatus.ts`; every workflow-status consumer must use that registry instead of
@@ -26,9 +26,12 @@ failed/cancelled run cannot retain a running stage, while an intentional post-co
 complete. Excel launch history persists failed/cancelled/unknown launches as terminal results with an error message;
 history recovery must not resurrect their polling. Dashboard cache terminality uses the same registry.
 
-C1a intentionally does **not** change `src/sourcing_agent/async_task_contract.py`, whose unknown-to-running authority
-fallback is a C1b debt. This temporary frontend/backend difference is report-visible here and in the C1 design batch
-record; it is not permission to add a second frontend fallback.
+C1b closes the former Python authority debt in `src/sourcing_agent/async_task_contract.py`: missing and unknown domain
+states now map to terminal `failed` with `missing_domain_status` / `unknown_domain_status`, never to `running`.
+`retry_wait -> queued`, `claimed|running|publishing -> running`, and
+`cancelled|canceled|detached|superseded -> cancelled` are explicit mappings. The same fast preflight covers accepted
+and poll envelopes, while the frontend continues to use its separate `workflowStatus.ts` projection for workflow
+rows. Neither adapter may infer active work from an unregistered status.
 
 ## Source Of Truth
 

@@ -2,12 +2,13 @@ import json
 import threading
 import unittest
 from urllib import request as urllib_request
+from urllib.error import HTTPError
 
 from sourcing_agent.api import create_server
 
 
 class _BytesPlanOrchestrator:
-    def plan_workflow(self, _payload):
+    def submit_plan_workflow(self, _payload):
         return {
             "status": b"ok",
             "intent_rewrite": {
@@ -19,6 +20,11 @@ class _BytesPlanOrchestrator:
                 "review_id": b"42",
             },
         }
+
+
+class _MissingPlanSubmitOwnerOrchestrator:
+    def plan_workflow(self, _payload):
+        raise AssertionError("the HTTP route must not fall back to synchronous plan compilation")
 
 
 class _ExcelWorkflowOrchestrator:
@@ -53,12 +59,12 @@ class ApiJsonSerializationTest(unittest.TestCase):
         opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
         try:
             # C1 deleted the synchronous /api/plan route; /api/plan/submit is the
-            # plan entrypoint. This stub exposes only plan_workflow, so the submit
-            # route falls back to it — the transport bytes-normalization under test
-            # is identical.
+            # sole serving entrypoint and delegates to its hydration owner.
             request = urllib_request.Request(
                 f"http://{host}:{port}/api/plan/submit",
-                data=json.dumps({"raw_user_request": "我想要OpenAI做Reasoning方向的人"}, ensure_ascii=False).encode("utf-8"),
+                data=json.dumps({"raw_user_request": "我想要OpenAI做Reasoning方向的人"}, ensure_ascii=False).encode(
+                    "utf-8"
+                ),
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
@@ -67,6 +73,30 @@ class ApiJsonSerializationTest(unittest.TestCase):
             self.assertEqual(payload["status"], "ok")
             self.assertEqual(payload["intent_rewrite"]["request"]["target_company"], "OpenAI")
             self.assertEqual(payload["plan_review_session"]["review_id"], "42")
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+
+    def test_plan_submit_missing_owner_fails_closed_without_sync_compile(self) -> None:
+        server = create_server(_MissingPlanSubmitOwnerOrchestrator(), host="127.0.0.1", port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
+        try:
+            request = urllib_request.Request(
+                f"http://{host}:{port}/api/plan/submit",
+                data=json.dumps({"raw_user_request": "find people"}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with self.assertRaises(HTTPError) as raised:
+                opener.open(request)
+            self.assertEqual(raised.exception.code, 503)
+            payload = json.loads(raised.exception.read().decode("utf-8"))
+            self.assertEqual(payload["status"], "failed")
+            self.assertEqual(payload["reason"], "plan_submit_owner_unavailable")
+            self.assertFalse(payload["fallback_used"])
         finally:
             server.shutdown()
             thread.join(timeout=5)

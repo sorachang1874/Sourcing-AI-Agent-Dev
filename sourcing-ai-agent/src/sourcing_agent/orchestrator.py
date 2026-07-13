@@ -215,6 +215,17 @@ from .outreach_layering import analyze_company_outreach_layers, build_outreach_l
 from .pattern_suggestions import derive_pattern_suggestions
 from .person_asset_writer import PersonAssetWriter
 from .plan_review import apply_plan_review_decision, build_plan_review_gate
+from .plan_submit_contract import (
+    LEGACY_PLAN_SUBMIT_RESPONSE_STATUS,
+    PLAN_GENERATION_COMPLETED,
+    PLAN_GENERATION_FAILED,
+    PLAN_GENERATION_QUEUED,
+    PLAN_GENERATION_RUNNING,
+    build_plan_generation,
+)
+from .plan_submit_contract import (
+    plan_hydration_request_signature as _plan_hydration_request_signature,
+)
 from .planning import build_sourcing_plan, hydrate_sourcing_plan
 from .post_acquisition_refinement import (
     apply_refinement_patch,
@@ -1556,12 +1567,11 @@ class SourcingOrchestrator:
         request_payload = dict(existing_link.get("request") or {})
         request_payload.update(dict(normalized_payload or {}))
         request_payload["raw_user_request"] = query_text
-        plan_generation = {
-            "status": "queued",
-            "request_id": plan_request_id,
-            "queued_at": queued_at,
-            "submitted_at": queued_at,
-        }
+        plan_generation = build_plan_generation(
+            status=PLAN_GENERATION_QUEUED,
+            request_id=plan_request_id,
+            queued_at=queued_at,
+        )
         self._persist_frontend_history_link(
             history_id=history_id,
             query_text=query_text,
@@ -1587,7 +1597,7 @@ class SourcingOrchestrator:
             queued_at=queued_at,
         )
         return {
-            "status": "pending",
+            "status": LEGACY_PLAN_SUBMIT_RESPONSE_STATUS,
             "history_id": history_id,
             "phase": "plan",
             "query_text": query_text,
@@ -1779,16 +1789,15 @@ class SourcingOrchestrator:
                     plan_payload={},
                     metadata={
                         "source": "plan_workflow_async",
-                        "plan_generation": {
-                            "status": "running",
-                            "request_id": str(consumer.get("request_id") or ""),
-                            "queued_at": consumer_queued_at,
-                            "submitted_at": consumer_queued_at,
-                            "started_at": started_at,
-                            "request_signature": normalized_request_signature,
-                            "coalesced_count": len(consumers),
-                            "queue_wait_ms": _milliseconds_between_iso(consumer_queued_at, started_at),
-                        },
+                        "plan_generation": build_plan_generation(
+                            status=PLAN_GENERATION_RUNNING,
+                            request_id=str(consumer.get("request_id") or ""),
+                            queued_at=consumer_queued_at,
+                            started_at=started_at,
+                            request_signature=normalized_request_signature,
+                            coalesced_count=len(consumers),
+                            queue_wait_ms=_milliseconds_between_iso(consumer_queued_at, started_at),
+                        ),
                     },
                     merge_metadata=True,
                 )
@@ -1831,19 +1840,18 @@ class SourcingOrchestrator:
                         plan_payload={},
                         metadata={
                             "source": "plan_workflow_async_failed",
-                            "plan_generation": {
-                                "status": "failed",
-                                "request_id": str(consumer.get("request_id") or ""),
-                                "queued_at": consumer_queued_at,
-                                "submitted_at": consumer_queued_at,
-                                "started_at": started_at,
-                                "completed_at": completed_at,
-                                "total_ms": total_ms,
-                                "error_message": reason,
-                                "request_signature": normalized_request_signature,
-                                "coalesced_count": len(consumers),
-                                "queue_wait_ms": _milliseconds_between_iso(consumer_queued_at, started_at),
-                            },
+                            "plan_generation": build_plan_generation(
+                                status=PLAN_GENERATION_FAILED,
+                                request_id=str(consumer.get("request_id") or ""),
+                                queued_at=consumer_queued_at,
+                                started_at=started_at,
+                                completed_at=completed_at,
+                                total_ms=total_ms,
+                                error_message=reason,
+                                request_signature=normalized_request_signature,
+                                coalesced_count=len(consumers),
+                                queue_wait_ms=_milliseconds_between_iso(consumer_queued_at, started_at),
+                            ),
                         },
                         merge_metadata=True,
                     )
@@ -1875,19 +1883,18 @@ class SourcingOrchestrator:
                     metadata={
                         "source": "plan_workflow_async_completed",
                         **_frontend_plan_semantics_metadata(result),
-                        "plan_generation": {
-                            "status": "completed",
-                            "request_id": str(consumer.get("request_id") or ""),
-                            "queued_at": consumer_queued_at,
-                            "submitted_at": consumer_queued_at,
-                            "started_at": started_at,
-                            "completed_at": completed_at,
-                            "total_ms": total_ms,
-                            "plan_status": result_status,
-                            "request_signature": normalized_request_signature,
-                            "coalesced_count": len(consumers),
-                            "queue_wait_ms": _milliseconds_between_iso(consumer_queued_at, started_at),
-                        },
+                        "plan_generation": build_plan_generation(
+                            status=PLAN_GENERATION_COMPLETED,
+                            request_id=str(consumer.get("request_id") or ""),
+                            queued_at=consumer_queued_at,
+                            started_at=started_at,
+                            completed_at=completed_at,
+                            total_ms=total_ms,
+                            plan_status=result_status,
+                            request_signature=normalized_request_signature,
+                            coalesced_count=len(consumers),
+                            queue_wait_ms=_milliseconds_between_iso(consumer_queued_at, started_at),
+                        ),
                     },
                     merge_metadata=True,
                 )
@@ -1912,18 +1919,17 @@ class SourcingOrchestrator:
                     plan_payload={},
                     metadata={
                         "source": "plan_workflow_async_failed",
-                        "plan_generation": {
-                            "status": "failed",
-                            "request_id": str(consumer.get("request_id") or ""),
-                            "queued_at": consumer_queued_at,
-                            "submitted_at": consumer_queued_at,
-                            "started_at": started_at,
-                            "completed_at": completed_at,
-                            "error_message": str(exc),
-                            "request_signature": normalized_request_signature,
-                            "coalesced_count": len(consumers),
-                            "queue_wait_ms": _milliseconds_between_iso(consumer_queued_at, started_at),
-                        },
+                        "plan_generation": build_plan_generation(
+                            status=PLAN_GENERATION_FAILED,
+                            request_id=str(consumer.get("request_id") or ""),
+                            queued_at=consumer_queued_at,
+                            started_at=started_at,
+                            completed_at=completed_at,
+                            error_message=str(exc),
+                            request_signature=normalized_request_signature,
+                            coalesced_count=len(consumers),
+                            queue_wait_ms=_milliseconds_between_iso(consumer_queued_at, started_at),
+                        ),
                     },
                     merge_metadata=True,
                 )
@@ -74909,45 +74915,6 @@ def _milliseconds_between_iso(start_value: str, end_value: str) -> int | None:
     if start is None or end is None:
         return None
     return max(0, int((end - start).total_seconds() * 1000))
-
-
-_PLAN_HYDRATION_SIGNATURE_IGNORED_KEYS = frozenset(
-    {
-        "history_id",
-        "frontend_history_id",
-        "plan_request_id",
-        "request_id",
-        "idempotency_key",
-        "queued_at",
-        "submitted_at",
-        "started_at",
-        "completed_at",
-    }
-)
-
-
-def _normalize_plan_hydration_signature_value(value: Any) -> Any:
-    if isinstance(value, dict):
-        normalized: dict[str, Any] = {}
-        for raw_key, raw_value in sorted(value.items(), key=lambda item: str(item[0])):
-            key = str(raw_key or "").strip()
-            if not key or key in _PLAN_HYDRATION_SIGNATURE_IGNORED_KEYS:
-                continue
-            normalized[key] = _normalize_plan_hydration_signature_value(raw_value)
-        return normalized
-    if isinstance(value, (list, tuple)):
-        return [_normalize_plan_hydration_signature_value(item) for item in value]
-    if isinstance(value, set):
-        return sorted(_normalize_plan_hydration_signature_value(item) for item in value)
-    if isinstance(value, Path):
-        return str(value)
-    return value
-
-
-def _plan_hydration_request_signature(payload: dict[str, Any] | None) -> str:
-    normalized = _normalize_plan_hydration_signature_value(dict(payload or {}))
-    encoded = json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def _serialize_api_timestamp(value: str) -> str:

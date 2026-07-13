@@ -26,6 +26,12 @@ from starlette.responses import Response
 from starlette.routing import Route
 
 from .orchestrator import SourcingOrchestrator
+from .plan_submit_contract import (
+    LEGACY_PLAN_SUBMIT_HTTP_STATUS,
+    PLAN_SUBMIT_OWNER_UNAVAILABLE_HTTP_STATUS,
+    PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON,
+    PLAN_SUBMIT_OWNER_UNAVAILABLE_STATUS,
+)
 from .remote_provider_events import normalize_remote_provider_event
 from .storage import _json_safe_payload
 from .workflow_submission import (
@@ -1542,8 +1548,19 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     def post_plan_submit(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
         _apply_server_identity(payload, request, requester=True, tenant=True)
         submit_plan = getattr(orchestrator, "submit_plan_workflow", None)
-        result = submit_plan(payload) if callable(submit_plan) else orchestrator.plan_workflow(payload)
-        status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+        if not callable(submit_plan):
+            return _json_response(
+                PLAN_SUBMIT_OWNER_UNAVAILABLE_HTTP_STATUS,
+                {
+                    "status": PLAN_SUBMIT_OWNER_UNAVAILABLE_STATUS,
+                    "reason": PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON,
+                    "phase": "plan",
+                    "retryable": True,
+                    "fallback_used": False,
+                },
+            )
+        result = submit_plan(payload)
+        status = LEGACY_PLAN_SUBMIT_HTTP_STATUS if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
 
     add(["POST"], "/api/plan/submit", post_plan_submit, read_body=True)

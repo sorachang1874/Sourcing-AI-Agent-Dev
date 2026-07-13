@@ -148,7 +148,9 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         recovered_manifest = dict(recovered["recovery"]["metadata"].get("provider_execution_manifest") or {})
         self.assertEqual(recovered_manifest.get("strategy_type"), "full_company_roster")
         recovered_current_lane = next(
-            lane for lane in list(recovered_manifest.get("lanes") or []) if lane.get("lane_id") == "current_company_employees"
+            lane
+            for lane in list(recovered_manifest.get("lanes") or [])
+            if lane.get("lane_id") == "current_company_employees"
         )
         self.assertEqual(recovered_current_lane.get("query_texts"), [])
 
@@ -211,15 +213,26 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
             }
 
-        self.orchestrator._run_plan_hydration(
-            history_id=history_id,
-            payload={
-                "raw_user_request": "我想要OpenAI做Reasoning方向的人",
-                "history_id": history_id,
-            },
-            plan_request_id=plan_request_id,
-            queued_at=queued_at,
+        queued_link = self.store.get_frontend_history_link(history_id)
+        assert queued_link is not None
+        self.assertEqual(
+            str(dict(queued_link["metadata"].get("plan_generation") or {}).get("status") or ""),
+            "queued",
         )
+        with mock.patch.object(
+            self.orchestrator,
+            "_persist_frontend_history_link",
+            wraps=self.orchestrator._persist_frontend_history_link,
+        ) as persist_mock:
+            self.orchestrator._run_plan_hydration(
+                history_id=history_id,
+                payload={
+                    "raw_user_request": "我想要OpenAI做Reasoning方向的人",
+                    "history_id": history_id,
+                },
+                plan_request_id=plan_request_id,
+                queued_at=queued_at,
+            )
 
         link = self.store.get_frontend_history_link(history_id)
         self.assertIsNotNone(link)
@@ -233,6 +246,21 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         )
         self.assertTrue(dict(link["metadata"].get("effective_execution_semantics") or {}))
         self.assertTrue(dict(link["metadata"].get("dispatch_preview") or {}))
+        generation_transitions = [
+            str(dict(dict(call.kwargs.get("metadata") or {}).get("plan_generation") or {}).get("status") or "")
+            for call in persist_mock.call_args_list
+        ]
+        self.assertEqual([status for status in generation_transitions if status], ["running", "completed"])
+        versions = self.store.repos.criteria_confidence.list_versions(target_company="OpenAI")
+        self.assertTrue(versions)
+        latest_version = versions[0]
+        self.assertEqual(str(latest_version.get("source_kind") or ""), "plan")
+        compiler_runs = self.store.repos.criteria_confidence.list_compiler_runs(
+            version_id=int(latest_version["version_id"])
+        )
+        self.assertTrue(compiler_runs)
+        self.assertEqual(str(compiler_runs[0].get("compiler_kind") or ""), "planning")
+        self.assertEqual(str(compiler_runs[0].get("status") or ""), "completed")
 
     def test_sync_plan_and_async_hydrated_plan_are_equivalent_for_same_request(self) -> None:
         """C1 consolidation-safety oracle: deleting the synchronous /api/plan route
@@ -396,6 +424,124 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "全量本地资产复用",
             )
 
+    def test_submit_plan_workflow_supersedes_same_history_before_stale_hydration_publish(self) -> None:
+        history_id = "history-plan-supersede-1"
+        hydration_release = threading.Event()
+        hydration_finished = threading.Event()
+        hydration_calls: list[dict[str, object]] = []
+        hydration_finished_count = 0
+        hydration_calls_lock = threading.Lock()
+
+        def block_hydration(**kwargs: object) -> None:
+            nonlocal hydration_finished_count
+            with hydration_calls_lock:
+                hydration_calls.append(dict(kwargs))
+            hydration_release.wait(timeout=10)
+            with hydration_calls_lock:
+                hydration_finished_count += 1
+                if hydration_finished_count == 2:
+                    hydration_finished.set()
+
+        try:
+            with mock.patch.object(self.orchestrator, "_run_plan_hydration", side_effect=block_hydration):
+                first = self.orchestrator.submit_plan_workflow(
+                    {
+                        "raw_user_request": "Find OpenAI reasoning researchers",
+                        "history_id": history_id,
+                    }
+                )
+                first_request_id = str(first["metadata"]["plan_generation"]["request_id"])
+                with self.orchestrator._plan_hydration_lock:
+                    first_record = dict(self.orchestrator._plan_hydration_inflight[history_id])
+                first_signature = str(first_record["request_signature"])
+
+                second = self.orchestrator.submit_plan_workflow(
+                    {
+                        "raw_user_request": "Find Anthropic pretraining researchers",
+                        "history_id": history_id,
+                    }
+                )
+
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    with hydration_calls_lock:
+                        if len(hydration_calls) == 2:
+                            break
+                    time.sleep(0.01)
+                with hydration_calls_lock:
+                    self.assertEqual(len(hydration_calls), 2)
+
+                second_request_id = str(second["metadata"]["plan_generation"]["request_id"])
+                self.assertNotEqual(first_request_id, second_request_id)
+                with self.orchestrator._plan_hydration_lock:
+                    current = dict(self.orchestrator._plan_hydration_inflight[history_id])
+                self.assertEqual(str(current["request_id"]), second_request_id)
+                stale_consumers = self.orchestrator._current_plan_hydration_consumers(
+                    request_signature=first_signature,
+                    fallback_history_id=history_id,
+                    fallback_payload=dict(first_record["payload"]),
+                    fallback_plan_request_id=first_request_id,
+                    fallback_queued_at=str(first_record["queued_at"]),
+                )
+                self.assertEqual(stale_consumers, [])
+                link = self.store.get_frontend_history_link(history_id)
+                assert link is not None
+                generation = dict(link["metadata"].get("plan_generation") or {})
+                self.assertEqual(str(generation.get("request_id") or ""), second_request_id)
+                self.assertEqual(str(generation.get("status") or ""), "queued")
+        finally:
+            hydration_release.set()
+            self.assertTrue(hydration_finished.wait(timeout=5))
+
+    def test_run_plan_hydration_invalid_result_terminalizes_history_failed(self) -> None:
+        history_id = "history-plan-hydration-failed-1"
+        request_id = "request-plan-hydration-failed-1"
+        queued_at = "2026-07-14T00:00:00+00:00"
+        payload = {"raw_user_request": "Find researchers", "history_id": history_id}
+        self.store.upsert_frontend_history_link(
+            {
+                "history_id": history_id,
+                "query_text": str(payload["raw_user_request"]),
+                "phase": "plan",
+                "request": payload,
+                "metadata": {
+                    "source": "plan_workflow_submit",
+                    "plan_generation": {
+                        "status": "queued",
+                        "request_id": request_id,
+                        "queued_at": queued_at,
+                        "submitted_at": queued_at,
+                    },
+                },
+            }
+        )
+        with self.orchestrator._plan_hydration_lock:
+            self.orchestrator._plan_hydration_inflight[history_id] = {
+                "request_id": request_id,
+                "queued_at": queued_at,
+                "payload": payload,
+            }
+
+        with mock.patch.object(
+            self.orchestrator,
+            "plan_workflow",
+            return_value={"status": "invalid", "reason": "fixture_compile_failed", "plan": {}},
+        ):
+            self.orchestrator._run_plan_hydration(
+                history_id=history_id,
+                payload=payload,
+                plan_request_id=request_id,
+                queued_at=queued_at,
+            )
+
+        link = self.store.get_frontend_history_link(history_id)
+        assert link is not None
+        self.assertFalse(link["plan"])
+        generation = dict(link["metadata"].get("plan_generation") or {})
+        self.assertEqual(str(generation.get("status") or ""), "failed")
+        self.assertEqual(str(generation.get("error_message") or ""), "fixture_compile_failed")
+        self.assertTrue(str(generation.get("completed_at") or ""))
+
     def test_start_workflow_persists_job_link_for_history(self) -> None:
         history_id = "history-workflow-1"
         self._write_company_identity_snapshot(target_company="Skild AI", snapshot_id="20260415T020102")
@@ -458,8 +604,12 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             ],
         }
         with (
-            mock.patch("sourcing_agent.orchestrator.ExcelIntakeService.prepare_contacts", return_value=prepared_contacts),
-            mock.patch.object(ExcelIntakeOwner, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None),
+            mock.patch(
+                "sourcing_agent.orchestrator.ExcelIntakeService.prepare_contacts", return_value=prepared_contacts
+            ),
+            mock.patch.object(
+                ExcelIntakeOwner, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None
+            ),
         ):
             queued = self.orchestrator.start_excel_intake_workflow(
                 {
@@ -547,8 +697,12 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             ],
         }
         with (
-            mock.patch("sourcing_agent.orchestrator.ExcelIntakeService.prepare_contacts", return_value=prepared_contacts),
-            mock.patch.object(ExcelIntakeOwner, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None),
+            mock.patch(
+                "sourcing_agent.orchestrator.ExcelIntakeService.prepare_contacts", return_value=prepared_contacts
+            ),
+            mock.patch.object(
+                ExcelIntakeOwner, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None
+            ),
         ):
             queued = self.orchestrator.start_excel_intake_workflow(
                 {
@@ -855,8 +1009,12 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             ],
         }
         with (
-            mock.patch("sourcing_agent.orchestrator.ExcelIntakeService.prepare_contacts", return_value=prepared_contacts),
-            mock.patch.object(ExcelIntakeOwner, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None),
+            mock.patch(
+                "sourcing_agent.orchestrator.ExcelIntakeService.prepare_contacts", return_value=prepared_contacts
+            ),
+            mock.patch.object(
+                ExcelIntakeOwner, "_run_excel_intake_workflow_command_thread", autospec=True, return_value=None
+            ),
         ):
             queued = self.orchestrator.start_excel_intake_workflow(
                 {
@@ -1033,7 +1191,9 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             mock.patch("sourcing_agent.candidate_artifacts.build_company_candidate_artifacts") as artifact_build,
         ):
             supplement_build.side_effect = AssertionError("Excel workflow must not inline full artifact build")
-            artifact_build.side_effect = AssertionError("Excel result view must not materialize on first dashboard read")
+            artifact_build.side_effect = AssertionError(
+                "Excel result view must not materialize on first dashboard read"
+            )
             self.orchestrator._run_excel_intake_workflow(
                 job_id="excelworkflowdeferred1",
                 request=request,
@@ -1718,6 +1878,7 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     method="POST",
                 )
                 with opener.open(plan_req) as response:
+                    self.assertEqual(response.status, 200)
                     plan_payload = json.loads(response.read().decode("utf-8"))
 
             recovery_req = urllib_request.Request(

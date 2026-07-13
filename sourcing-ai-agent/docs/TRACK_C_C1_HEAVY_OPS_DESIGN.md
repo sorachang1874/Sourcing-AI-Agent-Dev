@@ -8,6 +8,17 @@
 
 **C1 的核心问题不是「把每个重 handler 包成 enqueue+poll」**，而是：这些同步重 handler 是否与既有异步机制 **冗余（redundant）**，从而最优解是 **合并（consolidate）+ 删除冗余同步轨**，而非平行包装。按 OWNER DIRECTIVE（2026-06-15，删除/替换 > 保留双轨），下文逐 handler 给出冗余判定与处置。
 
+## 2026-07-14 C1b scoped erratum
+
+本文件的 durable `202 + task_id` 北极星没有改变，但 Plan 当前实现必须以
+`TRACK_C_C1_DURABLE_PLAN_TASK_DESIGN.md` 和 `plan_submit_contract.py` 为准：`POST /api/plan/submit` 仍是
+HTTP `200` + `status=pending` 的 report-visible compatibility bridge，不是 durable task。服务面唯一执行链为
+`submit_plan_workflow -> _queue_plan_hydration -> Thread(target=_run_plan_hydration) -> plan_workflow`；缺失 submit
+owner 时返回 retryable `503 plan_submit_owner_unavailable`，禁止同步 compile fallback。CLI `plan` 是显式 one-shot
+helper，不属于 serving 链。共享 async-task adapter 的 public `task_id` 与 `artifact.handle` 均由 domain owner
+提供；adapter 不假设 handle 等于 command id，missing/unknown domain status 终止为 failed。C1b 不实现 schema、
+durable consumer、202 cutover、compute/publish split、TTL 或 replay；这些仍受 D-C1-1..4 与 C1c-e 顺序约束。
+
 ---
 
 ## 1. 现状真相：同步重 handler 与其异步孪生

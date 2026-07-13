@@ -70,7 +70,7 @@
 - [x] psycopg_pool 连接池（2026-06-11）：per-adapter 懒加载池（`SOURCING_CONTROL_PLANE_PG_POOL_MIN/MAX`，默认 1/8）；25 个调用点事务语义逐一核验不变；实测 200 次顺序操作 1.516s→0.743s、新建连接 200→1；`ControlPlaneStore.close()` 接线。
 - [ ] 重活出请求线程：plan compile / `/api/jobs` / 导出统一为 enqueue + 轮询（后续 SSE）。C1 durable plan-task 设计见 `docs/TRACK_C_C1_DURABLE_PLAN_TASK_DESIGN.md`；先落不依赖存储裁决的 C1a fast contract lane，consumer table / 202 cutover / publication UoW / TTL 四项 owner 决策未决前不做 migration。
   - [x] C1a author implementation（2026-07-14）：exact export light lane、owner-supplied `artifact.handle` fail-closed、frontend terminal-total status registry、Plan `pending|queued` bridge；无 schema/provider/model。targeted + frontend build 已绿，scope-matched independent review pending；有效 `GO` 前不做本 scope 的 live/manual/product signoff。
-  - [ ] C1b characterization：固定当前 HTTP 200/pending、hydration thread/side-effect/identity 行为，并处置 `async_task_contract.py` unknown->running debt；不得越过 D-C1-1..4 做 C1c-e migration。
+  - [x] C1b author implementation（2026-07-14）：集中固定当前 HTTP 200/pending、唯一 hydration thread owner、history/side-effect/identity 行为；API 缺 owner 时 fail-closed，`async_task_contract.py` missing/unknown 已改为 terminal failed。targeted、lint 与 `349+2+11+1+2` fast contract lane 已绿，mypy 保持 `81 errors / 4 files`；scope-matched independent review pending。不得越过 D-C1-1..4 做 C1c-e migration。
 - [ ] worker 与 API 进程分离（`worker_daemon` 独立进程成为唯一模式）。
 - [ ] 最小鉴权 + 用户身份（token；`requester_id/tenant_id` 列已存在但来自未认证 payload）。
 - [x] FastAPI + uvicorn 传输层等价重写 api.py（2026-06-12）：同路由/同 payload/同状态码/同 headers；CORS allowlist + localhost 自动放行 + header 回显；Apify webhook token 校验保留；双道信号量改 middleware（HarvestAPI 并发约束保留至 M2 provider 预算落地）；`create_server` 兼容垫片包 uvicorn（serve_forever/shutdown/port-0）；`tests/test_api_transport_parity.py` 传输等价测试。

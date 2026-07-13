@@ -12,23 +12,30 @@
 
 目标不是穷举所有内部字段，而是定义一套前端可稳定依赖的 contract。
 
-## Track C C1a async transport contracts (2026-07-14)
+## Track C C1a/C1b async transport contracts (2026-07-14)
 
 C1a 只收口现有异步 transport/client 语义，不改变 schema、provider/model 或服务端 Plan submit 的 HTTP
 `200` 行为。共享字段的 owner/source/consumer 约束如下：
 
 | contract | owner / source of truth | allowed values / derivation | consumers | fail-closed state | migration / temporary-source deletion |
 | --- | --- | --- | --- | --- | --- |
-| workflow run status | 后端 workflow/progress owner；前端唯一 adapter 是 `frontend-demo/src/lib/workflowStatus.ts` | canonical `queued/running/blocked/completed/failed/cancelled`；`canceled/detached/superseded -> cancelled`；只有明确的 `completed + active background worker` 可投影为 effective `running` | `lib/api.ts`、`lib/sourcingBackend.ts`、`SearchPage`、Excel intake、timeline、dashboard cache | missing/unknown -> terminal `failed`；不得 fallback 为 `running` | C1a normal frontend path。别名仅在后端与 preflight 都证明只返回 canonical status 后删除；Python `async_task_contract.py` 的 authority debt 留给 C1b |
+| workflow run status | 后端 workflow/progress owner；前端唯一 adapter 是 `frontend-demo/src/lib/workflowStatus.ts` | canonical `queued/running/blocked/completed/failed/cancelled`；`canceled/detached/superseded -> cancelled`；只有明确的 `completed + active background worker` 可投影为 effective `running` | `lib/api.ts`、`lib/sourcingBackend.ts`、`SearchPage`、Excel intake、timeline、dashboard cache | missing/unknown -> terminal `failed`；不得 fallback 为 `running` | C1a normal frontend path。别名仅在后端与 preflight 都证明只返回 canonical status 后删除；C1b 已同步 Python async-task authority 为 terminal-total |
 | export `task_id` | export command owner 返回的 submit envelope | 非空、无 trim drift、无 `%`/separator/query/fragment/control/dot segment；客户端把值作为 opaque handle 保存，不从其他字段推导 | 两个 public export wrapper、status poll、artifact validator | 非法或缺失时 submit 后立即失败，不 poll/download | normal path；task retention/deletion 由 durable export owner 管理，客户端无 shadow ID |
 | export `artifact.handle` | `GET /api/exports/{task_id}` 的 owner-supplied `artifact.handle` | 只接受 exact `/api/exports/${encodeURIComponent(task_id)}/artifact`；root-relative、同一 task、无 scheme/authority/query/fragment/dot/encoded separator | projection export 与 CRM Public Web export download | `succeeded` 但 handle 缺失或 near-miss 时不发 binary request；不拼 fallback URL，也不 fetch supplied alternate URL | C1a normal path；无兼容 source，artifact 过期/删除仍由 export owner 表达 terminal status |
-| Plan submit bridge status | 当前 `POST /api/plan/submit` top-level response | client 暂时只把 `pending` 或 `queued` 解释为“等待 hydration”；不从 HTTP code 推导任务完成 | `SearchPage` initial plan 与 revision flow | 其他无 plan 响应报错；unknown 不启动 hydration polling | `pending|queued` 是 C1a compatibility bridge；C1e 完成 durable 202 cutover、旧 client 窗口结束且 preflight 证明无 `pending` 后删除 `pending` 分支 |
+| Plan submit bridge status | `plan_submit_contract.py` + `submit_plan_workflow`；当前 `POST /api/plan/submit` top-level response | server 固定 HTTP `200` + `pending`；history `plan_generation` 只走 `queued -> running -> completed|failed`；client 暂时接受 `pending|queued` | API route、`SearchPage` initial plan 与 revision flow、history recovery | submit owner 缺失时 HTTP `503` + `plan_submit_owner_unavailable` + `fallback_used=false`；绝不回退同步 `plan_workflow` | C1b characterized bridge；C1e durable 202 cutover、旧 client 窗口结束且 preflight 证明无 `pending` 后删除 |
 
 Lane ownership 仍在后端 `src/sourcing_agent/api.py::_request_priority_lane`：只有 `POST
 /api/projections/export`、`POST /api/crm/records/public-web-export` 与 exact `GET /api/exports/{single-segment-id}`
 是 light。binary `/artifact`、trailing/extra segment 和错误 method 必须保持 shared；前端不得从 URL prefix
 重新推导 lane。唯一 transport-level 例外是既有 CORS `OPTIONS` preflight：所有 `OPTIONS` 都保持 light，
 不表示对应 business method 被重新分类。
+
+C1b additionally pins the legacy Plan execution boundary. `submit_plan_workflow` is the only serving owner allowed to
+call `_queue_plan_hydration`; that queue owns the only `Thread(target=_run_plan_hydration)` creator, and the hydration
+runner is the only serving caller of `plan_workflow`. `sourcing-agent plan` remains an explicitly classified CLI
+one-shot helper, not a serving fallback. The source/AST preflight fails if another queue, thread, API compile caller,
+or CLI callsite appears. Current review creation, criteria compiler-run persistence, same-signature coalescing, and
+history queued/running/terminal projection remain unchanged until the owner-gated compute/publish split.
 
 补充约定：
 
