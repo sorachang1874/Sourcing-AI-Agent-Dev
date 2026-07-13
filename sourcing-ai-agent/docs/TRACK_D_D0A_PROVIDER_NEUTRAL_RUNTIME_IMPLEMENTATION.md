@@ -42,8 +42,10 @@ two types. Before the first D0 transport adapter or product callsite is connecte
 must move to a provider-neutral module, both owners must import that single type, and `ModelTurnUsage` must be deleted.
 Until that deletion condition is met, D0a remains non-live and no downstream contract may accept either type by duck
 typing or add a third usage representation. `docs/NEXT_TODO.md` records this as a mandatory predecessor of the first
-transport/product integration, and a production-source AST/reference ratchet prevents the temporary type from escaping
-its D0a owner while still allowing this focused D0 test and implementation documentation.
+transport/product integration. A production-source AST/reference ratchet prevents the temporary type from escaping
+its D0a owner: it follows runtime-module aliases, folds bounded static string expressions, and rejects unresolved
+dynamic `getattr`/subscript access on that module. This focused D0 test and implementation documentation remain the
+only allowed non-owner references.
 
 ## 3. Parser state and authorization boundary
 
