@@ -14,6 +14,7 @@ import requests
 
 from .document_extraction import infer_structured_signals_from_payload
 from .domain import JobRequest
+from .model_usage import ModelUsage
 from .query_intent_policy import build_supported_rewrite_policy_prompt_context
 from .runtime_environment import assert_live_provider_access_allowed, external_provider_mode
 from .settings import ModelProviderSettings, QwenSettings
@@ -33,26 +34,9 @@ _MODEL_PROVIDER_USAGE_TOKEN_LIMIT = 1_000_000_000
 CRM_PUBLIC_WEB_PRODUCT_MODEL = "gpt-5.6-sol"
 
 
-@dataclass(frozen=True, slots=True)
-class OpenAIModelUsage:
-    input_tokens: int | None = None
-    output_tokens: int | None = None
-    total_tokens: int | None = None
-    cached_input_tokens: int | None = None
-    reasoning_output_tokens: int | None = None
-
-    def to_record(self) -> dict[str, int]:
-        return {
-            key: value
-            for key, value in (
-                ("input_tokens", self.input_tokens),
-                ("output_tokens", self.output_tokens),
-                ("total_tokens", self.total_tokens),
-                ("cached_input_tokens", self.cached_input_tokens),
-                ("reasoning_output_tokens", self.reasoning_output_tokens),
-            )
-            if value is not None
-        }
+# Compatibility import for existing provider callers. ``ModelUsage`` is the
+# only class owner; new provider-neutral code should import it from model_usage.
+OpenAIModelUsage = ModelUsage
 
 
 @dataclass(frozen=True, slots=True)

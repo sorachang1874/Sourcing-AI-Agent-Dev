@@ -306,7 +306,7 @@ apply 命令清 pending 态并更新 gate。commit owner 的 canonical 复查（
   judge 输出不可参与 auto-confirm）。本节只列裁决侧补充语义：
   provider、requested/response/effective model（精确匹配）、`model_identity_provenance`、
   provider call id、route/api_style + route revision + **effective_route_snapshot digest**、
-  bounded usage（`OpenAIModelUsage`，`model_provider.py:36-55`）+ usage_status、fallback/circuit
+  bounded usage（provider-neutral `ModelUsage`；`OpenAIModelUsage` 仅兼容别名）+ usage_status、fallback/circuit
   证据、evidence bundle hash、**canonical response/result digest + 不可变 result artifact ref**
   （v5 补 round4#11——信封与解析产物绑定，防有效信封配错输出）。接受 = 两半同过；
   §4c CAS 同时比对 result artifact / provider call / bundle hash / attempt 身份四方一致。
@@ -381,5 +381,5 @@ preflight、§4b 迁移表注册校验、§4c 八项竞态电池、**§8 计费�
   单 UoW 全条件）；#5→§6（evidence_ids only + owner 解析 + bundle hash）；#6→§4b（迁移表全量 +
   expire 命令 + 矩阵恢复）；#7→§8（每物理调用一笔 + worst-case 预留 + 对账）；#8→本文自包含恢复 +
   上层计划同步（其 §2 D3）；#16→§2.1（provider 能力派生控制政策）；
-  非阻塞更正三则→§1（:554-594 为 writer）/§6（OpenAIModelUsage）/上层与 D0 术语统一。
+  非阻塞更正三则→§1（:554-594 为 writer）/§6（ModelUsage）/上层与 D0 术语统一。
 - v1/v2 轮已结项映射见 git 历史中的 v2/v3 版本 §10（内容已并入本版正文，不再另表）。

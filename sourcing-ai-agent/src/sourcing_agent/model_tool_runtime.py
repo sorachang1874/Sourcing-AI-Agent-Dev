@@ -24,6 +24,7 @@ from .model_route_registry import (
     ModelRouteSpec,
     assert_d0a_route_execution_allowed,
 )
+from .model_usage import ModelUsage
 
 MODEL_TURN_MESSAGE_SCHEMA_VERSION = "model_turn_message_v1"
 MODEL_TOOL_REQUEST_HASH_SCHEMA_VERSION = "model_tool_request_hash_v1"
@@ -338,40 +339,6 @@ class ToolSpec:
 
 
 @dataclass(frozen=True, slots=True)
-class ModelTurnUsage:
-    input_tokens: int | None = None
-    output_tokens: int | None = None
-    total_tokens: int | None = None
-    cached_input_tokens: int | None = None
-    reasoning_output_tokens: int | None = None
-
-    def __post_init__(self) -> None:
-        for field_name in (
-            "input_tokens",
-            "output_tokens",
-            "total_tokens",
-            "cached_input_tokens",
-            "reasoning_output_tokens",
-        ):
-            value = getattr(self, field_name)
-            if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 0):
-                raise ModelToolProtocolError(f"model_tool_usage_value_invalid:{field_name}")
-
-    def to_record(self) -> dict[str, int]:
-        return {
-            key: value
-            for key, value in (
-                ("input_tokens", self.input_tokens),
-                ("output_tokens", self.output_tokens),
-                ("total_tokens", self.total_tokens),
-                ("cached_input_tokens", self.cached_input_tokens),
-                ("reasoning_output_tokens", self.reasoning_output_tokens),
-            )
-            if value is not None
-        }
-
-
-@dataclass(frozen=True, slots=True)
 class ModelIdentity:
     requested_model: str
     response_model: str
@@ -392,7 +359,7 @@ class ModelIdentity:
 class ToolTurnResult:
     text: str
     tool_calls: tuple[ToolCallRecord, ...]
-    usage: ModelTurnUsage
+    usage: ModelUsage
     usage_status: UsageStatus
     model_identity: ModelIdentity
     terminal_reason: TerminalReason
@@ -475,7 +442,7 @@ class ToolCallPartialEvent:
 
 @dataclass(frozen=True, slots=True)
 class UsageEvent:
-    usage: ModelTurnUsage
+    usage: ModelUsage
     usage_status: Literal["reported", "invalid"]
     event_type: Literal["usage"] = field(init=False, default="usage")
 
@@ -997,9 +964,9 @@ def _usage_value(value: Any) -> int | None:
     return value
 
 
-def _parse_usage(raw_usage: Any) -> tuple[ModelTurnUsage, Literal["reported", "invalid"]]:
+def _parse_usage(raw_usage: Any) -> tuple[ModelUsage, Literal["reported", "invalid"]]:
     if not isinstance(raw_usage, dict):
-        return ModelTurnUsage(), "invalid"
+        return ModelUsage(), "invalid"
     known_values = {
         "input_tokens": raw_usage.get("input_tokens", raw_usage.get("prompt_tokens")),
         "output_tokens": raw_usage.get("output_tokens", raw_usage.get("completion_tokens")),
@@ -1012,7 +979,7 @@ def _parse_usage(raw_usage: Any) -> tuple[ModelTurnUsage, Literal["reported", "i
     if isinstance(output_details, dict):
         known_values["reasoning_output_tokens"] = output_details.get("reasoning_tokens")
     invalid = any(value is not None and _usage_value(value) is None for value in known_values.values())
-    usage = ModelTurnUsage(**{key: _usage_value(value) for key, value in known_values.items()})
+    usage = ModelUsage(**{key: _usage_value(value) for key, value in known_values.items()})
     if invalid or not usage.to_record():
         return usage, "invalid"
     return usage, "reported"
@@ -1061,7 +1028,7 @@ def parse_openai_chat_sse(
     response_model = ""
     provider_call_id = ""
     finish_reason = ""
-    usage = ModelTurnUsage()
+    usage = ModelUsage()
     usage_status: Literal["reported", "unavailable", "invalid"] = "unavailable"
     saw_done = False
 
@@ -1419,7 +1386,7 @@ __all__ = [
     "ModelToolRuntimeError",
     "ModelToolSchemaError",
     "ModelTurnMessage",
-    "ModelTurnUsage",
+    "ModelUsage",
     "ParsedToolTurn",
     "ScriptedToolReplayError",
     "ScriptedToolTurnSession",

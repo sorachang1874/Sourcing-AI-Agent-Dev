@@ -77,7 +77,7 @@ class ToolSpec:
 class ToolTurnResult:         # 唯一可授权后续动作的 canonical 语义结果
     text: str
     tool_calls: tuple[ToolCallRecord, ...]   # 已验证、有序、args 过 schema
-    usage: OpenAIModelUsage                  # 复用既有五字段类型(model_provider.py:36-55)
+    usage: ModelUsage                        # provider-neutral 单一五字段类型(model_usage.py)
     usage_status: str                        # reported | unavailable | invalid
     model_identity: ModelIdentity            # requested / response / effective + provenance
     terminal_reason: str                     # end_turn | tool_calls | length | content_filter
@@ -384,4 +384,4 @@ fail_closed` 唯一初始值。路由变更 = 配置提交 + 审计，不是运�
 approve/retry 创建点 copy+verify + 非同义反复的桥退役条件；#13→§3.1 字段所有权归一化；
 #14→§2.1 model_safe_result_schema + 全角色出站校验 + 租户身份入结果/转写/journal；
 #15→§2.3 预算保留台账契约（owner/身份/状态机/对账/orphan 回收）；命名更正→§2.2
-（OpenAIModelUsage、length）。
+（ModelUsage；OpenAIModelUsage 仅兼容别名、length）。

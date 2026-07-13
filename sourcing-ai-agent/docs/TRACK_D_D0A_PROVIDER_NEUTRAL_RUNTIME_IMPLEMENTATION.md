@@ -10,6 +10,7 @@ D0a establishes the deterministic seam needed before any model transport or Agen
 - discriminated message, tool-call, usage, event, and terminal-result types;
 - a bounded OpenAI-compatible chat SSE **parser** with arbitrary-chunk reassembly;
 - schema-validated synthetic tool calls and stable duplicate-call occurrence ordinals;
+- one provider-neutral immutable five-field usage value shared with the existing model provider;
 - one canonical request hash covering route/config/policy/message/tool/tenant/runtime-mode identity;
 - byte-content- and identity-bound scripted replay whose buffered and streamed projections share one terminal result;
 - a checked-in product route registry whose entries are content-revisioned and all remain `draft`;
@@ -27,27 +28,24 @@ no API route.
 | Product model routes | `model_route_registry.py::DEFAULT_MODEL_ROUTE_SPECS` | Unique `route_id`; content-derived SHA-256 revision; `fallback_policy=fail_closed`; D0a requires `rollout_state=draft`; exported lookup is a read-only `MappingProxyType` | request factory and scripted session | Reviewer routing, CRM product-model lock, runtime env, client-supplied model strings, or mutation of the public lookup | A later owner-approved route activation may extend the predicate only with typed owner, cost ledger, low-level live gate, and independent review | route revision/draft and public-registry immutability tests |
 | D0a execution mode | `assert_d0a_route_execution_allowed` | Exact `simulate|scripted`; `live` and every other value reject | scripted session before any parse | environment-derived fallback or silent mode coercion | Deleted only when a later live adapter replaces it with a strictly stronger gate | `test_d0a_route_predicate_rejects_live_and_unowned_modes` |
 | Typed message/tool schema | `model_tool_runtime.py` dataclasses and strict schema subset | Messages, tool count, per-tool schema, total tool fingerprints, and arguments are incrementally bounded canonical JSON; unsupported schema keywords reject rather than being partially interpreted | canonical hash and parser | raw untyped dictionaries treated as authorized commands or unbounded caller iterables | D1 may project registry-owned `ActionRequestSpec`; it must preserve this fail-closed validation boundary | schema/parser limit and sentinel-generator regression cases |
+| Model usage value | `model_usage.py::ModelUsage` | Exactly five optional fields; each reported value is an integer, non-boolean, and non-negative; invalid direct construction raises provider-neutral `ModelUsageValidationError` | `model_provider.py` and `model_tool_runtime.py` import the same class; `OpenAIModelUsage` is compatibility alias only | transport/env/settings ownership, duplicate usage classes, duck-typed third representations | Compatibility alias may be removed only after existing provider callers migrate; the canonical class remains provider-neutral | class-owner/type-identity, strict-value, dependency, and deleted-name regressions |
 | Canonical request identity | `canonical_tool_turn_request_payload/hash` | SHA-256 over route revision and snapshot digest, provider/model/API style, output/stream controls, tool schema, messages, policy revisions, tenant/actor/scope, transcript digest, runtime namespace, and provider mode | transcript lookup and terminal result evidence | timestamps, credentials, endpoint secrets, caller-supplied partial fingerprints | A durable owner may wrap the hash but must not omit or re-derive its fields | parametrized hash sensitivity tests |
 | Stream semantic result | `parse_openai_chat_sse` parser state | Exactly one choice/index 0, stable call/model identity, bounded total/chunks/complete-line count/raw wire-line bytes/frames/deltas, incomplete remainder bound at the same current byte ceiling, explicit finish + `[DONE]`, schema-valid complete calls. Raw line size is measured after splitting before LF, so CR is included | scripted replay | advisory delta events authorizing effects | A later transport adapter must consume this result, not rebuild it from events | arbitrary byte-split, >512 KiB same-byte chunking parity, exact/+1 LF/CRLF line boundaries, and malformed-stream tests |
 | Policy-evaluation eligibility | `ToolTurnResult.eligible_for_policy_evaluation` | Requires an explicit provider response call id plus either validated `end_turn` with zero calls or `tool_calls` with one or more calls; missing id and `length|content_filter` are false. `D0A_EFFECT_AUTHORIZATION_AVAILABLE=false` is unconditional | future owner policy gate input (not an effect adapter) | permission, approval, budget, cost, result-slot, CAS, or execution authorization | Durable owner policy + result-slot/consume CAS is required before any real action can be accepted | terminal-shape, missing-identity, and policy-sensitive negative tests |
 | Scripted transcript scope | `ScriptedToolTurnTranscript` plus canonical request hash | Exact SHA-256 of concatenated SSE bytes, independent of chunk boundaries; exact request hash; non-synthetic transcript also requires exact workspace | scripted session | caller-declared digest without byte proof, cross-mode/live authorization, or source-controlled real-person transcript | Recording/TTL/redaction governance is a later D0 batch; real data remains prohibited here | content mutation, chunk-split, request-hash, type, and workspace tests |
 
-### 2.1 Bounded usage-type migration
+### 2.1 Canonical provider-neutral usage value
 
-The repository already has `model_provider.OpenAIModelUsage` with the same five public fields and `to_record()` shape.
-D0a does not import it because `model_provider.py` also owns HTTP, credential/environment, retry, and circuit behavior;
-that import would violate this substrate's transport-free boundary. `ModelTurnUsage` is therefore a bounded temporary
-duplicate with stricter parser-side value validation, and a fast test pins valid-value field/record parity between the
-two types. Before the first D0 transport adapter or product callsite is connected, the shared five-field value object
-must move to a provider-neutral module, both owners must import that single type, and `ModelTurnUsage` must be deleted.
-Until that deletion condition is met, D0a remains non-live and no downstream contract may accept either type by duck
-typing or add a third usage representation. `docs/NEXT_TODO.md` records this as a mandatory predecessor of the first
-transport/product integration. A production-source AST/reference ratchet prevents the temporary type from escaping
-its D0a owner: until the shared type extraction, production modules may use selective symbol imports from
-`model_tool_runtime`, but may not acquire its module object through a normal or statically resolvable dynamic import.
-The ratchet also folds bounded static string expressions that spell the temporary type. This removes reflective
-`getattr`, `vars`, and `__dict__` namespace escape routes instead of trying to enumerate every alias form. This focused
-D0 test and implementation documentation remain the only allowed non-owner references.
+The former provider/runtime duplicate is closed. `model_usage.py` now owns the only five-field immutable class and its
+provider-neutral validation exception. Both `model_provider.py` and `model_tool_runtime.py` import that exact class;
+the existing `model_provider.OpenAIModelUsage` name remains only as an object-identical import alias for current callers.
+The temporary runtime type and its export were deleted, so reflective import policing is no longer the safety mechanism:
+there is no second runtime class to acquire. Fast regressions prove one production class owner, provider/runtime type
+identity, immutable serialization, strict non-negative integer/non-boolean construction, dependency neutrality, and
+zero production references to the deleted name.
+
+This closes only the usage-type predecessor recorded in `docs/NEXT_TODO.md`. It does not activate a transport, route,
+product caller, effect authorization, provider credential path, or live mode; all remaining D0 gates still apply.
 
 ## 3. Parser state and authorization boundary
 
@@ -116,8 +114,6 @@ D0a deliberately does **not** implement or claim:
 - ActionRequestSpec/D1 tool registry, model-safe result schema, dispatch adapter, API serve, or simulate dispatch preflight;
 - transcript file recording, redaction, TTL, artifact references, or real-person/CRM data handling;
 - `ModelClient` 14+3 facade characterization or transport integration;
-- provider-neutral extraction of the shared five-field usage value type and deletion of temporary `ModelTurnUsage`
-  (required before the first D0 transport adapter or product callsite, as specified in §2.1);
 - formal independent review, live/W6/manual/product validation, or milestone signoff.
 
 These are additive follow-up batches. No caller should import D0a as a live client or treat
@@ -130,15 +126,24 @@ Run from `sourcing-ai-agent/`:
 
 ```bash
 PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_model_tool_runtime.py
+PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_model_provider.py
 .venv/bin/ruff check \
+  src/sourcing_agent/model_usage.py \
   src/sourcing_agent/model_route_registry.py \
+  src/sourcing_agent/model_provider.py \
   src/sourcing_agent/model_tool_runtime.py \
-  tests/test_model_tool_runtime.py
+  tests/test_model_tool_runtime.py \
+  tests/test_model_provider.py
 PYTHONPATH=src .venv/bin/python -m mypy --follow-imports=skip \
+  src/sourcing_agent/model_usage.py \
   src/sourcing_agent/model_route_registry.py \
+  src/sourcing_agent/model_provider.py \
   src/sourcing_agent/model_tool_runtime.py
 ```
 
-Author evidence on 2026-07-14 after pinned re-review forward fixes: D0a `77 passed`; combined D0a + existing provider
-suite `116 passed + 11 subtests`; Ruff clean; focused mypy clean. This is author evidence only and does not
-replace the required pinned non-author review for the contract-heavy batch.
+Author evidence on 2026-07-14 after the provider-neutral extraction: D0a + existing provider suites
+`142 passed + 11 subtests`; Ruff passed on the six touched source/test files; focused mypy passed for
+`model_usage.py`, `model_route_registry.py`, and `model_tool_runtime.py`. `model_provider.py` still reports the same two
+pre-existing mypy findings (missing `requests` stubs and the legacy `int(Any | None)` site), reproduced in a clean
+`a0e4e60` worktree, so this extraction added no focused provider type error. This remains author evidence only and does
+not replace the required pinned non-author review for the contract-heavy batch.

@@ -3,12 +3,13 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
-from dataclasses import fields, replace
+from dataclasses import FrozenInstanceError, fields, replace
 from pathlib import Path
 from typing import Mapping
 
 import pytest
 
+import sourcing_agent.model_tool_runtime as model_tool_runtime_module
 from sourcing_agent.model_provider import OpenAIModelUsage
 from sourcing_agent.model_route_registry import (
     DEFAULT_MODEL_ROUTE_SPECS,
@@ -33,7 +34,6 @@ from sourcing_agent.model_tool_runtime import (
     ModelToolRequestBindingError,
     ModelToolRuntimeError,
     ModelToolSchemaError,
-    ModelTurnUsage,
     ScriptedToolReplayError,
     ScriptedToolTurnSession,
     ScriptedToolTurnTranscript,
@@ -48,6 +48,7 @@ from sourcing_agent.model_tool_runtime import (
     request_for_model_route,
     with_provider_mode,
 )
+from sourcing_agent.model_usage import ModelUsage, ModelUsageValidationError
 
 
 def _route() -> ModelRouteSpec:
@@ -290,129 +291,6 @@ def _bounded_sse_wire_line(prefix: bytes, newline: bytes, *, extra_raw_bytes: in
     raw_line = wire.split(b"\n", 1)[0]
     assert len(raw_line) == MAX_SSE_LINE_BYTES + extra_raw_bytes
     return wire
-
-
-def _static_string(node: ast.AST, names: dict[str, str] | None = None) -> str | None:
-    if isinstance(node, ast.Name):
-        return (names or {}).get(node.id)
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-        left = _static_string(node.left, names)
-        right = _static_string(node.right, names)
-        return None if left is None or right is None else left + right
-    if isinstance(node, ast.JoinedStr):
-        pieces: list[str] = []
-        for value in node.values:
-            if isinstance(value, ast.FormattedValue):
-                piece = _static_string(value.value, names)
-            else:
-                piece = _static_string(value, names)
-            if piece is None:
-                return None
-            pieces.append(piece)
-        return "".join(pieces)
-    if (
-        isinstance(node, ast.Call)
-        and not node.keywords
-        and len(node.args) == 1
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "join"
-    ):
-        separator = _static_string(node.func.value, names)
-        values = node.args[0]
-        if separator is None or not isinstance(values, (ast.List, ast.Tuple)):
-            return None
-        pieces = [_static_string(value, names) for value in values.elts]
-        return None if any(piece is None for piece in pieces) else separator.join(pieces)  # type: ignore[arg-type]
-    return None
-
-
-def _static_string_bindings(tree: ast.AST) -> dict[str, str]:
-    names: dict[str, str] = {}
-    assignments = [node for node in ast.walk(tree) if isinstance(node, (ast.Assign, ast.AnnAssign))]
-    for _round in range(len(assignments) + 1):
-        changed = False
-        for node in assignments:
-            if node.value is None:
-                continue
-            value = _static_string(node.value, names)
-            if value is None:
-                continue
-            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-            for target in targets:
-                if not isinstance(target, ast.Name):
-                    continue
-                current = names.get(target.id)
-                value_priority = int(value == "ModelTurnUsage" or value.endswith("model_tool_runtime"))
-                current_priority = int(
-                    current is not None
-                    and (current == "ModelTurnUsage" or current.endswith("model_tool_runtime"))
-                )
-                if current is None or value_priority > current_priority:
-                    names[target.id] = value
-                    changed = True
-        if not changed:
-            break
-    return names
-
-
-def _is_runtime_module_acquisition(node: ast.AST, names: dict[str, str]) -> bool:
-    if not isinstance(node, ast.Call):
-        return False
-    values = [*node.args, *(keyword.value for keyword in node.keywords)]
-    if any(
-        (value := _static_string(argument, names)) is not None and value.endswith("model_tool_runtime")
-        for argument in values
-    ):
-        return True
-    called = node.func.id if isinstance(node.func, ast.Name) else (
-        node.func.attr if isinstance(node.func, ast.Attribute) else ""
-    )
-    if called != "__import__":
-        return False
-    module_argument = node.args[0] if node.args else next(
-        (keyword.value for keyword in node.keywords if keyword.arg == "name"),
-        None,
-    )
-    module_name = _static_string(module_argument, names) if module_argument is not None else None
-    fromlist = next((keyword.value for keyword in node.keywords if keyword.arg == "fromlist"), None)
-    return bool(
-        module_name is not None
-        and module_name.endswith("sourcing_agent")
-        and isinstance(fromlist, (ast.List, ast.Tuple, ast.Set))
-        and any(_static_string(item, names) == "model_tool_runtime" for item in fromlist.elts)
-    )
-
-
-def _temporary_usage_reference_lines(source: str) -> tuple[int, ...]:
-    tree = ast.parse(source)
-    static_names = _static_string_bindings(tree)
-    lines: set[int] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Name) and node.id == "ModelTurnUsage":
-            lines.add(node.lineno)
-        elif isinstance(node, ast.Attribute) and node.attr == "ModelTurnUsage":
-            lines.add(node.lineno)
-        elif _static_string(node, static_names) == "ModelTurnUsage":
-            lines.add(node.lineno)
-        elif isinstance(node, ast.Import) and any(
-            alias.name.endswith("model_tool_runtime") for alias in node.names
-        ):
-            lines.add(node.lineno)
-        elif isinstance(node, ast.ImportFrom):
-            module_name = str(node.module or "")
-            if module_name.endswith("model_tool_runtime") and any(
-                alias.name in {"ModelTurnUsage", "__dict__", "*"} for alias in node.names
-            ):
-                lines.add(node.lineno)
-            elif (node.level > 0 or module_name.endswith("sourcing_agent")) and any(
-                alias.name == "model_tool_runtime" for alias in node.names
-            ):
-                lines.add(node.lineno)
-        elif _is_runtime_module_acquisition(node, static_names):
-            lines.add(node.lineno)
-    return tuple(sorted(lines))
 
 
 def test_route_registry_is_content_revisioned_and_draft_only() -> None:
@@ -1182,8 +1060,29 @@ def test_scripted_session_rejects_live_before_transcript_parse() -> None:
         )
 
 
-def test_temporary_usage_type_matches_existing_valid_value_contract() -> None:
-    assert [item.name for item in fields(ModelTurnUsage)] == [item.name for item in fields(OpenAIModelUsage)]
+def test_model_usage_has_one_provider_neutral_class_owner_and_compatibility_alias() -> None:
+    assert model_tool_runtime_module.ModelUsage is ModelUsage
+    assert OpenAIModelUsage is ModelUsage
+    assert ModelUsage.__module__ == "sourcing_agent.model_usage"
+    assert [item.name for item in fields(ModelUsage)] == [
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "cached_input_tokens",
+        "reasoning_output_tokens",
+    ]
+
+    repository_root = Path(__file__).resolve().parents[1]
+    production_root = repository_root / "src" / "sourcing_agent"
+    owners = []
+    for path in sorted(production_root.rglob("*.py")):
+        tree = ast.parse(path.read_text())
+        if any(isinstance(node, ast.ClassDef) and node.name == "ModelUsage" for node in ast.walk(tree)):
+            owners.append(str(path.relative_to(repository_root)))
+    assert owners == ["src/sourcing_agent/model_usage.py"]
+
+
+def test_model_usage_is_immutable_and_serializes_only_reported_fields() -> None:
     values = {
         "input_tokens": 12,
         "output_tokens": 7,
@@ -1191,95 +1090,59 @@ def test_temporary_usage_type_matches_existing_valid_value_contract() -> None:
         "cached_input_tokens": 2,
         "reasoning_output_tokens": 3,
     }
-    assert ModelTurnUsage(**values).to_record() == OpenAIModelUsage(**values).to_record()
-    assert ModelTurnUsage().to_record() == OpenAIModelUsage().to_record() == {}
-    with pytest.raises(ModelToolProtocolError, match="usage_value_invalid"):
-        ModelTurnUsage(input_tokens=-1)
+    usage = ModelUsage(**values)
+    assert usage.to_record() == values
+    assert OpenAIModelUsage(**values).to_record() == values
+    assert ModelUsage().to_record() == {}
+    with pytest.raises(FrozenInstanceError):
+        usage.input_tokens = 13  # type: ignore[misc]
 
 
-def test_temporary_usage_type_cannot_escape_into_production_modules() -> None:
-    assert _temporary_usage_reference_lines("from .model_tool_runtime import ModelTurnUsage")
-    assert _temporary_usage_reference_lines(
-        "import sourcing_agent.model_tool_runtime as runtime\nUsage = runtime.ModelTurnUsage"
-    )
-    assert _temporary_usage_reference_lines("from .model_tool_runtime import *")
-    assert _temporary_usage_reference_lines(
-        'import sourcing_agent.model_tool_runtime as runtime\nUsage = getattr(runtime, "ModelTurnUsage")'
-    )
-    assert _temporary_usage_reference_lines('UsageName = "ModelTurn" + "Usage"') == (1,)
-    assert _temporary_usage_reference_lines('UsageName = f\'{"ModelTurn"}{"Usage"}\'') == (1,)
-    assert _temporary_usage_reference_lines('UsageName = "".join(("ModelTurn", "Usage"))') == (1,)
-    assert _temporary_usage_reference_lines(
-        "import sourcing_agent.model_tool_runtime as runtime\nname = get_name()\nUsage = getattr(runtime, name)"
-    )
-    assert _temporary_usage_reference_lines(
-        "import sourcing_agent.model_tool_runtime as runtime\nname = get_name()\nUsage = runtime.__dict__[name]"
-    )
-    assert _temporary_usage_reference_lines(
-        "import sourcing_agent.model_tool_runtime as runtime\n"
-        "namespace = runtime.__dict__\nname = get_name()\nUsage = namespace[name]"
-    )
-    assert _temporary_usage_reference_lines(
-        "import sourcing_agent.model_tool_runtime as runtime\n"
-        "name = get_name()\nUsage = vars(runtime)[name]"
-    )
-    assert _temporary_usage_reference_lines(
-        'runtime = __import__("sourcing_agent." + "model_tool_runtime", fromlist=["*"])\n'
-        "name = get_name()\nUsage = getattr(runtime, name)"
-    )
-    assert _temporary_usage_reference_lines(
-        'import importlib\nruntime = importlib.import_module("sourcing_agent.model_tool_runtime")\n'
-        "name = get_name()\nUsage = getattr(runtime, name)"
-    )
-    assert _temporary_usage_reference_lines(
-        'from importlib import import_module as load\nruntime = load("sourcing_agent.model_tool_runtime")'
-    )
-    assert _temporary_usage_reference_lines("from . import model_tool_runtime as runtime") == (1,)
-    assert _temporary_usage_reference_lines("from .model_tool_runtime import __dict__ as namespace") == (1,)
-    assert _temporary_usage_reference_lines(
-        'from importlib import import_module as load\nruntime = load(name="sourcing_agent.model_tool_runtime")'
-    ) == (2,)
-    assert _temporary_usage_reference_lines(
-        'import builtins\nruntime = builtins.__import__("sourcing_agent.model_tool_runtime", fromlist=["*"])'
-    ) == (2,)
-    assert _temporary_usage_reference_lines(
-        'runtime = __import__("sourcing_agent", fromlist=["model_tool_runtime"]).model_tool_runtime'
-    ) == (1,)
-    assert _temporary_usage_reference_lines(
-        'module_name = "sourcing_agent.model_tool_runtime"\nruntime = load(module_name)'
-    ) == (2,)
-    assert not _temporary_usage_reference_lines("from .model_tool_runtime import ToolSpec")
-    assert _temporary_usage_reference_lines(
-        'import sourcing_agent.model_tool_runtime as runtime\nTool = getattr(runtime, "ToolSpec")'
-    )
+@pytest.mark.parametrize(
+    "field_name",
+    ("input_tokens", "output_tokens", "total_tokens", "cached_input_tokens", "reasoning_output_tokens"),
+)
+@pytest.mark.parametrize("invalid_value", (-1, True, False, 1.5, "1"))
+def test_model_usage_rejects_negative_bool_and_non_integer_values(field_name: str, invalid_value: object) -> None:
+    with pytest.raises(ModelUsageValidationError, match=f"model_usage_value_invalid:{field_name}"):
+        ModelUsage(**{field_name: invalid_value})  # type: ignore[arg-type]
 
+
+def test_deleted_temporary_usage_type_has_zero_production_references() -> None:
     repository_root = Path(__file__).resolve().parents[1]
     production_root = repository_root / "src" / "sourcing_agent"
-    owner_path = production_root / "model_tool_runtime.py"
-    violations: dict[str, tuple[int, ...]] = {}
-    for path in sorted(production_root.rglob("*.py")):
-        if path == owner_path:
-            continue
-        source = path.read_text()
-        references = _temporary_usage_reference_lines(source)
-        if references:
-            violations[str(path.relative_to(repository_root))] = references
-
-    # D0's owner module, this focused test, and implementation docs are the
-    # only current references. The ratchet deliberately scans production src.
+    deleted_name = "Model" + "Turn" + "Usage"
+    assert not hasattr(model_tool_runtime_module, deleted_name)
+    assert deleted_name not in model_tool_runtime_module.__all__
+    violations = {
+        str(path.relative_to(repository_root)): tuple(
+            index for index, line in enumerate(path.read_text().splitlines(), start=1) if deleted_name in line
+        )
+        for path in sorted(production_root.rglob("*.py"))
+        if deleted_name in path.read_text()
+    }
     assert violations == {}
 
 
 def test_d0a_modules_have_no_transport_or_environment_dependency() -> None:
     root = Path(__file__).resolve().parents[1] / "src" / "sourcing_agent"
     source = "\n".join(
-        (root / filename).read_text() for filename in ("model_route_registry.py", "model_tool_runtime.py")
+        (root / filename).read_text()
+        for filename in ("model_route_registry.py", "model_tool_runtime.py", "model_usage.py")
     )
 
     assert "import requests" not in source
     assert "urllib" not in source
     assert "os.environ" not in source
     assert "assert_live_provider_access_allowed" not in source
+
+    usage_imports = {
+        (node.module or "") if isinstance(node, ast.ImportFrom) else alias.name
+        for node in ast.walk(ast.parse((root / "model_usage.py").read_text()))
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+        for alias in node.names
+    }
+    assert usage_imports == {"__future__", "dataclasses"}
 
 
 def test_canonical_payload_exposes_hash_inputs_but_not_message_content() -> None:

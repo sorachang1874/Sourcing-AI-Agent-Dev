@@ -91,12 +91,12 @@
   reviewer CODEX_HOME（`configs/reviewer-codex/` + bootstrap，ChatGPT Desktop 切配置免疫），
   超时用 `REVIEW_TIMEOUT_SECONDS=1800`。
 - [ ] ModelClient 升级：streaming + tool-calling（现有 14 个单发方法、阻塞 requests、无流式）。
-- [ ] D0 usage type 收敛门（2026-07-14）：首个 model transport 或 product callsite 集成前，必须先把
-  `OpenAIModelUsage` / 临时 `ModelTurnUsage` 的五字段 value object 提取到无 transport/env 依赖的共享
-  provider-neutral 模块，让 `model_provider.py` 与 `model_tool_runtime.py` 只导入该单一类型，并删除
-  `ModelTurnUsage`。删除前，`src/sourcing_agent/` 除 D0a owner 外不得引用该临时类型；
-  `test_temporary_usage_type_cannot_escape_into_production_modules` 为 fail-closed ratchet，且 D0a 继续禁止
-  live/product integration。
+- [x] D0 usage type 收敛门（2026-07-14）：`model_usage.py::ModelUsage` 现为无 transport/env/settings 依赖的
+  单一五字段 immutable value owner，`model_provider.py` 与 `model_tool_runtime.py` 导入同一 class；
+  `OpenAIModelUsage` 仅保留 object-identical compatibility alias，临时 runtime 类型及其 export/生产引用均已
+  删除。回归直接证明单一 class owner、provider/runtime identity、严格非负 integer/non-bool 校验和依赖中立，
+  不再用可反射绕过的 AST escape ratchet 代替架构收敛。此项只关闭首个 transport/product callsite 的前置债务；
+  D0a 仍禁止 live/product integration，其他 durable owner/cost/policy/result-slot/review gates 不变。
 - [ ] Agent Session 契约：服务端 agentic loop；工具面 = M1 manifest 导出 + 只读上下文工具 + model_native_search/fetch 转正；效果全部走 typed AgentAction（边界已由 `AGENT_OPERATION_CONTRACT.md` 规定）。
 - [ ] 第一垂直切片：公司身份自验证 loop（搜索→fetch 验证→歧义才升级人工），替代 PlanCard 手动修正 LinkedIn URL。
 - [ ] 之后：plan review 对话化、intent→plan 前门流式化；OpenClaw/Claude 作为可插拔外脑。
