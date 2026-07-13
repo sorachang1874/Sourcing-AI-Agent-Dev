@@ -1,6 +1,6 @@
 # Track D D0b — ModelClient v1 characterize-first freeze
 
-> Status: Author characterization batch with second reviewer fixed-forward (2026-07-14). This is a non-live test and
+> Status: Author characterization batch with third reviewer fixed-forward (2026-07-14). This is a non-live test and
 > documentation slice, not a D0/D1 completion claim, independent-review `GO`, live-provider approval, or product
 > activation.
 
@@ -42,11 +42,14 @@ and factory/helper returns, typed receiver and attribute flow, receiver aliases,
 instances, and `getattr(receiver, method)` callables. Alias flow follows statement order: an unconditional overwrite
 kills the receiver or callable fact, a later assignment can rebind it, and a later assignment never makes an earlier
 call count. `if`/`try`/loop exits use a deliberate may-alias union, so a call reachable from any conservatively retained
-branch remains visible.
+branch remains visible. Conditional-expression and boolean-expression callable aliases preserve the union of their
+possible protocol methods.
 
 Nested sync functions, async functions, and lambdas are analyzed recursively from their definition-point lexical
 receiver/callable state. They receive stable qualified owners such as `outer.<locals>.inner`; lambda owners additionally
-include their parent owner and source position. Duplicate calls remain a multiset. This is a bounded characterization
+include their parent owner and source position. Positional and keyword-only defaults are evaluated under the enclosing
+owner, then their receiver/callable facts seed the nested parameter state; definition-time model calls therefore remain
+visible under the enclosing owner. Duplicate calls remain a multiset. This is a bounded characterization
 analyzer, not a claim of whole-Python interprocedural exactness: dynamic imports, `eval`, runtime monkeypatching,
 reflection beyond the characterized `getattr` form, late-bound closure mutation, and arbitrary cross-module return flow
 remain outside its proof boundary. Non-null `model_client=` handoffs keep propagation-only modules visible; literal
@@ -67,7 +70,8 @@ The suite fails when any of these semantics drift:
 6. generic response identity and the CRM-only product-model lock are conflated.
 
 In-memory mutations prove detection of sync/async/decorator drift, nested sync/async/lambda callbacks, receiver/callable
-overwrite and rebind, `getattr`, helper returns, and direct concrete calls. One probe inserts a nested call into the
+defaults, definition-time lambda calls, overwrite/rebind, conditional aliases, `getattr`, helper returns, and direct
+concrete calls. One probe inserts a nested call into the
 existing `orchestrator.py` consumer source in memory and proves the qualified-owner multiset changes. A runtime
 monkeypatch adds an otherwise hidden delegate side effect and proves the 17-method spy graph catches it. These probes do
 not edit production source files.
@@ -99,6 +103,6 @@ git diff --check -- \
   docs/TRACK_D_D0B_MODEL_CLIENT_V1_CHARACTERIZATION.md
 ```
 
-Author evidence on 2026-07-14: the characterization suite passed 18 tests; the combined characterization, existing
-provider, and D0a runtime suites passed `160 tests + 11 subtests`; Ruff format/check passed for the test file; and the
+Author evidence on 2026-07-14: the characterization suite passed 20 tests; the combined characterization, existing
+provider, and D0a runtime suites passed `162 tests + 11 subtests`; Ruff format/check passed for the test file; and the
 exact two-path diff check passed. This is author evidence only and does not replace independent review.

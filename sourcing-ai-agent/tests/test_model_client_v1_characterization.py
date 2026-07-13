@@ -565,6 +565,49 @@ def _method_references(
         )
     ):
         return frozenset({node.args[1].value})
+    if isinstance(node, ast.IfExp):
+        return _method_references(
+            node.body,
+            receivers=receivers,
+            callable_aliases=callable_aliases,
+            imported_symbols=imported_symbols,
+            module_aliases=module_aliases,
+            concrete=concrete,
+            protocol_methods=protocol_methods,
+        ) | _method_references(
+            node.orelse,
+            receivers=receivers,
+            callable_aliases=callable_aliases,
+            imported_symbols=imported_symbols,
+            module_aliases=module_aliases,
+            concrete=concrete,
+            protocol_methods=protocol_methods,
+        )
+    if isinstance(node, ast.BoolOp):
+        return frozenset().union(
+            *(
+                _method_references(
+                    value,
+                    receivers=receivers,
+                    callable_aliases=callable_aliases,
+                    imported_symbols=imported_symbols,
+                    module_aliases=module_aliases,
+                    concrete=concrete,
+                    protocol_methods=protocol_methods,
+                )
+                for value in node.values
+            )
+        )
+    if isinstance(node, ast.NamedExpr):
+        return _method_references(
+            node.value,
+            receivers=receivers,
+            callable_aliases=callable_aliases,
+            imported_symbols=imported_symbols,
+            module_aliases=module_aliases,
+            concrete=concrete,
+            protocol_methods=protocol_methods,
+        )
     return frozenset()
 
 
@@ -602,6 +645,18 @@ def _merge_alias_states(*states: _ModelAliasState) -> _ModelAliasState:
 def _argument_nodes(arguments: ast.arguments) -> tuple[ast.arg, ...]:
     optional = tuple(arg for arg in (arguments.vararg, arguments.kwarg) if arg is not None)
     return (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs, *optional)
+
+
+def _argument_defaults(arguments: ast.arguments) -> tuple[tuple[ast.arg, ast.expr], ...]:
+    positional = (*arguments.posonlyargs, *arguments.args)
+    positional_with_defaults = positional[-len(arguments.defaults) :] if arguments.defaults else ()
+    positional_defaults = tuple(zip(positional_with_defaults, arguments.defaults, strict=True))
+    keyword_defaults = tuple(
+        (argument, default)
+        for argument, default in zip(arguments.kwonlyargs, arguments.kw_defaults, strict=True)
+        if default is not None
+    )
+    return (*positional_defaults, *keyword_defaults)
 
 
 def _pattern_target_keys(pattern: ast.pattern) -> tuple[str, ...]:
@@ -743,13 +798,31 @@ class _LexicalModelCallAnalyzer:
         else:
             self._analyze_expression(node.elt, local, owner)
 
+    def _default_bindings(
+        self,
+        arguments: ast.arguments,
+        state: _ModelAliasState,
+        owner: str,
+    ) -> dict[str, tuple[bool, frozenset[str]]]:
+        bindings: dict[str, tuple[bool, frozenset[str]]] = {}
+        for argument, default in _argument_defaults(arguments):
+            self._analyze_expression(default, state, owner)
+            bindings[argument.arg] = self._assignment_semantics(default, state)
+        return bindings
+
     def _analyze_expression(self, node: ast.AST | None, state: _ModelAliasState, owner: str) -> None:
         if node is None:
             return
         if isinstance(node, ast.Lambda):
+            default_bindings = self._default_bindings(node.args, state, owner)
             nested_state = state.copy()
             for argument in _argument_nodes(node.args):
                 self._kill_target(nested_state, argument.arg)
+                is_receiver, methods = default_bindings.get(argument.arg, (False, frozenset()))
+                if is_receiver:
+                    nested_state.receivers.add(argument.arg)
+                elif methods:
+                    nested_state.callable_aliases[argument.arg] = methods
             lambda_owner = f"{owner}.<locals>.<lambda@L{node.lineno}C{node.col_offset}>"
             self._analyze_expression(node.body, nested_state, lambda_owner)
             return
@@ -792,11 +865,17 @@ class _LexicalModelCallAnalyzer:
         state: _ModelAliasState,
         owner: str,
     ) -> None:
-        for expression in (*node.decorator_list, *node.args.defaults, *node.args.kw_defaults):
+        for expression in node.decorator_list:
             self._analyze_expression(expression, state, owner)
+        default_bindings = self._default_bindings(node.args, state, owner)
         self._kill_target(state, node.name)
         nested_owner = f"{owner}.<locals>.{node.name}"
-        self.analyze_function(node, owner=nested_owner, inherited=state.copy())
+        self.analyze_function(
+            node,
+            owner=nested_owner,
+            inherited=state.copy(),
+            default_bindings=default_bindings,
+        )
 
     def _analyze_statement(self, node: ast.stmt, state: _ModelAliasState, owner: str) -> None:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -954,17 +1033,24 @@ class _LexicalModelCallAnalyzer:
         owner: str,
         class_name: str = "",
         inherited: _ModelAliasState | None = None,
+        default_bindings: dict[str, tuple[bool, frozenset[str]]] | None = None,
     ) -> _ModelAliasState:
         state = inherited.copy() if inherited is not None else _ModelAliasState()
         for argument in _argument_nodes(node.args):
             self._kill_target(state, argument.arg)
-            if _annotation_mentions_model(
+            default_is_receiver, default_methods = (default_bindings or {}).get(
+                argument.arg,
+                (False, frozenset()),
+            )
+            if default_is_receiver or _annotation_mentions_model(
                 argument.annotation,
                 imported_symbols=self.imported_symbols,
                 module_aliases=self.module_aliases,
                 model_types=self.model_types,
             ):
                 state.receivers.add(argument.arg)
+            elif default_methods:
+                state.callable_aliases[argument.arg] = default_methods
         state.receivers.update(self.class_receivers.get(class_name, ()))
         return self._analyze_statements(node.body, state, owner)
 
@@ -1377,6 +1463,71 @@ def ordered(model_client: ModelClient, flag: bool):
         {
             ("ordered.py", "ordered", "healthcheck"): 3,
             ("ordered.py", "ordered", "provider_name"): 2,
+        }
+    )
+
+
+def test_consumer_analysis_binds_nested_and_lambda_defaults_at_definition_time() -> None:
+    source = """\
+from sourcing_agent.model_provider import ModelClient
+
+def outer(model_client: ModelClient):
+    def receiver_default(client=model_client):
+        return client.healthcheck()
+
+    def callable_default(probe=model_client.provider_name):
+        return probe()
+
+    def keyword_default(*, client=model_client):
+        return client.supports_outreach_ai_verification()
+
+    lambda_receiver = lambda client=model_client: client.normalize_request({})
+    lambda_callable = lambda probe=model_client.judge_company_equivalence: probe({})
+    definition_call = lambda initial=model_client.healthcheck(): initial
+    return receiver_default, callable_default, keyword_default, lambda_receiver, lambda_callable, definition_call
+"""
+
+    calls = _call_points_for_source(source, module_name="defaults.py")
+
+    assert calls == Counter(
+        {
+            ("defaults.py", "outer.<locals>.receiver_default", "healthcheck"): 1,
+            ("defaults.py", "outer.<locals>.callable_default", "provider_name"): 1,
+            (
+                "defaults.py",
+                "outer.<locals>.keyword_default",
+                "supports_outreach_ai_verification",
+            ): 1,
+            ("defaults.py", "outer.<locals>.<lambda@L13C22>", "normalize_request"): 1,
+            (
+                "defaults.py",
+                "outer.<locals>.<lambda@L14C22>",
+                "judge_company_equivalence",
+            ): 1,
+            ("defaults.py", "outer", "healthcheck"): 1,
+        }
+    )
+
+
+def test_consumer_analysis_unions_conditional_callable_aliases() -> None:
+    source = """\
+from sourcing_agent.model_provider import ModelClient
+
+def conditional(model_client: ModelClient, flag: bool):
+    probe = model_client.healthcheck if flag else model_client.provider_name
+    probe()
+    second = model_client.normalize_request or model_client.judge_company_equivalence
+    second({})
+"""
+
+    calls = _call_points_for_source(source, module_name="conditional.py")
+
+    assert calls == Counter(
+        {
+            ("conditional.py", "conditional", "healthcheck"): 1,
+            ("conditional.py", "conditional", "provider_name"): 1,
+            ("conditional.py", "conditional", "normalize_request"): 1,
+            ("conditional.py", "conditional", "judge_company_equivalence"): 1,
         }
     )
 
