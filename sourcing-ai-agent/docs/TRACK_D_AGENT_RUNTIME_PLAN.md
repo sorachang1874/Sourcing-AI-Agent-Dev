@@ -1,10 +1,12 @@
 # Track D — 强 Agent 化执行计划（跨模型设计输入）
 
-> Status: Cross-model design input for owner review（v2 2026-07-13，作者 = Claude Fable 5；只规划、不改码）。
-> **v2 修订记录**：v1（`23a2b05`）经 gpt-5.6-sol pinned reference review 得 NO-GO（24 findings，
-> 提取件 `runtime/reviews/20260713T112818Z_*.extracted-reference.md`，因 runner 与 codex 0.144
-> 多线程协议代差，正式 artifact fail-closed 为 invalid_transport、仅作参考输入）；v2 已按
-> findings 修订，且全部代码级断言经 8 路并行独立核查（28 confirmed / 1 partial）后才采信。
+> Status: Cross-model design input for owner review（v3 2026-07-13，作者 = Claude Fable 5；只规划、不改码）。
+> **修订史**：v1（`23a2b05`）→ gpt-5.6-sol reference review NO-GO（24 findings，提取件
+> `runtime/reviews/20260713T112818Z_*.extracted-reference.md`，artifact 因 runner 协议代差
+> invalid_transport）→ v2（`ffdfa7c`，29 条代码断言 8 路独立核查后逐条修复 + 24 路覆盖度审计 +
+> 一致性审计）→ **有效 runner artifact** `runtime/reviews/20260713T122908Z_*`（gpt-5.6-sol/ultra/
+> priority，reviewer_exit_code=0）复核仍 NO-GO（16 条新 findings + 1 处 v2 事实错误：身份已有
+> 文件级持久化）→ v3 逐条修复（本版）。
 > 定位：为 Track D 提供第二模型家族的独立设计视角，供接手实现的 GPT-5.6(Codex) 部分复用或反驳；
 > 本文**不是任何 scope 的 GO**——实施批次仍逐批走 `INDEPENDENT_REVIEW_GATE.md`。
 > 配套阅读：`SERVING_EXECUTION_NORTH_STAR.md`（已 ratified，支柱 4）、`AGENT_OPERATION_CONTRACT.md`
@@ -47,9 +49,13 @@
   google-scope / former-employee / investor 四处置 True（`plan_review.py:54/:58/:78/:82`），身份解析
   发生在 acquisition 执行期（gate 之后），低置信 heuristic identity 今天直接 `ready` 执行、无人工
   检查点。修复必须把身份解析（廉价确定性分支）前移到 plan 期（→ D3）。
-- **执行期已存在一条活的身份 search+judge 路径**：`acquisition.py:970-1051` `_resolve_company` 低置信时
-  调 `_discover_company_identity_candidates`（`:4078-4100`，走配置的 search provider）+
-  `judge_company_equivalence`，结果**不持久化**——每 job 重解析、重付费。
+- **执行期已存在一条活的身份 search+judge 路径，且已有文件级持久化**（v3 事实修正——v2 的
+  "不持久化"说法错误，re-review 抓出）：`acquisition.py:970-1051` `_resolve_company` 低置信时调
+  `_discover_company_identity_candidates`（`:4078-4100`）+ `judge_company_equivalence`，成功后写
+  `identity.json` 并更新**全局文件注册表** `company_identity_registry.json`（`:1017-1031`），后续
+  解析经 `company_registry.py:210-234,554-594,641-681` 回读。问题不是"没持久化"，而是该注册表
+  **文件制、全局共享、无版本无租户无 generation**——D3 的 PG 读模型必须成为 canonical 并显式
+  迁移/降级它（否则双持久 owner，见 D3 详设 §4）。
 - **现成交接通道**：`resolver=="manual_review_override"` 会关闭上述付费分支（守卫 `:986-990`）——
   D3 以同机制加 `agent_self_verified` 通道即可「以消费代退役」，保持 provenance 诚实。
 - 工具面种子已就绪但未 serve：`command_type_manifest()` 仅测试引用；
@@ -108,7 +114,11 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
 - **（v2 修正）`agent_events` 不是第二事件源**：每行带物理因果列（workflow_event_id /
   workflow_command_id / operation_run_id / turn_id / step_id），terminal 真值属 workflow 事件/命令表，
   `agent_events` 是 turn 粒度的投影/明细表，**禁止独立推进 workflow 状态**；poll/SSE 消费同一有序
-  outbox（与 C4 同设计一次做）。
+  outbox（与 C4 同设计一次做）。**（v3 补全存储契约）**三表 PG-only（无 SQLite 路径）；
+  `agent_events` 带 per-stream `sequence_number` + `idempotency_key`（形态照抄 `operation_events`）、
+  workspace 租户列与授权 scope；投影 ownership = turn owner 单写者；可重建（从 canonical workflow
+  事件重放恢复，重放语义随表 DDL 声明）；fast preflight 断言 terminal 真值只存在于 canonical
+  workflow 状态表。
 - loop 预算：turn 级 max_steps/max_cost/max_wall 超限 fail-closed 转 HITL；每步落 `agent_events`。
 - 依赖：poll-mode 单进程版可先行；C2 身份/C3 拆进程是**多用户 hosted 激活**前置（见 §3 v2 拆分）。
 
@@ -179,7 +189,7 @@ plan review 对话化；intent→plan 前门流式化（依赖 D0+C4）；`model
   可执行信封：plan 级预授权、维度化（searches/fetches/model tokens/wall）、attempt 创建同事务
   原子扣减、跨 retry/resume 不重置；未来模型原生 Search 扩展按 D4 转正批，信封结构已兼容多后端。
 - **TD-6**（已裁决 2026-07-13：接受建议）v2 具体化：EntityDelta 存有界摘要 + artifact ref；
-  current-state 读模型由验证 owner 物化（兼修「身份从不持久化、每 job 重付费」）；
+  current-state 读模型由验证 owner 物化并成为 canonical（既有全局文件注册表按 §4a 迁移/降级）；
   `company_evidence` 若写必经其既有 owner。
 - **TD-7**（新，owner 2026-07-13 批准按推荐执行）auto-confirm 安全边界 = 分阶段：Phase 1 shadow
   （身份低置信即 block + 人一键确认，**比现状更严**）→ 统计门（零误确认 + 分母下限 + 上置信界）
