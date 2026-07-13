@@ -709,16 +709,21 @@ independent review because public status and download semantics change.
   owner-gated publication; no durable/live/manual/product signoff may treat this C1b fence as that split.
 - The AST ratchet now follows callable aliases and `partial`/`getattr`, plus thread and executor targets. Mutation
   fixtures prove aliased direct compile, aliased hydration thread, and executor submit bypasses are detected.
-- Authenticated unlinked Plan rows carry API-authored requester/tenant provenance. Submit, exact read, list, and
-  resubmit use one fail-closed matrix: missing, partial, mismatched, or body-authored ownership is 404/excluded; open
-  mode and non-Plan legacy rows retain compatibility. This bridge adds no schema and is deleted after durable consumer
-  identity and legacy-owner repair are authoritative.
+- Authenticated unlinked Plan rows carry API-authored requester/tenant provenance. The first-create owner check, claim,
+  queued projection, and process-local registration share the hydration lock, so two authenticated callers cannot both
+  claim an absent explicit `history_id`. Submit, exact read, list, and resubmit use one fail-closed matrix: missing,
+  partial, mismatched, or body-authored ownership is 404/excluded. Non-Plan legacy rows retain read compatibility but
+  never gain Plan replacement authority; open mode retains its explicit compatibility behavior. This bridge adds no
+  schema and is deleted after durable consumer identity and legacy-owner repair are authoritative.
 - Empty owner-supplied artifact handles are rejected at construction and malformed succeeded adapter payloads omit
   the artifact. The current Plan bridge remains HTTP `200`/`pending`; only C1e may switch it to durable HTTP `202`.
 - Deterministic tests use event/barrier or publication injection, not timing sleeps: late-consumer ordering is tested
   inside terminal publication, and a compiler-owner exception terminalizes every coalesced consumer as `failed` and
-  clears both process-local registries rather than leaving silent `pending` work. Fixed-forward evidence: contract/
-  identity `60 passed`, history recovery `32 passed`,
+  clears both process-local registries rather than leaving silent `pending` work. A thread-start failure now retires
+  the registered owner, best-effort terminalizes its queued projection, and returns retryable `503` instead of leaving
+  later consumers attached to a dead owner. A permanently unavailable history store can still prevent that terminal
+  projection; this process-local bridge cannot prove durable terminalization and remains blocked on the C1c owner.
+  Fixed-forward evidence before this follow-up: contract/identity `60 passed`, history recovery `32 passed`,
   export/transport `15 passed`, CRM `26 passed + 4 subtests`, frontend contracts `13 passed`, frontend production
   build and lint green, mypy unchanged at `81 errors / 4 files`, and `349+2+11+1+2` + `dry_run_ready` green.
 

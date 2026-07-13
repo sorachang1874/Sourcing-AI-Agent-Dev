@@ -28,12 +28,16 @@ from starlette.routing import Route
 from .orchestrator import SourcingOrchestrator
 from .plan_submit_contract import (
     LEGACY_PLAN_SUBMIT_HTTP_STATUS,
-    PLAN_SUBMIT_IDENTITY_METADATA_KEY,
+    PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_HTTP_STATUS,
+    PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_REASON,
+    PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_STATUS,
     PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY,
     PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
     PLAN_SUBMIT_OWNER_UNAVAILABLE_HTTP_STATUS,
     PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON,
     PLAN_SUBMIT_OWNER_UNAVAILABLE_STATUS,
+    authenticated_plan_history_metadata_owned,
+    frontend_history_record_is_plan,
 )
 from .remote_provider_events import normalize_remote_provider_event
 from .storage import _json_safe_payload
@@ -641,26 +645,17 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         return None
 
     def _frontend_history_is_plan(link: Any) -> bool:
-        record = dict(link or {}) if isinstance(link, dict) else {}
-        metadata = dict(record.get("metadata") or {})
-        source = str(metadata.get("source") or "").strip()
-        return bool(
-            str(record.get("phase") or "").strip().lower() == "plan"
-            or isinstance(metadata.get("plan_generation"), dict)
-            or source.startswith("plan_workflow")
-        )
+        return frontend_history_record_is_plan(link)
 
     def _authenticated_unlinked_plan_history_owned(request: Request, link: Any) -> bool:
         identity = _server_identity(request)
         if identity is None:
             return True
-        record = dict(link or {}) if isinstance(link, dict) else {}
-        proof = dict(dict(record.get("metadata") or {}).get(PLAN_SUBMIT_IDENTITY_METADATA_KEY) or {})
         user_id = identity["user_id"]
-        return bool(
-            str(proof.get("provenance") or "").strip() == PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER
-            and str(proof.get("requester_id") or "").strip() == user_id
-            and str(proof.get("tenant_id") or "").strip() == _user_namespace(user_id)
+        return authenticated_plan_history_metadata_owned(
+            link,
+            requester_id=user_id,
+            tenant_id=_user_namespace(user_id),
         )
 
     def _gate_frontend_history_owner(request: Request, history_id: str) -> Response | None:
@@ -1628,7 +1623,17 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
                 },
             )
         result = submit_plan(payload)
-        status = LEGACY_PLAN_SUBMIT_HTTP_STATUS if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+        result_status = str(result.get("status") or "").strip()
+        result_reason = str(result.get("reason") or "").strip()
+        if (
+            result_status == PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_STATUS
+            and result_reason == PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_REASON
+        ):
+            status = PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_HTTP_STATUS
+        elif result_status == PLAN_SUBMIT_OWNER_UNAVAILABLE_STATUS and result_reason == PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON:
+            status = PLAN_SUBMIT_OWNER_UNAVAILABLE_HTTP_STATUS
+        else:
+            status = LEGACY_PLAN_SUBMIT_HTTP_STATUS if result_status != "invalid" else HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
 
     add(["POST"], "/api/plan/submit", post_plan_submit, read_body=True)

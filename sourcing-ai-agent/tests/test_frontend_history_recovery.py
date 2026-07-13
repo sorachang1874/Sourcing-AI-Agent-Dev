@@ -25,9 +25,11 @@ from sourcing_agent.excel_intake_owner import ExcelIntakeOwner
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import SourcingOrchestrator, _plan_hydration_request_signature
 from sourcing_agent.plan_submit_contract import (
+    PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_REASON,
     PLAN_SUBMIT_IDENTITY_METADATA_KEY,
     PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY,
     PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+    PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON,
 )
 from sourcing_agent.semantic_provider import LocalSemanticProvider
 from sourcing_agent.settings import (
@@ -209,6 +211,78 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertNotIn(PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY, submitted["request"])
         queued_payload = dict(queue_mock.call_args.kwargs["payload"])
         self.assertNotIn(PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY, queued_payload)
+
+    def test_authenticated_first_create_history_claim_is_atomic(self) -> None:
+        history_id = "history-plan-first-create-race"
+        start_barrier = threading.Barrier(3)
+        results: dict[str, dict[str, object]] = {}
+        errors: list[BaseException] = []
+
+        def submit(user_id: str) -> None:
+            try:
+                start_barrier.wait(timeout=3)
+                results[user_id] = self.orchestrator.submit_plan_workflow(
+                    {
+                        "raw_user_request": "Find OpenAI researchers",
+                        "history_id": history_id,
+                        "requester_id": user_id,
+                        "tenant_id": f"user-{user_id}",
+                        PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY: PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+                    }
+                )
+            except BaseException as error:
+                errors.append(error)
+
+        with mock.patch.object(self.orchestrator, "_queue_plan_hydration", return_value=None):
+            threads = [threading.Thread(target=submit, args=(user_id,)) for user_id in ("alice", "bob")]
+            for thread in threads:
+                thread.start()
+            start_barrier.wait(timeout=3)
+            for thread in threads:
+                thread.join(timeout=5)
+
+        self.assertEqual(errors, [])
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        winners = [user_id for user_id, result in results.items() if result.get("status") == "pending"]
+        rejected = [
+            result
+            for result in results.values()
+            if result.get("reason") == PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_REASON
+        ]
+        self.assertEqual(len(winners), 1)
+        self.assertEqual(len(rejected), 1)
+        link = self.store.get_frontend_history_link(history_id)
+        assert link is not None
+        proof = dict(link["metadata"].get(PLAN_SUBMIT_IDENTITY_METADATA_KEY) or {})
+        self.assertEqual(proof.get("requester_id"), winners[0])
+        self.assertEqual(proof.get("tenant_id"), f"user-{winners[0]}")
+
+    def test_plan_hydration_thread_start_failure_terminalizes_and_retires_owner(self) -> None:
+        history_id = "history-plan-thread-start-failure"
+        real_thread_start = threading.Thread.start
+
+        def fail_plan_hydration_start(thread: threading.Thread) -> None:
+            if thread.name.startswith("plan-hydration-"):
+                raise RuntimeError("fixture_thread_start_failed")
+            real_thread_start(thread)
+
+        with mock.patch("sourcing_agent.orchestrator.threading.Thread.start", new=fail_plan_hydration_start):
+            submitted = self.orchestrator.submit_plan_workflow(
+                {
+                    "raw_user_request": "Find OpenAI researchers",
+                    "history_id": history_id,
+                }
+            )
+
+        self.assertEqual(submitted.get("status"), "failed")
+        self.assertEqual(submitted.get("reason"), PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON)
+        self.assertFalse(self.orchestrator._plan_hydration_inflight)
+        self.assertFalse(self.orchestrator._plan_hydration_signature_inflight)
+        link = self.store.get_frontend_history_link(history_id)
+        assert link is not None
+        generation = dict(link["metadata"].get("plan_generation") or {})
+        self.assertEqual(generation.get("status"), "failed")
+        self.assertEqual(generation.get("error_message"), PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON)
 
     def test_run_plan_hydration_promotes_pending_history_to_ready_plan(self) -> None:
         history_id = "history-plan-hydration-1"

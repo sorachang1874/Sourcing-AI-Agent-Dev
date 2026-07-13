@@ -45,6 +45,9 @@ PLAN_GENERATION_TERMINAL_STATUSES = frozenset({PLAN_GENERATION_COMPLETED, PLAN_G
 PLAN_SUBMIT_OWNER_UNAVAILABLE_STATUS = "failed"
 PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON = "plan_submit_owner_unavailable"
 PLAN_SUBMIT_OWNER_UNAVAILABLE_HTTP_STATUS = 503
+PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_STATUS = "not_found"
+PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_REASON = "plan_submit_history_owner_unresolved"
+PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_HTTP_STATUS = 404
 
 # The API strips this private transport key from every client payload, then sets
 # it only from authenticated request.state.  ``submit_plan_workflow`` consumes it
@@ -139,6 +142,36 @@ def build_plan_submit_identity_metadata(
         "requester_id": normalized_requester_id,
         "tenant_id": normalized_tenant_id,
     }
+
+
+def frontend_history_record_is_plan(link: Any) -> bool:
+    record = dict(link or {}) if isinstance(link, dict) else {}
+    metadata = dict(record.get("metadata") or {})
+    source = str(metadata.get("source") or "").strip()
+    return bool(
+        str(record.get("phase") or "").strip().lower() == "plan"
+        or isinstance(metadata.get("plan_generation"), dict)
+        or source.startswith("plan_workflow")
+    )
+
+
+def authenticated_plan_history_metadata_owned(
+    link: Any,
+    *,
+    requester_id: str,
+    tenant_id: str,
+) -> bool:
+    """Match only an API-authored unlinked-Plan ownership proof."""
+
+    if not frontend_history_record_is_plan(link):
+        return False
+    record = dict(link or {}) if isinstance(link, dict) else {}
+    proof = dict(dict(record.get("metadata") or {}).get(PLAN_SUBMIT_IDENTITY_METADATA_KEY) or {})
+    return bool(
+        str(proof.get("provenance") or "").strip() == PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER
+        and str(proof.get("requester_id") or "").strip() == str(requester_id or "").strip()
+        and str(proof.get("tenant_id") or "").strip() == str(tenant_id or "").strip()
+    )
 
 
 def _normalize_plan_hydration_signature_value(value: Any) -> Any:

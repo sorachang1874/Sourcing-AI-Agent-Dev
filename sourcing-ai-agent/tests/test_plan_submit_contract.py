@@ -21,9 +21,11 @@ from sourcing_agent.plan_submit_contract import (
     PLAN_GENERATION_RUNNING,
     PLAN_GENERATION_TERMINAL_STATUSES,
     PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+    authenticated_plan_history_metadata_owned,
     build_plan_generation,
     build_plan_submit_identity_metadata,
     canonical_plan_compile_request,
+    frontend_history_record_is_plan,
     plan_hydration_request_signature,
 )
 
@@ -244,6 +246,32 @@ def test_authenticated_plan_submit_identity_proof_is_total_and_fail_closed() -> 
         provenance=PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
         requester_id="alice",
         tenant_id="",
+    )
+    link = {
+        "phase": "plan",
+        "metadata": {
+            "plan_submit_identity": {
+                "provenance": PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+                "requester_id": "alice",
+                "tenant_id": "user-alice",
+            }
+        },
+    }
+    assert frontend_history_record_is_plan(link)
+    assert authenticated_plan_history_metadata_owned(
+        link,
+        requester_id="alice",
+        tenant_id="user-alice",
+    )
+    assert not authenticated_plan_history_metadata_owned(
+        link,
+        requester_id="bob",
+        tenant_id="user-bob",
+    )
+    assert not authenticated_plan_history_metadata_owned(
+        {"phase": "results", "metadata": link["metadata"]},
+        requester_id="alice",
+        tenant_id="user-alice",
     )
 
 

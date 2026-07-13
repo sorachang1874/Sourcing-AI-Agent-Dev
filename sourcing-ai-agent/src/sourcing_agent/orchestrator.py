@@ -221,8 +221,14 @@ from .plan_submit_contract import (
     PLAN_GENERATION_FAILED,
     PLAN_GENERATION_QUEUED,
     PLAN_GENERATION_RUNNING,
+    PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_REASON,
+    PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_STATUS,
     PLAN_SUBMIT_IDENTITY_METADATA_KEY,
     PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY,
+    PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
+    PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON,
+    PLAN_SUBMIT_OWNER_UNAVAILABLE_STATUS,
+    authenticated_plan_history_metadata_owned,
     build_plan_generation,
     build_plan_submit_identity_metadata,
 )
@@ -1570,12 +1576,8 @@ class SourcingOrchestrator:
                 "phase": "plan",
             }
 
-        existing_link = self.store.get_frontend_history_link(history_id) or {}
         plan_request_id = uuid.uuid4().hex
         queued_at = datetime.now(timezone.utc).isoformat()
-        request_payload = dict(existing_link.get("request") or {})
-        request_payload.update(dict(normalized_payload or {}))
-        request_payload["raw_user_request"] = query_text
         plan_generation = build_plan_generation(
             status=PLAN_GENERATION_QUEUED,
             request_id=plan_request_id,
@@ -1586,11 +1588,42 @@ class SourcingOrchestrator:
             requester_id=str(normalized_payload.get("requester_id") or ""),
             tenant_id=str(normalized_payload.get("tenant_id") or ""),
         )
+        authenticated_submit = identity_provenance == PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER
         # The history projection and process-local generation registration must
-        # be ordered against the legacy worker's guarded writes.  Otherwise an
-        # older worker can pass its in-memory check, then overwrite this newer
-        # queued generation while this submit is registering it.
+        # be ordered against both the authenticated owner claim and the legacy
+        # worker's guarded writes. Otherwise two first-create callers can both
+        # observe absence and the second can overwrite the first caller's claim.
         with self._plan_hydration_lock:
+            existing_link_raw = self.store.get_frontend_history_link(history_id)
+            existing_link = dict(existing_link_raw or {})
+            if authenticated_submit:
+                owner_matches = bool(plan_submit_identity)
+                if existing_link_raw is not None and owner_matches:
+                    existing_job_id = str(existing_link.get("job_id") or "").strip()
+                    if existing_job_id:
+                        existing_job = self.store.get_job(existing_job_id)
+                        owner_matches = bool(
+                            existing_job is not None
+                            and str(existing_job.get("requester_id") or "").strip()
+                            == str(plan_submit_identity.get("requester_id") or "").strip()
+                        )
+                    else:
+                        owner_matches = authenticated_plan_history_metadata_owned(
+                            existing_link,
+                            requester_id=str(plan_submit_identity.get("requester_id") or ""),
+                            tenant_id=str(plan_submit_identity.get("tenant_id") or ""),
+                        )
+                if not owner_matches:
+                    return {
+                        "status": PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_STATUS,
+                        "reason": PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_REASON,
+                        "history_id": history_id,
+                        "phase": "plan",
+                    }
+
+            request_payload = dict(existing_link.get("request") or {})
+            request_payload.update(dict(normalized_payload or {}))
+            request_payload["raw_user_request"] = query_text
             self._persist_frontend_history_link(
                 history_id=history_id,
                 query_text=query_text,
@@ -1610,12 +1643,21 @@ class SourcingOrchestrator:
                 },
                 merge_metadata=True,
             )
-            self._queue_plan_hydration(
+            queue_started = self._queue_plan_hydration(
                 history_id=history_id,
                 payload={**dict(normalized_payload or {}), "history_id": history_id},
                 plan_request_id=plan_request_id,
                 queued_at=queued_at,
             )
+        if queue_started is False:
+            return {
+                "status": PLAN_SUBMIT_OWNER_UNAVAILABLE_STATUS,
+                "reason": PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON,
+                "history_id": history_id,
+                "phase": "plan",
+                "retryable": True,
+                "fallback_used": False,
+            }
         return {
             "status": LEGACY_PLAN_SUBMIT_RESPONSE_STATUS,
             "history_id": history_id,
@@ -1639,10 +1681,10 @@ class SourcingOrchestrator:
         payload: dict[str, Any],
         plan_request_id: str,
         queued_at: str,
-    ) -> None:
+    ) -> bool:
         normalized_history_id = str(history_id or "").strip()
         if not normalized_history_id:
-            return
+            return False
         request_signature = _plan_hydration_request_signature(payload)
         inflight_record = {
             "request_id": str(plan_request_id or "").strip(),
@@ -1673,7 +1715,7 @@ class SourcingOrchestrator:
                     "updated_at": _utc_now_iso(),
                 }
         if not should_start_thread:
-            return
+            return True
         thread = threading.Thread(
             target=self._run_plan_hydration,
             kwargs={
@@ -1686,7 +1728,43 @@ class SourcingOrchestrator:
             name=f"plan-hydration-{request_signature[:16]}",
             daemon=True,
         )
-        thread.start()
+        try:
+            thread.start()
+        except BaseException:
+            self._retire_plan_hydration_owner(
+                request_signature=request_signature,
+                owner_request_id=str(plan_request_id or "").strip(),
+            )
+            completed_at = datetime.now(timezone.utc).isoformat()
+            try:
+                self._persist_frontend_history_link(
+                    history_id=normalized_history_id,
+                    query_text=str(payload.get("raw_user_request") or "").strip(),
+                    target_company=str(payload.get("target_company") or "").strip(),
+                    phase="plan",
+                    request_payload=dict(payload or {}),
+                    plan_payload={},
+                    metadata={
+                        "source": "plan_workflow_async_failed",
+                        "plan_generation": build_plan_generation(
+                            status=PLAN_GENERATION_FAILED,
+                            request_id=str(plan_request_id or "").strip(),
+                            queued_at=str(queued_at or "").strip(),
+                            completed_at=completed_at,
+                            error_message=PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON,
+                            request_signature=request_signature,
+                            coalesced_count=1,
+                        ),
+                    },
+                    merge_metadata=True,
+                )
+            except Exception:
+                # The API still returns a fail-closed 503 and the dead owner is
+                # removed. Permanent history-store failure remains a recorded
+                # C1b bridge limitation until the durable C1c owner exists.
+                pass
+            return False
+        return True
 
     def _plan_hydration_is_current(self, history_id: str, plan_request_id: str) -> bool:
         normalized_history_id = str(history_id or "").strip()
