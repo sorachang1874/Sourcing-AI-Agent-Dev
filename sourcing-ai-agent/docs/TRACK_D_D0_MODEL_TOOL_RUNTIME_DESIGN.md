@@ -1,6 +1,6 @@
 # Track D — D0+D1 批级设计：模型工具运行时 + 工具面 serve
 
-> Status: Track D D0+D1 design record（v6 2026-07-13，作者 = Claude Fable 5）。2026-07-14 的 D0a/D0b/D0c
+> Status: Track D D0+D1 design record（v6 2026-07-13，作者 = Claude Fable 5）。2026-07-14 的 D0a-D0e
 > 只落 additive、non-live 前置能力；它们不等于完整 D0/D1，也不授权 live/product 集成。
 > 修订史：v1→R1 24 findings→v2（29 断言核查+24 路覆盖审计）→v3（R2 16 findings）→v4（R3 #9-15：
 > terminal 事件、结果槽、路由快照、pin 生命周期、字段所有权、model-safe、预算台账）→v5（R4
@@ -215,6 +215,12 @@ v3 追加：流路径消费到的 terminal 事件所载结果与 `run_tool_turn`
 **D0d author implementation（2026-07-14）** 已按上式落地非 live 基类和 scripted 单一 parse 路径；
 当前参数仍是 D0a `ToolTurnRequest`，不代表 §2.3 的完整 live `ModelTurnExecutionContext` 已实现。详见
 `TRACK_D_D0D_TOOL_SESSION_BASE_IMPLEMENTATION.md`。
+
+**D0e author implementation（2026-07-14）** 新增 current-request → envelope provenance mirror：只比对
+`ToolTurnRequest` 物理拥有的 route/config/tenant/policy 字段，并从实际 request/messages/tools 重算 canonical
+request digest。它不比较 response/terminal/usage/circuit/evidence/artifact/cost/causality/budget，也不调用执行门；
+因此 schema/mirror 可表达一致的 `provider_mode=live`，但 D0a 执行门仍 fail-closed 拒绝。详见
+`TRACK_D_D0E_REQUEST_ENVELOPE_BINDING_IMPLEMENTATION.md`。
 
 ### 2.5 「流式输出 advisory、终态结果 authorize」（v2 新增核心安全规则）
 

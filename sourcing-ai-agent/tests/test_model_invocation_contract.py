@@ -13,7 +13,9 @@ from sourcing_agent.model_route_registry import (
     MODEL_ROUTE_MANIFEST_KEYS,
     MODEL_ROUTE_MANIFEST_ROUTE_KEYS,
     MODEL_ROUTE_SPEC_RECORD_KEYS,
+    ModelRouteExecutionRejected,
     ModelRouteRegistryError,
+    assert_d0a_route_execution_allowed,
     model_route_registry_manifest,
     validate_model_route_registry_manifest,
     validate_model_route_specs,
@@ -26,7 +28,14 @@ from sourcing_agent.model_tool_runtime import (
     ModelInvocationEnvelopeError,
     ModelInvocationEnvelopeV1,
     ModelInvocationMirrorError,
+    ModelToolRuntimeError,
+    SystemMessage,
+    ToolSpec,
     ToolTurnResult,
+    UserMessage,
+    canonical_tool_turn_request_hash,
+    request_for_model_route,
+    validate_tool_turn_request_envelope_mirror,
     validate_tool_turn_result_envelope_mirror,
 )
 from sourcing_agent.model_usage import ModelUsage
@@ -134,6 +143,74 @@ def _fully_bound_schema_fixture() -> ModelInvocationEnvelopeV1:
         result_artifact_digest=_digest("synthetic_result_artifact"),
         cost_exposure_ref="synthetic://cost-exposure/001",
         circuit_state="closed",
+    )
+
+
+def _request_fixture():
+    return request_for_model_route(
+        _route(),
+        provider_mode="scripted",
+        effective_route_snapshot_digest=_digest("synthetic_effective_route_snapshot"),
+        max_tokens=256,
+        prompt_policy_version="synthetic_prompt_policy_v1",
+        permission_scope_revision="synthetic_permission_revision_v1",
+        outbound_policy_revision="synthetic_outbound_revision_v1",
+        model_safe_schema_revision="synthetic_model_safe_revision_v1",
+        workspace_id="synthetic_workspace",
+        actor_id="synthetic_actor",
+        permission_scope="agent:synthetic",
+        runtime_namespace="test:model-invocation-envelope",
+        transcript_digest=_digest("synthetic_transcript_v1"),
+    )
+
+
+def _request_messages():
+    return (
+        SystemMessage("Use only the declared synthetic tool."),
+        UserMessage("Inspect synthetic evidence."),
+    )
+
+
+def _request_tools():
+    return (
+        ToolSpec(
+            name="inspect_synthetic_evidence",
+            description="Inspect one synthetic evidence fixture.",
+            input_schema={
+                "type": "object",
+                "properties": {"query": {"type": "string", "minLength": 1}},
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+            schema_version="inspect_synthetic_evidence_v1",
+            approval_policy="none_simulated",
+            budget_required=False,
+        ),
+    )
+
+
+def _envelope_for_request():
+    request = _request_fixture()
+    messages = _request_messages()
+    tools = _request_tools()
+    return replace(
+        _envelope_for_result(_result()),
+        route_id=request.route_id,
+        route_revision=request.route_revision,
+        provider=request.provider,
+        api_style=request.api_style,
+        requested_model=request.requested_model,
+        effective_route_snapshot_digest=request.effective_route_snapshot_digest,
+        runtime_namespace=request.runtime_namespace,
+        provider_mode=request.provider_mode,
+        workspace_id=request.workspace_id,
+        actor_id=request.actor_id,
+        permission_scope=request.permission_scope,
+        prompt_policy_version=request.prompt_policy_version,
+        permission_scope_revision=request.permission_scope_revision,
+        outbound_policy_revision=request.outbound_policy_revision,
+        model_safe_schema_revision=request.model_safe_schema_revision,
+        canonical_request_digest=canonical_tool_turn_request_hash(request, messages, tools),
     )
 
 
@@ -388,6 +465,227 @@ def test_tool_turn_result_envelope_mirror_fails_closed_on_mismatch_and_mode_poll
 
     with pytest.raises(ModelInvocationMirrorError, match=expected_mismatch):
         validate_tool_turn_result_envelope_mirror(_result(), envelope)
+
+
+def test_tool_turn_request_envelope_mirror_recomputes_complete_canonical_request() -> None:
+    assert (
+        validate_tool_turn_request_envelope_mirror(
+            _request_fixture(),
+            _request_messages(),
+            _request_tools(),
+            _envelope_for_request(),
+        )
+        is None
+    )
+
+
+def test_tool_turn_request_envelope_mirror_accepts_each_single_pass_iterable_once() -> None:
+    messages = (message for message in _request_messages())
+    tools = (tool for tool in _request_tools())
+
+    assert (
+        validate_tool_turn_request_envelope_mirror(
+            _request_fixture(),
+            messages,
+            tools,
+            _envelope_for_request(),
+        )
+        is None
+    )
+    assert tuple(messages) == ()
+    assert tuple(tools) == ()
+
+
+def test_tool_turn_request_envelope_mirror_direct_mismatch_precedes_iterable_consumption() -> None:
+    def untouched_iterable():
+        raise AssertionError("direct provenance mismatch must reject before input consumption")
+        yield  # pragma: no cover
+
+    with pytest.raises(ModelInvocationMirrorError, match="route_id"):
+        validate_tool_turn_request_envelope_mirror(
+            _request_fixture(),
+            untouched_iterable(),
+            untouched_iterable(),
+            replace(_envelope_for_request(), route_id="synthetic.route.other"),
+        )
+
+
+def test_tool_turn_request_envelope_mirror_live_coherence_does_not_grant_execution_permission() -> None:
+    live_request = replace(_request_fixture(), provider_mode="live")
+    live_envelope = replace(
+        _envelope_for_request(),
+        provider_mode="live",
+        canonical_request_digest=canonical_tool_turn_request_hash(
+            live_request,
+            _request_messages(),
+            _request_tools(),
+        ),
+    )
+
+    assert (
+        validate_tool_turn_request_envelope_mirror(
+            live_request,
+            _request_messages(),
+            _request_tools(),
+            live_envelope,
+        )
+        is None
+    )
+    with pytest.raises(ModelRouteExecutionRejected, match="model_tool_live_unavailable_d0a"):
+        assert_d0a_route_execution_allowed(
+            route_id=live_request.route_id,
+            provider_mode=live_request.provider_mode,
+            required_capabilities={"stream", "tools", "usage", "identity_check"},
+        )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "replacement", "error"),
+    [
+        ("tool_choice", "required", "tool_choice_unsupported_d0a"),
+        ("stream_options", {"include_usage": False}, "stream_options_unsupported_d0a"),
+    ],
+)
+def test_tool_turn_request_envelope_mirror_keeps_fixed_request_controls_fail_closed(
+    field_name: str,
+    replacement: object,
+    error: str,
+) -> None:
+    with pytest.raises(ModelToolRuntimeError, match=error):
+        replace(_request_fixture(), **{field_name: replacement})
+
+
+@pytest.mark.parametrize(
+    ("field_name", "replacement"),
+    [
+        ("route_id", "synthetic.route.other"),
+        ("route_revision", _digest("route_revision_other")),
+        ("provider", "synthetic_provider_other"),
+        ("api_style", "synthetic_api_style_other"),
+        ("requested_model", "synthetic-model-other"),
+        ("effective_route_snapshot_digest", _digest("route_snapshot_other")),
+        ("runtime_namespace", "test:model-invocation-envelope-other"),
+        ("provider_mode", "live"),
+        ("workspace_id", "synthetic_workspace_other"),
+        ("actor_id", "synthetic_actor_other"),
+        ("permission_scope", "agent:synthetic-other"),
+        ("prompt_policy_version", "synthetic_prompt_policy_v2"),
+        ("permission_scope_revision", "synthetic_permission_revision_v2"),
+        ("outbound_policy_revision", "synthetic_outbound_revision_v2"),
+        ("model_safe_schema_revision", "synthetic_model_safe_revision_v2"),
+        ("canonical_request_digest", _digest("canonical_request_other")),
+    ],
+)
+def test_tool_turn_request_envelope_mirror_fails_closed_for_every_request_owned_field(
+    field_name: str,
+    replacement: object,
+) -> None:
+    envelope = replace(_envelope_for_request(), **{field_name: replacement})
+
+    with pytest.raises(
+        ModelInvocationMirrorError,
+        match=rf"request_mirror_mismatch:.*{field_name}",
+    ):
+        validate_tool_turn_request_envelope_mirror(
+            _request_fixture(),
+            _request_messages(),
+            _request_tools(),
+            envelope,
+        )
+
+
+@pytest.mark.parametrize(
+    ("request_replacements", "messages", "tools"),
+    [
+        ({"max_tokens": 257}, _request_messages(), _request_tools()),
+        (
+            {"transcript_digest": _digest("synthetic_transcript_v2")},
+            _request_messages(),
+            _request_tools(),
+        ),
+        (
+            {},
+            (
+                SystemMessage("Use only the declared synthetic tool."),
+                UserMessage("Inspect different synthetic evidence."),
+            ),
+            _request_tools(),
+        ),
+        (
+            {},
+            _request_messages(),
+            (replace(_request_tools()[0], description="Inspect a different synthetic fixture."),),
+        ),
+    ],
+)
+def test_tool_turn_request_envelope_mirror_hash_binds_non_mirrored_request_payload_inputs(
+    request_replacements: dict[str, object],
+    messages: object,
+    tools: object,
+) -> None:
+    request = replace(_request_fixture(), **request_replacements)
+
+    with pytest.raises(ModelInvocationMirrorError, match="canonical_request_digest"):
+        validate_tool_turn_request_envelope_mirror(
+            request,
+            messages,  # type: ignore[arg-type]
+            tools,  # type: ignore[arg-type]
+            _envelope_for_request(),
+        )
+
+
+def test_tool_turn_request_envelope_mirror_does_not_claim_response_or_durable_authority() -> None:
+    envelope = replace(
+        _envelope_for_request(),
+        response_model="synthetic-response-model-other",
+        effective_model="synthetic-effective-model-other",
+        effective_route_snapshot_ref="synthetic://route-snapshot/other",
+        circuit_identity="synthetic_circuit_other",
+        operation_run_id="synthetic_operation_other",
+        turn_id="synthetic_turn_other",
+        step_id="synthetic_step_other",
+        workflow_command_id="synthetic_command_other",
+        activity_run_id="synthetic_activity_other",
+        activity_attempt_id="synthetic_attempt_other",
+        provider_call_id="synthetic_provider_call_other",
+        terminal_reason="length",
+        usage=ModelUsage(),
+        usage_status="unavailable",
+        fallback_status="blocked",
+        circuit_state="open",
+        evidence_bundle_hash=_digest("synthetic_evidence_other"),
+        canonical_result_digest=_digest("synthetic_result_other"),
+        result_artifact_ref="synthetic://result-artifact/other",
+        result_artifact_digest=_digest("synthetic_result_artifact_other"),
+        cost_exposure_ref="synthetic://cost-exposure/other",
+    )
+
+    assert (
+        validate_tool_turn_request_envelope_mirror(
+            _request_fixture(),
+            _request_messages(),
+            _request_tools(),
+            envelope,
+        )
+        is None
+    )
+
+
+def test_tool_turn_request_envelope_mirror_rejects_wrong_object_types() -> None:
+    with pytest.raises(ModelInvocationMirrorError, match="request_type_invalid"):
+        validate_tool_turn_request_envelope_mirror(  # type: ignore[arg-type]
+            object(),
+            _request_messages(),
+            _request_tools(),
+            _envelope_for_request(),
+        )
+    with pytest.raises(ModelInvocationMirrorError, match="envelope_type_invalid"):
+        validate_tool_turn_request_envelope_mirror(  # type: ignore[arg-type]
+            _request_fixture(),
+            _request_messages(),
+            _request_tools(),
+            object(),
+        )
 
 
 def test_route_registry_preflight_enforces_exact_unique_draft_manifest() -> None:

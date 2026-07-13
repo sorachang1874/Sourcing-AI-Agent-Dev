@@ -117,6 +117,12 @@
   `ParsedToolTurn` fail-closed。零 transport/settings/env/storage/provider/model/effect，request/hash/result/envelope
   schema 与执行权限不变；ExecutionContext、budget/cost/result-slot/live 仍 deferred。scoped author validation 与
   formal review 状态见 `TRACK_D_D0D_TOOL_SESSION_BASE_IMPLEMENTATION.md`。
+- [x] D0e request→invocation-envelope provenance binding author implementation（2026-07-14）：新增
+  `validate_tool_turn_request_envelope_mirror`，逐字段对齐 current request 真正拥有的 route/config/tenant/policy
+  provenance，并从一次消费的 request/messages/tools 重算 canonical request digest；明确不比较 response/
+  terminal/usage/circuit/evidence/artifact/cost/causality/budget authority。schema/version/execution gate 不变，
+  coherent `provider_mode=live` mirror 仍被 D0a 执行门拒绝；durable issuer/ExecutionContext/result-slot/cost/live 与
+  formal review 仍 deferred。scoped 证据见 `TRACK_D_D0E_REQUEST_ENVELOPE_BINDING_IMPLEMENTATION.md`。
 - [ ] Agent Session 契约：服务端 agentic loop；工具面 = M1 manifest 导出 + 只读上下文工具 + model_native_search/fetch 转正；效果全部走 typed AgentAction（边界已由 `AGENT_OPERATION_CONTRACT.md` 规定）。
 - [ ] 第一垂直切片：公司身份自验证 loop（搜索→fetch 验证→歧义才升级人工），替代 PlanCard 手动修正 LinkedIn URL。
 - [ ] 之后：plan review 对话化、intent→plan 前门流式化；OpenClaw/Claude 作为可插拔外脑。

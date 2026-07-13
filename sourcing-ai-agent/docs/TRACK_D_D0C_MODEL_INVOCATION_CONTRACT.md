@@ -29,6 +29,10 @@ crossing into transport or storage:
 No model/provider call, network access, credential read, environment/settings read, database schema, storage write,
 migration, API route, product caller, or live predicate was added.
 
+The additive D0e follow-up now binds the current `ToolTurnRequest` to the envelope fields it physically owns and
+recomputes the complete request/messages/tools digest. It does not expand this v1 schema or validate response/durable
+authority. See `TRACK_D_D0E_REQUEST_ENVELOPE_BINDING_IMPLEMENTATION.md`.
+
 ## 2. Canonical field groups
 
 The exact canonical list remains in `TRACK_D_D0_MODEL_TOOL_RUNTIME_DESIGN.md` §2.2 and in the owning dataclass. The
@@ -56,6 +60,7 @@ accepting extra keys is forbidden.
 | Physical envelope shape and digest | `ModelInvocationEnvelopeV1`, `MODEL_INVOCATION_ENVELOPE_RECORD_KEYS`, exact `to_record/from_record` | Immutable in-memory value; deterministic round trip; typed absence; preserve non-authorizable evidence | A second envelope class/schema, caller-supplied digest trust, fake refs, raw payload/secret bags, or field derivation from similarly named fields | Durable result-slot owner chooses issuance/persistence transaction and stronger live presence rules |
 | Provider-neutral usage | `model_usage.py::ModelUsage` | Exact shared immutable five-field value | Dict/`Any` usage or transport-owned duplicate type | Existing D0a owner remains unchanged |
 | D0a result mirror | `validate_tool_turn_result_envelope_mirror` | Compare exact shared route/tenant/runtime/request/model/provider-terminal/usage/result fields | Treating a passing mirror as permission, budget, cost, result-slot acceptance, durable ownership, or effect authority | Durable owner must add its own accept/consume CAS and authority checks |
+| D0e request mirror | `validate_tool_turn_request_envelope_mirror` plus canonical request hash | Compare exact request-owned route/config/tenant/policy fields and recompute request identity from materialized messages/tools | Inferring response, terminal, usage, circuit, evidence, artifact, cost, causality, budget, or execution authority | A durable issuer may reuse this preflight only inside a stronger issuance/acceptance contract |
 | Product route records | `model_route_registry.py::DEFAULT_MODEL_ROUTE_SPECS` | Exact record fields, content-derived revision, globally unique route id and circuit key | Runtime mutation, client-selected model, reviewer/CRM route reuse, silent fallback | Product owner must explicitly approve each rollout transition |
 | Route manifest | `model_route_registry_manifest` plus `validate_model_route_registry_manifest` | Exact manifest keysets and exact equality with checked-in route records; all current routes draft; live disabled | Canary/live pollution, missing/extra keys, duplicate identities, or a manifest-only route override | A later activation batch must replace this draft-only invariant with an owner-approved stronger gate |
 | D0a execution permission | `assert_d0a_route_execution_allowed` | Only canonical `simulate|scripted` | Inferring permission from envelope `provider_mode`, route registration, or manifest presence | Live adapter must have typed owner, execution context, cost ledger, low-level live gate, and independent review |
@@ -77,9 +82,9 @@ accepting extra keys is forbidden.
 7. Exact deserialization rejects any missing or extra top-level field, verifies the digest over the exact incoming
    unsigned record before normalization, constructs the value, and then requires canonical record equality. Explicit
    `null` aliases for omitted usage fields therefore fail even when supplied with a recomputed digest.
-8. Mirror comparison is deliberately narrower than envelope validation. Fields that D0a does not own—such as route
-   revision, policy revisions, causality, evidence bundle, artifact, and cost refs—cannot be validated by mirroring and
-   must be supplied and checked by their future owner.
+8. Result mirror comparison is deliberately narrower than envelope validation. The D0e request mirror separately owns
+   route revision and policy revisions because they physically exist on `ToolTurnRequest`, but neither mirror validates
+   durable causality, evidence bundle, artifact, cost refs, budget, or effect authority.
 9. This v1 envelope represents terminal results only. `provider_call_id=None` means the observed provider response did
    not provide a usable call id; it never means no provider call occurred. Pre-call, transport, and protocol failures
    remain deferred to a future closed attempt-outcome discriminator or separate attempt artifact, and must not be
@@ -108,9 +113,9 @@ D0c narrows one ambiguity but does not close the remaining owner decisions:
   not weaken the current real-person-data prohibition for scripted fixtures.
 - **OB-10.3:** cost-ledger rows and reconciliation must be isolated by runtime namespace and provider mode in addition
   to tenant identity before live. The envelope carrying those values does not make the ledger compliant by itself.
-- **OB-10.4:** the future `ModelTurnExecutionContext` must explicitly carry runtime namespace and provider mode and
-  bind them into request/result-slot identity. D0c adds them to the physical result schema only; it does not implement
-  or silently repair the request-side context.
+- **OB-10.4:** D0e now checks runtime namespace and provider mode between the current in-memory request and envelope and
+  includes both in the recomputed request digest. The future `ModelTurnExecutionContext` and durable result-slot owner
+  must still bind them through issuance, persistence, acceptance, and consume CAS; the narrow mirror is not closure.
 
 Also deferred: durable envelope issuer/persistence, result-slot accept/consume CAS, generation/control-epoch fences,
 approval and budget authority, effective-snapshot owner, evidence-bundle/artifact/cost issuers, transport timeout/retry/

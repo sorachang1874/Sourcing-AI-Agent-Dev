@@ -148,7 +148,7 @@ class ModelInvocationEnvelopeError(ModelToolRuntimeError):
 
 
 class ModelInvocationMirrorError(ModelInvocationEnvelopeError):
-    """Raised when a D0a result conflicts with shared envelope evidence."""
+    """Raised when D0a request/result provenance conflicts with envelope evidence."""
 
 
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
@@ -1107,6 +1107,60 @@ def canonical_tool_turn_request_hash(
     return _sha256_json(canonical_tool_turn_request_payload(request, messages, tools))
 
 
+def validate_tool_turn_request_envelope_mirror(
+    request: ToolTurnRequest,
+    messages: Iterable[ModelTurnMessage],
+    tools: Iterable[ToolSpec],
+    envelope: ModelInvocationEnvelopeV1,
+) -> None:
+    """Verify only provenance that the request physically owns.
+
+    After direct provenance matches, the canonical digest is recomputed from
+    the complete request, messages, and tool registry, consuming each supplied
+    iterable exactly once. Callers that need to reuse those values must pass
+    materialized tuples. Passing this check does not validate response evidence,
+    durable causality, circuit/cost state, budget, execution permission, or
+    effect authority.
+    """
+
+    if type(request) is not ToolTurnRequest:
+        raise ModelInvocationMirrorError("model_invocation_request_mirror_request_type_invalid")
+    if type(envelope) is not ModelInvocationEnvelopeV1:
+        raise ModelInvocationMirrorError("model_invocation_request_mirror_envelope_type_invalid")
+    direct_shared = {
+        "route_id": (request.route_id, envelope.route_id),
+        "route_revision": (request.route_revision, envelope.route_revision),
+        "provider": (request.provider, envelope.provider),
+        "api_style": (request.api_style, envelope.api_style),
+        "requested_model": (request.requested_model, envelope.requested_model),
+        "effective_route_snapshot_digest": (
+            request.effective_route_snapshot_digest,
+            envelope.effective_route_snapshot_digest,
+        ),
+        "runtime_namespace": (request.runtime_namespace, envelope.runtime_namespace),
+        "provider_mode": (request.provider_mode, envelope.provider_mode),
+        "workspace_id": (request.workspace_id, envelope.workspace_id),
+        "actor_id": (request.actor_id, envelope.actor_id),
+        "permission_scope": (request.permission_scope, envelope.permission_scope),
+        "prompt_policy_version": (request.prompt_policy_version, envelope.prompt_policy_version),
+        "permission_scope_revision": (
+            request.permission_scope_revision,
+            envelope.permission_scope_revision,
+        ),
+        "outbound_policy_revision": (request.outbound_policy_revision, envelope.outbound_policy_revision),
+        "model_safe_schema_revision": (
+            request.model_safe_schema_revision,
+            envelope.model_safe_schema_revision,
+        ),
+    }
+    mismatches = sorted(field_name for field_name, (actual, mirrored) in direct_shared.items() if actual != mirrored)
+    if mismatches:
+        raise ModelInvocationMirrorError(f"model_invocation_request_mirror_mismatch:{','.join(mismatches)}")
+    canonical_request_digest = canonical_tool_turn_request_hash(request, messages, tools)
+    if canonical_request_digest != envelope.canonical_request_digest:
+        raise ModelInvocationMirrorError("model_invocation_request_mirror_mismatch:canonical_request_digest")
+
+
 def _validate_schema_definition(schema: dict[str, Any], *, path: str, require_object: bool = False) -> None:
     unknown = sorted(set(schema) - _SUPPORTED_SCHEMA_KEYS)
     if unknown:
@@ -1852,6 +1906,7 @@ __all__ = [
     "canonical_tool_turn_request_payload",
     "parse_openai_chat_sse",
     "request_for_model_route",
+    "validate_tool_turn_request_envelope_mirror",
     "validate_tool_turn_result_envelope_mirror",
     "with_provider_mode",
 ]
