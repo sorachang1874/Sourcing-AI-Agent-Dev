@@ -339,7 +339,10 @@ def test_independent_review_gate_is_documented_and_executable() -> None:
     assert "_load_reviewer_configuration" in runner
     assert "_load_app_server_effective_reviewer_configuration" in runner
     assert "thread_settings_applied" in runner
+    assert "_resolve_codex_executable" in runner
     assert "_build_app_server_args" in runner
+    assert "_build_codex_args" not in runner
+    assert "reviewer_codex_executable" in runner
     assert "INVALID_REVIEW_ARTIFACT: bare NO-GO" in runner
     assert "reviewer produced no output" in runner
     assert 'review_body.strip() == "NO-GO"' in runner
@@ -353,6 +356,9 @@ def test_independent_review_gate_is_documented_and_executable() -> None:
     assert "REVIEW_SERVICE_TIER ?=" not in makefile
     assert "--reasoning-effort" not in makefile
     assert "--service-tier" not in makefile
+    assert re.search(r"^PATH\s*[:+?]?=", makefile, flags=re.MULTILINE) is None
+    assert "bash ./scripts/" not in makefile
+    assert '"$(SHELL)" ./scripts/' in makefile
     assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED ?= 0" in makefile
     assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT ?=" in makefile
     assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256 ?=" in makefile
@@ -406,24 +412,25 @@ def test_independent_review_runner_inherits_codex_global_config_without_cli_pins
         encoding="utf-8",
     )
     configured = runner._load_reviewer_configuration(config_path)
+    codex_path = tmp_path / "caller-bin" / "codex"
+    codex_path.parent.mkdir()
+    codex_path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    codex_path.chmod(0o755)
+    resolved_codex = runner._resolve_codex_executable(caller_path=str(codex_path.parent))
 
-    codex_args = runner._build_codex_args(
-        root=REPO_ROOT,
-        output_path=Path("runtime/reviews/pytest_review.md"),
-    )
+    codex_args = runner._build_app_server_args(resolved_codex)
 
     assert configured.settings == runner.ReviewerSettings("gpt-5.6-sol", "ultra", "priority")
     assert configured.sha256
-    assert codex_args[:7] == [
-        "codex",
-        "exec",
-        "--strict-config",
-        "--cd",
-        str(REPO_ROOT),
+    assert resolved_codex == codex_path.resolve()
+    assert codex_args == [
+        str(resolved_codex),
         "--sandbox",
         "read-only",
+        "app-server",
+        "--strict-config",
+        "--stdio",
     ]
-    assert "--json" in codex_args
     assert "--model" not in codex_args
     assert "-c" not in codex_args
 

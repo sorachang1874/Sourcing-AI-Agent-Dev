@@ -1,5 +1,4 @@
 SHELL := $(firstword $(wildcard /opt/homebrew/bin/bash /usr/local/bin/bash /bin/bash))
-PATH := $(dir $(SHELL)):$(PATH)
 .DEFAULT_GOAL := help
 
 HOST ?= 0.0.0.0
@@ -103,24 +102,24 @@ HOSTED_API_BASE_URL ?= https://api.111874.xyz
 HOSTED_BACKEND_LAUNCH_LOG ?= $(HOSTED_RUNTIME_DIR)/service_logs/hosted-backend-launch.log
 HOSTED_BACKEND_LAUNCH_STATUS ?= $(HOSTED_RUNTIME_DIR)/service_logs/hosted-backend-launch.status.json
 
-BACKEND_CMD = bash ./scripts/dev_backend.sh --runtime-dir "$(RUNTIME_DIR)" --host "$(HOST)" --port "$(API_PORT)" $(foreach port,$(ALLOWED_FRONTEND_PORTS),--frontend-port "$(port)") $(if $(ALLOW_ORIGIN),--allow-origin "$(ALLOW_ORIGIN)") $(EXTRA_BACKEND_ARGS)
-FRONTEND_CMD = bash ./scripts/dev_frontend.sh --host "$(HOST)" --port "$(FRONTEND_PORT)" --api-base-url "$(API_BASE_URL)" $(EXTRA_FRONTEND_ARGS)
-STATUS_CMD = bash ./scripts/dev_status.sh --runtime-dir "$(RUNTIME_DIR)" --api-port "$(API_PORT)" --frontend-port "$(FRONTEND_PORT)" --api-base-url "$(API_BASE_URL)"
-STOP_CMD = bash ./scripts/dev_stop.sh --runtime-dir "$(RUNTIME_DIR)" --api-port "$(API_PORT)" --frontend-port "$(FRONTEND_PORT)"
-LOGS_CMD = bash ./scripts/dev_logs.sh --runtime-dir "$(RUNTIME_DIR)" --api-port "$(API_PORT)" --frontend-port "$(FRONTEND_PORT)" $(EXTRA_LOG_ARGS)
-CLEAN_CMD = bash ./scripts/dev_clean.sh --runtime-dir "$(RUNTIME_DIR)" --api-port "$(API_PORT)" --frontend-port "$(FRONTEND_PORT)" $(EXTRA_CLEAN_ARGS)
-DOCTOR_CMD = env DEV_PYTHON_BIN="$(PYTHON_BIN)" bash ./scripts/dev_doctor.sh
-AGENT_NETWORK_PREFLIGHT_CMD = bash ./scripts/agent_network_preflight.sh
-DOCKER_CONTEXT_CMD = bash ./scripts/with_docker_context.sh
-DOCKER_START_CMD = bash ./scripts/docker_start.sh
-DOCKER_DOCTOR_CMD = env TEST_PYTHON_BIN="$(TEST_PYTHON_BIN)" PYTHON_BIN="$(PYTHON_BIN)" $(DOCKER_CONTEXT_CMD) bash ./scripts/docker_doctor.sh
-BOOTSTRAP_TEST_ENV_CMD = env BOOTSTRAP_TEST_ENV_PYTHON_BIN="$(PYTHON_BIN)" bash ./scripts/bootstrap_test_env.sh
-TEST_BACKEND_CMD = SOURCING_RUNTIME_ENVIRONMENT="$(TEST_RUNTIME_ENVIRONMENT)" SOURCING_EXTERNAL_PROVIDER_MODE="$(TEST_EXTERNAL_PROVIDER_MODE)" SOURCING_SECRETS_FILE="$(abspath $(TEST_SECRETS_FILE))" OBJECT_STORAGE_PREFIX="$(TEST_OBJECT_STORAGE_PREFIX)" $(if $(TEST_SCRIPTED_PROVIDER_SCENARIO),SOURCING_SCRIPTED_PROVIDER_SCENARIO="$(TEST_SCRIPTED_PROVIDER_SCENARIO)") bash ./scripts/dev_backend.sh --runtime-dir "$(TEST_RUNTIME_DIR)" --host "$(HOST)" --port "$(TEST_API_PORT)" $(foreach port,$(TEST_ALLOWED_FRONTEND_PORTS),--frontend-port "$(port)") $(if $(ALLOW_ORIGIN),--allow-origin "$(ALLOW_ORIGIN)") $(TEST_EXTRA_BACKEND_ARGS)
-TEST_FRONTEND_CMD = bash ./scripts/dev_frontend.sh --host "$(HOST)" --port "$(TEST_FRONTEND_PORT)" --api-base-url "$(TEST_API_BASE_URL)" $(TEST_EXTRA_FRONTEND_ARGS)
-TEST_STATUS_CMD = bash ./scripts/dev_status.sh --runtime-dir "$(TEST_RUNTIME_DIR)" --api-port "$(TEST_API_PORT)" --frontend-port "$(TEST_FRONTEND_PORT)" --api-base-url "$(TEST_API_BASE_URL)"
-TEST_STOP_CMD = bash ./scripts/dev_stop.sh --runtime-dir "$(TEST_RUNTIME_DIR)" --api-port "$(TEST_API_PORT)" --frontend-port "$(TEST_FRONTEND_PORT)"
-TEST_LOGS_CMD = bash ./scripts/dev_logs.sh --runtime-dir "$(TEST_RUNTIME_DIR)" --api-port "$(TEST_API_PORT)" --frontend-port "$(TEST_FRONTEND_PORT)" $(EXTRA_LOG_ARGS)
-TEST_CLEAN_CMD = bash ./scripts/dev_clean.sh --runtime-dir "$(TEST_RUNTIME_DIR)" --api-port "$(TEST_API_PORT)" --frontend-port "$(TEST_FRONTEND_PORT)" $(EXTRA_CLEAN_ARGS)
+BACKEND_CMD = "$(SHELL)" ./scripts/dev_backend.sh --runtime-dir "$(RUNTIME_DIR)" --host "$(HOST)" --port "$(API_PORT)" $(foreach port,$(ALLOWED_FRONTEND_PORTS),--frontend-port "$(port)") $(if $(ALLOW_ORIGIN),--allow-origin "$(ALLOW_ORIGIN)") $(EXTRA_BACKEND_ARGS)
+FRONTEND_CMD = "$(SHELL)" ./scripts/dev_frontend.sh --host "$(HOST)" --port "$(FRONTEND_PORT)" --api-base-url "$(API_BASE_URL)" $(EXTRA_FRONTEND_ARGS)
+STATUS_CMD = "$(SHELL)" ./scripts/dev_status.sh --runtime-dir "$(RUNTIME_DIR)" --api-port "$(API_PORT)" --frontend-port "$(FRONTEND_PORT)" --api-base-url "$(API_BASE_URL)"
+STOP_CMD = "$(SHELL)" ./scripts/dev_stop.sh --runtime-dir "$(RUNTIME_DIR)" --api-port "$(API_PORT)" --frontend-port "$(FRONTEND_PORT)"
+LOGS_CMD = "$(SHELL)" ./scripts/dev_logs.sh --runtime-dir "$(RUNTIME_DIR)" --api-port "$(API_PORT)" --frontend-port "$(FRONTEND_PORT)" $(EXTRA_LOG_ARGS)
+CLEAN_CMD = "$(SHELL)" ./scripts/dev_clean.sh --runtime-dir "$(RUNTIME_DIR)" --api-port "$(API_PORT)" --frontend-port "$(FRONTEND_PORT)" $(EXTRA_CLEAN_ARGS)
+DOCTOR_CMD = env DEV_PYTHON_BIN="$(PYTHON_BIN)" "$(SHELL)" ./scripts/dev_doctor.sh
+AGENT_NETWORK_PREFLIGHT_CMD = "$(SHELL)" ./scripts/agent_network_preflight.sh
+DOCKER_CONTEXT_CMD = "$(SHELL)" ./scripts/with_docker_context.sh
+DOCKER_START_CMD = "$(SHELL)" ./scripts/docker_start.sh
+DOCKER_DOCTOR_CMD = env TEST_PYTHON_BIN="$(TEST_PYTHON_BIN)" PYTHON_BIN="$(PYTHON_BIN)" $(DOCKER_CONTEXT_CMD) "$(SHELL)" ./scripts/docker_doctor.sh
+BOOTSTRAP_TEST_ENV_CMD = env BOOTSTRAP_TEST_ENV_PYTHON_BIN="$(PYTHON_BIN)" "$(SHELL)" ./scripts/bootstrap_test_env.sh
+TEST_BACKEND_CMD = SOURCING_RUNTIME_ENVIRONMENT="$(TEST_RUNTIME_ENVIRONMENT)" SOURCING_EXTERNAL_PROVIDER_MODE="$(TEST_EXTERNAL_PROVIDER_MODE)" SOURCING_SECRETS_FILE="$(abspath $(TEST_SECRETS_FILE))" OBJECT_STORAGE_PREFIX="$(TEST_OBJECT_STORAGE_PREFIX)" $(if $(TEST_SCRIPTED_PROVIDER_SCENARIO),SOURCING_SCRIPTED_PROVIDER_SCENARIO="$(TEST_SCRIPTED_PROVIDER_SCENARIO)") "$(SHELL)" ./scripts/dev_backend.sh --runtime-dir "$(TEST_RUNTIME_DIR)" --host "$(HOST)" --port "$(TEST_API_PORT)" $(foreach port,$(TEST_ALLOWED_FRONTEND_PORTS),--frontend-port "$(port)") $(if $(ALLOW_ORIGIN),--allow-origin "$(ALLOW_ORIGIN)") $(TEST_EXTRA_BACKEND_ARGS)
+TEST_FRONTEND_CMD = "$(SHELL)" ./scripts/dev_frontend.sh --host "$(HOST)" --port "$(TEST_FRONTEND_PORT)" --api-base-url "$(TEST_API_BASE_URL)" $(TEST_EXTRA_FRONTEND_ARGS)
+TEST_STATUS_CMD = "$(SHELL)" ./scripts/dev_status.sh --runtime-dir "$(TEST_RUNTIME_DIR)" --api-port "$(TEST_API_PORT)" --frontend-port "$(TEST_FRONTEND_PORT)" --api-base-url "$(TEST_API_BASE_URL)"
+TEST_STOP_CMD = "$(SHELL)" ./scripts/dev_stop.sh --runtime-dir "$(TEST_RUNTIME_DIR)" --api-port "$(TEST_API_PORT)" --frontend-port "$(TEST_FRONTEND_PORT)"
+TEST_LOGS_CMD = "$(SHELL)" ./scripts/dev_logs.sh --runtime-dir "$(TEST_RUNTIME_DIR)" --api-port "$(TEST_API_PORT)" --frontend-port "$(TEST_FRONTEND_PORT)" $(EXTRA_LOG_ARGS)
+TEST_CLEAN_CMD = "$(SHELL)" ./scripts/dev_clean.sh --runtime-dir "$(TEST_RUNTIME_DIR)" --api-port "$(TEST_API_PORT)" --frontend-port "$(TEST_FRONTEND_PORT)" $(EXTRA_CLEAN_ARGS)
 TEST_SEED_CMD = PYTHONPATH=src "$(PYTHON_BIN)" ./scripts/seed_test_env_assets.py --source-runtime-dir "$(RUNTIME_DIR)" --target-runtime-dir "$(TEST_RUNTIME_DIR)" --link-mode "$(TEST_ENV_SEED_LINK_MODE)" $(foreach company,$(TEST_ENV_SEED_COMPANIES),--company "$(company)")
 TEST_BROWSER_E2E_FAST_CMD = PYTHONPATH=src SOURCING_RUN_FRONTEND_BROWSER_E2E=1 "$(PYTHON_BIN)" -m unittest tests.test_frontend_browser_e2e.FrontendBrowserFastE2ETest -v
 TEST_BROWSER_E2E_SLOW_CMD = SOURCING_RUN_FRONTEND_BROWSER_E2E=1 SOURCING_RUN_SLOW_BROWSER_E2E=1 PYTHONPATH=src "$(PYTHON_BIN)" -m unittest tests.test_frontend_browser_e2e.FrontendBrowserSlowE2ETest -v
@@ -136,17 +135,17 @@ CI_FRONTEND_BROWSER_GATE_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING
 CI_WORKFLOW_BROWSER_GATE_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING_REQUIRE_TESTCONTAINERS=1 SOURCING_RUN_TESTCONTAINERS=1 TESTCONTAINERS_RYUK_DISABLED=1 SOURCING_TESTCONTAINERS_POSTGRES_IMAGE="$(TESTCONTAINERS_POSTGRES_IMAGE)" "$(TEST_PYTHON_BIN)" -m unittest tests.testcontainers_workflow_browser_gate -v
 CI_PRE_AGENT_CONTRACT_CMD = export SOURCING_REQUIRE_PG_STORE_TESTS=1 SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1 && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_pre_agent_contract_review.py tests/test_independent_review_gate_runner.py tests/test_operation_runtime.py tests/test_crm_public_web_runtime_boundary.py tests/test_legacy_public_web_retirement_audit.py tests/test_storage_surface_guardrails.py tests/test_pg_onconflict_guard.py -q && SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1 PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_enrichment.py -k 'isolates_retry_wait or retry_wait_as_isolated_batch' -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_dataforseo_client.py tests/test_search_provider.py tests/test_public_web_search.py tests/test_seed_discovery.py tests/test_exploratory_enrichment.py -k 'partial_task_errors or dataforseo_provider_submit_batch_retries_only_failed_query_item or dataforseo_provider_submit_batch_fails_closed_without_provider_identity or batch_provider_requires_stable_query_identity_key or provider_chain_rejects_missing_query_identity_before_fallback or dataforseo_provider_fetch_ready_batch_preserves_success_when_one_task_get_fails or batch_queue_submit_failure_is_query_level_not_whole_batch or public_web_batch_query_identity_is_candidate_query_scoped_not_order_scoped or search_seed_worker_key_uses_query_identity_not_order_ordinal or exploration_query_task_key_uses_query_identity_not_order_ordinal or model_native_search_provider_order_fails_closed_without_contract' -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_projection_crm_api_contracts.py -k asset_backfill_http_routes_are_explicit_migration_paths -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" -m pytest tests/test_scripted_smoke_signoff.py -k durable_command_owner_contract -q && PYTHONPATH=src "$(TEST_PYTHON_BIN)" ./scripts/run_crm_public_web_live_product_validation.py --report-json "$(CRM_PUBLIC_WEB_LIVE_REPORT_JSON)"
 LOCAL_CONTAINER_SMOKE_CMD = $(DOCKER_CONTEXT_CMD) env PYTHONPATH=src SOURCING_RUN_TESTCONTAINERS=1 TESTCONTAINERS_RYUK_DISABLED=1 SOURCING_TESTCONTAINERS_POSTGRES_IMAGE="$(TESTCONTAINERS_POSTGRES_IMAGE)" "$(TEST_PYTHON_BIN)" -m unittest tests.testcontainers_pg_contract -v
-LIVE_TEST_BACKEND_CMD = SOURCING_RUNTIME_ENVIRONMENT="$(LIVE_TEST_RUNTIME_ENVIRONMENT)" SOURCING_EXTERNAL_PROVIDER_MODE="live" SOURCING_LIVE_PROVIDER_CONFIRM="1" SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS="1" SOURCING_ALLOW_TEST_REPO_POSTGRES_ENV="1" SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE="postgres_only" SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES="1" SOURCING_PG_ONLY_SQLITE_BACKEND="shared_memory" SOURCING_SECRETS_FILE="$(abspath $(LIVE_TEST_SECRETS_FILE))" OBJECT_STORAGE_PREFIX="$(LIVE_TEST_OBJECT_STORAGE_PREFIX)" bash ./scripts/dev_backend.sh --runtime-dir "$(LIVE_TEST_RUNTIME_DIR)" --host "$(HOST)" --port "$(LIVE_TEST_API_PORT)" $(foreach port,$(LIVE_TEST_ALLOWED_FRONTEND_PORTS),--frontend-port "$(port)") $(if $(ALLOW_ORIGIN),--allow-origin "$(ALLOW_ORIGIN)") $(LIVE_TEST_EXTRA_BACKEND_ARGS)
+LIVE_TEST_BACKEND_CMD = SOURCING_RUNTIME_ENVIRONMENT="$(LIVE_TEST_RUNTIME_ENVIRONMENT)" SOURCING_EXTERNAL_PROVIDER_MODE="live" SOURCING_LIVE_PROVIDER_CONFIRM="1" SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS="1" SOURCING_ALLOW_TEST_REPO_POSTGRES_ENV="1" SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE="postgres_only" SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES="1" SOURCING_PG_ONLY_SQLITE_BACKEND="shared_memory" SOURCING_SECRETS_FILE="$(abspath $(LIVE_TEST_SECRETS_FILE))" OBJECT_STORAGE_PREFIX="$(LIVE_TEST_OBJECT_STORAGE_PREFIX)" "$(SHELL)" ./scripts/dev_backend.sh --runtime-dir "$(LIVE_TEST_RUNTIME_DIR)" --host "$(HOST)" --port "$(LIVE_TEST_API_PORT)" $(foreach port,$(LIVE_TEST_ALLOWED_FRONTEND_PORTS),--frontend-port "$(port)") $(if $(ALLOW_ORIGIN),--allow-origin "$(ALLOW_ORIGIN)") $(LIVE_TEST_EXTRA_BACKEND_ARGS)
 TEST_LIVE_LARGE_ORG_CMD = PYTHONPATH=src SOURCING_LIVE_PROVIDER_CONFIRM="1" SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS="1" "$(PYTHON_BIN)" ./scripts/run_live_large_org_regression.py --base-url "$(LIVE_TEST_API_BASE_URL)" $(foreach case,$(LIVE_LARGE_ORG_CASES),--case "$(case)") --confirm-live-provider-cost --strict
 CRM_PUBLIC_WEB_LIVE_VALIDATION_CMD = PYTHONPATH=src "$(PYTHON_BIN)" ./scripts/run_crm_public_web_live_product_validation.py --base-url "$(CRM_PUBLIC_WEB_LIVE_BASE_URL)" $(foreach record,$(CRM_PUBLIC_WEB_LIVE_RECORD_IDS),--crm-record-id "$(record)") --report-json "$(CRM_PUBLIC_WEB_LIVE_REPORT_JSON)" --poll-timeout-seconds "$(CRM_PUBLIC_WEB_LIVE_POLL_TIMEOUT_SECONDS)" --max-fetches-per-candidate "$(CRM_PUBLIC_WEB_LIVE_MAX_FETCHES_PER_CANDIDATE)" --max-ai-evidence-documents "$(CRM_PUBLIC_WEB_LIVE_MAX_AI_EVIDENCE_DOCUMENTS)" --max-ai-entry-links "$(CRM_PUBLIC_WEB_LIVE_MAX_AI_ENTRY_LINKS)" --max-remote-search-wait-seconds "$(CRM_PUBLIC_WEB_LIVE_MAX_REMOTE_SEARCH_WAIT_SECONDS)" --max-provider-pending-wait-seconds "$(CRM_PUBLIC_WEB_LIVE_MAX_PROVIDER_PENDING_WAIT_SECONDS)" --max-concurrent-candidate-analyses "$(CRM_PUBLIC_WEB_LIVE_MAX_CONCURRENT_CANDIDATE_ANALYSES)" $(if $(filter 1,$(CRM_PUBLIC_WEB_LIVE_RECORD_IDS_REVIEWED)),--reviewed-crm-record-ids,) $(if $(filter 1,$(CRM_PUBLIC_WEB_LIVE_FORCE_REFRESH)),--force-refresh,) $(if $(filter 0,$(CRM_PUBLIC_WEB_LIVE_DRY_RUN)),--execute-live --confirm-live-provider-cost,)
 INDEPENDENT_REVIEW_GATE_CMD = PYTHONPATH=src "$(PYTHON_BIN)" ./scripts/run_independent_review_gate.py --title "$(REVIEW_TITLE)" --files "$(REVIEW_FILES)" --base "$(REVIEW_BASE)" --extra-context "$(REVIEW_EXTRA_CONTEXT)" --timeout-seconds "$(REVIEW_TIMEOUT_SECONDS)" $(if $(REVIEW_OUTPUT),--output "$(REVIEW_OUTPUT)",) $(if $(filter 1,$(REVIEW_EXECUTE)),--execute,)
 ASSET_MEDIA_BACKFILL_ARGS = --runtime-dir "$(ASSET_MEDIA_BACKFILL_RUNTIME_DIR)" --limit "$(ASSET_MEDIA_BACKFILL_LIMIT)" $(foreach collection,$(ASSET_MEDIA_BACKFILL_COLLECTION_IDS),--collection-id "$(collection)") $(foreach projection,$(ASSET_MEDIA_BACKFILL_PROJECTION_IDS),--projection-id "$(projection)") $(foreach company,$(ASSET_MEDIA_BACKFILL_COMPANIES),--company "$(company)") $(foreach run_id,$(ASSET_MEDIA_BACKFILL_PUBLIC_WEB_RUN_IDS),--public-web-run-id "$(run_id)") $(foreach mapping,$(ASSET_MEDIA_BACKFILL_LOGO_SOURCE_URLS),--company-logo-source-url "$(mapping)") $(if $(filter 1,$(ASSET_MEDIA_BACKFILL_INCLUDE_HOMEPAGE_FAVICON)),--include-homepage-favicon,) $(if $(filter 1,$(ASSET_MEDIA_BACKFILL_RUN_NOW)),--run-now,)
 ASSET_MEDIA_BACKFILL_DRY_RUN_CMD = PYTHONPATH=src "$(PYTHON_BIN)" ./scripts/backfill_person_company_asset_media.py $(ASSET_MEDIA_BACKFILL_ARGS) --output-json "$(ASSET_MEDIA_BACKFILL_OUTPUT_JSON)" --strict
 ASSET_MEDIA_BACKFILL_APPLY_CMD = PYTHONPATH=src "$(PYTHON_BIN)" ./scripts/backfill_person_company_asset_media.py $(ASSET_MEDIA_BACKFILL_ARGS) --output-json "$(ASSET_MEDIA_BACKFILL_APPLY_OUTPUT_JSON)" --apply --reviewed --strict
-HOSTED_TRIAL_BACKEND_CMD = SOURCING_RUNTIME_ENVIRONMENT="$(HOSTED_RUNTIME_ENVIRONMENT)" SOURCING_EXTERNAL_PROVIDER_MODE="$(HOSTED_EXTERNAL_PROVIDER_MODE)" HOSTED_MAX_PARALLEL_REQUESTS="$(HOSTED_MAX_PARALLEL_REQUESTS)" HOSTED_LIGHT_REQUEST_RESERVED="$(HOSTED_LIGHT_REQUEST_RESERVED)" bash ./scripts/run_hosted_trial_backend.sh --runtime-dir "$(HOSTED_RUNTIME_DIR)" --host "$(HOSTED_API_HOST)" --port "$(HOSTED_API_PORT)" --origin "$(HOSTED_FRONTEND_ORIGIN)"
+HOSTED_TRIAL_BACKEND_CMD = SOURCING_RUNTIME_ENVIRONMENT="$(HOSTED_RUNTIME_ENVIRONMENT)" SOURCING_EXTERNAL_PROVIDER_MODE="$(HOSTED_EXTERNAL_PROVIDER_MODE)" HOSTED_MAX_PARALLEL_REQUESTS="$(HOSTED_MAX_PARALLEL_REQUESTS)" HOSTED_LIGHT_REQUEST_RESERVED="$(HOSTED_LIGHT_REQUEST_RESERVED)" "$(SHELL)" ./scripts/run_hosted_trial_backend.sh --runtime-dir "$(HOSTED_RUNTIME_DIR)" --host "$(HOSTED_API_HOST)" --port "$(HOSTED_API_PORT)" --origin "$(HOSTED_FRONTEND_ORIGIN)"
 FRONTEND_HOSTED_BUILD_CMD = cd frontend-demo && VITE_API_BASE_URL="$(HOSTED_API_BASE_URL)" npm run build:hosted
 FRONTEND_HOSTED_BUILD_SAME_ORIGIN_CMD = cd frontend-demo && VITE_API_BASE_URL="same-origin" npm run build:hosted
-PYTHON_QUALITY_CMD = bash ./scripts/run_python_quality.sh
+PYTHON_QUALITY_CMD = "$(SHELL)" ./scripts/run_python_quality.sh
 DETACHED_LAUNCH_CMD = PYTHONPATH=src "$(PYTHON_BIN)" -m sourcing_agent.cli launch-detached
 
 .PHONY: help bootstrap-test-env dev-doctor agent-network-preflight docker-start docker-doctor local-pg-up local-pg-down local-pg-status dev-backend dev-frontend dev-launch-backend dev-launch-frontend dev dev-status dev-stop dev-logs dev-clean hosted-trial-backend hosted-trial-backend-launch frontend-build-hosted frontend-build-hosted-same-origin lint typecheck verify-python test-env-backend test-env-launch-backend test-env-frontend test-env test-env-status test-env-stop test-env-logs test-env-clean test-env-seed-assets test-env-scripted-openai-agent test-env-scripted-openai-agent-backend test-env-scripted-openai-agent-seed test-env-scripted-openai-agent-status test-env-scripted-openai-agent-stop test-env-scripted-openai-agent-logs test-browser-e2e-fast test-browser-e2e-slow test-browser-e2e-full test-scripted-large-org ci-pg-contract ci-workflow-fake-provider ci-frontend-browser-gate ci-workflow-browser-gate ci-pre-agent-contract independent-review-gate ci-containerized-pre-release local-container-smoke test-env-backend-live test-live-large-org-manual test-crm-public-web-live-product-validation asset-media-backfill-dry-run asset-media-backfill-apply prune-test-env prune-test-env-apply
@@ -262,10 +261,10 @@ dev-frontend:
 	@$(FRONTEND_CMD)
 
 dev-launch-backend:
-	@$(DETACHED_LAUNCH_CMD) --description "local dev backend" --log-path "$(BACKEND_LAUNCH_LOG)" --status-path "$(BACKEND_LAUNCH_STATUS)" -- bash ./scripts/dev_backend.sh --runtime-dir "$(RUNTIME_DIR)" --host "$(HOST)" --port "$(API_PORT)" $(foreach port,$(ALLOWED_FRONTEND_PORTS),--frontend-port "$(port)") $(if $(ALLOW_ORIGIN),--allow-origin "$(ALLOW_ORIGIN)") $(EXTRA_BACKEND_ARGS)
+	@$(DETACHED_LAUNCH_CMD) --description "local dev backend" --log-path "$(BACKEND_LAUNCH_LOG)" --status-path "$(BACKEND_LAUNCH_STATUS)" -- "$(SHELL)" ./scripts/dev_backend.sh --runtime-dir "$(RUNTIME_DIR)" --host "$(HOST)" --port "$(API_PORT)" $(foreach port,$(ALLOWED_FRONTEND_PORTS),--frontend-port "$(port)") $(if $(ALLOW_ORIGIN),--allow-origin "$(ALLOW_ORIGIN)") $(EXTRA_BACKEND_ARGS)
 
 dev-launch-frontend:
-	@$(DETACHED_LAUNCH_CMD) --description "local dev frontend" --log-path "$(FRONTEND_LAUNCH_LOG)" --status-path "$(FRONTEND_LAUNCH_STATUS)" -- bash ./scripts/dev_frontend.sh --host "$(HOST)" --port "$(FRONTEND_PORT)" --api-base-url "$(API_BASE_URL)" $(EXTRA_FRONTEND_ARGS)
+	@$(DETACHED_LAUNCH_CMD) --description "local dev frontend" --log-path "$(FRONTEND_LAUNCH_LOG)" --status-path "$(FRONTEND_LAUNCH_STATUS)" -- "$(SHELL)" ./scripts/dev_frontend.sh --host "$(HOST)" --port "$(FRONTEND_PORT)" --api-base-url "$(API_BASE_URL)" $(EXTRA_FRONTEND_ARGS)
 
 dev-status:
 	@$(STATUS_CMD)
@@ -283,7 +282,7 @@ hosted-trial-backend:
 	@$(HOSTED_TRIAL_BACKEND_CMD)
 
 hosted-trial-backend-launch:
-	@$(DETACHED_LAUNCH_CMD) --description "hosted trial backend" --log-path "$(HOSTED_BACKEND_LAUNCH_LOG)" --status-path "$(HOSTED_BACKEND_LAUNCH_STATUS)" -- env SOURCING_RUNTIME_ENVIRONMENT="$(HOSTED_RUNTIME_ENVIRONMENT)" SOURCING_EXTERNAL_PROVIDER_MODE="$(HOSTED_EXTERNAL_PROVIDER_MODE)" HOSTED_MAX_PARALLEL_REQUESTS="$(HOSTED_MAX_PARALLEL_REQUESTS)" HOSTED_LIGHT_REQUEST_RESERVED="$(HOSTED_LIGHT_REQUEST_RESERVED)" bash ./scripts/run_hosted_trial_backend.sh --runtime-dir "$(HOSTED_RUNTIME_DIR)" --host "$(HOSTED_API_HOST)" --port "$(HOSTED_API_PORT)" --origin "$(HOSTED_FRONTEND_ORIGIN)"
+	@$(DETACHED_LAUNCH_CMD) --description "hosted trial backend" --log-path "$(HOSTED_BACKEND_LAUNCH_LOG)" --status-path "$(HOSTED_BACKEND_LAUNCH_STATUS)" -- env SOURCING_RUNTIME_ENVIRONMENT="$(HOSTED_RUNTIME_ENVIRONMENT)" SOURCING_EXTERNAL_PROVIDER_MODE="$(HOSTED_EXTERNAL_PROVIDER_MODE)" HOSTED_MAX_PARALLEL_REQUESTS="$(HOSTED_MAX_PARALLEL_REQUESTS)" HOSTED_LIGHT_REQUEST_RESERVED="$(HOSTED_LIGHT_REQUEST_RESERVED)" "$(SHELL)" ./scripts/run_hosted_trial_backend.sh --runtime-dir "$(HOSTED_RUNTIME_DIR)" --host "$(HOSTED_API_HOST)" --port "$(HOSTED_API_PORT)" --origin "$(HOSTED_FRONTEND_ORIGIN)"
 
 frontend-build-hosted:
 	@$(FRONTEND_HOSTED_BUILD_CMD)
@@ -304,7 +303,7 @@ test-env-backend:
 	@$(TEST_BACKEND_CMD)
 
 test-env-launch-backend:
-	@$(DETACHED_LAUNCH_CMD) --description "isolated test backend" --log-path "$(TEST_BACKEND_LAUNCH_LOG)" --status-path "$(TEST_BACKEND_LAUNCH_STATUS)" -- env SOURCING_RUNTIME_ENVIRONMENT="$(TEST_RUNTIME_ENVIRONMENT)" SOURCING_EXTERNAL_PROVIDER_MODE="$(TEST_EXTERNAL_PROVIDER_MODE)" SOURCING_SECRETS_FILE="$(abspath $(TEST_SECRETS_FILE))" OBJECT_STORAGE_PREFIX="$(TEST_OBJECT_STORAGE_PREFIX)" $(if $(TEST_SCRIPTED_PROVIDER_SCENARIO),SOURCING_SCRIPTED_PROVIDER_SCENARIO="$(TEST_SCRIPTED_PROVIDER_SCENARIO)") bash ./scripts/dev_backend.sh --runtime-dir "$(TEST_RUNTIME_DIR)" --host "$(HOST)" --port "$(TEST_API_PORT)" $(foreach port,$(TEST_ALLOWED_FRONTEND_PORTS),--frontend-port "$(port)") $(if $(ALLOW_ORIGIN),--allow-origin "$(ALLOW_ORIGIN)") $(TEST_EXTRA_BACKEND_ARGS)
+	@$(DETACHED_LAUNCH_CMD) --description "isolated test backend" --log-path "$(TEST_BACKEND_LAUNCH_LOG)" --status-path "$(TEST_BACKEND_LAUNCH_STATUS)" -- env SOURCING_RUNTIME_ENVIRONMENT="$(TEST_RUNTIME_ENVIRONMENT)" SOURCING_EXTERNAL_PROVIDER_MODE="$(TEST_EXTERNAL_PROVIDER_MODE)" SOURCING_SECRETS_FILE="$(abspath $(TEST_SECRETS_FILE))" OBJECT_STORAGE_PREFIX="$(TEST_OBJECT_STORAGE_PREFIX)" $(if $(TEST_SCRIPTED_PROVIDER_SCENARIO),SOURCING_SCRIPTED_PROVIDER_SCENARIO="$(TEST_SCRIPTED_PROVIDER_SCENARIO)") "$(SHELL)" ./scripts/dev_backend.sh --runtime-dir "$(TEST_RUNTIME_DIR)" --host "$(HOST)" --port "$(TEST_API_PORT)" $(foreach port,$(TEST_ALLOWED_FRONTEND_PORTS),--frontend-port "$(port)") $(if $(ALLOW_ORIGIN),--allow-origin "$(ALLOW_ORIGIN)") $(TEST_EXTRA_BACKEND_ARGS)
 
 test-env-frontend:
 	@$(TEST_FRONTEND_CMD)
@@ -329,22 +328,22 @@ test-env-seed-assets:
 	@$(TEST_SEED_CMD)
 
 test-env-scripted-openai-agent:
-	@bash ./scripts/dev_scripted_openai_agent_delta.sh --runtime-dir "$(SCRIPTED_OPENAI_AGENT_RUNTIME_DIR)" --api-port "$(SCRIPTED_OPENAI_AGENT_API_PORT)" --frontend-port "$(SCRIPTED_OPENAI_AGENT_FRONTEND_PORT)" --scenario "$(SCRIPTED_OPENAI_AGENT_SCENARIO)" --secrets-file "$(SCRIPTED_OPENAI_AGENT_SECRETS_FILE)"
+	@"$(SHELL)" ./scripts/dev_scripted_openai_agent_delta.sh --runtime-dir "$(SCRIPTED_OPENAI_AGENT_RUNTIME_DIR)" --api-port "$(SCRIPTED_OPENAI_AGENT_API_PORT)" --frontend-port "$(SCRIPTED_OPENAI_AGENT_FRONTEND_PORT)" --scenario "$(SCRIPTED_OPENAI_AGENT_SCENARIO)" --secrets-file "$(SCRIPTED_OPENAI_AGENT_SECRETS_FILE)"
 
 test-env-scripted-openai-agent-backend:
-	@bash ./scripts/dev_scripted_openai_agent_delta.sh --backend-only --runtime-dir "$(SCRIPTED_OPENAI_AGENT_RUNTIME_DIR)" --api-port "$(SCRIPTED_OPENAI_AGENT_API_PORT)" --frontend-port "$(SCRIPTED_OPENAI_AGENT_FRONTEND_PORT)" --scenario "$(SCRIPTED_OPENAI_AGENT_SCENARIO)" --secrets-file "$(SCRIPTED_OPENAI_AGENT_SECRETS_FILE)"
+	@"$(SHELL)" ./scripts/dev_scripted_openai_agent_delta.sh --backend-only --runtime-dir "$(SCRIPTED_OPENAI_AGENT_RUNTIME_DIR)" --api-port "$(SCRIPTED_OPENAI_AGENT_API_PORT)" --frontend-port "$(SCRIPTED_OPENAI_AGENT_FRONTEND_PORT)" --scenario "$(SCRIPTED_OPENAI_AGENT_SCENARIO)" --secrets-file "$(SCRIPTED_OPENAI_AGENT_SECRETS_FILE)"
 
 test-env-scripted-openai-agent-seed:
-	@bash ./scripts/dev_scripted_openai_agent_delta.sh --seed-only --runtime-dir "$(SCRIPTED_OPENAI_AGENT_RUNTIME_DIR)" --api-port "$(SCRIPTED_OPENAI_AGENT_API_PORT)" --frontend-port "$(SCRIPTED_OPENAI_AGENT_FRONTEND_PORT)" --scenario "$(SCRIPTED_OPENAI_AGENT_SCENARIO)" --secrets-file "$(SCRIPTED_OPENAI_AGENT_SECRETS_FILE)"
+	@"$(SHELL)" ./scripts/dev_scripted_openai_agent_delta.sh --seed-only --runtime-dir "$(SCRIPTED_OPENAI_AGENT_RUNTIME_DIR)" --api-port "$(SCRIPTED_OPENAI_AGENT_API_PORT)" --frontend-port "$(SCRIPTED_OPENAI_AGENT_FRONTEND_PORT)" --scenario "$(SCRIPTED_OPENAI_AGENT_SCENARIO)" --secrets-file "$(SCRIPTED_OPENAI_AGENT_SECRETS_FILE)"
 
 test-env-scripted-openai-agent-status:
-	@bash ./scripts/dev_status.sh --runtime-dir "$(SCRIPTED_OPENAI_AGENT_RUNTIME_DIR)" --api-port "$(SCRIPTED_OPENAI_AGENT_API_PORT)" --frontend-port "$(SCRIPTED_OPENAI_AGENT_FRONTEND_PORT)" --api-base-url "http://localhost:$(SCRIPTED_OPENAI_AGENT_API_PORT)"
+	@"$(SHELL)" ./scripts/dev_status.sh --runtime-dir "$(SCRIPTED_OPENAI_AGENT_RUNTIME_DIR)" --api-port "$(SCRIPTED_OPENAI_AGENT_API_PORT)" --frontend-port "$(SCRIPTED_OPENAI_AGENT_FRONTEND_PORT)" --api-base-url "http://localhost:$(SCRIPTED_OPENAI_AGENT_API_PORT)"
 
 test-env-scripted-openai-agent-stop:
-	@bash ./scripts/dev_stop.sh --runtime-dir "$(SCRIPTED_OPENAI_AGENT_RUNTIME_DIR)" --api-port "$(SCRIPTED_OPENAI_AGENT_API_PORT)" --frontend-port "$(SCRIPTED_OPENAI_AGENT_FRONTEND_PORT)"
+	@"$(SHELL)" ./scripts/dev_stop.sh --runtime-dir "$(SCRIPTED_OPENAI_AGENT_RUNTIME_DIR)" --api-port "$(SCRIPTED_OPENAI_AGENT_API_PORT)" --frontend-port "$(SCRIPTED_OPENAI_AGENT_FRONTEND_PORT)"
 
 test-env-scripted-openai-agent-logs:
-	@bash ./scripts/dev_logs.sh --runtime-dir "$(SCRIPTED_OPENAI_AGENT_RUNTIME_DIR)" --api-port "$(SCRIPTED_OPENAI_AGENT_API_PORT)" --frontend-port "$(SCRIPTED_OPENAI_AGENT_FRONTEND_PORT)" $(EXTRA_LOG_ARGS)
+	@"$(SHELL)" ./scripts/dev_logs.sh --runtime-dir "$(SCRIPTED_OPENAI_AGENT_RUNTIME_DIR)" --api-port "$(SCRIPTED_OPENAI_AGENT_API_PORT)" --frontend-port "$(SCRIPTED_OPENAI_AGENT_FRONTEND_PORT)" $(EXTRA_LOG_ARGS)
 
 test-browser-e2e-fast:
 	@$(TEST_BROWSER_E2E_FAST_CMD)

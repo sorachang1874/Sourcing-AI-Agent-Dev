@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import importlib.util
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import time
@@ -21,6 +24,7 @@ RUNNER_PATH = REPO_ROOT / "scripts" / "run_independent_review_gate.py"
 THREAD_ID = "019f0000-0000-7000-8000-000000000099"
 TURN_ID = "019f0000-0000-7000-8000-000000000100"
 REAL_SUBPROCESS_RUN = subprocess.run
+REAL_SUBPROCESS_POPEN = subprocess.Popen
 
 
 def _load_runner():
@@ -40,6 +44,13 @@ def _configured(runner, codex_home: Path):
         encoding="utf-8",
     )
     return runner._load_reviewer_configuration(config_path)
+
+
+def _write_executable(path: Path, content: str = "#!/bin/sh\nexit 0\n") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    path.chmod(0o755)
+    return path.resolve()
 
 
 def _write_rollout(codex_home: Path, events: list[dict[str, object]]) -> Path:
@@ -220,6 +231,7 @@ def _app_server_result(
     configured,
     prompt_raw: bytes,
     final_output: str,
+    codex_executable: Path,
     returncode: int = 0,
     stderr: str = "",
 ):
@@ -238,7 +250,7 @@ def _app_server_result(
         raw_output=final_output.encode("utf-8"),
     )
     return runner.AppServerReviewResult(
-        args=tuple(runner._build_app_server_args()),
+        args=tuple(runner._build_app_server_args(codex_executable)),
         returncode=returncode,
         transcript_raw=transcript_raw,
         stderr=stderr,
@@ -848,6 +860,87 @@ def test_app_server_rollout_identity_and_root_lineage_fail_closed(
         assert verifier_blocker in blockers
 
 
+@pytest.mark.parametrize("codex_state", ["missing", "non_executable"])
+def test_codex_resolver_fails_closed_when_caller_path_has_no_executable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    codex_state: str,
+) -> None:
+    runner = _load_runner()
+    root = tmp_path / "repo"
+    base = _init_review_repo(root)
+    codex_home = tmp_path / "codex-home"
+    _configured(runner, codex_home)
+    caller_bin = tmp_path / "caller-bin"
+    caller_bin.mkdir()
+    git_executable = shutil.which("git")
+    assert git_executable is not None
+    (caller_bin / "git").symlink_to(git_executable)
+    if codex_state == "non_executable":
+        (caller_bin / "codex").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    output_path = root / "runtime" / "reviews" / f"{codex_state}.md"
+    prompt_path = root / "runtime" / "reviews" / f"{codex_state}.prompt.md"
+    monkeypatch.setenv("PATH", str(caller_bin))
+    monkeypatch.setattr(runner, "_repo_root", lambda: root)
+    monkeypatch.setattr(runner, "_codex_home", lambda: codex_home)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(RUNNER_PATH),
+            "--title",
+            codex_state,
+            "--base",
+            base,
+            "--files",
+            "src/example.py",
+            "--output",
+            str(output_path),
+            "--prompt-output",
+            str(prompt_path),
+        ],
+    )
+
+    assert runner.main() == 2
+
+    artifact = output_path.read_text(encoding="utf-8")
+    assert "- reviewer_exit_code: invalid_transport" in artifact
+    assert "- reviewer_codex_executable: unresolved" in artifact
+    assert "NO-GO: Codex executable resolution failed closed" in artifact
+    assert "not found or is not executable on caller PATH" in artifact
+
+
+def test_canonical_makefile_preserves_caller_path_and_binds_script_shell(
+    tmp_path: Path,
+) -> None:
+    make_executable = shutil.which("make")
+    assert make_executable is not None
+    caller_bin = tmp_path / "caller-bin"
+    caller_bin.mkdir()
+    probe_makefile = tmp_path / "PathProbe.mk"
+    probe_makefile.write_text(
+        "include Makefile\n.PHONY: print-effective-path\nprint-effective-path:\n\t@printf '%s\\n' \"$$PATH\"\n",
+        encoding="utf-8",
+    )
+    env = dict(os.environ)
+    env["PATH"] = str(caller_bin)
+
+    completed = REAL_SUBPROCESS_RUN(
+        [make_executable, "-f", str(probe_makefile), "--no-print-directory", "print-effective-path"],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert completed.stdout.strip() == str(caller_bin)
+    assert re.search(r"^PATH\s*[:+?]?=", makefile, flags=re.MULTILINE) is None
+    assert "bash ./scripts/" not in makefile
+    assert '"$(SHELL)" ./scripts/' in makefile
+
+
 def test_app_server_transport_runs_scripted_json_rpc_without_model_access(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -934,15 +1027,22 @@ for raw_line in sys.stdin:
         encoding="utf-8",
     )
     fake_codex.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ.get('PATH', '')}")
+    shadow_codex = _write_executable(tmp_path / "shadow-bin" / "codex", "#!/bin/sh\nexit 99\n")
+    inherited_path = os.environ.get("PATH", "")
+    monkeypatch.setenv("PATH", f"{fake_bin}:{shadow_codex.parent}:{inherited_path}")
+    codex_executable = runner._resolve_codex_executable()
+    monkeypatch.setenv("PATH", f"{shadow_codex.parent}:{inherited_path}")
 
     result = runner._run_app_server_review(
         root=tmp_path,
         configured=configured,
+        codex_executable=codex_executable,
         prompt_raw=b"scripted prompt",
         timeout_seconds=10,
     )
 
+    assert codex_executable == fake_codex.resolve()
+    assert result.args[0] == str(fake_codex.resolve())
     assert result.returncode == 0
     assert result.evidence.final_output == b"GO"
     assert result.evidence.session_id == THREAD_ID
@@ -972,17 +1072,112 @@ time.sleep(30)
     )
     fake_codex.chmod(0o755)
     monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ.get('PATH', '')}")
+    codex_executable = runner._resolve_codex_executable()
 
     started = time.monotonic()
     with pytest.raises(subprocess.TimeoutExpired):
         runner._run_app_server_review(
             root=tmp_path,
             configured=configured,
+            codex_executable=codex_executable,
             prompt_raw=b"scripted prompt",
             timeout_seconds=1,
         )
 
     assert time.monotonic() - started < 5
+
+
+def test_dry_run_records_resolved_codex_executable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    runner = _load_runner()
+    root = tmp_path / "repo"
+    base = _init_review_repo(root)
+    codex_home = tmp_path / "codex-home"
+    _configured(runner, codex_home)
+    codex_executable = _write_executable(tmp_path / "preferred-bin" / "codex")
+    output_path = root / "runtime" / "reviews" / "dry-run.md"
+    prompt_path = root / "runtime" / "reviews" / "dry-run.prompt.md"
+    monkeypatch.setenv("PATH", f"{codex_executable.parent}:{os.environ.get('PATH', '')}")
+    monkeypatch.setattr(runner, "_repo_root", lambda: root)
+    monkeypatch.setattr(runner, "_codex_home", lambda: codex_home)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(RUNNER_PATH),
+            "--title",
+            "dry run executable",
+            "--base",
+            base,
+            "--files",
+            "src/example.py",
+            "--output",
+            str(output_path),
+            "--prompt-output",
+            str(prompt_path),
+        ],
+    )
+
+    assert runner.main() == 0
+
+    stdout = capsys.readouterr().out
+    assert f"reviewer_codex_executable={codex_executable}" in stdout
+    assert f"execute_command={codex_executable} --sandbox read-only app-server --strict-config --stdio" in stdout
+    assert prompt_path.is_file()
+    assert not output_path.exists()
+
+
+def test_app_server_enoent_after_resolution_records_executable_and_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    root = tmp_path / "repo"
+    base = _init_review_repo(root)
+    codex_home = tmp_path / "codex-home"
+    _configured(runner, codex_home)
+    codex_executable = _write_executable(tmp_path / "caller-bin" / "codex")
+    output_path = root / "runtime" / "reviews" / "enoent.md"
+    prompt_path = root / "runtime" / "reviews" / "enoent.prompt.md"
+
+    def popen_with_codex_enoent(command, *args, **kwargs):
+        if command[0] == str(codex_executable):
+            raise FileNotFoundError(errno.ENOENT, "No such file or directory", str(codex_executable))
+        return REAL_SUBPROCESS_POPEN(command, *args, **kwargs)
+
+    monkeypatch.setenv("PATH", f"{codex_executable.parent}:{os.environ.get('PATH', '')}")
+    monkeypatch.setattr(runner, "_repo_root", lambda: root)
+    monkeypatch.setattr(runner, "_codex_home", lambda: codex_home)
+    monkeypatch.setattr(runner.subprocess, "Popen", popen_with_codex_enoent)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(RUNNER_PATH),
+            "--execute",
+            "--title",
+            "enoent",
+            "--base",
+            base,
+            "--files",
+            "src/example.py",
+            "--output",
+            str(output_path),
+            "--prompt-output",
+            str(prompt_path),
+        ],
+    )
+
+    assert runner.main() == 2
+
+    artifact = output_path.read_text(encoding="utf-8")
+    assert "- reviewer_exit_code: invalid_transport" in artifact
+    assert f"- reviewer_codex_executable: `{codex_executable}`" in artifact
+    assert "NO-GO: Codex app-server review transport failed closed" in artifact
+    assert "No such file or directory" in artifact
 
 
 def test_signoff_runner_binds_pinned_scope_and_all_raw_evidence(
@@ -1013,6 +1208,7 @@ def test_signoff_runner_binds_pinned_scope_and_all_raw_evidence(
         ],
     )
     output_path = root / "runtime" / "reviews" / "valid.md"
+    codex_executable = _write_executable(tmp_path / "bin" / "codex")
 
     def fake_app_server_review(**kwargs):
         prompt = kwargs["prompt_raw"].decode("utf-8")
@@ -1032,10 +1228,12 @@ def test_signoff_runner_binds_pinned_scope_and_all_raw_evidence(
             configured=kwargs["configured"],
             prompt_raw=kwargs["prompt_raw"],
             final_output=final_output,
+            codex_executable=kwargs["codex_executable"],
         )
 
     monkeypatch.setattr(runner, "_repo_root", lambda: root)
     monkeypatch.setattr(runner, "_codex_home", lambda: codex_home)
+    monkeypatch.setattr(runner, "_resolve_codex_executable", lambda: codex_executable)
     monkeypatch.setattr(runner, "_run_app_server_review", fake_app_server_review)
     monkeypatch.setattr(
         sys,
@@ -1068,6 +1266,8 @@ def test_signoff_runner_binds_pinned_scope_and_all_raw_evidence(
     assert evidence["session"]["turn_id"] == TURN_ID
     assert evidence["transport"]["kind"] == "app_server_stdio"
     assert evidence["transport"]["active_settings_source"] == "thread/start.response"
+    assert metadata["reviewer_codex_executable"] == str(codex_executable)
+    assert f"- command: `{codex_executable} --sandbox read-only app-server --strict-config --stdio`" in artifact_text
     assert evidence["scope"]["title"] == "pinned scope"
     assert evidence["scope"]["scope_mode"] == "pinned_commit_diff"
     assert evidence["scope"]["files"] == ["src/example.py"]
@@ -1539,6 +1739,7 @@ def test_nonzero_codex_exit_forces_no_go_and_records_durable_evidence(
     )
     output_path = root / "runtime" / "reviews" / "nonzero.md"
     prompt_path = root / "runtime" / "reviews" / "nonzero.prompt.md"
+    codex_executable = _write_executable(tmp_path / "bin" / "codex")
 
     def fake_app_server_review(**kwargs):
         prompt = kwargs["prompt_raw"].decode("utf-8")
@@ -1558,12 +1759,14 @@ def test_nonzero_codex_exit_forces_no_go_and_records_durable_evidence(
             configured=kwargs["configured"],
             prompt_raw=kwargs["prompt_raw"],
             final_output=final_output,
+            codex_executable=kwargs["codex_executable"],
             returncode=17,
             stderr="capacity",
         )
 
     monkeypatch.setattr(runner, "_repo_root", lambda: root)
     monkeypatch.setattr(runner, "_codex_home", lambda: codex_home)
+    monkeypatch.setattr(runner, "_resolve_codex_executable", lambda: codex_executable)
     monkeypatch.setattr(runner, "_run_app_server_review", fake_app_server_review)
     monkeypatch.setattr(
         sys,
@@ -1629,12 +1832,16 @@ def test_codex_timeout_is_recorded_as_invalid_no_go(
     _configured(runner, codex_home)
     output_path = root / "runtime" / "reviews" / "timeout.md"
     prompt_path = root / "runtime" / "reviews" / "timeout.prompt.md"
+    codex_executable = _write_executable(tmp_path / "bin" / "codex")
 
     def fake_app_server_review(**kwargs):
-        raise subprocess.TimeoutExpired(runner._build_app_server_args(), kwargs["timeout_seconds"])
+        raise subprocess.TimeoutExpired(
+            runner._build_app_server_args(kwargs["codex_executable"]), kwargs["timeout_seconds"]
+        )
 
     monkeypatch.setattr(runner, "_repo_root", lambda: root)
     monkeypatch.setattr(runner, "_codex_home", lambda: codex_home)
+    monkeypatch.setattr(runner, "_resolve_codex_executable", lambda: codex_executable)
     monkeypatch.setattr(runner, "_run_app_server_review", fake_app_server_review)
     monkeypatch.setattr(
         sys,
@@ -1661,5 +1868,6 @@ def test_codex_timeout_is_recorded_as_invalid_no_go(
     assert prompt_path.read_text(encoding="utf-8")
     artifact = output_path.read_text(encoding="utf-8")
     assert "- reviewer_exit_code: timeout" in artifact
+    assert f"- reviewer_codex_executable: `{codex_executable}`" in artifact
     assert "NO-GO: independent review timed out after 60 seconds." in artifact
     assert not list((root / "runtime" / "reviews").glob("*_timeout.effective-config.json"))

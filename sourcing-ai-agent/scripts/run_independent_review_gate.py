@@ -8,6 +8,7 @@ import json
 import os
 import selectors
 import shlex
+import shutil
 import subprocess
 import tempfile
 import time
@@ -553,14 +554,34 @@ def _app_server_transcript_binding_valid(binding: dict[str, object]) -> bool:
     )
 
 
-def _build_app_server_args() -> list[str]:
-    return ["codex", "--sandbox", "read-only", "app-server", "--strict-config", "--stdio"]
+def _resolve_codex_executable(*, caller_path: str | None = None) -> Path:
+    path_value = os.environ.get("PATH", "") if caller_path is None else caller_path
+    candidate = shutil.which("codex", path=path_value)
+    if not candidate:
+        raise RuntimeError("Codex executable was not found or is not executable on caller PATH")
+    candidate_path = Path(candidate).expanduser()
+    if not candidate_path.is_absolute():
+        candidate_path = Path.cwd() / candidate_path
+    try:
+        resolved = candidate_path.resolve(strict=True)
+    except OSError as exc:
+        raise RuntimeError(f"Codex executable selected from caller PATH is unavailable: {candidate_path}") from exc
+    if not resolved.is_file() or not os.access(resolved, os.X_OK):
+        raise RuntimeError(f"Codex executable selected from caller PATH is not executable: {resolved}")
+    return resolved
+
+
+def _build_app_server_args(codex_executable: Path) -> list[str]:
+    if not codex_executable.is_absolute():
+        raise RuntimeError("Codex app-server executable must be an absolute path")
+    return [str(codex_executable), "--sandbox", "read-only", "app-server", "--strict-config", "--stdio"]
 
 
 def _run_app_server_review(
     *,
     root: Path,
     configured: ReviewerConfiguration,
+    codex_executable: Path,
     prompt_raw: bytes,
     timeout_seconds: int,
 ) -> AppServerReviewResult:
@@ -568,7 +589,7 @@ def _run_app_server_review(
         prompt = prompt_raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise RuntimeError("independent review prompt is not valid UTF-8") from exc
-    args = _build_app_server_args()
+    args = _build_app_server_args(codex_executable)
     transcript = bytearray()
     deadline = time.monotonic() + max(1, timeout_seconds)
 
@@ -1413,6 +1434,7 @@ def _artifact_header(
     raw_output_path: Path,
     raw_output_sha256: str,
     reviewer_exit_code: int,
+    codex_executable: Path,
     shell_command: str,
     transcript: AppServerTranscriptEvidence,
 ) -> str:
@@ -1431,6 +1453,7 @@ def _artifact_header(
         f"- reviewer_config_path: `{configured.path}`\n"
         f"- reviewer_config_sha256: {configured.sha256}\n"
         f"- reviewer_exit_code: {reviewer_exit_code}\n"
+        f"- reviewer_codex_executable: `{codex_executable}`\n"
         f"- reviewer_codex_cli_version: {effective.codex_cli_version}\n"
         f"- reviewer_session_id: {effective.session_id}\n"
         f"- reviewer_session_source: {transcript.session_source}\n"
@@ -1464,26 +1487,6 @@ def _artifact_header(
         f"{scope}\n\n"
         "## Reviewer Output\n\n"
     )
-
-
-def _build_codex_args(
-    *,
-    root: Path,
-    output_path: Path,
-) -> list[str]:
-    return [
-        "codex",
-        "exec",
-        "--strict-config",
-        "--cd",
-        str(root),
-        "--sandbox",
-        "read-only",
-        "--json",
-        "--output-last-message",
-        str(output_path),
-        "-",
-    ]
 
 
 def main() -> int:
@@ -1541,7 +1544,26 @@ def main() -> int:
     prompt_sha256 = hashlib.sha256(prompt_raw).hexdigest()
 
     timeout_seconds = max(60, int(args.timeout_seconds or 420))
-    codex_args = _build_app_server_args()
+    try:
+        codex_executable = _resolve_codex_executable()
+    except (OSError, RuntimeError) as exc:
+        output_path.write_text(
+            "## Review Metadata\n\n"
+            f"- title: {args.title or 'Independent review'}\n"
+            "- reviewer_exit_code: invalid_transport\n"
+            f"- reviewer_transport: {_APP_SERVER_TRANSPORT}\n"
+            "- reviewer_codex_executable: unresolved\n"
+            f"- prompt_path: `{prompt_path}`\n\n"
+            "## Reviewer Output\n\n"
+            f"NO-GO: Codex executable resolution failed closed: {exc}. "
+            "Do not treat this as review evidence.\n",
+            encoding="utf-8",
+        )
+        print(f"prompt_written={prompt_path}")
+        print(f"review_output={output_path}")
+        print("reviewer_codex_executable=unresolved")
+        return 2
+    codex_args = _build_app_server_args(codex_executable)
     shell_command = " ".join(shlex.quote(part) for part in codex_args)
     if not args.execute:
         print(f"prompt_written={prompt_path}")
@@ -1553,6 +1575,7 @@ def main() -> int:
         print(f"reviewer_config_path={configured.path}")
         print(f"reviewer_config_sha256={configured.sha256}")
         print(f"reviewer_transport={_APP_SERVER_TRANSPORT}")
+        print(f"reviewer_codex_executable={codex_executable}")
         print(f"reviewer_thread_source={_APP_SERVER_THREAD_SOURCE}")
         print(f"review_scope_mode={scope_evidence['scope_mode']}")
         print(f"review_resolved_base_commit={scope_evidence['resolved_base_commit']}")
@@ -1565,6 +1588,7 @@ def main() -> int:
         completed = _run_app_server_review(
             root=root,
             configured=configured,
+            codex_executable=codex_executable,
             prompt_raw=prompt_raw,
             timeout_seconds=timeout_seconds,
         )
@@ -1576,6 +1600,7 @@ def main() -> int:
             f"- title: {args.title or 'Independent review'}\n"
             "- reviewer_exit_code: timeout\n"
             f"- reviewer_transport: {_APP_SERVER_TRANSPORT}\n"
+            f"- reviewer_codex_executable: `{codex_executable}`\n"
             f"- prompt_path: `{prompt_path}`\n\n"
             "## Reviewer Output\n\n"
             f"NO-GO: independent review timed out after {timeout_seconds} seconds. "
@@ -1594,6 +1619,7 @@ def main() -> int:
             f"- title: {args.title or 'Independent review'}\n"
             "- reviewer_exit_code: invalid_transport\n"
             f"- reviewer_transport: {_APP_SERVER_TRANSPORT}\n"
+            f"- reviewer_codex_executable: `{codex_executable}`\n"
             f"- prompt_path: `{prompt_path}`\n"
             f"- events_path: `{events_path}`\n"
             f"- events_sha256: {hashlib.sha256(exc.transcript_raw).hexdigest()}\n\n"
@@ -1611,6 +1637,7 @@ def main() -> int:
             f"- title: {args.title or 'Independent review'}\n"
             "- reviewer_exit_code: invalid_transport\n"
             f"- reviewer_transport: {_APP_SERVER_TRANSPORT}\n"
+            f"- reviewer_codex_executable: `{codex_executable}`\n"
             f"- prompt_path: `{prompt_path}`\n\n"
             "## Reviewer Output\n\n"
             f"NO-GO: Codex app-server review transport failed closed: {exc}. "
@@ -1686,6 +1713,7 @@ def main() -> int:
             f"- reviewer_config_path: `{configured.path}`\n"
             f"- reviewer_config_sha256: {configured.sha256}\n"
             f"- reviewer_exit_code: {completed.returncode}\n"
+            f"- reviewer_codex_executable: `{codex_executable}`\n"
             f"- prompt_path: `{prompt_path}`\n"
             f"- events_path: `{events_path}`\n\n"
             "## Reviewer Output\n\n"
@@ -1709,6 +1737,7 @@ def main() -> int:
         raw_output_path=raw_output_path,
         raw_output_sha256=raw_output_sha256,
         reviewer_exit_code=int(completed.returncode),
+        codex_executable=codex_executable,
         shell_command=shell_command,
         transcript=completed.evidence,
     )
