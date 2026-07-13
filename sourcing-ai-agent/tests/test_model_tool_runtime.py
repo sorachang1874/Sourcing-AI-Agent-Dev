@@ -292,20 +292,22 @@ def _bounded_sse_wire_line(prefix: bytes, newline: bytes, *, extra_raw_bytes: in
     return wire
 
 
-def _static_string(node: ast.AST) -> str | None:
+def _static_string(node: ast.AST, names: dict[str, str] | None = None) -> str | None:
+    if isinstance(node, ast.Name):
+        return (names or {}).get(node.id)
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-        left = _static_string(node.left)
-        right = _static_string(node.right)
+        left = _static_string(node.left, names)
+        right = _static_string(node.right, names)
         return None if left is None or right is None else left + right
     if isinstance(node, ast.JoinedStr):
         pieces: list[str] = []
         for value in node.values:
             if isinstance(value, ast.FormattedValue):
-                piece = _static_string(value.value)
+                piece = _static_string(value.value, names)
             else:
-                piece = _static_string(value)
+                piece = _static_string(value, names)
             if piece is None:
                 return None
             pieces.append(piece)
@@ -317,31 +319,82 @@ def _static_string(node: ast.AST) -> str | None:
         and isinstance(node.func, ast.Attribute)
         and node.func.attr == "join"
     ):
-        separator = _static_string(node.func.value)
+        separator = _static_string(node.func.value, names)
         values = node.args[0]
         if separator is None or not isinstance(values, (ast.List, ast.Tuple)):
             return None
-        pieces = [_static_string(value) for value in values.elts]
+        pieces = [_static_string(value, names) for value in values.elts]
         return None if any(piece is None for piece in pieces) else separator.join(pieces)  # type: ignore[arg-type]
     return None
 
 
-def _is_runtime_module_acquisition(node: ast.AST) -> bool:
-    if not isinstance(node, ast.Call) or not node.args:
+def _static_string_bindings(tree: ast.AST) -> dict[str, str]:
+    names: dict[str, str] = {}
+    assignments = [node for node in ast.walk(tree) if isinstance(node, (ast.Assign, ast.AnnAssign))]
+    for _round in range(len(assignments) + 1):
+        changed = False
+        for node in assignments:
+            if node.value is None:
+                continue
+            value = _static_string(node.value, names)
+            if value is None:
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                if not isinstance(target, ast.Name):
+                    continue
+                current = names.get(target.id)
+                value_priority = int(value == "ModelTurnUsage" or value.endswith("model_tool_runtime"))
+                current_priority = int(
+                    current is not None
+                    and (current == "ModelTurnUsage" or current.endswith("model_tool_runtime"))
+                )
+                if current is None or value_priority > current_priority:
+                    names[target.id] = value
+                    changed = True
+        if not changed:
+            break
+    return names
+
+
+def _is_runtime_module_acquisition(node: ast.AST, names: dict[str, str]) -> bool:
+    if not isinstance(node, ast.Call):
         return False
-    module_name = _static_string(node.args[0])
-    return module_name is not None and module_name.endswith("model_tool_runtime")
+    values = [*node.args, *(keyword.value for keyword in node.keywords)]
+    if any(
+        (value := _static_string(argument, names)) is not None and value.endswith("model_tool_runtime")
+        for argument in values
+    ):
+        return True
+    called = node.func.id if isinstance(node.func, ast.Name) else (
+        node.func.attr if isinstance(node.func, ast.Attribute) else ""
+    )
+    if called != "__import__":
+        return False
+    module_argument = node.args[0] if node.args else next(
+        (keyword.value for keyword in node.keywords if keyword.arg == "name"),
+        None,
+    )
+    module_name = _static_string(module_argument, names) if module_argument is not None else None
+    fromlist = next((keyword.value for keyword in node.keywords if keyword.arg == "fromlist"), None)
+    return bool(
+        module_name is not None
+        and module_name.endswith("sourcing_agent")
+        and isinstance(fromlist, (ast.List, ast.Tuple, ast.Set))
+        and any(_static_string(item, names) == "model_tool_runtime" for item in fromlist.elts)
+    )
 
 
 def _temporary_usage_reference_lines(source: str) -> tuple[int, ...]:
     tree = ast.parse(source)
+    static_names = _static_string_bindings(tree)
     lines: set[int] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Name) and node.id == "ModelTurnUsage":
             lines.add(node.lineno)
         elif isinstance(node, ast.Attribute) and node.attr == "ModelTurnUsage":
             lines.add(node.lineno)
-        elif _static_string(node) == "ModelTurnUsage":
+        elif _static_string(node, static_names) == "ModelTurnUsage":
             lines.add(node.lineno)
         elif isinstance(node, ast.Import) and any(
             alias.name.endswith("model_tool_runtime") for alias in node.names
@@ -350,14 +403,14 @@ def _temporary_usage_reference_lines(source: str) -> tuple[int, ...]:
         elif isinstance(node, ast.ImportFrom):
             module_name = str(node.module or "")
             if module_name.endswith("model_tool_runtime") and any(
-                alias.name in {"ModelTurnUsage", "*"} for alias in node.names
+                alias.name in {"ModelTurnUsage", "__dict__", "*"} for alias in node.names
             ):
                 lines.add(node.lineno)
             elif (node.level > 0 or module_name.endswith("sourcing_agent")) and any(
                 alias.name == "model_tool_runtime" for alias in node.names
             ):
                 lines.add(node.lineno)
-        elif _is_runtime_module_acquisition(node):
+        elif _is_runtime_module_acquisition(node, static_names):
             lines.add(node.lineno)
     return tuple(sorted(lines))
 
@@ -1153,15 +1206,9 @@ def test_temporary_usage_type_cannot_escape_into_production_modules() -> None:
     assert _temporary_usage_reference_lines(
         'import sourcing_agent.model_tool_runtime as runtime\nUsage = getattr(runtime, "ModelTurnUsage")'
     )
-    assert _temporary_usage_reference_lines(
-        'import sourcing_agent.model_tool_runtime as runtime\nUsage = getattr(runtime, "ModelTurn" + "Usage")'
-    )
-    assert _temporary_usage_reference_lines(
-        'import sourcing_agent.model_tool_runtime as runtime\nUsage = getattr(runtime, f\'{"ModelTurn"}{"Usage"}\')'
-    )
-    assert _temporary_usage_reference_lines(
-        'import sourcing_agent.model_tool_runtime as runtime\nUsage = getattr(runtime, "".join(("ModelTurn", "Usage")))'
-    )
+    assert _temporary_usage_reference_lines('UsageName = "ModelTurn" + "Usage"') == (1,)
+    assert _temporary_usage_reference_lines('UsageName = f\'{"ModelTurn"}{"Usage"}\'') == (1,)
+    assert _temporary_usage_reference_lines('UsageName = "".join(("ModelTurn", "Usage"))') == (1,)
     assert _temporary_usage_reference_lines(
         "import sourcing_agent.model_tool_runtime as runtime\nname = get_name()\nUsage = getattr(runtime, name)"
     )
@@ -1187,7 +1234,20 @@ def test_temporary_usage_type_cannot_escape_into_production_modules() -> None:
     assert _temporary_usage_reference_lines(
         'from importlib import import_module as load\nruntime = load("sourcing_agent.model_tool_runtime")'
     )
-    assert _temporary_usage_reference_lines("from . import model_tool_runtime as runtime")
+    assert _temporary_usage_reference_lines("from . import model_tool_runtime as runtime") == (1,)
+    assert _temporary_usage_reference_lines("from .model_tool_runtime import __dict__ as namespace") == (1,)
+    assert _temporary_usage_reference_lines(
+        'from importlib import import_module as load\nruntime = load(name="sourcing_agent.model_tool_runtime")'
+    ) == (2,)
+    assert _temporary_usage_reference_lines(
+        'import builtins\nruntime = builtins.__import__("sourcing_agent.model_tool_runtime", fromlist=["*"])'
+    ) == (2,)
+    assert _temporary_usage_reference_lines(
+        'runtime = __import__("sourcing_agent", fromlist=["model_tool_runtime"]).model_tool_runtime'
+    ) == (1,)
+    assert _temporary_usage_reference_lines(
+        'module_name = "sourcing_agent.model_tool_runtime"\nruntime = load(module_name)'
+    ) == (2,)
     assert not _temporary_usage_reference_lines("from .model_tool_runtime import ToolSpec")
     assert _temporary_usage_reference_lines(
         'import sourcing_agent.model_tool_runtime as runtime\nTool = getattr(runtime, "ToolSpec")'
