@@ -18,6 +18,12 @@ RESULT_SCHEMA_VERSION = "x.grok.capability_probe.result.v1"
 EXECUTION_MODE = "fixture_only"
 SAFETY_POLICY_VERSION = "x-first-public-professional-v1"
 MAX_ERROR_MESSAGE_CHARS = 280
+REQUEST_DIAGNOSTIC_CODE = "XCAP_REQUEST_INVALID"
+BOUND_REQUEST_DIAGNOSTIC_CODE = "XCAP_BOUND_REQUEST_INVALID"
+RESULT_DIAGNOSTIC_CODE = "XCAP_RESULT_INVALID"
+DIAGNOSTIC_CODES = frozenset(
+    {REQUEST_DIAGNOSTIC_CODE, BOUND_REQUEST_DIAGNOSTIC_CODE, RESULT_DIAGNOSTIC_CODE}
+)
 CANONICAL_RFC3339_UTC_MILLIS_PATTERN = (
     r"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:[0-2][0-9]|3[01])T"
     r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\.[0-9]{3}Z$"
@@ -229,11 +235,19 @@ def _field_tokens(field: str) -> set[str]:
 
 
 def _credential_errors(value: Any, *, root: str) -> list[str]:
-    errors: list[str] = []
     for path, _child in _iter_values(value):
         if path and _field_tokens(path[-1]) & CREDENTIAL_FIELD_TOKENS:
-            errors.append(f"credential-bearing field is forbidden: {'.'.join((root, *path))}")
-    return sorted(set(errors))
+            return [f"credential-bearing field is forbidden in {root}"]
+    return []
+
+
+def _encode_diagnostics(code: str, errors: Iterable[str]) -> list[str]:
+    return sorted({f"{code}: {error}" for error in errors})
+
+
+def _diagnostic_detail(diagnostic: str, *, code: str) -> str:
+    prefix = f"{code}: "
+    return diagnostic.removeprefix(prefix)
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -273,7 +287,7 @@ def _validate_object(
     if missing:
         errors.append(f"{location} missing fields: {missing}")
     if extra:
-        errors.append(f"{location} unexpected fields: {extra}")
+        errors.append(f"{location} contains unexpected fields")
     return value
 
 
@@ -354,9 +368,9 @@ def validate_capability_request(payload: Any) -> list[str]:
         if not _is_false(claims.get(field)):
             errors.append(f"request.claims.{field} must be false")
 
-    errors.extend(_prohibited_content_errors(payload, root="request"))
+    errors.extend(_prohibited_content_errors(payload, root="request", include_locations=False))
     errors.extend(_credential_errors(payload, root="request"))
-    return sorted(set(errors))
+    return _encode_diagnostics(REQUEST_DIAGNOSTIC_CODE, errors)
 
 
 def validate_capability_result(
@@ -364,7 +378,14 @@ def validate_capability_result(
     *,
     request: Any,
 ) -> list[str]:
-    errors = [f"bound request invalid: {error}" for error in validate_capability_request(request)]
+    bound_request_errors = [
+        (
+            f"{BOUND_REQUEST_DIAGNOSTIC_CODE}: bound request invalid: "
+            f"{_diagnostic_detail(error, code=REQUEST_DIAGNOSTIC_CODE)}"
+        )
+        for error in validate_capability_request(request)
+    ]
+    errors: list[str] = []
     bound_request = request if isinstance(request, dict) else {}
     result = _validate_object(payload, fields=RESULT_FIELDS, location="result", errors=errors)
     if result.get("schema_version") != RESULT_SCHEMA_VERSION:
@@ -386,11 +407,11 @@ def validate_capability_result(
     task_status = str(task.get("status") or "")
     verdict = str(capability.get("verdict") or "")
     if run_status not in RUN_STATUS_REGISTRY:
-        errors.append(f"unknown capability run status: {run_status or '<missing>'}")
+        errors.append("unknown capability run status at result.run.status")
     if task_status not in TASK_STATUS_REGISTRY:
-        errors.append(f"unknown capability task status: {task_status or '<missing>'}")
+        errors.append("unknown capability task status at result.task.status")
     if verdict not in CAPABILITY_VERDICTS:
-        errors.append(f"unknown capability verdict: {verdict or '<missing>'}")
+        errors.append("unknown capability verdict at result.capability.verdict")
     if (run_status, task_status, verdict) not in TERMINAL_TUPLES:
         errors.append("capability run/task/verdict terminal tuple is inconsistent")
     if run.get("run_id") != "xprobe_run_fixture_openai_official_v1":
@@ -482,10 +503,11 @@ def validate_capability_result(
         else None
     )
     for index, observation_value in enumerate(observations):
+        observation_location = f"result.observations[{index}]"
         observation = _validate_shape(
             observation_value,
             shape="observation",
-            location=f"result.observations[{index}]",
+            location=observation_location,
             errors=errors,
         )
         observation_id = str(observation.get("observation_id") or "")
@@ -493,26 +515,28 @@ def validate_capability_result(
         canonical_url_value = observation.get("canonical_url")
         canonical_url = canonical_url_value if isinstance(canonical_url_value, str) else ""
         if not re.fullmatch(r"xprobe_obs_fixture_[0-9]{3}", observation_id):
-            errors.append(f"capability observation ID is not synthetic: {observation_id}")
+            errors.append(f"capability observation ID is not synthetic at {observation_location}")
         if not re.fullmatch(r"xpost_fixture_[0-9]{3}", object_id):
-            errors.append(f"capability platform object ID is not synthetic: {observation_id}")
+            errors.append(f"capability platform object ID is not synthetic at {observation_location}")
         if observation_id in observation_ids or object_id in object_ids or canonical_url in canonical_urls:
             errors.append("capability observation identities and URLs must be unique")
         observation_ids.add(observation_id)
         object_ids.add(object_id)
         canonical_urls.add(canonical_url)
         if observation.get("platform_user_id") != target.get("platform_user_id"):
-            errors.append(f"capability observation account mismatch: {observation_id}")
+            errors.append(f"capability observation account mismatch at {observation_location}")
         if observation.get("author_handle") != target.get("current_handle"):
-            errors.append(f"capability observation handle mismatch: {observation_id}")
+            errors.append(f"capability observation handle mismatch at {observation_location}")
         expected_url = f"https://posts.invalid/{target.get('current_handle')}/status/{object_id}"
         if canonical_url_value != expected_url:
-            errors.append(f"capability observation URL is not the exact canonical synthetic string: {observation_id}")
+            errors.append(
+                f"capability observation URL is not the exact canonical synthetic string at {observation_location}"
+            )
         try:
             parsed_url = urlsplit(canonical_url_value) if isinstance(canonical_url_value, str) else None
         except (TypeError, ValueError):
             parsed_url = None
-            errors.append(f"capability observation URL cannot be parsed safely: {observation_id}")
+            errors.append(f"capability observation URL cannot be parsed safely at {observation_location}")
         expected_path = f"/{target.get('current_handle')}/status/{object_id}"
         if (
             parsed_url is None
@@ -522,33 +546,36 @@ def validate_capability_result(
             or parsed_url.query
             or parsed_url.fragment
         ):
-            errors.append(f"capability observation URL is not canonical synthetic evidence: {observation_id}")
+            errors.append(f"capability observation URL is not canonical synthetic evidence at {observation_location}")
         authored_at = _parse_datetime(observation.get("authored_at"))
         observed_at = _parse_datetime(observation.get("observed_at"))
         if authored_at is None or observed_at is None:
             errors.append(
-                f"capability observation timestamps must use canonical UTC RFC3339 millisecond form: {observation_id}"
+                "capability observation timestamps must use canonical UTC RFC3339 millisecond form at "
+                f"{observation_location}"
             )
         elif authored_at > observed_at:
-            errors.append(f"capability observation authored_at follows observed_at: {observation_id}")
+            errors.append(f"capability observation authored_at follows observed_at at {observation_location}")
         elif started_at is not None and completed_at is not None and not started_at <= observed_at <= completed_at:
-            errors.append(f"capability observation observed_at falls outside run: {observation_id}")
+            errors.append(f"capability observation observed_at falls outside run at {observation_location}")
         object_match = re.fullmatch(r"xpost_fixture_([0-9]{3})", object_id)
         expected_observation_id = (
             f"xprobe_obs_fixture_{object_match.group(1)}" if object_match is not None else None
         )
         if observation_id != expected_observation_id:
-            errors.append(f"capability observation ID must bind its platform object sequence: {observation_id}")
+            errors.append(
+                f"capability observation ID must bind its platform object sequence at {observation_location}"
+            )
         excerpt = observation.get("excerpt")
         expected_excerpt = CAPABILITY_OBSERVATION_EXCERPTS.get(object_id)
         if excerpt != expected_excerpt:
             errors.append(
-                f"capability observation excerpt must match the deterministic object template: {observation_id}"
+                f"capability observation excerpt must match the deterministic object template at {observation_location}"
             )
         if not isinstance(excerpt, str) or not isinstance(max_excerpt_chars, int) or len(excerpt) > max_excerpt_chars:
-            errors.append(f"capability observation excerpt is not bounded synthetic text: {observation_id}")
+            errors.append(f"capability observation excerpt is not bounded synthetic text at {observation_location}")
         if observation.get("full_body_stored") is not False:
-            errors.append(f"capability observation cannot store a full body: {observation_id}")
+            errors.append(f"capability observation cannot store a full body at {observation_location}")
 
     errors_value = result.get("errors")
     if not isinstance(errors_value, list):
@@ -595,9 +622,9 @@ def validate_capability_result(
         if not _is_false(claims.get(field)):
             errors.append(f"result.claims.{field} must be false")
 
-    errors.extend(_prohibited_content_errors(payload, root="result"))
+    errors.extend(_prohibited_content_errors(payload, root="result", include_locations=False))
     errors.extend(_credential_errors(payload, root="result"))
-    return sorted(set(errors))
+    return sorted(set(bound_request_errors + _encode_diagnostics(RESULT_DIAGNOSTIC_CODE, errors)))
 
 
 def _default_paths() -> tuple[Path, Path]:

@@ -336,21 +336,24 @@ def _contains_prohibited_term(value: str, term: str) -> bool:
     return term.casefold() in value
 
 
-def _prohibited_content_errors(value: Any, *, root: str) -> list[str]:
+def _prohibited_content_errors(value: Any, *, root: str, include_locations: bool = True) -> list[str]:
     errors: list[str] = []
     for path, child in _iter_values(value):
         location = ".".join((root, *path)) if path else root
+        location_suffix = f": {location}" if include_locations else ""
         if path:
             normalized_key = path[-1].strip().lower().replace("-", "_")
             if _field_tokens(path[-1]) & PROHIBITED_FIELD_TOKENS:
-                errors.append(f"prohibited protected/proxy field: {location}")
+                errors.append(f"prohibited protected/proxy field{location_suffix}")
             if normalized_key in FORBIDDEN_WRITER_KEYS:
-                errors.append(f"forbidden canonical writer field: {location}")
+                errors.append(f"forbidden canonical writer field{location_suffix}")
         if isinstance(child, str):
             folded = child.casefold()
             for term in PROHIBITED_VALUE_TERMS:
                 if _contains_prohibited_term(folded, term):
-                    errors.append(f"prohibited protected/proxy value at {location}")
+                    errors.append(
+                        f"prohibited protected/proxy value{f' at {location}' if include_locations else ''}"
+                    )
                     break
             if (
                 "x.com/" in folded
@@ -358,7 +361,7 @@ def _prohibited_content_errors(value: Any, *, root: str) -> list[str]:
                 or "https://x.com" in folded
                 or "https://twitter.com" in folded
             ):
-                errors.append(f"live X URL is forbidden in fixture at {location}")
+                errors.append(f"live X URL is forbidden in fixture{f' at {location}' if include_locations else ''}")
     return sorted(set(errors))
 
 

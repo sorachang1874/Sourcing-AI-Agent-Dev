@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import errno
+import fcntl
 import json
 import os
 import re
 import secrets
+import stat
+import threading
+import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +27,12 @@ ROOT = Path(__file__).resolve().parents[1]
 TIMESTAMP = "2026-07-14T00:00:00.000Z"
 OWNED_TEMP_PREFIX = ".x-first-capability-fixture."
 _OWNED_TEMP_TOKEN_PATTERN = r"[0-9a-f]{32}"
+PAIR_LOCK_FILENAME = ".x-first-capability-fixture.pair.lock"
+PAIR_LOCK_TIMEOUT_SECONDS = 5.0
+PAIR_LOCK_POLL_SECONDS = 0.01
+_PAIR_LOCK_FILE_MODE = 0o600
+_PAIR_LOCK_REGISTRY_GUARD = threading.Lock()
+_PAIR_LOCK_REGISTRY: dict[Path, threading.Lock] = {}
 
 
 def build_request_fixture() -> dict[str, Any]:
@@ -226,57 +239,144 @@ def _fsync_directory(path: Path) -> None:
         os.close(directory_fd)
 
 
+def _in_process_pair_lock(parent: Path) -> threading.Lock:
+    key = parent.resolve(strict=True)
+    with _PAIR_LOCK_REGISTRY_GUARD:
+        lock = _PAIR_LOCK_REGISTRY.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _PAIR_LOCK_REGISTRY[key] = lock
+        return lock
+
+
+def _lock_file_identity_is_safe(lock_fd: int, lock_path: Path) -> bool:
+    descriptor_stat = os.fstat(lock_fd)
+    try:
+        path_stat = lock_path.stat(follow_symlinks=False)
+    except OSError:
+        return False
+    return (
+        stat.S_ISREG(descriptor_stat.st_mode)
+        and stat.S_ISREG(path_stat.st_mode)
+        and descriptor_stat.st_dev == path_stat.st_dev
+        and descriptor_stat.st_ino == path_stat.st_ino
+        and descriptor_stat.st_uid == os.geteuid()
+        and descriptor_stat.st_nlink == 1
+        and stat.S_IMODE(descriptor_stat.st_mode) == _PAIR_LOCK_FILE_MODE
+    )
+
+
+@contextlib.contextmanager
+def _exclusive_pair_lock(parent: Path) -> Iterator[None]:
+    deadline = time.monotonic() + PAIR_LOCK_TIMEOUT_SECONDS
+    thread_lock = _in_process_pair_lock(parent)
+    if not thread_lock.acquire(timeout=max(0.0, deadline - time.monotonic())):
+        raise TimeoutError("capability fixture pair lock acquisition timed out")
+
+    lock_fd: int | None = None
+    file_lock_acquired = False
+    try:
+        lock_path = parent / PAIR_LOCK_FILENAME
+        flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            lock_fd = os.open(lock_path, flags, _PAIR_LOCK_FILE_MODE)
+        except OSError as error:
+            if error.errno in {errno.ELOOP, errno.EMLINK}:
+                raise ValueError("capability fixture pair lock must not be a symlink") from error
+            raise
+        if not _lock_file_identity_is_safe(lock_fd, lock_path):
+            raise ValueError("capability fixture pair lock ownership or file identity is unsafe")
+
+        while True:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                file_lock_acquired = True
+                break
+            except BlockingIOError as error:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("capability fixture pair lock acquisition timed out") from error
+                time.sleep(min(PAIR_LOCK_POLL_SECONDS, remaining))
+
+        if not _lock_file_identity_is_safe(lock_fd, lock_path):
+            raise ValueError("capability fixture pair lock changed during acquisition")
+        os.fsync(lock_fd)
+        _fsync_directory(parent)
+        yield
+    finally:
+        try:
+            if lock_fd is not None:
+                try:
+                    if file_lock_acquired:
+                        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                finally:
+                    os.close(lock_fd)
+        finally:
+            thread_lock.release()
+
+
 def _atomic_write_many(values: tuple[tuple[Path, str], ...]) -> tuple[Path, ...]:
     paths = [path for path, _content in values]
+    if len(paths) != 2:
+        raise ValueError("capability fixture writer requires exactly two destinations")
     if len(set(paths)) != len(paths):
         raise ValueError("capability fixture destinations must be unique")
-    for path in paths:
-        if path.is_symlink():
-            raise ValueError(f"refusing to replace symlink fixture destination: {path}")
-        if path.exists() and not path.is_file():
-            raise ValueError(f"fixture destination must be a regular file or absent: {path}")
+    parent = paths[0].parent
+    if any(path.parent != parent for path in paths):
+        raise ValueError("capability fixture destinations must share one directory")
 
-    reaped_stale_temps = _reap_owned_stale_temps(paths)
-    originals = {path: path.read_bytes() if path.exists() else None for path in paths}
-    pending: dict[Path, Path] = {}
-    try:
-        for path, content in values:
-            pending[path] = _write_same_directory_temp(path, content.encode("utf-8"))
-    except BaseException:
-        for temp_path in pending.values():
-            temp_path.unlink(missing_ok=True)
-        raise
-    replaced: list[Path] = []
-    try:
-        for path in paths:
-            os.replace(pending[path], path)
-            replaced.append(path)
-        for parent in {path.parent for path in paths}:
-            _fsync_directory(parent)
-    except BaseException as write_error:
-        rollback_error: BaseException | None = None
-        for path in reversed(replaced):
+    with _exclusive_pair_lock(parent):
+        pending: dict[Path, Path] = {}
+        try:
+            for path in paths:
+                if path.is_symlink():
+                    raise ValueError("refusing to replace symlink fixture destination")
+                if path.exists() and not path.is_file():
+                    raise ValueError("fixture destination must be a regular file or absent")
+
+            reaped_stale_temps = _reap_owned_stale_temps(paths)
+            originals = {path: path.read_bytes() if path.exists() else None for path in paths}
             try:
-                original = originals[path]
-                if original is None:
-                    path.unlink(missing_ok=True)
-                else:
-                    rollback_temp = _write_same_directory_temp(path, original)
+                for path, content in values:
+                    pending[path] = _write_same_directory_temp(path, content.encode("utf-8"))
+            except BaseException:
+                for temp_path in pending.values():
+                    temp_path.unlink(missing_ok=True)
+                raise
+
+            replaced: list[Path] = []
+            try:
+                for path in paths:
+                    os.replace(pending[path], path)
+                    replaced.append(path)
+                _fsync_directory(parent)
+            except BaseException as write_error:
+                rollback_error: BaseException | None = None
+                for path in reversed(replaced):
                     try:
-                        os.replace(rollback_temp, path)
-                    finally:
-                        rollback_temp.unlink(missing_ok=True)
-            except BaseException as error:
-                rollback_error = error
-        for parent in {path.parent for path in paths}:
+                        original = originals[path]
+                        if original is None:
+                            path.unlink(missing_ok=True)
+                        else:
+                            rollback_temp = _write_same_directory_temp(path, original)
+                            try:
+                                os.replace(rollback_temp, path)
+                            finally:
+                                rollback_temp.unlink(missing_ok=True)
+                    except BaseException as error:
+                        rollback_error = error
+                try:
+                    _fsync_directory(parent)
+                except BaseException as error:
+                    rollback_error = error
+                if rollback_error is not None:
+                    raise RuntimeError("capability fixture atomic-write rollback failed") from rollback_error
+                raise write_error
+            return reaped_stale_temps
+        finally:
+            for temp_path in pending.values():
+                temp_path.unlink(missing_ok=True)
             _fsync_directory(parent)
-        if rollback_error is not None:
-            raise RuntimeError("capability fixture atomic-write rollback failed") from rollback_error
-        raise write_error
-    finally:
-        for temp_path in pending.values():
-            temp_path.unlink(missing_ok=True)
-    return reaped_stale_temps
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -30,6 +30,7 @@ a new reviewed contract version.
 | Target | request fixture | one synthetic official-lab account | Real stable account ID requires owner pin |
 | Retention | request/result fixture | synthetic-only, bounded excerpts, no full body | Live TTL/deletion evidence requires privacy owner |
 | Safety | sibling AGENTS + executable scanners | unsafe fields/values, credentials, live URLs rejected | No bypass or permissive fallback |
+| Fixture pair writer | capability fixture generator | persistent same-directory lock owned by the local OS user; request/result commit as one serialized pair | Replaced only by a reviewed durable artifact writer |
 | Canonical/product writers | existing product owners | all writer arrays empty | Separate adjudicated adapter gate |
 
 ## State and verdict contract
@@ -56,12 +57,21 @@ normalized or rounded. The fixed
 unbound caller-supplied hash.
 
 Fixture regeneration refuses symlink destinations, and `--check` treats symlink fixtures as stale even when their
-targets contain the expected bytes. Writes materialize every candidate file in an owned, same-directory temporary
-file, fsync it, and use atomic replacement. A successful repair reaps only temp files in the generator-owned
+targets contain the expected bytes. The generator owns one persistent
+`.x-first-capability-fixture.pair.lock` file in the fixture directory. It is never unlinked during normal operation;
+the local effective OS user must own it as a single-link regular file with mode `0600`. A symlink, hard link,
+unexpected owner/mode/type, or identity change during acquisition fails closed. An in-process mutex covers threads,
+and a non-blocking advisory file lock covers processes. Both use one five-second monotonic acquisition budget.
+
+The exclusive pair lock is held across destination preflight, stale-temp reaping, both temporary writes and atomic
+replacements, rollback, temporary cleanup, and final directory fsync. Therefore another writer cannot reap an active
+temporary file, snapshot a half-written pair, or roll an earlier generation back over a later successful generation.
+Writes materialize every candidate file in an owned, same-directory temporary file, fsync it, and use atomic
+replacement. A successful repair reaps only temp files in the generator-owned
 `.x-first-capability-fixture.<destination>.<32 lowercase hex>.tmp` namespace; other files remain untouched. A normal
-multi-file replacement failure rolls already replaced files back to their prior bytes. A process-loss boundary cannot
-make a mismatched pair valid because the result binds the canonical request hash and both `--check` and the validator
-fail closed on drift.
+multi-file replacement failure rolls already replaced files back to their prior bytes. A hard process loss releases
+the kernel lock; the next writer reaps owned orphan temps and replaces both files, while the request hash, `--check`,
+and validator continue to reject any half-written pair before repair.
 
 ## Fail-closed rules
 
@@ -82,6 +92,12 @@ Validation rejects:
   the executable registry and declarative schema;
 - candidate packets, identity links, assertions, canonical writes, outreach/ranking authorization, or protected-trait
   and proxy fields/values.
+
+All executable validation diagnostics use one of the fixed codes `XCAP_REQUEST_INVALID`,
+`XCAP_BOUND_REQUEST_INVALID`, or `XCAP_RESULT_INVALID`. Diagnostics may identify only static schema paths and bounded
+array indices. They never interpolate submitted values, unknown field names or paths, status/verdict strings,
+observation IDs, excerpts, terminal-error text, credentials, protected-trait text, or person-like text. This applies
+equally to the Python validation API and CLI JSON output.
 
 The fixture makes no affiliation, employment, relevance, identity-link, exhaustiveness, or outreach claim.
 

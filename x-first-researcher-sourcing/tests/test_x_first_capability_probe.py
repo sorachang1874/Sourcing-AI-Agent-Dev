@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import tomllib
 import unittest
@@ -25,7 +26,9 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import generate_capability_probe_fixtures as capability_fixture_generator  # noqa: E402
 from generate_capability_probe_fixtures import (  # noqa: E402
     OWNED_TEMP_PREFIX,
+    PAIR_LOCK_FILENAME,
     _atomic_write_many,
+    _exclusive_pair_lock,
     _write_same_directory_temp,
     build_request_fixture,
     build_result_fixture,
@@ -34,6 +37,7 @@ from generate_capability_probe_fixtures import (  # noqa: E402
 from x_first.capability_probe import (  # noqa: E402
     CANONICAL_RFC3339_UTC_MILLIS_PATTERN,
     CAPABILITY_OBSERVATION_EXCERPTS,
+    DIAGNOSTIC_CODES,
     ERROR_ENVELOPE_BY_VERDICT,
     SYNTHETIC_RAW_RESPONSE_SHA256,
     canonical_sha256,
@@ -126,6 +130,7 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
             stale_owned_temp = _write_same_directory_temp(first, b"hard-crash-orphan")
             unrelated_temp = root / f"{OWNED_TEMP_PREFIX}{first.name}.not-owned.tmp"
             unrelated_temp.write_text("unrelated", encoding="utf-8")
+            first.write_text("hard-crash-partial-first", encoding="utf-8")
             reaped = _atomic_write_many(((first, "repaired-first"), (second, "repaired-second")))
             self.assertEqual(reaped, (stale_owned_temp,))
             self.assertFalse(stale_owned_temp.exists())
@@ -163,6 +168,131 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
                 [path for path in root.glob(f"{OWNED_TEMP_PREFIX}*.tmp") if path != unrelated_temp]
             )
             self.assertEqual(unrelated_temp.read_text(encoding="utf-8"), "unrelated")
+
+    def test_generator_pair_lock_rejects_symlink_and_serializes_two_writers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "lock-target"
+            target.write_text("not-a-lock", encoding="utf-8")
+            (root / PAIR_LOCK_FILENAME).symlink_to(target)
+            first = root / "first.json"
+            second = root / "second.json"
+            with self.assertRaisesRegex(ValueError, "pair lock must not be a symlink"):
+                _atomic_write_many(((first, "first"), (second, "second")))
+            self.assertEqual(target.read_text(encoding="utf-8"), "not-a-lock")
+            self.assertFalse(first.exists())
+            self.assertFalse(second.exists())
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "request.json"
+            second = root / "result.json"
+            first.write_text("initial-request", encoding="utf-8")
+            second.write_text("initial-result", encoding="utf-8")
+
+            first_writer_replaced_request = threading.Event()
+            release_first_writer = threading.Event()
+            second_writer_started = threading.Event()
+            second_writer_entered_critical_section = threading.Event()
+            writer_errors: list[BaseException] = []
+            real_replace = os.replace
+            real_reap = capability_fixture_generator._reap_owned_stale_temps
+
+            def interleaved_replace(
+                source: str | os.PathLike[str], destination: str | os.PathLike[str]
+            ) -> None:
+                real_replace(source, destination)
+                if threading.current_thread().name == "writer-one" and Path(destination) == first:
+                    first_writer_replaced_request.set()
+                    if not release_first_writer.wait(timeout=3):
+                        raise TimeoutError("test did not release first writer")
+
+            def tracked_reap(paths: list[Path]) -> tuple[Path, ...]:
+                if threading.current_thread().name == "writer-two":
+                    second_writer_entered_critical_section.set()
+                return real_reap(paths)
+
+            def write_pair(name: str, values: tuple[tuple[Path, str], ...]) -> None:
+                if name == "writer-two":
+                    second_writer_started.set()
+                try:
+                    _atomic_write_many(values)
+                except BaseException as error:
+                    writer_errors.append(error)
+
+            with (
+                mock.patch("generate_capability_probe_fixtures.os.replace", side_effect=interleaved_replace),
+                mock.patch(
+                    "generate_capability_probe_fixtures._reap_owned_stale_temps",
+                    side_effect=tracked_reap,
+                ),
+            ):
+                writer_one = threading.Thread(
+                    target=write_pair,
+                    name="writer-one",
+                    args=("writer-one", ((first, "writer-one-request"), (second, "writer-one-result"))),
+                )
+                writer_one.start()
+                self.assertTrue(first_writer_replaced_request.wait(timeout=3))
+                writer_two = threading.Thread(
+                    target=write_pair,
+                    name="writer-two",
+                    args=("writer-two", ((first, "writer-two-request"), (second, "writer-two-result"))),
+                )
+                writer_two.start()
+                try:
+                    self.assertTrue(second_writer_started.wait(timeout=3))
+                    entered_before_release = second_writer_entered_critical_section.wait(timeout=0.2)
+                finally:
+                    release_first_writer.set()
+                writer_one.join(timeout=3)
+                writer_two.join(timeout=3)
+
+            self.assertFalse(writer_one.is_alive())
+            self.assertFalse(writer_two.is_alive())
+            self.assertFalse(entered_before_release, "second writer entered while the first pair was half-written")
+            self.assertEqual(writer_errors, [])
+            self.assertTrue(second_writer_entered_critical_section.is_set())
+            self.assertEqual(first.read_text(encoding="utf-8"), "writer-two-request")
+            self.assertEqual(second.read_text(encoding="utf-8"), "writer-two-result")
+            self.assertFalse(list(root.glob(f"{OWNED_TEMP_PREFIX}*.tmp")))
+
+    def test_generator_pair_lock_serializes_processes_with_bounded_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "request.json"
+            second = root / "result.json"
+            first.write_text("initial-request", encoding="utf-8")
+            second.write_text("initial-result", encoding="utf-8")
+            _atomic_write_many(((first, "parent-request"), (second, "parent-result")))
+
+            child_program = "\n".join(
+                (
+                    "import sys",
+                    "from pathlib import Path",
+                    "import generate_capability_probe_fixtures as generator",
+                    "generator.PAIR_LOCK_TIMEOUT_SECONDS = 0.2",
+                    "try:",
+                    "    generator._atomic_write_many(((Path(sys.argv[1]), 'child-request'), "
+                    "(Path(sys.argv[2]), 'child-result')))",
+                    "except TimeoutError:",
+                    "    raise SystemExit(0)",
+                    "raise SystemExit(3)",
+                )
+            )
+            with _exclusive_pair_lock(root):
+                completed = subprocess.run(
+                    [sys.executable, "-c", child_program, str(first), str(second)],
+                    cwd=ROOT,
+                    env={**os.environ, "PYTHONPATH": f"{ROOT / 'src'}:{ROOT / 'scripts'}"},
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertEqual(first.read_text(encoding="utf-8"), "parent-request")
+            self.assertEqual(second.read_text(encoding="utf-8"), "parent-result")
 
     def test_generator_check_rejects_symlink_even_when_target_bytes_match(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -433,6 +563,72 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
             any("must match the deterministic verdict envelope" in error for error in retryable_errors),
             retryable_errors,
         )
+
+    def test_runtime_and_cli_diagnostics_never_echo_untrusted_content(self) -> None:
+        sentinels = (
+            "SENTINEL_UNKNOWN_NATIONALITY_SECRET_FIELD_7D3F",
+            "SENTINEL_PERSON_VALUE_ALICE_7D3F",
+            "SENTINEL_STATUS_ALICE_7D3F",
+            "SENTINEL_VERDICT_ALICE_7D3F",
+            "SENTINEL_OBSERVATION_ALICE_7D3F",
+            "SENTINEL_ERROR_CODE_ALICE_7D3F",
+            "SENTINEL_ERROR_MESSAGE_ALICE_SECRET_7D3F",
+        )
+        unknown_field, person_value, status, verdict, observation_id, error_code, error_message = sentinels
+        request = copy.deepcopy(self.request)
+        request[unknown_field] = person_value
+        request["target"][unknown_field] = person_value
+        result = copy.deepcopy(self.result)
+        result["run"]["status"] = status
+        result["task"]["status"] = status
+        result["capability"]["verdict"] = verdict
+        result["observations"][0]["observation_id"] = observation_id
+        result["observations"][0][unknown_field] = person_value
+        result["errors"] = [{"code": error_code, "message": error_message, "retryable": False}]
+
+        diagnostics = [
+            *validate_capability_request(request),
+            *validate_capability_result(result, request=request),
+        ]
+        self.assertTrue(diagnostics)
+        for diagnostic in diagnostics:
+            self.assertIn(diagnostic.partition(":")[0], DIAGNOSTIC_CODES)
+        rendered = json.dumps(diagnostics, ensure_ascii=False)
+        for sentinel in sentinels:
+            self.assertNotIn(sentinel, rendered)
+        self.assertIn("result.observations[0]", rendered)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            request_path = root / "request.json"
+            result_path = root / "result.json"
+            request_path.write_text(json.dumps(request), encoding="utf-8")
+            result_path.write_text(json.dumps(result), encoding="utf-8")
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "x_first.capability_probe",
+                    "--request",
+                    str(request_path),
+                    "--result",
+                    str(result_path),
+                ],
+                cwd=ROOT,
+                env={**os.environ, "PYTHONPATH": "src"},
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        for sentinel in sentinels:
+            self.assertNotIn(sentinel, completed.stdout)
+            self.assertNotIn(sentinel, completed.stderr)
+        cli_payload = json.loads(completed.stdout)
+        self.assertEqual(cli_payload["status"], "invalid")
+        for diagnostic in cli_payload["errors"]:
+            self.assertIn(diagnostic.partition(":")[0], DIAGNOSTIC_CODES)
 
     def test_run_duration_and_elapsed_ms_reconcile_exactly(self) -> None:
         one_millisecond = copy.deepcopy(self.result)
