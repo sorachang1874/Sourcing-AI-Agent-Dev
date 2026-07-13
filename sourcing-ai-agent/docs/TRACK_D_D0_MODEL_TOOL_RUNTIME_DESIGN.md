@@ -1,11 +1,13 @@
 # Track D — D0+D1 批级设计：模型工具运行时 + 工具面 serve
 
-> Status: Cross-model design input for owner review（v4 2026-07-13，作者 = Claude Fable 5；只设计、不改码）。
-> **v4 修订**：按 round-3 评审（提取件 `runtime/reviews/20260713T125255Z_*.extracted-reference.md`）
-> findings #9-15 修订：typed terminal 事件变体、逻辑结果槽首成功 CAS、有效路由快照、schema pin
-> 物理生命周期、字段所有权归一化、model_safe_result_schema、预算保留台账契约；
-> 术语统一（OpenAIModelUsage / length）。覆盖映射见 §6-§7。
-> 修订史：v1→24 findings→v2（29 断言核查 + 24 路覆盖审计）→v3（round-2 的 16 findings）→v4。
+> Status: Cross-model design input for owner review（v6 2026-07-13，作者 = Claude Fable 5；只设计、不改码）。
+> 修订史：v1→R1 24 findings→v2（29 断言核查+24 路覆盖审计）→v3（R2 16 findings）→v4（R3 #9-15：
+> terminal 事件、结果槽、路由快照、pin 生命周期、字段所有权、model-safe、预算台账）→v5（R4
+> #10-15：快照创建点前移+digest 入指纹、pin 物理生命周期、归一化边界、三策略 revision、成本
+> 分账）→**v6**（R5 #5/#6/#8：槽消费 CAS + accepted→superseded、dispatching 计费态、
+> ModelInvocationEnvelope canonical 定义于 §2.2 含 terminal_reason；sweep blocker：槽 CAS 补
+> control epoch + 槽写者单 owner 化）。覆盖映射见 §6-§7；sweep 报告
+> `TRACK_D_INVARIANT_SWEEP_2026-07-13.md`。
 > 上层计划：`TRACK_D_AGENT_RUNTIME_PLAN.md` §2 D0/D1。TD-1 已裁决（requests + SSE 行解析）。
 > 实施前按 handbook 纪律重新 Scout 全部行号锚点（基准 HEAD `5f14ed8`）。
 
@@ -82,12 +84,15 @@ class ToolTurnResult:         # 唯一可授权后续动作的 canonical 语义�
                                              # (v4 统一词汇:与解析器/授权集合同用 provider 语义 "length")
     provider_call_id: str | None
     route_id: str
-    invocation_envelope_ref: str             # v6(R5#8):**单一物理 schema `ModelInvocationEnvelope`**
-                                             # 的引用——信封本体(一处定义,D0/D3 共用)含:快照 ref+digest、
-                                             # workspace/actor/permission/outbound-policy/model-safe-schema
-                                             # revisions、command/attempt 因果、provider 响应身份、
-                                             # result artifact ref+digest、成本暴露行引用;经 action/
-                                             # command/attempt/结果槽/journal 与接受 CAS 全链绑定
+    invocation_envelope_ref: str             # v6(R5#8):**单一物理 schema `ModelInvocationEnvelope`**,
+                                             # 本注释即 canonical 字段清单(D3 §6 引用不复述):快照
+                                             # ref+digest、workspace/actor/permission/outbound-policy/
+                                             # model-safe-schema revisions、command/attempt 因果、
+                                             # provider 响应身份(requested/response/effective +
+                                             # provenance + call id)、**terminal_reason**、usage +
+                                             # usage_status、fallback/circuit 证据、evidence bundle
+                                             # hash、result artifact ref+digest、成本暴露行引用;经
+                                             # action/command/attempt/结果槽/journal 与接受 CAS 全链绑定
     workspace_id: str; actor_id: str         # v4(#14):冗余镜像便于查询;信封为权威
 ```
 
@@ -166,8 +171,11 @@ v3 追加：流路径消费到的 terminal 事件所载结果与 `run_tool_turn`
   `(result_slot_id, slot_generation, tool_name, canonical_args_digest)`——tool_ordinal 不入身份。
 - **v5（round4#5）槽的取消/失效围栏**：槽自带 `slot_state ∈ {open, accepted, consumed, closed,
   superseded}`；**接受 CAS 的全条件** = 槽 open + 所属 OperationRun/turn/WorkflowCommand 均非终态
-  + claim/attempt 身份匹配 + schema/route/policy pins 匹配；cancel/supersession 原子关槽
-  （open→closed，**accepted→superseded**——v6 补 R5#5：已接受未消费的结果同样被失效）。
+  + claim/attempt 身份匹配 + **durable control epoch 匹配**（sweep 修正：requeue→重 claim 窗口的
+  ABA 同样适用于槽，与 D3 §4c 同一 epoch 机制）+ schema/route/policy pins 匹配；cancel/
+  supersession 原子关槽（open→closed，**accepted→superseded**——v6 补 R5#5）；槽状态转移的
+  **写者 = turn owner 的域命令**（generic 控制面经 事件→reducer→turn owner 命令收敛，与 D3 §4c
+  同构，不跨 owner 直写）。
 - **消费 CAS（v6，R5#5）**：AgentAction 创建 = `accepted→consumed` 的 CAS（同 UoW 持久化 action
   + journal）；approve 与 dispatch 各自复查槽 generation + canonical operation/turn/command/claim/
   route/schema/policy pins——cancel 落在「接受后、消费前」窗口时，`accepted→superseded` 抢先，

@@ -1,10 +1,10 @@
 # Track D — D3 批级设计：公司身份自验证 loop（第一垂直切片）
 
-> Status: Cross-model design input for owner review（v5 2026-07-13，作者 = Claude Fable 5；只设计、不改码）。
-> **v5 修订**：按 round-4 有效 artifact `runtime/reviews/20260713T131447Z_*`（NO-GO，阻断集 =
-> 新 findings #1、#3-#7）修订：record/apply 单写者拆分、workspace 键恢复、expiry 去读者化、
-> grant 一等记录与生命周期、共享模型调用契约、bridge diagnostic-only 语义、claim generation
-> 物理实现诚实化。修订史与覆盖映射见 §10。
+> Status: Cross-model design input for owner review（v6 2026-07-13，作者 = Claude Fable 5；只设计、不改码）。
+> **v6 修订**：v5（round-4 修复）基础上按 round-5 有效 artifact `runtime/reviews/20260713T133324Z_*`
+> （NO-GO 8 findings）修订，并首次执行 `DESIGN_INVARIANT_CHECKLIST.md` 九类不变量自查
+> （报告 = `TRACK_D_INVARIANT_SWEEP_2026-07-13.md`，8 blocker 已修、52 obligation 转实施义务）。
+> 修订史与覆盖映射见 §10。
 > 上层计划：`TRACK_D_AGENT_RUNTIME_PLAN.md` §2 D3。TD-2/5/6/7 裁决见上层 §5。
 > **不依赖 model_native_search、不依赖 D0 tool-calling、不依赖 D2。**
 > 实施前按 handbook 纪律重新 Scout（基准 HEAD `656b368`）。
@@ -55,7 +55,8 @@ approved/ready（`acquisition_command_owner.py:1855-1867`）——v4 的审批�
     verification_intent generation, policy_revision）+ **不可变签发身份**（v6，R5#3）：每次授予
     = 新 `grant_id` + scoped 单调 `issuance_generation` + 授予事件 id——**终态 grant 永不复活**，
     再授予 = 新行；命令/attempt/扣减/transport 绑定**精确签发身份**（旧授予事件驱动的 stale
-    Tier-2 命令不能消费新 grant）。状态 `active/revoked/exhausted/reconciled`。**retry 余额规则**
+    Tier-2 命令不能消费新 grant）。状态 `active/revoked/exhausted/superseded/reconciled`
+    （sweep 修正：补 superseded 入枚举，与转移规则一致）。**retry 余额规则**
     （v6 消解与上层"不重置"的矛盾）：intent supersession 时由 grant owner 命令原子做
     「supersede-with-transfer」——旧 grant→superseded、新 grant 携带**恰好剩余额度**（不清零、
     不回满）绑新 intent generation。**revoke 走单写者路径**（v6，R5#4）：cancel/重编译/终审等
@@ -89,9 +90,10 @@ acquisition.plan.build 结果事件（含 plan 期廉价解析的置信度）
   → reducer **仅对 record 结果 = applied** 计划 plan_review.identity_result.apply
     （owner = plan review owner；幂等键 = intent_id；not_applied 永不触发 gate 更新）
   → apply owner 单 UoW（v6 补 R5#1 的 gate 侧围栏）：CAS 于 {workspace + session 当前 revision +
-    verification generation > gate 携带的 identity watermark + source 事件 id 匹配}；通过则更新
-    gate payload 并把 watermark 推进到该 generation；**阻塞方向恒占优**——过期/supersession/
-    人工否决产生的 blocking apply 无视 watermark 直接生效，清除方向只能单调向前
+    source 事件 id 匹配 + generation 规则}；**watermark 单调、每次成功 apply（含 blocking 方向）
+    都推进**（sweep blocker 修正——阻塞若不推进 watermark，晚到的旧 clearing 可在
+    blocking(gen N+1) 之后以 gen N+? 通过）：clearing 仅当 generation > watermark 生效；
+    blocking 当 generation ≥ watermark 生效并推进 watermark——晚到旧 clearing 永被拒
   → 发 apply 结果事件
 ```
 
@@ -252,7 +254,10 @@ reducer → apply 命令更新 gate——同一编舞、两个单写者 UoW；�
   "D0 §2.3"：那里定义的是请求执行上下文，本信封是**独立命名的不可变结果侧契约**，D0 与 D3
   同一物理定义一处落库，含 ref **与** digest 两者、tenant/permission/policy 身份、command/attempt
   因果、provider 响应身份、result artifact ref+digest、成本暴露行引用；经 action/command/attempt/
-  结果槽/journal 与两侧接受 CAS 全链绑定）。字段：
+  结果槽/journal 与两侧接受 CAS 全链绑定）。**canonical 字段清单以 D0 §2.2 为唯一定义处**（sweep
+  修正——两处各自列举即两个 schema），且必须含 `terminal_reason`：非可授权终态
+  （{end_turn, tool_calls} 之外）在 D3 接受谓词同样 fail-closed 转 needs_human（截断/过滤的
+  judge 输出不可参与 auto-confirm）。本节只列裁决侧补充语义：
   provider、requested/response/effective model（精确匹配）、`model_identity_provenance`、
   provider call id、route/api_style + route revision + **effective_route_snapshot digest**、
   bounded usage（`OpenAIModelUsage`，`model_provider.py:36-55`）+ usage_status、fallback/circuit
@@ -309,6 +314,14 @@ preflight、§4b 迁移表注册校验、§4c 八项竞态电池、**§8 计费�
   其中 4 critical 类）。
 - v4（`4745e9c`）→ round-4 **有效 artifact** `20260713T131447Z_*`（NO-GO，阻断集 = 新 #1、#3-#7；
   re-raise 明示不构成裁决依据）。
+- v5（`88bc1c6`）→ round-5 **有效 artifact** `20260713T133324Z_*`（NO-GO 8 findings）。
+- **v6（本版）round-5 覆盖**：#1→§2.2 watermark（sweep 后改为单调恒推进）+ 反向失效 + commit
+  canonical 复查；#2→§4c terminal 事件谓词 + control epoch；#3→§2.1 不可变签发 +
+  supersede-with-transfer；#4→§2.1 单写者 revoke + transport 前扩展 CAS；#5→（D0 §2.5 消费
+  CAS）；#6→§8 dispatching 计费态；#7→本文/上层计划编舞逐字对齐 + §5 人工确认两 UoW 重述；
+  #8→§6 信封 canonical 定义收归 D0 §2.2（含 terminal_reason）。另：九类不变量自查 8 blocker
+  当场修复（watermark 单调、grant 枚举补 superseded、槽 CAS 补 epoch、信封单一定义、版本标签
+  归一），52 obligation 见 `TRACK_D_INVARIANT_SWEEP_2026-07-13.md`。
 - **v5（本版）round-4 阻断集覆盖**：#1→§2.2 record/apply 单写者拆分（验证 owner 写验证聚合、
   review owner 写 gate，域事件+reducer 连接）；#3→§4c workspace 键恢复进身份与全条件 CAS；
   #4→§4b expire 走定时事件+域 owner 扫描，读者零写零 enqueue；#5→（D0 §2.5 槽围栏）；
