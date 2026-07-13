@@ -1,4 +1,9 @@
 import { useEffect, useId, useMemo, useState } from "react";
+import {
+  isWorkflowStatusCompleted,
+  isWorkflowStatusTerminal,
+  normalizeWorkflowStatus,
+} from "../lib/workflowStatus";
 import type { ExcelIntakeProgress } from "../types";
 
 interface ExcelWorkflowBatchGroup {
@@ -48,24 +53,22 @@ interface ExcelWorkflowIntakePanelProps {
   }>;
 }
 
-function isTerminalStatus(status: string): boolean {
-  return ["completed", "failed"].includes(status.trim().toLowerCase());
-}
-
-function isCompletedStatus(status: string): boolean {
-  return status.trim().toLowerCase() === "completed";
-}
-
 function batchStatusSummary(groups: ExcelWorkflowBatchGroup[]): string {
-  const completedCount = groups.filter((group) => group.status.trim().toLowerCase() === "completed").length;
+  const completedCount = groups.filter((group) => isWorkflowStatusCompleted(group.status)).length;
   if (completedCount === groups.length && groups.length > 0) {
     return "全部子工作流已完成。";
   }
-  return `已完成 ${completedCount} / ${groups.length} 个子工作流。`;
+  const cancelledCount = groups.filter((group) => normalizeWorkflowStatus(group.status) === "cancelled").length;
+  const failedCount = groups.filter((group) => normalizeWorkflowStatus(group.status) === "failed").length;
+  const terminalSuffix = [
+    cancelledCount > 0 ? `已取消 ${cancelledCount}` : "",
+    failedCount > 0 ? `失败 ${failedCount}` : "",
+  ].filter(Boolean).join("，");
+  return `已完成 ${completedCount} / ${groups.length} 个子工作流${terminalSuffix ? `，${terminalSuffix}` : ""}。`;
 }
 
 function excelCompletionMessage(group: ExcelWorkflowBatchGroup): string {
-  if (!isCompletedStatus(group.status)) {
+  if (!isWorkflowStatusCompleted(group.status)) {
     return group.currentMessage || "子工作流已创建，等待执行。";
   }
   const progress = group.excelIntakeProgress;
@@ -115,7 +118,13 @@ export function ExcelWorkflowIntakePanel({
         file: selectedFile,
         filename: selectedFile.name,
       });
-      setBatchLaunch(launched);
+      setBatchLaunch({
+        ...launched,
+        groups: launched.groups.map((group) => ({
+          ...group,
+          status: normalizeWorkflowStatus(group.status),
+        })),
+      });
       setGroupActionMessageByJobId({});
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Excel 批量导入启动失败。");
@@ -178,7 +187,9 @@ export function ExcelWorkflowIntakePanel({
     if (!batchLaunch) {
       return;
     }
-    const pendingGroups = batchLaunch.groups.filter((group) => group.jobId && !isTerminalStatus(group.status));
+    const pendingGroups = batchLaunch.groups.filter(
+      (group) => group.jobId && !isWorkflowStatusTerminal(group.status),
+    );
     if (pendingGroups.length === 0) {
       return;
     }
@@ -189,7 +200,7 @@ export function ExcelWorkflowIntakePanel({
           const nextProgress = await onPollGroupProgress(group.jobId).catch(() => null);
           return {
             jobId: group.jobId,
-            status: String(nextProgress?.status || group.status || ""),
+            status: nextProgress ? normalizeWorkflowStatus(nextProgress.status) : group.status,
             currentMessage: String(nextProgress?.currentMessage || group.currentMessage || ""),
             excelIntakeProgress: nextProgress?.excelIntakeProgress || group.excelIntakeProgress,
           };
@@ -340,7 +351,7 @@ export function ExcelWorkflowIntakePanel({
                     type="button"
                     className="ghost-button"
                     data-testid="excel-target-import-button"
-                    disabled={!isCompletedStatus(group.status) || Boolean(runningGroupActionByJobId[group.jobId])}
+                    disabled={!isWorkflowStatusCompleted(group.status) || Boolean(runningGroupActionByJobId[group.jobId])}
                     onClick={() => {
                       void handleImportTargets(group);
                     }}
@@ -351,7 +362,7 @@ export function ExcelWorkflowIntakePanel({
                     type="button"
                     className="ghost-button"
                     data-testid="excel-target-export-button"
-                    disabled={!isCompletedStatus(group.status) || Boolean(runningGroupActionByJobId[group.jobId])}
+                    disabled={!isWorkflowStatusCompleted(group.status) || Boolean(runningGroupActionByJobId[group.jobId])}
                     onClick={() => {
                       void handleExportTargets(group);
                     }}

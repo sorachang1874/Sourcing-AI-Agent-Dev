@@ -5,6 +5,7 @@ import {
   dashboardRowHydrationTargetCount,
 } from "./dashboardHydration";
 import { lifecycleEffectiveDeltaMaterializedCount } from "./resultViewLifecycle";
+import { normalizeWorkflowStatus, resolveWorkflowStatus } from "./workflowStatus";
 import type {
   Candidate,
   CandidateDetail,
@@ -2904,7 +2905,8 @@ function mapProgressPayloadToRunStatus(payload: any): RunStatusData {
   const progressEvents = asArray(payload.progress?.events);
   const workerSummary = (payload.progress?.worker_summary as Record<string, unknown>) || {};
   const laneSummaries = asArray(workerSummary.by_lane).map((item) => (item as Record<string, unknown>) || {});
-  const rawOverallStatus = pickFirstString(payload, ["status"]) || "running";
+  const rawOverallStatus = pickFirstString(payload, ["status"]);
+  const statusContract = resolveWorkflowStatus(rawOverallStatus);
   const workerStatusCounts = (workerSummary.by_status as Record<string, number>) || {};
   const activeBackgroundWorkerCount = [
     "running",
@@ -2913,17 +2915,10 @@ function mapProgressPayloadToRunStatus(payload: any): RunStatusData {
     "waiting_remote_harvest",
     "blocked",
   ].reduce((sum, status) => sum + Number(workerStatusCounts[status] || 0), 0);
-  const hasPostCompletionWork = rawOverallStatus === "completed" && activeBackgroundWorkerCount > 0;
+  const hasPostCompletionWork = statusContract.status === "completed" && activeBackgroundWorkerCount > 0;
   const overallStatus: RunStatusData["status"] =
-    hasPostCompletionWork
-      ? "running"
-      : rawOverallStatus === "completed" ||
-        rawOverallStatus === "running" ||
-        rawOverallStatus === "queued" ||
-        rawOverallStatus === "blocked" ||
-        rawOverallStatus === "failed"
-      ? rawOverallStatus
-      : "running";
+    hasPostCompletionWork ? "running" : statusContract.status;
+  const effectiveStatusContract = resolveWorkflowStatus(overallStatus);
   const postCompletionMessage = "结果已可浏览，后台仍在补全 LinkedIn profile 与候选人详情。";
   const completedAtFallback = normalizeBackendProgressTimestamp(pickFirstString(payload, ["updated_at"]));
 
@@ -2931,26 +2926,31 @@ function mapProgressPayloadToRunStatus(payload: any): RunStatusData {
     status: string,
     stage: string,
   ): RunStatusData["timeline"][number]["status"] => {
+    const sourceStatus = String(status || "").trim().toLowerCase();
     const normalizedStatus =
-      overallStatus === "completed" && status === "running" && stage !== "completed"
+      overallStatus === "completed" && sourceStatus === "running" && stage !== "completed"
         ? "completed"
-        : status || "running";
+        : sourceStatus;
     if (
-      normalizedStatus === "completed" ||
-      normalizedStatus === "running" ||
-      normalizedStatus === "queued" ||
-      normalizedStatus === "blocked" ||
-      normalizedStatus === "failed"
+      effectiveStatusContract.terminal &&
+      (normalizedStatus === "pending" ||
+        normalizedStatus === "queued" ||
+        normalizedStatus === "running" ||
+        normalizedStatus === "blocked")
     ) {
-      return normalizedStatus;
+      return statusContract.status;
     }
-    if (overallStatus === "failed") {
-      return "failed";
+    if (normalizedStatus === "pending") {
+      return "pending";
     }
-    if (overallStatus === "completed") {
+    if (normalizedStatus === "succeeded") {
       return "completed";
     }
-    return "running";
+    const eventStatusContract = resolveWorkflowStatus(normalizedStatus);
+    if (eventStatusContract.reason !== "unknown_domain_status" && eventStatusContract.reason !== "missing_domain_status") {
+      return eventStatusContract.status;
+    }
+    return effectiveStatusContract.terminal ? effectiveStatusContract.status : "failed";
   };
 
   const normalizeCompletedAt = (status: string, completedAt: string): string => {
@@ -3111,7 +3111,7 @@ function mapProgressPayloadToRunStatus(payload: any): RunStatusData {
     if (rawOverallStatus === "completed") {
       return "stage_2_final";
     }
-    if (overallStatus === "failed") {
+    if (overallStatus === "failed" || overallStatus === "cancelled") {
       const latestStartedStage = [...canonicalWorkflowStages].reverse().find((stage) => {
         const summary = stageSummaryMap[stage.id] || {};
         return Boolean(
@@ -3286,26 +3286,25 @@ function mapProgressPayloadToRunStatus(payload: any): RunStatusData {
           const summary = stageSummaryMap[stage.id] || {};
           const explicitStatus = pickFirstString(summary, ["status"]);
           let status = "";
-          if (linkedinProfileWorkPending && stage.id === "linkedin_stage_1") {
+          if (overallStatus === "running" && linkedinProfileWorkPending && stage.id === "linkedin_stage_1") {
             status = "running";
-          } else if (linkedinProfileWorkPending && stage.id !== "linkedin_stage_1") {
+          } else if (overallStatus === "running" && linkedinProfileWorkPending && stage.id !== "linkedin_stage_1") {
             status = "pending";
           } else if (hasPostCompletionWork && stage.id === "stage_2_final") {
             status = "running";
-          } else if (
-            explicitStatus === "completed" ||
-            explicitStatus === "running" ||
-            explicitStatus === "queued" ||
-            explicitStatus === "blocked" ||
-            explicitStatus === "failed"
-          ) {
+          } else if (explicitStatus) {
             status = normalizeEventStatus(explicitStatus, stage.id);
           } else if (overallStatus === "completed" && stage.id === "stage_2_final") {
             status = "completed";
           } else if (index < currentCanonicalStageIndex) {
             status = "completed";
           } else if (index === currentCanonicalStageIndex) {
-            status = overallStatus === "queued" ? "queued" : overallStatus === "failed" ? "failed" : "running";
+            status =
+              overallStatus === "queued"
+                ? "queued"
+                : overallStatus === "failed" || overallStatus === "cancelled"
+                  ? overallStatus
+                  : "running";
           } else {
             status = "pending";
           }
@@ -3361,7 +3360,7 @@ function mapProgressPayloadToRunStatus(payload: any): RunStatusData {
         ? progressEvents.map((item, index) => {
             const event = item as Record<string, unknown>;
             const stage = pickFirstString(event, ["stage"]) || `Stage ${index + 1}`;
-            const status = normalizeEventStatus(pickFirstString(event, ["status"]) || "running", stage);
+            const status = normalizeEventStatus(pickFirstString(event, ["status"]), stage);
             return {
               id: pickFirstString(event, ["id"]) || String(index + 1),
               stage,
@@ -3382,7 +3381,7 @@ function mapProgressPayloadToRunStatus(payload: any): RunStatusData {
         : milestones.map((item, index) => {
             const milestone = item as Record<string, unknown>;
             const stage = pickFirstString(milestone, ["stage"]) || `Stage ${index + 1}`;
-            const status = normalizeEventStatus(pickFirstString(milestone, ["status"]) || "running", stage);
+            const status = normalizeEventStatus(pickFirstString(milestone, ["status"]), stage);
             return {
               id: String(index + 1),
               stage,
@@ -3403,6 +3402,10 @@ function mapProgressPayloadToRunStatus(payload: any): RunStatusData {
   };
 }
 
+export function __testMapProgressPayloadToRunStatus(payload: any): RunStatusData {
+  return mapProgressPayloadToRunStatus(payload);
+}
+
 export async function getRunStatus(jobId?: string): Promise<RunStatusData> {
   if (!jobId) {
     throw new Error("Missing job_id. Real-time workflow progress requires a valid backend job.");
@@ -3414,7 +3417,7 @@ export async function getRunStatus(jobId?: string): Promise<RunStatusData> {
     const fallbackPayload = await fetchJson<any>(`/api/jobs/${jobId}`);
       return {
         jobId: fallbackPayload.job_id || jobId,
-        status: fallbackPayload.status || "running",
+        status: normalizeWorkflowStatus(fallbackPayload.status),
         currentStage: fallbackPayload.stage || "Workflow",
         startedAt: fallbackPayload.created_at || fallbackPayload.updated_at || "unknown",
         currentMessage: fallbackPayload.summary?.message || "",
@@ -4209,7 +4212,7 @@ export async function getDashboard(
       .then(async (payload) => {
         const summaryDashboard = mapJobResultsToDashboard(payload);
         const jobStatus = asString(payload?.job?.status).toLowerCase();
-        const terminalJobStatus = ["completed", "failed"].includes(jobStatus);
+        const terminalJobStatus = resolveWorkflowStatus(jobStatus).terminal;
         const shouldCacheDashboard = (dashboard: DashboardData) =>
           terminalJobStatus && dashboardHasRenderableCandidates(dashboard);
         const initialHydrationTarget = summaryDashboard.boardRuntimeState
@@ -5904,44 +5907,142 @@ function requireTargetCandidatePublicWebWorkspaceId(workspaceId?: string): strin
   return value;
 }
 
-// C1.4/C1.5: exports are durable async tasks. Submit -> 202 + {task_id}; the worker
-// builds the archive off the request thread; poll GET /api/exports/{id} until
-// succeeded, then download GET /api/exports/{id}/artifact (blob + X-Sourcing-* headers).
-// Encapsulated here so the export functions keep their {blob, filename, ...} return
-// shape and callers/components are unchanged (the existing await covers the loading UX).
-async function submitAndDownloadExport(
+// C1.4/C1.5: exports are durable async tasks. Submission, wait, and download are
+// separate contracts so task_id can later be persisted for reload/resume without
+// changing submission semantics. A succeeded response must carry the exact owner-
+// supplied artifact route; missing or near-miss handles fail closed.
+interface ExportTaskSubmission {
+  taskId: string;
+  payload: any;
+}
+
+const EXPORT_TASK_STATUSES = new Set(["queued", "running", "succeeded", "failed", "cancelled", "expired"]);
+
+function hasUnsafeDecodedExportTaskId(value: string): boolean {
+  let decoded = value;
+  for (let pass = 0; pass < 2; pass += 1) {
+    try {
+      decoded = decodeURIComponent(decoded);
+    } catch {
+      return true;
+    }
+    if (
+      decoded === "." ||
+      decoded === ".." ||
+      /[\\/?#\u0000-\u001f\u007f]/.test(decoded)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function requireExactExportTaskId(value: unknown): string {
+  const taskId = typeof value === "string" ? value : "";
+  if (
+    !taskId ||
+    taskId !== taskId.trim() ||
+    taskId.includes("%") ||
+    taskId === "." ||
+    taskId === ".." ||
+    /[\\/?#\u0000-\u001f\u007f]/.test(taskId) ||
+    /%(?:2f|5c)/i.test(taskId) ||
+    /^(?:%2e|%2e%2e)$/i.test(taskId) ||
+    hasUnsafeDecodedExportTaskId(taskId)
+  ) {
+    throw new Error("Export task id is not a valid single path segment.");
+  }
+  return taskId;
+}
+
+function throwOnExportTerminalFailure(status: string, payload: any): void {
+  if (status === "failed" || status === "cancelled" || status === "expired") {
+    const reason = String((payload && payload.error && payload.error.reason) || status);
+    throw new Error(`Export failed: ${reason}`);
+  }
+}
+
+async function submitExportTask(
   submitPath: string,
   submitBody: unknown,
   timeoutMs = RESULTS_API_TIMEOUT_MS,
-): Promise<{ blob: Blob; filename: string; contentType: string; headers: Headers }> {
-  const throwOnTerminalFailure = (status: string, payload: any): void => {
-    if (status === "failed" || status === "cancelled" || status === "expired") {
-      const reason = String((payload && payload.error && payload.error.reason) || status);
-      throw new Error(`Export failed: ${reason}`);
-    }
-  };
+): Promise<ExportTaskSubmission> {
   const submitted = await fetchJson<any>(
     submitPath,
     { method: "POST", body: JSON.stringify(submitBody) },
     timeoutMs,
   );
-  const taskId = String((submitted && submitted.task_id) || "");
-  if (!taskId) {
-    throw new Error(`Export submit did not return a task id: ${JSON.stringify(submitted).slice(0, 200)}`);
+  const taskId = requireExactExportTaskId(submitted && submitted.task_id);
+  return { taskId, payload: submitted };
+}
+
+async function waitForExportArtifact(
+  taskId: string,
+  initialPayload: any,
+  timeoutMs = RESULTS_API_TIMEOUT_MS,
+): Promise<any> {
+  requireExactExportTaskId(taskId);
+  let payload = initialPayload;
+  let status = String((payload && payload.status) || "").trim().toLowerCase();
+  if (!EXPORT_TASK_STATUSES.has(status)) {
+    throw new Error(`Export returned an unknown status: ${status || "missing"}`);
   }
-  let status = String((submitted && submitted.status) || "");
-  throwOnTerminalFailure(status, submitted);
+  throwOnExportTerminalFailure(status, payload);
   const deadline = Date.now() + timeoutMs;
   while (status !== "succeeded") {
     if (Date.now() > deadline) {
       throw new Error("Export timed out waiting for the artifact to be generated.");
     }
     await new Promise((resolve) => setTimeout(resolve, EXPORT_POLL_INTERVAL_MS));
-    const poll = await fetchJson<any>(`/api/exports/${encodeURIComponent(taskId)}`);
-    status = String((poll && poll.status) || "");
-    throwOnTerminalFailure(status, poll);
+    payload = await fetchJson<any>(`/api/exports/${encodeURIComponent(taskId)}`);
+    status = String((payload && payload.status) || "").trim().toLowerCase();
+    if (!EXPORT_TASK_STATUSES.has(status)) {
+      throw new Error(`Export returned an unknown status: ${status || "missing"}`);
+    }
+    throwOnExportTerminalFailure(status, payload);
   }
-  return fetchBinary(`/api/exports/${encodeURIComponent(taskId)}/artifact`, { method: "GET" }, timeoutMs);
+  return payload;
+}
+
+function requireExactExportArtifactHandle(taskId: string, payload: any): string {
+  const normalizedTaskId = requireExactExportTaskId(taskId);
+  const artifact = payload && typeof payload.artifact === "object" && !Array.isArray(payload.artifact)
+    ? payload.artifact
+    : null;
+  const suppliedHandle = artifact && typeof artifact.handle === "string" ? artifact.handle : "";
+  const expectedHandle = `/api/exports/${encodeURIComponent(normalizedTaskId)}/artifact`;
+  const hasDotSegment = /(?:^|\/)(?:\.{1,2}|%2e(?:%2e)?)(?:\/|$)/i.test(suppliedHandle);
+  if (
+    !suppliedHandle ||
+    suppliedHandle !== suppliedHandle.trim() ||
+    !suppliedHandle.startsWith("/") ||
+    suppliedHandle.startsWith("//") ||
+    /^[a-z][a-z0-9+.-]*:/i.test(suppliedHandle) ||
+    /[?#\\]/.test(suppliedHandle) ||
+    /%(?:2f|5c)/i.test(suppliedHandle) ||
+    hasDotSegment ||
+    suppliedHandle !== expectedHandle
+  ) {
+    throw new Error("Export succeeded without the exact canonical artifact handle.");
+  }
+  return expectedHandle;
+}
+
+export function __testRequireExactExportArtifactHandle(taskId: string, payload: any): string {
+  return requireExactExportArtifactHandle(taskId, payload);
+}
+
+export function __testRequireExactExportTaskId(value: unknown): string {
+  return requireExactExportTaskId(value);
+}
+
+async function downloadExportArtifact(
+  taskId: string,
+  completedPayload: any,
+  timeoutMs = RESULTS_API_TIMEOUT_MS,
+): Promise<{ blob: Blob; filename: string; contentType: string; headers: Headers }> {
+  const canonicalHandle = requireExactExportArtifactHandle(taskId, completedPayload);
+  return fetchBinary(canonicalHandle, { method: "GET" }, timeoutMs);
 }
 
 export async function exportTargetCandidatePublicWebArchive(payload?: {
@@ -5966,11 +6067,13 @@ export async function exportTargetCandidatePublicWebArchive(payload?: {
   };
 }> {
   const workspaceId = requireTargetCandidatePublicWebWorkspaceId(payload?.workspaceId);
-  const result = await submitAndDownloadExport("/api/crm/records/public-web-export", {
+  const submission = await submitExportTask("/api/crm/records/public-web-export", {
     crm_record_ids: Array.from(new Set((payload?.recordIds || []).map((value) => value.trim()).filter(Boolean))),
     workspace_id: workspaceId,
     mode: payload?.mode || "promoted_only",
   });
+  const completedPayload = await waitForExportArtifact(submission.taskId, submission.payload);
+  const result = await downloadExportArtifact(submission.taskId, completedPayload);
   const headerNumber = (name: string): number => {
     const value = Number.parseInt(result.headers.get(name) || "0", 10);
     return Number.isFinite(value) ? value : 0;
@@ -6011,7 +6114,7 @@ export async function exportProjectionCandidatesArchive(payload: {
   if (!payload.expectedMembershipRevision.trim()) {
     throw new Error("Canonical projection revision is required for export.");
   }
-  const result = await submitAndDownloadExport("/api/projections/export", {
+  const submission = await submitExportTask("/api/projections/export", {
     projection_id: payload.projectionId,
     expected_membership_revision: payload.expectedMembershipRevision,
     candidate_identity_keys: Array.from(
@@ -6019,6 +6122,8 @@ export async function exportProjectionCandidatesArchive(payload: {
     ),
     include_llm_reviewed_unconfirmed_assertions: Boolean(payload.includeLlmReviewedUnconfirmedAssertions),
   });
+  const completedPayload = await waitForExportArtifact(submission.taskId, submission.payload);
+  const result = await downloadExportArtifact(submission.taskId, completedPayload);
   const headerNumber = (name: string): number => {
     const value = Number.parseInt(result.headers.get(name) || "0", 10);
     return Number.isFinite(value) ? value : 0;

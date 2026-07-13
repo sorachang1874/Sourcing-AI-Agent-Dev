@@ -1,7 +1,8 @@
 # Track C C1 Durable Plan Task Design
 
 > Status: Author-complete executable design for owner review (2026-07-13). Scout evidence was reconciled against
-> the D-3 implementation commit `82d69a1`; C1a code has not started and D-C1-1 through D-C1-4 remain owner-pending.
+> the D-3 implementation commit `82d69a1`; C1a reached author-complete implementation on 2026-07-14 and its scoped
+> independent review remains pending. D-C1-1 through D-C1-4 remain owner-pending.
 > Symbol names are authoritative where line numbers drift. This document authorizes no schema migration, production
 > rollout, or live provider/model call.
 > Implementation and validation are **provider simulate-only** until targeted gates and a scope-matched independent
@@ -650,6 +651,27 @@ and poll still responsive, binary download remaining shared, frontend valid/miss
 wrong-id/query/fragment/dot-segment/encoded-separator handle cases, terminal-total workflow status mapping, and
 `pending|queued` Plan submit parsing. Exit: no schema/code outside API/frontend/tests; no provider/model; targeted
 independent review because public status and download semantics change.
+
+#### C1a author batch record (2026-07-14; independent review pending)
+
+- Backend lane classification is exact: the two export submits and single-segment export status poll are light;
+  binary download, wrong methods, empty/trailing/extra segments remain shared. A deterministic saturation test holds
+  the shared slot, proves submit/poll use the reserved lane, and proves `/artifact` waits for shared capacity.
+  The pre-existing all-route CORS `OPTIONS` preflight remains an explicit light-lane transport exception.
+- Export transport keeps `task_id` in each public wrapper across separate submit/wait/download calls. The client rejects
+  missing, absolute, protocol-relative, wrong-id, query, fragment, dot-segment, encoded-separator, percent-alias, and
+  double-decoding task/handle shapes before any poll or binary fetch.
+- `workflowStatus.ts` is the only frontend workflow-status registry. Cancel aliases are terminal cancelled;
+  missing/unknown are terminal failed. Timeline, history recovery, Excel launch, dashboard caching, and launch-reuse
+  consumers use the same semantics. The intentional completed-with-active-background-work projection stays running.
+- Initial and revision Plan clients accept top-level `pending|queued`; server HTTP `200` remains unchanged.
+- Scope contains no schema, durable owner, provider, model, live environment, or credential change. The existing Python
+  `async_task_contract.py` unknown-to-running behavior is explicitly deferred to C1b and must not be treated as closed.
+- Targeted evidence before review: C1a transport/frontend tests `11 passed + 17 subtests`; adjacent frontend contract
+  tests `26 passed`; combined targeted regression `38 passed + 17 subtests`; existing two-lane middleware test passed;
+  the exact legacy pipeline classifier node passed after starting the project-local PG; frontend production build and
+  `make lint` passed. The mypy ratchet stayed at `81 errors / 4 files`; the contract lane passed
+  `349+2+11+1+2` plus `dry_run_ready`. A formal `GO` must come from the repository review gate, not this author record.
 
 ### C1b: Characterize and contract preflight
 

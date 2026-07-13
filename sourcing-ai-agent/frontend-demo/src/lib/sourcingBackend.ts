@@ -12,6 +12,7 @@ import {
   importTargetCandidatesFromJob,
   startWorkflowRun,
 } from "./api";
+import { normalizeWorkflowLaunchStatus, normalizeWorkflowStatus } from "./workflowStatus";
 import type { DashboardData, DemoPlan, PlanReviewDecision, RunStatusData } from "../types";
 
 export interface NaturalLanguagePlanResult {
@@ -62,18 +63,43 @@ function buildLaunchRunStatus(jobId: string, raw: unknown): RunStatusData {
     raw && typeof raw === "object" && !Array.isArray(raw)
       ? (raw as Record<string, unknown>)
       : {};
-  const rawStatus = String(payload.status || "queued").toLowerCase();
-  const status: RunStatusData["status"] =
-    rawStatus === "completed" || rawStatus === "blocked" || rawStatus === "failed" || rawStatus === "running"
-      ? rawStatus
-      : "queued";
+  const dispatch =
+    payload.dispatch && typeof payload.dispatch === "object" && !Array.isArray(payload.dispatch)
+      ? (payload.dispatch as Record<string, unknown>)
+      : {};
+  const rawLaunchStatus = String(payload.status || "").trim().toLowerCase();
+  const status = normalizeWorkflowLaunchStatus(payload.status, dispatch.matched_job_status);
   const stage = String(payload.stage || "planning");
+  const launchTitle =
+    status === "completed"
+      ? "Workflow completed"
+      : status === "failed"
+        ? "Workflow launch failed"
+        : status === "cancelled"
+          ? "Workflow cancelled"
+          : status === "blocked"
+            ? "Workflow blocked"
+            : status === "running"
+              ? "Workflow running"
+              : "Workflow queued";
+  const launchDetail =
+    status === "failed"
+      ? rawLaunchStatus === "failed"
+        ? "The backend reported that the workflow launch failed."
+        : "The workflow launch response had a missing or unknown status."
+      : status === "cancelled"
+        ? "The workflow is terminal and will not be polled again."
+        : status === "completed"
+          ? "An existing completed workflow was reused."
+          : status === "blocked"
+            ? "The workflow is waiting for an explicit continuation action."
+            : "Workflow progress polling is starting.";
   return {
     jobId,
     status,
     currentStage: stage === "planning" ? "Workflow" : stage,
     startedAt: "unknown",
-    currentMessage: status === "queued" ? "Workflow queued" : "Workflow started",
+    currentMessage: launchTitle,
     awaitingUserAction: "",
     metrics: [
       { label: "总候选人数量", value: "0" },
@@ -83,9 +109,9 @@ function buildLaunchRunStatus(jobId: string, raw: unknown): RunStatusData {
       {
         id: "workflow_launch",
         stage: "planning",
-        title: "Workflow queued",
-        detail: "Workflow has been queued and progress polling is starting.",
-        status: status === "queued" ? "queued" : "running",
+        title: launchTitle,
+        detail: launchDetail,
+        status,
         startedAt: "",
         completedAt: "",
         sourceTags: [],
@@ -141,7 +167,7 @@ export class SourcingBackendClient {
       unassignedRows: launched.unassignedRows,
       groups: await Promise.all(
         launched.groups.map(async (group) => ({
-          status: group.status,
+          status: normalizeWorkflowStatus(group.status),
           jobId: group.jobId,
           historyId: group.historyId,
           queryText: group.queryText,

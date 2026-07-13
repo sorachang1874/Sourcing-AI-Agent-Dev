@@ -2584,10 +2584,14 @@ def _request_priority_lane(method: str, path: str) -> str:
         return "shared"
     if normalized_method == "POST" and normalized_path == "/api/projections/rebuild-person-search-index":
         return "shared"
-    if normalized_method == "POST" and normalized_path == "/api/projections/export":
-        return "shared"
-    if normalized_method == "POST" and normalized_path == "/api/crm/records/public-web-export":
-        return "shared"
+    if normalized_path in {
+        "/api/projections/export",
+        "/api/crm/records/public-web-export",
+    }:
+        # These are exact POST submit routes. In particular, do not let the
+        # generic GET projection-id classifier below reinterpret the literal
+        # ``export`` segment as an ordinary projection read.
+        return "light" if normalized_method == "POST" else "shared"
     if normalized_method == "POST" and normalized_path in {
         "/api/crm/records/public-web-search/poll",
         "/api/crm/records/public-web-search/cancel",
@@ -2598,6 +2602,8 @@ def _request_priority_lane(method: str, path: str) -> str:
         return "light"
     if normalized_method != "GET":
         return "shared"
+    if re.fullmatch(r"/api/exports/[^/]+", normalized_path):
+        return "light"
     if normalized_path in {
         "/health",
         "/api/providers/health",

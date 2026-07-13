@@ -14,6 +14,12 @@ function stepIcon(status: SearchTimelineStep["status"]): string {
   if (status === "running") {
     return "..";
   }
+  if (status === "failed") {
+    return "!!";
+  }
+  if (status === "cancelled") {
+    return "X";
+  }
   return "--";
 }
 

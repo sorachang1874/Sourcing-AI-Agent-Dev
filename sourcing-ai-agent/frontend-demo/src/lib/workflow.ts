@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import { summarizeSearchQuery } from "./historySummary";
 import { formatWorkflowTimestamp, parseWorkflowTimestamp } from "./time";
+import { resolveWorkflowStatus } from "./workflowStatus";
 
 function detectCompany(queryText: string): string {
   const normalized = queryText.trim();
@@ -203,6 +204,10 @@ export function buildTimelineSteps(
       status:
         item.status === "completed"
           ? "completed"
+          : item.status === "failed"
+            ? "failed"
+            : item.status === "cancelled" || item.status === "canceled" || item.status === "detached" || item.status === "superseded"
+              ? "cancelled"
           : item.status === "running" || item.status === "queued"
             ? "running"
             : "pending",
@@ -212,13 +217,45 @@ export function buildTimelineSteps(
   }
 
   const summary = summarizeSearchQuery(queryText);
+  const resolvedStatus = resolveWorkflowStatus(runStatus.status);
+  const target = plan?.targetCompany || "候选人";
+  const fallbackPresentation =
+    resolvedStatus.status === "completed"
+      ? {
+          title: `${target} 检索已完成`,
+          detail: "工作流已完成，但后端未返回事件时间线。",
+          status: "completed" as const,
+        }
+      : resolvedStatus.status === "failed"
+        ? {
+            title: `${target} 检索执行失败`,
+            detail: "工作流未能完成，且后端未返回可展示的失败事件。",
+            status: "failed" as const,
+          }
+        : resolvedStatus.status === "cancelled"
+          ? {
+              title: `${target} 检索已取消`,
+              detail: "工作流已取消，不再等待后端事件。",
+              status: "cancelled" as const,
+            }
+          : resolvedStatus.status === "blocked"
+            ? {
+                title: `${target} 检索等待处理`,
+                detail: "工作流已阻塞，正在等待可恢复条件。",
+                status: "pending" as const,
+              }
+            : {
+                title: `正在准备执行 ${target} 检索`,
+                detail: summary ? `已提交搜索需求：${summary}` : "搜索需求已提交，正在等待后端返回实时事件。",
+                status: "running" as const,
+              };
   return [
     {
       id: "workflow_waiting",
-      title: `正在准备执行 ${plan?.targetCompany || "候选人"} 检索`,
-      detail: summary ? `已提交搜索需求：${summary}` : "搜索需求已提交，正在等待后端返回实时事件。",
+      title: fallbackPresentation.title,
+      detail: fallbackPresentation.detail,
       timestamp: "--",
-      status: "running",
+      status: fallbackPresentation.status,
       sources: [],
     },
   ];

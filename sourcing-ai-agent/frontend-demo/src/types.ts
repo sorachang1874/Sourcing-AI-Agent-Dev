@@ -2,7 +2,7 @@ export type PlanStatus = "draft" | "pending_review" | "approved";
 
 export type CandidateConfidence = "high" | "medium" | "lead_only";
 export type WorkflowPhase = "idle" | "plan" | "running" | "results";
-export type TimelineStepStatus = "completed" | "running" | "pending";
+export type TimelineStepStatus = "completed" | "running" | "pending" | "failed" | "cancelled";
 export type CandidateReviewStatus =
   | "no_review_needed"
   | "needs_review"
@@ -413,9 +413,11 @@ export interface RunWorker {
   budget: string;
 }
 
+export type WorkflowRunStatus = "queued" | "running" | "completed" | "blocked" | "failed" | "cancelled";
+
 export interface RunStatusData {
   jobId: string;
-  status: "queued" | "running" | "completed" | "blocked" | "failed";
+  status: WorkflowRunStatus;
   currentStage: string;
   startedAt: string;
   currentMessage?: string;

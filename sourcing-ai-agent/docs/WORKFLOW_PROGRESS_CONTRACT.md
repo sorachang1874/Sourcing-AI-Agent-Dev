@@ -4,6 +4,32 @@
 
 This document defines where progress numbers come from and how the frontend may display them. The goal is to avoid mixing provider discovery, profile fetch, local materialization, and frontend pagination into one ambiguous counter.
 
+## C1a frontend terminal-total status projection
+
+The backend workflow/progress owner remains the source of the raw workflow status. C1a adds one frontend projection
+registry at `frontend-demo/src/lib/workflowStatus.ts`; every workflow-status consumer must use that registry instead of
+maintaining a local terminal set or defaulting an unknown value to active work.
+
+| raw status | frontend status | terminal | outcome |
+| --- | --- | --- | --- |
+| `queued` | `queued` | no | active |
+| `running` | `running` | no | active |
+| `blocked` | `blocked` | no | blocked |
+| `completed` | `completed` | yes | succeeded |
+| `failed` | `failed` | yes | failed |
+| `cancelled`, `canceled`, `detached`, `superseded` | `cancelled` | yes | cancelled |
+| missing or unknown | `failed` | yes | failed with `missing_domain_status` or `unknown_domain_status` |
+
+One existing product projection is preserved explicitly: raw `completed` with a nonzero active background-worker count
+is effective `running` until that post-completion work clears. Timeline stages use the effective status, so a terminal
+failed/cancelled run cannot retain a running stage, while an intentional post-completion tail is not prematurely marked
+complete. Excel launch history persists failed/cancelled/unknown launches as terminal results with an error message;
+history recovery must not resurrect their polling. Dashboard cache terminality uses the same registry.
+
+C1a intentionally does **not** change `src/sourcing_agent/async_task_contract.py`, whose unknown-to-running authority
+fallback is a C1b debt. This temporary frontend/backend difference is report-visible here and in the C1 design batch
+record; it is not permission to add a second frontend fallback.
+
 ## Source Of Truth
 
 `GET /api/jobs/{job_id}/progress`, `GET /api/jobs/{job_id}/dashboard`, and `GET /api/jobs/{job_id}/candidates` must expose the same canonical progress contracts:

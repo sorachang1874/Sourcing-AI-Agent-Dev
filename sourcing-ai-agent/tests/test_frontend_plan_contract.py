@@ -33,6 +33,12 @@ class FrontendPlanContractTest(unittest.TestCase):
                 if (Object.prototype.hasOwnProperty.call(overrides, specifier)) {
                   return overrides[specifier];
                 }
+                if (specifier === "./workflowStatus") {
+                  return {
+                    normalizeWorkflowStatus: () => "failed",
+                    resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
+                  };
+                }
                 return require(specifier);
               };
               vm.runInNewContext(

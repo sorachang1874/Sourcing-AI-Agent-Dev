@@ -423,6 +423,12 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                     },
                   };
                 }
+                if (specifier === "./workflowStatus") {
+                  return {
+                    normalizeWorkflowStatus: () => "failed",
+                    resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
+                  };
+                }
                 return require(specifier);
               };
               vm.runInNewContext(
@@ -566,6 +572,12 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                     Number(lifecycle?.deltaProfileBoardVisibleCount ?? lifecycle?.deltaProfileMaterializedCount ?? 0) || 0,
                 };
               }
+              if (specifier === "./workflowStatus") {
+                return {
+                  normalizeWorkflowStatus: () => "failed",
+                  resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
+                };
+              }
               return require(specifier);
             };
             vm.runInNewContext(
@@ -691,6 +703,12 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
               }
               if (specifier === "./resultViewLifecycle") {
                 return { lifecycleEffectiveDeltaMaterializedCount: (lifecycle) => Number(lifecycle?.deltaProfileBoardVisibleCount || 0) || 0 };
+              }
+              if (specifier === "./workflowStatus") {
+                return {
+                  normalizeWorkflowStatus: () => "failed",
+                  resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
+                };
               }
               return require(specifier);
             };
@@ -995,6 +1013,12 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                       Number(lifecycle?.deltaProfileBoardVisibleCount ?? lifecycle?.deltaProfileMaterializedCount ?? 0) || 0,
                   };
                 }
+                if (specifier === "./workflowStatus") {
+                  return {
+                    normalizeWorkflowStatus: () => "failed",
+                    resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
+                  };
+                }
                 return require(specifier);
               };
               vm.runInNewContext(
@@ -1147,6 +1171,12 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                   return {
                     lifecycleEffectiveDeltaMaterializedCount: (lifecycle) =>
                       Number(lifecycle?.deltaProfileBoardVisibleCount ?? lifecycle?.deltaProfileMaterializedCount ?? 0) || 0,
+                  };
+                }
+                if (specifier === "./workflowStatus") {
+                  return {
+                    normalizeWorkflowStatus: () => "failed",
+                    resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                   };
                 }
                 return require(specifier);
@@ -1745,6 +1775,12 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                   return {
                     lifecycleEffectiveDeltaMaterializedCount: (lifecycle) =>
                       Number(lifecycle?.deltaProfileBoardVisibleCount ?? lifecycle?.deltaProfileMaterializedCount ?? 0) || 0,
+                  };
+                }
+                if (specifier === "./workflowStatus") {
+                  return {
+                    normalizeWorkflowStatus: () => "failed",
+                    resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
                   };
                 }
                 return require(specifier);

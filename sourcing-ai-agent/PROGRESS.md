@@ -8,6 +8,26 @@
 > month-before-last out before appending. Keep this file under ~300 lines.
 > Archives: [2026-05](docs/archive/progress/PROGRESS_2026-05.md) · [2026-04 and earlier](docs/archive/progress/PROGRESS_2026-04_and_earlier.md)
 
+## 2026-07-14 (Asia/Singapore)
+
+### Track C C1a: async transport and terminal-total frontend contract
+
+- Author implementation completed the storage-free C1a slice: exact light-lane export submit/status routes with shared
+  binary download; owner-supplied export `task_id`/`artifact.handle` validation that rejects alternate/double-decoded
+  paths before follow-up fetch; and explicit submit/wait/download boundaries that preserve the opaque task handle.
+- Frontend workflow status now has one terminal-total registry across API mapping, launch/reuse, SearchPage, Excel
+  intake, timeline rendering, history recovery, and dashboard caching. Cancel aliases stop as cancelled; missing/unknown
+  stop as failed; completed jobs with active background work retain their intentional effective-running tail. Plan create
+  and revision paths accept `pending|queued` without changing the server's current HTTP 200 response.
+- Regression evidence: new C1a group **11 passed + 17 subtests**; adjacent frontend contracts **26 passed**; combined
+  targeted regression **38 passed + 17 subtests**. Existing
+  FastAPI two-lane test and the exact legacy pipeline classifier node passed (project-local PG only); frontend `tsc` +
+  Vite production build passed; `make lint` passed. The mypy ratchet held at the existing **81 errors / 4 files**
+  (`make typecheck` remains non-zero by baseline), and the contract lane passed **349+2+11+1+2** with
+  `dry_run_ready`. No provider/model/live environment or schema was used. The pinned commit is recorded when the batch
+  settles. Independent scope review is still pending, so
+  this author evidence is not a formal `GO`; Python `async_task_contract.py` unknown->running remains explicit C1b debt.
+
 ## 2026-07-10 (Asia/Shanghai)
 
 ### CRM Public Web: gpt-5.6-sol product model and review-evidence hardening

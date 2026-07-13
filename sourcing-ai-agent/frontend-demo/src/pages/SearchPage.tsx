@@ -34,6 +34,11 @@ import {
 } from "../lib/dashboardHydration";
 import { sourcingBackendClient } from "../lib/sourcingBackend";
 import {
+  isPlanSubmitPendingStatus,
+  isWorkflowStatusTerminal,
+  normalizeWorkflowStatus,
+} from "../lib/workflowStatus";
+import {
   buildReusedCompletedTimelineSteps,
   buildTimelineSteps,
   createHistorySnapshot,
@@ -393,6 +398,10 @@ export function SearchPage() {
         if (!isRequestEpochActive(requestEpoch)) {
           return;
         }
+        const currentFlow = flowRef.current;
+        if ((currentFlow.jobId || "") !== jobId || currentFlow.phase !== "running") {
+          return;
+        }
         const mergedNextDashboard = mergeDashboardRuntimeProgress(nextDashboard, nextRunStatus);
         const renderable = hasRenderableDashboard(mergedNextDashboard);
         if (!renderable) {
@@ -405,8 +414,7 @@ export function SearchPage() {
           setDashboard(mergedNextDashboard);
         }
         setIsLoadingResults(!renderable);
-        const currentFlow = flowRef.current;
-        if (!renderable || (currentFlow.jobId || "") !== jobId || currentFlow.phase !== "running") {
+        if (!renderable) {
           return;
         }
         persistFlow(
@@ -425,6 +433,10 @@ export function SearchPage() {
       })
       .catch(() => {
         if (!isRequestEpochActive(requestEpoch)) {
+          return;
+        }
+        const currentFlow = flowRef.current;
+        if ((currentFlow.jobId || "") !== jobId || currentFlow.phase !== "running") {
           return;
         }
         setIsLoadingResults(true);
@@ -460,6 +472,10 @@ export function SearchPage() {
         if (!isRequestEpochActive(requestEpoch)) {
           return;
         }
+        const currentFlow = flowRef.current;
+        if ((currentFlow.jobId || "") !== jobId || currentFlow.phase !== "running") {
+          return;
+        }
         setIsLoadingResults(true);
       });
   };
@@ -488,18 +504,29 @@ export function SearchPage() {
           }
           return mergedDashboard;
         });
-        if ((hasBoardRuntimeDisplayReadyCards(nextRunStatus) || hasLegacyStage1PreviewOnly(nextRunStatus)) && !peekDashboardCache(jobId)) {
-          setIsLoadingResults(true);
-        }
-        warmDashboardForPreviewReadyJob(jobId, nextRunStatus, requestEpoch);
-        if (nextRunStatus.boardRuntimeState) {
-          refreshDashboardFromBoardPatchLog(jobId, requestEpoch);
-        }
         const nextSteps = buildTimelineSteps(nextRunStatus, activeFlow.queryText, activeFlow.plan || flowRef.current.plan);
         const nextError =
           nextRunStatus.status === "failed"
             ? nextRunStatus.timeline[nextRunStatus.timeline.length - 1]?.detail || "工作流未能完成，请检查后端采集日志。"
-            : "";
+            : nextRunStatus.status === "cancelled"
+              ? "工作流已取消，不再轮询。"
+              : "";
+
+        if (isWorkflowStatusTerminal(nextRunStatus.status) && nextRunStatus.status !== "completed") {
+          setErrorMessage(nextError);
+          setIsLoadingResults(false);
+          persistFlow(
+            {
+              ...activeFlow,
+              phase: "results",
+              errorMessage: nextError,
+              timelineSteps: nextSteps,
+            },
+            null,
+          );
+          stopTimelineAnimation();
+          return;
+        }
 
         if (nextRunStatus.status === "completed") {
           stopTimelineAnimation();
@@ -572,6 +599,14 @@ export function SearchPage() {
           return;
         }
 
+        if ((hasBoardRuntimeDisplayReadyCards(nextRunStatus) || hasLegacyStage1PreviewOnly(nextRunStatus)) && !peekDashboardCache(jobId)) {
+          setIsLoadingResults(true);
+        }
+        warmDashboardForPreviewReadyJob(jobId, nextRunStatus, requestEpoch);
+        if (nextRunStatus.boardRuntimeState) {
+          refreshDashboardFromBoardPatchLog(jobId, requestEpoch);
+        }
+
         const runningFlow: SearchHistoryItem = {
           ...activeFlow,
           phase: "running",
@@ -582,20 +617,6 @@ export function SearchPage() {
           return;
         }
         setErrorMessage(nextError);
-
-        if (nextRunStatus.status === "failed") {
-          persistFlow(
-            {
-              ...activeFlow,
-              phase: "results",
-              errorMessage: nextError,
-              timelineSteps: nextSteps,
-            },
-            null,
-          );
-          stopTimelineAnimation();
-          return;
-        }
 
         persistFlow(runningFlow, null);
 
@@ -724,8 +745,10 @@ export function SearchPage() {
     const timelinePlan = recoveredItem.plan || flowRef.current.plan;
     let refreshedTimelineSteps = recoveredItem.timelineSteps;
     let restoredWorkflowPhase: WorkflowPhase = recoveredItem.phase;
+    let restoredError = recoveredItem.errorMessage || "";
     const reusedCompletedHistory = shouldUseReusedCompletedFlow(recoveredItem);
     if (reusedCompletedHistory && timelinePlan) {
+      restoredError = "";
       refreshedTimelineSteps = buildReusedCompletedTimelineSteps({
         queryText: recoveredItem.queryText,
         plan: timelinePlan,
@@ -744,45 +767,44 @@ export function SearchPage() {
         cachedDashboard,
       );
     } else {
-      void sourcingBackendClient.getWorkflowProgress(recoveredItem.jobId)
-        .then((restoredRunStatus) => {
-          if (!isRequestEpochActive(requestEpoch)) {
-            return;
-          }
-          setRunStatus(restoredRunStatus);
-          const restoredError =
-            restoredRunStatus.status === "failed"
-              ? restoredRunStatus.timeline[restoredRunStatus.timeline.length - 1]?.detail ||
-                recoveredItem.errorMessage ||
-                "工作流未能完成，请检查后端采集日志。"
+      try {
+        const restoredRunStatus = await sourcingBackendClient.getWorkflowProgress(recoveredItem.jobId);
+        if (!isRequestEpochActive(requestEpoch)) {
+          return;
+        }
+        setRunStatus(restoredRunStatus);
+        restoredError =
+          restoredRunStatus.status === "failed"
+            ? restoredRunStatus.timeline[restoredRunStatus.timeline.length - 1]?.detail ||
+              recoveredItem.errorMessage ||
+              "工作流未能完成，请检查后端采集日志。"
+            : restoredRunStatus.status === "cancelled"
+              ? "工作流已取消，不再轮询。"
               : "";
-          refreshedTimelineSteps = buildTimelineSteps(
-            restoredRunStatus,
-            recoveredItem.queryText,
-            timelinePlan,
+        setErrorMessage(restoredError);
+        refreshedTimelineSteps = buildTimelineSteps(
+          restoredRunStatus,
+          recoveredItem.queryText,
+          timelinePlan,
+        );
+        restoredWorkflowPhase = isWorkflowStatusTerminal(restoredRunStatus.status) ? "results" : "running";
+        if (refreshedTimelineSteps.length > 0 || isWorkflowStatusTerminal(restoredRunStatus.status)) {
+          persistFlow(
+            {
+              ...recoveredItem,
+              phase: restoredWorkflowPhase,
+              errorMessage: restoredError,
+              timelineSteps: refreshedTimelineSteps,
+            },
+            peekDashboardCache(recoveredItem.jobId),
           );
-          restoredWorkflowPhase =
-            restoredRunStatus.status === "completed" || restoredRunStatus.status === "failed"
-              ? "results"
-              : "running";
-          if (refreshedTimelineSteps.length > 0 || restoredRunStatus.status === "failed") {
-            persistFlow(
-              {
-                ...recoveredItem,
-                phase: restoredWorkflowPhase,
-                errorMessage: restoredError,
-                timelineSteps: refreshedTimelineSteps,
-              },
-              peekDashboardCache(recoveredItem.jobId),
-            );
-          }
-        })
-        .catch(() => {
-          if (!isRequestEpochActive(requestEpoch)) {
-            return;
-          }
-          setRunStatus(null);
-        });
+        }
+      } catch {
+        if (!isRequestEpochActive(requestEpoch)) {
+          return;
+        }
+        setRunStatus(null);
+      }
     }
     try {
       const restoredDashboard = await getDashboard(recoveredItem.jobId);
@@ -790,7 +812,7 @@ export function SearchPage() {
         return;
       }
       setDashboard(restoredDashboard);
-      setErrorMessage("");
+      setErrorMessage(restoredError);
       setIsLoadingResults(false);
       if (reusedCompletedHistory) {
         persistFlow(buildReusedCompletedFlow(recoveredItem, restoredDashboard), restoredDashboard);
@@ -799,6 +821,7 @@ export function SearchPage() {
       const hydrated = {
         ...hydrateHistoryWithResult(recoveredItem, restoredDashboard),
         phase: restoredWorkflowPhase,
+        errorMessage: restoredError,
         timelineSteps: refreshedTimelineSteps,
       };
       persistFlow(hydrated, restoredDashboard);
@@ -1016,7 +1039,7 @@ export function SearchPage() {
       }
       const resolvedHistoryId = nextHistoryId || historyItem.id;
       if (!planned) {
-        if (status === "pending") {
+        if (isPlanSubmitPendingStatus(status)) {
           const pendingHydrationFlow: SearchHistoryItem = {
             ...pendingFlow,
             id: resolvedHistoryId,
@@ -1084,8 +1107,14 @@ export function SearchPage() {
         filename: payload.filename,
       });
       const groups: ExcelBatchLaunchGroupView[] = launched.groups.map((group) => {
-        const status = String(group.runStatus?.status || group.status || "queued");
+        const status = normalizeWorkflowStatus(group.runStatus?.status || group.status);
         const currentMessage = String(group.runStatus?.currentMessage || "");
+        const terminalMessage =
+          status === "failed"
+            ? currentMessage || "Excel 导入工作流启动失败或返回了无法识别的状态。"
+            : status === "cancelled"
+              ? currentMessage || "Excel 导入工作流已取消，不再轮询。"
+              : "";
         const historyMetadata = normalizeHistoryMetadata({
           source: "excel_intake_workflow",
           workflow_kind: "excel_intake",
@@ -1098,8 +1127,8 @@ export function SearchPage() {
           id: group.historyId || historySnapshot.id,
           queryText: group.queryText,
           summary: `Excel 导入 · ${group.targetCompany}`,
-          phase: status === "completed" ? "results" : "running",
-          errorMessage: "",
+          phase: isWorkflowStatusTerminal(status) ? "results" : "running",
+          errorMessage: terminalMessage,
           plan: null,
           reviewId: "",
           jobId: group.jobId,
@@ -1166,7 +1195,7 @@ export function SearchPage() {
       }
       const resolvedHistoryId = nextHistoryId || currentFlow.id;
       if (!planned) {
-        if (status === "pending") {
+        if (isPlanSubmitPendingStatus(status)) {
           const pendingRevisionFlow: SearchHistoryItem = {
             ...currentFlow,
             id: resolvedHistoryId,
@@ -1261,7 +1290,11 @@ export function SearchPage() {
         raw && typeof raw === "object" && !Array.isArray(raw)
           ? normalizeHistoryMetadata({
               source: String((raw as Record<string, unknown>).source || "start_workflow"),
-              workflow_status: String((raw as Record<string, unknown>).workflow_status || ""),
+              workflow_status: String(
+                (raw as Record<string, unknown>).status ||
+                (raw as Record<string, unknown>).workflow_status ||
+                "",
+              ),
               dispatch:
                 (raw as Record<string, unknown>).dispatch &&
                 typeof (raw as Record<string, unknown>).dispatch === "object" &&
@@ -1270,7 +1303,8 @@ export function SearchPage() {
                   : {},
             })
           : {};
-      const reusedCompletedLaunch = shouldUseReusedCompletedFlow({ historyMetadata });
+      const reusedCompletedLaunch =
+        shouldUseReusedCompletedFlow({ historyMetadata }) || runStatus.status === "completed";
       if (reusedCompletedLaunch) {
         setRunStatus(null);
         const cachedDashboard = peekDashboardCache(jobId);
@@ -1334,6 +1368,29 @@ export function SearchPage() {
       }
       const initialSteps = buildTimelineSteps(runStatus, currentFlow.queryText, currentFlow.plan);
       setRunStatus(runStatus);
+      if (isWorkflowStatusTerminal(runStatus.status)) {
+        const terminalMessage =
+          runStatus.status === "cancelled"
+            ? "工作流在启动阶段已取消，不再轮询。"
+            : runStatus.currentMessage || "工作流启动状态缺失或无法识别，已按失败终止。";
+        const terminalFlow: SearchHistoryItem = {
+          ...currentFlow,
+          phase: "results",
+          errorMessage: terminalMessage,
+          reviewId,
+          jobId,
+          updatedAt: new Date().toISOString(),
+          historyMetadata,
+          timelineSteps: initialSteps,
+          selectedCandidateId: "",
+        };
+        setErrorMessage(terminalMessage);
+        setDashboard(null);
+        setIsLoadingResults(false);
+        persistFlow(terminalFlow, null);
+        syncSearchRoute(terminalFlow.id, terminalFlow.jobId, true);
+        return;
+      }
       const nextFlow: SearchHistoryItem = {
         ...currentFlow,
         phase: "running",
