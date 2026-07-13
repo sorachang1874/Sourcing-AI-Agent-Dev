@@ -25,9 +25,12 @@ N 层机制，评审即在 N+1 层产出新 findings**——修复引入的新�
    bundle、授权检查中（重写文档时最易静默丢失——R4#3 即 v4 重写回归）。
 3. **世代与物理围栏**：接受/应用类写必须 CAS 于**存储的**（非随载荷携带的）generation +
    物理执行身份（claim generation/lease token、attempt id）；每种控制转移
-   （cancel/retry/resume/timeout/rebuild/人工决定）都显式推进围栏；专查 **ABA 窗口**：
+   （cancel/retry/resume/timeout/rebuild/人工决定）都显式推进围栏，**且区分同步围栏与异步收敛
+   ——控制转移已 commit、域侧 supersession 未落地的窗口内旧结果必须已被挡**；专查 **ABA 窗口**：
    requeue 之后、下次 claim 之前，旧结果是否仍能匹配旧围栏？依赖的物理列真的存在于
-   pinned schema 吗（R4#2：claim generation 列并不存在）？
+   pinned schema 吗（R4#2：claim generation 列并不存在）？**（v2 强化，R6#1 教训）新键/新命令
+   必须对照 pinned 物理约束检查交互**：共享唯一约束（如 workflow_commands 的
+   (workflow_run_id, idempotency_key)）下，两个不同命令/两次不同转移的键会不会互撞？
 4. **生命周期完备性**：状态迁移表全量（含反向路径：过期、policy 失效、supersession、重验、
    "谁重开一个已被清除的阻塞"）；定时收敛有 owner（定时事件/扫描 owner，非读者驱动）；
    grant/信封类有不可变签发身份 + 终态不复活 + 余额继承规则。
@@ -46,6 +49,14 @@ N 层机制，评审即在 N+1 层产出新 findings**——修复引入的新�
    公共 ingress 不可伪造服务端引用；出站 model-safe 白名单覆盖全部消息角色。
 9. **自包含与跨文档一致**：无"同 vN"式历史引用（Git 历史不是契约）；跨文档共享的契约 =
    一个物理 schema 一处定义；术语/命令名/状态枚举/链条描述逐字一致；上层计划与详设同步修订。
+10. **运行时/模式隔离**（v2 新增，R6#2 教训——首版清单完全缺失，而这是仓库
+    RUNTIME_ENVIRONMENT_ISOLATION 契约的核心）：每个新 durable 行/幂等 scope/接受 CAS 是否携带
+    不可变 `runtime_namespace` + `provider_mode`？simulate/scripted/回放产物是否**结构上不可能**
+    进入 live 命名空间的授权路径（污染 = 测试证据变成生产决定）？跨模式污染 preflight 在吗？
+    回放身份是否含租户（跨租户复用只允许显式合成 fixture）？
+
+> 清单本身随每轮 findings 的类分布迭代：某类反复出现 → 该列自查失效，先补列再补文档
+> （v1→v2：R6 暴露第 10 类缺失与第 3 类物理交互盲区）。
 
 ## 2. 使用协议
 

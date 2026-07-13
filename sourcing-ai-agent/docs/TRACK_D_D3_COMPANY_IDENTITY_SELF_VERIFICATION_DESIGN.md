@@ -126,8 +126,14 @@ fail-closed（身份 reason 未清即仍阻塞，中间态无放行窗口）。�
 1. **Tier-1 取证**：候选 = plan 期 observed 候选 + §4 读模型历史；逐候选 documents.fetch 公司
    页面/official-domain 证据（fetch_key 去重）；
 2. **裁决**：§6 schema 逐候选×证据比对（模型只见证据 id，见 §6）；
-3. 证据不足且 Tier-2 信封（§2.1 grant）可用 ⇒ 计划 `company.identity.search.expand`（新候选回 1）；
-   信封不可用 ⇒ terminal `needs_human`（gate 附「可授予搜索预算」提示）；
+3. **Tier-2 续跑编舞（v7 修 R6#4——durable 化，不再隐含"命令内等待"）**：`verify.evidence` 的
+   类型化 phase 结果 = `final_adjudication | evidence_insufficient | needs_human_budget`；
+   `evidence_insufficient` 且 grant 可用 ⇒ 其**结果事件**经 reducer 计划 `search.expand`；
+   expand 终态事件 ⇒ reducer 计划**后继 `verify.evidence` 子命令**（root intent + 单调
+   `phase_generation`+1，每个子命令各绑自己的 claim/attempt——intent 结构升级为
+   root-intent + per-phase 子绑定）；`needs_human_budget` ⇒ terminal needs_human（gate 附
+   「可授予搜索预算」提示）。**只有显式 `final_adjudication` 结果才允许计划
+   `verification.record`**——中间 phase 结果结构上到不了 record；
 4. **出口**：谓词（§7）+ 裁决全过 ⇒ Phase 1 记 `shadow_would_verify`（非授权态，gate 仍需人一键
    确认，同时记 shadow 统计）；Phase 2（§7 统计门 + owner GO + 逐行 revalidation + promotion 事件）
    才产 `verified_accepted`；其余（谓词失败/uncertain/fallback/冲突/预算步数耗尽/超时）⇒
@@ -234,8 +240,17 @@ decision_generation；`intent_state ∈ {pending, applied, cancelled, timed_out,
   完成后 record 才被计划，故谓词认"预期终态事件"而非"命令非终态"——后者会拒绝一切正常完成）
   AND stored_fingerprint 匹配 AND decision_generation=<expected> AND policy/schema/route/snapshot
   pins 匹配 AND review_session 当前仍 pending-review AND verification_state NOT IN
-  (human_confirmed)`——全过则原子：intent→applied + verification 行迁移 + applied 证据事件；
-  任一失配 ⇒ 全不动 + `not_applied` no-op 证据事件；
+  (human_confirmed) AND **（v7 修 R6#5）所属 OperationRun 当前非终态（terminal winner 检查）AND
+  plan/review revision（bundle watermark）与 intent 存储值相等 AND 存储的 control epoch 相等**
+  ——cancel/timeout/requeue/rebuild/重编译在各自 commit 的同一 UoW 内**同步推进**对应围栏
+  （epoch/revision），旧 record 在异步 supersession 落地前即已被挡；AND **（v7 修 R6#6）
+  adjudication-set manifest 全终态聚合 hash 匹配**（见下）——全过则原子：intent→applied +
+  verification 行迁移 + applied 证据事件；任一失配 ⇒ 全不动 + `not_applied` no-op 证据事件；
+- **多候选完备性证明（v7，R6#6）**：owner 在裁决开始前持久化 **adjudication-set manifest**
+  （键 = workspace/intent/phase generation）：服务端枚举的全部 expected candidate ids +
+  逐 call 的信封/结果/状态 + all-terminal 聚合 hash；record CAS 要求 manifest 全终态且 hash
+  匹配——crash/过滤/未跑的兄弟候选缺席 ⇒ 聚合不成立 ⇒ needs_human，"幸存者显得唯一有效"
+  被结构性堵死；
 - **retry ABA 窗口封堵（v6，R5#2）**：requeue 在同一控制 UoW 内先递增命令的 **durable control
   epoch**（与 claim generation 分立、requeue 即变），intent 记录 epoch——旧结果在"已 requeue、
   未重 claim"窗口内因 epoch 失配即拒；后继 intent 只在新 claim + 新 ActivityAttempt 创建事务内

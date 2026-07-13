@@ -97,8 +97,10 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
 
 ### D1 — 工具面 serve（并入 D0 批或紧随，详设同文档 §3）
 
-- **先补地基**：`ActionSpec` 扩展版本化 `input_schema`（单一事实源；提交路径同 schema 校验——
-  顺带修复 `submit_action` 零校验），planner ToolSpec / API serve / dispatch 三方消费同一份。
+- **先补地基**：`ActionSpec` 扩展为版本化 **`ActionRequestSpec`**（v7 与 D0 §3.1 同步——schema
+  同时覆盖 `input_payload` 与 `target_ref`，target 服务端绑定防旁路；单一事实源；提交路径同
+  schema 校验，顺带修复 `submit_action` 零校验），planner ToolSpec / API serve / dispatch
+  三方消费同一份；schema 版本+digest 作为不可变 pin 落 durable 对象。
 - serve 的是 **`agent_tool_enabled` 子集**而非 ActionRegistry 全集（v2 修正）：schema 在 +
   dispatch adapter 在（dispatch 集合从 registry 派生，替换 `orchestrator.py:47091-47096` 的硬编码
   字面集合）+ activity-spine/agent_callable 校验过 + simulate dispatch preflight 通过。当前
@@ -190,9 +192,11 @@ plan review 对话化；intent→plan 前门流式化（依赖 D0+C4）；`model
   fail-closed fallback/rollout_state；调用方只传 route_id）。**与 review gate 的 reviewer 路由表
   彻底分离**（v1 建议同表管理是错的，reviewer 表是 operator 基础设施，耦合会让评审配置改变产品
   行为）。任何 live D0/D3 模型调用在 owner 批准初始路由表前 fail-closed。
-- **TD-5**（已裁决 2026-07-13：暂按 3 次/plan，内部产品软默认非硬限，可配置倾向宽松）v2 落成
-  可执行信封：plan 级预授权、维度化（searches/fetches/model tokens/wall）、attempt 创建同事务
-  原子扣减、跨 retry/resume 不重置；未来模型原生 Search 扩展按 D4 转正批，信封结构已兼容多后端。
+- **TD-5**（已裁决 2026-07-13：内部产品软默认非硬限，可配置倾向宽松）**额度单位 = 每次授予**
+  （v7 矩阵审计统一口径：`identity_search_budget_grant` 每次授予默认 3 次检索，plan 生命周期内
+  可多次授予——不是 per-plan 总量硬限）；信封维度化（searches/fetches/model tokens/wall）、
+  扣减原子、余额经 supersede-with-transfer 跨 retry 继承不重置；未来模型原生 Search 扩展按
+  D4 转正批，信封结构已兼容多后端。
 - **TD-6**（已裁决 2026-07-13：接受建议）v2 具体化：EntityDelta 存有界摘要 + artifact ref；
   current-state 读模型由验证 owner 物化并成为 canonical（既有全局文件注册表按 §4a 迁移/降级）；
   `company_evidence` 若写必经其既有 owner。

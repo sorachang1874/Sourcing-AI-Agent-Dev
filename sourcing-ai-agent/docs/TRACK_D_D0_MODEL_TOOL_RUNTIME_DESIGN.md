@@ -176,11 +176,17 @@ v3 追加：流路径消费到的 terminal 事件所载结果与 `run_tool_turn`
   supersession 原子关槽（open→closed，**accepted→superseded**——v6 补 R5#5）；槽状态转移的
   **写者 = turn owner 的域命令**（generic 控制面经 事件→reducer→turn owner 命令收敛，与 D3 §4c
   同构，不跨 owner 直写）。
-- **消费 CAS（v6，R5#5；v7 修 R6#12）**：AgentAction 创建 = `accepted→consumed` 的 CAS（同 UoW
-  持久化 action + journal），谓词含槽 generation + **durable control epoch** + canonical
-  operation/turn/command/claim/route/schema/policy pins；approve 与 dispatch 各自复查同一全集
-  （含 epoch——requeue 后旧 accepted 结果在消费/审批/派发任一点都被 epoch 失配拒）。cancel 落在
-  「接受后、消费前」窗口时 `accepted→superseded` 抢先。晚到 terminal 结果一律 quarantine 证据。
+- **消费 CAS（v6，R5#5；v7 修 R6#12/#7）**：消费 = **完整终局结果的原子消费**，不是"一个
+  action 一次转移"：`end_turn` 结果的消费 UoW 持久化最终 assistant 输出 + turn 完成记录
+  （零 action，槽照样 accepted→consumed，不再滞留）；`tool_calls` 结果的消费 UoW 持久化
+  **全部确定性 action 集 + journal + 期望数量/集合 digest**（部分持久化 = 整 UoW 回滚）。
+  谓词含槽 generation + **durable control epoch** + canonical operation/turn/command/claim/
+  route/schema/policy pins；approve 与 dispatch 各自复查同一全集。cancel 落在「接受后、消费前」
+  窗口时 `accepted→superseded` 抢先。晚到 terminal 结果一律 quarantine 证据。
+- **终态与形状的判别联合（v7 修 R6#8）**：`ToolTurnResult` 语义上是判别联合——`end_turn` 当且
+  仅当 provider reason=stop 且 call 数为 0；`tool_calls` 当且仅当 reason=tool_calls 且 ≥1 个
+  完整验证过的 call；任何错配（stop 带 call、tool_calls 零 call）⇒ 协议失败 + quarantine，
+  不入可授权集合。
   **运行时隔离（R6#2 同 D3）**：信封/槽/journal/action 携带不可变 runtime_namespace +
   provider_mode，scripted/simulate 结果不可流入 live 命名空间的任何授权路径。
 - 部分输出保留为 quarantined 证据（attempt 级 artifact），不进结果。
@@ -226,8 +232,10 @@ v3 追加：流路径消费到的 terminal 事件所载结果与 `run_tool_turn`
   `{route_id, route_revision, effective_route_snapshot_digest, provider, model, api_style,
   max_tokens, tool_choice, stream_options, message_model_version, tools_schema_digest,
   prompt_policy_version, permission_scope_revision, outbound_policy_revision,
-  model_safe_schema_revision, messages_digest}`（v5：含快照 digest 与三个策略 revision）；
-  任一字段变化 ⇒ 回放 fail-closed（测试逐字段验证）。
+  model_safe_schema_revision, messages_digest, **workspace_id, actor_id, permission_scope,
+  transcript_digest**}`（v7 修 R6#10：回放身份含租户——同请求不同租户不得命中同一转写）；
+  **live 录制的转写 tenant-bound、跨租户不可回放**；只有显式标注 `synthetic` 的合成 fixture
+  可跨租户复用（接受时校验信封租户等式）。任一字段变化 ⇒ 回放 fail-closed（测试逐字段验证）。
 - 转写治理：落 `runtime/model_turn_transcripts/` 命名空间（runtime 不入库）；每份带
   schema_version、大小上限、保留 TTL；**录制管线内置脱敏**——转写只存归一化事件（永不存 raw
   provider payload），敏感字段（候选人姓名/邮箱/电话/CRM 备注）按字段级脱敏规则替换为占位符+
@@ -273,8 +281,11 @@ served ⊆ ActionRegistry，当且仅当：
    `activity_spine_policy.requirement != legacy-internal` 且 `agent_callable`，复用注册期校验
    `operation_runtime.py:121-134`；注意该校验只遍历 `allowed_workflow_command_types`——空命令面
    action 由本谓词第 2 条兜住）;
-4. **simulate dispatch preflight**：每个 served tool 在 simulate 模式实际 dispatch 成功一次
-   （contract lane 级守卫，防注册元数据与 adapter 再度脱节）。
+4. **（v7 修 R6#9）已注册的 revisioned `model_safe_result_schema` + 校验器 owner 在位**——缺
+   出站白名单的 tool 不 serve（§2.1 强制项进谓词，敏感输出上 wire 的路径结构性关死）；
+5. **simulate dispatch preflight**：每个 served tool 在 simulate 模式实际 dispatch 成功一次，
+   **且 preflight 实际行使 model-safe 序列化器**（contract lane 级守卫，防注册元数据与 adapter
+   再度脱节）。
 
 ### 3.3 路由与序列化
 
