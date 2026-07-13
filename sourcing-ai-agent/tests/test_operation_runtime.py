@@ -1,50 +1,28 @@
-import os
 import base64
 import json
-import threading
+import os
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 from urllib import error as urllib_error
 from urllib import request as urllib_request
-from unittest import mock
 
 from sourcing_agent.acquisition import AcquisitionEngine
 from sourcing_agent.api import create_server
 from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.company_asset_writer import CompanyAssetWriter
 from sourcing_agent.crm_public_web_runtime import start_crm_public_web_batch
-from sourcing_agent.model_provider import DeterministicModelClient
-from sourcing_agent.operation_runtime import (
-    ACTION_ADD_TO_CRM,
-    ACTION_ADD_CRM_NOTE,
-    ACTION_CONTINUE_ACQUISITION_RUN,
-    ACTION_CREATE_CRM_TASK,
-    ACTION_FETCH_PROFILE_SAMPLE,
-    ACTION_REFRESH_COMPANY_PUBLIC_WEB,
-    ACTION_SET_CRM_STAGE,
-    ACTION_START_ACQUISITION_RUN,
-    ACTION_ENRICH_PERSON_PUBLIC_WEB,
-    ACTION_EXPORT_CANDIDATES,
-    ACTION_FILTER_PROJECTION,
-    ActionRegistry,
-    ActionSpec,
-    DEFAULT_ACTION_REGISTRY,
-    OperationRuntimeStateConflict,
-    OperationRuntimeWriter,
-    operation_retry_run_id_for,
-    operation_run_control_state,
-)
+from sourcing_agent.domain import JobRequest
 from sourcing_agent.durable_runtime import (
-    ACTIVITY_SPINE_LEGACY_INTERNAL,
-    ACTIVITY_SPINE_REQUIRED,
     ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
     ACQUISITION_INTENT_RESOLVE_OWNER,
-    ACQUISITION_PLAN_COMMIT_COMMAND_TYPE,
-    ACQUISITION_PLAN_COMMIT_OWNER,
     ACQUISITION_PLAN_BUILD_COMMAND_TYPE,
     ACQUISITION_PLAN_BUILD_OWNER,
+    ACQUISITION_PLAN_COMMIT_COMMAND_TYPE,
+    ACQUISITION_PLAN_COMMIT_OWNER,
     ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE,
     ACQUISITION_PLAN_REVIEW_REQUEST_OWNER,
     ACQUISITION_PROBE_COLLECT_COMMAND_TYPE,
@@ -53,24 +31,26 @@ from sourcing_agent.durable_runtime import (
     ACQUISITION_RUN_CREATE_COMMAND_TYPE,
     ACQUISITION_SCALE_PLAN_COMMAND_TYPE,
     ACQUISITION_SCALE_PLAN_OWNER,
+    ACTIVITY_SPINE_LEGACY_INTERNAL,
+    ACTIVITY_SPINE_REQUIRED,
+    COLLECTION_AUTHORITATIVE_MERGE_COMMAND_TYPE,
+    COLLECTION_AUTHORITATIVE_MERGE_OWNER,
     COMPANY_ASSET_OWNER,
     COMPANY_LOGO_PROFILE_EXPERIENCE_DISCOVER_COMMAND_TYPE,
     COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
     COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
     COMPANY_PUBLIC_WEB_REFRESH_OWNER,
     COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
-    COLLECTION_AUTHORITATIVE_MERGE_COMMAND_TYPE,
-    COLLECTION_AUTHORITATIVE_MERGE_OWNER,
     CRM_NOTE_ADD_COMMAND_TYPE,
     CRM_PUBLIC_WEB_DOCUMENTS_FETCH_COMMAND_TYPE,
     CRM_PUBLIC_WEB_EVIDENCE_ADJUDICATE_COMMAND_TYPE,
     CRM_PUBLIC_WEB_MODEL_SAFE_FINALIZE_COMMAND_TYPE,
     CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE,
-    CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE,
-    CRM_RECORD_UPDATE_COMMAND_TYPE,
     CRM_PUBLIC_WEB_SEARCH_POLL_FETCH_COMMAND_TYPE,
     CRM_PUBLIC_WEB_SEARCH_SUBMIT_COMMAND_TYPE,
     CRM_PUBLIC_WEB_SIGNALS_MATERIALIZE_COMMAND_TYPE,
+    CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE,
+    CRM_RECORD_UPDATE_COMMAND_TYPE,
     CRM_TASK_CREATE_COMMAND_TYPE,
     CRM_WRITER_OWNER,
     DEFAULT_COMMAND_OWNER_REGISTRY,
@@ -80,6 +60,8 @@ from sourcing_agent.durable_runtime import (
     EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
     LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
     LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
+    LINKEDIN_LOCAL_PROFILE_DELTA_APPLY_COMMAND_TYPE,
+    LINKEDIN_LOCAL_PROFILE_DELTA_APPLY_OWNER,
     LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER,
     LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE,
     LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE,
@@ -88,8 +70,6 @@ from sourcing_agent.durable_runtime import (
     LINKEDIN_PROFILE_TERMINAL_ADMIT_COMMAND_TYPE,
     LINKEDIN_PROFILE_URL_TERMINAL_RECORD_COMMAND_TYPE,
     LINKEDIN_PROFILE_URL_TERMINAL_RECORD_OWNER,
-    LINKEDIN_LOCAL_PROFILE_DELTA_APPLY_COMMAND_TYPE,
-    LINKEDIN_LOCAL_PROFILE_DELTA_APPLY_OWNER,
     MEDIA_ASSET_CACHE_COMMAND_TYPE,
     MEDIA_ASSET_OWNER,
     PROJECTION_BOARD_VISIBLE_PATCH_PUBLISH_COMMAND_TYPE,
@@ -106,7 +86,27 @@ from sourcing_agent.durable_runtime import (
     SNAPSHOT_COMPACTION_RUN_OWNER,
     workflow_command_activity_spine_policy,
 )
-from sourcing_agent.domain import JobRequest
+from sourcing_agent.model_provider import DeterministicModelClient
+from sourcing_agent.operation_runtime import (
+    ACTION_ADD_CRM_NOTE,
+    ACTION_ADD_TO_CRM,
+    ACTION_CONTINUE_ACQUISITION_RUN,
+    ACTION_CREATE_CRM_TASK,
+    ACTION_ENRICH_PERSON_PUBLIC_WEB,
+    ACTION_EXPORT_CANDIDATES,
+    ACTION_FETCH_PROFILE_SAMPLE,
+    ACTION_FILTER_PROJECTION,
+    ACTION_REFRESH_COMPANY_PUBLIC_WEB,
+    ACTION_SET_CRM_STAGE,
+    ACTION_START_ACQUISITION_RUN,
+    DEFAULT_ACTION_REGISTRY,
+    ActionRegistry,
+    ActionSpec,
+    OperationRuntimeStateConflict,
+    OperationRuntimeWriter,
+    operation_retry_run_id_for,
+    operation_run_control_state,
+)
 from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.semantic_provider import LocalSemanticProvider
 from sourcing_agent.settings import (
@@ -131,6 +131,348 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
     def tearDown(self) -> None:
         self._stop_pg_durable_runtime()
         self.tempdir.cleanup()
+
+    def test_acquisition_run_repository_fences_identity_terminal_reopen_and_merges_json(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        payload = {
+            "acquisition_run_id": "acqrun-repository-fence",
+            "workspace_id": "workspace-repository-fence",
+            "operation_run_id": "op-repository-fence",
+            "workflow_run_id": "wf-repository-fence",
+            "plan_id": "plan-repository-fence",
+            "target_company": "OpenAI",
+            "status": "probe_submitted",
+            "current_phase": "probe_submitted",
+            "idempotency_key": "acquisition_run:repository-fence",
+            "metadata": {"created_by": "first-writer"},
+        }
+        created = repository.upsert_acquisition_run(payload)
+        replayed = repository.upsert_acquisition_run({**payload, "metadata": {"updated_by": "second-writer"}})
+        self.assertEqual(replayed["created_at"], created["created_at"])
+        self.assertEqual(
+            replayed["metadata"],
+            {"created_by": "first-writer", "updated_by": "second-writer"},
+        )
+
+        terminal = repository.upsert_acquisition_run(
+            {
+                **payload,
+                "status": "cancelled_before_probe",
+                "current_phase": "cancelled",
+                "metadata": {"terminal_writer": True},
+            }
+        )
+        stale = repository.upsert_acquisition_run({**payload, "metadata": {"stale_writer": True}})
+        self.assertEqual(stale["status"], "cancelled_before_probe")
+        self.assertEqual(stale["current_phase"], "cancelled")
+        self.assertEqual(stale["metadata"], terminal["metadata"])
+        self.assertNotIn("stale_writer", stale["metadata"])
+
+        with self.assertRaises(RuntimeError):
+            repository.upsert_acquisition_run({**payload, "workspace_id": "other-workspace"})
+        with self.assertRaises(RuntimeError):
+            repository.upsert_acquisition_run({**payload, "acquisition_run_id": "acqrun-idem-collision"})
+
+    def test_discovery_lane_repository_fences_identity_terminal_reopen_and_merges_json(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        payload = {
+            "lane_id": "lane-repository-fence",
+            "workspace_id": "workspace-repository-fence",
+            "acquisition_run_id": "acqrun-repository-fence",
+            "workflow_run_id": "wf-repository-fence",
+            "operation_run_id": "op-repository-fence",
+            "source_command_id": "cmd-repository-fence",
+            "activity_run_id": "activity-repository-fence",
+            "target_company": "OpenAI",
+            "query": "OpenAI research",
+            "provider": "dataforseo",
+            "status": "running",
+            "phase": "provider_poll",
+            "idempotency_key": "acquisition_discovery_lane:repository-fence",
+            "lane_plan": {"query_count": 1},
+            "metadata": {"created_by": "first-writer"},
+        }
+        created = repository.upsert_discovery_lane(payload)
+        replayed = repository.upsert_discovery_lane(
+            {
+                **payload,
+                "lane_plan": {"provider_count": 1},
+                "metadata": {"updated_by": "second-writer"},
+            }
+        )
+        self.assertEqual(replayed["created_at"], created["created_at"])
+        self.assertEqual(replayed["lane_plan"], {"query_count": 1, "provider_count": 1})
+        self.assertEqual(
+            replayed["metadata"],
+            {"created_by": "first-writer", "updated_by": "second-writer"},
+        )
+
+        terminal = repository.upsert_discovery_lane(
+            {
+                **payload,
+                "status": "provider_discovery_completed",
+                "phase": "provider_discovery_completed",
+                "metadata": {"terminal_writer": True},
+            }
+        )
+        stale = repository.upsert_discovery_lane({**payload, "metadata": {"stale_writer": True}})
+        self.assertEqual(stale["status"], "provider_discovery_completed")
+        self.assertEqual(stale["phase"], "provider_discovery_completed")
+        self.assertEqual(stale["metadata"], terminal["metadata"])
+
+        with self.assertRaises(RuntimeError):
+            repository.upsert_discovery_lane({**payload, "activity_run_id": "other-activity"})
+        with self.assertRaises(RuntimeError):
+            repository.upsert_discovery_lane({**payload, "lane_id": "lane-idem-collision"})
+
+    def test_acquisition_run_concurrent_same_identity_converges_without_json_patch_loss(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        base = {
+            "acquisition_run_id": "acqrun-concurrent-repository",
+            "workspace_id": "workspace-concurrent-repository",
+            "operation_run_id": "op-concurrent-repository",
+            "workflow_run_id": "wf-concurrent-repository",
+            "target_company": "OpenAI",
+            "status": "probe_collected",
+            "current_phase": "probe_collected",
+            "idempotency_key": "acquisition_run:concurrent-repository",
+        }
+        barrier = threading.Barrier(2)
+        errors: list[Exception] = []
+
+        def write(key: str) -> None:
+            try:
+                barrier.wait(timeout=5)
+                repository.upsert_acquisition_run({**base, "metadata": {key: True}})
+            except Exception as exc:  # pragma: no cover - asserted below.
+                errors.append(exc)
+
+        threads = [threading.Thread(target=write, args=(key,)) for key in ("writer_a", "writer_b")]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        self.assertEqual(errors, [])
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        stored = repository.get_acquisition_run(base["acquisition_run_id"])
+        self.assertEqual(stored["metadata"], {"writer_a": True, "writer_b": True})
+        self.assertEqual(
+            len(
+                repository.list_acquisition_runs(
+                    workspace_id=base["workspace_id"],
+                    workflow_run_id=base["workflow_run_id"],
+                )
+            ),
+            1,
+        )
+
+    def test_acquisition_run_crossed_identity_collisions_fail_without_deadlock(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        rows = [
+            {
+                "acquisition_run_id": f"acqrun-crossed-{suffix}",
+                "workspace_id": "workspace-crossed-repository",
+                "operation_run_id": f"op-crossed-{suffix}",
+                "workflow_run_id": f"wf-crossed-{suffix}",
+                "target_company": "OpenAI",
+                "status": "probe_submitted",
+                "current_phase": "probe_submitted",
+                "idempotency_key": f"acquisition_run:crossed-{suffix}",
+            }
+            for suffix in ("a", "b")
+        ]
+        for row in rows:
+            repository.upsert_acquisition_run(row)
+
+        barrier = threading.Barrier(2)
+        errors: list[Exception] = []
+
+        def collide(row_index: int, idempotency_index: int) -> None:
+            try:
+                barrier.wait(timeout=5)
+                repository.upsert_acquisition_run(
+                    {**rows[row_index], "idempotency_key": rows[idempotency_index]["idempotency_key"]}
+                )
+            except Exception as exc:  # pragma: no cover - asserted below.
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=collide, args=(0, 1)),
+            threading.Thread(target=collide, args=(1, 0)),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        self.assertEqual(len(errors), 2)
+        self.assertTrue(all(isinstance(error, RuntimeError) for error in errors))
+        for row in rows:
+            stored = repository.get_acquisition_run(row["acquisition_run_id"])
+            self.assertEqual(stored["idempotency_key"], row["idempotency_key"])
+
+    def test_discovery_lane_concurrency_merges_and_crossed_identity_fails_without_deadlock(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        base = {
+            "lane_id": "lane-concurrent-repository-a",
+            "workspace_id": "workspace-concurrent-lane",
+            "acquisition_run_id": "acqrun-concurrent-lane",
+            "workflow_run_id": "wf-concurrent-lane",
+            "operation_run_id": "op-concurrent-lane",
+            "source_command_id": "cmd-concurrent-lane-a",
+            "activity_run_id": "activity-concurrent-lane-a",
+            "target_company": "OpenAI",
+            "query": "OpenAI research",
+            "provider": "dataforseo",
+            "status": "running",
+            "phase": "provider_poll",
+            "idempotency_key": "acquisition_discovery_lane:concurrent-a",
+        }
+        barrier = threading.Barrier(2)
+        errors: list[Exception] = []
+
+        def merge(key: str) -> None:
+            try:
+                barrier.wait(timeout=5)
+                repository.upsert_discovery_lane({**base, "metadata": {key: True}})
+            except Exception as exc:  # pragma: no cover - asserted below.
+                errors.append(exc)
+
+        merge_threads = [threading.Thread(target=merge, args=(key,)) for key in ("writer_a", "writer_b")]
+        for thread in merge_threads:
+            thread.start()
+        for thread in merge_threads:
+            thread.join(timeout=10)
+
+        self.assertEqual(errors, [])
+        self.assertTrue(all(not thread.is_alive() for thread in merge_threads))
+        merged = repository.get_discovery_lane(base["lane_id"])
+        self.assertEqual(merged["metadata"], {"writer_a": True, "writer_b": True})
+
+        other = {
+            **base,
+            "lane_id": "lane-concurrent-repository-b",
+            "source_command_id": "cmd-concurrent-lane-b",
+            "activity_run_id": "activity-concurrent-lane-b",
+            "idempotency_key": "acquisition_discovery_lane:concurrent-b",
+        }
+        repository.upsert_discovery_lane(other)
+        rows = [base, other]
+        collision_barrier = threading.Barrier(2)
+        collision_errors: list[Exception] = []
+
+        def collide(row_index: int, idempotency_index: int) -> None:
+            try:
+                collision_barrier.wait(timeout=5)
+                repository.upsert_discovery_lane(
+                    {**rows[row_index], "idempotency_key": rows[idempotency_index]["idempotency_key"]}
+                )
+            except Exception as exc:  # pragma: no cover - asserted below.
+                collision_errors.append(exc)
+
+        collision_threads = [
+            threading.Thread(target=collide, args=(0, 1)),
+            threading.Thread(target=collide, args=(1, 0)),
+        ]
+        for thread in collision_threads:
+            thread.start()
+        for thread in collision_threads:
+            thread.join(timeout=10)
+
+        self.assertTrue(all(not thread.is_alive() for thread in collision_threads))
+        self.assertEqual(len(collision_errors), 2)
+        self.assertTrue(all(isinstance(error, RuntimeError) for error in collision_errors))
+        for row in rows:
+            stored = repository.get_discovery_lane(row["lane_id"])
+            self.assertEqual(stored["idempotency_key"], row["idempotency_key"])
+
+    def test_profile_provider_retry_exhaustion_terminalizes_acquisition_run(self) -> None:
+        settings = AppSettings(
+            project_root=self.runtime_dir,
+            runtime_dir=self.runtime_dir,
+            secrets_file=self.runtime_dir / "secrets.toml",
+            db_path=self.runtime_dir / "profile-retry-exhausted.db",
+            jobs_dir=self.runtime_dir / "jobs",
+            company_assets_dir=self.runtime_dir / "company_assets",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        orchestrator = SourcingOrchestrator(
+            catalog=AssetCatalog.discover(),
+            store=self.store,
+            jobs_dir=settings.jobs_dir,
+            model_client=DeterministicModelClient(),
+            semantic_provider=LocalSemanticProvider(),
+            acquisition_engine=AcquisitionEngine(
+                AssetCatalog.discover(),
+                settings,
+                self.store,
+                DeterministicModelClient(),
+            ),
+        )
+        repository = self.store.repos.workflow_runtime
+        acquisition_payload = {
+            "acquisition_run_id": "acqrun-profile-retry-exhausted",
+            "workspace_id": "default",
+            "operation_run_id": "op-profile-retry-exhausted",
+            "workflow_run_id": "wf-profile-retry-exhausted",
+            "target_company": "OpenAI",
+            "status": "profile_fetch_activity_planned",
+            "current_phase": "profile_fetch_pending",
+            "idempotency_key": "acquisition_run:profile-retry-exhausted",
+            "metadata": {"before_retry": True},
+        }
+        acquisition_run = repository.upsert_acquisition_run(acquisition_payload)
+        activity = self.store.upsert_workflow_activity_run(
+            {
+                "activity_run_id": "actrun-profile-retry-exhausted",
+                "workspace_id": "default",
+                "workflow_run_id": acquisition_run["workflow_run_id"],
+                "operation_run_id": acquisition_run["operation_run_id"],
+                "acquisition_run_id": acquisition_run["acquisition_run_id"],
+                "command_id": "cmd-profile-retry-exhausted",
+                "activity_type": LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE,
+                "owner": LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER,
+                "status": "planned_pending_provider_owner",
+                "phase": "provider_profile_fetch_pending",
+                "idempotency_key": "workflow_activity:profile-retry-exhausted",
+            }
+        )
+        command = {
+            "command_id": "cmd-profile-retry-exhausted",
+            "workflow_run_id": acquisition_run["workflow_run_id"],
+            "operation_id": acquisition_run["operation_run_id"],
+            "payload": {
+                "workspace_id": "default",
+                "acquisition_run_id": acquisition_run["acquisition_run_id"],
+                "source_profile_activity_run_id": activity["activity_run_id"],
+                "profile_urls": ["https://www.linkedin.com/in/retry-exhausted/"],
+                "provider_attempt_scope": "retry_wave",
+                "retry_wave_index": 1,
+                "profile_retry_budget": 1,
+            },
+        }
+        with mock.patch.object(
+            orchestrator.acquisition_engine.multi_source_enricher.profile_connector,
+            "fetch_profile",
+            return_value=None,
+        ):
+            result = orchestrator._execute_operation_native_profile_fetch_provider_command_payload(  # noqa: SLF001
+                command,
+                lease_owner="unit-test-profile-retry-exhausted",
+            )
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["reason"], "operation_native_profile_provider_fetch_retry_exhausted")
+        exhausted = repository.get_acquisition_run(acquisition_run["acquisition_run_id"])
+        self.assertEqual(exhausted["status"], "failed")
+        self.assertEqual(exhausted["current_phase"], "profile_fetch_retry_exhausted")
+        stale = repository.upsert_acquisition_run({**acquisition_payload, "metadata": {"stale_writer": True}})
+        self.assertEqual(stale, exhausted)
+        self.assertNotIn("stale_writer", stale["metadata"])
 
     def test_operation_run_control_state_is_backend_owned(self) -> None:
         queued = operation_run_control_state(
@@ -625,7 +967,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "target_company": "OpenAI",
             },
         )
-        claimed = self.store.claim_workflow_command(
+        self.store.claim_workflow_command(
             command["command_id"],
             lease_owner="unit-test-plan-review-owner",
             lease_seconds=300,
@@ -843,7 +1185,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             idempotency_key="workflow_command:plan-commit-cancel",
             payload={"workspace_id": "default", "target_company": "OpenAI", "plan_id": "plan-commit-cancel"},
         )
-        acquisition_run = self.store.upsert_acquisition_run(
+        acquisition_run = self.store.repos.workflow_runtime.upsert_acquisition_run(
             {
                 "acquisition_run_id": "acqrun-plan-commit-cancel",
                 "workspace_id": "default",
@@ -880,7 +1222,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         )
         self.assertFalse(response["workflow_command"]["result"]["downstream_command_planned"])
         self.assertTrue(response["workflow_command"]["result"]["acquisition_run_cancelled"])
-        cancelled_run = self.store.get_acquisition_run(acquisition_run["acquisition_run_id"])
+        cancelled_run = self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run["acquisition_run_id"])
         self.assertEqual(cancelled_run["status"], "cancelled_before_probe")
         self.assertEqual(cancelled_run["current_phase"], "cancelled")
         self.assertEqual(cancelled_run["metadata"]["control_source"], "api.workflow_command_owner_specific_cancel")
@@ -914,7 +1256,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             idempotency_key="workflow_command:scale-plan-cancel",
             payload={"workspace_id": "default", "target_company": "OpenAI", "query": "OpenAI research"},
         )
-        acquisition_run = self.store.upsert_acquisition_run(
+        acquisition_run = self.store.repos.workflow_runtime.upsert_acquisition_run(
             {
                 "acquisition_run_id": "acqrun-scale-plan-cancel",
                 "workspace_id": "default",
@@ -944,7 +1286,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "metadata": {"provider_called": False, "legacy_job_shell_created": False},
             }
         )
-        lane = self.store.upsert_acquisition_discovery_lane(
+        lane = self.store.repos.workflow_runtime.upsert_discovery_lane(
             {
                 "lane_id": "lane-scale-plan-cancel",
                 "workspace_id": "default",
@@ -988,10 +1330,10 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         cancelled_activity = self.store.get_workflow_activity_run(activity["activity_run_id"])
         self.assertEqual(cancelled_activity["status"], "cancelled_before_discovery")
         self.assertEqual(cancelled_activity["phase"], "cancelled")
-        cancelled_lane = self.store.get_acquisition_discovery_lane(lane["lane_id"])
+        cancelled_lane = self.store.repos.workflow_runtime.get_discovery_lane(lane["lane_id"])
         self.assertEqual(cancelled_lane["status"], "cancelled_before_discovery")
         self.assertEqual(cancelled_lane["phase"], "cancelled")
-        cancelled_run = self.store.get_acquisition_run(acquisition_run["acquisition_run_id"])
+        cancelled_run = self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run["acquisition_run_id"])
         self.assertEqual(cancelled_run["status"], "cancelled_before_discovery")
         self.assertEqual(cancelled_run["current_phase"], "cancelled")
         self.assertEqual(cancelled_run["metadata"]["cancelled_activity_run_count"], 1)
@@ -1026,7 +1368,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             idempotency_key="workflow_command:scale-plan-cancel-attempt",
             payload={"workspace_id": "default", "target_company": "OpenAI", "query": "OpenAI research"},
         )
-        acquisition_run = self.store.upsert_acquisition_run(
+        acquisition_run = self.store.repos.workflow_runtime.upsert_acquisition_run(
             {
                 "acquisition_run_id": "acqrun-scale-plan-cancel-attempt",
                 "workspace_id": "default",
@@ -1079,7 +1421,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(response["activity_attempt_count"], 1)
         self.assertFalse(response["module_state_mutated"])
         self.assertEqual(
-            self.store.get_acquisition_run(acquisition_run["acquisition_run_id"])["status"],
+            self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run["acquisition_run_id"])["status"],
             "scale_planned_pending_discovery",
         )
 
@@ -7005,7 +7347,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(acquisition_run["target_company"], "OpenAI")
             self.assertEqual(acquisition_run["plan_review_id"], review_session["review_id"])
             self.assertEqual(
-                api_store.list_acquisition_runs(operation_run_id=operation_run_id)[0]["acquisition_run_id"],
+                api_store.repos.workflow_runtime.list_acquisition_runs(operation_run_id=operation_run_id)[0][
+                    "acquisition_run_id"
+                ],
                 acquisition_run["acquisition_run_id"],
             )
             self.assertEqual(terminal_commit_command["result"]["downstream_command_count"], 1)
@@ -7055,7 +7399,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(probe_collect_command["command_type"], ACQUISITION_PROBE_COLLECT_COMMAND_TYPE)
             self.assertEqual(probe_collect_command["owner"], ACQUISITION_PROBE_OWNER)
             self.assertEqual(probe_collect_command["parent_command_id"], terminal_probe_submit_command["command_id"])
-            acquisition_after_probe_submit = api_store.get_acquisition_run(acquisition_run["acquisition_run_id"])
+            acquisition_after_probe_submit = api_store.repos.workflow_runtime.get_acquisition_run(
+                acquisition_run["acquisition_run_id"]
+            )
             self.assertEqual(acquisition_after_probe_submit["status"], "probe_submitted")
             self.assertEqual(acquisition_after_probe_submit["current_phase"], "probe_submitted")
             operation_after_probe_submit = api_store.repos.workflow_runtime.get_operation(operation_run_id)
@@ -7078,7 +7424,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(scale_plan_command["command_type"], ACQUISITION_SCALE_PLAN_COMMAND_TYPE)
             self.assertEqual(scale_plan_command["owner"], ACQUISITION_SCALE_PLAN_OWNER)
             self.assertEqual(scale_plan_command["parent_command_id"], terminal_probe_collect_command["command_id"])
-            acquisition_after_probe_collect = api_store.get_acquisition_run(acquisition_run["acquisition_run_id"])
+            acquisition_after_probe_collect = api_store.repos.workflow_runtime.get_acquisition_run(
+                acquisition_run["acquisition_run_id"]
+            )
             self.assertEqual(acquisition_after_probe_collect["status"], "probe_collected")
             self.assertEqual(acquisition_after_probe_collect["current_phase"], "probe_collected")
             operation_after_probe_collect = api_store.repos.workflow_runtime.get_operation(operation_run_id)
@@ -7116,7 +7464,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 api_store.list_workflow_activity_attempts(activity_run_id=activity_runs[0]["activity_run_id"]),
                 [],
             )
-            discovery_lanes = api_store.list_acquisition_discovery_lanes(
+            discovery_lanes = api_store.repos.workflow_runtime.list_discovery_lanes(
                 acquisition_run_id=acquisition_run["acquisition_run_id"],
             )
             self.assertEqual(len(discovery_lanes), 1)
@@ -7125,7 +7473,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(discovery_lanes[0]["source_command_id"], scale_plan_command["command_id"])
             self.assertFalse(discovery_lanes[0]["metadata"]["legacy_job_shell_created"])
             self.assertFalse(discovery_lanes[0]["downstream_command_ids"])
-            acquisition_after_scale_plan = api_store.get_acquisition_run(acquisition_run["acquisition_run_id"])
+            acquisition_after_scale_plan = api_store.repos.workflow_runtime.get_acquisition_run(
+                acquisition_run["acquisition_run_id"]
+            )
             self.assertEqual(acquisition_after_scale_plan["status"], "scale_planned_pending_discovery")
             self.assertEqual(acquisition_after_scale_plan["current_phase"], "discovery_pending")
             self.assertEqual(
@@ -7258,7 +7608,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(completed_activity["status"], "succeeded")
             self.assertEqual(completed_activity["phase"], "provider_discovery_completed")
             self.assertEqual(completed_activity["entity_counts"]["candidate_count"], 2)
-            completed_lane = api_store.get_acquisition_discovery_lane(discovery_lanes[0]["lane_id"])
+            completed_lane = api_store.repos.workflow_runtime.get_discovery_lane(discovery_lanes[0]["lane_id"])
             self.assertEqual(completed_lane["status"], "provider_discovery_completed")
             self.assertEqual(completed_lane["phase"], "provider_discovery_completed")
             self.assertEqual(completed_lane["entity_counts"]["profile_url_count"], 2)
@@ -10548,7 +10898,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "entity_delta:api",
                 }
             )
-            api_lane = api_store.upsert_acquisition_discovery_lane(
+            api_lane = api_store.repos.workflow_runtime.upsert_discovery_lane(
                 {
                     "lane_id": "lane_api",
                     "workspace_id": "default",

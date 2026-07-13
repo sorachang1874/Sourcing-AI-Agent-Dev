@@ -147,6 +147,11 @@ W8 foundation is active.
 
 - `src/sourcing_agent/operation_runtime.py` owns the module action registry and `OperationRuntimeWriter`.
 - `agent_actions`, `operation_runs`, `acquisition_runs`, `workflow_activity_runs`, `workflow_activity_attempts`, `workflow_entity_deltas`, `acquisition_discovery_lanes`, `operation_events`, and CRM task current-state (`crm_tasks`) are PG-only durable/current-state tables. SQLite is not a normal operation runtime path, and new Operation/W11/CRM task state must not add SQLite DDL/fallback as a compatibility shortcut.
+- `store.repos.workflow_runtime` is the only public persistence surface for `acquisition_runs` and
+  `acquisition_discovery_lanes`. Its single-row write primitive locks primary and workspace/idempotency identity,
+  rejects immutable ownership collisions, merges JSON object patches under the row lock, and prevents terminal
+  acquisition state from reopening. Discovery lanes remain read models; Agent controls still target their owning
+  workflow command.
 - Unknown action types fail closed in the registry.
 - Approval-required actions are persisted as `AgentAction(status='approval_required')` and `OperationEvent(ActionApprovalRequired)` but do not create `OperationRun` before approval.
 - Budget-required actions fail closed unless an explicit budget is supplied.
@@ -176,6 +181,9 @@ W9 backend control foundation is active; product Agent UI remains deferred.
   the API returns `status=conflict` / HTTP 409 and does not append the losing success event. Approve/resume/retry also
   validate their committed target before creating downstream events or child runs. The wider command-plan and owner
   completion UoWs remain tracked by `RESIDUAL_LEDGER.md` R-019.
+- The acquisition plan-commit, scale-plan, and profile-fetch owner-specific cancel paths do not yet atomically combine
+  module-state cancellation with the workflow-command transition. Their partial-commit window is tracked separately by
+  `RESIDUAL_LEDGER.md` R-020 and must not be inferred closed from the single-row Repository write guarantees.
 - `POST /api/operations/runs/{operation_run_id}/resume` appends `OperationResumeRequested` and moves a non-terminal run back to queued control state; it does not execute the owner.
 - `POST /api/operations/runs/{operation_run_id}/retry` creates an idempotent queued child `OperationRun` for failed/cancelled runs; it does not mutate the terminal parent or execute the owner.
   A linked `failed` action, or a normally cancelled action whose approval was not rejected, is requeued through the

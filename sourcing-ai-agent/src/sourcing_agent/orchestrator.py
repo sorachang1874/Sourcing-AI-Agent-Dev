@@ -16478,9 +16478,9 @@ class SourcingOrchestrator:
                     },
                 }
             )
-        lane = self.store.get_acquisition_discovery_lane(lane_id) if lane_id else {}
+        lane = self.store.repos.workflow_runtime.get_discovery_lane(lane_id) if lane_id else {}
         if lane:
-            self.store.upsert_acquisition_discovery_lane(
+            self.store.repos.workflow_runtime.upsert_discovery_lane(
                 {
                     **lane,
                     "status": "waiting_owner_implementation",
@@ -16768,8 +16768,10 @@ class SourcingOrchestrator:
         query_text = str(payload.get("query") or "").strip()
         target_company = str(payload.get("target_company") or "").strip()
         activity = self.store.get_workflow_activity_run(activity_run_id) if activity_run_id else {}
-        lane = self.store.get_acquisition_discovery_lane(lane_id) if lane_id else {}
-        acquisition_run = self.store.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+        lane = self.store.repos.workflow_runtime.get_discovery_lane(lane_id) if lane_id else {}
+        acquisition_run = (
+            self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+        )
         if not command_id or not workflow_run_id or not activity_run_id or not lane_id or not acquisition_run_id:
             return {
                 "status": "failed",
@@ -16877,7 +16879,7 @@ class SourcingOrchestrator:
                 },
             }
         )
-        self.store.upsert_acquisition_discovery_lane(
+        self.store.repos.workflow_runtime.upsert_discovery_lane(
             {
                 **lane,
                 "status": "running",
@@ -16936,9 +16938,9 @@ class SourcingOrchestrator:
                     "output": {"latest_attempt_id": str(failed_attempt.get("attempt_id") or "").strip()},
                 }
             )
-            self.store.upsert_acquisition_discovery_lane(
+            self.store.repos.workflow_runtime.upsert_discovery_lane(
                 {
-                    **self.store.get_acquisition_discovery_lane(lane_id),
+                    **self.store.repos.workflow_runtime.get_discovery_lane(lane_id),
                     "status": "retry_wait",
                     "phase": "provider_discovery_retry_wait",
                 }
@@ -17024,9 +17026,9 @@ class SourcingOrchestrator:
                     },
                 }
             )
-            self.store.upsert_acquisition_discovery_lane(
+            self.store.repos.workflow_runtime.upsert_discovery_lane(
                 {
-                    **self.store.get_acquisition_discovery_lane(lane_id),
+                    **self.store.repos.workflow_runtime.get_discovery_lane(lane_id),
                     "status": "retry_wait",
                     "phase": "provider_discovery_retry_wait",
                     "artifact_refs": artifact_refs,
@@ -17166,9 +17168,9 @@ class SourcingOrchestrator:
                 },
             }
         )
-        completed_lane = self.store.upsert_acquisition_discovery_lane(
+        completed_lane = self.store.repos.workflow_runtime.upsert_discovery_lane(
             {
-                **self.store.get_acquisition_discovery_lane(lane_id),
+                **self.store.repos.workflow_runtime.get_discovery_lane(lane_id),
                 "status": "provider_discovery_completed",
                 "phase": "provider_discovery_completed",
                 "provider_ref": {"accounts_used": accounts_used, "query_summaries": query_summaries},
@@ -17176,7 +17178,7 @@ class SourcingOrchestrator:
                 "entity_counts": entity_counts,
                 "downstream_command_ids": [],
                 "metadata": {
-                    **dict((self.store.get_acquisition_discovery_lane(lane_id) or {}).get("metadata") or {}),
+                    **dict((self.store.repos.workflow_runtime.get_discovery_lane(lane_id) or {}).get("metadata") or {}),
                     "provider_called": True,
                     "legacy_job_shell_created": False,
                     "latest_attempt_id": str(completed_attempt.get("attempt_id") or "").strip(),
@@ -17514,7 +17516,9 @@ class SourcingOrchestrator:
                 "provider_called": False,
                 "legacy_job_shell_created": False,
             }
-        acquisition_run = self.store.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+        acquisition_run = (
+            self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+        )
         target_company = str(
             payload.get("target_company") or dict(acquisition_run or {}).get("target_company") or ""
         ).strip()
@@ -43697,7 +43701,7 @@ class SourcingOrchestrator:
         target_company = str(payload.get("target_company") or "").strip().casefold()
         provider = str(payload.get("provider") or "").strip().casefold()
         query_text = str(payload.get("query") or "").strip().casefold()
-        lanes = self.store.list_acquisition_discovery_lanes(
+        lanes = self.store.repos.workflow_runtime.list_discovery_lanes(
             workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
             acquisition_run_id=str(payload.get("acquisition_run_id") or "").strip(),
             workflow_run_id=str(payload.get("workflow_run_id") or "").strip(),
@@ -43724,7 +43728,7 @@ class SourcingOrchestrator:
 
     def get_acquisition_discovery_lane_api(self, lane_id: str) -> dict[str, Any]:
         normalized_lane_id = str(lane_id or "").strip()
-        lane = self.store.get_acquisition_discovery_lane(normalized_lane_id) if normalized_lane_id else {}
+        lane = self.store.repos.workflow_runtime.get_discovery_lane(normalized_lane_id) if normalized_lane_id else {}
         if not lane:
             return {"status": "not_found", "lane_id": normalized_lane_id}
         return {
@@ -47485,7 +47489,9 @@ class SourcingOrchestrator:
                 or activity.get("acquisition_run_id")
                 or ""
             ).strip()
-            acquisition_run = self.store.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+            acquisition_run = (
+                self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+            )
             workflow_run_id = (
                 workflow_run_id
                 or str(activity.get("workflow_run_id") or "").strip()
@@ -47576,7 +47582,9 @@ class SourcingOrchestrator:
                 or activity.get("acquisition_run_id")
                 or ""
             ).strip()
-            acquisition_run = self.store.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+            acquisition_run = (
+                self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+            )
             workflow_run_id = (
                 workflow_run_id
                 or str(activity.get("workflow_run_id") or "").strip()
@@ -47696,7 +47704,9 @@ class SourcingOrchestrator:
                 or activity.get("acquisition_run_id")
                 or ""
             ).strip()
-            acquisition_run = self.store.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+            acquisition_run = (
+                self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+            )
             workflow_run_id = (
                 workflow_run_id
                 or str(activity.get("workflow_run_id") or "").strip()
@@ -47808,7 +47818,9 @@ class SourcingOrchestrator:
                 or source_activity.get("acquisition_run_id")
                 or ""
             ).strip()
-            acquisition_run = self.store.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+            acquisition_run = (
+                self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+            )
             workflow_run_id = (
                 workflow_run_id
                 or str(source_activity.get("workflow_run_id") or "").strip()
@@ -47917,9 +47929,9 @@ class SourcingOrchestrator:
                 or explicit_command_payload.get("activity_run_id")
                 or ""
             ).strip()
-            lane = self.store.get_acquisition_discovery_lane(lane_id) if lane_id else {}
+            lane = self.store.repos.workflow_runtime.get_discovery_lane(lane_id) if lane_id else {}
             if not lane and acquisition_run_id:
-                candidate_lanes = self.store.list_acquisition_discovery_lanes(
+                candidate_lanes = self.store.repos.workflow_runtime.list_discovery_lanes(
                     acquisition_run_id=acquisition_run_id,
                     statuses=["planned_pending_owner", "waiting_owner_implementation"],
                     limit=2,
@@ -47935,7 +47947,9 @@ class SourcingOrchestrator:
                         "command_type": command_type,
                     }
             if not lane and activity_run_id:
-                candidate_lanes = self.store.list_acquisition_discovery_lanes(activity_run_id=activity_run_id, limit=2)
+                candidate_lanes = self.store.repos.workflow_runtime.list_discovery_lanes(
+                    activity_run_id=activity_run_id, limit=2
+                )
                 if len(candidate_lanes) == 1:
                     lane = candidate_lanes[0]
                     lane_id = str(lane.get("lane_id") or "").strip()
@@ -47943,7 +47957,9 @@ class SourcingOrchestrator:
                 acquisition_run_id = acquisition_run_id or str(lane.get("acquisition_run_id") or "").strip()
                 workflow_run_id = workflow_run_id or str(lane.get("workflow_run_id") or "").strip()
                 activity_run_id = activity_run_id or str(lane.get("activity_run_id") or "").strip()
-            acquisition_run = self.store.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+            acquisition_run = (
+                self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id) if acquisition_run_id else {}
+            )
             if acquisition_run:
                 workflow_run_id = workflow_run_id or str(acquisition_run.get("workflow_run_id") or "").strip()
             activity_run = self.store.get_workflow_activity_run(activity_run_id) if activity_run_id else {}
@@ -48375,7 +48391,7 @@ class SourcingOrchestrator:
     ) -> dict[str, Any]:
         run_payload = dict(acquisition_run or {})
         metadata = {**dict(run_payload.get("metadata") or {}), **dict(metadata_patch or {})}
-        return self.store.upsert_acquisition_run(
+        return self.store.repos.workflow_runtime.upsert_acquisition_run(
             {
                 "acquisition_run_id": str(run_payload.get("acquisition_run_id") or "").strip(),
                 "workspace_id": str(run_payload.get("workspace_id") or "default").strip() or "default",

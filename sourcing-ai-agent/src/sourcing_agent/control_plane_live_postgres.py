@@ -423,6 +423,101 @@ _OPERATION_RUNTIME_TABLES = {
     "acquisition_discovery_lanes",
     "operation_events",
 }
+_ACQUISITION_RUNTIME_UPSERT_CONFIG = {
+    "acquisition_runs": {
+        "id_column": "acquisition_run_id",
+        "columns": (
+            "acquisition_run_id",
+            "workspace_id",
+            "operation_run_id",
+            "workflow_run_id",
+            "plan_id",
+            "plan_review_id",
+            "target_company",
+            "query",
+            "status",
+            "current_phase",
+            "request_json",
+            "plan_json",
+            "execution_bundle_json",
+            "metadata_json",
+            "idempotency_key",
+            "created_at",
+            "updated_at",
+        ),
+        "immutable_columns": (
+            "acquisition_run_id",
+            "workspace_id",
+            "workflow_run_id",
+            "operation_run_id",
+            "idempotency_key",
+        ),
+        "json_object_columns": (
+            "request_json",
+            "plan_json",
+            "execution_bundle_json",
+            "metadata_json",
+        ),
+        "terminal_statuses": (
+            "cancelled_before_probe",
+            "cancelled_before_discovery",
+            "cancelled_before_profile_fetch_activity",
+            "projection_admitted",
+            "completed",
+            "failed",
+            "cancelled",
+        ),
+    },
+    "acquisition_discovery_lanes": {
+        "id_column": "lane_id",
+        "columns": (
+            "lane_id",
+            "workspace_id",
+            "acquisition_run_id",
+            "workflow_run_id",
+            "operation_run_id",
+            "source_command_id",
+            "activity_run_id",
+            "target_company",
+            "query",
+            "provider",
+            "status",
+            "phase",
+            "lane_plan_json",
+            "provider_ref_json",
+            "artifact_refs_json",
+            "entity_counts_json",
+            "downstream_command_ids_json",
+            "idempotency_key",
+            "metadata_json",
+            "created_at",
+            "updated_at",
+        ),
+        "immutable_columns": (
+            "lane_id",
+            "workspace_id",
+            "acquisition_run_id",
+            "workflow_run_id",
+            "operation_run_id",
+            "source_command_id",
+            "activity_run_id",
+            "idempotency_key",
+        ),
+        "json_object_columns": (
+            "lane_plan_json",
+            "provider_ref_json",
+            "entity_counts_json",
+            "metadata_json",
+        ),
+        "terminal_statuses": (
+            "cancelled_before_discovery",
+            "provider_discovery_completed",
+            "completed",
+            "failed",
+            "cancelled",
+        ),
+    },
+}
 _RUNNING_RECOVERABLE_WAIT_STAGES = {
     "submitting_remote_search",
     "submitting_remote_harvest",
@@ -4389,6 +4484,165 @@ class LiveControlPlanePostgresAdapter:
                     existing = _fetch_one_dict_row(cursor, cursor.fetchone())
             connection.commit()
         return existing
+
+    def upsert_acquisition_runtime_row(
+        self,
+        row: dict[str, Any] | None = None,
+        *,
+        table_name: str,
+        id_column: str,
+        immutable_columns: tuple[str, ...],
+        terminal_statuses: tuple[str, ...],
+    ) -> dict[str, Any] | None:
+        normalized_table = _normalize_postgres_identifier(table_name)
+        config = _ACQUISITION_RUNTIME_UPSERT_CONFIG.get(normalized_table)
+        if config is None:
+            raise ValueError("upsert_acquisition_runtime_row requires an acquisition runtime table")
+        configured_id_column = str(config["id_column"])
+        configured_immutable_columns = tuple(config["immutable_columns"])
+        configured_terminal_statuses = tuple(config["terminal_statuses"])
+        if _normalize_postgres_identifier(id_column) != configured_id_column:
+            raise ValueError(f"upsert_acquisition_runtime_row invalid id_column for {normalized_table}")
+        if tuple(immutable_columns) != configured_immutable_columns:
+            raise ValueError(f"upsert_acquisition_runtime_row immutable contract mismatch for {normalized_table}")
+        if tuple(terminal_statuses) != configured_terminal_statuses:
+            raise ValueError(f"upsert_acquisition_runtime_row terminal contract mismatch for {normalized_table}")
+        if not self._require_operation_runtime_table(normalized_table):
+            return None
+
+        payload = _normalize_postgres_row_payload(dict(row or {}))
+        configured_columns = tuple(config["columns"])
+        unknown_columns = set(payload) - set(configured_columns)
+        if unknown_columns:
+            raise ValueError(
+                f"upsert_acquisition_runtime_row unknown columns for {normalized_table}: "
+                + ", ".join(sorted(unknown_columns))
+            )
+        row_id = str(payload.get(configured_id_column) or "").strip()
+        workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
+        idempotency_key = str(payload.get("idempotency_key") or "").strip()
+        if not row_id or not workspace_id or not idempotency_key:
+            return None
+
+        columns = [column for column in configured_columns if column in payload]
+        if configured_id_column not in columns:
+            return None
+        quoted_table = _quote_identifier(normalized_table)
+        quoted_id_column = _quote_identifier(configured_id_column)
+        json_object_columns = tuple(config["json_object_columns"])
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        lock_keys = sorted(
+                            {
+                                f"acquisition_runtime:{normalized_table}:id:{row_id}",
+                                (
+                                    f"acquisition_runtime:{normalized_table}:idempotency:"
+                                    f"{workspace_id}:{idempotency_key}"
+                                ),
+                            }
+                        )
+                        for lock_key in lock_keys:
+                            self._acquire_transaction_lock(cursor, lock_key)
+
+                        cursor.execute(
+                            (
+                                f"SELECT * FROM {quoted_table} "
+                                f"WHERE (workspace_id = %s AND idempotency_key = %s) OR {quoted_id_column} = %s "
+                                f"ORDER BY {quoted_id_column} FOR UPDATE"
+                            ),
+                            (workspace_id, idempotency_key, row_id),
+                        )
+                        identity_rows = _fetch_all_dict_rows(cursor)
+                        idempotent_row = next(
+                            (
+                                item
+                                for item in identity_rows
+                                if (str(item.get("workspace_id") or "default").strip() or "default") == workspace_id
+                                and str(item.get("idempotency_key") or "").strip() == idempotency_key
+                            ),
+                            None,
+                        )
+                        primary_key_row = next(
+                            (
+                                item
+                                for item in identity_rows
+                                if str(item.get(configured_id_column) or "").strip() == row_id
+                            ),
+                            None,
+                        )
+
+                        if (
+                            idempotent_row is not None
+                            and str(idempotent_row.get(configured_id_column) or "").strip() != row_id
+                        ):
+                            raise ValueError(
+                                f"{normalized_table} idempotency identity collision: "
+                                f"{workspace_id}/{idempotency_key} is already bound"
+                            )
+                        current = primary_key_row or idempotent_row
+                        if current is not None:
+                            for column in configured_immutable_columns:
+                                current_value = str(current.get(column) or "").strip()
+                                requested_value = str(payload.get(column) or "").strip()
+                                if current_value != requested_value:
+                                    raise ValueError(
+                                        f"{normalized_table} immutable identity collision for {row_id}: {column}"
+                                    )
+                            current_status = str(current.get("status") or "").strip()
+                            if current_status in configured_terminal_statuses:
+                                connection.commit()
+                                return current
+
+                            updated_payload = dict(payload)
+                            updated_payload["created_at"] = current.get("created_at")
+                            for column in json_object_columns:
+                                updated_payload[column] = _json_dump(
+                                    {
+                                        **_json_load_dict(current.get(column)),
+                                        **_json_load_dict(payload.get(column)),
+                                    }
+                                )
+                            update_columns = [
+                                column
+                                for column in columns
+                                if column not in configured_immutable_columns and column != "created_at"
+                            ]
+                            assignments = ", ".join(f"{_quote_identifier(column)} = %s" for column in update_columns)
+                            cursor.execute(
+                                (f"UPDATE {quoted_table} SET {assignments} WHERE {quoted_id_column} = %s RETURNING *"),
+                                tuple(
+                                    _normalize_postgres_payload(updated_payload.get(column))
+                                    for column in update_columns
+                                )
+                                + (row_id,),
+                            )
+                            committed = _fetch_one_dict_row(cursor, cursor.fetchone())
+                            if committed is None:
+                                raise RuntimeError(f"{normalized_table} locked row update returned no row")
+                            connection.commit()
+                            return committed
+
+                        quoted_columns = [_quote_identifier(column) for column in columns]
+                        cursor.execute(
+                            (
+                                f"INSERT INTO {quoted_table} ({', '.join(quoted_columns)}) "
+                                f"VALUES ({', '.join(['%s'] * len(columns))}) RETURNING *"
+                            ),
+                            tuple(_normalize_postgres_payload(payload.get(column)) for column in columns),
+                        )
+                        inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if inserted is None:
+                            raise RuntimeError(f"{normalized_table} insert returned no row")
+                    connection.commit()
+                return inserted
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
     def get_agent_action(self, action_id: str) -> dict[str, Any] | None:
         if not self._require_operation_runtime_table("agent_actions"):

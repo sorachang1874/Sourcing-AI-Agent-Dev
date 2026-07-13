@@ -8,10 +8,42 @@ to jsonb by changing only the column Kind here.
 
 from __future__ import annotations
 
+import json
+from hashlib import sha1
 from typing import Any
 
 from ..control_plane_repository import Column, Kind, Repository, TableDescriptor
+from ..control_plane_serde import json_safe_payload
 from ..control_plane_time import utc_now_timestamp
+
+
+def _loads_json_list(value: Any, *, default: list[Any] | None = None) -> list[Any]:
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, tuple):
+        return list(value)
+    try:
+        parsed = json.loads(str(value or "[]"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return list(default or [])
+    return list(parsed) if isinstance(parsed, list) else list(default or [])
+
+
+def _loads_json_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    try:
+        parsed = json.loads(str(value or "{}"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    return dict(parsed) if isinstance(parsed, dict) else {}
+
+
+def _normalize_json_object_payload(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(json_safe_payload(value))
+    return _loads_json_dict(value)
+
 
 WORKFLOW_RECOVERY_INTENTS = TableDescriptor(
     table="workflow_recovery_intents",
@@ -367,11 +399,9 @@ RUNTIME_OUTBOX = TableDescriptor(
 FROM_ROW_DESCRIPTORS = {
     "_workflow_recovery_intent_from_row": WORKFLOW_RECOVERY_INTENTS,
     "_workflow_event_from_row": WORKFLOW_EVENTS,
-    "_acquisition_run_from_row": ACQUISITION_RUNS,
     "_workflow_activity_run_from_row": WORKFLOW_ACTIVITY_RUNS,
     "_workflow_activity_attempt_from_row": WORKFLOW_ACTIVITY_ATTEMPTS,
     "_workflow_entity_delta_from_row": WORKFLOW_ENTITY_DELTAS,
-    "_acquisition_discovery_lane_from_row": ACQUISITION_DISCOVERY_LANES,
     "_workflow_current_state_from_row": WORKFLOW_CURRENT_STATE,
     "_workflow_command_from_row": WORKFLOW_COMMANDS,
     "_runtime_outbox_from_row": RUNTIME_OUTBOX,
@@ -381,6 +411,40 @@ FROM_ROW_DESCRIPTORS = {
 class WorkflowRuntimeRepository(Repository):
     """PG-only repository for workflow and operation runtime state."""
 
+    _ACQUISITION_RUN_IMMUTABLE_COLUMNS = (
+        "acquisition_run_id",
+        "workspace_id",
+        "workflow_run_id",
+        "operation_run_id",
+        "idempotency_key",
+    )
+    _ACQUISITION_RUN_TERMINAL_STATUSES = (
+        "cancelled_before_probe",
+        "cancelled_before_discovery",
+        "cancelled_before_profile_fetch_activity",
+        "projection_admitted",
+        "completed",
+        "failed",
+        "cancelled",
+    )
+    _DISCOVERY_LANE_IMMUTABLE_COLUMNS = (
+        "lane_id",
+        "workspace_id",
+        "acquisition_run_id",
+        "workflow_run_id",
+        "operation_run_id",
+        "source_command_id",
+        "activity_run_id",
+        "idempotency_key",
+    )
+    _DISCOVERY_LANE_TERMINAL_STATUSES = (
+        "cancelled_before_discovery",
+        "provider_discovery_completed",
+        "completed",
+        "failed",
+        "cancelled",
+    )
+
     def _require_postgres_for_durable_runtime(self, table_name: str) -> None:
         normalized_table = str(table_name or "").strip()
         if str(getattr(self._adapter, "mode", "") or "").strip() == "postgres_only":
@@ -389,6 +453,285 @@ class WorkflowRuntimeRepository(Repository):
             f"{normalized_table} is PG-only durable runtime storage. "
             "Set SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only with a resolved Postgres DSN; "
             "SQLite durable runtime execution is not a normal path."
+        )
+
+    def _upsert_acquisition_runtime_row(
+        self,
+        table_name: str,
+        *,
+        id_column: str,
+        row_payload: dict[str, Any],
+        row_builder: Any,
+        immutable_columns: tuple[str, ...],
+        terminal_statuses: tuple[str, ...],
+    ) -> dict[str, Any]:
+        if self._should_prefer_read(table_name):
+            row = self._call_native_write(
+                "upsert_acquisition_runtime_row",
+                table_name=table_name,
+                row=row_payload,
+                id_column=id_column,
+                immutable_columns=immutable_columns,
+                terminal_statuses=terminal_statuses,
+            )
+            if row is not None:
+                return row_builder(row)
+            if self._strict_authoritative(table_name):
+                self._raise_write_failure(
+                    table_name=table_name,
+                    method_name="upsert_acquisition_runtime_row",
+                    reason="postgres-only: authoritative upsert returned no row",
+                )
+        self._raise_postgres_only_invariant(
+            table_name=table_name,
+            method_name="upsert_acquisition_runtime_row",
+        )
+        raise AssertionError("unreachable")
+
+    def upsert_acquisition_run(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("acquisition_runs")
+        normalized = dict(payload or {})
+        workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
+        operation_run_id = str(normalized.get("operation_run_id") or "").strip()
+        workflow_run_id = str(normalized.get("workflow_run_id") or "").strip()
+        plan_id = str(normalized.get("plan_id") or "").strip()
+        plan_review_id = int(normalized.get("plan_review_id") or 0)
+        target_company = str(normalized.get("target_company") or "").strip()
+        query_text = str(normalized.get("query") or "").strip()
+        idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+        if not idempotency_key:
+            idempotency_seed = "|".join(
+                [operation_run_id, workflow_run_id, str(plan_review_id), plan_id, target_company]
+            )
+            idempotency_key = f"acquisition_run:{sha1(idempotency_seed.encode('utf-8')).hexdigest()[:24]}"
+        acquisition_run_id = str(
+            normalized.get("acquisition_run_id")
+            or normalized.get("run_id")
+            or f"acqrun_{sha1(idempotency_key.encode('utf-8')).hexdigest()[:24]}"
+        ).strip()
+        if not acquisition_run_id or not workflow_run_id:
+            return {}
+        existing = self.get_acquisition_run(acquisition_run_id)
+        now = utc_now_timestamp()
+        row_payload = ACQUISITION_RUNS.to_columns(
+            {
+                **normalized,
+                "acquisition_run_id": acquisition_run_id,
+                "workspace_id": workspace_id,
+                "operation_run_id": operation_run_id,
+                "workflow_run_id": workflow_run_id,
+                "plan_id": plan_id,
+                "plan_review_id": plan_review_id,
+                "target_company": target_company,
+                "query": query_text,
+                "request": _normalize_json_object_payload(normalized.get("request") or normalized.get("request_json")),
+                "plan": _normalize_json_object_payload(normalized.get("plan") or normalized.get("plan_json")),
+                "execution_bundle": _normalize_json_object_payload(
+                    normalized.get("execution_bundle") or normalized.get("execution_bundle_json")
+                ),
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "idempotency_key": idempotency_key,
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
+        return self._upsert_acquisition_runtime_row(
+            "acquisition_runs",
+            id_column="acquisition_run_id",
+            row_payload=row_payload,
+            row_builder=self._acquisition_run_from_row,
+            immutable_columns=self._ACQUISITION_RUN_IMMUTABLE_COLUMNS,
+            terminal_statuses=self._ACQUISITION_RUN_TERMINAL_STATUSES,
+        )
+
+    def get_acquisition_run(self, acquisition_run_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("acquisition_runs")
+        normalized_run_id = str(acquisition_run_id or "").strip()
+        if not normalized_run_id:
+            return {}
+        postgres_row = self._select_row(
+            "acquisition_runs",
+            row_builder=self._acquisition_run_from_row,
+            where_sql="acquisition_run_id = %s",
+            params=[normalized_run_id],
+        )
+        return postgres_row or {}
+
+    def list_acquisition_runs(
+        self,
+        *,
+        workspace_id: str = "default",
+        operation_run_id: str = "",
+        workflow_run_id: str = "",
+        target_company: str = "",
+        statuses: list[str] | tuple[str, ...] | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("acquisition_runs")
+        pg_clauses: list[str] = []
+        pg_params: list[Any] = []
+        normalized_workspace_id = str(workspace_id or "").strip()
+        if normalized_workspace_id:
+            pg_clauses.append("workspace_id = %s")
+            pg_params.append(normalized_workspace_id)
+        normalized_operation_id = str(operation_run_id or "").strip()
+        if normalized_operation_id:
+            pg_clauses.append("operation_run_id = %s")
+            pg_params.append(normalized_operation_id)
+        normalized_workflow_run_id = str(workflow_run_id or "").strip()
+        if normalized_workflow_run_id:
+            pg_clauses.append("workflow_run_id = %s")
+            pg_params.append(normalized_workflow_run_id)
+        normalized_company = str(target_company or "").strip()
+        if normalized_company:
+            pg_clauses.append("target_company = %s")
+            pg_params.append(normalized_company)
+        normalized_statuses = [
+            str(status or "").strip() for status in list(statuses or []) if str(status or "").strip()
+        ]
+        if normalized_statuses:
+            pg_placeholders = ", ".join(["%s"] * len(normalized_statuses))
+            pg_clauses.append(f"status IN ({pg_placeholders})")
+            pg_params.extend(normalized_statuses)
+        return self._select_rows(
+            "acquisition_runs",
+            row_builder=self._acquisition_run_from_row,
+            where_sql=" AND ".join(pg_clauses),
+            params=pg_params,
+            order_by_sql="updated_at DESC, created_at DESC",
+            limit=max(0, int(limit or 0)),
+            offset=max(0, int(offset or 0)),
+        )
+
+    def upsert_discovery_lane(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("acquisition_discovery_lanes")
+        normalized = dict(payload or {})
+        workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
+        acquisition_run_id = str(normalized.get("acquisition_run_id") or "").strip()
+        workflow_run_id = str(normalized.get("workflow_run_id") or "").strip()
+        operation_run_id = str(normalized.get("operation_run_id") or normalized.get("operation_id") or "").strip()
+        source_command_id = str(normalized.get("source_command_id") or normalized.get("command_id") or "").strip()
+        activity_run_id = str(normalized.get("activity_run_id") or "").strip()
+        target_company = str(normalized.get("target_company") or "").strip()
+        query_text = str(normalized.get("query") or "").strip()
+        provider = str(normalized.get("provider") or "").strip()
+        idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+        if not idempotency_key:
+            idempotency_seed = "|".join([acquisition_run_id, workflow_run_id, source_command_id, query_text, provider])
+            idempotency_key = f"acquisition_discovery_lane:{sha1(idempotency_seed.encode('utf-8')).hexdigest()[:24]}"
+        lane_id = str(
+            normalized.get("lane_id") or f"lane_{sha1(idempotency_key.encode('utf-8')).hexdigest()[:24]}"
+        ).strip()
+        if not lane_id or not acquisition_run_id or not workflow_run_id:
+            return {}
+        existing = self.get_discovery_lane(lane_id)
+        now = utc_now_timestamp()
+        row_payload = ACQUISITION_DISCOVERY_LANES.to_columns(
+            {
+                **normalized,
+                "lane_id": lane_id,
+                "workspace_id": workspace_id,
+                "acquisition_run_id": acquisition_run_id,
+                "workflow_run_id": workflow_run_id,
+                "operation_run_id": operation_run_id,
+                "source_command_id": source_command_id,
+                "activity_run_id": activity_run_id,
+                "target_company": target_company,
+                "query": query_text,
+                "provider": provider,
+                "lane_plan": _normalize_json_object_payload(
+                    normalized.get("lane_plan") or normalized.get("lane_plan_json")
+                ),
+                "provider_ref": _normalize_json_object_payload(
+                    normalized.get("provider_ref") or normalized.get("provider_ref_json")
+                ),
+                "artifact_refs": _loads_json_list(
+                    normalized.get("artifact_refs") or normalized.get("artifact_refs_json")
+                ),
+                "entity_counts": _normalize_json_object_payload(
+                    normalized.get("entity_counts") or normalized.get("entity_counts_json")
+                ),
+                "downstream_command_ids": _loads_json_list(
+                    normalized.get("downstream_command_ids") or normalized.get("downstream_command_ids_json")
+                ),
+                "idempotency_key": idempotency_key,
+                "metadata": _normalize_json_object_payload(
+                    normalized.get("metadata") or normalized.get("metadata_json")
+                ),
+                "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or now),
+                "updated_at": now,
+            }
+        )
+        return self._upsert_acquisition_runtime_row(
+            "acquisition_discovery_lanes",
+            id_column="lane_id",
+            row_payload=row_payload,
+            row_builder=self._discovery_lane_from_row,
+            immutable_columns=self._DISCOVERY_LANE_IMMUTABLE_COLUMNS,
+            terminal_statuses=self._DISCOVERY_LANE_TERMINAL_STATUSES,
+        )
+
+    def get_discovery_lane(self, lane_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("acquisition_discovery_lanes")
+        normalized_lane_id = str(lane_id or "").strip()
+        if not normalized_lane_id:
+            return {}
+        postgres_row = self._select_row(
+            "acquisition_discovery_lanes",
+            row_builder=self._discovery_lane_from_row,
+            where_sql="lane_id = %s",
+            params=[normalized_lane_id],
+        )
+        return postgres_row or {}
+
+    def list_discovery_lanes(
+        self,
+        *,
+        workspace_id: str = "default",
+        acquisition_run_id: str = "",
+        workflow_run_id: str = "",
+        operation_run_id: str = "",
+        source_command_id: str = "",
+        activity_run_id: str = "",
+        statuses: list[str] | tuple[str, ...] | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("acquisition_discovery_lanes")
+        pg_clauses: list[str] = []
+        pg_params: list[Any] = []
+        normalized_workspace_id = str(workspace_id or "").strip()
+        if normalized_workspace_id:
+            pg_clauses.append("workspace_id = %s")
+            pg_params.append(normalized_workspace_id)
+        for column_name, value in (
+            ("acquisition_run_id", acquisition_run_id),
+            ("workflow_run_id", workflow_run_id),
+            ("operation_run_id", operation_run_id),
+            ("source_command_id", source_command_id),
+            ("activity_run_id", activity_run_id),
+        ):
+            normalized_value = str(value or "").strip()
+            if normalized_value:
+                pg_clauses.append(f"{column_name} = %s")
+                pg_params.append(normalized_value)
+        normalized_statuses = [
+            str(status or "").strip() for status in list(statuses or []) if str(status or "").strip()
+        ]
+        if normalized_statuses:
+            pg_clauses.append("status IN (" + ", ".join(["%s"] * len(normalized_statuses)) + ")")
+            pg_params.extend(normalized_statuses)
+        return self._select_rows(
+            "acquisition_discovery_lanes",
+            row_builder=self._discovery_lane_from_row,
+            where_sql=" AND ".join(pg_clauses),
+            params=pg_params,
+            order_by_sql="updated_at DESC, created_at DESC",
+            limit=max(0, int(limit or 0)),
+            offset=max(0, int(offset or 0)),
         )
 
     def upsert_action(
@@ -1085,3 +1428,9 @@ class WorkflowRuntimeRepository(Repository):
 
     def _operation_event_from_row(self, row: Any) -> dict[str, Any]:
         return OPERATION_EVENTS.from_row(row)
+
+    def _acquisition_run_from_row(self, row: Any) -> dict[str, Any]:
+        return ACQUISITION_RUNS.from_row(row)
+
+    def _discovery_lane_from_row(self, row: Any) -> dict[str, Any]:
+        return ACQUISITION_DISCOVERY_LANES.from_row(row)

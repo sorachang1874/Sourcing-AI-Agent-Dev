@@ -852,3 +852,36 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     operation/action/event 跨表原子性尚未由 expected-status CAS 解决,登记 R-019;不得宣称整个 operation runtime
     已原子化。R-018 登记本批 pinned 异步 Codex review;GO 前只冻结 ②.4a 的 live/W6/manual/里程碑签收。
     下一批为 ②.4b acquisition-control。D-1/D-2/D-3 截止仍为 **2026-07-31**。
+
+- **2026-07-13 ②.4b 完成 —— acquisition-control 退役到 `store.repos.workflow_runtime`**:
+  - **范围/Scout/删除**:`acquisition_runs` 与 `acquisition_discovery_lanes` 两表，6 个原 Store public + 2 mapper
+    迁为 Repository 的 run 三方法与 discovery-lane 三个短名方法；activity spine、commands、
+    `acquisition_shard_registry` 均未越界合批。`storage.py` **12,809 → 12,564**(-245)，workflow repository
+    **1,087 → 1,436** 行；旧 6 facade / 2 mapper / 2 descriptor dispatch keys、direct/getattr/callback receiver 均为 0。
+  - **调用面**:production **38 / 3 files**(orchestrator 24、acquisition owner 10、profile owner 4)，既有 tests
+    **15 / 1 file** 全部机械切换；fake/monkeypatch/whitebox/adapter-direct/ambiguous 均为 0。质量清单
+    **49 → 53 files**，并清偿这四个新纳入文件的 import-order、unused import/local 基线债务。
+  - **A/B + 变异**:删除前 frozen 同树 battery 对 run/lane 各跑 write/get/list，覆盖生成 id/hash、malformed/non-object
+    JSON、tuple list、空 workspace、status 参数顺序、排序、`limit=0` 与负 offset，结果 **6 passed**；把 run list
+    `updated_at DESC` 受控改为 ASC 后电池转为 **1 failed / 5 passed**，恢复后重新 6 passed。当前旧 8 函数与 pinned
+    `a1c2a99` **8/8 源码完全相等**，bundle SHA-256
+    `8d795a0d28654870550e46afe8f2ac091fdbb478580dd36fc9b21c4926105865`；临时 A/B 文件已删除。
+  - **单行 fixed-forward**:新增 allowlist 驱动的 `upsert_acquisition_runtime_row` PG 原语；按排序后的 PK 与
+    `(workspace,idempotency)` advisory scopes 取锁，再以 `ORDER BY id FOR UPDATE` 一次锁定两类候选。PK/idempotency
+    交叉碰撞、workspace/workflow/operation/command/activity immutable 漂移 fail-closed；同状态 JSON object patch
+    锁内 merge、created_at 保留；run/lane terminal row 对 exact replay 与 stale write 均返回当前 committed row，不可 reopen。
+    list JSON 仍按新 payload 整体替换，未暗改为集合语义。动态 table/column 均来自双表固定 registry + quoted identifier。
+  - **对抗审计 fixed-forward**:只读审计初报 `P1=1`：profile provider 零成功且 retry exhausted 时 command 已失败，
+    run 却仍写共享 `profile_fetch_provider_retry_wait`，可绕过 terminal fence。现改为 canonical `status=failed`、
+    `current_phase=profile_fetch_retry_exhausted`，owner+Repository 真实 PG 回归证明 stale planned writer 的
+    status/phase/metadata 均不变；复审 `P0=0/P1=0`。lane 专属同身份并发 merge 与 crossed identity swap 测试也已补；
+    剩余 P2 仅为 adapter 40P01/40001/非 retryable fault-injection 基座缺口，下次触碰该 adapter 补测。
+  - **验证**:A/B **6 passed**，变异 **1 failed / 5 passed**；surface/onconflict **39 + 4 passed**；单行
+    identity/terminal/JSON/concurrency/owner-exhaustion 精确电池 **6 passed / 109 deselected**；完整 operation runtime
+    **115 passed**。最终 `make ci-pre-agent-contract` 为 **289 passed / 0 skip** + 后续门
+    **2/11/1/2 passed**，`dry_run_ready failures=[]`。`make lint` **53 files** 全绿；mypy 保持 R-011 基线
+    **87 errors / 4 files**，新 Repository/adapter 无新增。未运行 full `test_pipeline.py`、live provider、W6 或 manual signoff。
+  - **边界/接续**:`acquisition_discovery_lanes` 仍是 read model，控制目标仍是 owning workflow command。本批单行
+    原语不等于跨表 cancel UoW；plan-commit、scale-plan、profile-fetch 三条 module-state→command 部分提交窗口单列
+    R-020。下一分子批为 ②.4c activity spine + R-020 fixed-forward。D-1/D-2/D-3 截止仍为 **2026-07-31**；本批 pinned 异步 Codex review
+    在 implementation commit 固定后登记，只冻结本 scope 的 live/W6/manual/里程碑签收。

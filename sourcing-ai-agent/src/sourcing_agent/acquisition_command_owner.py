@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-
 from typing import Any, Callable
 
 from .command_kernel import CommandKernel
@@ -69,7 +68,6 @@ from .durable_runtime import (
     SNAPSHOT_COMPACTION_RUN_COMMAND_TYPE,
     default_stage_id_for_command_type,
 )
-
 
 # NOTE: the helpers below duplicate small module-level helpers in
 # ``orchestrator.py`` (which imports this module — importing them back from
@@ -188,16 +186,24 @@ class AcquisitionCommandOwner:
             }
         acquisition_run = self._find_acquisition_run_for_command(command_payload)
         acquisition_run_id = str(acquisition_run.get("acquisition_run_id") or "").strip()
-        lanes = self.store.list_acquisition_discovery_lanes(
-            acquisition_run_id=acquisition_run_id,
-            source_command_id=command_id,
-            limit=500,
-        ) if acquisition_run_id else []
-        activities = self.store.list_workflow_activity_runs(
-            acquisition_run_id=acquisition_run_id,
-            command_id=command_id,
-            limit=500,
-        ) if acquisition_run_id else []
+        lanes = (
+            self.store.repos.workflow_runtime.list_discovery_lanes(
+                acquisition_run_id=acquisition_run_id,
+                source_command_id=command_id,
+                limit=500,
+            )
+            if acquisition_run_id
+            else []
+        )
+        activities = (
+            self.store.list_workflow_activity_runs(
+                acquisition_run_id=acquisition_run_id,
+                command_id=command_id,
+                limit=500,
+            )
+            if acquisition_run_id
+            else []
+        )
         activity_by_id = {
             str(activity.get("activity_run_id") or "").strip(): dict(activity or {})
             for activity in activities
@@ -267,7 +273,7 @@ class AcquisitionCommandOwner:
             lane_plan = dict(lane.get("lane_plan") or {})
             lane_plan["status"] = "cancelled_before_discovery"
             lane_plan["phase"] = "cancelled"
-            cancelled_lane = self.store.upsert_acquisition_discovery_lane(
+            cancelled_lane = self.store.repos.workflow_runtime.upsert_discovery_lane(
                 {
                     **lane,
                     "status": "cancelled_before_discovery",
@@ -349,21 +355,23 @@ class AcquisitionCommandOwner:
         command_id = str(command_payload.get("command_id") or "").strip()
         payload = dict(command_payload.get("payload") or {})
         acquisition_run_id = str(
-            payload.get("acquisition_run_id")
-            or (command_payload.get("result") or {}).get("acquisition_run_id")
-            or ""
+            payload.get("acquisition_run_id") or (command_payload.get("result") or {}).get("acquisition_run_id") or ""
         ).strip()
         if acquisition_run_id:
-            run = self.store.get_acquisition_run(acquisition_run_id)
+            run = self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id)
             if run:
                 return run
         candidate_runs: list[dict[str, Any]] = []
         operation_id = str(command_payload.get("operation_id") or payload.get("operation_run_id") or "").strip()
         workflow_run_id = str(command_payload.get("workflow_run_id") or "").strip()
         if operation_id:
-            candidate_runs.extend(self.store.list_acquisition_runs(operation_run_id=operation_id, limit=50))
+            candidate_runs.extend(
+                self.store.repos.workflow_runtime.list_acquisition_runs(operation_run_id=operation_id, limit=50)
+            )
         if workflow_run_id:
-            candidate_runs.extend(self.store.list_acquisition_runs(workflow_run_id=workflow_run_id, limit=50))
+            candidate_runs.extend(
+                self.store.repos.workflow_runtime.list_acquisition_runs(workflow_run_id=workflow_run_id, limit=50)
+            )
         for run in candidate_runs:
             metadata = dict((run or {}).get("metadata") or {})
             if str(metadata.get("source_command_id") or "").strip() == command_id:
@@ -499,18 +507,21 @@ class AcquisitionCommandOwner:
             }
         cancelled_review: dict[str, Any] = {}
         if review_session:
-            cancelled_review = self.store.review_plan_session(
-                review_id=int(review_session.get("review_id") or 0),
-                status="cancelled",
-                reviewer=actor,
-                notes=reason,
-                decision_payload={
-                    "status": "cancelled",
-                    "reason": reason,
-                    "control_source": "api.workflow_command_owner_specific_cancel",
-                    "command_id": command_id,
-                },
-            ) or {}
+            cancelled_review = (
+                self.store.review_plan_session(
+                    review_id=int(review_session.get("review_id") or 0),
+                    status="cancelled",
+                    reviewer=actor,
+                    notes=reason,
+                    decision_payload={
+                        "status": "cancelled",
+                        "reason": reason,
+                        "control_source": "api.workflow_command_owner_specific_cancel",
+                        "command_id": command_id,
+                    },
+                )
+                or {}
+            )
         updated = self.store.cancel_workflow_command(
             command_id,
             reason=reason,
@@ -805,7 +816,9 @@ class AcquisitionCommandOwner:
         payload = dict(command_payload.get("payload") or {})
         workflow_payload = dict(payload.get("workflow_payload") or {})
         target_company = str(payload.get("target_company") or workflow_payload.get("target_company") or "").strip()
-        query_text = str(payload.get("query") or workflow_payload.get("query") or workflow_payload.get("raw_user_request") or "").strip()
+        query_text = str(
+            payload.get("query") or workflow_payload.get("query") or workflow_payload.get("raw_user_request") or ""
+        ).strip()
         plan_review_id = str(payload.get("plan_review_id") or workflow_payload.get("plan_review_id") or "").strip()
         if not plan_review_id and not target_company and not query_text:
             return {
@@ -817,7 +830,9 @@ class AcquisitionCommandOwner:
             "target_company": target_company,
             "query": query_text,
             "plan_review_id": plan_review_id,
-            "workspace_id": str(payload.get("workspace_id") or workflow_payload.get("workspace_id") or "default").strip()
+            "workspace_id": str(
+                payload.get("workspace_id") or workflow_payload.get("workspace_id") or "default"
+            ).strip()
             or "default",
             "runtime_execution_mode": str(workflow_payload.get("runtime_execution_mode") or "operation_command").strip()
             or "operation_command",
@@ -1129,7 +1144,9 @@ class AcquisitionCommandOwner:
                 },
             )
         event = self.store.repos.workflow_runtime.append_operation_event(
-            workspace_id=str(operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default").strip()
+            workspace_id=str(
+                operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default"
+            ).strip()
             or "default",
             event_stream_id=operation_run_id,
             operation_run_id=operation_run_id,
@@ -1217,7 +1234,10 @@ class AcquisitionCommandOwner:
                     migration_phase="W11b_acquisition_plan_review_request",
                 )
             ],
-            "downstream_command_types": [ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE, ACQUISITION_PLAN_COMMIT_COMMAND_TYPE],
+            "downstream_command_types": [
+                ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE,
+                ACQUISITION_PLAN_COMMIT_COMMAND_TYPE,
+            ],
             "next_phase": "W11b_acquisition_plan_review_request",
             "completed_by": str(lease_owner or "").strip(),
             "migration_phase": "W11b_acquisition_plan_build",
@@ -1518,7 +1538,9 @@ class AcquisitionCommandOwner:
                 },
             )
         event = self.store.repos.workflow_runtime.append_operation_event(
-            workspace_id=str(operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default").strip()
+            workspace_id=str(
+                operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default"
+            ).strip()
             or "default",
             event_stream_id=operation_run_id,
             operation_run_id=operation_run_id,
@@ -1724,7 +1746,9 @@ class AcquisitionCommandOwner:
         execution_bundle = dict(session.get("execution_bundle") or {})
         plan_payload = dict(execution_bundle.get("plan") or session.get("plan") or {})
         request_payload = dict(execution_bundle.get("request") or session.get("request") or {})
-        workflow_run_id = str(execution_bundle.get("workflow_run_id") or plan_payload.get("workflow_run_id") or "").strip()
+        workflow_run_id = str(
+            execution_bundle.get("workflow_run_id") or plan_payload.get("workflow_run_id") or ""
+        ).strip()
         operation_id = str(execution_bundle.get("operation_id") or "").strip()
         parent_command_id = str(
             execution_bundle.get("plan_review_request_command_id")
@@ -1735,7 +1759,9 @@ class AcquisitionCommandOwner:
         if not workflow_run_id or not operation_id:
             return {}
         idempotency_key = f"{ACQUISITION_PLAN_COMMIT_COMMAND_TYPE}:review:{review_id}"
-        causal_group_id = str(execution_bundle.get("causal_group_id") or parent_command_id or f"review:{review_id}").strip()
+        causal_group_id = str(
+            execution_bundle.get("causal_group_id") or parent_command_id or f"review:{review_id}"
+        ).strip()
         command_payload = {
             "review_id": review_id,
             "plan_review_session": _plan_review_session_api_summary(session),
@@ -1964,7 +1990,9 @@ class AcquisitionCommandOwner:
         command_result = dict(command_payload.get("result") or {})
         review_session = dict(command_result.get("plan_review_session") or {})
         acquisition_run = dict(command_result.get("acquisition_run") or {})
-        acquisition_run_id = str(command_result.get("acquisition_run_id") or acquisition_run.get("acquisition_run_id") or "").strip()
+        acquisition_run_id = str(
+            command_result.get("acquisition_run_id") or acquisition_run.get("acquisition_run_id") or ""
+        ).strip()
         workflow_ref = {
             "workflow_run_id": str(command_payload.get("workflow_run_id") or ""),
             "command_id": command_id,
@@ -2014,7 +2042,9 @@ class AcquisitionCommandOwner:
                 },
             )
         event = self.store.repos.workflow_runtime.append_operation_event(
-            workspace_id=str(operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default").strip()
+            workspace_id=str(
+                operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default"
+            ).strip()
             or "default",
             event_stream_id=operation_run_id,
             operation_run_id=operation_run_id,
@@ -2074,7 +2104,9 @@ class AcquisitionCommandOwner:
                 "operation_completion_deferred": False,
             }
         execution_bundle = dict(payload.get("execution_bundle") or review_session.get("execution_bundle") or {})
-        request_payload = dict(payload.get("request") or execution_bundle.get("request") or review_session.get("request") or {})
+        request_payload = dict(
+            payload.get("request") or execution_bundle.get("request") or review_session.get("request") or {}
+        )
         plan_payload = dict(payload.get("plan") or execution_bundle.get("plan") or review_session.get("plan") or {})
         target_company = str(
             payload.get("target_company")
@@ -2084,23 +2116,28 @@ class AcquisitionCommandOwner:
             or ""
         ).strip()
         query_text = str(
-            request_payload.get("query")
-            or request_payload.get("raw_user_request")
-            or plan_payload.get("query")
-            or ""
+            request_payload.get("query") or request_payload.get("raw_user_request") or plan_payload.get("query") or ""
         ).strip()
-        plan_id = str(payload.get("plan_id") or plan_payload.get("plan_id") or request_payload.get("plan_id") or "").strip()
+        plan_id = str(
+            payload.get("plan_id") or plan_payload.get("plan_id") or request_payload.get("plan_id") or ""
+        ).strip()
         operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
-        workspace_id = str(
-            (operation_run or {}).get("workspace_id")
-            or payload.get("workspace_id")
-            or request_payload.get("tenant_id")
+        workspace_id = (
+            str(
+                (operation_run or {}).get("workspace_id")
+                or payload.get("workspace_id")
+                or request_payload.get("tenant_id")
+                or "default"
+            ).strip()
             or "default"
-        ).strip() or "default"
-        acquisition_run_id = "acqrun_" + hashlib.sha1(
-            f"{workflow_run_id}:{operation_run_id}:{review_id}:{plan_id}".encode("utf-8")
-        ).hexdigest()[:24]
-        acquisition_run = self.store.upsert_acquisition_run(
+        )
+        acquisition_run_id = (
+            "acqrun_"
+            + hashlib.sha1(f"{workflow_run_id}:{operation_run_id}:{review_id}:{plan_id}".encode("utf-8")).hexdigest()[
+                :24
+            ]
+        )
+        acquisition_run = self.store.repos.workflow_runtime.upsert_acquisition_run(
             {
                 "acquisition_run_id": acquisition_run_id,
                 "workspace_id": workspace_id,
@@ -2119,7 +2156,9 @@ class AcquisitionCommandOwner:
                 "metadata": {
                     "source_command_id": str(command_payload.get("command_id") or "").strip(),
                     "source_command_type": str(command_payload.get("command_type") or "").strip(),
-                    "causal_group_id": str(command_payload.get("causal_group_id") or payload.get("causal_group_id") or "").strip(),
+                    "causal_group_id": str(
+                        command_payload.get("causal_group_id") or payload.get("causal_group_id") or ""
+                    ).strip(),
                     "owner": ACQUISITION_PLAN_COMMIT_OWNER,
                     "normal_path_executes_queue_workflow_inline": False,
                     "legacy_job_shell_created": False,
@@ -2323,7 +2362,9 @@ class AcquisitionCommandOwner:
             }
         command_result = dict(command_payload.get("result") or {})
         acquisition_run = dict(command_result.get("acquisition_run") or {})
-        acquisition_run_id = str(command_result.get("acquisition_run_id") or acquisition_run.get("acquisition_run_id") or "").strip()
+        acquisition_run_id = str(
+            command_result.get("acquisition_run_id") or acquisition_run.get("acquisition_run_id") or ""
+        ).strip()
         operation_phase = str(command_result.get("operation_phase") or "acquisition_run_phase_advanced").strip()
         workflow_ref = {
             "workflow_run_id": str(command_payload.get("workflow_run_id") or ""),
@@ -2350,7 +2391,8 @@ class AcquisitionCommandOwner:
             metadata_patch={
                 "last_command_terminal_status": command_status,
                 "last_command_sync_source": source,
-                "awaiting_probe_commands": operation_phase in {
+                "awaiting_probe_commands": operation_phase
+                in {
                     "acquisition_probe_submitted",
                     "acquisition_probe_collected_pending_scale",
                 },
@@ -2369,7 +2411,8 @@ class AcquisitionCommandOwner:
                 },
                 metadata_patch={
                     "last_operation_command_status": command_status,
-                    "awaiting_probe_commands": operation_phase in {
+                    "awaiting_probe_commands": operation_phase
+                    in {
                         "acquisition_probe_submitted",
                         "acquisition_probe_collected_pending_scale",
                     },
@@ -2377,7 +2420,9 @@ class AcquisitionCommandOwner:
                 },
             )
         event = self.store.repos.workflow_runtime.append_operation_event(
-            workspace_id=str(operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default").strip()
+            workspace_id=str(
+                operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default"
+            ).strip()
             or "default",
             event_stream_id=operation_run_id,
             operation_run_id=operation_run_id,
@@ -2414,7 +2459,7 @@ class AcquisitionCommandOwner:
         command_payload = dict(command or {})
         payload = dict(command_payload.get("payload") or {})
         acquisition_run_id = str(payload.get("acquisition_run_id") or "").strip()
-        acquisition_run = self.store.get_acquisition_run(acquisition_run_id)
+        acquisition_run = self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id)
         if not acquisition_run:
             return {
                 "status": "invalid",
@@ -2479,7 +2524,7 @@ class AcquisitionCommandOwner:
         command_payload = dict(command or {})
         payload = dict(command_payload.get("payload") or {})
         acquisition_run_id = str(payload.get("acquisition_run_id") or "").strip()
-        acquisition_run = self.store.get_acquisition_run(acquisition_run_id)
+        acquisition_run = self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id)
         if not acquisition_run:
             return {
                 "status": "invalid",
@@ -2556,7 +2601,7 @@ class AcquisitionCommandOwner:
         command_payload = dict(command or {})
         payload = dict(command_payload.get("payload") or {})
         acquisition_run_id = str(payload.get("acquisition_run_id") or "").strip()
-        acquisition_run = self.store.get_acquisition_run(acquisition_run_id)
+        acquisition_run = self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id)
         if not acquisition_run:
             return {
                 "status": "invalid",
@@ -2564,7 +2609,9 @@ class AcquisitionCommandOwner:
                 "operation_completion_deferred": False,
             }
         query_text = str(acquisition_run.get("query") or payload.get("query") or "").strip()
-        workflow_run_id = str(command_payload.get("workflow_run_id") or acquisition_run.get("workflow_run_id") or "").strip()
+        workflow_run_id = str(
+            command_payload.get("workflow_run_id") or acquisition_run.get("workflow_run_id") or ""
+        ).strip()
         operation_run_id = str(
             command_payload.get("operation_id") or acquisition_run.get("operation_run_id") or ""
         ).strip()
@@ -2639,7 +2686,7 @@ class AcquisitionCommandOwner:
             "normal_path_executes_legacy_discovery_owner": False,
             "operation_native_owner_required": True,
         }
-        discovery_lane = self.store.upsert_acquisition_discovery_lane(
+        discovery_lane = self.store.repos.workflow_runtime.upsert_discovery_lane(
             {
                 "workspace_id": str(acquisition_run.get("workspace_id") or "default").strip() or "default",
                 "acquisition_run_id": acquisition_run_id,
@@ -2870,7 +2917,9 @@ class AcquisitionCommandOwner:
         queued_count = sum(1 for result in results if str(dict(result).get("status") or "") == "queued")
         return {
             "status": "completed" if results else "idle",
-            "reason": "acquisition_scale_plan_commands_drained" if results else "no_ready_acquisition_scale_plan_commands",
+            "reason": "acquisition_scale_plan_commands_drained"
+            if results
+            else "no_ready_acquisition_scale_plan_commands",
             "command_count": len(ready_commands),
             "executed_command_count": len(results),
             "completed_count": completed_count,
@@ -2891,7 +2940,9 @@ class AcquisitionCommandOwner:
         payload = dict(command_payload.get("payload") or {})
         workflow_payload = dict(payload.get("workflow_payload") or {})
         target_company = str(payload.get("target_company") or workflow_payload.get("target_company") or "").strip()
-        query_text = str(payload.get("query") or workflow_payload.get("query") or workflow_payload.get("raw_user_request") or "").strip()
+        query_text = str(
+            payload.get("query") or workflow_payload.get("query") or workflow_payload.get("raw_user_request") or ""
+        ).strip()
         plan_review_id = str(payload.get("plan_review_id") or workflow_payload.get("plan_review_id") or "").strip()
         if not plan_review_id and not target_company and not query_text:
             return {

@@ -31,7 +31,6 @@ import os
 import re
 import time
 import uuid
-
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,10 +50,6 @@ from .runtime_environment import runtime_namespace_ownership_for_path
 from .runtime_tuning import resolved_harvest_profile_actor_global_inflight
 from .seed_discovery import SearchSeedSnapshot
 from .snapshot_materializer import resolve_snapshot_company_identity
-from .workflow_refresh import (
-    worker_has_inline_incremental_ingest_output as _worker_has_inline_incremental_ingest_output,
-)
-
 
 # NOTE: the helpers below duplicate small module-level helpers in
 # ``orchestrator.py`` (which imports this module — importing them back from
@@ -649,9 +644,7 @@ class ProfileFetchOwner:
             profile_key = normalize_linkedin_profile_url_key(profile_url)
             registry_entry = dict(registry_entries.get(profile_key) or {})
             registry_status = str(registry_entry.get("status") or "").strip().lower()
-            registry_raw_path = str(
-                registry_entry.get("raw_path") or registry_entry.get("last_raw_path") or ""
-            ).strip()
+            registry_raw_path = str(registry_entry.get("raw_path") or registry_entry.get("last_raw_path") or "").strip()
             is_cache_hit = registry_status == "fetched" and bool(registry_raw_path)
             if is_cache_hit:
                 cache_hit_urls.append(profile_url)
@@ -821,7 +814,7 @@ class ProfileFetchOwner:
             }
         )
         if acquisition_run_id:
-            acquisition_run = self.store.get_acquisition_run(acquisition_run_id) or {}
+            acquisition_run = self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id) or {}
             if acquisition_run:
                 self._upsert_acquisition_run_phase(
                     acquisition_run=acquisition_run,
@@ -879,14 +872,13 @@ class ProfileFetchOwner:
         command_id = str(command_payload.get("command_id") or "").strip()
         workflow_run_id = str(command_payload.get("workflow_run_id") or payload.get("workflow_run_id") or "").strip()
         operation_run_id = str(
-            command_payload.get("operation_id")
-            or payload.get("operation_id")
-            or payload.get("operation_run_id")
-            or ""
+            command_payload.get("operation_id") or payload.get("operation_id") or payload.get("operation_run_id") or ""
         ).strip()
         workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
         acquisition_run_id = str(payload.get("acquisition_run_id") or "").strip()
-        activity_run_id = str(payload.get("source_profile_activity_run_id") or payload.get("activity_run_id") or "").strip()
+        activity_run_id = str(
+            payload.get("source_profile_activity_run_id") or payload.get("activity_run_id") or ""
+        ).strip()
         source_delta_ids = _dedupe_texts(payload.get("source_entity_delta_ids") or [])
         source_delta_rows = [
             self.store.get_workflow_entity_delta(delta_id)
@@ -910,11 +902,7 @@ class ProfileFetchOwner:
         profile_urls = _dedupe_texts(payload.get("profile_urls") or [])
         if source_delta_ids and not profile_urls:
             profile_urls = _dedupe_texts(
-                [
-                    dict(delta.get("entity_payload") or {}).get("profile_url")
-                    for delta in source_delta_rows
-                    if delta
-                ]
+                [dict(delta.get("entity_payload") or {}).get("profile_url") for delta in source_delta_rows if delta]
             )
         provider_attempt_scope = str(payload.get("provider_attempt_scope") or "normal").strip() or "normal"
         retry_wave_index = max(0, _coerce_int(payload.get("retry_wave_index"), 0))
@@ -937,7 +925,6 @@ class ProfileFetchOwner:
                 "provider_called": False,
                 "legacy_job_shell_created": False,
             }
-        activity_input = dict(activity.get("input") or {})
         activity_output = dict(activity.get("output") or {})
         activity_metadata = dict(activity.get("metadata") or {})
         started_at = _utc_now_iso()
@@ -1117,7 +1104,9 @@ class ProfileFetchOwner:
             error_url = str(dict(error).get("profile_url") or "").strip()
             error_key = normalize_linkedin_profile_url_key(error_url) or error_url
             if error_key and error_key not in error_by_profile_key:
-                error_by_profile_key[error_key] = str(dict(error).get("reason") or "profile_provider_fetch_failed").strip()
+                error_by_profile_key[error_key] = str(
+                    dict(error).get("reason") or "profile_provider_fetch_failed"
+                ).strip()
         failed_delta_ids: list[str] = []
         failed_source_delta_ids: list[str] = []
         retry_exhausted = is_retry_wave or retry_wave_index >= retry_budget
@@ -1338,13 +1327,20 @@ class ProfileFetchOwner:
                     },
                 }
             )
+        provider_retry_exhausted = failed_count > 0 and retry_exhausted and fetched_count == 0
         if acquisition_run_id:
-            acquisition_run = self.store.get_acquisition_run(acquisition_run_id) or {}
+            acquisition_run = self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id) or {}
             if acquisition_run:
                 self._upsert_acquisition_run_phase(
                     acquisition_run=acquisition_run,
                     command=command_payload,
-                    status="profile_fetch_provider_completed" if failed_count == 0 else "profile_fetch_provider_retry_wait",
+                    status=(
+                        "profile_fetch_provider_completed"
+                        if failed_count == 0
+                        else "failed"
+                        if provider_retry_exhausted
+                        else "profile_fetch_provider_retry_wait"
+                    ),
                     current_phase="profile_terminal_pending"
                     if fetched_delta_ids
                     else "profile_fetch_retry_wait"
@@ -1357,7 +1353,7 @@ class ProfileFetchOwner:
                         "profile_provider_retry_wave_planned": bool(downstream_retry_command),
                     },
                 )
-        if failed_count > 0 and retry_exhausted and fetched_count == 0:
+        if provider_retry_exhausted:
             return {
                 "status": "failed",
                 "reason": "operation_native_profile_provider_fetch_retry_exhausted",
@@ -1432,10 +1428,7 @@ class ProfileFetchOwner:
         command_id = str(command_payload.get("command_id") or "").strip()
         workflow_run_id = str(command_payload.get("workflow_run_id") or payload.get("workflow_run_id") or "").strip()
         operation_run_id = str(
-            command_payload.get("operation_id")
-            or payload.get("operation_id")
-            or payload.get("operation_run_id")
-            or ""
+            command_payload.get("operation_id") or payload.get("operation_id") or payload.get("operation_run_id") or ""
         ).strip()
         workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
         acquisition_run_id = str(payload.get("acquisition_run_id") or "").strip()
@@ -1544,7 +1537,9 @@ class ProfileFetchOwner:
                 continue
             entity_payload = dict(source_delta.get("entity_payload") or {})
             profile_url = str(entity_payload.get("profile_url") or "").strip()
-            profile_key = str(source_delta.get("entity_key") or entity_payload.get("profile_url_key") or profile_url).strip()
+            profile_key = str(
+                source_delta.get("entity_key") or entity_payload.get("profile_url_key") or profile_url
+            ).strip()
             raw_path = str(entity_payload.get("raw_path") or "").strip()
             admitted_profile_urls.append(profile_url)
             terminal_delta = self.store.upsert_workflow_entity_delta(
@@ -1681,7 +1676,7 @@ class ProfileFetchOwner:
                 }
             )
         if acquisition_run_id:
-            acquisition_run = self.store.get_acquisition_run(acquisition_run_id) or {}
+            acquisition_run = self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id) or {}
             if acquisition_run:
                 self._upsert_acquisition_run_phase(
                     acquisition_run=acquisition_run,
@@ -1729,9 +1724,7 @@ class ProfileFetchOwner:
         limit = max(
             1,
             _coerce_int(
-                normalized.get("operation_native_profile_fetch_command_limit")
-                or normalized.get("command_limit")
-                or 10,
+                normalized.get("operation_native_profile_fetch_command_limit") or normalized.get("command_limit") or 10,
                 10,
             ),
         )
@@ -1777,7 +1770,9 @@ class ProfileFetchOwner:
                     {
                         **command_result,
                         "status": "completed",
-                        "reason": str(command_result.get("reason") or "operation_native_profile_fetch_already_succeeded"),
+                        "reason": str(
+                            command_result.get("reason") or "operation_native_profile_fetch_already_succeeded"
+                        ),
                         "workflow_command": self._kernel._workflow_command_observation(
                             current_command,
                             migration_phase="W11e_operation_native_profile_fetch_activity",
@@ -1824,7 +1819,9 @@ class ProfileFetchOwner:
                 )
                 skipped_count += 1
                 continue
-            running_command = self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            running_command = (
+                self.store.mark_workflow_command_running(command_id, lease_owner=lease_owner) or claimed_command
+            )
             claimed_count += 1
             running_command_type = str(running_command.get("command_type") or "").strip()
             if running_command_type == LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE:
@@ -2024,7 +2021,7 @@ class ProfileFetchOwner:
                 cancelled_activities.append(cancelled_activity)
         cancelled_run: dict[str, Any] = {}
         if acquisition_run_id:
-            acquisition_run = self.store.get_acquisition_run(acquisition_run_id) or {}
+            acquisition_run = self.store.repos.workflow_runtime.get_acquisition_run(acquisition_run_id) or {}
             if acquisition_run:
                 cancelled_run = self._upsert_acquisition_run_phase(
                     acquisition_run=acquisition_run,
@@ -2438,10 +2435,12 @@ class ProfileFetchOwner:
                         normal_ready_item_count=0,
                     )
                     if bool(retry_gate.get("retry_allowed")):
-                        retry_wait_allowed_groups.append({
-                            **retry_payload,
-                            "retry_wait_gate": retry_gate,
-                        })
+                        retry_wait_allowed_groups.append(
+                            {
+                                **retry_payload,
+                                "retry_wait_gate": retry_gate,
+                            }
+                        )
                     else:
                         retry_wait_groups_blocked[(source_job, snapshot_dir_value)] = {
                             **retry_payload,
@@ -2504,14 +2503,18 @@ class ProfileFetchOwner:
             source_job = str(dict(group or {}).get("source_job") or "").strip()
             snapshot_dir_value = str(dict(group or {}).get("snapshot_dir") or "").strip()
             group_scope_key = (source_job, snapshot_dir_value)
-            processed_group_scope_counts[group_scope_key] = int(processed_group_scope_counts.get(group_scope_key) or 0) + 1
+            processed_group_scope_counts[group_scope_key] = (
+                int(processed_group_scope_counts.get(group_scope_key) or 0) + 1
+            )
             if not source_job or not snapshot_dir_value:
-                results.append({
-                    "status": "skipped",
-                    "reason": "group_scope_missing",
-                    "source_job": source_job,
-                    "snapshot_dir": snapshot_dir_value,
-                })
+                results.append(
+                    {
+                        "status": "skipped",
+                        "reason": "group_scope_missing",
+                        "source_job": source_job,
+                        "snapshot_dir": snapshot_dir_value,
+                    }
+                )
                 continue
             if explicit_job_id and source_job != explicit_job_id:
                 continue
@@ -2521,48 +2524,56 @@ class ProfileFetchOwner:
                 configured_runtime_dir=self.runtime_dir,
             )
             if not ownership.matches:
-                results.append({
-                    "status": "skipped",
-                    "reason": "runtime_namespace_mismatch",
-                    "source_job": source_job,
-                    "snapshot_dir": snapshot_dir_value,
-                    "owner_runtime_dir": ownership.owner_runtime_dir,
-                    "inferred_runtime_dir": ownership.inferred_runtime_dir,
-                    "runtime_namespace": ownership.to_record(),
-                    "item_count": int(dict(group or {}).get("item_count") or 0),
-                })
+                results.append(
+                    {
+                        "status": "skipped",
+                        "reason": "runtime_namespace_mismatch",
+                        "source_job": source_job,
+                        "snapshot_dir": snapshot_dir_value,
+                        "owner_runtime_dir": ownership.owner_runtime_dir,
+                        "inferred_runtime_dir": ownership.inferred_runtime_dir,
+                        "runtime_namespace": ownership.to_record(),
+                        "item_count": int(dict(group or {}).get("item_count") or 0),
+                    }
+                )
                 continue
             job = self.store.get_job(source_job)
             if not job:
-                results.append({
-                    "status": "skipped",
-                    "reason": "job_missing",
-                    "source_job": source_job,
-                    "snapshot_dir": snapshot_dir_value,
-                })
+                results.append(
+                    {
+                        "status": "skipped",
+                        "reason": "job_missing",
+                        "source_job": source_job,
+                        "snapshot_dir": snapshot_dir_value,
+                    }
+                )
                 continue
             job_status = str(job.get("status") or "").strip().lower()
             if job_status in {"failed", "superseded", "cancelled", "canceled"}:
-                results.append({
-                    "status": "skipped",
-                    "reason": "job_terminal_without_refill",
-                    "job_status": job_status,
-                    "source_job": source_job,
-                    "snapshot_dir": snapshot_dir_value,
-                })
+                results.append(
+                    {
+                        "status": "skipped",
+                        "reason": "job_terminal_without_refill",
+                        "job_status": job_status,
+                        "source_job": source_job,
+                        "snapshot_dir": snapshot_dir_value,
+                    }
+                )
                 continue
             request_payload = dict(job.get("request") or {})
             plan_payload = dict(job.get("plan") or {})
             request = JobRequest.from_payload(request_payload)
             snapshot_dir = Path(snapshot_dir_value).expanduser()
             if not snapshot_dir.exists():
-                results.append({
-                    "status": "skipped",
-                    "reason": "snapshot_dir_missing",
-                    "source_job": source_job,
-                    "snapshot_dir": snapshot_dir_value,
-                    "item_count": int(dict(group or {}).get("item_count") or 0),
-                })
+                results.append(
+                    {
+                        "status": "skipped",
+                        "reason": "snapshot_dir_missing",
+                        "source_job": source_job,
+                        "snapshot_dir": snapshot_dir_value,
+                        "item_count": int(dict(group or {}).get("item_count") or 0),
+                    }
+                )
                 continue
             active_group_count += 1
             started_at = _utc_now_iso()
@@ -2642,10 +2653,7 @@ class ProfileFetchOwner:
             planned_command_count_total += planned_command_count
             planned_worker_count_total += planned_worker_count
             planned_url_count_total += planned_url_count
-            if (
-                int(result["queued_worker_count"]) >= dispatch_worker_limit
-                and int(result["deferred_url_count"]) > 0
-            ):
+            if int(result["queued_worker_count"]) >= dispatch_worker_limit and int(result["deferred_url_count"]) > 0:
                 dispatch_worker_budget_exhausted = True
             results.append(result)
             if planned_command_count > 0 or planned_worker_count > 0 or planned_url_count > 0:
@@ -2660,7 +2668,10 @@ class ProfileFetchOwner:
                 selected_refill_states != ["retry_wait"]
                 and (planned_command_count > 0 or planned_worker_count > 0)
                 and processed_group_scope_counts[group_scope_key] < dispatch_worker_limit
-                and (phase_budget_ms <= 0 or int(max(0.0, (time.perf_counter() - phase_started_monotonic) * 1000)) < phase_budget_ms)
+                and (
+                    phase_budget_ms <= 0
+                    or int(max(0.0, (time.perf_counter() - phase_started_monotonic) * 1000)) < phase_budget_ms
+                )
             ):
                 followup_groups = list(
                     list_groups(
@@ -2675,12 +2686,12 @@ class ProfileFetchOwner:
                     group_queue.insert(0, dict(followup_groups[0] or {}))
 
         planned_work_observed = (
-            planned_command_count_total > 0
-            or planned_worker_count_total > 0
-            or planned_url_count_total > 0
+            planned_command_count_total > 0 or planned_worker_count_total > 0 or planned_url_count_total > 0
         )
         return {
-            "status": "active" if dispatched_url_count > 0 or queued_worker_count > 0 or planned_work_observed else "idle",
+            "status": "active"
+            if dispatched_url_count > 0 or queued_worker_count > 0 or planned_work_observed
+            else "idle",
             "reason": (
                 "profile_prefetch_refill_phase_budget_exhausted"
                 if elapsed_budget_exhausted
@@ -2727,9 +2738,7 @@ class ProfileFetchOwner:
         if not job_id:
             return {"status": "skipped", "reason": "job_id_missing"}
         started_at = _utc_now_iso()
-        source_worker_id_values = [
-            int(item) for item in list(source_worker_ids or []) if int(item or 0) > 0
-        ]
+        source_worker_id_values = [int(item) for item in list(source_worker_ids or []) if int(item or 0) > 0]
         next_submit = self._run_profile_completion_next_submit_opportunity(
             job_id=job_id,
             request=request,
@@ -2804,9 +2813,7 @@ class ProfileFetchOwner:
             return dict(output.get("inline_incremental_ingest") or {})
         summary = dict(output.get("summary") or {})
         requested_count = _coerce_int(
-            summary.get("requested_url_count")
-            or summary.get("requested_urls")
-            or output.get("requested_url_count"),
+            summary.get("requested_url_count") or summary.get("requested_urls") or output.get("requested_url_count"),
             0,
         )
         unresolved_count = _coerce_int(

@@ -1,13 +1,13 @@
 # Track B ② Repository 迁移 Handbook(新一轮的入口文档)
 
 > Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
-> 状态:**②.4a 完成(2026-07-10,implementation `93d9f9e`)** —— workflow_runtime 的 operation-control 分子域
-> (`agent_actions` / `operation_runs` / `operation_events`)已退役到 `store.repos.workflow_runtime`;
-> 当前分支 storage.py 13,296 → 12,809 行,production 91 + tests 46 个调用全部迁移,
-> 旧 11 facade / 3 mapper / 7 native dispatch key 清零。reject/cancel 的状态、关联 action 与 event
-> 已收敛为 PG 单事务 UoW;普通 action/run 更新增加 expected-status CAS。批记录见
-> `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。下一批为 **②.4b acquisition-control**;
-> command-plan / 通用 state-sync 的多行原子化另见残差 R-019,不得把 ②.4a 误读为整个 operation runtime 已原子化。
+> 状态:**②.4b 完成(2026-07-13,待本批 implementation commit 固定)** —— workflow_runtime 的 acquisition-control
+> (`acquisition_runs` / `acquisition_discovery_lanes`)已退役到 `store.repos.workflow_runtime`;
+> 当前分支 `storage.py` 12,809 → 12,564 行,production 38 + tests 15 个旧调用全部迁移,
+> 旧 6 facade / 2 mapper / 2 descriptor dispatch keys 清零。单行写现已具有 identity collision fail-closed、
+> 锁内 JSON merge 与 terminal stale-writer fence;跨 acquisition run / lane / activity / command 的 cancel 原子化
+> 另见 R-020,不得把单行加固误读为 owner cancel UoW。批记录见
+> `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。下一批为 **②.4c activity spine + R-020 fixed-forward**。
 > B4.3 影子拆除 100% 完成(commit 952f9ee)。本文档是路线图
 > **②「Repository 查询方法建设 + 按域迁移调用方」** 这一轮的执行手册。
 > 设计依据:`docs/TRACK_B_B4_2_PG_NATIVE_STORE_DESIGN.md`(B4.2 设计,owner 已 ratify);历史全记录:`docs/TRACK_B_PG_PURE_STORE_DESIGN.md` §6。
@@ -15,13 +15,13 @@
 
 ## 1. 当前基底(起点事实,勿再重推导)
 
-- `storage.py` = 12,809 行(②.4a 后;②.4a 当前分支起点 13,296,②.3d 当前分支起点 13,835,②.3c settled tree 13,822,
+- `storage.py` = 12,564 行(②.4b 后;②.4b 起点 12,809,②.4a 当前分支起点 13,296,②.3d 当前分支起点 13,835,②.3c settled tree 13,822,
   ②.3b 后 14,261,②.3a 后 14,355,②.2 后 14,635,②.1 后 15,091,②.0 后 16,382,试点前 19,187),
   **PG-pure**:零 sqlite3 / 零 `_connection` / 零 `_lock`。
   已整体退役的域:linkedin_profile_registry(②.0)、criteria/confidence(②.1,`store.repos.criteria_confidence`)、
   manual_review(②.2,`store.repos.manual_review`);serving_projection 的 catalog、manifest、members、person search index
   已由 ②.3a-d 整域退役到 `store.repos.serving_projection`;
-  workflow_runtime 的 operation-control 已由 ②.4a 退役到 `store.repos.workflow_runtime`;
+  workflow_runtime 的 operation-control 与 acquisition-control 已由 ②.4a-b 退役到 `store.repos.workflow_runtime`;
   其余域仍在 God-class 门面上,按批推进。共享纯函数 `matching_bundle_payload`/`request_signature_context` 已外提到
   `request_matching.py`(storage 留别名 import)。
 - PG schema 唯一来源 = `migrations/0001_baseline.sql` + `migration_runner.py`(adapter `ensure_bootstrapped()` 驱动);遗留迁移表由 adapter 内字面 DDL(`_LEGACY_TARGET_PUBLIC_WEB_MIGRATION_TABLE_DDL`)按需建。
@@ -53,8 +53,8 @@
 4. **②.3 serving_projection 分子批推进完成**:~~②.3a catalog 三表~~ DONE → ~~②.3b manifest shards~~ DONE →
    ~~②.3c members + D-4(a)~~ DONE → ~~②.3d person search index~~ DONE。serving_projection 整域闭合。
    D-4 的四点显式 keyword 修复和全局 guard 已随 ②.3c 完成。
-5. **②.4 workflow_runtime 分子批**:~~②.4a operation-control~~ DONE → **②.4b acquisition-control** →
-   activity spine → read-model trio → recovery intents → session/trace → job leases → workers → commands(last)。
+5. **②.4 workflow_runtime 分子批**:~~②.4a operation-control~~ DONE → ~~②.4b acquisition-control~~ DONE →
+   **②.4c activity spine + R-020 fixed-forward** → read-model trio → recovery intents → session/trace → job leases → workers → commands(last)。
    每个分子批重新 Scout;不得因共享一个 repository 文件而合并状态机或跨批删除。
 6. **随批机会主义**:37 个 IRREGULAR read-mapper 里"软 irregular"(subscript 形式等价)可在其域批内顺手转 descriptor(harness 全列模式验证)。
    **②.1 反例警示**:criteria/confidence 的 8 个 mapper 看似可转,实为 None 直通 + 写路径真写 NULL FK —— Kind.INT 会 None→0 炸字节等价;
@@ -141,8 +141,8 @@ SOURCING_TEST_PG_ISOLATED_SCHEMA=1 \
 # REQUIRE flags 内建于 lane 命令 —— PG 不可用时 fail-closed 变红,Docker daemon 宕不再静默假绿)
 make ci-pre-agent-contract
 
-# 下一域方法清单(②.4b acquisition-control;落批前仍须按 §4 Scout 扩成精确方法映射)
-rg -n '^    def .*acquisition' src/sourcing_agent/storage.py
+# 下一分子域方法清单(activity spine;落批前仍须按 §4 Scout 扩成精确方法映射)
+rg -n '^    def .*workflow_(activity|entity_delta)' src/sourcing_agent/storage.py
 ```
 
 ## 6. 已验证的 gotchas(付过学费的)
@@ -198,6 +198,14 @@ rg -n '^    def .*acquisition' src/sourcing_agent/storage.py
   (c) CAS miss 返回 winning row 后,调用者必须按 committed target 判断成功,不能无条件写 success event/API 状态;
   (d) expected-status CAS 不阻止同状态 stale JSON merge。command-plan、approval/retry 和通用 operation+action+event sync
   需要锁内 merge/UoW,已登记 R-019;本批只声明 reject/cancel UoW 原子。
+- **②.4b 新增经验**:(a) 仅用 PK row lock 不足以防止相同 workspace/idempotency 不同 PK 的竞争;
+  单行 upsert 需同时按确定顺序取 PK 和 idempotency advisory lock,再一次 `FOR UPDATE` 锁定两类候选,
+  crossed identity swap 必须 fail-closed 且不死锁;(b) 同状态并发 metadata/lane-plan object patch 必须在 row lock 内 merge,
+  list JSON 仍按新 payload 整体替换;terminal row 对 exact replay 与 stale write 都只读返回 committed row,
+  否则 stale writer 可 reopen 或丢 patch;(c) owner 返回 failed 时必须同步把
+  acquisition run 写为 canonical terminal status;profile retry exhausted 曾留在 `profile_fetch_provider_retry_wait`,
+  会绕过仅看 status 的 terminal fence;(d) 单行原语不提供 run/lane/activity/command 跨表 rollback,
+  owner-specific cancel UoW 已登记 R-020,且在 activity spine/commands 分子批或 acquisition signoff 前触发。
 
 ## 7. 待 owner 决策(决策卡格式,2026-07-09 升级;每卡一问、有推荐、有截止、有超时默认)
 

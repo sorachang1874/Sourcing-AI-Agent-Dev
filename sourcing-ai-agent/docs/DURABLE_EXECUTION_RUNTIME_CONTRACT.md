@@ -45,7 +45,13 @@ W8 operation persistence contract:
 - Operation-layer persistence must not create `workflow_commands`, CRM rows, projection rows, person assets/evidence/assertions, provider registry rows, or export artifacts. Those remain module-owner effects.
 - W9 backend operation controls may approve, reject, query, and cancel operation state through operation runtime tables and append-only events. They must still not execute module side effects or bypass workflow command owners.
 - `store.repos.workflow_runtime` is the public storage owner for `agent_actions`, `operation_runs`, and
-  `operation_events`; the retired `ControlPlaneStore` operation-control facade must not be restored.
+  `operation_events`, and for acquisition current-state rows in `acquisition_runs` and
+  `acquisition_discovery_lanes`; the retired `ControlPlaneStore` operation/acquisition facades must not be restored.
+- Acquisition run/lane writes lock both primary-key and `(workspace_id, idempotency_key)` identity scopes in a
+  deterministic order. Primary/idempotency identity collisions fail closed; immutable workflow/operation/command/
+  activity ownership cannot drift; JSON object patches merge under the row lock; and a terminal run/lane cannot be
+  reopened or rewritten by a stale writer. `acquisition_discovery_lanes` remains a domain read model and never owns
+  retry/cancel/resume semantics.
 - Ordinary action/run state updates use expected-status compare-and-set and return the committed row. Callers
   must validate the committed target before emitting a success event or reporting success. A stale writer must
   not reopen `completed`, `failed`, `cancelled`, or `rejected` action state, or a terminal operation run.
@@ -58,6 +64,9 @@ W8 operation persistence contract:
   returns `status=conflict` and HTTP 409 and must not create a loser success event. This guarantee is bounded to
   the implemented reject/cancel UoWs plus committed-target guards for approve/resume/retry. Command planning and
   generic operation+action+event synchronization still require the UoWs tracked by `RESIDUAL_LEDGER.md` R-019.
+- Owner-specific acquisition cancel paths that touch an acquisition run, discovery lane/activity rows, and a workflow
+  command are not yet one PG UoW. A command CAS conflict or process failure can therefore leave module state cancelled
+  before the command transition commits; this separate boundary is tracked by `RESIDUAL_LEDGER.md` R-020.
 
 ### Workflow Layer
 
