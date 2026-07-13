@@ -199,6 +199,18 @@ plan review 对话化；intent→plan 前门流式化（依赖 D0+C4）；`model
   达标且 owner GO → Phase 2（`shadow_would_verify` 经逐行 revalidation + promotion 命令升
   `verified_accepted` 后自动放行——旧影子行不随开关生效）；Phase 2 开关本身是 owner-gated 配置。
 
+## 5a. 评审循环终局状态（2026-07-13，owner 决策点）
+
+五轮对抗评审（R1 24 → R2 16 → R3 17 → R4 阻断集 6 → R5 阻断集 5，artifact：
+`20260713T122908Z/131447Z/133324Z` 三份有效 + 两份提取件）：每轮修复 N 层机制，评审即在 N+1 层
+产出新 findings（R5 例：R4 处方的单写者拆分→gate apply generation 围栏、grant 记录→re-grant
+连续性、槽围栏→retry ABA）。**文档层面不收敛**——剩余 findings 已属实现级分布式细节，正是各
+实施批 characterize-first + A/B + 变异自检 + per-batch gate 的处置对象。
+**设计作者建议**：按 gate Failure Policy 走 owner-accepted exception（引用 R5 artifact
+`20260713T133324Z_*`），R5 全部 findings（阻断 5 条 + 其余）与 §6 义务清单一并转为对应实施批的
+**开工义务**（batch step 1 处置、per-batch review 验收）；不再做纸面 v6。**该 exception 需 owner
+明示接受并记录在案**（gate 要求）；owner 亦可选择继续设计轮或改由 Codex 接管设计迭代。
+
 ## 6. 实施批义务清单（round-4 校准裁定：非设计阻断，随各实施批执行并逐条验收）
 
 1. **注册表/快照全量 Scout**（D3 批 step 1）：round-4 补充点名 `company_asset_supplement.py:1032-1042`、
