@@ -42,8 +42,8 @@ and factory/helper returns, typed receiver and attribute flow, receiver aliases,
 instances, and `getattr(receiver, method)` callables. Alias flow follows statement order: an unconditional overwrite
 kills the receiver or callable fact, a later assignment can rebind it, and a later assignment never makes an earlier
 call count. `if`/`try`/loop exits use a deliberate may-alias union, so a call reachable from any conservatively retained
-branch remains visible. Conditional-expression and boolean-expression callable aliases preserve the union of their
-possible protocol methods.
+branch remains visible. Conditional-expression and boolean-expression aliases preserve both receiver and callable
+facts when both are possible, and callable facts preserve the union of their possible protocol methods.
 
 Nested sync functions, async functions, and lambdas are analyzed recursively from their definition-point lexical
 receiver/callable state. They receive stable qualified owners such as `outer.<locals>.inner`; lambda owners additionally
@@ -103,6 +103,6 @@ git diff --check -- \
   docs/TRACK_D_D0B_MODEL_CLIENT_V1_CHARACTERIZATION.md
 ```
 
-Author evidence on 2026-07-14: the characterization suite passed 20 tests; the combined characterization, existing
-provider, and D0a runtime suites passed `162 tests + 11 subtests`; Ruff format/check passed for the test file; and the
+Author evidence on 2026-07-14: the characterization suite passed 21 tests; the combined characterization, existing
+provider, and D0a runtime suites passed `163 tests + 11 subtests`; Ruff format/check passed for the test file; and the
 exact two-path diff check passed. This is author evidence only and does not replace independent review.

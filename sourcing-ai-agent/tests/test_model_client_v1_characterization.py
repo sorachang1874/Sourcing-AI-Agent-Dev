@@ -748,7 +748,7 @@ class _LexicalModelCallAnalyzer:
             self._kill_target(state, target)
             if is_receiver:
                 state.receivers.add(target)
-            elif methods:
+            if methods:
                 state.callable_aliases[target] = methods
 
     def _assignment_semantics(
@@ -821,7 +821,7 @@ class _LexicalModelCallAnalyzer:
                 is_receiver, methods = default_bindings.get(argument.arg, (False, frozenset()))
                 if is_receiver:
                     nested_state.receivers.add(argument.arg)
-                elif methods:
+                if methods:
                     nested_state.callable_aliases[argument.arg] = methods
             lambda_owner = f"{owner}.<locals>.<lambda@L{node.lineno}C{node.col_offset}>"
             self._analyze_expression(node.body, nested_state, lambda_owner)
@@ -1049,7 +1049,7 @@ class _LexicalModelCallAnalyzer:
                 model_types=self.model_types,
             ):
                 state.receivers.add(argument.arg)
-            elif default_methods:
+            if default_methods:
                 state.callable_aliases[argument.arg] = default_methods
         state.receivers.update(self.class_receivers.get(class_name, ()))
         return self._analyze_statements(node.body, state, owner)
@@ -1528,6 +1528,33 @@ def conditional(model_client: ModelClient, flag: bool):
             ("conditional.py", "conditional", "provider_name"): 1,
             ("conditional.py", "conditional", "normalize_request"): 1,
             ("conditional.py", "conditional", "judge_company_equivalence"): 1,
+        }
+    )
+
+
+def test_consumer_analysis_preserves_mixed_receiver_and_callable_facts() -> None:
+    source = """\
+from sourcing_agent.model_provider import ModelClient
+
+def mixed(model_client: ModelClient, flag: bool):
+    boolean_alias = model_client and model_client.healthcheck
+    boolean_alias()
+    conditional_alias = model_client.provider_name if flag else model_client
+    conditional_alias()
+
+    def nested(probe=model_client and model_client.normalize_request):
+        return probe({})
+
+    return nested
+"""
+
+    calls = _call_points_for_source(source, module_name="mixed.py")
+
+    assert calls == Counter(
+        {
+            ("mixed.py", "mixed", "healthcheck"): 1,
+            ("mixed.py", "mixed", "provider_name"): 1,
+            ("mixed.py", "mixed.<locals>.nested", "normalize_request"): 1,
         }
     )
 
