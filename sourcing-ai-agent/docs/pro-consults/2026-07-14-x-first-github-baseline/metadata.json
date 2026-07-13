@@ -1,0 +1,88 @@
+{
+  "purpose": "architecture",
+  "secondary_question_sets": [
+    "kickoff"
+  ],
+  "advisory_only": true,
+  "formal_gate_eligible": false,
+  "formal_review_status": "not_run",
+  "consultation_status": "complete",
+  "failure_reason": null,
+  "requested_at": null,
+  "completed_at": "2026-07-13T17:27:39Z",
+  "required_surface": "Chat",
+  "required_model": "GPT-5.6 Sol",
+  "required_mode": "Pro",
+  "observed_surface": "Chat",
+  "observed_model": "GPT-5.6 Sol",
+  "observed_mode": "Pro",
+  "ui_state_verification": "verified",
+  "browser": "iab",
+  "repository": "sorachang1874/Sourcing-AI-Agent-Dev",
+  "requested_commit_sha": "5ab9798b5e8e1935cc1520abc82204c9261f5fef",
+  "observed_commit_sha": "5ab9798b5e8e1935cc1520abc82204c9261f5fef",
+  "commit_verification": "verified",
+  "branch": "governance-phase0-ttl-20260611",
+  "branch_verification": "connector_unavailable",
+  "connector_status": "commit_pinned",
+  "outcome_code": "connector_ok_commit_pinned",
+  "operator_local_branch_ref_sha": "5ab9798b5e8e1935cc1520abc82204c9261f5fef",
+  "operator_local_branch_ref_is_connector_evidence": false,
+  "connector_file_proof": [
+    {
+      "path": "/AGENTS.md",
+      "observed_commit_sha": "5ab9798b5e8e1935cc1520abc82204c9261f5fef",
+      "retrieval_status": "complete",
+      "citation": null
+    },
+    {
+      "path": "/sourcing-ai-agent/AGENTS.md",
+      "observed_commit_sha": "5ab9798b5e8e1935cc1520abc82204c9261f5fef",
+      "retrieval_status": "complete",
+      "citation": null
+    },
+    {
+      "path": "/sourcing-ai-agent/docs/HANDOFF_CODEX_DESKTOP_AFTER_D3_2026-07-13.md",
+      "observed_commit_sha": "5ab9798b5e8e1935cc1520abc82204c9261f5fef",
+      "retrieval_status": "complete",
+      "citation": null
+    },
+    {
+      "path": "/sourcing-ai-agent/docs/TRACK_C_C1_DURABLE_PLAN_TASK_DESIGN.md",
+      "observed_commit_sha": "5ab9798b5e8e1935cc1520abc82204c9261f5fef",
+      "retrieval_status": "complete",
+      "citation": null
+    },
+    {
+      "path": "/sourcing-ai-agent/docs/QUERY_GUARDRAILS.md",
+      "observed_commit_sha": "5ab9798b5e8e1935cc1520abc82204c9261f5fef",
+      "retrieval_status": "complete",
+      "citation": null
+    },
+    {
+      "path": "/sourcing-ai-agent/docs/MODEL_NATIVE_SEARCH_PROVIDER_CONTRACT.md",
+      "observed_commit_sha": "5ab9798b5e8e1935cc1520abc82204c9261f5fef",
+      "retrieval_status": "complete",
+      "citation": null
+    }
+  ],
+  "local_state": "dirty",
+  "connector_sees_dirty_scope": false,
+  "dirty_scope_provided_to_pro": false,
+  "dirty_scope_transfer": null,
+  "dirty_base_commit_sha": "5ab9798b5e8e1935cc1520abc82204c9261f5fef",
+  "dirty_diff_sha256": null,
+  "dirty_changed_files": [],
+  "redaction_status": "verified",
+  "redaction_categories": [],
+  "redaction_count": 0,
+  "redaction_performed": true,
+  "response_complete": true,
+  "response_schema_valid": false,
+  "response_schema_note": "The pre-skill response omitted a raw keep/adjust/pivot verdict and per-file connector citations.",
+  "raw_verdict": null,
+  "normalized_recommendation": null,
+  "extraction_format": "rendered_text",
+  "request_sha256": "70865a69efb539b4a7f116c742f6a2ee693dff1ca8ce9a49857037b02ff9cd36",
+  "response_sha256": "644b59af20904cd7bdd54453f0f242d1ca6428d66b77369a8e61ddfca660b977"
+}
