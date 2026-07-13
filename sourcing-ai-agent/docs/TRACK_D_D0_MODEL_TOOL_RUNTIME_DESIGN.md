@@ -95,10 +95,16 @@ class ModelTurnExecutionContext:
     route_id: str                    # §4 路由表条目;不接受裸 model 字符串
     route_revision: str              # v3(#13):路由条目内容 digest,随 action/command/attempt/请求
                                      # hash/result 全链持久化——部署改路由不影响已排队重试的语义
-    effective_route_snapshot_ref: str  # v4(round3#11):claim 时固化的有效执行配置快照(非密钥的
-                                     # endpoint 身份/base_url digest、timeout、api_style、定价类、
-                                     # circuit policy id——settings.py:22-29 的 base_url/timeout 可变、
-                                     # 熔断键含 base_url :1294-1295,仅 route_revision 不足以钉住)
+    effective_route_snapshot_ref: str  # v5(round4#10):快照在 **action/approval/command 创建点**固化
+                                     # (claim 时固化太晚——部署后首次 claim 的命令会拿到新配置);
+                                     # 内容 = 非密钥 endpoint 身份/base_url digest、timeout、api_style、
+                                     # 定价类、circuit policy id;随 retry 全链传播;**其 digest 计入
+                                     # §2.8 canonical request hash**。settings.py:22-29 base_url/
+                                     # timeout 可变、熔断键含 base_url(:1294-1295),route_revision
+                                     # 单独不足以钉住。该快照契约为**共享模型调用契约**(D3 §6 同用)。
+    permission_scope_revision: str   # v5(round4#12):权限/出站策略/model-safe schema 三个 revision
+    outbound_policy_revision: str    #   进 context、ToolTurnResult、结果槽身份与 §2.8 request hash,
+    model_safe_schema_revision: str  #   转写回放与 accepted-action journal 身份同绑
     workspace_id: str; actor_id: str; permission_scope: str   # v3(#14):租户/主体绑定,owner 铸造
     operation_run_id: str; turn_id: str; step_id: str; attempt: int
     workflow_command_id: str; activity_run_id: str            # v3(prior#8):物理因果 id
@@ -106,12 +112,13 @@ class ModelTurnExecutionContext:
     budget: ModelTurnBudget          # token/monetary 上限 + deadline_at(UTC 墙钟,持久化;
                                      # attempt claim 后派生 attempt-local 单调 deadline 执行——
                                      # v4 统一命名,不再另有 wall_deadline)
-    budget_reservation_ref: str      # 预算保留台账行(v4 round3#15 补全契约):PG-only 表,owner =
-                                     # 发起方 operation owner;行身份 = (reservation_id, workspace,
-                                     # operation_run_id, activity_attempt 物理 id);状态机
-                                     # reserved→consumed/released/orphaned;每次物理 provider 调用
-                                     # 各记实际计费行(与 attempt 创建同事务),终局 reconcile 预留
-                                     # 与实际;orphan 回收 preflight;live 付费路径落地前该台账必须在
+    budget_reservation_ref: str      # 成本台账(v5 修正 round4#13——预留与物理调用暴露分账):
+                                     # 单一 PG cost-ledger owner;父行 = worst-case 预留(挂 operation);
+                                     # 子行 = (reservation, activity_attempt, physical_call_index)
+                                     # 暴露行,状态 prepared→sent→confirmed|uncertain|no_call——
+                                     # prepared 在 transport 前写入,sent 在发出后标记,故 crash 可
+                                     # 区分"未发送"与"发送未见结果"(uncertain);confirmed/uncertain
+                                     # 暴露对账后经 CAS 释放未用预留。live 付费路径落地前该台账必须在位。
     activity_attempt_id: str         # v4:物理 attempt 身份(替代裸 int attempt 计数)
     approval_ref: str | None         # 审批证据引用(路由的 budget_class 要求时必填)
 ```
@@ -150,8 +157,12 @@ v3 追加：流路径消费到的 terminal 事件所载结果与 `run_tool_turn`
   结果以 CAS 占槽（journal 落库得 `accepted_result_id`）；此后同槽的重试结果**join**（同
   tool_name + canonical_args_digest ⇒ 幂等命中既有 action）或 **quarantine**（不同内容 ⇒ 隔离
   证据，不产新 action）；**有意重新生成**必须显式推进槽 generation（新 step）。action 身份 =
-  `(result_slot_id, slot_generation, tool_name, canonical_args_digest)`——tool_ordinal 不入身份
-  （重排不稳定）。重复 side-effect 与「重试变新身份」两条路都堵死。
+  `(result_slot_id, slot_generation, tool_name, canonical_args_digest)`——tool_ordinal 不入身份。
+- **v5（round4#5）槽的取消/失效围栏**：槽自带 `slot_state ∈ {open, accepted, closed, superseded}`；
+  **接受 CAS 的全条件** = 槽 open + 所属 OperationRun/turn/WorkflowCommand 均非终态 + claim/attempt
+  身份匹配 + schema/route/policy pins 匹配；cancel/supersession 在其 UoW 内**原子关槽**
+  （open→closed）——此后任何晚到 terminal 结果只能落 quarantine 证据，**空槽不再可被取消后的
+  晚到结果占据**。
 - 部分输出保留为 quarantined 证据（attempt 级 artifact），不进结果。
 
 ### 2.6 OpenAI-compatible chat 流式实现：fail-closed 状态机（v2 全面收紧）
@@ -175,7 +186,8 @@ v3 追加：流路径消费到的 terminal 事件所载结果与 `run_tool_turn`
 - **熔断语义**：transport 前查熔断；**成功只在「验证过的 terminal 帧 + 身份匹配 + 工具调用完整」
   后记录**（HTTP 200 即记成功会祝福断流）；transport / provider error 帧 / 解析 / 截断 / 身份失败
   均记失败；本地 pre-transport 配置失败（不支持的 api_style、缺 context）不触熔断。
-- **墙钟**：以 ctx.budget.wall_deadline（单调钟）跨帧强制，非仅 requests read timeout；超时 ⇒
+- **墙钟**：以持久化 UTC `deadline_at` 在 attempt claim 后派生的 attempt-local 单调 deadline
+  跨帧强制（v5 修正 :178 与 §2.3 的命名矛盾），非仅 requests read timeout；超时 ⇒
   失败终止 + incomplete attempt。
 - 流内不做 session 级重试（v1 规则保留；重试权归 owner 层，配合 §2.5 去重键）。
 
@@ -191,9 +203,10 @@ v3 追加：流路径消费到的 terminal 事件所载结果与 `run_tool_turn`
 ### 2.8 Scripted 回放与转写治理（v2 收紧）
 
 - 请求指纹升级为**canonical request hash v1**，覆盖全部影响行为的字段：
-  `{route_id, route_revision, provider, model, api_style, max_tokens, tool_choice, stream_options,
-  message_model_version, tools_schema_digest, prompt_policy_version, messages_digest}`
-  （v3 #13：含 route_revision——路由内容变更后旧转写不可误配）；
+  `{route_id, route_revision, effective_route_snapshot_digest, provider, model, api_style,
+  max_tokens, tool_choice, stream_options, message_model_version, tools_schema_digest,
+  prompt_policy_version, permission_scope_revision, outbound_policy_revision,
+  model_safe_schema_revision, messages_digest}`（v5：含快照 digest 与三个策略 revision）；
   任一字段变化 ⇒ 回放 fail-closed（测试逐字段验证）。
 - 转写治理：落 `runtime/model_turn_transcripts/` 命名空间（runtime 不入库）；每份带
   schema_version、大小上限、保留 TTL；**录制管线内置脱敏**——转写只存归一化事件（永不存 raw

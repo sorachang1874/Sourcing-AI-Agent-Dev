@@ -1,9 +1,10 @@
 # Track D — D3 批级设计：公司身份自验证 loop（第一垂直切片）
 
-> Status: Cross-model design input for owner review（v4 2026-07-13，作者 = Claude Fable 5；只设计、不改码）。
-> **v4 修订**：按 round-3 评审（提取件 `runtime/reviews/20260713T125255Z_*.extracted-reference.md`，
-> NO-GO）修订——采纳其对 join 链/审批解耦/intent 绑定/证据 provenance 的具体修法，并恢复 v3 被
-> 压缩的自包含正文。修订史与覆盖映射见 §10。
+> Status: Cross-model design input for owner review（v5 2026-07-13，作者 = Claude Fable 5；只设计、不改码）。
+> **v5 修订**：按 round-4 有效 artifact `runtime/reviews/20260713T131447Z_*`（NO-GO，阻断集 =
+> 新 findings #1、#3-#7）修订：record/apply 单写者拆分、workspace 键恢复、expiry 去读者化、
+> grant 一等记录与生命周期、共享模型调用契约、bridge diagnostic-only 语义、claim generation
+> 物理实现诚实化。修订史与覆盖映射见 §10。
 > 上层计划：`TRACK_D_AGENT_RUNTIME_PLAN.md` §2 D3。TD-2/5/6/7 裁决见上层 §5。
 > **不依赖 model_native_search、不依赖 D0 tool-calling、不依赖 D2。**
 > 实施前按 handbook 纪律重新 Scout（基准 HEAD `656b368`）。
@@ -49,8 +50,12 @@ approved/ready（`acquisition_command_owner.py:1855-1867`）——v4 的审批�
   capability 注册，不按步骤类型一刀切。
 - **Tier-2 审批与终审解耦**（v4 核心修正——终审批准即刻 commit，不能兼任搜索预算授权）：
   - review session 增加**类型化部分决定** `identity_search_budget_grant`：人在 review 卡上可
-    **只授予搜索预算**（默认额度 = TD-5 的 3 次，可配置）而不终审通过 plan——授予事件铸造
-    Tier-2 信封（原子扣减、跨 retry/resume 不重置）；
+    **只授予搜索预算**（默认额度 = TD-5 的 3 次，可配置）而不终审通过 plan。**grant 是一等 PG
+    记录**（v5 补 round4#6 生命周期）：键 =（workspace_id, review_session_id,
+    verification_intent generation, policy_revision），状态 `active/revoked/exhausted/reconciled`；
+    cancel/plan 重编译/intent supersession/review 终审 transition **原子 revoke** 关联 grant——
+    信封不跨代存活；**每次物理 search 调用在扣减+transport 前 CAS 当前 session+intent+grant
+    三者均活跃**；grant 进 §4b owner 矩阵（owner = plan review owner，消费方 = Tier-2 命令）；
   - **plan 终审通过的前置** = 全部 blocking reasons 已清除或 human_confirmed（含身份 reason）；
     **commit owner 原子复查**：计划 provider 工作前在同一 UoW 内验证 blocking reasons 状态
     （修复 pinned 的 commit 只查 approved 状态的缺口——实施项，进 W11 commit owner 批）；
@@ -70,10 +75,20 @@ acquisition.plan.build 结果事件（含 plan 期廉价解析的置信度）
   → request owner 创建 review session（id 此刻才存在），发 session-created 结果事件
   → reducer（置信 < high 时）计划 company.identity.verify.evidence（携带 session id + fingerprint + intent）
   → 验证 terminal 结果事件
-  → reducer 计划 plan_review.identity_result.apply（幂等键 = verification_intent_id）
-  → apply 命令 owner 在自己的 UoW 内：§4c 全条件 CAS + 更新 review session gate payload
-    （证据卡 + 身份 reason 状态）+ 发 apply 结果事件（applied / not_applied 显式）
+  → reducer 计划 company.identity.verification.record（owner = 验证 owner；幂等键 = intent_id）
+  → record owner 单 UoW：§4c 全条件 CAS，只写自己的聚合（verification 行 + intent 迁移 +
+    not_applied/applied 证据），发 company_identity_verification_recorded 域事件
+  → reducer 计划 plan_review.identity_result.apply（owner = plan review owner；幂等键 = intent_id）
+  → apply owner 单 UoW：只写自己的聚合（review session gate payload：证据卡 + 身份 reason 状态），
+    发 apply 结果事件
 ```
+
+**（v5，round4#1 单写者拆分）**两段各自单 owner 单聚合：验证状态/intent/generation 只由验证
+owner 写，gate 只由 plan review owner 写，两者以域事件+reducer 连接；两步之间 gate 保持
+fail-closed（身份 reason 未清即仍阻塞，中间态无放行窗口）。人工确认同构反向：review owner 在
+自己 UoW 记录人工决定 + 发事件 → reducer 计划验证 owner 的 supersession 命令（写 human_confirmed
++ generation+1 + supersede intent）。**Phase-2 语义澄清（义务清单第 6 条的裁定）**：
+`verified_accepted` 只清身份 reason，**永不计划 commit**——commit 仍只由终审批准链触发。
 
 - plan 期廉价解析（只跑确定性分支，不 search 不调模型）在 plan.build owner 内完成，置信度随
   结果事件携带；
@@ -117,8 +132,12 @@ acquisition.plan.build 结果事件（含 plan 期廉价解析的置信度）
      **verification_state=needs_human**（导入行永不 verified/accepted 态）、无 workspace 的全局
      记录进 quarantine 映射表（显式映射到 workspace 或标 shared-origin，不静默落入任一 workspace）；
   3. 文件注册表 + 快照重扫路径全部降级 migration bridge：读先 PG 后 bridge（命中记指标）、
-     **全部 4+ 写入方**迁移或停写（asset/cloud-import/org-assets 三个调用方逐个改造为经 PG owner
-     写入）、deletion preflight 覆盖**所有 resolver 路径含快照重扫**；
+     **全部写入方**迁移或停写（asset/cloud-import/org-assets 调用方逐个改造为经 PG owner 写入；
+     Scout 需补 round-4 点名的 `company_asset_supplement.py:1032-1042`、`asset_sync.py:1066-1077`
+     等快照写方，并更正 `:641-681` 为读方）、deletion preflight 覆盖所有 resolver 路径含快照重扫；
+     **bridge 消费语义（v5，round4#8）**：PG miss 且 bridge 命中而**无显式 workspace 映射**时，
+     结果为 **diagnostic-only 的 needs_human**——不得授权身份、local-asset 可用性、gate 清除或
+     付费分支抑制；存在 bridge 命中期间，normal-path 签收被 scope-local 阻断直至删除条件达成；
   4. precedence preflight：PG 行在位时文件注册表与快照不可能胜出；workspace 决定永不回写全局文件。
 - 跨 workspace 共享语义显式推迟（内部单 org 阶段），推迟记录在案。
 
@@ -139,11 +158,19 @@ workflow_command_id / activity_run_id / attempt_id / entity_delta_id）；预算
 | pending | shadow_would_verify / needs_human / failed / timed_out | 验证 terminal（apply 命令） |
 | shadow_would_verify | verified_accepted | **显式 promotion 命令**（Phase 2 + revalidation 过） |
 | shadow_would_verify | needs_human / superseded | 过期/policy 升版/新 intent |
-| verified_accepted | needs_human | **`company.identity.verification.expire` 命令**（`valid_until` 到期或 `accepted_policy_version` 失效；由定期扫描 owner 计划，或读路径发现过期时**只计划该命令并按 needs_human 消费**，不直写） |
+| verified_accepted | needs_human | **`company.identity.verification.expire` 命令**（v5 修正 round4#4——读者不得 enqueue：接受时**同 UoW 持久化 expiry not-before 定时事件**，定期域 owner 扫描发类型化事件 → reducer 计划 expire 命令；读路径只做 fail-closed 派生——过期行**按 needs_human 消费**但零写零 enqueue） |
+| pending | needs_human / superseded | 控制路径（cancel/timeout/rebuild 的域命令）——v5 补 round4#9 缺口 |
+| superseded | pending | 新 verification intent（重验；superseded 现态行被新 generation 决定覆盖）——v5 补 |
 | verified_accepted | superseded | 新 generation 决定（人工或新验证） |
 | failed / timed_out / needs_human | pending | 新 verification intent（重验） |
 | 任意非 human_confirmed | human_confirmed | 人工确认 UoW |
 | human_confirmed | superseded | 仅新 generation 人工决定 |
+
+**历史与现态分离（v5，round4#9）**：append-only 的 decision/intent 历史（EntityDelta + intent 行
++ superseded 行审计链）与 canonical 现态（本表唯一行）分离——superseded 现态行由**新 generation
+决定整行替换**（历史留审计链），不存在"superseded 行原地复活"。矩阵扩展到全部共享字段（含
+validity/policy version/decision source/grant/物理因果列，补 derivation 与 migration-status 两列）
+为实施批义务（见上层计划义务清单）。
 
 **owner 矩阵（v4 恢复并补列）**：
 | 字段 | owner | source of truth | 允许值 | 消费方 | 禁止消费方 | fallback | preflight |
@@ -157,18 +184,26 @@ workflow_command_id / activity_run_id / attempt_id / entity_delta_id）；预算
 
 ### 4c. verification intent（v4 绑定物理执行身份，round-3 #4）
 
-`verification_intent`：`intent_id` PK；绑定 **operation_run_id + review_session_id +
-workflow_command_id + 该命令的 claim/lease generation + activity_attempt_id**（物理执行身份，
-generic retry 重排队同命令 id 时 claim generation 变 ⇒ 旧 intent 天然失配）；存储 plan bundle
-hash + target/scope fingerprint + `accepted_policy_version` + route/schema revisions + expected
+`verification_intent`：`(workspace_id, intent_id)` 身份（**v5 恢复租户键**——round4#3 指出 v4
+重写时丢失；workspace 等式进入索引、命令/事件引用、证据 bundle、repository 授权、幂等 scope 与
+下述 CAS 的每一条）；绑定 **operation_run_id + review_session_id + workflow_command_id +
+claim_generation + activity_attempt_id**。**claim_generation 的物理实现（v5 诚实化，round4#2）**：
+pinned `workflow_commands` 只有会被 generic retry 重置的 `attempt` 计数——本设计**要求新增
+永不重置的单调 claim generation/token 列**（migration 项，实施批义务；claim 时 +1、retry 不清零），
+intent 在 **claim 完成且 ActivityAttempt 创建之后**绑定；generic 控制面（cancel/retry/resume）
+只动 runtime 现态，域侧 supersession 经 owner 控制事件 → reducer → 域命令完成（不假设控制面
+直接原子改域行）。存储 plan bundle hash + fingerprint + `accepted_policy_version` +
+route/schema revisions + **effective_route_snapshot digest（§6 共享契约）** + expected
 decision_generation；`intent_state ∈ {pending, applied, cancelled, timed_out, superseded}`。
-- operation/command 的 retry、resume、cancel、timeout、plan 重编译、人工决定——**每种都原子
-  supersede 旧 intent**（含 generic retry：requeue 时由 owner 在同 UoW 铸新 intent）；
-- **apply 命令 owner 的单 UoW 全条件 CAS**：`intent_id 匹配 AND intent_state='pending' AND
-  claim_generation 匹配 AND stored_fingerprint 匹配 AND decision_generation=<expected> AND
-  review_session 当前状态仍 pending-review AND verification_state NOT IN (human_confirmed)`——
-  全过则原子完成：intent→applied + verification 行迁移 + gate payload 更新 + applied 证据事件；
-  任一失配 ⇒ intent 不动、行不动、发 `not_applied` no-op 证据事件（显式终态，可审计）；
+- retry、resume、cancel、timeout、plan 重编译、人工决定——每种经上述事件→reducer→域命令路径
+  **原子 supersede 旧 intent**（含 generic retry：requeue 触发的域命令在同 UoW 铸新 intent）；
+- **record 命令 owner 的单 UoW 全条件 CAS**（v5：只写验证聚合，见 §2.2 拆分）：`workspace_id
+  匹配 AND intent_id 匹配 AND intent_state='pending' AND claim_generation 匹配 AND
+  activity_attempt_id 匹配 AND stored_fingerprint 匹配 AND decision_generation=<expected> AND
+  policy/schema/route/snapshot pins 匹配 AND 所属 operation/command 当前非终态 AND
+  review_session 当前仍 pending-review AND verification_state NOT IN (human_confirmed)`——全过
+  则原子：intent→applied + verification 行迁移 + applied 证据事件（gate 更新走后续 apply 命令）；
+  任一失配 ⇒ 全不动 + `not_applied` no-op 证据事件（显式终态，可审计）；
 - 竞态电池（批验收硬项，八项）：人工确认 vs 机器到达、cancel vs 回调、retry 子 vs 父晚到、
   重编译 vs 旧结果、双机器并发 CAS、cancel 后晚到 apply、timeout 后晚到 apply、
   **generic retry 重排队后旧 attempt 晚到 apply**。
@@ -187,10 +222,14 @@ intent + superseded delta + review 决定记录。R-019 边界不变（本表自
 - **owner 侧解析**：evidence_ids 逐一对照**不可变的 intent/attempt 证据 bundle**（bundle hash 绑
   入调用信封）resolve——URL/可注册域/kind 全部服务端派生；引用不存在的 id ⇒ needs_human。
   独立性计算（§7.3'）只用服务端记录。
-- **服务端调用信封**（transport 生成，模型不可自证）：provider、requested/response/effective
-  model（精确匹配）、`model_identity_provenance`、provider call id、route/api_style + route
-  revision、bounded usage（复用既有 `OpenAIModelUsage` 五字段形态，`model_provider.py:36-55`）+
-  usage_status、fallback/circuit 证据、evidence bundle hash。接受 = 两半同过。
+- **服务端调用信封**（transport 生成，模型不可自证；**= D0 §2.3 定义的共享模型调用契约**，
+  v5 依 round4#7 显式共享——D3 不依赖 D0 的 tool-calling 能力，但信封/路由快照契约同源实现）：
+  provider、requested/response/effective model（精确匹配）、`model_identity_provenance`、
+  provider call id、route/api_style + route revision + **effective_route_snapshot digest**、
+  bounded usage（`OpenAIModelUsage`，`model_provider.py:36-55`）+ usage_status、fallback/circuit
+  证据、evidence bundle hash、**canonical response/result digest + 不可变 result artifact ref**
+  （v5 补 round4#11——信封与解析产物绑定，防有效信封配错输出）。接受 = 两半同过；
+  §4c CAS 同时比对 result artifact / provider call / bundle hash / attempt 身份四方一致。
 - 身份 ≠ 人群 scope：`confirmed_company_scope` 仍归 plan review。
 
 ## 7. 确定性接受谓词与统计门（v4 恢复全文）
@@ -239,6 +278,15 @@ preflight、§4b 迁移表注册校验、§4c 八项竞态电池、**§8 计费�
 - v2（`ffdfa7c`）→ 有效 artifact `20260713T122908Z_*`（NO-GO：16 新 findings + 持久化事实更正）。
 - v3（`656b368`）→ round-3 提取件 `20260713T125255Z_*.extracted-reference.md`（NO-GO：17 findings，
   其中 4 critical 类）。
+- v4（`4745e9c`）→ round-4 **有效 artifact** `20260713T131447Z_*`（NO-GO，阻断集 = 新 #1、#3-#7；
+  re-raise 明示不构成裁决依据）。
+- **v5（本版）round-4 阻断集覆盖**：#1→§2.2 record/apply 单写者拆分（验证 owner 写验证聚合、
+  review owner 写 gate，域事件+reducer 连接）；#3→§4c workspace 键恢复进身份与全条件 CAS；
+  #4→§4b expire 走定时事件+域 owner 扫描，读者零写零 enqueue；#5→（D0 §2.5 槽围栏）；
+  #6→§2.1 grant 一等 PG 记录 + revoke 生命周期 + 三活跃 CAS；#7→§6 共享模型调用契约（快照
+  digest 绑入 intent/attempt/信封/artifact/CAS）。re-raise 处置：#2→§4c claim generation 物理
+  实现诚实化（新列，migration 义务）；#8→§4a bridge diagnostic-only；#9→§4b 迁移表补两行 +
+  历史/现态分离；#11→§6 result digest 绑定；#13→（D0 §2.3 成本台账分账）。
 - **v4（本版）round-3 覆盖**：#1→§4a（写入方全列 + quarantine + 快照路径入 preflight）；
   #2→§2.2（事件驱动链、apply owner 写、session-created 事件后才计划验证）；#3→§2.1
   （identity_search_budget_grant 部分决定 + commit owner 原子复查）；#4→§4c（物理执行身份绑定 +

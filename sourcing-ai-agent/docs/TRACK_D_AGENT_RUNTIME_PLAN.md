@@ -1,12 +1,12 @@
 # Track D — 强 Agent 化执行计划（跨模型设计输入）
 
-> Status: Cross-model design input for owner review（v4 2026-07-13，作者 = Claude Fable 5；只规划、不改码）。
-> **修订史**：v1（`23a2b05`）→ review NO-GO 24 findings（提取件 `20260713T112818Z_*`，artifact 因
-> runner 协议代差 invalid_transport）→ v2（`ffdfa7c`，29 断言独立核查 + 24 路覆盖审计）→
-> **有效 artifact** `20260713T122908Z_*`（gpt-5.6-sol/ultra/priority）NO-GO 16 findings + 1 处事实
-> 更正 → v3（`656b368`）→ round-3 NO-GO 17 findings（提取件 `20260713T125255Z_*`）→ v4（本版，
-> 采纳 round-3 全部具体修法：事件驱动 join 链、审批解耦、intent 物理绑定、证据 provenance
-> 服务端化、结果槽 CAS、路由快照、pin 生命周期、预算台账）。
+> Status: Cross-model design input for owner review（v5 2026-07-13，作者 = Claude Fable 5；只规划、不改码）。
+> **修订史**：v1（`23a2b05`）→ NO-GO 24 findings（提取件 `20260713T112818Z_*`）→ v2（`ffdfa7c`）→
+> 有效 artifact `20260713T122908Z_*` NO-GO 16 findings + 1 事实更正 → v3（`656b368`）→ round-3
+> NO-GO 17 findings（提取件 `20260713T125255Z_*`）→ v4（`4745e9c`）→ round-4 有效 artifact
+> `20260713T131447Z_*` NO-GO（阻断集收窄到 6 条新 findings，re-raise 明示不构成裁决依据，
+> 3 项按校准转实施批义务）→ v5（本版：单写者拆分、workspace 键恢复、expiry 去读者化、grant
+> 生命周期、槽围栏、共享调用契约、成本分账；义务清单见 §6）。
 > 定位：为 Track D 提供第二模型家族的独立设计视角，供接手实现的 GPT-5.6(Codex) 部分复用或反驳；
 > 本文**不是任何 scope 的 GO**——实施批次仍逐批走 `INDEPENDENT_REVIEW_GATE.md`。
 > 配套阅读：`SERVING_EXECUTION_NORTH_STAR.md`（已 ratified，支柱 4）、`AGENT_OPERATION_CONTRACT.md`
@@ -199,7 +199,23 @@ plan review 对话化；intent→plan 前门流式化（依赖 D0+C4）；`model
   达标且 owner GO → Phase 2（`shadow_would_verify` 经逐行 revalidation + promotion 命令升
   `verified_accepted` 后自动放行——旧影子行不随开关生效）；Phase 2 开关本身是 owner-gated 配置。
 
-## 6. v1 评审 findings 处置总索引
+## 6. 实施批义务清单（round-4 校准裁定：非设计阻断，随各实施批执行并逐条验收）
+
+1. **注册表/快照全量 Scout**（D3 批 step 1）：round-4 补充点名 `company_asset_supplement.py:1032-1042`、
+   `asset_sync.py:1066-1077` 为快照写方，`company_registry.py:641-681` 更正为读方；Scout 产出
+   逐点分类清单存档。
+2. `agent_events` 精确投影契约（D2 批）：stream 身份公式、source-event ordinal/基数、唯一约束、
+   rebuild owner/顺序、cursor 授权、replay parity preflight。
+3. 宽松 action-schema 迁移桥启用前，先落 residual 台账行 + NEXT_TODO 条目（D1 批）。
+4. tool-schema 版本/digest 在 turn 创建点钉住并贯穿 terminal result/journal → AgentAction →
+   approve/retry run（D0/D2 批）。
+5. `judge_call_key` 追加 workspace/intent generation/有效路由/schema/policy revision 维度；
+   「official domain 归属」的服务端证明规则成文（D3 批）。
+6. workflow_commands 新增永不重置的 claim generation/token 列（migration，D3 批前置）。
+7. §4b owner 矩阵扩展到全部共享字段（补 derivation/migration-status 列）（D3 批）。
+8. 文档标签清理（残留「详设 v2」字样等）随下一次文档批处理。
+
+## 7. v1 评审 findings 处置总索引
 
 3 critical + 17 high + 3 medium + 1 low 全部 addressed：D3 相关（#1-4、#15-19、#21、#24）见 D3
 详设 v2 **§10** 覆盖映射表；D0/D1 相关（#5-14、#22-23）见 D0 详设 v2 §6 覆盖映射表；
