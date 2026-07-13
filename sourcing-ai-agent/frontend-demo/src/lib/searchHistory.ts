@@ -68,6 +68,18 @@ export function upsertSearchHistoryItem(item: SearchHistoryItem): SearchHistoryI
   return writeSearchHistory([item, ...readSearchHistory().filter((entry) => entry.id !== item.id)]);
 }
 
+export function replaceSearchHistoryItem(
+  previousHistoryId: string,
+  item: SearchHistoryItem,
+): SearchHistoryItem[] {
+  return writeSearchHistory([
+    item,
+    ...readSearchHistory().filter(
+      (entry) => entry.id !== previousHistoryId && entry.id !== item.id,
+    ),
+  ]);
+}
+
 export function deleteSearchHistoryItem(historyId: string): SearchHistoryItem[] {
   return writeSearchHistory(readSearchHistory().filter((item) => item.id !== historyId));
 }

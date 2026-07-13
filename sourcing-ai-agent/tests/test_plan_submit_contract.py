@@ -152,12 +152,35 @@ class _CallInventory(ast.NodeVisitor):
                     }
                 )
 
-        if called in {"submit", "map", "apply", "apply_async"}:
-            target = node.args[0] if node.args else next(
-                (keyword.value for keyword in node.keywords if keyword.arg in {"fn", "func"}),
-                None,
+        executor_target: ast.AST | None = None
+        if called == "run_in_executor":
+            executor_target = (
+                node.args[1]
+                if len(node.args) >= 2
+                else next(
+                    (keyword.value for keyword in node.keywords if keyword.arg in {"fn", "func"}),
+                    None,
+                )
             )
-            target_name = self._resolve_callable(target)
+        elif called in {
+            "apply",
+            "apply_async",
+            "map",
+            "starmap",
+            "starmap_async",
+            "submit",
+            "to_thread",
+        }:
+            executor_target = (
+                node.args[0]
+                if node.args
+                else next(
+                    (keyword.value for keyword in node.keywords if keyword.arg in {"fn", "func"}),
+                    None,
+                )
+            )
+        if executor_target is not None:
+            target_name = self._resolve_callable(executor_target)
             target_record = {
                 "attribute": target_name,
                 "function": self.function_stack[-1] if self.function_stack else "<module>",
@@ -303,10 +326,7 @@ def test_plan_compile_signature_excludes_consumer_transport_identity_only() -> N
 
 
 def test_source_ratchet_has_one_submit_owned_hydration_thread_and_no_api_compile_fallback() -> None:
-    inventories = {
-        str(path.relative_to(SOURCE_ROOT)): _inventory(path)
-        for path in sorted(SOURCE_ROOT.rglob("*.py"))
-    }
+    inventories = {str(path.relative_to(SOURCE_ROOT)): _inventory(path) for path in sorted(SOURCE_ROOT.rglob("*.py"))}
 
     queue_callers = [
         (path, call["function"])
@@ -315,6 +335,14 @@ def test_source_ratchet_has_one_submit_owned_hydration_thread_and_no_api_compile
         if call["attribute"] == LEGACY_PLAN_HYDRATION_QUEUE_METHOD
     ]
     assert queue_callers == [("orchestrator.py", LEGACY_PLAN_HYDRATION_OWNER_METHOD)]
+
+    direct_hydration_callers = [
+        (path, call["function"])
+        for path, inventory in inventories.items()
+        for call in inventory.attribute_calls
+        if call["attribute"] == LEGACY_PLAN_HYDRATION_RUN_METHOD and call["kind"] == "direct_or_alias_call"
+    ]
+    assert direct_hydration_callers == []
 
     thread_creators = [
         (path, creator["function"])
@@ -349,23 +377,34 @@ def test_source_ratchet_has_one_submit_owned_hydration_thread_and_no_api_compile
 def test_source_ratchet_detects_callable_alias_thread_alias_and_executor_bypasses() -> None:
     inventory = _inventory_source(
         """
+import asyncio
 import threading as thread_runtime
 
-def bypass(self, executor):
+def bypass(self, executor, loop, pool):
     compile_alias = self.plan_workflow
     compile_alias({})
     run_alias = self._run_plan_hydration
+    run_alias()
     thread_alias = thread_runtime.Thread
     thread_alias(target=run_alias)
     submit_alias = executor.submit
     submit_alias(run_alias)
     submit_alias(compile_alias, {})
+    asyncio.to_thread(compile_alias, {})
+    asyncio.to_thread(run_alias)
+    loop.run_in_executor(None, run_alias)
+    pool.starmap(compile_alias, [])
 """
     )
 
-    compile_uses = [
-        call for call in inventory.attribute_calls if call["attribute"] == "plan_workflow"
-    ]
+    compile_uses = [call for call in inventory.attribute_calls if call["attribute"] == "plan_workflow"]
     assert {call["kind"] for call in compile_uses} == {"direct_or_alias_call", "executor_target"}
+    assert len(compile_uses) == 4
+    direct_hydration_uses = [
+        call
+        for call in inventory.attribute_calls
+        if call["attribute"] == LEGACY_PLAN_HYDRATION_RUN_METHOD and call["kind"] == "direct_or_alias_call"
+    ]
+    assert len(direct_hydration_uses) == 1
     assert len(inventory.hydration_thread_creators) == 1
-    assert len(inventory.hydration_executor_targets) == 1
+    assert len(inventory.hydration_executor_targets) == 3

@@ -1632,7 +1632,10 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             and result_reason == PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_REASON
         ):
             status = PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_HTTP_STATUS
-        elif result_status == PLAN_SUBMIT_OWNER_UNAVAILABLE_STATUS and result_reason == PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON:
+        elif (
+            result_status == PLAN_SUBMIT_OWNER_UNAVAILABLE_STATUS
+            and result_reason == PLAN_SUBMIT_OWNER_UNAVAILABLE_REASON
+        ):
             status = PLAN_SUBMIT_OWNER_UNAVAILABLE_HTTP_STATUS
         else:
             status = LEGACY_PLAN_SUBMIT_HTTP_STATUS if result_status != "invalid" else HTTPStatus.BAD_REQUEST

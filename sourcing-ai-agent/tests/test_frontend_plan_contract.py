@@ -149,6 +149,14 @@ class FrontendPlanContractTest(unittest.TestCase):
               metadata: {},
               raw: {},
             });
+            const captureError = (callback) => {
+              try {
+                callback();
+                return "";
+              } catch (error) {
+                return String(error?.message || error || "");
+              }
+            };
 
             console.log(JSON.stringify({
               canonicalLabel: api.__testResolvePlanAcquisitionStrategyLabel(staleLovableShape),
@@ -251,6 +259,24 @@ class FrontendPlanContractTest(unittest.TestCase):
               shouldRecoverLocal: historyRecovery.shouldRecoverHistoryFromBackend(localCachedHistory),
               shouldRecoverBackend: historyRecovery.shouldRecoverHistoryFromBackend(backendRecoveredHistory),
               recoveredMarker: recovered.historyMetadata.frontend_history_recovery_source,
+              initialPlanSubmitPayload: api.__testBuildPlanSubmitPayload("find researchers"),
+              revisionPlanSubmitPayload: api.__testBuildPlanSubmitPayload(
+                "find researchers with revision",
+                "history-server-owned-1",
+              ),
+              initialResolvedHistoryId: api.__testResolvePlanSubmitHistoryId(
+                "",
+                "history-server-owned-1",
+              ),
+              missingInitialHistoryIdError: captureError(() =>
+                api.__testResolvePlanSubmitHistoryId("", ""),
+              ),
+              mismatchedRevisionHistoryIdError: captureError(() =>
+                api.__testResolvePlanSubmitHistoryId(
+                  "history-server-owned-1",
+                  "history-other-owner",
+                ),
+              ),
             }));
             """
         )
@@ -287,6 +313,99 @@ class FrontendPlanContractTest(unittest.TestCase):
         self.assertTrue(result["shouldRecoverLocal"])
         self.assertFalse(result["shouldRecoverBackend"])
         self.assertEqual(result["recoveredMarker"], "backend")
+
+    def test_plan_submit_identity_lifecycle_uses_server_id_then_explicit_revision_id(self) -> None:
+        result = self._run_contract_cases()
+
+        self.assertNotIn("history_id", result["initialPlanSubmitPayload"])
+        self.assertEqual(
+            result["revisionPlanSubmitPayload"]["history_id"],
+            "history-server-owned-1",
+        )
+        self.assertEqual(result["initialResolvedHistoryId"], "history-server-owned-1")
+        self.assertIn("missing the server-owned history id", result["missingInitialHistoryIdError"])
+        self.assertIn("changed the existing history id", result["mismatchedRevisionHistoryIdError"])
+
+        source = (REPO_ROOT / "frontend-demo/src/pages/SearchPage.tsx").read_text(encoding="utf-8")
+        initial_start = source.index("const submitSearch")
+        initial_end = source.index("const startExcelWorkflow", initial_start)
+        initial_section = source[initial_start:initial_end]
+        self.assertIn("planNaturalLanguageSearch(nextQuery);", initial_section)
+        self.assertNotIn("planNaturalLanguageSearch(nextQuery, historyItem.id)", initial_section)
+        self.assertGreaterEqual(initial_section.count("persistFlow("), 3)
+        self.assertIn("persistFlow(pendingHydrationFlow, null, historyItem.id)", initial_section)
+        self.assertIn("persistFlow(readyFlow, null, historyItem.id)", initial_section)
+
+        revision_start = source.index("const applyRevision")
+        revision_section = source[revision_start:]
+        revision_call_start = revision_section.index("await sourcingBackendClient.planNaturalLanguageSearch(")
+        revision_call_end = revision_section.index(");", revision_call_start)
+        revision_call = revision_section[revision_call_start:revision_call_end]
+        self.assertIn("currentFlow.id", revision_call)
+
+    def test_local_plan_snapshot_rekey_removes_provisional_id(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("node is required for frontend TypeScript helper checks")
+        script = textwrap.dedent(
+            """
+            const fs = require("fs");
+            const path = require("path");
+            const vm = require("vm");
+            const ts = require("./frontend-demo/node_modules/typescript");
+            const source = fs.readFileSync(
+              path.join(process.cwd(), "frontend-demo/src/lib/searchHistory.ts"),
+              "utf8",
+            );
+            const compiled = ts.transpileModule(source, {
+              compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+            }).outputText;
+            let stored = JSON.stringify([
+              { id: "history-local-provisional", createdAt: "2026-07-14T02:00:00Z" },
+              { id: "history-unrelated", createdAt: "2026-07-14T01:00:00Z" },
+            ]);
+            let updateEvents = 0;
+            const window = {
+              localStorage: {
+                getItem: () => stored,
+                setItem: (_key, value) => { stored = value; },
+              },
+              dispatchEvent: () => { updateEvents += 1; },
+            };
+            const module = { exports: {} };
+            const localRequire = (specifier) => {
+              if (specifier === "./api") {
+                return { deleteFrontendHistory: async () => ({}), listFrontendHistory: async () => [] };
+              }
+              if (specifier === "./historyRecovery") {
+                return { historyItemFromRecoveryEnvelope: (value) => value };
+              }
+              return require(specifier);
+            };
+            vm.runInNewContext(
+              compiled,
+              { module, exports: module.exports, require: localRequire, window, Event: class Event {} },
+              { filename: "searchHistory.js" },
+            );
+            module.exports.replaceSearchHistoryItem(
+              "history-local-provisional",
+              { id: "history-server-owned", createdAt: "2026-07-14T03:00:00Z" },
+            );
+            console.log(JSON.stringify({ items: JSON.parse(stored), updateEvents }));
+            """
+        )
+        completed = subprocess.run(
+            ["node", "-e", script],
+            cwd=REPO_ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        result = json.loads(completed.stdout)
+        self.assertEqual(
+            [item["id"] for item in result["items"]],
+            ["history-server-owned", "history-unrelated"],
+        )
+        self.assertEqual(result["updateEvents"], 1)
 
     def test_provider_manifest_is_advanced_only_developer_context(self) -> None:
         source = (REPO_ROOT / "frontend-demo/src/components/PlanCard.tsx").read_text(encoding="utf-8")

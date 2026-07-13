@@ -21,7 +21,8 @@ durable consumer、202 cutover、compute/publish split、TTL 或 replay；这些
 Pinned advisory fixed-forward closes the process-local late-consumer snapshot/cleanup gap with a shared lock,
 owner-token retirement barrier, and successor rule; history writes are generation-guarded and authenticated unlinked
 Plan history submit/read/list/resubmit is provenance-gated. Authenticated first-create IDs are server-generated;
-caller-provided absent IDs reject, while in-process owner recheck and registration share the same lock. Old non-Plan
+the frontend rekeys its provisional local snapshot/route to that returned ID and only revisions send an existing ID.
+Caller-provided absent IDs reject, while in-process owner recheck and registration share the same lock. Old non-Plan
 read compatibility never authorizes Plan replacement. Thread-start failure retires the dead owner
 and returns retryable `503`, but permanent history-store failure still cannot guarantee a durable terminal projection.
 It also does **not** close compiler side effects: a deterministic real-compiler race still produces orphan

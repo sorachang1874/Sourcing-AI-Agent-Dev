@@ -2727,32 +2727,65 @@ function mapFrontendHistoryRecoveryPayload(
   };
 }
 
+function buildPlanSubmitPayload(queryText: string, historyId = ""): Record<string, unknown> {
+  const normalizedHistoryId = historyId.trim();
+  return {
+    raw_user_request: queryText,
+    ...(normalizedHistoryId ? { history_id: normalizedHistoryId } : {}),
+    planning_mode: "model_assisted",
+    ...DEFAULT_RECALL_LIMITS,
+  };
+}
+
+function resolvePlanSubmitHistoryId(requestedHistoryId: string, responseHistoryId: unknown): string {
+  const requested = requestedHistoryId.trim();
+  const resolved = String(responseHistoryId || "").trim();
+  if (!resolved) {
+    throw new Error("Plan submit response is missing the server-owned history id.");
+  }
+  if (requested && requested !== resolved) {
+    throw new Error("Plan revision response changed the existing history id.");
+  }
+  return resolved;
+}
+
 export async function submitPlanEnvelope(
   queryText: string,
   historyId = "",
 ): Promise<{ plan: DemoPlan | null; reviewId: string; historyId: string; status: string; raw: any; explain: any }> {
+  const requestPayload = buildPlanSubmitPayload(queryText, historyId);
   const payload = await fetchJson<any>("/api/plan/submit", {
     method: "POST",
-    body: JSON.stringify({
-      raw_user_request: queryText,
-      history_id: historyId || undefined,
-      planning_mode: "model_assisted",
-      ...DEFAULT_RECALL_LIMITS,
-    }),
+    body: JSON.stringify(requestPayload),
   }, DEFAULT_API_TIMEOUT_MS);
   const hasPlan =
     payload?.plan &&
     typeof payload.plan === "object" &&
     !Array.isArray(payload.plan) &&
     Object.keys(payload.plan).length > 0;
+  const resolvedHistoryId = resolvePlanSubmitHistoryId(historyId, payload.history_id);
   return {
     plan: hasPlan ? mapPlanPayloadToDemoPlan(payload, queryText, payload) : null,
     reviewId: String(payload.plan_review_session?.review_id || ""),
-    historyId: String(payload.history_id || historyId || ""),
+    historyId: resolvedHistoryId,
     status: String(payload.status || ""),
     raw: payload,
     explain: payload,
   };
+}
+
+export function __testBuildPlanSubmitPayload(
+  queryText: string,
+  historyId = "",
+): Record<string, unknown> {
+  return buildPlanSubmitPayload(queryText, historyId);
+}
+
+export function __testResolvePlanSubmitHistoryId(
+  requestedHistoryId: string,
+  responseHistoryId: unknown,
+): string {
+  return resolvePlanSubmitHistoryId(requestedHistoryId, responseHistoryId);
 }
 
 export async function approvePlanReview(reviewId: string, decision?: PlanReviewDecision, editableFields: PlanReviewEditableField[] = []): Promise<any> {

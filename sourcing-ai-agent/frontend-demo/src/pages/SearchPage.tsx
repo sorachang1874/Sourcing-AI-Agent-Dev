@@ -23,6 +23,7 @@ import {
 import { summarizeSearchQuery } from "../lib/historySummary";
 import {
   readSearchHistoryItem,
+  replaceSearchHistoryItem,
   startNewSearchEventName,
   upsertSearchHistoryItem,
 } from "../lib/searchHistory";
@@ -199,10 +200,18 @@ export function SearchPage() {
     setSearchParams({}, { replace: true });
   };
 
-  const persistFlow = (nextFlow: SearchHistoryItem, nextDashboard: DashboardData | null = dashboard) => {
+  const persistFlow = (
+    nextFlow: SearchHistoryItem,
+    nextDashboard: DashboardData | null = dashboard,
+    previousHistoryId = "",
+  ) => {
     commitFlow(nextFlow);
     if (nextFlow.id) {
-      upsertSearchHistoryItem(nextFlow);
+      if (previousHistoryId && previousHistoryId !== nextFlow.id) {
+        replaceSearchHistoryItem(previousHistoryId, nextFlow);
+      } else {
+        upsertSearchHistoryItem(nextFlow);
+      }
     }
     writeDemoSession({
       queryText: nextFlow.queryText,
@@ -1031,9 +1040,11 @@ export function SearchPage() {
     persistFlow(pendingFlow, null);
     setQueryText(nextQuery);
 
+    let submittedHistoryId = "";
     try {
       const { plan: planned, reviewId, historyId: nextHistoryId, status, raw } =
-        await sourcingBackendClient.planNaturalLanguageSearch(nextQuery, historyItem.id);
+        await sourcingBackendClient.planNaturalLanguageSearch(nextQuery);
+      submittedHistoryId = nextHistoryId;
       if (!isRequestEpochActive(requestEpoch)) {
         return;
       }
@@ -1048,7 +1059,7 @@ export function SearchPage() {
                 ? normalizeHistoryMetadata((raw as Record<string, unknown>).metadata)
                 : {},
           };
-          persistFlow(pendingHydrationFlow, null);
+          persistFlow(pendingHydrationFlow, null, historyItem.id);
           syncSearchRoute(resolvedHistoryId, "", true);
           startPlanHydrationPolling(resolvedHistoryId, requestEpoch);
           return;
@@ -1066,12 +1077,15 @@ export function SearchPage() {
         reviewChecklistConfirmed: (planned.reviewGate?.confirmationItems.length || 0) === 0,
         errorMessage: "",
       };
-      persistFlow(readyFlow, null);
+      persistFlow(readyFlow, null, historyItem.id);
+      syncSearchRoute(resolvedHistoryId, "", true);
     } catch (error) {
       if (!isRequestEpochActive(requestEpoch)) {
         return;
       }
-      const recovered = await recoverPlanHistoryAfterRequestFailure(historyItem.id, requestEpoch);
+      const recovered = submittedHistoryId
+        ? await recoverPlanHistoryAfterRequestFailure(submittedHistoryId, requestEpoch)
+        : false;
       if (recovered) {
         setErrorMessage("");
         setRunStatus(null);
@@ -1187,9 +1201,9 @@ export function SearchPage() {
     try {
       const { plan: planned, reviewId, historyId: nextHistoryId, status, raw } =
         await sourcingBackendClient.planNaturalLanguageSearch(
-        [currentFlow.queryText, currentFlow.revisionText].filter(Boolean).join(" "),
-        currentFlow.id,
-      );
+          [currentFlow.queryText, currentFlow.revisionText].filter(Boolean).join(" "),
+          currentFlow.id,
+        );
       if (!isRequestEpochActive(requestEpoch)) {
         return;
       }

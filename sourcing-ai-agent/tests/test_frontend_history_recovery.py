@@ -244,9 +244,7 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertTrue(all(not thread.is_alive() for thread in threads))
         rejected = [
-            result
-            for result in results.values()
-            if result.get("reason") == PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_REASON
+            result for result in results.values() if result.get("reason") == PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_REASON
         ]
         self.assertEqual(len(rejected), 2)
         self.assertIsNone(self.store.get_frontend_history_link(history_id))
@@ -530,9 +528,7 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         first_history_id = "history-plan-owner-barrier-first"
         late_history_id = "history-plan-owner-barrier-late"
         first_request_id = "request-plan-owner-barrier-first"
-        base_payload = normalize_workflow_submission_payload(
-            {"raw_user_request": "Find OpenAI reasoning researchers"}
-        )
+        base_payload = normalize_workflow_submission_payload({"raw_user_request": "Find OpenAI reasoning researchers"})
         first_payload = {**base_payload, "history_id": first_history_id}
         request_signature = _plan_hydration_request_signature(first_payload)
         first_record = {
@@ -586,9 +582,7 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 and str(generation.get("status") or "") == "completed"
             ):
                 late_submit.update(
-                    self.orchestrator.submit_plan_workflow(
-                        {**base_payload, "history_id": late_history_id}
-                    )
+                    self.orchestrator.submit_plan_workflow({**base_payload, "history_id": late_history_id})
                 )
             return persisted
 
@@ -841,9 +835,7 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         second_history_id = "history-plan-owner-error-second"
         first_request_id = "request-plan-owner-error-first"
         second_request_id = "request-plan-owner-error-second"
-        base_payload = normalize_workflow_submission_payload(
-            {"raw_user_request": "Find OpenAI reasoning researchers"}
-        )
+        base_payload = normalize_workflow_submission_payload({"raw_user_request": "Find OpenAI reasoning researchers"})
         first_payload = {**base_payload, "history_id": first_history_id}
         second_payload = {**base_payload, "history_id": second_history_id}
         request_signature = _plan_hydration_request_signature(first_payload)

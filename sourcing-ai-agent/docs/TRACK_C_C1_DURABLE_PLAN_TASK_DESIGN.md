@@ -707,12 +707,15 @@ independent review because public status and download semantics change.
   This is not full closure: a deterministic real-compiler race proves the obsolete generation can still create an
   orphan review session and criteria versions before the post-call fence. D-C1-3/C1d must split pure compute from
   owner-gated publication; no durable/live/manual/product signoff may treat this C1b fence as that split.
-- The AST ratchet now follows callable aliases and `partial`/`getattr`, plus thread and executor targets. Mutation
-  fixtures prove aliased direct compile, aliased hydration thread, and executor submit bypasses are detected.
+- The AST ratchet now follows callable aliases and `partial`/`getattr`, asserts there are no direct hydration-run
+  callers, and inspects thread plus executor targets. Mutation fixtures prove aliased direct compile/hydration,
+  aliased hydration thread, `submit`, `asyncio.to_thread`, `run_in_executor`, and pool `starmap` bypasses are detected.
 - Authenticated unlinked Plan rows carry API-authored requester/tenant provenance. First-create history IDs are always
   server-generated; an authenticated caller-provided absent `history_id` is rejected rather than claimed, which closes
   the cross-process check/claim gap without inventing a pre-C1c durable CAS row. Within one API process, owner recheck,
-  queued projection, and registration also share the hydration lock. Submit, exact read, list, and resubmit use one
+  queued projection, and registration also share the hydration lock. The frontend omits its provisional local ID on
+  initial submit, atomically rekeys the local snapshot and route to the returned server ID, and sends that server ID
+  only for later revision. Submit, exact read, list, and resubmit use one
   fail-closed matrix: missing,
   partial, mismatched, or body-authored ownership is 404/excluded. Non-Plan legacy rows retain read compatibility but
   never gain Plan replacement authority; open mode retains its explicit compatibility behavior. This bridge adds no
