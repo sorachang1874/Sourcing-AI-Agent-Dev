@@ -6,20 +6,29 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 import unittest
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from generate_capability_probe_fixtures import build_request_fixture, build_result_fixture  # noqa: E402
+from generate_capability_probe_fixtures import (  # noqa: E402
+    _atomic_write_many,
+    build_request_fixture,
+    build_result_fixture,
+)
 
 from x_first.capability_probe import (  # noqa: E402
+    CAPABILITY_OBSERVATION_EXCERPTS,
+    ERROR_ENVELOPE_BY_VERDICT,
+    SYNTHETIC_RAW_RESPONSE_SHA256,
     canonical_sha256,
     validate_capability_request,
     validate_capability_result,
@@ -67,6 +76,17 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
         errors = validate_capability_result(result, request=self.request)
         self.assertTrue(any(contains in error for error in errors), errors)
 
+    def build_failure_result(self, *, verdict: str = "capability_unavailable") -> dict[str, Any]:
+        result = copy.deepcopy(self.result)
+        result["run"]["status"] = "failed"
+        result["task"].update({"status": "failed", "stop_reason": "fixture_failed"})
+        result["capability"]["verdict"] = verdict
+        result["observations"] = []
+        result["usage"]["observations"] = 0
+        code, message, retryable = ERROR_ENVELOPE_BY_VERDICT[verdict]
+        result["errors"] = [{"code": code, "message": message, "retryable": retryable}]
+        return result
+
     def test_generated_artifacts_are_current_and_deterministic(self) -> None:
         self.assertEqual(build_request_fixture(), build_request_fixture())
         self.assertEqual(build_result_fixture(self.request), build_result_fixture(self.request))
@@ -83,12 +103,55 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_generator_atomic_write_rejects_symlinks_and_rolls_back_pair_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "first.json"
+            second = root / "second.json"
+            first.write_text("old-first", encoding="utf-8")
+            second.write_text("old-second", encoding="utf-8")
+
+            _atomic_write_many(((first, "new-first"), (second, "new-second")))
+            self.assertEqual(first.read_text(encoding="utf-8"), "new-first")
+            self.assertEqual(second.read_text(encoding="utf-8"), "new-second")
+            self.assertFalse(list(root.glob(".*.tmp")))
+
+            target = root / "target.json"
+            symlink = root / "symlink.json"
+            target.write_text("target-original", encoding="utf-8")
+            symlink.symlink_to(target)
+            with self.assertRaisesRegex(ValueError, "refusing to replace symlink"):
+                _atomic_write_many(((symlink, "must-not-write"), (second, "must-not-write")))
+            self.assertEqual(target.read_text(encoding="utf-8"), "target-original")
+            self.assertEqual(second.read_text(encoding="utf-8"), "new-second")
+
+            first.write_text("rollback-first", encoding="utf-8")
+            second.write_text("rollback-second", encoding="utf-8")
+            real_replace = os.replace
+            replace_calls = 0
+
+            def fail_second_replace(source: str | os.PathLike[str], destination: str | os.PathLike[str]) -> None:
+                nonlocal replace_calls
+                replace_calls += 1
+                if replace_calls == 2:
+                    raise OSError("synthetic second replace failure")
+                real_replace(source, destination)
+
+            with mock.patch("generate_capability_probe_fixtures.os.replace", side_effect=fail_second_replace):
+                with self.assertRaisesRegex(OSError, "synthetic second replace failure"):
+                    _atomic_write_many(((first, "partial-first"), (second, "partial-second")))
+            self.assertEqual(first.read_text(encoding="utf-8"), "rollback-first")
+            self.assertEqual(second.read_text(encoding="utf-8"), "rollback-second")
+            self.assertFalse(list(root.glob(".*.tmp")))
+
     def test_positive_fixture_validates_and_binds_request(self) -> None:
         self.assertEqual(validate_capability_request(self.request), [])
         self.assertEqual(validate_capability_result(self.result, request=self.request), [])
         expected_hash = canonical_sha256(self.request)
         self.assertEqual(self.result["request_sha256"], expected_hash)
         self.assertEqual(self.result["provenance"]["request_sha256"], expected_hash)
+        self.assertEqual(self.result["provenance"]["raw_response_sha256"], SYNTHETIC_RAW_RESPONSE_SHA256)
+        self.assertEqual(self.result["usage"]["elapsed_ms"], 0)
         self.assertEqual(self.result["capability"]["verdict"], "fixture_contract_validated")
         self.assertFalse(self.result["capability"]["x_native_access_proven"])
 
@@ -102,9 +165,30 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
         self.assertEqual(self.result_schema["properties"]["execution_mode"]["const"], "fixture_only")
         self.assertIs(self.result_schema["$defs"]["capability"]["properties"]["x_native_access_proven"]["const"], False)
         self.assertEqual(self.result_schema["properties"]["observations"]["maxItems"], 5)
+        self.assertEqual(self.result_schema["$defs"]["error"]["properties"]["message"]["maxLength"], 280)
+        self.assertEqual(
+            set(self.result_schema["$defs"]["observation"]["properties"]["excerpt"]["enum"]),
+            set(CAPABILITY_OBSERVATION_EXCERPTS.values()),
+        )
+        self.assertEqual(
+            self.result_schema["$defs"]["provenance"]["properties"]["raw_response_sha256"]["const"],
+            SYNTHETIC_RAW_RESPONSE_SHA256,
+        )
+        error_properties = self.result_schema["$defs"]["error"]["properties"]
+        self.assertEqual(
+            set(error_properties["code"]["enum"]),
+            {value[0] for value in ERROR_ENVELOPE_BY_VERDICT.values()},
+        )
+        self.assertEqual(
+            set(error_properties["message"]["enum"]),
+            {value[1] for value in ERROR_ENVELOPE_BY_VERDICT.values()},
+        )
         stage0 = load_json(ROOT / "contracts/x.grok.collection.v1.schema.json")
         self.assertEqual(stage0["properties"]["schema_version"]["const"], "x.grok.collection.v1")
         self.assertNotIn("capability", stage0["properties"])
+        contract_doc = (ROOT / "docs/STAGE1_CAPABILITY_FIXTURE_CONTRACT.md").read_text(encoding="utf-8")
+        self.assertIn("CapabilityFixtureProfile", contract_doc)
+        self.assertIn("before — not after — any second lab", contract_doc)
 
     def test_fixture_contains_only_synthetic_account_level_evidence(self) -> None:
         serialized = json.dumps({"request": self.request, "result": self.result}, ensure_ascii=False).casefold()
@@ -190,8 +274,8 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
                 "cannot prove X-native access",
             ),
             "invalid raw response hash": (
-                lambda p: p["provenance"].__setitem__("raw_response_sha256", "not-a-hash"),
-                "must be a lowercase SHA-256",
+                lambda p: p["provenance"].__setitem__("raw_response_sha256", "0" * 64),
+                "must bind the canonical synthetic raw response bytes",
             ),
         }
         for name, (mutation, expected) in mutations.items():
@@ -199,15 +283,7 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
                 self.assert_result_rejected(mutation, contains=expected)
 
     def test_terminal_total_state_registry_and_failure_envelope(self) -> None:
-        failure = copy.deepcopy(self.result)
-        failure["run"]["status"] = "failed"
-        failure["task"].update({"status": "failed", "stop_reason": "fixture_failed"})
-        failure["capability"]["verdict"] = "capability_unavailable"
-        failure["observations"] = []
-        failure["usage"]["observations"] = 0
-        failure["errors"] = [
-            {"code": "synthetic_unavailable", "message": "Synthetic capability unavailable.", "retryable": False}
-        ]
+        failure = self.build_failure_result()
         self.assertEqual(validate_capability_result(failure, request=self.request), [])
 
         self.assert_result_rejected(
@@ -225,6 +301,80 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
         self.assert_result_rejected(
             lambda p: p["run"].__setitem__("status", "failed"),
             contains="terminal tuple is inconsistent",
+        )
+
+    def test_observation_and_error_content_registries_fail_closed(self) -> None:
+        injected_excerpts = (
+            "Synthetic capability evidence 001 plus an arbitrary individual name.",
+            "Synthetic capability evidence 001 from @arbitrary_handle.",
+            "Synthetic capability evidence 001 at https://x.com/example/status/1.",
+            "Synthetic capability evidence 001 with api_key=fixture-value.",
+            "Synthetic capability evidence 001 with a language signal and region signal.",
+        )
+        for excerpt in injected_excerpts:
+            with self.subTest(excerpt=excerpt):
+                self.assert_result_rejected(
+                    lambda payload, excerpt=excerpt: payload["observations"][0].__setitem__("excerpt", excerpt),
+                    contains="must match the deterministic object template",
+                )
+        self.assert_result_rejected(
+            lambda payload: payload["observations"][0].__setitem__("observation_id", "xprobe_obs_fixture_002"),
+            contains="must bind its platform object sequence",
+        )
+        self.assert_result_rejected(
+            lambda payload: payload["observations"][0].__setitem__(
+                "excerpt", CAPABILITY_OBSERVATION_EXCERPTS["xpost_fixture_002"]
+            ),
+            contains="must match the deterministic object template",
+        )
+
+        injected_messages = (
+            "Synthetic failure involving an arbitrary individual name.",
+            "Synthetic failure from @arbitrary_handle.",
+            "Synthetic failure at https://x.com/example/status/1.",
+            "Synthetic failure with api_key=fixture-value.",
+            "Synthetic failure with a language signal and region signal.",
+        )
+        for message in injected_messages:
+            with self.subTest(message=message):
+                failure = self.build_failure_result()
+                failure["errors"][0]["message"] = message
+                errors = validate_capability_result(failure, request=self.request)
+                self.assertTrue(
+                    any("must match the deterministic verdict envelope" in error for error in errors),
+                    errors,
+                )
+
+        overlong_failure = self.build_failure_result()
+        overlong_failure["errors"][0]["message"] = "S" * 281
+        overlong_errors = validate_capability_result(overlong_failure, request=self.request)
+        self.assertTrue(any("at most 280 characters" in error for error in overlong_errors), overlong_errors)
+
+        wrong_code_failure = self.build_failure_result()
+        wrong_code_failure["errors"][0]["code"] = "synthetic_other"
+        wrong_code_errors = validate_capability_result(wrong_code_failure, request=self.request)
+        self.assertTrue(
+            any("must match the deterministic verdict envelope" in error for error in wrong_code_errors),
+            wrong_code_errors,
+        )
+
+    def test_run_duration_and_elapsed_ms_reconcile_exactly(self) -> None:
+        one_millisecond = copy.deepcopy(self.result)
+        one_millisecond["run"]["completed_at"] = "2026-07-14T00:00:00.001Z"
+        one_millisecond["usage"]["elapsed_ms"] = 1
+        self.assertEqual(validate_capability_result(one_millisecond, request=self.request), [])
+
+        self.assert_result_rejected(
+            lambda payload: payload["usage"].__setitem__("elapsed_ms", 1),
+            contains="must exactly match the run timestamp duration",
+        )
+        self.assert_result_rejected(
+            lambda payload: payload["run"].__setitem__("completed_at", "2026-07-14T00:00:00.001Z"),
+            contains="must exactly match the run timestamp duration",
+        )
+        self.assert_result_rejected(
+            lambda payload: payload["run"].__setitem__("completed_at", "2026-07-14T00:00:00.000001Z"),
+            contains="must resolve to an exact non-negative millisecond count",
         )
 
     def test_usage_totals_and_hard_budgets_fail_closed(self) -> None:
@@ -281,6 +431,10 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
                     "https://fixture@posts.invalid/fixture_openai_official/status/xpost_fixture_001",
                 ),
                 "not canonical synthetic evidence",
+            ),
+            "URL parser exception": (
+                lambda p: p["observations"][0].__setitem__("canonical_url", "https://[invalid"),
+                "cannot be parsed safely",
             ),
             "account mismatch": (
                 lambda p: p["observations"][0].__setitem__("platform_user_id", "xuid_fixture_other"),

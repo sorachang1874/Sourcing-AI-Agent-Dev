@@ -47,6 +47,16 @@ The result is terminal-total. Accepted tuples are:
 Unknown or cross-paired states are invalid. `x_native_proven` is intentionally not a v1 verdict, and
 `x_native_access_proven` is always false.
 
+Run duration is derived from `completed_at - started_at` at exact millisecond precision. It must equal
+`usage.elapsed_ms`; sub-millisecond timestamps are rejected rather than rounded. The fixed
+`raw_response_sha256` is the digest of the canonical synthetic raw bytes owned by the executable contract, not an
+unbound caller-supplied hash.
+
+Fixture regeneration refuses symlink destinations, materializes every candidate file in a same-directory temporary
+file, fsyncs it, and uses atomic replacement. A normal multi-file replacement failure rolls already replaced files
+back to their prior bytes. A process-loss boundary cannot make a mismatched pair valid because the result binds the
+canonical request hash and both `--check` and the validator fail closed on drift.
+
 ## Fail-closed rules
 
 Validation rejects:
@@ -57,10 +67,23 @@ Validation rejects:
 - unknown or inconsistent run/task/verdict values;
 - missing or duplicate stable IDs, URL/object-ID mismatch, target-account mismatch, invalid timestamps, or unbounded
   excerpt/full-body retention;
+- excerpts or terminal error messages outside their exact object/verdict-bound synthetic template registries;
+- parser exceptions, raw-response hash drift, or a mismatch between run timestamp duration and `elapsed_ms`;
 - candidate packets, identity links, assertions, canonical writes, outreach/ranking authorization, or protected-trait
   and proxy fields/values.
 
 The fixture makes no affiliation, employment, relevance, identity-link, exhaustiveness, or outreach claim.
+
+## Fixture profile extraction boundary
+
+Version 1 intentionally hard-codes the exact OpenAI synthetic account, IDs, query, schema constants, and fixture
+paths. That bounded duplication is deleted before — not after — any second lab becomes fixture-enabled. The extension
+condition is an owner-reviewed contract batch that introduces a typed `CapabilityFixtureProfile` registry containing
+the lab ID, synthetic account ID/handle, probe/run/task IDs, fixed query, URL namespace, and template registry. That
+batch must version schemas and generate independently validated fixtures/tests for every profile.
+
+Do not extract the registry speculatively in v1, and do not interpret a future second profile as approval for live or
+multi-lab collection. Until the extension condition is met, any non-OpenAI target fails closed.
 
 ## Local validation
 

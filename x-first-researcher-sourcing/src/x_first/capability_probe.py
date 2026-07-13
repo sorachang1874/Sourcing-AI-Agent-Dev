@@ -17,6 +17,37 @@ REQUEST_SCHEMA_VERSION = "x.grok.capability_probe.request.v1"
 RESULT_SCHEMA_VERSION = "x.grok.capability_probe.result.v1"
 EXECUTION_MODE = "fixture_only"
 SAFETY_POLICY_VERSION = "x-first-public-professional-v1"
+MAX_ERROR_MESSAGE_CHARS = 280
+SYNTHETIC_RAW_RESPONSE_BYTES = b"synthetic fixture response v1"
+SYNTHETIC_RAW_RESPONSE_SHA256 = hashlib.sha256(SYNTHETIC_RAW_RESPONSE_BYTES).hexdigest()
+CAPABILITY_OBSERVATION_EXCERPTS: Mapping[str, str] = MappingProxyType(
+    {
+        f"xpost_fixture_{number:03d}": (
+            f"Synthetic capability evidence {number:03d} for xpost_fixture_{number:03d} about public technical "
+            "model-training work."
+        )
+        for number in range(1, 6)
+    }
+)
+ERROR_ENVELOPE_BY_VERDICT: Mapping[str, tuple[str, str, bool]] = MappingProxyType(
+    {
+        "capability_unavailable": (
+            "synthetic_unavailable",
+            "Synthetic capability unavailable.",
+            False,
+        ),
+        "probe_error": (
+            "synthetic_probe_error",
+            "Synthetic capability probe failed.",
+            False,
+        ),
+        "killed": (
+            "synthetic_killed",
+            "Synthetic capability probe killed.",
+            False,
+        ),
+    }
+)
 
 REQUEST_FIELDS = frozenset(
     {
@@ -211,6 +242,18 @@ def _parse_datetime(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo is not None else None
 
 
+def _exact_duration_ms(started_at: datetime, completed_at: datetime) -> int | None:
+    delta = completed_at - started_at
+    total_microseconds = (
+        delta.days * 24 * 60 * 60 * 1_000_000
+        + delta.seconds * 1_000_000
+        + delta.microseconds
+    )
+    if total_microseconds < 0 or total_microseconds % 1000:
+        return None
+    return total_microseconds // 1000
+
+
 def _validate_object(
     value: Any,
     *,
@@ -354,10 +397,15 @@ def validate_capability_result(
         errors.append("capability task stop_reason contradicts verdict")
     started_at = _parse_datetime(run.get("started_at"))
     completed_at = _parse_datetime(run.get("completed_at"))
+    run_duration_ms: int | None = None
     if started_at is None or completed_at is None:
         errors.append("capability run timestamps must be timezone-aware ISO-8601 values")
     elif started_at > completed_at:
         errors.append("capability run started_at must not follow completed_at")
+    else:
+        run_duration_ms = _exact_duration_ms(started_at, completed_at)
+        if run_duration_ms is None:
+            errors.append("capability run duration must resolve to an exact non-negative millisecond count")
     if capability.get("proof_scope") != "offline_synthetic_only":
         errors.append("capability proof_scope must remain offline_synthetic_only")
     if capability.get("x_native_access_proven") is not False:
@@ -378,10 +426,8 @@ def validate_capability_result(
     for field, expected in expected_provenance.items():
         if provenance.get(field) != expected:
             errors.append(f"fixture provenance mismatch: {field}")
-    if not isinstance(provenance.get("raw_response_sha256"), str) or not re.fullmatch(
-        r"[0-9a-f]{64}", provenance.get("raw_response_sha256", "")
-    ):
-        errors.append("fixture raw_response_sha256 must be a lowercase SHA-256")
+    if provenance.get("raw_response_sha256") != SYNTHETIC_RAW_RESPONSE_SHA256:
+        errors.append("fixture raw_response_sha256 must bind the canonical synthetic raw response bytes")
 
     usage = _validate_shape(result.get("usage"), shape="usage", location="result.usage", errors=errors)
     integer_usage = ("executions", "external_calls", "pages", "observations", "elapsed_ms")
@@ -389,6 +435,9 @@ def validate_capability_result(
         errors.append("capability usage counters must be non-negative integers")
     if type(usage.get("cost_usd")) not in {int, float} or usage.get("cost_usd", -1) < 0:
         errors.append("capability usage cost_usd must be a non-negative number")
+    if run_duration_ms is not None and type(usage.get("elapsed_ms")) is int:
+        if usage["elapsed_ms"] != run_duration_ms:
+            errors.append("capability usage elapsed_ms must exactly match the run timestamp duration")
     if any(usage.get(field) != 0 for field in ("executions", "external_calls", "pages", "cost_usd")):
         errors.append("fixture-only capability results must have zero external execution, calls, pages, and cost")
     budgets = request.get("hard_budgets") if isinstance(request.get("hard_budgets"), dict) else {}
@@ -446,10 +495,15 @@ def validate_capability_result(
             errors.append(f"capability observation account mismatch: {observation_id}")
         if observation.get("author_handle") != target.get("current_handle"):
             errors.append(f"capability observation handle mismatch: {observation_id}")
-        parsed_url = urlsplit(canonical_url)
+        try:
+            parsed_url = urlsplit(canonical_url)
+        except ValueError:
+            parsed_url = None
+            errors.append(f"capability observation URL cannot be parsed safely: {observation_id}")
         expected_path = f"/{target.get('current_handle')}/status/{object_id}"
         if (
-            parsed_url.scheme != "https"
+            parsed_url is None
+            or parsed_url.scheme != "https"
             or parsed_url.netloc != "posts.invalid"
             or parsed_url.path != expected_path
             or parsed_url.query
@@ -464,13 +518,19 @@ def validate_capability_result(
             errors.append(f"capability observation authored_at follows observed_at: {observation_id}")
         elif started_at is not None and completed_at is not None and not started_at <= observed_at <= completed_at:
             errors.append(f"capability observation observed_at falls outside run: {observation_id}")
+        object_match = re.fullmatch(r"xpost_fixture_([0-9]{3})", object_id)
+        expected_observation_id = (
+            f"xprobe_obs_fixture_{object_match.group(1)}" if object_match is not None else None
+        )
+        if observation_id != expected_observation_id:
+            errors.append(f"capability observation ID must bind its platform object sequence: {observation_id}")
         excerpt = observation.get("excerpt")
-        if (
-            not isinstance(excerpt, str)
-            or not excerpt.startswith("Synthetic capability evidence ")
-            or not isinstance(max_excerpt_chars, int)
-            or len(excerpt) > max_excerpt_chars
-        ):
+        expected_excerpt = CAPABILITY_OBSERVATION_EXCERPTS.get(object_id)
+        if excerpt != expected_excerpt:
+            errors.append(
+                f"capability observation excerpt must match the deterministic object template: {observation_id}"
+            )
+        if not isinstance(excerpt, str) or not isinstance(max_excerpt_chars, int) or len(excerpt) > max_excerpt_chars:
             errors.append(f"capability observation excerpt is not bounded synthetic text: {observation_id}")
         if observation.get("full_body_stored") is not False:
             errors.append(f"capability observation cannot store a full body: {observation_id}")
@@ -488,10 +548,18 @@ def validate_capability_result(
         )
         if not re.fullmatch(r"[a-z][a-z0-9_]{2,63}", str(error.get("code") or "")):
             errors.append(f"capability error code is invalid: {index}")
-        if not isinstance(error.get("message"), str) or not error["message"].startswith("Synthetic "):
-            errors.append(f"capability error message must be synthetic: {index}")
+        message = error.get("message")
+        if not isinstance(message, str) or len(message) > MAX_ERROR_MESSAGE_CHARS:
+            errors.append(f"capability error message must be a string of at most 280 characters: {index}")
         if type(error.get("retryable")) is not bool:
             errors.append(f"capability error retryable must be boolean: {index}")
+        expected_error = ERROR_ENVELOPE_BY_VERDICT.get(verdict)
+        if expected_error is None or (
+            error.get("code"),
+            error.get("message"),
+            error.get("retryable"),
+        ) != expected_error:
+            errors.append(f"capability error must match the deterministic verdict envelope: {index}")
 
     retention = _validate_shape(
         result.get("retention"), shape="result.retention", location="result.retention", errors=errors

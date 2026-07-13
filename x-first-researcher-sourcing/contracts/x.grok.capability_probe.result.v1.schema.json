@@ -105,7 +105,9 @@
         "provider_request_id": {"type": "null"},
         "prompt_version": {"const": "fixture-capability-v1"},
         "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "raw_response_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        "raw_response_sha256": {
+          "const": "b4073d48187f563ebe09e3a0feea08be0e6d087ec3eb3e0d5acf94ff98e18349"
+        }
       }
     },
     "usage": {
@@ -146,7 +148,17 @@
         },
         "authored_at": {"type": "string", "format": "date-time"},
         "observed_at": {"type": "string", "format": "date-time"},
-        "excerpt": {"type": "string", "maxLength": 280},
+        "excerpt": {
+          "type": "string",
+          "maxLength": 280,
+          "enum": [
+            "Synthetic capability evidence 001 for xpost_fixture_001 about public technical model-training work.",
+            "Synthetic capability evidence 002 for xpost_fixture_002 about public technical model-training work.",
+            "Synthetic capability evidence 003 for xpost_fixture_003 about public technical model-training work.",
+            "Synthetic capability evidence 004 for xpost_fixture_004 about public technical model-training work.",
+            "Synthetic capability evidence 005 for xpost_fixture_005 about public technical model-training work."
+          ]
+        },
         "full_body_stored": {"const": false}
       }
     },
@@ -155,8 +167,18 @@
       "additionalProperties": false,
       "required": ["code", "message", "retryable"],
       "properties": {
-        "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
-        "message": {"type": "string", "maxLength": 280},
+        "code": {
+          "enum": ["synthetic_unavailable", "synthetic_probe_error", "synthetic_killed"]
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 280,
+          "enum": [
+            "Synthetic capability unavailable.",
+            "Synthetic capability probe failed.",
+            "Synthetic capability probe killed."
+          ]
+        },
         "retryable": {"type": "boolean"}
       }
     },

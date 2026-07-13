@@ -76,4 +76,7 @@ hidden fallback for LinkedIn-first discovery or a canonical writer.
   pins, a user-triggered request, and independent review.
 - Keep schema and executable validator changes in the same batch with adversarial regression tests.
 - Unknown state, provenance, identity, budget, or retention values fail closed.
+- Before enabling a second lab fixture, replace the exact OpenAI literals with the reviewed
+  `CapabilityFixtureProfile` registry defined by the extraction condition in
+  `STAGE1_CAPABILITY_FIXTURE_CONTRACT.md`; v1 remains deliberately exact until then.
 - Reviews block only promotion/live/manual/product signoff for their scope; unrelated offline work may continue.

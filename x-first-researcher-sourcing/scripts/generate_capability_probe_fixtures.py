@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
-from x_first.capability_probe import REQUEST_SCHEMA_VERSION, RESULT_SCHEMA_VERSION, canonical_sha256
+from x_first.capability_probe import (
+    CAPABILITY_OBSERVATION_EXCERPTS,
+    REQUEST_SCHEMA_VERSION,
+    RESULT_SCHEMA_VERSION,
+    SYNTHETIC_RAW_RESPONSE_SHA256,
+    canonical_sha256,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 TIMESTAMP = "2026-07-14T00:00:00Z"
@@ -85,9 +92,7 @@ def build_result_fixture(request: dict[str, Any] | None = None) -> dict[str, Any
                 "canonical_url": f"https://posts.invalid/{target['current_handle']}/status/{object_id}",
                 "authored_at": f"2026-07-{10 + number:02d}T12:00:00Z",
                 "observed_at": TIMESTAMP,
-                "excerpt": (
-                    f"Synthetic capability evidence {number:03d} about public technical model-training work."
-                ),
+                "excerpt": CAPABILITY_OBSERVATION_EXCERPTS[object_id],
                 "full_body_stored": False,
             }
         )
@@ -120,7 +125,7 @@ def build_result_fixture(request: dict[str, Any] | None = None) -> dict[str, Any
             "provider_request_id": None,
             "prompt_version": "fixture-capability-v1",
             "request_sha256": request_hash,
-            "raw_response_sha256": hashlib.sha256(b"synthetic fixture response v1").hexdigest(),
+            "raw_response_sha256": SYNTHETIC_RAW_RESPONSE_SHA256,
         },
         "usage": {
             "executions": 0,
@@ -128,7 +133,7 @@ def build_result_fixture(request: dict[str, Any] | None = None) -> dict[str, Any
             "pages": 0,
             "observations": len(observations),
             "cost_usd": 0,
-            "elapsed_ms": 1,
+            "elapsed_ms": 0,
         },
         "observations": observations,
         "errors": [],
@@ -159,6 +164,87 @@ def _check(path: Path, expected: str) -> bool:
     return path.exists() and path.read_text(encoding="utf-8") == expected
 
 
+def _write_same_directory_temp(path: Path, content: bytes) -> Path:
+    handle = tempfile.NamedTemporaryFile(
+        mode="wb",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    )
+    temp_path = Path(handle.name)
+    try:
+        handle.write(content)
+        handle.flush()
+        os.fsync(handle.fileno())
+        handle.close()
+        temp_path.chmod(0o644)
+    except BaseException:
+        handle.close()
+        temp_path.unlink(missing_ok=True)
+        raise
+    return temp_path
+
+
+def _fsync_directory(path: Path) -> None:
+    directory_fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
+def _atomic_write_many(values: tuple[tuple[Path, str], ...]) -> None:
+    paths = [path for path, _content in values]
+    if len(set(paths)) != len(paths):
+        raise ValueError("capability fixture destinations must be unique")
+    for path in paths:
+        if path.is_symlink():
+            raise ValueError(f"refusing to replace symlink fixture destination: {path}")
+        if path.exists() and not path.is_file():
+            raise ValueError(f"fixture destination must be a regular file or absent: {path}")
+
+    originals = {path: path.read_bytes() if path.exists() else None for path in paths}
+    pending: dict[Path, Path] = {}
+    try:
+        for path, content in values:
+            pending[path] = _write_same_directory_temp(path, content.encode("utf-8"))
+    except BaseException:
+        for temp_path in pending.values():
+            temp_path.unlink(missing_ok=True)
+        raise
+    replaced: list[Path] = []
+    try:
+        for path in paths:
+            os.replace(pending[path], path)
+            replaced.append(path)
+        for parent in {path.parent for path in paths}:
+            _fsync_directory(parent)
+    except BaseException as write_error:
+        rollback_error: BaseException | None = None
+        for path in reversed(replaced):
+            try:
+                original = originals[path]
+                if original is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    rollback_temp = _write_same_directory_temp(path, original)
+                    try:
+                        os.replace(rollback_temp, path)
+                    finally:
+                        rollback_temp.unlink(missing_ok=True)
+            except BaseException as error:
+                rollback_error = error
+        for parent in {path.parent for path in paths}:
+            _fsync_directory(parent)
+        if rollback_error is not None:
+            raise RuntimeError("capability fixture atomic-write rollback failed") from rollback_error
+        raise write_error
+    finally:
+        for temp_path in pending.values():
+            temp_path.unlink(missing_ok=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate or check deterministic capability-probe fixtures")
     action = parser.add_mutually_exclusive_group(required=True)
@@ -174,8 +260,7 @@ def main() -> int:
         (result_path, _serialized(build_result_fixture(request))),
     )
     if args.write:
-        for path, content in values:
-            path.write_text(content, encoding="utf-8")
+        _atomic_write_many(values)
         print(json.dumps({"status": "written", "paths": [str(path) for path, _ in values]}, indent=2))
         return 0
 
