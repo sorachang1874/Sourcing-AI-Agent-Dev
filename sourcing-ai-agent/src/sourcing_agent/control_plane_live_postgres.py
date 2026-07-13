@@ -4504,7 +4504,14 @@ class LiveControlPlanePostgresAdapter:
             ),
         )
 
-    def append_workflow_event(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
+    def append_workflow_event(
+        self,
+        row: dict[str, Any] | None = None,
+        *,
+        table_name: str = "workflow_events",
+    ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "workflow_events":
+            raise ValueError("append_workflow_event requires table_name=workflow_events")
         if not self.should_prefer_read("workflow_events"):
             return None
         self._ensure_runtime_coordination_schema()
@@ -4521,20 +4528,44 @@ class LiveControlPlanePostgresAdapter:
             try:
                 with self._connect() as connection:
                     with connection.cursor() as cursor:
-                        cursor.execute(
-                            "SELECT pg_advisory_xact_lock(hashtext(%s))",
-                            (self._advisory_lock_key(f"workflow_events:{workflow_run_id}"),),
+                        self._acquire_transaction_lock(
+                            cursor,
+                            f"workflow_events:{workflow_run_id}",
                         )
-                        sequence_number = int(payload.get("sequence_number") or 0)
-                        if sequence_number <= 0:
-                            cursor.execute(
-                                "SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM workflow_events WHERE workflow_run_id = %s",
-                                (workflow_run_id,),
-                            )
-                            row_value = cursor.fetchone()
-                            sequence_number = int(
-                                (row_value[0] if isinstance(row_value, (list, tuple)) and row_value else row_value) or 1
-                            )
+                        requested_sequence = max(0, int(payload.get("sequence_number") or 0))
+                        cursor.execute(
+                            """
+                            SELECT * FROM workflow_events
+                            WHERE workflow_run_id = %s AND idempotency_key = %s
+                            LIMIT 1
+                            FOR UPDATE
+                            """,
+                            (workflow_run_id, idempotency_key),
+                        )
+                        existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if existing is not None:
+                            self._validate_workflow_event_identity(existing, expected=payload)
+                            if requested_sequence and int(existing.get("sequence_number") or 0) != requested_sequence:
+                                raise ValueError("workflow_events immutable identity collision: sequence_number")
+                            connection.commit()
+                            return existing
+
+                        cursor.execute(
+                            "SELECT COALESCE(MAX(sequence_number), 0) FROM workflow_events WHERE workflow_run_id = %s",
+                            (workflow_run_id,),
+                        )
+                        row_value = cursor.fetchone()
+                        max_sequence = int(
+                            (row_value[0] if isinstance(row_value, (list, tuple)) and row_value else row_value) or 0
+                        )
+                        if requested_sequence:
+                            if requested_sequence <= max_sequence:
+                                raise ValueError(
+                                    "workflow_events explicit sequence_number must advance the committed stream"
+                                )
+                            sequence_number = requested_sequence
+                        else:
+                            sequence_number = max_sequence + 1
                         event_id = str(payload.get("event_id") or "").strip() or (
                             "evt_"
                             + sha1(
@@ -4560,45 +4591,218 @@ class LiveControlPlanePostgresAdapter:
                             "schema_version": str(payload.get("schema_version") or "workflow_event_v1").strip(),
                             "created_at": str(payload.get("created_at") or now).strip(),
                         }
+                        cursor.execute(
+                            "SELECT * FROM workflow_events WHERE event_id = %s LIMIT 1 FOR UPDATE",
+                            (event_id,),
+                        )
+                        if _fetch_one_dict_row(cursor, cursor.fetchone()) is not None:
+                            raise ValueError("workflow_events immutable identity collision: event_id")
                         columns = list(event_payload.keys())
                         cursor.execute(
                             (
                                 f"INSERT INTO workflow_events ({', '.join(_quote_identifier(column) for column in columns)}) "
                                 f"VALUES ({', '.join(['%s'] * len(columns))}) "
-                                "ON CONFLICT DO NOTHING RETURNING *"
+                                "RETURNING *"
                             ),
                             tuple(event_payload[column] for column in columns),
                         )
                         inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
-                        if inserted is not None:
-                            connection.commit()
-                            return inserted
-                        cursor.execute(
-                            """
-                            SELECT * FROM workflow_events
-                            WHERE workflow_run_id = %s AND idempotency_key = %s
-                            LIMIT 1
-                            """,
-                            (workflow_run_id, idempotency_key),
-                        )
-                        existing = _fetch_one_dict_row(cursor, cursor.fetchone())
-                        if existing is None:
-                            cursor.execute(
-                                """
-                                SELECT * FROM workflow_events
-                                WHERE workflow_run_id = %s AND sequence_number = %s
-                                LIMIT 1
-                                """,
-                                (workflow_run_id, sequence_number),
-                            )
-                            existing = _fetch_one_dict_row(cursor, cursor.fetchone())
                     connection.commit()
-                    return existing
+                    return inserted
             except Exception as exc:
                 attempt += 1
                 if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
                     raise
                 time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    @staticmethod
+    def _validate_workflow_event_identity(
+        event: dict[str, Any],
+        *,
+        expected: dict[str, Any],
+    ) -> None:
+        identity_fields = (
+            "workflow_run_id",
+            "operation_id",
+            "command_id",
+            "activity_attempt_id",
+            "event_family",
+            "event_type",
+            "idempotency_key",
+        )
+        mismatches = [
+            field
+            for field in identity_fields
+            if str(event.get(field) or "").strip() != str(expected.get(field) or "").strip()
+        ]
+        if mismatches:
+            raise ValueError("workflow_events immutable identity collision: " + ", ".join(mismatches))
+
+    def upsert_workflow_current_state(
+        self,
+        row: dict[str, Any] | None = None,
+        *,
+        table_name: str = "workflow_current_state",
+    ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "workflow_current_state":
+            raise ValueError("upsert_workflow_current_state requires table_name=workflow_current_state")
+        if not self.should_prefer_read("workflow_current_state"):
+            return None
+        self._ensure_runtime_coordination_schema()
+        payload = _normalize_postgres_row_payload(dict(row or {}))
+        allowed_columns = {
+            "workflow_run_id",
+            "operation_id",
+            "workflow_type",
+            "status",
+            "current_stage_key",
+            "completion_proofs_json",
+            "active_command_counts_json",
+            "terminal_command_counts_json",
+            "read_model_pointers_json",
+            "migration_status_json",
+            "last_processed_sequence_number",
+            "reducer_version",
+            "schema_version",
+            "metadata_json",
+        }
+        unknown_columns = set(payload) - allowed_columns
+        if unknown_columns:
+            raise ValueError("upsert_workflow_current_state unknown columns: " + ", ".join(sorted(unknown_columns)))
+        workflow_run_id = str(payload.get("workflow_run_id") or "").strip()
+        if not workflow_run_id:
+            return None
+        checkpoint_provided = "last_processed_sequence_number" in payload
+        incoming_sequence = (
+            max(0, int(payload.get("last_processed_sequence_number") or 0)) if checkpoint_provided else None
+        )
+        now = _utc_now_sql_timestamp()
+        json_columns = (
+            "completion_proofs_json",
+            "active_command_counts_json",
+            "terminal_command_counts_json",
+            "read_model_pointers_json",
+            "migration_status_json",
+            "metadata_json",
+        )
+        reducer_owned_columns = (
+            "status",
+            "current_stage_key",
+            "completion_proofs_json",
+            "reducer_version",
+            "metadata_json",
+        )
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                self._acquire_transaction_lock(cursor, f"workflow_current_state:{workflow_run_id}")
+                cursor.execute(
+                    "SELECT * FROM workflow_current_state WHERE workflow_run_id = %s FOR UPDATE",
+                    (workflow_run_id,),
+                )
+                current = _fetch_one_dict_row(cursor, cursor.fetchone())
+                if current is None:
+                    inserted_payload = {
+                        "workflow_run_id": workflow_run_id,
+                        "operation_id": str(payload.get("operation_id") or "").strip(),
+                        "workflow_type": str(payload.get("workflow_type") or "").strip(),
+                        "status": str(payload.get("status") or "pending").strip() or "pending",
+                        "current_stage_key": str(payload.get("current_stage_key") or "").strip(),
+                        "completion_proofs_json": str(payload.get("completion_proofs_json") or "{}"),
+                        "active_command_counts_json": str(payload.get("active_command_counts_json") or "{}"),
+                        "terminal_command_counts_json": str(payload.get("terminal_command_counts_json") or "{}"),
+                        "read_model_pointers_json": str(payload.get("read_model_pointers_json") or "{}"),
+                        "migration_status_json": str(payload.get("migration_status_json") or "{}"),
+                        "last_processed_sequence_number": incoming_sequence or 0,
+                        "reducer_version": str(payload.get("reducer_version") or "").strip(),
+                        "schema_version": str(payload.get("schema_version") or "workflow_current_state_v1").strip(),
+                        "metadata_json": str(payload.get("metadata_json") or "{}"),
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                    columns = list(inserted_payload)
+                    cursor.execute(
+                        (
+                            f"INSERT INTO workflow_current_state "
+                            f"({', '.join(_quote_identifier(column) for column in columns)}) "
+                            f"VALUES ({', '.join(['%s'] * len(columns))}) RETURNING *"
+                        ),
+                        tuple(inserted_payload[column] for column in columns),
+                    )
+                    committed = _fetch_one_dict_row(cursor, cursor.fetchone())
+                    connection.commit()
+                    return committed
+
+                stored_sequence = max(0, int(current.get("last_processed_sequence_number") or 0))
+                if incoming_sequence is None:
+                    raise ValueError(
+                        "workflow_current_state existing-row updates require last_processed_sequence_number"
+                    )
+                if incoming_sequence < stored_sequence:
+                    connection.commit()
+                    return current
+
+                for identity_column in ("workflow_type",):
+                    requested_value = str(payload.get(identity_column) or "").strip()
+                    stored_value = str(current.get(identity_column) or "").strip()
+                    if requested_value and stored_value and requested_value != stored_value:
+                        raise ValueError(f"workflow_current_state immutable identity collision: {identity_column}")
+
+                if incoming_sequence == stored_sequence:
+                    mismatches: list[str] = []
+                    for column in reducer_owned_columns:
+                        if column not in payload:
+                            continue
+                        requested_value = payload[column]
+                        if column in json_columns:
+                            matches = _json_load_dict(requested_value) == _json_load_dict(current.get(column))
+                        else:
+                            normalized_requested = str(requested_value or "").strip()
+                            matches = (
+                                not normalized_requested
+                                or normalized_requested == str(current.get(column) or "").strip()
+                            )
+                        if not matches:
+                            mismatches.append(column)
+                    if mismatches:
+                        raise ValueError(
+                            "workflow_current_state same-sequence reducer collision: " + ", ".join(mismatches)
+                        )
+
+                updated_payload = dict(current)
+                for column, value in payload.items():
+                    if column in {"workflow_run_id", "schema_version"}:
+                        continue
+                    if column in json_columns:
+                        updated_payload[column] = str(value or "{}")
+                    elif column == "last_processed_sequence_number":
+                        updated_payload[column] = incoming_sequence
+                    elif str(value or "").strip():
+                        updated_payload[column] = str(value).strip()
+                updated_payload["updated_at"] = now
+                update_columns = [
+                    "operation_id",
+                    "workflow_type",
+                    "status",
+                    "current_stage_key",
+                    *json_columns,
+                    "last_processed_sequence_number",
+                    "reducer_version",
+                    "updated_at",
+                ]
+                if all(current.get(column) == updated_payload.get(column) for column in update_columns[:-1]):
+                    connection.commit()
+                    return current
+                cursor.execute(
+                    (
+                        "UPDATE workflow_current_state SET "
+                        + ", ".join(f"{_quote_identifier(column)} = %s" for column in update_columns)
+                        + " WHERE workflow_run_id = %s RETURNING *"
+                    ),
+                    tuple(updated_payload.get(column) for column in update_columns) + (workflow_run_id,),
+                )
+                committed = _fetch_one_dict_row(cursor, cursor.fetchone())
+            connection.commit()
+        return committed
 
     def upsert_agent_action(
         self,
@@ -6970,7 +7174,14 @@ class LiveControlPlanePostgresAdapter:
             (attempt, _json_dump(next_result), now, normalized_command_id),
         )
 
-    def enqueue_runtime_outbox(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
+    def enqueue_runtime_outbox(
+        self,
+        row: dict[str, Any] | None = None,
+        *,
+        table_name: str = "runtime_outbox",
+    ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "runtime_outbox":
+            raise ValueError("enqueue_runtime_outbox requires table_name=runtime_outbox")
         if not self.should_prefer_read("runtime_outbox"):
             return None
         self._ensure_runtime_coordination_schema()
@@ -7003,48 +7214,140 @@ class LiveControlPlanePostgresAdapter:
             "created_at": str(payload.get("created_at") or now).strip(),
             "updated_at": str(payload.get("updated_at") or now).strip(),
         }
-        columns = list(row_payload.keys())
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    (
-                        f"INSERT INTO runtime_outbox ({', '.join(_quote_identifier(column) for column in columns)}) "
-                        f"VALUES ({', '.join(['%s'] * len(columns))}) "
-                        "ON CONFLICT DO NOTHING RETURNING *"
-                    ),
-                    tuple(row_payload[column] for column in columns),
-                )
-                inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
-                if inserted is not None:
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        for lock_key in sorted(
+                            {
+                                f"runtime_outbox:id:{outbox_id}",
+                                f"runtime_outbox:idempotency:{idempotency_key}",
+                            }
+                        ):
+                            self._acquire_transaction_lock(cursor, lock_key)
+                        cursor.execute(
+                            """
+                            SELECT * FROM runtime_outbox
+                            WHERE outbox_id = %s OR idempotency_key = %s
+                            ORDER BY outbox_id
+                            FOR UPDATE
+                            """,
+                            (outbox_id, idempotency_key),
+                        )
+                        identity_rows = _fetch_all_dict_rows(cursor)
+                        if len(identity_rows) > 1:
+                            raise ValueError("runtime_outbox identity collision: id and idempotency rows differ")
+                        if identity_rows:
+                            existing = identity_rows[0]
+                            self._validate_runtime_outbox_identity(existing, expected=row_payload)
+                            connection.commit()
+                            return existing
+                        columns = list(row_payload)
+                        cursor.execute(
+                            (
+                                f"INSERT INTO runtime_outbox "
+                                f"({', '.join(_quote_identifier(column) for column in columns)}) "
+                                f"VALUES ({', '.join(['%s'] * len(columns))}) RETURNING *"
+                            ),
+                            tuple(row_payload[column] for column in columns),
+                        )
+                        inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
                     connection.commit()
                     return inserted
-                cursor.execute(
-                    "SELECT * FROM runtime_outbox WHERE idempotency_key = %s LIMIT 1",
-                    (idempotency_key,),
-                )
-                existing = _fetch_one_dict_row(cursor, cursor.fetchone())
-            connection.commit()
-        return existing
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
-    def mark_runtime_outbox_dispatched(self, outbox_id: str) -> dict[str, Any] | None:
+    @staticmethod
+    def _validate_runtime_outbox_identity(
+        outbox: dict[str, Any],
+        *,
+        expected: dict[str, Any],
+    ) -> None:
+        identity_fields = (
+            "outbox_id",
+            "workflow_run_id",
+            "operation_id",
+            "command_id",
+            "outbox_type",
+            "idempotency_key",
+        )
+        mismatches = [
+            field
+            for field in identity_fields
+            if str(outbox.get(field) or "").strip() != str(expected.get(field) or "").strip()
+        ]
+        if mismatches:
+            raise ValueError("runtime_outbox immutable identity collision: " + ", ".join(mismatches))
+
+    def mark_runtime_outbox_dispatched(
+        self,
+        outbox_id: str,
+        *,
+        table_name: str = "runtime_outbox",
+        lease_owner: str = "",
+    ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "runtime_outbox":
+            raise ValueError("mark_runtime_outbox_dispatched requires table_name=runtime_outbox")
         if not self.should_prefer_read("runtime_outbox"):
             return None
+        normalized_outbox_id = str(outbox_id or "").strip()
+        if not normalized_outbox_id:
+            return None
         now = _utc_now_sql_timestamp()
-        return self._execute_returning_one(
-            """
-            UPDATE runtime_outbox
-            SET status = 'dispatched',
-                dispatched_at = %s,
-                lease_owner = '',
-                lease_expires_at = '',
-                last_error = '',
-                updated_at = %s
-            WHERE outbox_id = %s
-              AND status IN ('queued', 'claimed', 'running')
-            RETURNING *
-            """,
-            (now, now, str(outbox_id or "").strip()),
-        )
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        self._acquire_transaction_lock(cursor, f"runtime_outbox:id:{normalized_outbox_id}")
+                        cursor.execute(
+                            "SELECT * FROM runtime_outbox WHERE outbox_id = %s FOR UPDATE",
+                            (normalized_outbox_id,),
+                        )
+                        current = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if current is None:
+                            connection.commit()
+                            return None
+                        current_status = str(current.get("status") or "").strip()
+                        if current_status == "dispatched":
+                            connection.commit()
+                            return current
+                        normalized_lease_owner = str(lease_owner or "").strip()
+                        if current_status in {"claimed", "running"} and (
+                            not normalized_lease_owner
+                            or normalized_lease_owner != str(current.get("lease_owner") or "").strip()
+                        ):
+                            raise ValueError("runtime_outbox dispatch lease-owner mismatch")
+                        if current_status not in {"queued", "claimed", "running"}:
+                            raise ValueError(
+                                f"runtime_outbox cannot dispatch from status {current_status or '<empty>'}"
+                            )
+                        cursor.execute(
+                            """
+                            UPDATE runtime_outbox
+                            SET status = 'dispatched',
+                                dispatched_at = %s,
+                                lease_owner = '',
+                                lease_expires_at = '',
+                                last_error = '',
+                                updated_at = %s
+                            WHERE outbox_id = %s
+                            RETURNING *
+                            """,
+                            (now, now, normalized_outbox_id),
+                        )
+                        committed = _fetch_one_dict_row(cursor, cursor.fetchone())
+                    connection.commit()
+                    return committed
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
     def acquire_linkedin_profile_registry_lease(
         self,

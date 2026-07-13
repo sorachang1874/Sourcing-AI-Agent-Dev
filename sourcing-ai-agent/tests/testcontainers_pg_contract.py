@@ -33,6 +33,9 @@ class TestcontainersPostgresContractTest(unittest.TestCase):
                 }
                 with mock.patch.dict(os.environ, env, clear=False):
                     store = ControlPlaneStore(runtime_dir / "sourcing_agent.db")
+                    # PG-only reads fail closed on missing tables, so the contract harness must run
+                    # the versioned migration before repository read-before-write paths execute.
+                    store._control_plane_postgres.ensure_bootstrapped()  # noqa: SLF001
                     store.repos.serving_projection.upsert(
                         {
                             "projection_id": "proj_container_pg",
@@ -68,7 +71,7 @@ class TestcontainersPostgresContractTest(unittest.TestCase):
                             "active_collection_version": "v1",
                         }
                     )
-                    event = store.append_workflow_event(
+                    event = store.repos.workflow_runtime.append_workflow_event(
                         workflow_run_id="wf_container_pg",
                         operation_id="op_container_pg",
                         event_family="workflow_event",
@@ -106,7 +109,7 @@ class TestcontainersPostgresContractTest(unittest.TestCase):
                         command["command_id"],
                         result={"provider_run_id": "pg-provider-run"},
                     )
-                    store.upsert_workflow_current_state(
+                    store.repos.workflow_runtime.upsert_workflow_current_state(
                         workflow_run_id="wf_container_pg",
                         operation_id="op_container_pg",
                         workflow_type="linkedin_acquisition",
@@ -114,7 +117,7 @@ class TestcontainersPostgresContractTest(unittest.TestCase):
                         current_stage_key="profile_fetch",
                         last_processed_sequence_number=event["sequence_number"],
                     )
-                    outbox = store.enqueue_runtime_outbox(
+                    outbox = store.repos.workflow_runtime.enqueue_runtime_outbox(
                         workflow_run_id="wf_container_pg",
                         operation_id="op_container_pg",
                         command_id=command["command_id"],
@@ -122,7 +125,8 @@ class TestcontainersPostgresContractTest(unittest.TestCase):
                         idempotency_key="wf_container_pg:stream:start",
                         payload={"event_id": event["event_id"]},
                     )
-                    store.mark_runtime_outbox_dispatched(outbox["outbox_id"])
+                    store.repos.workflow_runtime.mark_runtime_outbox_dispatched(outbox["outbox_id"])
+                    store.close()
 
                 with psycopg.connect(dsn) as connection:
                     with connection.cursor() as cursor:

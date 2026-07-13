@@ -1,30 +1,28 @@
 # Track B ② Repository 迁移 Handbook(新一轮的入口文档)
 
 > Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
-> 状态:**②.4c 完成(2026-07-13,implementation `30a703e`)** —— workflow_runtime 的 activity spine
-> (`workflow_activity_runs` / `workflow_activity_attempts` / `workflow_entity_deltas`)已退役到
-> `store.repos.workflow_runtime`;当前分支 `storage.py` 12,564 → 12,190 行,production 165 + tests 134 个旧调用
-> 全部迁移,旧 9 facade / 3 mapper / 3 descriptor dispatch keys 清零。五表共享 identity/terminal/write-once
-> 原语已落地,plan-commit / scale-plan / profile-fetch 三条 owner cancel 现由 command/run/activity/lane 单事务 UoW
-> 闭合 R-020。该 UoW 不提供提交后 phantom child/attempt ownership fence,linked Operation post-commit sync 也仍在
-> R-019;不得误读为 acquisition 全链原子化。R-022 已固定 `af50f45..30a703e` 异步 Codex review，
-> 不阻断下一批。批记录见 `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。
-> 下一批为 **②.4 workflow_runtime read-model trio**。
+> 状态:**②.4d 完成(2026-07-13,implementation commit 待本批收口)** —— workflow runtime read-model trio
+> (`workflow_events` / `workflow_current_state` / `runtime_outbox`)已退役到 `store.repos.workflow_runtime`;
+> 当前分支 `storage.py` 12,190 → 11,959 行,production 9 + tests 22 个旧调用全部迁移,旧 6 facade / 3 mapper /
+> 3 descriptor dispatch keys / 4 native keys 清零。event sequence/identity、current-state checkpoint+sparse merge、
+> outbox identity/dispatch owner fence 已落地；`DurableRuntimeWriter` 四表多提交和 same-checkpoint count coherence
+> 继续归 R-019，future outbox claim ABA 归 R-023。批记录见 `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。
+> 下一批按既定顺序为 **②.4 workflow recovery intents**；commands 仍为本域最后一批并闭合 R-019。
 > B4.3 影子拆除 100% 完成(commit 952f9ee)。本文档是路线图
 > **②「Repository 查询方法建设 + 按域迁移调用方」** 这一轮的执行手册。
 > 设计依据:`docs/TRACK_B_B4_2_PG_NATIVE_STORE_DESIGN.md`(B4.2 设计,owner 已 ratify);历史全记录:`docs/TRACK_B_PG_PURE_STORE_DESIGN.md` §6。
-> 路线图(owner 2026-06-23 批准):① 死影子/mirror 拆除(**已完成**)→ **② 本轮** → ③ jsonb/timestamptz 数据迁移(合同级变更,**owner 明确 GO + 停机窗口后才可做**)。
+> 路线图(owner 2026-06-23 批准):① 死影子/mirror 拆除(**已完成**)→ **② 本轮** → ③ jsonb/timestamptz 数据迁移。owner 2026-07-13 已选择 D-1(a):② 全域收官后立即排窗口；实际 ALTER 仍是合同级变更，须 readiness GO + 明确 full-stop 执行批准。
 
 ## 1. 当前基底(起点事实,勿再重推导)
 
-- `storage.py` = 12,190 行(②.4c 后;②.4c 起点 12,564,②.4b 起点 12,809,②.4a 当前分支起点 13,296,②.3d 当前分支起点 13,835,②.3c settled tree 13,822,
+- `storage.py` = 11,959 行(②.4d 后;②.4d 起点 12,190,②.4c 起点 12,564,②.4b 起点 12,809,②.4a 当前分支起点 13,296,②.3d 当前分支起点 13,835,②.3c settled tree 13,822,
   ②.3b 后 14,261,②.3a 后 14,355,②.2 后 14,635,②.1 后 15,091,②.0 后 16,382,试点前 19,187),
   **PG-pure**:零 sqlite3 / 零 `_connection` / 零 `_lock`。
   已整体退役的域:linkedin_profile_registry(②.0)、criteria/confidence(②.1,`store.repos.criteria_confidence`)、
   manual_review(②.2,`store.repos.manual_review`);serving_projection 的 catalog、manifest、members、person search index
   已由 ②.3a-d 整域退役到 `store.repos.serving_projection`;
-  workflow_runtime 的 operation-control、acquisition-control 与 activity spine 已由 ②.4a-c 退役到
-  `store.repos.workflow_runtime`;
+  workflow_runtime 的 operation-control、acquisition-control、activity spine 与 read-model trio 已由 ②.4a-d
+  退役到 `store.repos.workflow_runtime`;
   其余域仍在 God-class 门面上,按批推进。共享纯函数 `matching_bundle_payload`/`request_signature_context` 已外提到
   `request_matching.py`(storage 留别名 import)。
 - PG schema 唯一来源 = `migrations/0001_baseline.sql` + `migration_runner.py`(adapter `ensure_bootstrapped()` 驱动);遗留迁移表由 adapter 内字面 DDL(`_LEGACY_TARGET_PUBLIC_WEB_MIGRATION_TABLE_DDL`)按需建。
@@ -57,7 +55,8 @@
    ~~②.3c members + D-4(a)~~ DONE → ~~②.3d person search index~~ DONE。serving_projection 整域闭合。
    D-4 的四点显式 keyword 修复和全局 guard 已随 ②.3c 完成。
 5. **②.4 workflow_runtime 分子批**:~~②.4a operation-control~~ DONE → ~~②.4b acquisition-control~~ DONE →
-   ~~②.4c activity spine + R-020 fixed-forward~~ DONE → **read-model trio** → recovery intents → session/trace → job leases → workers → commands(last)。
+   ~~②.4c activity spine + R-020 fixed-forward~~ DONE → ~~②.4d read-model trio~~ DONE → **recovery intents** →
+   session/trace → job leases → workers → commands(last，闭合 R-019)。
    每个分子批重新 Scout;不得因共享一个 repository 文件而合并状态机或跨批删除。
 6. **随批机会主义**:37 个 IRREGULAR read-mapper 里"软 irregular"(subscript 形式等价)可在其域批内顺手转 descriptor(harness 全列模式验证)。
    **②.1 反例警示**:criteria/confidence 的 8 个 mapper 看似可转,实为 None 直通 + 写路径真写 NULL FK —— Kind.INT 会 None→0 炸字节等价;
@@ -223,9 +222,14 @@ rg -n '^    def .*workflow_(current_state|event)|^    def .*runtime_outbox' src/
   handler 不得在事务外重做 module writes 或把 blocked/conflict 报成 success;(d) exact replay、legacy partial repair、
   injected rollback 与 corrupt identity 必须同组验证,否则“幂等”可能只覆盖 command row 而漏 module rows。
 
-## 7. 待 owner 决策(决策卡格式,2026-07-09 升级;每卡一问、有推荐、有截止、有超时默认)
+## 7. Owner 决策卡(决策卡格式,2026-07-09 升级;D-1/D-2 已决，D-3 待决)
 
 ### D-1 ③ jsonb/timestamptz 迁移窗口
+
+> **状态:owner 已于 2026-07-13 选择 (a)。** ② 全域收官后立即排 production migration 窗口，不等待
+> Track C 容器化；inventory、坏值 preflight、rollback 和 production-copy rehearsal 可与②尾部并行准备。
+> 本裁决只批准排期方向，不等于现在执行 ALTER；实际窗口仍需 scope-matched independent-review GO、full-stop
+> readiness、备份/恢复演练和 owner execute GO。
 
 - **单一问题**:是否批准 ③ 的 jsonb/timestamptz 生产数据迁移窗口(合同级,需停机窗口 + 明确 GO)?
 - **选项**:(a) ② 全域收官后立即排窗口 —— ③ 设计已 RATIFIED(`TRACK_B_B4_2_PG_NATIVE_STORE_DESIGN.md` §4,
@@ -239,6 +243,10 @@ rg -n '^    def .*workflow_(current_state|event)|^    def .*runtime_outbox' src/
 - **超时默认**:维持 TEXT 列现状(安全、无停机),③ 冻结并在本卡记一次顺延;② 系列不受阻。
 
 ### D-2 `control_plane_postgres.py` on-disk-SQLite 导入/导出工具退役
+
+> **状态:owner 已于 2026-07-13 选择 (b)。** 现有 SQLite import/export/direct-sync 腿立即冻结为
+> `deprecated / migration-only / no new callers / no maintenance`；③ 整体 production cutover 验收完成后自动进入
+> 删除批。它不是③的 rollback 机制；PG snapshot export/restore 和 cross-device PG bundle 不在退役范围。
 
 - **单一问题**:这对独立的 on-disk-SQLite 导入/导出工具(非运行时路径,仅数据搬运)现在退役还是保留?
 - **选项**:(a) 退役删除 —— storage.py 已 PG-pure,工具的"从旧 SQLite 导入"场景已随影子退役消失;

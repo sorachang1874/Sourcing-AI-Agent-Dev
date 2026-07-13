@@ -37,7 +37,8 @@
     - 之后：Option 3 全事件流 driver = Track D 北极星(`agent_events`/SSE 表尚不存在)。
 
 ### Track B — 存储与测试基建（与 A 并行）
-- [ ] R-022：②.4c activity spine / R-020 fixed-forward 已固定 `af50f45..30a703e` 异步 Codex review；有效 GO 前只冻结本 scope 的 live/W6/manual/里程碑签收，read-model trio 与其他非 live 开发继续。
+- [ ] R-022：②.4c activity spine / R-020 fixed-forward 已固定 `af50f45..30a703e` 异步 Codex review；有效 GO 前只冻结本 scope 的 live/W6/manual/里程碑签收，commands 与其他非 live 开发继续。
+- [ ] R-023：`runtime_outbox` 在 production claim/consumer、Track C 5d 或 outbox live/W6/manual 签收前补 claim generation/token fence；当前无 production consumer，不阻断非 live 开发。
 - [x] 测试环境契约 v2（2026-06-11）：每 run = (PG schema + runtime dir) 配对 + `.ephemeral-test-env.json` 标记；teardown `DROP SCHEMA CASCADE`（仅删自建 schema，`pre_existing` 守卫）；孤儿 janitor `scripts/prune_test_schemas.py`（先快照后扫描、活跃连接守卫、仅限本地 DSN、dry-run 默认）。
 - [x] Mac 本地 PG Docker 方案（2026-06-11）：`local_postgres_docker.py` + `make local-pg-up/down/status`；容器 55432 复用既有 DSN 发现机制零侵入；PG 强制模式下 durable runtime 套件真实执行验证。
 - [x] PG 测试 fixture 试点（2026-06-12）：`tests/pg_store_fixture.py`（`PGControlPlaneStoreTestMixin`：per-class schema + `pg_tables` 截断复用）；8 个文件先行迁移；试点即捕获一个生产缺陷（见下条）。
@@ -49,7 +50,7 @@
 - [ ] 收尾项：6 个已走 `PGDurableRuntimeTestMixin` 的可选统一；`test_pipeline`（42k 行，永不全量跑）单独设计；PG 适配器自测 3 个豁免（保持）。
 - [x] advisory lock key 按 schema 命名空间化（2026-06-12，owner 批准趁 systemd 全量重启部署窗口落地）：7 个锁点统一走 `_advisory_lock_key()`（schema 前缀，空 schema 归一为 `public`）；跨 schema 互不争用 + 同 schema 互斥 + 默认前缀确定性均有实测锁定（`test_control_plane_pool.py`）。**部署约束：锁身份已变，上线必须全停重启，禁止新旧进程共存热部署**（现行 systemd 部署天然满足；Track C 容器化滚动部署前无需再协调）。
 - [x] 之后：按表组把双路径方法重写为 PG-pure 并删 mirror/内存 SQLite 影子 + 引入正式 migration 机制——**已由 Track B 全部完成**（RATIFIED 2026-06-16，追踪见 `docs/TRACK_B_PG_PURE_STORE_DESIGN.md`，本条即该 doc 引用的 §50 roadmap）：`storage.py` 现为 PG-pure（零 sqlite3/mirror；B4.3f 内存影子退役，shadow 访问器只剩 inert 标签）；PG schema 唯一来源 = 版本化 migration runner（`src/sourcing_agent/migrations/0001_baseline.sql` + `src/sourcing_agent/migration_runner.py`，`init_schema` 已删）；`SOURCING_PG_ONLY_SQLITE_BACKEND` 已成 inert no-op。下一步（已批）：B4.2 ② Repository 查询方法 + 按域迁移 caller → ③ jsonb/timestamptz（owner-gated，决策卡 = handbook §7 D-1）。
-- [x] ② 域退役进行中（入口文档 `docs/TRACK_B_REPOSITORY_MIGRATION_HANDBOOK.md`）：②.0 linkedin_profile_registry（2026-07-02）+ ②.1 criteria/confidence（2026-07-06，`d5109f1`）+ ②.2 manual_review（2026-07-10，`d0828e7`）+ ②.3a-d serving_projection（catalog / manifest / members / person search index）+ ②.4a operation-control（`93d9f9e`）+ ②.4b acquisition-control（`d6e1e2a`）+ **②.4c activity spine** 已完成，`storage.py` 19,187 → **12,190** 行。②.4c 删除 9 facade + 3 mapper，旧 receiver 299→0，并以共享 identity/terminal/write-once 原语保护 ActivityRun/Attempt 与 append-only EntityDelta；plan-commit / scale-plan / profile-fetch 三条 command+run+activity/lane cancel 已合成固定 PG UoW，R-020 有界关闭。transaction commit 后 stale owner 新建 phantom child/attempt 的 ownership fence，以及 linked Operation post-commit sync，仍明确留在 R-019。②.3d 的 R-017、②.4a 的 R-018、②.4b 的 R-021 review 均异步、scope-local，不阻断下一批。owner 已轮换 Apify Token/API Keys，当前版本未配置可用新凭据且未授权 live，因此 live provider 验证延期，simulation/local PG 开发继续。**下一批：②.4 workflow_runtime read-model trio**，按 handbook §4 重新 Scout；D-1/D-2/D-3 均须在 **2026-07-31** 前裁决。
+- [x] ② 域退役进行中（入口文档 `docs/TRACK_B_REPOSITORY_MIGRATION_HANDBOOK.md`）：②.0 linkedin_profile_registry（2026-07-02）+ ②.1 criteria/confidence（2026-07-06，`d5109f1`）+ ②.2 manual_review（2026-07-10，`d0828e7`）+ ②.3a-d serving_projection + ②.4a operation-control（`93d9f9e`）+ ②.4b acquisition-control（`d6e1e2a`）+ ②.4c activity spine（`30a703e`）+ **②.4d workflow runtime read-model trio** 已完成，`storage.py` 19,187 → **11,959** 行。②.4d 删除 6 facade + 3 mapper + 3 descriptor/4 native key，旧 receiver 31→0；event sequence/identity、current-state sparse merge/checkpoint、outbox identity/dispatch owner fence 均已进入 repository/PG 合同。`DurableRuntimeWriter` 的四表多提交与 same-checkpoint count coherence 继续由 R-019 在 commands(last) 分子批闭合，未来 outbox claim generation fence 由 R-023 跟踪。owner 已轮换 Apify Token/API Keys，当前版本无可用新凭据且未授权 live；simulation/local PG 开发继续。**下一批：②.4 workflow recovery intents**，之后依次 session/trace、job leases、workers、commands(last)；D-1 已选 (a)、D-2 已选 (b)，D-3 仍待 owner 裁决，原截止 **2026-07-31**。
 - [x] provider fail-closed 隔离合入（2026-07-09，`430a369`）：`SOURCING_EXTERNAL_PROVIDER_MODE` 未设/未知一律 `simulate`；非生产环境 live 需双钥确认；detached 子进程注入 access-disabled + 空 token；`tests/conftest.py` 全局隔离 secrets。2026-06-27 计费事故类在主线关闭。落地条件：已验证（58 runtime/model/settings + connector 套件；7 个全套件失败经 worktree 基线证明 pre-existing，台账 R-010）。
 - [x] 合同 lane 加固（2026-07-09，`8b555b6`）：onconflict 守卫入两条 lane；REQUIRE flags 全段 skip→fail（变异自证）。
 
@@ -65,6 +66,7 @@
 - 明确不做：Redis、LISTEN/NOTIFY（当前规模不需要）。
 
 ### Track D — 强 Agent 化
+- 2026-07-13 跨模型设计输入落档：`docs/TRACK_D_AGENT_RUNTIME_PLAN.md`（Fable 5 起草，owner 待审；基线修正——W8/W9 AgentAction/OperationRun/审批/预算 substrate 已 active，`command_type_manifest()` 工具面种子已就绪未 serve；建议顺序 D0 ModelClient→D1 tool registry serve→D3 垂直切片(poll-mode)→D2 会话/事件层(与 C4/C5 合流)；四个 owner 决策点 TD-1…TD-4 见该文 §5）。
 - [ ] ModelClient 升级：streaming + tool-calling（现有 14 个单发方法、阻塞 requests、无流式）。
 - [ ] Agent Session 契约：服务端 agentic loop；工具面 = M1 manifest 导出 + 只读上下文工具 + model_native_search/fetch 转正；效果全部走 typed AgentAction（边界已由 `AGENT_OPERATION_CONTRACT.md` 规定）。
 - [ ] 第一垂直切片：公司身份自验证 loop（搜索→fetch 验证→歧义才升级人工），替代 PlanCard 手动修正 LinkedIn URL。

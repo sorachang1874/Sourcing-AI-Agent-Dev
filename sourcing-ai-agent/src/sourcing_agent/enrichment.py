@@ -55,7 +55,7 @@ from .profile_registry_utils import (
     harvest_profile_payload_has_usable_content,
     profile_cache_path_candidates,
 )
-from .repositories import linkedin_profile_registry_repo
+from .repositories import linkedin_profile_registry_repo, workflow_runtime_repo
 from .runtime_environment import (
     assert_live_provider_access_allowed,
     external_provider_mode,
@@ -7742,7 +7742,10 @@ class MultiSourceEnricher:
             # Migration bridge for lightweight fake stores that do not expose the
             # durable runtime tables. ControlPlaneStore normal paths should use
             # the command owner above.
-            if hasattr(self.store, "append_workflow_event") or hasattr(self.store, "upsert_workflow_command"):
+            runtime_repo = workflow_runtime_repo(self.store)
+            if callable(getattr(runtime_repo, "append_workflow_event", None)) or callable(
+                getattr(runtime_repo, "upsert_workflow_command", None)
+            ):
                 return {
                     "status": "failed",
                     "reason": "profile_url_terminal_record_command_planning_failed",

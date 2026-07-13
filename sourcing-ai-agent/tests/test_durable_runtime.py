@@ -73,21 +73,21 @@ class DurableRuntimeStorageTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.tempdir.cleanup()
 
     def test_workflow_events_are_append_only_and_idempotent_per_run(self) -> None:
-        first = self.store.append_workflow_event(
+        first = self.store.repos.workflow_runtime.append_workflow_event(
             workflow_run_id="wf_openai_1",
             event_family="workflow_event",
             event_type="WorkflowStarted",
             idempotency_key="wf_openai_1:start",
             payload={"stage_key": "stage1_candidate_set"},
         )
-        duplicate = self.store.append_workflow_event(
+        duplicate = self.store.repos.workflow_runtime.append_workflow_event(
             workflow_run_id="wf_openai_1",
             event_family="workflow_event",
             event_type="WorkflowStarted",
             idempotency_key="wf_openai_1:start",
             payload={"stage_key": "should_not_replace"},
         )
-        second = self.store.append_workflow_event(
+        second = self.store.repos.workflow_runtime.append_workflow_event(
             workflow_run_id="wf_openai_1",
             event_family="domain_event",
             event_type="CompletionProofRecorded",
@@ -95,12 +95,112 @@ class DurableRuntimeStorageTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             payload={"proof_key": "stage1_candidate_set_terminal", "status": "proved"},
         )
 
-        events = self.store.list_workflow_events("wf_openai_1")
+        events = self.store.repos.workflow_runtime.list_workflow_events("wf_openai_1")
 
         self.assertEqual(first["event_id"], duplicate["event_id"])
         self.assertEqual(first["payload"]["stage_key"], "stage1_candidate_set")
         self.assertEqual([event["sequence_number"] for event in events], [1, 2])
         self.assertEqual(second["sequence_number"], 2)
+
+    def test_workflow_event_repository_rejects_immutable_identity_collision(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        event = repository.append_workflow_event(
+            workflow_run_id="wf_event_identity_collision",
+            operation_id="op_event_identity_collision",
+            command_id="cmd_event_identity_collision",
+            activity_attempt_id="attempt_event_identity_collision",
+            event_family="workflow_event",
+            event_type="WorkflowStarted",
+            idempotency_key="wf_event_identity_collision:start",
+            payload={"stage_key": "profile_fetch"},
+        )
+        replay = repository.append_workflow_event(
+            workflow_run_id="wf_event_identity_collision",
+            operation_id="op_event_identity_collision",
+            command_id="cmd_event_identity_collision",
+            activity_attempt_id="attempt_event_identity_collision",
+            event_family="workflow_event",
+            event_type="WorkflowStarted",
+            idempotency_key="wf_event_identity_collision:start",
+            payload={"stage_key": "must_not_replace"},
+        )
+
+        self.assertEqual(replay["event_id"], event["event_id"])
+        self.assertEqual(replay["payload"], {"stage_key": "profile_fetch"})
+        with self.assertRaisesRegex(RuntimeError, "workflow_events.*append_workflow_event"):
+            repository.append_workflow_event(
+                workflow_run_id="wf_event_identity_collision",
+                operation_id="op_event_identity_collision",
+                command_id="cmd_event_identity_collision",
+                activity_attempt_id="attempt_event_identity_collision",
+                event_family="workflow_event",
+                event_type="WorkflowCompleted",
+                idempotency_key="wf_event_identity_collision:start",
+            )
+
+    def test_workflow_event_repository_rejects_explicit_late_sequence(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        for index in range(2):
+            repository.append_workflow_event(
+                workflow_run_id="wf_event_late_sequence",
+                event_family="workflow_event",
+                event_type="ProgressRecorded",
+                idempotency_key=f"wf_event_late_sequence:progress:{index}",
+                payload={"index": index},
+            )
+
+        with self.assertRaisesRegex(RuntimeError, "workflow_events.*append_workflow_event"):
+            repository.append_workflow_event(
+                workflow_run_id="wf_event_late_sequence",
+                event_family="workflow_event",
+                event_type="LateProgressRecorded",
+                idempotency_key="wf_event_late_sequence:late",
+                sequence_number=1,
+            )
+
+        events = repository.list_workflow_events("wf_event_late_sequence")
+        self.assertEqual([event["sequence_number"] for event in events], [1, 2])
+        self.assertEqual(
+            [event["idempotency_key"] for event in events],
+            ["wf_event_late_sequence:progress:0", "wf_event_late_sequence:progress:1"],
+        )
+
+    def test_workflow_event_repository_allocates_contiguous_sequences_concurrently(self) -> None:
+        import threading
+
+        repository = self.store.repos.workflow_runtime
+        thread_count = 8
+        barrier = threading.Barrier(thread_count)
+        results: list[dict[str, object]] = []
+        errors: list[Exception] = []
+
+        def append(index: int) -> None:
+            try:
+                barrier.wait(timeout=10)
+                results.append(
+                    repository.append_workflow_event(
+                        workflow_run_id="wf_event_concurrent_sequence",
+                        event_family="workflow_event",
+                        event_type="ProgressRecorded",
+                        idempotency_key=f"wf_event_concurrent_sequence:progress:{index}",
+                        payload={"index": index},
+                    )
+                )
+            except Exception as exc:  # pragma: no cover - asserted below.
+                errors.append(exc)
+
+        threads = [threading.Thread(target=append, args=(index,)) for index in range(thread_count)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=20)
+
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        self.assertEqual(errors, [])
+        self.assertEqual(sorted(int(result["sequence_number"]) for result in results), list(range(1, 9)))
+        events = repository.list_workflow_events("wf_event_concurrent_sequence")
+        self.assertEqual([event["sequence_number"] for event in events], list(range(1, 9)))
+        self.assertEqual(len({event["event_id"] for event in events}), thread_count)
 
     def test_sqlite_durable_runtime_normal_path_fails_closed(self) -> None:
         self._stop_pg_durable_runtime()
@@ -124,7 +224,7 @@ class DurableRuntimeStorageTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
 
     def test_workflow_current_state_is_materialized_not_event_truth(self) -> None:
-        state = self.store.upsert_workflow_current_state(
+        state = self.store.repos.workflow_runtime.upsert_workflow_current_state(
             workflow_run_id="wf_google_1",
             operation_id="op_google_1",
             workflow_type="linkedin_acquisition",
@@ -135,7 +235,7 @@ class DurableRuntimeStorageTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             reducer_version="test_reducer_v1",
             metadata={"job_id": "legacy_job_google_1"},
         )
-        stale_update = self.store.upsert_workflow_current_state(
+        stale_update = self.store.repos.workflow_runtime.upsert_workflow_current_state(
             workflow_run_id="wf_google_1",
             status="running",
             last_processed_sequence_number=3,
@@ -144,6 +244,144 @@ class DurableRuntimeStorageTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(state["workflow_run_id"], "wf_google_1")
         self.assertEqual(stale_update["last_processed_sequence_number"], 7)
         self.assertEqual(stale_update["metadata"]["job_id"], "legacy_job_google_1")
+
+    def test_workflow_current_state_repository_lower_sequence_cannot_regress_snapshot(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        committed = repository.upsert_workflow_current_state(
+            workflow_run_id="wf_state_sequence_fence",
+            operation_id="op_state_sequence_fence",
+            workflow_type="linkedin_acquisition",
+            status="completed",
+            current_stage_key="serving_finalized",
+            completion_proofs={"workflow_terminal": {"status": "proved"}},
+            last_processed_sequence_number=9,
+            reducer_version="reducer_v9",
+            metadata={"snapshot_id": "snapshot-new", "writer": "new"},
+        )
+        stale = repository.upsert_workflow_current_state(
+            workflow_run_id="wf_state_sequence_fence",
+            status="running",
+            current_stage_key="profile_fetch",
+            completion_proofs={"profile_fetch": {"status": "pending"}},
+            last_processed_sequence_number=3,
+            reducer_version="reducer_v3",
+            metadata={"snapshot_id": "snapshot-old", "writer": "stale"},
+        )
+
+        self.assertEqual(stale["last_processed_sequence_number"], 9)
+        self.assertEqual(stale["status"], "completed")
+        self.assertEqual(stale["current_stage_key"], "serving_finalized")
+        self.assertEqual(stale["completion_proofs"], committed["completion_proofs"])
+        self.assertEqual(stale["metadata"], committed["metadata"])
+        self.assertEqual(stale["reducer_version"], "reducer_v9")
+        self.assertEqual(repository.get_workflow_current_state("wf_state_sequence_fence"), stale)
+
+    def test_workflow_current_state_repository_allows_equal_sequence_command_count_refresh(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        repository.upsert_workflow_current_state(
+            workflow_run_id="wf_state_equal_sequence_refresh",
+            operation_id="op_state_equal_sequence_refresh",
+            workflow_type="linkedin_acquisition",
+            status="running",
+            current_stage_key="profile_fetch",
+            completion_proofs={"candidate_set": {"status": "proved"}},
+            active_command_counts={"profile_owner": {"profile.fetch": 2}},
+            terminal_command_counts={},
+            last_processed_sequence_number=7,
+            reducer_version="reducer_v7",
+            metadata={"snapshot_id": "snapshot-equal-sequence"},
+        )
+
+        refreshed = repository.upsert_workflow_current_state(
+            workflow_run_id="wf_state_equal_sequence_refresh",
+            active_command_counts={"profile_owner": {"profile.fetch": 1}},
+            terminal_command_counts={"profile_owner": {"profile.fetch": 1}},
+            last_processed_sequence_number=7,
+        )
+
+        self.assertEqual(refreshed["last_processed_sequence_number"], 7)
+        self.assertEqual(refreshed["active_command_counts"], {"profile_owner": {"profile.fetch": 1}})
+        self.assertEqual(refreshed["terminal_command_counts"], {"profile_owner": {"profile.fetch": 1}})
+        self.assertEqual(refreshed["status"], "running")
+        self.assertEqual(refreshed["current_stage_key"], "profile_fetch")
+        self.assertEqual(refreshed["completion_proofs"], {"candidate_set": {"status": "proved"}})
+        self.assertEqual(refreshed["metadata"], {"snapshot_id": "snapshot-equal-sequence"})
+
+    def test_workflow_current_state_repository_rejects_equal_sequence_reducer_collision(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        committed = repository.upsert_workflow_current_state(
+            workflow_run_id="wf_state_equal_sequence_collision",
+            status="running",
+            current_stage_key="profile_fetch",
+            completion_proofs={"candidate_set": {"status": "proved"}},
+            last_processed_sequence_number=5,
+            reducer_version="reducer_v5",
+            metadata={"snapshot_id": "snapshot-v5"},
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "same-sequence reducer collision"):
+            repository.upsert_workflow_current_state(
+                workflow_run_id="wf_state_equal_sequence_collision",
+                status="completed",
+                current_stage_key="serving_finalized",
+                last_processed_sequence_number=5,
+                reducer_version="reducer_v5-conflict",
+                metadata={"snapshot_id": "snapshot-conflict"},
+            )
+
+        self.assertEqual(
+            repository.get_workflow_current_state("wf_state_equal_sequence_collision"),
+            committed,
+        )
+
+    def test_workflow_current_state_repository_omitted_status_preserves_existing_status(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        repository.upsert_workflow_current_state(
+            workflow_run_id="wf_state_omitted_status",
+            status="running",
+            current_stage_key="profile_fetch",
+            last_processed_sequence_number=1,
+        )
+
+        refreshed = repository.upsert_workflow_current_state(
+            workflow_run_id="wf_state_omitted_status",
+            active_command_counts={"profile_owner": {"profile.fetch": 1}},
+            last_processed_sequence_number=2,
+        )
+
+        self.assertEqual(refreshed["status"], "running")
+        self.assertEqual(refreshed["current_stage_key"], "profile_fetch")
+        self.assertEqual(refreshed["last_processed_sequence_number"], 2)
+        self.assertEqual(refreshed["active_command_counts"], {"profile_owner": {"profile.fetch": 1}})
+
+    def test_workflow_current_state_repository_existing_patch_requires_checkpoint(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        committed = repository.upsert_workflow_current_state(
+            workflow_run_id="wf_state_checkpoint_required",
+            status="running",
+            active_command_counts={"profile_owner": {"profile.fetch": 1}},
+            last_processed_sequence_number=3,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "updates require last_processed_sequence_number"):
+            repository.upsert_workflow_current_state(
+                workflow_run_id="wf_state_checkpoint_required",
+                active_command_counts={"profile_owner": {"profile.fetch": 0}},
+            )
+
+        self.assertEqual(
+            repository.get_workflow_current_state("wf_state_checkpoint_required"),
+            committed,
+        )
+
+    def test_workflow_current_state_repository_new_row_defaults_checkpoint_to_zero(self) -> None:
+        created = self.store.repos.workflow_runtime.upsert_workflow_current_state(
+            workflow_run_id="wf_state_checkpoint_default_insert",
+            status="running",
+        )
+
+        self.assertEqual(created["status"], "running")
+        self.assertEqual(created["last_processed_sequence_number"], 0)
 
     def test_workflow_commands_are_idempotent_claimable_and_terminal(self) -> None:
         command = self.store.upsert_workflow_command(
@@ -603,24 +841,99 @@ class DurableRuntimeStorageTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertTrue(snapshot.startswith(f"{SNAPSHOT_COMPACTION_RUN_COMMAND_TYPE}:"))
 
     def test_runtime_outbox_is_idempotent_and_dispatchable(self) -> None:
-        queued = self.store.enqueue_runtime_outbox(
+        queued = self.store.repos.workflow_runtime.enqueue_runtime_outbox(
             workflow_run_id="wf_openai_2",
             outbox_type="stream.workflow_event",
             idempotency_key="wf_openai_2:stream:started",
             payload={"event_type": "WorkflowStarted"},
         )
-        duplicate = self.store.enqueue_runtime_outbox(
+        duplicate = self.store.repos.workflow_runtime.enqueue_runtime_outbox(
             workflow_run_id="wf_openai_2",
             outbox_type="stream.workflow_event",
             idempotency_key="wf_openai_2:stream:started",
             payload={"event_type": "Different"},
         )
-        dispatched = self.store.mark_runtime_outbox_dispatched(queued["outbox_id"])
+        dispatched = self.store.repos.workflow_runtime.mark_runtime_outbox_dispatched(queued["outbox_id"])
 
         self.assertEqual(queued["outbox_id"], duplicate["outbox_id"])
         self.assertEqual(duplicate["payload"]["event_type"], "WorkflowStarted")
         self.assertEqual(dispatched["status"], "dispatched")
         self.assertTrue(dispatched["dispatched_at"])
+
+    def test_runtime_outbox_repository_rejects_cross_run_and_type_idempotency_collisions(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        repository.enqueue_runtime_outbox(
+            workflow_run_id="wf_outbox_identity_a",
+            outbox_type="stream.workflow_event",
+            idempotency_key="outbox:cross-run",
+            payload={"event_type": "WorkflowStarted"},
+        )
+        with self.assertRaisesRegex(RuntimeError, "runtime_outbox.*enqueue_runtime_outbox"):
+            repository.enqueue_runtime_outbox(
+                workflow_run_id="wf_outbox_identity_b",
+                outbox_type="stream.workflow_event",
+                idempotency_key="outbox:cross-run",
+            )
+
+        repository.enqueue_runtime_outbox(
+            workflow_run_id="wf_outbox_identity_type",
+            outbox_type="stream.workflow_event",
+            idempotency_key="outbox:cross-type",
+        )
+        with self.assertRaisesRegex(RuntimeError, "runtime_outbox.*enqueue_runtime_outbox"):
+            repository.enqueue_runtime_outbox(
+                workflow_run_id="wf_outbox_identity_type",
+                outbox_type="workflow.completed",
+                idempotency_key="outbox:cross-type",
+            )
+
+    def test_runtime_outbox_repository_repeated_dispatch_preserves_first_timestamp(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        queued = repository.enqueue_runtime_outbox(
+            workflow_run_id="wf_outbox_dispatch_replay",
+            outbox_type="stream.workflow_event",
+            idempotency_key="wf_outbox_dispatch_replay:stream:started",
+        )
+
+        first = repository.mark_runtime_outbox_dispatched(queued["outbox_id"])
+        repeated = repository.mark_runtime_outbox_dispatched(queued["outbox_id"])
+
+        self.assertEqual(first["status"], "dispatched")
+        self.assertTrue(first["dispatched_at"])
+        self.assertEqual(repeated["outbox_id"], queued["outbox_id"])
+        self.assertEqual(repeated["status"], "dispatched")
+        self.assertEqual(repeated["dispatched_at"], first["dispatched_at"])
+
+    def test_runtime_outbox_repository_claimed_dispatch_requires_lease_owner(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        queued = repository.enqueue_runtime_outbox(
+            workflow_run_id="wf_outbox_dispatch_lease",
+            outbox_type="stream.workflow_event",
+            idempotency_key="wf_outbox_dispatch_lease:stream:started",
+        )
+        adapter = self.store._control_plane_postgres
+        with adapter._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE runtime_outbox SET status = 'claimed', lease_owner = %s WHERE outbox_id = %s",
+                    ("outbox-worker-a", queued["outbox_id"]),
+                )
+            connection.commit()
+
+        with self.assertRaisesRegex(RuntimeError, "dispatch lease-owner mismatch"):
+            repository.mark_runtime_outbox_dispatched(queued["outbox_id"])
+        with self.assertRaisesRegex(RuntimeError, "dispatch lease-owner mismatch"):
+            repository.mark_runtime_outbox_dispatched(
+                queued["outbox_id"],
+                lease_owner="outbox-worker-b",
+            )
+
+        dispatched = repository.mark_runtime_outbox_dispatched(
+            queued["outbox_id"],
+            lease_owner="outbox-worker-a",
+        )
+        self.assertEqual(dispatched["status"], "dispatched")
+        self.assertEqual(dispatched["lease_owner"], "")
 
     def test_runtime_writer_applies_reducer_output_idempotently(self) -> None:
         registry = CommandOwnerRegistry(

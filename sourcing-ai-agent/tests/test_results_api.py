@@ -3390,7 +3390,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(commands[0]["owner"], PROJECTION_RUN_SCOPE_FINALIZE_OWNER)
         self.assertEqual(commands[0]["status"], "succeeded")
         self.assertEqual(dict(commands[0]["result"] or {}).get("projection_id"), projection_id)
-        workflow_state = self.store.get_workflow_current_state(legacy_job_workflow_run_id("job-projection-event-time"))
+        workflow_state = self.store.repos.workflow_runtime.get_workflow_current_state(
+            legacy_job_workflow_run_id("job-projection-event-time")
+        )
         serving_finalized = dict(dict(workflow_state.get("completion_proofs") or {}).get("serving_finalized") or {})
         self.assertEqual(serving_finalized.get("status"), "proved")
         self.assertEqual(len(merge_commands), 1)
@@ -3492,7 +3494,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(phase["counts"]["executed_command_count"], 1)
         self.assertEqual(stored_command["command_type"], PROJECTION_RUN_SCOPE_FINALIZE_COMMAND_TYPE)
         self.assertEqual(stored_command["status"], "succeeded")
-        workflow_state = self.store.get_workflow_current_state(
+        workflow_state = self.store.repos.workflow_runtime.get_workflow_current_state(
             legacy_job_workflow_run_id("job-projection-finalize-recovery")
         )
         serving_finalized = dict(dict(workflow_state.get("completion_proofs") or {}).get("serving_finalized") or {})
@@ -3613,7 +3615,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         )
 
         job = self.store.get_job(job_id) or {}
-        workflow_state = self.store.get_workflow_current_state(legacy_job_workflow_run_id(job_id)) or {}
+        workflow_state = (
+            self.store.repos.workflow_runtime.get_workflow_current_state(legacy_job_workflow_run_id(job_id)) or {}
+        )
         post_projection_resume = list(recovery.get("post_projection_workflow_resume") or [])
         compaction_commands = self.store.list_workflow_commands(
             workflow_run_id=legacy_job_workflow_run_id(job_id),
@@ -9348,7 +9352,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             )
             self.assertNotEqual(contract["active_phase_id"], "final_results")
 
-            self.store.upsert_workflow_current_state(
+            self.store.repos.workflow_runtime.upsert_workflow_current_state(
                 workflow_run_id=legacy_job_workflow_run_id(job_id),
                 operation_id=f"op_{job_id}",
                 workflow_type="linkedin_acquisition",
@@ -18477,7 +18481,11 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 }
             },
         }
-        with mock.patch.object(self.store, "get_workflow_current_state", return_value=serving_finalized_state):
+        with mock.patch.object(
+            self.store.repos.workflow_runtime,
+            "get_workflow_current_state",
+            return_value=serving_finalized_state,
+        ):
             blockers = self.orchestrator._workflow_completion_promotion_blockers(  # noqa: SLF001
                 self.store.get_job(job_id) or {"job_id": job_id},
                 ignore_workflow_lease=True,
@@ -20225,7 +20233,11 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 }
             },
         }
-        with mock.patch.object(self.store, "get_workflow_current_state", return_value=serving_finalized_state):
+        with mock.patch.object(
+            self.store.repos.workflow_runtime,
+            "get_workflow_current_state",
+            return_value=serving_finalized_state,
+        ):
             blockers_after_board_visible = self.orchestrator._workflow_completion_promotion_blockers(  # noqa: SLF001
                 self.store.get_job(job_id) or {},
                 ignore_workflow_lease=True,
@@ -23859,7 +23871,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         item_id = f"{job_id}:live_roster_discovery_lane:{snapshot_id}"
         lane_proofs = [
             dict(dict(event).get("payload") or {})
-            for event in self.store.list_workflow_events(legacy_job_workflow_run_id(job_id), limit=0)
+            for event in self.store.repos.workflow_runtime.list_workflow_events(
+                legacy_job_workflow_run_id(job_id), limit=0
+            )
             if str(dict(event).get("event_type") or "") == "CompletionProofRecorded"
             and str(dict(dict(event).get("payload") or {}).get("proof_key") or "").startswith(
                 f"stage1_lane:live_roster:{snapshot_id}:"

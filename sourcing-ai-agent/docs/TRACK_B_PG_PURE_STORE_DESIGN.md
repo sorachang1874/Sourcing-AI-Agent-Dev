@@ -930,3 +930,47 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     provider simulation、local PG 与非 live 合同开发继续，不受异步 review 阻断。R-022 已登记 pinned
     `af50f45..30a703e` scope-local async Codex review，只冻结本批 live/W6/manual/里程碑签收。下一分子批为
     workflow_runtime read-model trio。D-1/D-2/D-3 截止仍为 **2026-07-31**。
+
+- **2026-07-13 ②.4d 完成 —— workflow runtime read-model trio 退役到 `store.repos.workflow_runtime`**:
+  - **范围/Scout/删除**:`workflow_events`、`workflow_current_state`、`runtime_outbox` 三表，6 个原 Store public
+    (`append/list event`、`upsert/get current state`、`enqueue/mark dispatched outbox`) + 3 mapper 整体迁入
+    `WorkflowRuntimeRepository`；旧 facade、mapper、3 descriptor dispatch key 与 4 Store native-dispatch key 同批删除，
+    不留双轨。旧 receiver **31 → 0**，其中 production **9**、tests **22**；direct/getattr/hasattr/
+    `mock.patch.object` 均由 receiver-aware AST guard 覆盖。`storage.py` **12,190 → 11,959**(-231)，workflow
+    repository **1,938 → 2,195** 行；质量清单 **57 → 58 files**，新增本批触碰的 `durable_runtime.py`。
+    `workflow_commands` 仍留给本域最后一个分子批。
+  - **A/B + 双层变异自检**:删除前真实 PG old Store/new Repository battery 覆盖 6 方法、invalid/missing、自动与
+    显式 sequence、idem first-write-wins、排序/limit、低 checkpoint、三表 malformed JSON、dispatch replay 与 raw dump，
+    同树 **3 passed**。Pinned `889848e` 旧 Store 快照为 current-state **2,415 bytes / SHA-256
+    `42d5ba1e2b803e7846574329836dac399d94480a1207db47e4e193db6ce38280`**、events **3,528 bytes /
+    `7be02ed9f0509f516e51f928292ce7e8016d37af2fd642f691b736ab23aa3cf5`**、outbox **3,119 bytes /
+    `2b7acc2d43c706cde209c4632fc432cbe29a111eb8da2f302754454a2c17e5ef`**。把 repo event order 从 ASC
+    受控变为 DESC 后 **1 failed / 2 passed**；把双方共享的 event payload descriptor 改错后同树仍 **3 passed**，
+    但 pinned hash 变为 **3,448 bytes / `135e89aa47bab1530ad1c5541c8a43a4f79861b1ca87a9f736b76df6a943f455`**，
+    证明 pinned comparator 能抓共享盲区，恢复后回到原 hash。fixed-forward 后 current-state/events hash 保持；outbox
+    因第二次 dispatch 从旧 `{}` 改为返回原 committed row，当前快照为 **3,653 bytes /
+    `87ff0858f62006a3bc7485e7b54f6466215fcbf484cd47c6f484612391d27bb6`**，是有测试钉住的预期契约改进。
+  - **并发/身份 fixed-forward**:event append 以 workflow advisory transaction lock 串行分配 sequence，exact replay
+    校验 run/operation/command/attempt/family/type/idempotency identity；新显式 sequence 不得落后 committed stream，
+    collision fail-closed。current-state 改为 run lock + `SELECT FOR UPDATE` 下的 sparse merge；低 checkpoint 整行只读
+    返回且不改时间戳，相同 checkpoint 的 reducer-owned status/stage/proof/version/metadata 漂移报 collision，counts/
+    pointers/migration 可显式刷新；existing-row patch 省略 checkpoint 会 loudly fail，新 insert 仍默认 sequence 0，
+    `status` 省略不再重置 pending。`operation_id` 保持可随高层 continuation 更新，不被误当 workflow immutable identity。
+    outbox 同时按 id/key 确定序加锁并校验 run/operation/command/type identity；exact replay 不 reopen dispatched row，
+    重复 dispatch 返回原 timestamp，claimed/running dispatch 至少要求匹配 lease owner。
+  - **永久守卫/验证**:完整 durable runtime **55 passed + 12 subtests**；storage surface **52 passed**；live-PG
+    foundation **61 passed + 4 subtests**；recovery wakeup **6 passed**；Testcontainers PG contract 修复 fresh-schema
+    migration ordering 后 **1 passed**。results 精确 7 项为 **6 passed / 1 failed**，唯一 `public_facet_counts` 缺
+    `candidate_count` 在 pinned `889848e` 同败，单列为 R-024（不扩张 R-007 ×3 预算）；enrichment 精确节点
+    **1 passed**。单个允许的 pipeline
+    节点当前/pinned 均 `0 != 1`：共享 PG 有 1,656 个 open refill rows，目标 rank 1,650，而 reader 先全局截到
+    `limit*3=1,500` 再按 source job 过滤，归 R-009；未运行 full `test_pipeline.py`。最终
+    `make ci-pre-agent-contract` 为 **314 passed / 0 skip** + 后续门 **2/11/1/2 passed**，
+    `dry_run_ready failures=[]`；`make lint` **58 files** 全绿；mypy 保持 R-011 基线 **87 errors / 4 files**。
+  - **边界/接续**:`DurableRuntimeWriter` 仍是 event → commands → outbox → state 的可重试多提交协调器，不是合同要求的
+    四表单事务；相同 event checkpoint 的 command counts 仍可能被延迟 reducer last-writer 覆盖，继续由 R-019 在
+    `workflow_commands` 分子批闭合。outbox 目前无 production claim/consumer，owner-name dispatch fence 缺
+    attempt/generation token 的未来 ABA 风险登记 R-023，Track C 5d 前必须修。owner 已轮换 Apify Token/API Keys，
+    当前版本没有可用新凭据且未授权 live，故未运行 live provider/W6/manual signoff。②.4d implementation commit 后
+    登记 scope-local async Codex review；它只冻结本批 live/W6/manual/里程碑签收，不阻断 commands 分子批。
+    D-1 已由 owner 选择 (a)、D-2 选择 (b)并写回权威决策卡；D-3 仍待 owner 裁决，截止 **2026-07-31**。

@@ -53,3 +53,9 @@ def serving_projection_repo(store: Any) -> Any:
     """Return the serving-projection repository exposed by a store-like object, if present."""
 
     return getattr(getattr(store, "repos", None), "serving_projection", None)
+
+
+def workflow_runtime_repo(store: Any) -> Any:
+    """Return the workflow-runtime repository exposed by a store-like object, if present."""
+
+    return getattr(getattr(store, "repos", None), "workflow_runtime", None)

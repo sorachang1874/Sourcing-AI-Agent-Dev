@@ -3,8 +3,9 @@
 > Status: **RATIFIED by owner (2026-06-21/23); execution in progress.** Roadmap: ① dead-shadow/mirror
 > teardown — executed as **B4.3, 100% complete 2026-07-02** (`storage.py` is PG-pure; mirror machinery
 > deleted) → ② repository query methods + per-domain caller migration — **current round**, execution entry
-> doc: `docs/TRACK_B_REPOSITORY_MIGRATION_HANDBOOK.md` → ③ jsonb/timestamptz data migration — **still
-> owner-gated** (explicit GO + full-stop window). Ratified deltas vs. this doc's recommendations:
+> doc: `docs/TRACK_B_REPOSITORY_MIGRATION_HANDBOOK.md` → ③ jsonb/timestamptz data migration — owner selected
+> D-1(a) on 2026-07-13: schedule immediately after ② closes; execution remains gated by scope-matched GO,
+> readiness evidence, and an explicit full-stop window. Ratified deltas vs. this doc's recommendations:
 > repositories become the PUBLIC API (callers migrate directly; no permanent facade); pilot domain =
 > `linkedin_profile_registry`. Builds on the completed B4.1 (shadow schema removed, commit d6f6f1a) and the
 > deficiency assessment in [[track_b_pg_pure_store]] (workflow wf_c0a3b7c3).
@@ -150,11 +151,16 @@ change is one or a few new migrations:
 
 ## §7 Decisions needed from the owner
 
-> **All decided (owner 2026-06-21/23):** 1) data migration ratified as roadmap step ③, execution still gated
-> on an explicit GO + full-stop window; 2) repositories become the **PUBLIC API** — callers migrate directly
+> **All decided (owner 2026-06-21/23 and 2026-07-13):** 1) data migration ratified as roadmap step ③;
+> D-1(a) schedules its window immediately after ② closes, while execution remains gated on scope-matched GO,
+> readiness evidence and an explicit full-stop window; 2) repositories become the **PUBLIC API** — callers migrate directly
 > and the God-class facade retires (not the facade-first recommendation); 3) pilot domain =
 > `linkedin_profile_registry` (not the candidates recommended below); 4) typed/tolerant-read code first,
 > schema migration deferred to gated step ③ after the ② repository round.
+
+> D-2(b) separately freezes the on-disk-SQLite import/export/direct-sync utilities as deprecated migration-only
+> compatibility. They receive no new callers or maintenance and are deleted only after the complete production ③
+> cutover is accepted; PG backup/snapshot restore remains the rollback path and is not deleted.
 
 1. **Ratify the data migration** (jsonb + timestamptz) per §4 — the Contract change.
 2. **Repository decomposition shape:** thin `ControlPlaneStore` facade composing repositories (preserve

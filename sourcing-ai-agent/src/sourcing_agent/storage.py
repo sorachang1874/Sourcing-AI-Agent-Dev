@@ -128,8 +128,6 @@ _CONTROL_PLANE_POSTGRES_NATIVE_TABLES = {
     "claim_workflow_recovery_intents": "workflow_recovery_intents",
     "mark_workflow_recovery_intent_consumed": "workflow_recovery_intents",
     "supersede_workflow_runtime_state": "agent_worker_runs",
-    "append_workflow_event": "workflow_events",
-    "upsert_workflow_current_state": "workflow_current_state",
     "upsert_workflow_command": "workflow_commands",
     "update_workflow_command_payload": "workflow_commands",
     "claim_workflow_command": "workflow_commands",
@@ -141,8 +139,6 @@ _CONTROL_PLANE_POSTGRES_NATIVE_TABLES = {
     "cancel_workflow_command": "workflow_commands",
     "retry_workflow_command": "workflow_commands",
     "resume_workflow_command": "workflow_commands",
-    "enqueue_runtime_outbox": "runtime_outbox",
-    "mark_runtime_outbox_dispatched": "runtime_outbox",
     "claim_job_materialization_item": "job_materialization_items",
     "mark_job_materialization_item_completed": "job_materialization_items",
     "mark_job_materialization_item_failed": "job_materialization_items",
@@ -6556,164 +6552,6 @@ class ControlPlaneStore:
     def _workflow_recovery_intent_from_row(self, row: Any) -> dict[str, Any]:
         return _workflow_runtime_repo.WORKFLOW_RECOVERY_INTENTS.from_row(row)
 
-    def append_workflow_event(
-        self,
-        *,
-        workflow_run_id: str,
-        event_family: str,
-        event_type: str,
-        idempotency_key: str,
-        operation_id: str = "",
-        command_id: str = "",
-        activity_attempt_id: str = "",
-        sequence_number: int = 0,
-        occurred_at: str = "",
-        actor: str = "",
-        source: str = "",
-        payload: dict[str, Any] | None = None,
-        artifact_refs: list[Any] | tuple[Any, ...] | None = None,
-        schema_version: str = "workflow_event_v1",
-    ) -> dict[str, Any]:
-        self._require_postgres_for_durable_runtime("workflow_events")
-        normalized_run_id = str(workflow_run_id or "").strip()
-        normalized_family = str(event_family or "").strip()
-        normalized_type = str(event_type or "").strip()
-        normalized_idempotency = str(idempotency_key or "").strip()
-        if not normalized_run_id or not normalized_family or not normalized_type or not normalized_idempotency:
-            return {}
-        now = _utc_now_timestamp()
-        row_payload = _workflow_runtime_repo.WORKFLOW_EVENTS.to_columns(
-            {
-                "event_id": "",
-                "workflow_run_id": normalized_run_id,
-                "operation_id": operation_id,
-                "command_id": command_id,
-                "activity_attempt_id": activity_attempt_id,
-                "event_family": normalized_family,
-                "event_type": normalized_type,
-                "sequence_number": max(0, int(sequence_number or 0)),
-                "idempotency_key": normalized_idempotency,
-                "occurred_at": str(occurred_at or now).strip(),
-                "recorded_at": now,
-                "actor": actor,
-                "source": source,
-                "payload": payload or {},
-                "artifact_refs": list(artifact_refs or []),
-                "schema_version": str(schema_version or "workflow_event_v1").strip(),
-                "created_at": now,
-            }
-        )
-        if self._control_plane_postgres_should_prefer_read("workflow_events"):
-            row = self._call_control_plane_postgres_native("append_workflow_event", row_payload)
-            if row is not None:
-                return self._workflow_event_from_row(row)
-            if self._control_plane_postgres_should_skip_sqlite_fallback("workflow_events"):
-                return {}
-        raise RuntimeError(
-            "postgres-only invariant violated for workflow_events in append_workflow_event: should_prefer_read "
-            "returned False; legacy SQLite tail retired (B4)"
-        )
-
-    def list_workflow_events(self, workflow_run_id: str, *, limit: int = 1000) -> list[dict[str, Any]]:
-        self._require_postgres_for_durable_runtime("workflow_events")
-        normalized_run_id = str(workflow_run_id or "").strip()
-        if not normalized_run_id:
-            return []
-        postgres_rows = self._select_control_plane_rows(
-            "workflow_events",
-            row_builder=self._workflow_event_from_row,
-            where_sql="workflow_run_id = %s",
-            params=[normalized_run_id],
-            order_by_sql="sequence_number ASC",
-            limit=max(0, int(limit or 0)),
-        )
-        if postgres_rows:
-            return postgres_rows
-        return []
-
-    def upsert_workflow_current_state(
-        self,
-        *,
-        workflow_run_id: str,
-        operation_id: str = "",
-        workflow_type: str = "",
-        status: str = "pending",
-        current_stage_key: str = "",
-        completion_proofs: dict[str, Any] | None = None,
-        active_command_counts: dict[str, Any] | None = None,
-        terminal_command_counts: dict[str, Any] | None = None,
-        read_model_pointers: dict[str, Any] | None = None,
-        migration_status: dict[str, Any] | None = None,
-        last_processed_sequence_number: int = 0,
-        reducer_version: str = "",
-        metadata: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        self._require_postgres_for_durable_runtime("workflow_current_state")
-        normalized_run_id = str(workflow_run_id or "").strip()
-        if not normalized_run_id:
-            return {}
-        now = _utc_now_timestamp()
-        existing = self.get_workflow_current_state(normalized_run_id) or {}
-        row_payload = _workflow_runtime_repo.WORKFLOW_CURRENT_STATE.to_columns(
-            {
-                "workflow_run_id": normalized_run_id,
-                "operation_id": operation_id or existing.get("operation_id"),
-                "workflow_type": workflow_type or existing.get("workflow_type"),
-                "status": status or existing.get("status"),
-                "current_stage_key": current_stage_key or existing.get("current_stage_key"),
-                "completion_proofs": (
-                    completion_proofs if completion_proofs is not None else existing.get("completion_proofs") or {}
-                ),
-                "active_command_counts": (
-                    active_command_counts
-                    if active_command_counts is not None
-                    else existing.get("active_command_counts") or {}
-                ),
-                "terminal_command_counts": (
-                    terminal_command_counts
-                    if terminal_command_counts is not None
-                    else existing.get("terminal_command_counts") or {}
-                ),
-                "read_model_pointers": (
-                    read_model_pointers if read_model_pointers is not None else existing.get("read_model_pointers") or {}
-                ),
-                "migration_status": (
-                    migration_status if migration_status is not None else existing.get("migration_status") or {}
-                ),
-                "last_processed_sequence_number": max(
-                    int(existing.get("last_processed_sequence_number") or 0),
-                    int(last_processed_sequence_number or 0),
-                ),
-                "reducer_version": reducer_version or existing.get("reducer_version"),
-                "schema_version": "workflow_current_state_v1",
-                "metadata": metadata if metadata is not None else existing.get("metadata") or {},
-                "created_at": str(existing.get("created_at") or now).strip() or now,
-                "updated_at": now,
-            }
-        )
-        if self._write_control_plane_row_to_postgres("workflow_current_state", row_payload):
-            return self.get_workflow_current_state(normalized_run_id) or self._workflow_current_state_from_row(row_payload)
-        self._raise_control_plane_postgres_write_failure(
-            table_name="workflow_current_state",
-            method_name="upsert_workflow_current_state",
-            reason="postgres-only: write returned no confirmation; legacy SQLite mirror tail retired (B4)",
-        )
-
-    def get_workflow_current_state(self, workflow_run_id: str) -> dict[str, Any]:
-        self._require_postgres_for_durable_runtime("workflow_current_state")
-        normalized_run_id = str(workflow_run_id or "").strip()
-        if not normalized_run_id:
-            return {}
-        postgres_row = self._select_control_plane_row(
-            "workflow_current_state",
-            row_builder=self._workflow_current_state_from_row,
-            where_sql="workflow_run_id = %s",
-            params=[normalized_run_id],
-        )
-        if postgres_row is not None:
-            return postgres_row
-        return {}
-
     def upsert_workflow_command(
         self,
         *,
@@ -7171,66 +7009,6 @@ class ControlPlaneStore:
             return self._workflow_command_from_row(row) if row is not None else {}
         raise RuntimeError(
             "postgres-only invariant violated for workflow_commands in resume_workflow_command: should_prefer_read "
-            "returned False; legacy SQLite tail retired (B4)"
-        )
-
-    def enqueue_runtime_outbox(
-        self,
-        *,
-        outbox_type: str,
-        idempotency_key: str,
-        workflow_run_id: str = "",
-        operation_id: str = "",
-        command_id: str = "",
-        payload: dict[str, Any] | None = None,
-        not_before_at: str = "",
-        max_attempts: int = 5,
-    ) -> dict[str, Any]:
-        self._require_postgres_for_durable_runtime("runtime_outbox")
-        normalized_type = str(outbox_type or "").strip()
-        normalized_idempotency = str(idempotency_key or "").strip()
-        if not normalized_type or not normalized_idempotency:
-            return {}
-        now = _utc_now_timestamp()
-        row_payload = _workflow_runtime_repo.RUNTIME_OUTBOX.to_columns(
-            {
-                "outbox_id": "out_" + sha1(normalized_idempotency.encode("utf-8")).hexdigest()[:24],
-                "workflow_run_id": workflow_run_id,
-                "operation_id": operation_id,
-                "command_id": command_id,
-                "outbox_type": normalized_type,
-                "status": "queued",
-                "idempotency_key": normalized_idempotency,
-                "payload": payload or {},
-                "not_before_at": not_before_at,
-                "attempt": 0,
-                "max_attempts": max(1, int(max_attempts or 5)),
-                "schema_version": "runtime_outbox_v1",
-                "created_at": now,
-                "updated_at": now,
-            }
-        )
-        if self._control_plane_postgres_should_prefer_read("runtime_outbox"):
-            row = self._call_control_plane_postgres_native("enqueue_runtime_outbox", row_payload)
-            if row is not None:
-                return self._runtime_outbox_from_row(row)
-            if self._control_plane_postgres_should_skip_sqlite_fallback("runtime_outbox"):
-                return {}
-        raise RuntimeError(
-            "postgres-only invariant violated for runtime_outbox in enqueue_runtime_outbox: should_prefer_read "
-            "returned False; legacy SQLite tail retired (B4)"
-        )
-
-    def mark_runtime_outbox_dispatched(self, outbox_id: str) -> dict[str, Any]:
-        self._require_postgres_for_durable_runtime("runtime_outbox")
-        normalized_outbox_id = str(outbox_id or "").strip()
-        if not normalized_outbox_id:
-            return {}
-        if self._control_plane_postgres_should_prefer_read("runtime_outbox"):
-            row = self._call_control_plane_postgres_native("mark_runtime_outbox_dispatched", normalized_outbox_id)
-            return self._runtime_outbox_from_row(row) if row is not None else {}
-        raise RuntimeError(
-            "postgres-only invariant violated for runtime_outbox in mark_runtime_outbox_dispatched: should_prefer_read "
             "returned False; legacy SQLite tail retired (B4)"
         )
 
@@ -10773,17 +10551,8 @@ class ControlPlaneStore:
             "updated_at": str(row["updated_at"] or ""),
         }
 
-    def _workflow_event_from_row(self, row: Any) -> dict[str, Any]:
-        return _workflow_runtime_repo.WORKFLOW_EVENTS.from_row(row)
-
-    def _workflow_current_state_from_row(self, row: Any) -> dict[str, Any]:
-        return _workflow_runtime_repo.WORKFLOW_CURRENT_STATE.from_row(row)
-
     def _workflow_command_from_row(self, row: Any) -> dict[str, Any]:
         return _workflow_runtime_repo.WORKFLOW_COMMANDS.from_row(row)
-
-    def _runtime_outbox_from_row(self, row: Any) -> dict[str, Any]:
-        return _workflow_runtime_repo.RUNTIME_OUTBOX.from_row(row)
 
     def _plan_review_session_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
         execution_bundle = {}

@@ -31778,7 +31778,9 @@ class SourcingOrchestrator:
         workflow_state_unavailable = False
         workflow_run_absent = False
         try:
-            workflow_state = self.store.get_workflow_current_state(legacy_job_workflow_run_id(job_id)) or {}
+            workflow_state = (
+                self.store.repos.workflow_runtime.get_workflow_current_state(legacy_job_workflow_run_id(job_id)) or {}
+            )
             # The store returns {} when no current-state row exists. Confirmed
             # absence may exempt the serving_finalized gate, but ONLY for the
             # final-results reconciliation path (callers opt in) — generic
@@ -34378,7 +34380,7 @@ class SourcingOrchestrator:
                 stage1_proof_prefix = f"stage1_lane:{contract.lane_kind}:{normalized_snapshot_id}"
                 proof_events = [
                     dict(event)
-                    for event in self.store.list_workflow_events(workflow_run_id, limit=0)
+                    for event in self.store.repos.workflow_runtime.list_workflow_events(workflow_run_id, limit=0)
                     if str(dict(event).get("event_type") or "").strip() == "CompletionProofRecorded"
                     and str(dict(dict(event).get("payload") or {}).get("proof_key") or "")
                     .strip()

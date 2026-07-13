@@ -136,427 +136,427 @@ DEFAULT_COMMAND_TYPE_SPECS: dict[str, CommandTypeSpec] = {
     ACQUISITION_RUN_CREATE_COMMAND_TYPE: CommandTypeSpec(
         command_type=ACQUISITION_RUN_CREATE_COMMAND_TYPE,
         owner=ACQUISITION_RUN_CREATE_OWNER,
-        stage_id='acquisition_run_create',
-        readiness_effect='acquisition_run_requested',
-        display_label='Create acquisition run',
-        display_category='acquisition',
-        display_description='Create the durable root for a staged acquisition operation.',
+        stage_id="acquisition_run_create",
+        readiness_effect="acquisition_run_requested",
+        display_label="Create acquisition run",
+        display_category="acquisition",
+        display_description="Create the durable root for a staged acquisition operation.",
         activity_spine_requirement=ACTIVITY_SPINE_ORCHESTRATION,
-        running_control_categories=('orchestration',),
+        running_control_categories=("orchestration",),
     ),
     ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE: CommandTypeSpec(
         command_type=ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
         owner=ACQUISITION_INTENT_RESOLVE_OWNER,
-        stage_id='acquisition_intent_resolve',
-        readiness_effect='acquisition_intent_ready_for_plan',
-        display_label='Resolve acquisition intent',
-        display_category='acquisition',
-        display_description='Normalize the bounded acquisition request before plan building.',
+        stage_id="acquisition_intent_resolve",
+        readiness_effect="acquisition_intent_ready_for_plan",
+        display_label="Resolve acquisition intent",
+        display_category="acquisition",
+        display_description="Normalize the bounded acquisition request before plan building.",
         activity_spine_requirement=ACTIVITY_SPINE_ORCHESTRATION,
-        running_control_categories=('orchestration',),
+        running_control_categories=("orchestration",),
     ),
     ACQUISITION_PLAN_BUILD_COMMAND_TYPE: CommandTypeSpec(
         command_type=ACQUISITION_PLAN_BUILD_COMMAND_TYPE,
         owner=ACQUISITION_PLAN_BUILD_OWNER,
-        stage_id='acquisition_plan_build',
-        readiness_effect='acquisition_plan_ready_for_review',
-        display_label='Build acquisition plan',
-        display_category='acquisition',
-        display_description='Build a typed acquisition plan without provider side effects.',
+        stage_id="acquisition_plan_build",
+        readiness_effect="acquisition_plan_ready_for_review",
+        display_label="Build acquisition plan",
+        display_category="acquisition",
+        display_description="Build a typed acquisition plan without provider side effects.",
         activity_spine_requirement=ACTIVITY_SPINE_ORCHESTRATION,
-        running_control_categories=('orchestration',),
+        running_control_categories=("orchestration",),
     ),
     ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE: CommandTypeSpec(
         command_type=ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE,
         owner=ACQUISITION_PLAN_REVIEW_REQUEST_OWNER,
-        stage_id='acquisition_plan_review_request',
-        readiness_effect='acquisition_plan_review_requested',
-        display_label='Request plan review',
-        display_category='acquisition',
-        display_description='Open or reuse a human review session before execution.',
+        stage_id="acquisition_plan_review_request",
+        readiness_effect="acquisition_plan_review_requested",
+        display_label="Request plan review",
+        display_category="acquisition",
+        display_description="Open or reuse a human review session before execution.",
         activity_spine_requirement=ACTIVITY_SPINE_ORCHESTRATION,
-        running_control_categories=('orchestration',),
+        running_control_categories=("orchestration",),
     ),
     ACQUISITION_PLAN_COMMIT_COMMAND_TYPE: CommandTypeSpec(
         command_type=ACQUISITION_PLAN_COMMIT_COMMAND_TYPE,
         owner=ACQUISITION_PLAN_COMMIT_OWNER,
-        stage_id='acquisition_plan_commit',
-        readiness_effect='acquisition_plan_committed',
-        display_label='Commit reviewed plan',
-        display_category='acquisition',
-        display_description='Materialize the approved acquisition plan as a PG-only acquisition run.',
+        stage_id="acquisition_plan_commit",
+        readiness_effect="acquisition_plan_committed",
+        display_label="Commit reviewed plan",
+        display_category="acquisition",
+        display_description="Materialize the approved acquisition plan as a PG-only acquisition run.",
         activity_spine_requirement=ACTIVITY_SPINE_ORCHESTRATION,
-        running_control_categories=('orchestration',),
+        running_control_categories=("orchestration",),
     ),
     ACQUISITION_PROBE_SUBMIT_COMMAND_TYPE: CommandTypeSpec(
         command_type=ACQUISITION_PROBE_SUBMIT_COMMAND_TYPE,
         owner=ACQUISITION_PROBE_OWNER,
-        stage_id='acquisition_probe_submit',
-        readiness_effect='acquisition_probe_submitted',
-        display_label='Submit acquisition probe',
-        display_category='acquisition',
-        display_description='Submit the bounded acquisition probe.',
+        stage_id="acquisition_probe_submit",
+        readiness_effect="acquisition_probe_submitted",
+        display_label="Submit acquisition probe",
+        display_category="acquisition",
+        display_description="Submit the bounded acquisition probe.",
         activity_spine_requirement=ACTIVITY_SPINE_ORCHESTRATION,
-        running_control_categories=('provider_attempt',),
+        running_control_categories=("provider_attempt",),
         provider_after_start_mode=PROVIDER_AFTER_START_CONTROL_MODE_POLL_CANCEL_QUARANTINE,
     ),
     ACQUISITION_PROBE_COLLECT_COMMAND_TYPE: CommandTypeSpec(
         command_type=ACQUISITION_PROBE_COLLECT_COMMAND_TYPE,
         owner=ACQUISITION_PROBE_OWNER,
-        stage_id='acquisition_probe_collect',
-        readiness_effect='acquisition_probe_collected',
-        display_label='Collect acquisition probe',
-        display_category='acquisition',
-        display_description='Collect probe results and prepare scale planning.',
+        stage_id="acquisition_probe_collect",
+        readiness_effect="acquisition_probe_collected",
+        display_label="Collect acquisition probe",
+        display_category="acquisition",
+        display_description="Collect probe results and prepare scale planning.",
         activity_spine_requirement=ACTIVITY_SPINE_ORCHESTRATION,
-        running_control_categories=('provider_attempt',),
+        running_control_categories=("provider_attempt",),
         provider_after_start_mode=PROVIDER_AFTER_START_CONTROL_MODE_POLL_CANCEL_QUARANTINE,
     ),
     ACQUISITION_SCALE_PLAN_COMMAND_TYPE: CommandTypeSpec(
         command_type=ACQUISITION_SCALE_PLAN_COMMAND_TYPE,
         owner=ACQUISITION_SCALE_PLAN_OWNER,
-        stage_id='acquisition_scale_plan',
-        readiness_effect='acquisition_scale_planned',
-        display_label='Plan acquisition scale',
-        display_category='acquisition',
-        display_description='Create discovery lanes and activity boundaries.',
+        stage_id="acquisition_scale_plan",
+        readiness_effect="acquisition_scale_planned",
+        display_label="Plan acquisition scale",
+        display_category="acquisition",
+        display_description="Create discovery lanes and activity boundaries.",
         activity_spine_requirement=ACTIVITY_SPINE_ACTIVITY_BOUNDARY,
-        running_control_categories=('orchestration',),
+        running_control_categories=("orchestration",),
     ),
     LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE: CommandTypeSpec(
         command_type=LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE,
         owner=LINKEDIN_DISCOVERY_QUERY_RUN_OWNER,
-        stage_id='stage1_candidate_discovery',
-        readiness_effect='stage1_discovery_lane_submitted',
-        display_label='Run LinkedIn discovery lane',
-        display_category='linkedin',
-        display_description='Execute one operation-native discovery lane.',
+        stage_id="stage1_candidate_discovery",
+        readiness_effect="stage1_discovery_lane_submitted",
+        display_label="Run LinkedIn discovery lane",
+        display_category="linkedin",
+        display_description="Execute one operation-native discovery lane.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('provider_attempt',),
+        running_control_categories=("provider_attempt",),
         provider_after_start_mode=PROVIDER_AFTER_START_CONTROL_MODE_POLL_CANCEL_QUARANTINE,
     ),
     LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH_COMMAND_TYPE: CommandTypeSpec(
         command_type=LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH_COMMAND_TYPE,
         owner=LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH_OWNER,
-        stage_id='profile_fetch',
-        readiness_effect='profile_refill_submitted',
-        display_label='Submit profile refill batch',
-        display_category='linkedin',
-        display_description='Submit a bounded LinkedIn profile refill batch.',
+        stage_id="profile_fetch",
+        readiness_effect="profile_refill_submitted",
+        display_label="Submit profile refill batch",
+        display_category="linkedin",
+        display_description="Submit a bounded LinkedIn profile refill batch.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('provider_attempt',),
+        running_control_categories=("provider_attempt",),
         provider_after_start_mode=PROVIDER_AFTER_START_CONTROL_MODE_POLL_CANCEL_QUARANTINE,
     ),
     LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE: CommandTypeSpec(
         command_type=LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE,
         owner=LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER,
-        stage_id='operation_native_profile_fetch',
-        readiness_effect='profile_fetch_activity_planned',
-        display_label='Plan profile fetch activity',
-        display_category='linkedin',
-        display_description='Resolve profile cache hits and provider fetch requirements.',
+        stage_id="operation_native_profile_fetch",
+        readiness_effect="profile_fetch_activity_planned",
+        display_label="Plan profile fetch activity",
+        display_category="linkedin",
+        display_description="Resolve profile cache hits and provider fetch requirements.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE: CommandTypeSpec(
         command_type=LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE,
         owner=LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER,
-        stage_id='operation_native_profile_provider_fetch',
-        readiness_effect='profile_fetch_provider_completed',
-        display_label='Fetch profiles from provider',
-        display_category='linkedin',
-        display_description='Fetch required LinkedIn profiles through provider attempts.',
+        stage_id="operation_native_profile_provider_fetch",
+        readiness_effect="profile_fetch_provider_completed",
+        display_label="Fetch profiles from provider",
+        display_category="linkedin",
+        display_description="Fetch required LinkedIn profiles through provider attempts.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('provider_attempt',),
+        running_control_categories=("provider_attempt",),
         provider_after_start_mode=PROVIDER_AFTER_START_CONTROL_MODE_POLL_CANCEL_QUARANTINE,
     ),
     LINKEDIN_PROFILE_TERMINAL_ADMIT_COMMAND_TYPE: CommandTypeSpec(
         command_type=LINKEDIN_PROFILE_TERMINAL_ADMIT_COMMAND_TYPE,
         owner=LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER,
-        stage_id='operation_native_profile_terminal_admission',
-        readiness_effect='profile_terminal_admitted',
-        display_label='Admit terminal profiles',
-        display_category='linkedin',
-        display_description='Convert cache/provider facts into terminal profile deltas.',
+        stage_id="operation_native_profile_terminal_admission",
+        readiness_effect="profile_terminal_admitted",
+        display_label="Admit terminal profiles",
+        display_category="linkedin",
+        display_description="Convert cache/provider facts into terminal profile deltas.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     LINKEDIN_PROFILE_URL_TERMINAL_RECORD_COMMAND_TYPE: CommandTypeSpec(
         command_type=LINKEDIN_PROFILE_URL_TERMINAL_RECORD_COMMAND_TYPE,
         owner=LINKEDIN_PROFILE_URL_TERMINAL_RECORD_OWNER,
-        stage_id='profile_fetch_terminal_recording',
-        readiness_effect='profile_url_terminal_recorded',
-        display_label='Record profile URL terminal state',
-        display_category='linkedin',
-        display_description='Persist terminal registry state for fetched or failed profile URLs.',
+        stage_id="profile_fetch_terminal_recording",
+        readiness_effect="profile_url_terminal_recorded",
+        display_label="Record profile URL terminal state",
+        display_category="linkedin",
+        display_description="Persist terminal registry state for fetched or failed profile URLs.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     LINKEDIN_LOCAL_PROFILE_DELTA_APPLY_COMMAND_TYPE: CommandTypeSpec(
         command_type=LINKEDIN_LOCAL_PROFILE_DELTA_APPLY_COMMAND_TYPE,
         owner=LINKEDIN_LOCAL_PROFILE_DELTA_APPLY_OWNER,
-        stage_id='local_profile_delta_apply',
-        readiness_effect='local_profile_delta_applied',
-        display_label='Apply local profile delta',
-        display_category='linkedin',
-        display_description='Apply fetched profile data into local candidate materialization.',
+        stage_id="local_profile_delta_apply",
+        readiness_effect="local_profile_delta_applied",
+        display_label="Apply local profile delta",
+        display_category="linkedin",
+        display_description="Apply fetched profile data into local candidate materialization.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     PROJECTION_BOARD_VISIBLE_PATCH_PUBLISH_COMMAND_TYPE: CommandTypeSpec(
         command_type=PROJECTION_BOARD_VISIBLE_PATCH_PUBLISH_COMMAND_TYPE,
         owner=PROJECTION_BOARD_VISIBLE_PATCH_PUBLISH_OWNER,
-        stage_id='board_visible_publication',
-        readiness_effect='board_visible_patch_published',
-        display_label='Publish board-visible patch',
-        display_category='projection',
-        display_description='Publish candidate changes to the board-visible patch stream.',
+        stage_id="board_visible_publication",
+        readiness_effect="board_visible_patch_published",
+        display_label="Publish board-visible patch",
+        display_category="projection",
+        display_description="Publish candidate changes to the board-visible patch stream.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     PROJECTION_PROFILE_ADMISSION_APPLY_COMMAND_TYPE: CommandTypeSpec(
         command_type=PROJECTION_PROFILE_ADMISSION_APPLY_COMMAND_TYPE,
         owner=PROJECTION_PROFILE_ADMISSION_APPLY_OWNER,
-        stage_id='operation_native_projection_admission',
-        readiness_effect='profile_terminal_projection_admitted',
-        display_label='Admit profiles to projection',
-        display_category='projection',
-        display_description='Apply terminal profile facts into canonical run-scope projection membership.',
+        stage_id="operation_native_projection_admission",
+        readiness_effect="profile_terminal_projection_admitted",
+        display_label="Admit profiles to projection",
+        display_category="projection",
+        display_description="Apply terminal profile facts into canonical run-scope projection membership.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     PROJECTION_FACET_LAYERING_BUILD_COMMAND_TYPE: CommandTypeSpec(
         command_type=PROJECTION_FACET_LAYERING_BUILD_COMMAND_TYPE,
         owner=PROJECTION_FACET_LAYERING_BUILD_OWNER,
-        stage_id='post_result_layering',
-        readiness_effect='projection_facet_layering_built',
-        display_label='Build projection facets and layering',
-        display_category='projection',
-        display_description='Build canonical filter facets, layering, and related read-model metadata.',
+        stage_id="post_result_layering",
+        readiness_effect="projection_facet_layering_built",
+        display_label="Build projection facets and layering",
+        display_category="projection",
+        display_description="Build canonical filter facets, layering, and related read-model metadata.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     PROJECTION_RUN_SCOPE_FINALIZE_COMMAND_TYPE: CommandTypeSpec(
         command_type=PROJECTION_RUN_SCOPE_FINALIZE_COMMAND_TYPE,
         owner=PROJECTION_RUN_SCOPE_FINALIZE_OWNER,
-        stage_id='serving_projection_finalization',
-        readiness_effect='run_scope_projection_finalized',
-        display_label='Finalize run-scope projection',
-        display_category='projection',
-        display_description='Publish canonical run-scope projection readiness.',
+        stage_id="serving_projection_finalization",
+        readiness_effect="run_scope_projection_finalized",
+        display_label="Finalize run-scope projection",
+        display_category="projection",
+        display_description="Publish canonical run-scope projection readiness.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     PROJECTION_PERSON_SEARCH_INDEX_BUILD_COMMAND_TYPE: CommandTypeSpec(
         command_type=PROJECTION_PERSON_SEARCH_INDEX_BUILD_COMMAND_TYPE,
         owner=PROJECTION_PERSON_SEARCH_INDEX_BUILD_OWNER,
-        stage_id='projection_index_build',
-        readiness_effect='projection_person_search_index_built',
-        display_label='Build projection person search index',
-        display_category='projection',
-        display_description='Build searchable person/profile index rows for projection readers.',
+        stage_id="projection_index_build",
+        readiness_effect="projection_person_search_index_built",
+        display_label="Build projection person search index",
+        display_category="projection",
+        display_description="Build searchable person/profile index rows for projection readers.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     COLLECTION_AUTHORITATIVE_MERGE_COMMAND_TYPE: CommandTypeSpec(
         command_type=COLLECTION_AUTHORITATIVE_MERGE_COMMAND_TYPE,
         owner=COLLECTION_AUTHORITATIVE_MERGE_OWNER,
-        stage_id='collection_authoritative_merge',
-        readiness_effect='collection_authoritative_projection_merged',
-        display_label='Merge collection authoritative projection',
-        display_category='projection',
-        display_description='Merge a run-scope projection into collection-authoritative assets.',
+        stage_id="collection_authoritative_merge",
+        readiness_effect="collection_authoritative_projection_merged",
+        display_label="Merge collection authoritative projection",
+        display_category="projection",
+        display_description="Merge a run-scope projection into collection-authoritative assets.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     SNAPSHOT_COMPACTION_RUN_COMMAND_TYPE: CommandTypeSpec(
         command_type=SNAPSHOT_COMPACTION_RUN_COMMAND_TYPE,
         owner=SNAPSHOT_COMPACTION_RUN_OWNER,
-        stage_id='snapshot_compaction',
-        readiness_effect='snapshot_compaction_completed',
-        display_label='Compact snapshot artifacts',
-        display_category='maintenance',
-        display_description='Run background snapshot/materialization compaction.',
+        stage_id="snapshot_compaction",
+        readiness_effect="snapshot_compaction_completed",
+        display_label="Compact snapshot artifacts",
+        display_category="maintenance",
+        display_description="Run background snapshot/materialization compaction.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE: CommandTypeSpec(
         command_type=CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE,
         owner=CRM_PUBLIC_WEB_QUEUE_BATCH_OWNER,
-        stage_id='crm_public_web_queue_batch',
-        readiness_effect='crm_public_web_workers_queued',
-        display_label='Queue CRM Public Web batch',
-        display_category='crm_public_web',
-        display_description='Create CRM Public Web batch/run rows and downstream phase commands.',
+        stage_id="crm_public_web_queue_batch",
+        readiness_effect="crm_public_web_workers_queued",
+        display_label="Queue CRM Public Web batch",
+        display_category="crm_public_web",
+        display_description="Create CRM Public Web batch/run rows and downstream phase commands.",
         activity_spine_requirement=ACTIVITY_SPINE_ORCHESTRATION,
-        running_control_categories=('orchestration',),
+        running_control_categories=("orchestration",),
     ),
     CRM_PUBLIC_WEB_SEARCH_SUBMIT_COMMAND_TYPE: CommandTypeSpec(
         command_type=CRM_PUBLIC_WEB_SEARCH_SUBMIT_COMMAND_TYPE,
         owner=CRM_PUBLIC_WEB_PHASE_OWNER,
-        stage_id='crm_public_web_search_submit',
-        readiness_effect='crm_public_web_search_submitted',
-        display_label='Submit CRM Public Web search',
-        display_category='crm_public_web',
-        display_description='Submit provider search for one CRM Public Web run.',
+        stage_id="crm_public_web_search_submit",
+        readiness_effect="crm_public_web_search_submitted",
+        display_label="Submit CRM Public Web search",
+        display_category="crm_public_web",
+        display_description="Submit provider search for one CRM Public Web run.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('crm_public_web_phase',),
+        running_control_categories=("crm_public_web_phase",),
         provider_after_start_mode=PROVIDER_AFTER_START_CONTROL_MODE_POLL_CANCEL_QUARANTINE,
         phase_group="crm_public_web",
         phase_index=0,
-        product_label_zh='提交公开搜索',
-        migration_step_id='W7f_crm_public_web_search_submit',
-        expected_run_statuses=('queued',),
+        product_label_zh="提交公开搜索",
+        migration_step_id="W7f_crm_public_web_search_submit",
+        expected_run_statuses=("queued",),
     ),
     CRM_PUBLIC_WEB_SEARCH_POLL_FETCH_COMMAND_TYPE: CommandTypeSpec(
         command_type=CRM_PUBLIC_WEB_SEARCH_POLL_FETCH_COMMAND_TYPE,
         owner=CRM_PUBLIC_WEB_PHASE_OWNER,
-        stage_id='crm_public_web_search_poll_fetch',
-        readiness_effect='crm_public_web_search_polled_or_fetched',
-        display_label='Poll CRM Public Web search',
-        display_category='crm_public_web',
-        display_description='Poll/fetch provider search results for one CRM Public Web run.',
+        stage_id="crm_public_web_search_poll_fetch",
+        readiness_effect="crm_public_web_search_polled_or_fetched",
+        display_label="Poll CRM Public Web search",
+        display_category="crm_public_web",
+        display_description="Poll/fetch provider search results for one CRM Public Web run.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('crm_public_web_phase',),
+        running_control_categories=("crm_public_web_phase",),
         provider_after_start_mode=PROVIDER_AFTER_START_CONTROL_MODE_POLL_CANCEL_QUARANTINE,
         phase_group="crm_public_web",
         phase_index=1,
-        product_label_zh='取回搜索结果',
-        migration_step_id='W7f_crm_public_web_search_poll_fetch',
-        expected_run_statuses=('search_submitted', 'searching'),
+        product_label_zh="取回搜索结果",
+        migration_step_id="W7f_crm_public_web_search_poll_fetch",
+        expected_run_statuses=("search_submitted", "searching"),
     ),
     CRM_PUBLIC_WEB_DOCUMENTS_FETCH_COMMAND_TYPE: CommandTypeSpec(
         command_type=CRM_PUBLIC_WEB_DOCUMENTS_FETCH_COMMAND_TYPE,
         owner=CRM_PUBLIC_WEB_PHASE_OWNER,
-        stage_id='crm_public_web_documents_fetch',
-        readiness_effect='crm_public_web_documents_fetched',
-        display_label='Fetch CRM Public Web documents',
-        display_category='crm_public_web',
-        display_description='Fetch and persist candidate Public Web documents.',
+        stage_id="crm_public_web_documents_fetch",
+        readiness_effect="crm_public_web_documents_fetched",
+        display_label="Fetch CRM Public Web documents",
+        display_category="crm_public_web",
+        display_description="Fetch and persist candidate Public Web documents.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('crm_public_web_phase',),
+        running_control_categories=("crm_public_web_phase",),
         provider_after_start_mode=PROVIDER_AFTER_START_CONTROL_MODE_FAIL_CLOSED_TERMINAL,
         phase_group="crm_public_web",
         phase_index=2,
-        product_label_zh='整理页面内容',
-        migration_step_id='W7f_crm_public_web_documents_fetch',
-        expected_run_statuses=('entry_links_ready', 'fetching'),
+        product_label_zh="整理页面内容",
+        migration_step_id="W7f_crm_public_web_documents_fetch",
+        expected_run_statuses=("entry_links_ready", "fetching"),
     ),
     CRM_PUBLIC_WEB_EVIDENCE_ADJUDICATE_COMMAND_TYPE: CommandTypeSpec(
         command_type=CRM_PUBLIC_WEB_EVIDENCE_ADJUDICATE_COMMAND_TYPE,
         owner=CRM_PUBLIC_WEB_PHASE_OWNER,
-        stage_id='crm_public_web_evidence_adjudicate',
-        readiness_effect='crm_public_web_evidence_adjudicated',
-        display_label='Adjudicate CRM Public Web evidence',
-        display_category='crm_public_web',
-        display_description='Review fetched Public Web evidence into candidate-safe signals.',
+        stage_id="crm_public_web_evidence_adjudicate",
+        readiness_effect="crm_public_web_evidence_adjudicated",
+        display_label="Adjudicate CRM Public Web evidence",
+        display_category="crm_public_web",
+        display_description="Review fetched Public Web evidence into candidate-safe signals.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('crm_public_web_phase',),
+        running_control_categories=("crm_public_web_phase",),
         provider_after_start_mode=PROVIDER_AFTER_START_CONTROL_MODE_FAIL_CLOSED_TERMINAL,
         phase_group="crm_public_web",
         phase_index=3,
-        product_label_zh='判断候选信号',
-        migration_step_id='W7f_crm_public_web_evidence_adjudicate',
-        expected_run_statuses=('documents_fetched', 'analyzing'),
+        product_label_zh="判断候选信号",
+        migration_step_id="W7f_crm_public_web_evidence_adjudicate",
+        expected_run_statuses=("documents_fetched", "analyzing"),
     ),
     CRM_PUBLIC_WEB_MODEL_SAFE_FINALIZE_COMMAND_TYPE: CommandTypeSpec(
         command_type=CRM_PUBLIC_WEB_MODEL_SAFE_FINALIZE_COMMAND_TYPE,
         owner=CRM_PUBLIC_WEB_PHASE_OWNER,
-        stage_id='crm_public_web_model_safe_finalize',
-        readiness_effect='crm_public_web_model_safe_finalized',
-        display_label='Finalize model-safe Public Web payload',
-        display_category='crm_public_web',
-        display_description='Finalize model-safe Public Web artifacts for review/export.',
+        stage_id="crm_public_web_model_safe_finalize",
+        readiness_effect="crm_public_web_model_safe_finalized",
+        display_label="Finalize model-safe Public Web payload",
+        display_category="crm_public_web",
+        display_description="Finalize model-safe Public Web artifacts for review/export.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('crm_public_web_phase',),
+        running_control_categories=("crm_public_web_phase",),
         provider_after_start_mode=PROVIDER_AFTER_START_CONTROL_MODE_FAIL_CLOSED_TERMINAL,
         phase_group="crm_public_web",
         phase_index=4,
-        product_label_zh='生成审核候选',
-        migration_step_id='W7f_crm_public_web_model_safe_finalize',
-        expected_run_statuses=('adjudication_completed',),
+        product_label_zh="生成审核候选",
+        migration_step_id="W7f_crm_public_web_model_safe_finalize",
+        expected_run_statuses=("adjudication_completed",),
     ),
     CRM_PUBLIC_WEB_SIGNALS_MATERIALIZE_COMMAND_TYPE: CommandTypeSpec(
         command_type=CRM_PUBLIC_WEB_SIGNALS_MATERIALIZE_COMMAND_TYPE,
         owner=CRM_PUBLIC_WEB_PHASE_OWNER,
-        stage_id='crm_public_web_signals_materialize',
-        readiness_effect='crm_public_web_signals_materialized',
-        display_label='Materialize CRM Public Web signals',
-        display_category='crm_public_web',
-        display_description='Materialize reviewed Public Web signals into person asset/evidence rows.',
+        stage_id="crm_public_web_signals_materialize",
+        readiness_effect="crm_public_web_signals_materialized",
+        display_label="Materialize CRM Public Web signals",
+        display_category="crm_public_web",
+        display_description="Materialize reviewed Public Web signals into person asset/evidence rows.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('crm_public_web_phase',),
+        running_control_categories=("crm_public_web_phase",),
         phase_group="crm_public_web",
         phase_index=5,
-        product_label_zh='保存公开信息结果',
-        migration_step_id='W7f_crm_public_web_signals_materialize',
-        expected_run_statuses=('analysis_completed',),
+        product_label_zh="保存公开信息结果",
+        migration_step_id="W7f_crm_public_web_signals_materialize",
+        expected_run_statuses=("analysis_completed",),
     ),
     CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE: CommandTypeSpec(
         command_type=CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE,
         owner=CRM_WRITER_OWNER,
-        stage_id='crm_record_add_from_projection',
-        readiness_effect='crm_record_added_from_projection',
-        display_label='Add person to CRM',
-        display_category='crm',
-        display_description='Create or link a CRM record from canonical projection/person identity.',
+        stage_id="crm_record_add_from_projection",
+        readiness_effect="crm_record_added_from_projection",
+        display_label="Add person to CRM",
+        display_category="crm",
+        display_description="Create or link a CRM record from canonical projection/person identity.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     CRM_RECORD_UPDATE_COMMAND_TYPE: CommandTypeSpec(
         command_type=CRM_RECORD_UPDATE_COMMAND_TYPE,
         owner=CRM_WRITER_OWNER,
-        stage_id='crm_record_update',
-        readiness_effect='crm_record_updated',
-        display_label='Update CRM record',
-        display_category='crm',
-        display_description='Apply a bounded CRM record or engagement update.',
+        stage_id="crm_record_update",
+        readiness_effect="crm_record_updated",
+        display_label="Update CRM record",
+        display_category="crm",
+        display_description="Apply a bounded CRM record or engagement update.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     CRM_NOTE_ADD_COMMAND_TYPE: CommandTypeSpec(
         command_type=CRM_NOTE_ADD_COMMAND_TYPE,
         owner=CRM_WRITER_OWNER,
-        stage_id='crm_note_add',
-        readiness_effect='crm_note_added',
-        display_label='Add CRM note',
-        display_category='crm',
-        display_description='Append a CRM note through the CRM writer owner.',
+        stage_id="crm_note_add",
+        readiness_effect="crm_note_added",
+        display_label="Add CRM note",
+        display_category="crm",
+        display_description="Append a CRM note through the CRM writer owner.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     CRM_TASK_CREATE_COMMAND_TYPE: CommandTypeSpec(
         command_type=CRM_TASK_CREATE_COMMAND_TYPE,
         owner=CRM_WRITER_OWNER,
-        stage_id='crm_task_create',
-        readiness_effect='crm_task_created',
-        display_label='Create CRM task',
-        display_category='crm',
-        display_description='Create a queryable CRM follow-up task with audit event evidence.',
+        stage_id="crm_task_create",
+        readiness_effect="crm_task_created",
+        display_label="Create CRM task",
+        display_category="crm",
+        display_description="Create a queryable CRM follow-up task with audit event evidence.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE: CommandTypeSpec(
         command_type=COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
         owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
-        stage_id='company_public_web_refresh',
-        readiness_effect='company_public_web_refreshed',
-        display_label='Refresh company Public Web assets',
-        display_category='company_assets',
-        display_description='Plan company-level Public Web source collection and asset materialization.',
+        stage_id="company_public_web_refresh",
+        readiness_effect="company_public_web_refreshed",
+        display_label="Refresh company Public Web assets",
+        display_category="company_assets",
+        display_description="Plan company-level Public Web source collection and asset materialization.",
         activity_spine_requirement=ACTIVITY_SPINE_ORCHESTRATION,
-        running_control_categories=('orchestration',),
+        running_control_categories=("orchestration",),
     ),
     COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE: CommandTypeSpec(
         command_type=COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
         owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
-        stage_id='company_public_web_source_collect',
-        readiness_effect='company_public_web_sources_collected',
-        display_label='Collect company Public Web sources',
-        display_category='company_assets',
-        display_description='Collect company-level Public Web source rows and model-safe artifacts.',
+        stage_id="company_public_web_source_collect",
+        readiness_effect="company_public_web_sources_collected",
+        display_label="Collect company Public Web sources",
+        display_category="company_assets",
+        display_description="Collect company-level Public Web source rows and model-safe artifacts.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('provider_attempt',),
+        running_control_categories=("provider_attempt",),
         provider_after_start_mode=PROVIDER_AFTER_START_CONTROL_MODE_POLL_CANCEL_QUARANTINE,
         phase_group="company_public_web",
         phase_index=0,
@@ -564,72 +564,72 @@ DEFAULT_COMMAND_TYPE_SPECS: dict[str, CommandTypeSpec] = {
     COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE: CommandTypeSpec(
         command_type=COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
         owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
-        stage_id='company_public_web_assets_materialize',
-        readiness_effect='company_public_web_assets_materialized',
-        display_label='Materialize company Public Web assets',
-        display_category='company_assets',
-        display_description='Sync collected company Public Web rows into CompanyAsset and CompanyEvidence.',
+        stage_id="company_public_web_assets_materialize",
+        readiness_effect="company_public_web_assets_materialized",
+        display_label="Materialize company Public Web assets",
+        display_category="company_assets",
+        display_description="Sync collected company Public Web rows into CompanyAsset and CompanyEvidence.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
         phase_group="company_public_web",
         phase_index=1,
     ),
     COMPANY_LOGO_PROFILE_EXPERIENCE_DISCOVER_COMMAND_TYPE: CommandTypeSpec(
         command_type=COMPANY_LOGO_PROFILE_EXPERIENCE_DISCOVER_COMMAND_TYPE,
         owner=COMPANY_ASSET_OWNER,
-        stage_id='company_logo_profile_experience_discover',
-        readiness_effect='company_logo_profile_evidence_planned',
-        display_label='Discover profile company logo',
-        display_category='company_assets',
-        display_description='Read one fresh profile work-experience logo candidate and plan stable media caching.',
+        stage_id="company_logo_profile_experience_discover",
+        readiness_effect="company_logo_profile_evidence_planned",
+        display_label="Discover profile company logo",
+        display_category="company_assets",
+        display_description="Read one fresh profile work-experience logo candidate and plan stable media caching.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     MEDIA_ASSET_CACHE_COMMAND_TYPE: CommandTypeSpec(
         command_type=MEDIA_ASSET_CACHE_COMMAND_TYPE,
         owner=MEDIA_ASSET_OWNER,
-        stage_id='media_asset_cache',
-        readiness_effect='media_asset_cached',
-        display_label='Cache media asset',
-        display_category='media_assets',
-        display_description='Fetch or store stable person/company media assets.',
+        stage_id="media_asset_cache",
+        readiness_effect="media_asset_cached",
+        display_label="Cache media asset",
+        display_category="media_assets",
+        display_description="Fetch or store stable person/company media assets.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('domain_mutation',),
+        running_control_categories=("domain_mutation",),
     ),
     EXCEL_INTAKE_RUN_COMMAND_TYPE: CommandTypeSpec(
         command_type=EXCEL_INTAKE_RUN_COMMAND_TYPE,
         owner=EXCEL_INTAKE_RUN_OWNER,
-        stage_id='excel_intake',
-        readiness_effect='excel_intake_started',
-        display_label='Run Excel intake',
-        display_category='excel',
-        display_description='Process an Excel intake job through the durable command owner.',
+        stage_id="excel_intake",
+        readiness_effect="excel_intake_started",
+        display_label="Run Excel intake",
+        display_category="excel",
+        display_description="Process an Excel intake job through the durable command owner.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('local_thread',),
+        running_control_categories=("local_thread",),
     ),
     EXPORT_PROJECTION_GENERATE_COMMAND_TYPE: CommandTypeSpec(
         command_type=EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
         owner=EXPORT_PROJECTION_GENERATE_OWNER,
-        stage_id='projection_export',
-        readiness_effect='projection_export_generated',
-        display_label='Export projection candidates',
-        display_category='export',
-        display_description='Generate a projection candidate export artifact.',
+        stage_id="projection_export",
+        readiness_effect="projection_export_generated",
+        display_label="Export projection candidates",
+        display_category="export",
+        display_description="Generate a projection candidate export artifact.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('export_artifact',),
-        metric_key='projection_export_generate',
+        running_control_categories=("export_artifact",),
+        metric_key="projection_export_generate",
     ),
     EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE: CommandTypeSpec(
         command_type=EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE,
         owner=EXPORT_CRM_PUBLIC_WEB_GENERATE_OWNER,
-        stage_id='crm_public_web_export',
-        readiness_effect='crm_public_web_export_generated',
-        display_label='Export CRM Public Web signals',
-        display_category='export',
-        display_description='Generate a CRM Public Web review/export artifact.',
+        stage_id="crm_public_web_export",
+        readiness_effect="crm_public_web_export_generated",
+        display_label="Export CRM Public Web signals",
+        display_category="export",
+        display_description="Generate a CRM Public Web review/export artifact.",
         activity_spine_requirement=ACTIVITY_SPINE_REQUIRED,
-        running_control_categories=('export_artifact',),
-        metric_key='crm_public_web_export_generate',
+        running_control_categories=("export_artifact",),
+        metric_key="crm_public_web_export_generate",
     ),
 }
 
@@ -652,11 +652,7 @@ def _command_types_with_activity_spine_requirement(requirement: str) -> set[str]
 
 def _phase_command_types(phase_group: str) -> tuple[str, ...]:
     members = sorted(
-        (
-            spec
-            for spec in DEFAULT_COMMAND_TYPE_SPECS.values()
-            if spec.phase_group == phase_group
-        ),
+        (spec for spec in DEFAULT_COMMAND_TYPE_SPECS.values() if spec.phase_group == phase_group),
         key=lambda spec: spec.phase_index if spec.phase_index is not None else 0,
     )
     return tuple(spec.command_type for spec in members)
@@ -796,9 +792,7 @@ class CommandOwnerRegistry:
             raise ValueError("command_type and owner are required")
         existing_owner = self._mapping.get(normalized_type)
         if existing_owner and existing_owner != normalized_owner:
-            raise ValueError(
-                f"command_type {normalized_type!r} is already owned by {existing_owner!r}"
-            )
+            raise ValueError(f"command_type {normalized_type!r} is already owned by {existing_owner!r}")
         self._mapping[normalized_type] = normalized_owner
 
     def owner_for(self, command_type: str) -> str:
@@ -1044,9 +1038,7 @@ class WorkflowCommandActivitySpinePolicy:
         }
 
 
-_ACTIVITY_SPINE_REQUIRED_COMMAND_TYPES = _command_types_with_activity_spine_requirement(
-    ACTIVITY_SPINE_REQUIRED
-)
+_ACTIVITY_SPINE_REQUIRED_COMMAND_TYPES = _command_types_with_activity_spine_requirement(ACTIVITY_SPINE_REQUIRED)
 
 _ACTIVITY_SPINE_ACTIVITY_BOUNDARY_COMMAND_TYPES = _command_types_with_activity_spine_requirement(
     ACTIVITY_SPINE_ACTIVITY_BOUNDARY
@@ -1060,9 +1052,7 @@ _ACTIVITY_SPINE_LEGACY_INTERNAL_COMMAND_TYPES = _command_types_with_activity_spi
     ACTIVITY_SPINE_LEGACY_INTERNAL
 )
 
-_PROVIDER_RUNNING_CANCEL_BLOCKED_COMMAND_TYPES = _command_types_with_running_control_category(
-    "provider_attempt"
-)
+_PROVIDER_RUNNING_CANCEL_BLOCKED_COMMAND_TYPES = _command_types_with_running_control_category("provider_attempt")
 
 PROVIDER_ATTEMPT_COMMAND_TYPES = tuple(sorted(_PROVIDER_RUNNING_CANCEL_BLOCKED_COMMAND_TYPES))
 
@@ -1078,15 +1068,11 @@ _PROVIDER_AFTER_START_FAIL_CLOSED_TERMINAL_COMMAND_TYPES = {
     if spec.provider_after_start_mode == PROVIDER_AFTER_START_CONTROL_MODE_FAIL_CLOSED_TERMINAL
 }
 
-_ORCHESTRATION_RUNNING_CANCEL_BLOCKED_COMMAND_TYPES = _command_types_with_running_control_category(
-    "orchestration"
-)
+_ORCHESTRATION_RUNNING_CANCEL_BLOCKED_COMMAND_TYPES = _command_types_with_running_control_category("orchestration")
 
 ORCHESTRATION_COMMAND_TYPES = tuple(sorted(_ORCHESTRATION_RUNNING_CANCEL_BLOCKED_COMMAND_TYPES))
 
-_DOMAIN_MUTATION_RUNNING_CANCEL_BLOCKED_COMMAND_TYPES = _command_types_with_running_control_category(
-    "domain_mutation"
-)
+_DOMAIN_MUTATION_RUNNING_CANCEL_BLOCKED_COMMAND_TYPES = _command_types_with_running_control_category("domain_mutation")
 
 DOMAIN_MUTATION_COMMAND_TYPES = tuple(sorted(_DOMAIN_MUTATION_RUNNING_CANCEL_BLOCKED_COMMAND_TYPES))
 
@@ -1114,60 +1100,58 @@ CRM_WRITER_COMMAND_TYPES = (
 # Pinned by tests/test_cancel_resume_dispatch_contract.py and
 # tests/test_command_type_specs.py — do NOT edit to make a failing test pass.
 _COMMAND_TYPE_CANCEL_HANDLERS: dict[str, str] = {
-    ACQUISITION_RUN_CREATE_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
-    ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
-    ACQUISITION_PLAN_BUILD_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
-    COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
-    ACQUISITION_PLAN_COMMIT_COMMAND_TYPE: '_cancel_running_acquisition_plan_commit_before_probe',
-    ACQUISITION_SCALE_PLAN_COMMAND_TYPE: '_cancel_running_acquisition_scale_plan_before_discovery',
-    ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE: '_cancel_running_acquisition_plan_review_request_command',
-    CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE: '_cancel_running_crm_public_web_queue_batch_before_phase_commands',
-    EXCEL_INTAKE_RUN_COMMAND_TYPE: '_cancel_running_excel_intake_command',
-    COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE: '_cancel_running_company_public_web_assets_materialize_before_sync',
-    LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE: '_cancel_running_profile_fetch_activity_before_cache_lookup_attempt',
-    MEDIA_ASSET_CACHE_COMMAND_TYPE: '_cancel_running_media_asset_cache_command_before_fetch_upload_attempt',
-    EXPORT_PROJECTION_GENERATE_COMMAND_TYPE: '_cancel_running_export_command',
-    EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE: '_cancel_running_export_command',
-    **{ct: '_cancel_running_crm_public_web_phase_command' for ct in CRM_PUBLIC_WEB_PHASE_COMMAND_TYPES},
-    **{ct: '_cancel_running_provider_attempt_command_before_attempt' for ct in PROVIDER_ATTEMPT_COMMAND_TYPES},
-    **{ct: '_cancel_running_crm_writer_command_before_mutation_attempt' for ct in CRM_WRITER_COMMAND_TYPES},
+    ACQUISITION_RUN_CREATE_COMMAND_TYPE: "_cancel_running_orchestration_before_downstream",
+    ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE: "_cancel_running_orchestration_before_downstream",
+    ACQUISITION_PLAN_BUILD_COMMAND_TYPE: "_cancel_running_orchestration_before_downstream",
+    COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE: "_cancel_running_orchestration_before_downstream",
+    ACQUISITION_PLAN_COMMIT_COMMAND_TYPE: "_cancel_running_acquisition_plan_commit_before_probe",
+    ACQUISITION_SCALE_PLAN_COMMAND_TYPE: "_cancel_running_acquisition_scale_plan_before_discovery",
+    ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE: "_cancel_running_acquisition_plan_review_request_command",
+    CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE: "_cancel_running_crm_public_web_queue_batch_before_phase_commands",
+    EXCEL_INTAKE_RUN_COMMAND_TYPE: "_cancel_running_excel_intake_command",
+    COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE: "_cancel_running_company_public_web_assets_materialize_before_sync",
+    LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE: "_cancel_running_profile_fetch_activity_before_cache_lookup_attempt",
+    MEDIA_ASSET_CACHE_COMMAND_TYPE: "_cancel_running_media_asset_cache_command_before_fetch_upload_attempt",
+    EXPORT_PROJECTION_GENERATE_COMMAND_TYPE: "_cancel_running_export_command",
+    EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE: "_cancel_running_export_command",
+    **{ct: "_cancel_running_crm_public_web_phase_command" for ct in CRM_PUBLIC_WEB_PHASE_COMMAND_TYPES},
+    **{ct: "_cancel_running_provider_attempt_command_before_attempt" for ct in PROVIDER_ATTEMPT_COMMAND_TYPES},
+    **{ct: "_cancel_running_crm_writer_command_before_mutation_attempt" for ct in CRM_WRITER_COMMAND_TYPES},
 }
 # DOMAIN_MUTATION is the lowest-priority command-type-only branch; only the
 # members not already claimed by a higher-priority branch above keep it as their
 # canonical-owner handler (setdefault preserves the earlier, more specific map).
 for _ct in DOMAIN_MUTATION_COMMAND_TYPES:
-    _COMMAND_TYPE_CANCEL_HANDLERS.setdefault(
-        _ct, '_cancel_running_domain_mutation_command_before_attempt'
-    )
+    _COMMAND_TYPE_CANCEL_HANDLERS.setdefault(_ct, "_cancel_running_domain_mutation_command_before_attempt")
 
 _COMMAND_TYPE_RESUME_HANDLERS: dict[str, str] = {
-    **{ct: '_resume_running_orchestration_command' for ct in ORCHESTRATION_COMMAND_TYPES},
-    COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE: '_resume_running_company_public_web_source_collect_command',
-    EXCEL_INTAKE_RUN_COMMAND_TYPE: '_resume_running_excel_intake_command',
-    COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE: '_resume_running_company_public_web_assets_materialize_command',
-    MEDIA_ASSET_CACHE_COMMAND_TYPE: '_resume_running_media_asset_cache_command',
-    EXPORT_PROJECTION_GENERATE_COMMAND_TYPE: '_resume_running_export_command',
-    EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE: '_resume_running_export_command',
+    **{ct: "_resume_running_orchestration_command" for ct in ORCHESTRATION_COMMAND_TYPES},
+    COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE: "_resume_running_company_public_web_source_collect_command",
+    EXCEL_INTAKE_RUN_COMMAND_TYPE: "_resume_running_excel_intake_command",
+    COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE: "_resume_running_company_public_web_assets_materialize_command",
+    MEDIA_ASSET_CACHE_COMMAND_TYPE: "_resume_running_media_asset_cache_command",
+    EXPORT_PROJECTION_GENERATE_COMMAND_TYPE: "_resume_running_export_command",
+    EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE: "_resume_running_export_command",
 }
 # source.collect is in PROVIDER_ATTEMPT but its owner-guarded resume branch wins
 # under the canonical owner (set above); the remaining provider-attempt types,
 # then the CRM Public Web phase, CRM writer, and domain-mutation members keep
 # their respective resume handlers (lower branch priority).
 for _ct in PROVIDER_ATTEMPT_COMMAND_TYPES:
-    _COMMAND_TYPE_RESUME_HANDLERS.setdefault(_ct, '_resume_running_provider_attempt_command')
+    _COMMAND_TYPE_RESUME_HANDLERS.setdefault(_ct, "_resume_running_provider_attempt_command")
 for _ct in CRM_PUBLIC_WEB_PHASE_COMMAND_TYPES:
-    _COMMAND_TYPE_RESUME_HANDLERS.setdefault(_ct, '_resume_running_crm_public_web_phase_command')
+    _COMMAND_TYPE_RESUME_HANDLERS.setdefault(_ct, "_resume_running_crm_public_web_phase_command")
 for _ct in CRM_WRITER_COMMAND_TYPES:
-    _COMMAND_TYPE_RESUME_HANDLERS.setdefault(_ct, '_resume_running_crm_writer_command')
+    _COMMAND_TYPE_RESUME_HANDLERS.setdefault(_ct, "_resume_running_crm_writer_command")
 for _ct in DOMAIN_MUTATION_COMMAND_TYPES:
-    _COMMAND_TYPE_RESUME_HANDLERS.setdefault(_ct, '_resume_running_domain_mutation_command')
+    _COMMAND_TYPE_RESUME_HANDLERS.setdefault(_ct, "_resume_running_domain_mutation_command")
 
 # Bake the canonical-owner handler names into the frozen specs (pure data).
 DEFAULT_COMMAND_TYPE_SPECS = {
     command_type: replace(
         spec,
-        cancel_handler=_COMMAND_TYPE_CANCEL_HANDLERS.get(command_type, ''),
-        resume_handler=_COMMAND_TYPE_RESUME_HANDLERS.get(command_type, ''),
+        cancel_handler=_COMMAND_TYPE_CANCEL_HANDLERS.get(command_type, ""),
+        resume_handler=_COMMAND_TYPE_RESUME_HANDLERS.get(command_type, ""),
     )
     for command_type, spec in DEFAULT_COMMAND_TYPE_SPECS.items()
 }
@@ -1181,21 +1165,21 @@ DEFAULT_COMMAND_TYPE_SPECS = {
 # unconditional branch and falls through to the default response on owner
 # mismatch. Pinned by tests/test_cancel_resume_dispatch_contract.py.
 _CANCEL_OWNER_AGNOSTIC_HANDLERS: dict[str, str] = {
-    ACQUISITION_RUN_CREATE_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
-    ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
-    ACQUISITION_PLAN_BUILD_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
-    COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE: '_cancel_running_orchestration_before_downstream',
-    EXPORT_PROJECTION_GENERATE_COMMAND_TYPE: '_cancel_running_export_command',
-    EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE: '_cancel_running_export_command',
-    **{ct: '_cancel_running_provider_attempt_command_before_attempt' for ct in PROVIDER_ATTEMPT_COMMAND_TYPES},
-    **{ct: '_cancel_running_domain_mutation_command_before_attempt' for ct in DOMAIN_MUTATION_COMMAND_TYPES},
+    ACQUISITION_RUN_CREATE_COMMAND_TYPE: "_cancel_running_orchestration_before_downstream",
+    ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE: "_cancel_running_orchestration_before_downstream",
+    ACQUISITION_PLAN_BUILD_COMMAND_TYPE: "_cancel_running_orchestration_before_downstream",
+    COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE: "_cancel_running_orchestration_before_downstream",
+    EXPORT_PROJECTION_GENERATE_COMMAND_TYPE: "_cancel_running_export_command",
+    EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE: "_cancel_running_export_command",
+    **{ct: "_cancel_running_provider_attempt_command_before_attempt" for ct in PROVIDER_ATTEMPT_COMMAND_TYPES},
+    **{ct: "_cancel_running_domain_mutation_command_before_attempt" for ct in DOMAIN_MUTATION_COMMAND_TYPES},
 }
 _RESUME_OWNER_AGNOSTIC_HANDLERS: dict[str, str] = {
-    **{ct: '_resume_running_orchestration_command' for ct in ORCHESTRATION_COMMAND_TYPES},
-    EXPORT_PROJECTION_GENERATE_COMMAND_TYPE: '_resume_running_export_command',
-    EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE: '_resume_running_export_command',
-    **{ct: '_resume_running_provider_attempt_command' for ct in PROVIDER_ATTEMPT_COMMAND_TYPES},
-    **{ct: '_resume_running_domain_mutation_command' for ct in DOMAIN_MUTATION_COMMAND_TYPES},
+    **{ct: "_resume_running_orchestration_command" for ct in ORCHESTRATION_COMMAND_TYPES},
+    EXPORT_PROJECTION_GENERATE_COMMAND_TYPE: "_resume_running_export_command",
+    EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE: "_resume_running_export_command",
+    **{ct: "_resume_running_provider_attempt_command" for ct in PROVIDER_ATTEMPT_COMMAND_TYPES},
+    **{ct: "_resume_running_domain_mutation_command" for ct in DOMAIN_MUTATION_COMMAND_TYPES},
 }
 
 
@@ -1225,13 +1209,9 @@ def workflow_command_resume_owner_agnostic_handler(command_type: str) -> str:
     return _RESUME_OWNER_AGNOSTIC_HANDLERS.get(command_type, "")
 
 
-_EXPORT_RUNNING_CANCEL_SUPPORTED_COMMAND_TYPES = _command_types_with_running_control_category(
-    "export_artifact"
-)
+_EXPORT_RUNNING_CANCEL_SUPPORTED_COMMAND_TYPES = _command_types_with_running_control_category("export_artifact")
 
-_LOCAL_THREAD_RUNNING_CANCEL_SUPPORTED_COMMAND_TYPES = _command_types_with_running_control_category(
-    "local_thread"
-)
+_LOCAL_THREAD_RUNNING_CANCEL_SUPPORTED_COMMAND_TYPES = _command_types_with_running_control_category("local_thread")
 
 _ARTIFACT_OR_THREAD_RUNNING_CANCEL_BLOCKED_COMMAND_TYPES = _command_types_with_running_control_category(
     "artifact_or_thread_blocked"
@@ -1255,6 +1235,7 @@ def workflow_command_running_control_categories(command_type: str) -> tuple[str,
         for category, command_types in _RUNNING_CONTROL_POLICY_CATEGORY_SETS.items()
         if normalized_type in command_types
     )
+
 
 _PROVIDER_RUNNING_CANCEL_UPGRADE_REQUIREMENTS = (
     "owner_specific_provider_interrupt_or_poll_stop",
@@ -1290,6 +1271,7 @@ _PROVIDER_RUNNING_RESUME_UPGRADE_REQUIREMENTS = (
     "operation_command_terminal_sync",
 )
 
+
 def _provider_after_start_control_policy_kwargs(
     *,
     command_type: str = "",
@@ -1322,6 +1304,7 @@ def _provider_after_start_control_policy_kwargs(
         "provider_after_start_control_upgrade_requirements": (),
         "module_state_mutated_on_provider_after_start_control": False,
     }
+
 
 _ORCHESTRATION_RUNNING_RESUME_UPGRADE_REQUIREMENTS = (
     "deterministic_reducer_reentry_checkpoint",
@@ -2075,9 +2058,7 @@ def command_causality_for(
     normalized_owner = str(owner or "").strip()
     normalized_idempotency = str(idempotency_key or "").strip()
     source_event_id = str(existing.get("source_event_id") or (source_event or {}).get("event_id") or "").strip()
-    source_event_type = str(
-        existing.get("source_event_type") or (source_event or {}).get("event_type") or ""
-    ).strip()
+    source_event_type = str(existing.get("source_event_type") or (source_event or {}).get("event_type") or "").strip()
     parent_command_id = str(
         existing.get("parent_command_id")
         or event_payload.get("parent_command_id")
@@ -2108,16 +2089,15 @@ def command_causality_for(
     if not produced_counts:
         produced_counts = _infer_produced_entity_counts_from_payload(payload, command_type=normalized_type)
     no_op_reason = str(
-        existing.get("no_op_reason")
-        or event_payload.get("no_op_reason")
-        or payload.get("no_op_reason")
-        or ""
+        existing.get("no_op_reason") or event_payload.get("no_op_reason") or payload.get("no_op_reason") or ""
     ).strip()
     if not no_op_reason and produced_counts and sum(int(value or 0) for value in produced_counts.values()) <= 0:
         no_op_reason = _infer_no_op_reason_from_payload(payload, command_type=normalized_type)
     if not no_op_reason and not produced_counts:
         no_op_reason = _infer_no_op_reason_from_payload(payload, command_type=normalized_type)
-    input_refs = existing.get("input_artifact_refs") or event_payload.get("input_artifact_refs") or list(artifact_refs or ())
+    input_refs = (
+        existing.get("input_artifact_refs") or event_payload.get("input_artifact_refs") or list(artifact_refs or ())
+    )
     output_refs = existing.get("output_artifact_refs") or event_payload.get("output_artifact_refs") or []
     downstream_ids = existing.get("downstream_command_ids") or event_payload.get("downstream_command_ids") or []
     return CommandCausalityEnvelope(
@@ -2142,7 +2122,9 @@ def command_causality_for(
             or default_readiness_effect_for_command_type(normalized_type)
             or ""
         ).strip(),
-        downstream_command_ids=tuple(str(item or "").strip() for item in list(downstream_ids or []) if str(item or "").strip()),
+        downstream_command_ids=tuple(
+            str(item or "").strip() for item in list(downstream_ids or []) if str(item or "").strip()
+        ),
     )
 
 
@@ -2190,11 +2172,7 @@ def linkedin_profile_refill_submit_idempotency_key(
     normalized_job_id = str(job_id or "").strip()
     normalized_snapshot_dir = str(snapshot_dir or "").strip()
     normalized_urls = sorted(
-        {
-            str(profile_url or "").strip()
-            for profile_url in list(profile_urls or [])
-            if str(profile_url or "").strip()
-        }
+        {str(profile_url or "").strip() for profile_url in list(profile_urls or []) if str(profile_url or "").strip()}
     )
     if not normalized_job_id or not normalized_snapshot_dir or not normalized_urls:
         return ""
@@ -2529,11 +2507,7 @@ def crm_public_web_queue_batch_idempotency_key(
     normalized_workspace_id = str(workspace_id or "default").strip() or "default"
     normalized_batch_id = str(batch_id or "").strip()
     normalized_run_ids = sorted(
-        {
-            str(run_id or "").strip()
-            for run_id in list(run_ids or [])
-            if str(run_id or "").strip()
-        }
+        {str(run_id or "").strip() for run_id in list(run_ids or []) if str(run_id or "").strip()}
     )
     if not normalized_batch_id or not normalized_run_ids:
         return ""
@@ -2755,9 +2729,7 @@ def export_projection_generate_idempotency_key(
             {
                 "projection_id": normalized_projection_id,
                 "candidate_identity_keys": normalized_keys,
-                "include_llm_reviewed_unconfirmed_assertions": bool(
-                    include_llm_reviewed_unconfirmed_assertions
-                ),
+                "include_llm_reviewed_unconfirmed_assertions": bool(include_llm_reviewed_unconfirmed_assertions),
                 "include_crm_notes": bool(include_crm_notes),
                 "limit": max(0, int(limit or 0)),
                 "page_size": max(0, int(page_size or 0)),
@@ -2780,11 +2752,7 @@ def export_crm_public_web_generate_idempotency_key(
 ) -> str:
     normalized_workspace_id = str(workspace_id or "default").strip() or "default"
     normalized_record_ids = sorted(
-        {
-            str(record_id or "").strip()
-            for record_id in list(crm_record_ids or [])
-            if str(record_id or "").strip()
-        }
+        {str(record_id or "").strip() for record_id in list(crm_record_ids or []) if str(record_id or "").strip()}
     )
     if not normalized_record_ids:
         return ""
@@ -2997,7 +2965,11 @@ def _infer_produced_entity_counts_from_payload(payload: dict[str, Any], *, comma
         )
     elif normalized_type == PROJECTION_PERSON_SEARCH_INDEX_BUILD_COMMAND_TYPE:
         candidates = (
-            ("indexed_person", ("indexed_count", "member_count", "candidate_count"), ("members", "member_ids", "candidate_ids")),
+            (
+                "indexed_person",
+                ("indexed_count", "member_count", "candidate_count"),
+                ("members", "member_ids", "candidate_ids"),
+            ),
         )
     elif normalized_type == PROJECTION_FACET_LAYERING_BUILD_COMMAND_TYPE:
         candidates = (
@@ -3096,11 +3068,11 @@ def _infer_no_op_reason_from_payload(payload: dict[str, Any], *, command_type: s
 
 
 class DurableRuntimeWriter:
-    """Reducer-owned write facade for W2 migration slices.
+    """Restartable reducer coordinator for W2 migration slices.
 
-    Workers/callbacks should write events/results. This class is the bounded
-    transaction-style owner that applies reducer output to current-state,
-    typed commands, and outbox rows.
+    Workers/callbacks should write events/results. This compatibility path applies reducer output to
+    current-state, typed commands, and outbox rows through separate durable commits; idempotency makes a
+    caller retry safe, but the four-table transaction required by the runtime contract remains R-019.
     """
 
     def __init__(
@@ -3142,7 +3114,7 @@ class DurableRuntimeWriter:
         payload: dict[str, Any] | None = None,
         artifact_refs: list[Any] | tuple[Any, ...] | None = None,
     ) -> RuntimeApplyResult:
-        event = self.store.append_workflow_event(
+        event = self.store.repos.workflow_runtime.append_workflow_event(
             workflow_run_id=workflow_run_id,
             operation_id=operation_id,
             command_id=command_id,
@@ -3167,9 +3139,10 @@ class DurableRuntimeWriter:
         if not normalized_run_id:
             return RuntimeApplyResult(workflow_run_id="", event={}, state={})
 
-        current_state = self.store.get_workflow_current_state(normalized_run_id) or {}
+        runtime_repo = self.store.repos.workflow_runtime
+        current_state = runtime_repo.get_workflow_current_state(normalized_run_id) or {}
         last_processed_sequence = int(current_state.get("last_processed_sequence_number") or 0)
-        events = self.store.list_workflow_events(normalized_run_id, limit=0)
+        events = runtime_repo.list_workflow_events(normalized_run_id, limit=0)
         new_events = [
             event_payload
             for event_payload in events
@@ -3183,7 +3156,7 @@ class DurableRuntimeWriter:
             if active_counts != current_active_counts or terminal_counts != current_terminal_counts:
                 operation_id = _resolve_operation_id(current_state=current_state, events=events)
                 workflow_type = _resolve_workflow_type(current_state=current_state, events=events)
-                state = self.store.upsert_workflow_current_state(
+                state = runtime_repo.upsert_workflow_current_state(
                     workflow_run_id=normalized_run_id,
                     operation_id=operation_id,
                     workflow_type=workflow_type,
@@ -3238,7 +3211,7 @@ class DurableRuntimeWriter:
         written_outbox: list[dict[str, Any]] = []
         for outbox_spec in reducer_result.outbox:
             written_outbox.append(
-                self.store.enqueue_runtime_outbox(
+                runtime_repo.enqueue_runtime_outbox(
                     workflow_run_id=normalized_run_id,
                     operation_id=operation_id,
                     outbox_type=outbox_spec.outbox_type,
@@ -3250,7 +3223,7 @@ class DurableRuntimeWriter:
         all_commands = self.store.list_workflow_commands(workflow_run_id=normalized_run_id, limit=0)
         active_counts, terminal_counts = summarize_workflow_command_counts(all_commands)
         max_sequence = max(int(event_payload.get("sequence_number") or 0) for event_payload in new_events)
-        state = self.store.upsert_workflow_current_state(
+        state = runtime_repo.upsert_workflow_current_state(
             workflow_run_id=normalized_run_id,
             operation_id=operation_id,
             workflow_type=workflow_type,

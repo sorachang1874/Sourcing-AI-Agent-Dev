@@ -55,8 +55,10 @@ As of `2026-04-23`, the main remaining hosted leak identified in this round was:
     - SQLite shadow backend is disk-backed instead of `shared_memory`
   - production runtime now requires PG even if the startup script forgot `SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1`
   - this kept PG-only as a code-level runtime contract, not only a shell-script convention
-- `2026-06-06` CRM/Public Web read-path hardening:
-  - PG-only generic control-plane reads no longer call `ensure_bootstrapped()` before `select_many` / `count_rows`; missing PG tables return empty results without repairing from SQLite.
+- `2026-06-06` CRM/Public Web read-path hardening (updated 2026-07-13):
+  - PG-only generic control-plane reads do not call `ensure_bootstrapped()` before `select_many` / `count_rows`;
+    missing authoritative tables fail closed. Fresh database/test provisioning must run the versioned migration explicitly
+    before the first repository read and must never repair a missing table from SQLite.
   - CRM/Public Web latest-run batch reads and detail-style generic reads now fail closed on authoritative PG exceptions instead of swallowing them into empty results or falling back to SQLite.
   - Fast regression coverage pins both paths so poll/detail drift cannot be masked by a compatibility shadow.
 - `2026-04-25` storage-surface closeout:

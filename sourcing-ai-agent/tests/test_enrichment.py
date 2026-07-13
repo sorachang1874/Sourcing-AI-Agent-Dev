@@ -5134,7 +5134,7 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
             workflow_run_id = legacy_job_workflow_run_id("job_typed_refill_submit")
             commands = store.list_workflow_commands(workflow_run_id=workflow_run_id, limit=0)
-            events = store.list_workflow_events(workflow_run_id, limit=0)
+            events = store.repos.workflow_runtime.list_workflow_events(workflow_run_id, limit=0)
 
         self.assertEqual(len(dispatched_chunks), 1)
         self.assertEqual(result["queued_worker_count"], 1)

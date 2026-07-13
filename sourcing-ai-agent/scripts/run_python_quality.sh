@@ -19,6 +19,7 @@ PYTHON_QUALITY_TARGETS=(
   "src/sourcing_agent/acquisition_command_owner.py"
   "src/sourcing_agent/command_kernel.py"
   "src/sourcing_agent/crm_public_web_owner.py"
+  "src/sourcing_agent/durable_runtime.py"
   "src/sourcing_agent/enrichment.py"
   "src/sourcing_agent/excel_intake_owner.py"
   "src/sourcing_agent/operation_runtime.py"

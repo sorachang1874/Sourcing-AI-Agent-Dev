@@ -130,6 +130,37 @@ _ACTIVITY_SPINE_REPOSITORY_METHODS = {
     "_activity_attempt_from_row",
     "_entity_delta_from_row",
 }
+_RETIRED_WORKFLOW_READ_MODEL_STORE_METHODS = {
+    "append_workflow_event",
+    "list_workflow_events",
+    "upsert_workflow_current_state",
+    "get_workflow_current_state",
+    "enqueue_runtime_outbox",
+    "mark_runtime_outbox_dispatched",
+    "_workflow_event_from_row",
+    "_workflow_current_state_from_row",
+    "_runtime_outbox_from_row",
+}
+_RETIRED_WORKFLOW_READ_MODEL_CALL_ATTRIBUTES = {
+    name for name in _RETIRED_WORKFLOW_READ_MODEL_STORE_METHODS if not name.startswith("_")
+}
+_RETIRED_WORKFLOW_READ_MODEL_NATIVE_DISPATCH_KEYS = {
+    "append_workflow_event",
+    "upsert_workflow_current_state",
+    "enqueue_runtime_outbox",
+    "mark_runtime_outbox_dispatched",
+}
+_WORKFLOW_READ_MODEL_REPOSITORY_METHODS = {
+    "append_workflow_event",
+    "list_workflow_events",
+    "upsert_workflow_current_state",
+    "get_workflow_current_state",
+    "enqueue_runtime_outbox",
+    "mark_runtime_outbox_dispatched",
+    "_workflow_event_from_row",
+    "_workflow_current_state_from_row",
+    "_runtime_outbox_from_row",
+}
 _RETIRED_SERVING_PROJECTION_STORE_METHODS = {
     "upsert_serving_projection",
     "get_serving_projection",
@@ -341,6 +372,54 @@ def _retired_activity_spine_references(tree: ast.AST) -> list[tuple[int, str]]:
     return offenders
 
 
+def _is_workflow_read_model_store_receiver(node: ast.AST) -> bool:
+    if _is_store_receiver(node):
+        return True
+    if isinstance(node, ast.Name):
+        return node.id == "ControlPlaneStore"
+    return isinstance(node, ast.Attribute) and node.attr.endswith("_store")
+
+
+def _is_patch_object_call(node: ast.Call) -> bool:
+    return (
+        isinstance(node.func, ast.Attribute)
+        and node.func.attr == "object"
+        and isinstance(node.func.value, ast.Attribute)
+        and node.func.value.attr == "patch"
+    )
+
+
+def _retired_workflow_read_model_references(tree: ast.AST) -> list[tuple[int, str]]:
+    offenders: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr in _RETIRED_WORKFLOW_READ_MODEL_CALL_ATTRIBUTES
+            and _is_workflow_read_model_store_receiver(node.value)
+        ):
+            offenders.append((node.lineno, node.attr))
+        if not isinstance(node, ast.Call):
+            continue
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id in {"getattr", "hasattr"}
+            and len(node.args) >= 2
+            and _is_workflow_read_model_store_receiver(node.args[0])
+            and isinstance(node.args[1], ast.Constant)
+            and node.args[1].value in _RETIRED_WORKFLOW_READ_MODEL_CALL_ATTRIBUTES
+        ):
+            offenders.append((node.lineno, f"{node.func.id}:{node.args[1].value}"))
+        if (
+            _is_patch_object_call(node)
+            and len(node.args) >= 2
+            and _is_workflow_read_model_store_receiver(node.args[0])
+            and isinstance(node.args[1], ast.Constant)
+            and node.args[1].value in _RETIRED_WORKFLOW_READ_MODEL_CALL_ATTRIBUTES
+        ):
+            offenders.append((node.lineno, f"mock.patch.object:{node.args[1].value}"))
+    return offenders
+
+
 def _workflow_runtime_state_update_count(tree: ast.AST) -> int:
     count = 0
     for node in ast.walk(tree):
@@ -540,6 +619,47 @@ class _OperationControlFaultAdapter:
         **_kwargs: object,
     ) -> None:
         self._raise_if_failing("cancel_acquisition_owner_command")
+        return None
+
+
+class _WorkflowReadModelFaultAdapter:
+    mode = "postgres_only"
+
+    def __init__(self, *, failing_method: str) -> None:
+        self.failing_method = failing_method
+
+    def should_prefer_read(self, _table_name: str) -> bool:
+        return True
+
+    def is_authoritative(self, _table_name: str) -> bool:
+        return True
+
+    def _raise_if_failing(self, method_name: str) -> None:
+        if self.failing_method == method_name:
+            raise RuntimeError(f"{method_name}-boom")
+
+    def select_one(self, _table_name: str, **_kwargs: object) -> None:
+        self._raise_if_failing("select_one")
+        return None
+
+    def select_many(self, _table_name: str, **_kwargs: object) -> list[dict[str, object]]:
+        self._raise_if_failing("select_many")
+        return []
+
+    def append_workflow_event(self, *, table_name: str, row: dict[str, object]) -> None:
+        self._raise_if_failing("append_workflow_event")
+        return None
+
+    def upsert_workflow_current_state(self, *, table_name: str, row: dict[str, object]) -> None:
+        self._raise_if_failing("upsert_workflow_current_state")
+        return None
+
+    def enqueue_runtime_outbox(self, *, table_name: str, row: dict[str, object]) -> None:
+        self._raise_if_failing("enqueue_runtime_outbox")
+        return None
+
+    def mark_runtime_outbox_dispatched(self, *, table_name: str, outbox_id: str) -> None:
+        self._raise_if_failing("mark_runtime_outbox_dispatched")
         return None
 
 
@@ -984,6 +1104,212 @@ def test_activity_spine_retired_store_calls_cannot_return() -> None:
             )
 
     assert offenders == []
+
+
+def test_workflow_read_model_storage_facade_is_retired_to_workflow_runtime_repository() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    storage_path = repo_root / "src" / "sourcing_agent" / "storage.py"
+    repository_path = repo_root / "src" / "sourcing_agent" / "repositories" / "workflow_runtime.py"
+    storage_methods = _class_method_names(storage_path, "ControlPlaneStore")
+    repository_methods = _class_method_names(repository_path, "WorkflowRuntimeRepository")
+    descriptor_dispatch_keys = _assigned_literal_dict_keys(repository_path, "FROM_ROW_DESCRIPTORS")
+
+    assert len(_RETIRED_WORKFLOW_READ_MODEL_STORE_METHODS) == 9
+    assert storage_methods.isdisjoint(_RETIRED_WORKFLOW_READ_MODEL_STORE_METHODS)
+    assert len(_WORKFLOW_READ_MODEL_REPOSITORY_METHODS) == 9
+    assert _WORKFLOW_READ_MODEL_REPOSITORY_METHODS <= repository_methods
+    assert descriptor_dispatch_keys.isdisjoint(
+        {
+            "_workflow_event_from_row",
+            "_workflow_current_state_from_row",
+            "_runtime_outbox_from_row",
+        }
+    )
+
+
+def test_workflow_read_model_retired_calls_and_native_dispatch_keys_cannot_return() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    synthetic = ast.parse(
+        "\n".join(
+            [
+                'store.append_workflow_event(workflow_run_id="run")',
+                "callback = api_store.list_workflow_events",
+                'dynamic = getattr(self._store, "get_workflow_current_state")',
+                'feature = hasattr(self.store, "enqueue_runtime_outbox")',
+                'patcher = mock.patch.object(store, "mark_runtime_outbox_dispatched")',
+                'ControlPlaneStore.upsert_workflow_current_state(store, workflow_run_id="run")',
+                'store.repos.workflow_runtime.append_workflow_event(workflow_run_id="run")',
+                'adapter.append_workflow_event({}, table_name="workflow_events")',
+                'live_pg_adapter.enqueue_runtime_outbox({}, table_name="runtime_outbox")',
+            ]
+        )
+    )
+    assert {label for _line, label in _retired_workflow_read_model_references(synthetic)} == {
+        "append_workflow_event",
+        "list_workflow_events",
+        "getattr:get_workflow_current_state",
+        "hasattr:enqueue_runtime_outbox",
+        "mock.patch.object:mark_runtime_outbox_dispatched",
+        "upsert_workflow_current_state",
+    }
+
+    offenders: list[str] = []
+    checked_roots = [repo_root / "src" / "sourcing_agent", repo_root / "scripts", repo_root / "tests"]
+    current_test = Path(__file__).resolve()
+    for root in checked_roots:
+        for path in root.rglob("*.py"):
+            if path.resolve() == current_test:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            offenders.extend(
+                f"{path.relative_to(repo_root)}:{line}:{label}"
+                for line, label in _retired_workflow_read_model_references(tree)
+            )
+
+    native_dispatch_keys = _assigned_literal_dict_keys(
+        repo_root / "src" / "sourcing_agent" / "storage.py",
+        "_CONTROL_PLANE_POSTGRES_NATIVE_TABLES",
+    )
+    assert offenders == []
+    assert native_dispatch_keys.isdisjoint(_RETIRED_WORKFLOW_READ_MODEL_NATIVE_DISPATCH_KEYS)
+
+
+@pytest.mark.parametrize(
+    ("method_name", "table_name", "invoke_with_wrong_table"),
+    [
+        (
+            "append_workflow_event",
+            "workflow_events",
+            lambda adapter: adapter.append_workflow_event({}, table_name="runtime_outbox"),
+        ),
+        (
+            "upsert_workflow_current_state",
+            "workflow_current_state",
+            lambda adapter: adapter.upsert_workflow_current_state({}, table_name="workflow_events"),
+        ),
+        (
+            "enqueue_runtime_outbox",
+            "runtime_outbox",
+            lambda adapter: adapter.enqueue_runtime_outbox({}, table_name="workflow_events"),
+        ),
+        (
+            "mark_runtime_outbox_dispatched",
+            "runtime_outbox",
+            lambda adapter: adapter.mark_runtime_outbox_dispatched("outbox-1", table_name="workflow_events"),
+        ),
+    ],
+)
+def test_workflow_read_model_native_writers_require_exact_authority_table(
+    method_name: str,
+    table_name: str,
+    invoke_with_wrong_table,
+) -> None:
+    from sourcing_agent.control_plane_live_postgres import LiveControlPlanePostgresAdapter
+
+    method = getattr(LiveControlPlanePostgresAdapter, method_name)
+    parameter = inspect.signature(method).parameters["table_name"]
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameter.default == table_name
+
+    adapter = object.__new__(LiveControlPlanePostgresAdapter)
+    with pytest.raises(ValueError, match=rf"{method_name} requires table_name={table_name}"):
+        invoke_with_wrong_table(adapter)
+
+
+def test_workflow_read_model_repository_preserves_authority_fault_contracts() -> None:
+    read_cases = [
+        (
+            "workflow_events",
+            "select_many",
+            lambda repository: repository.list_workflow_events("workflow-run-1"),
+        ),
+        (
+            "workflow_current_state",
+            "select_one",
+            lambda repository: repository.get_workflow_current_state("workflow-run-1"),
+        ),
+    ]
+    write_cases = [
+        (
+            "workflow_events",
+            "append_workflow_event",
+            lambda repository: repository.append_workflow_event(
+                workflow_run_id="workflow-run-1",
+                event_family="workflow",
+                event_type="workflow.started",
+                idempotency_key="event-idem-1",
+            ),
+        ),
+        (
+            "workflow_current_state",
+            "upsert_workflow_current_state",
+            lambda repository: repository.upsert_workflow_current_state(
+                workflow_run_id="workflow-run-1",
+                status="running",
+            ),
+        ),
+        (
+            "runtime_outbox",
+            "enqueue_runtime_outbox",
+            lambda repository: repository.enqueue_runtime_outbox(
+                workflow_run_id="workflow-run-1",
+                outbox_type="workflow.wakeup",
+                idempotency_key="outbox-idem-1",
+            ),
+        ),
+        (
+            "runtime_outbox",
+            "mark_runtime_outbox_dispatched",
+            lambda repository: repository.mark_runtime_outbox_dispatched("outbox-1"),
+        ),
+    ]
+
+    for table_name, primitive, call in read_cases:
+        repository = WorkflowRuntimeRepository(_WorkflowReadModelFaultAdapter(failing_method=primitive))
+        error = _runtime_error(lambda: call(repository))
+        assert str(error) == (
+            f"Postgres authoritative read failed for {table_name} via {primitive}: RuntimeError: {primitive}-boom"
+        )
+        assert isinstance(error.__cause__, RuntimeError)
+
+    for table_name, primitive, call in write_cases:
+        repository = WorkflowRuntimeRepository(_WorkflowReadModelFaultAdapter(failing_method=primitive))
+        error = _runtime_error(lambda: call(repository))
+        assert str(error) == (
+            f"Postgres authoritative write failed for {table_name} via {primitive}: RuntimeError: {primitive}-boom"
+        )
+        assert isinstance(error.__cause__, RuntimeError)
+
+
+@pytest.mark.parametrize(
+    ("method_name", "invoke"),
+    [
+        (
+            "append_workflow_event",
+            lambda repository: repository.append_workflow_event(
+                workflow_run_id="workflow-run-1",
+                event_family="workflow",
+                event_type="workflow.started",
+                idempotency_key="event-idem-1",
+            ),
+        ),
+        (
+            "enqueue_runtime_outbox",
+            lambda repository: repository.enqueue_runtime_outbox(
+                workflow_run_id="workflow-run-1",
+                outbox_type="workflow.wakeup",
+                idempotency_key="outbox-idem-1",
+            ),
+        ),
+    ],
+)
+def test_workflow_read_model_authoritative_native_writes_require_returned_rows(method_name: str, invoke) -> None:
+    repository = WorkflowRuntimeRepository(_WorkflowReadModelFaultAdapter(failing_method=""))
+
+    error = _runtime_error(lambda: invoke(repository))
+
+    assert method_name in str(error)
+    assert "returned no row" in str(error)
 
 
 def test_operation_state_sync_residual_callers_are_ratcheted() -> None:

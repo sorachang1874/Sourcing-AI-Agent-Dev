@@ -77,9 +77,7 @@ def _extract_m0_checkpoint_files(markdown: str) -> list[str]:
 class MarkdownStatusTest(unittest.TestCase):
     def test_first_party_markdown_files_have_status_banner(self) -> None:
         markdown_files = sorted(
-            path
-            for path in REPO_ROOT.rglob("*.md")
-            if path.is_file() and _is_first_party_markdown(path)
+            path for path in REPO_ROOT.rglob("*.md") if path.is_file() and _is_first_party_markdown(path)
         )
         self.assertTrue(markdown_files, "expected at least one first-party Markdown file")
         missing_status = []
@@ -94,21 +92,19 @@ class MarkdownStatusTest(unittest.TestCase):
         )
 
     def test_m0_checkpoint_file_scope_is_git_root_relative_and_consistent(self) -> None:
-        service_plan = (REPO_ROOT / "docs" / "SERVICE_GRADE_ARCHITECTURE_PLAN.md").read_text(
-            encoding="utf-8"
-        )
-        next_todo = (REPO_ROOT / "docs" / "NEXT_TODO.md").read_text(encoding="utf-8")
+        service_plan = (REPO_ROOT / "docs" / "SERVICE_GRADE_ARCHITECTURE_PLAN.md").read_text(encoding="utf-8")
+        checkpoint_todo = (REPO_ROOT / "docs" / "archive" / "NEXT_TODO_2026-06-10_full.md").read_text(encoding="utf-8")
 
         service_scope = _extract_m0_checkpoint_files(service_plan)
-        next_todo_scope = _extract_m0_checkpoint_files(next_todo)
+        checkpoint_todo_scope = _extract_m0_checkpoint_files(checkpoint_todo)
 
         self.assertEqual(service_scope, M0_CHECKPOINT_REQUIRED_FILES)
-        self.assertEqual(next_todo_scope, M0_CHECKPOINT_REQUIRED_FILES)
-        self.assertEqual(service_scope, next_todo_scope)
+        self.assertEqual(checkpoint_todo_scope, M0_CHECKPOINT_REQUIRED_FILES)
+        self.assertEqual(service_scope, checkpoint_todo_scope)
         for path in service_scope:
             self.assertTrue(path.startswith("sourcing-ai-agent/"), path)
         for forbidden_path in M0_CHECKPOINT_FORBIDDEN_FILES:
             self.assertNotIn(forbidden_path, service_scope)
-            self.assertNotIn(forbidden_path, next_todo_scope)
+            self.assertNotIn(forbidden_path, checkpoint_todo_scope)
         self.assertIn("git diff --cached --name-only", service_plan)
-        self.assertIn("git diff --cached --name-only", next_todo)
+        self.assertIn("git diff --cached --name-only", checkpoint_todo)

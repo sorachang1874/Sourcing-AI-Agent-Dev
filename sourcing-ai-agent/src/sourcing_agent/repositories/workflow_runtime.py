@@ -398,10 +398,7 @@ RUNTIME_OUTBOX = TableDescriptor(
 # Read-path descriptors keyed by the ControlPlaneStore mapper method they replace.
 FROM_ROW_DESCRIPTORS = {
     "_workflow_recovery_intent_from_row": WORKFLOW_RECOVERY_INTENTS,
-    "_workflow_event_from_row": WORKFLOW_EVENTS,
-    "_workflow_current_state_from_row": WORKFLOW_CURRENT_STATE,
     "_workflow_command_from_row": WORKFLOW_COMMANDS,
-    "_runtime_outbox_from_row": RUNTIME_OUTBOX,
 }
 
 
@@ -507,6 +504,257 @@ class WorkflowRuntimeRepository(Repository):
             f"{normalized_table} is PG-only durable runtime storage. "
             "Set SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only with a resolved Postgres DSN; "
             "SQLite durable runtime execution is not a normal path."
+        )
+
+    def append_workflow_event(
+        self,
+        *,
+        workflow_run_id: str,
+        event_family: str,
+        event_type: str,
+        idempotency_key: str,
+        operation_id: str = "",
+        command_id: str = "",
+        activity_attempt_id: str = "",
+        sequence_number: int = 0,
+        occurred_at: str = "",
+        actor: str = "",
+        source: str = "",
+        payload: dict[str, Any] | None = None,
+        artifact_refs: list[Any] | tuple[Any, ...] | None = None,
+        schema_version: str = "workflow_event_v1",
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_events")
+        normalized_run_id = str(workflow_run_id or "").strip()
+        normalized_family = str(event_family or "").strip()
+        normalized_type = str(event_type or "").strip()
+        normalized_idempotency = str(idempotency_key or "").strip()
+        if not normalized_run_id or not normalized_family or not normalized_type or not normalized_idempotency:
+            return {}
+        now = utc_now_timestamp()
+        row_payload = WORKFLOW_EVENTS.to_columns(
+            {
+                "event_id": "",
+                "workflow_run_id": normalized_run_id,
+                "operation_id": operation_id,
+                "command_id": command_id,
+                "activity_attempt_id": activity_attempt_id,
+                "event_family": normalized_family,
+                "event_type": normalized_type,
+                "sequence_number": max(0, int(sequence_number or 0)),
+                "idempotency_key": normalized_idempotency,
+                "occurred_at": str(occurred_at or now).strip(),
+                "recorded_at": now,
+                "actor": actor,
+                "source": source,
+                "payload": payload or {},
+                "artifact_refs": list(artifact_refs or []),
+                "schema_version": str(schema_version or "workflow_event_v1").strip(),
+                "created_at": now,
+            }
+        )
+        if self._should_prefer_read("workflow_events"):
+            row = self._call_native_write(
+                "append_workflow_event",
+                table_name="workflow_events",
+                row=row_payload,
+            )
+            if row is not None:
+                return self._workflow_event_from_row(row)
+            if self._strict_authoritative("workflow_events"):
+                self._raise_write_failure(
+                    table_name="workflow_events",
+                    method_name="append_workflow_event",
+                    reason="native writer returned no row",
+                )
+        self._raise_postgres_only_invariant(
+            table_name="workflow_events",
+            method_name="append_workflow_event",
+        )
+
+    def list_workflow_events(self, workflow_run_id: str, *, limit: int = 1000) -> list[dict[str, Any]]:
+        self._require_postgres_for_durable_runtime("workflow_events")
+        normalized_run_id = str(workflow_run_id or "").strip()
+        if not normalized_run_id:
+            return []
+        postgres_rows = self._select_rows(
+            "workflow_events",
+            row_builder=self._workflow_event_from_row,
+            where_sql="workflow_run_id = %s",
+            params=[normalized_run_id],
+            order_by_sql="sequence_number ASC",
+            limit=max(0, int(limit or 0)),
+        )
+        if postgres_rows:
+            return postgres_rows
+        return []
+
+    def upsert_workflow_current_state(
+        self,
+        *,
+        workflow_run_id: str,
+        operation_id: str = "",
+        workflow_type: str = "",
+        status: str = "",
+        current_stage_key: str = "",
+        completion_proofs: dict[str, Any] | None = None,
+        active_command_counts: dict[str, Any] | None = None,
+        terminal_command_counts: dict[str, Any] | None = None,
+        read_model_pointers: dict[str, Any] | None = None,
+        migration_status: dict[str, Any] | None = None,
+        last_processed_sequence_number: int | None = None,
+        reducer_version: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_current_state")
+        normalized_run_id = str(workflow_run_id or "").strip()
+        if not normalized_run_id:
+            return {}
+        public_patch: dict[str, Any] = {
+            "workflow_run_id": normalized_run_id,
+            "schema_version": "workflow_current_state_v1",
+        }
+        if last_processed_sequence_number is not None:
+            public_patch["last_processed_sequence_number"] = max(0, int(last_processed_sequence_number or 0))
+        for field_name, value in (
+            ("operation_id", operation_id),
+            ("workflow_type", workflow_type),
+            ("status", status),
+            ("current_stage_key", current_stage_key),
+            ("reducer_version", reducer_version),
+        ):
+            if str(value or "").strip():
+                public_patch[field_name] = value
+        for field_name, value in (
+            ("completion_proofs", completion_proofs),
+            ("active_command_counts", active_command_counts),
+            ("terminal_command_counts", terminal_command_counts),
+            ("read_model_pointers", read_model_pointers),
+            ("migration_status", migration_status),
+            ("metadata", metadata),
+        ):
+            if value is not None:
+                public_patch[field_name] = value
+        encoded = WORKFLOW_CURRENT_STATE.to_columns(public_patch)
+        included_columns = {
+            "workflow_run_id",
+            "schema_version",
+            *(column.name for column in WORKFLOW_CURRENT_STATE.columns if column.key in public_patch),
+        }
+        row_payload = {column: value for column, value in encoded.items() if column in included_columns}
+        if self._should_prefer_read("workflow_current_state"):
+            row = self._call_native_write(
+                "upsert_workflow_current_state",
+                table_name="workflow_current_state",
+                row=row_payload,
+            )
+            if row is not None:
+                return self._workflow_current_state_from_row(row)
+            if self._strict_authoritative("workflow_current_state"):
+                self._raise_write_failure(
+                    table_name="workflow_current_state",
+                    method_name="upsert_workflow_current_state",
+                    reason="native writer returned no row",
+                )
+        self._raise_postgres_only_invariant(
+            table_name="workflow_current_state",
+            method_name="upsert_workflow_current_state",
+        )
+
+    def get_workflow_current_state(self, workflow_run_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_current_state")
+        normalized_run_id = str(workflow_run_id or "").strip()
+        if not normalized_run_id:
+            return {}
+        postgres_row = self._select_row(
+            "workflow_current_state",
+            row_builder=self._workflow_current_state_from_row,
+            where_sql="workflow_run_id = %s",
+            params=[normalized_run_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        return {}
+
+    def enqueue_runtime_outbox(
+        self,
+        *,
+        outbox_type: str,
+        idempotency_key: str,
+        workflow_run_id: str = "",
+        operation_id: str = "",
+        command_id: str = "",
+        payload: dict[str, Any] | None = None,
+        not_before_at: str = "",
+        max_attempts: int = 5,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("runtime_outbox")
+        normalized_type = str(outbox_type or "").strip()
+        normalized_idempotency = str(idempotency_key or "").strip()
+        if not normalized_type or not normalized_idempotency:
+            return {}
+        now = utc_now_timestamp()
+        row_payload = RUNTIME_OUTBOX.to_columns(
+            {
+                "outbox_id": "out_" + sha1(normalized_idempotency.encode("utf-8")).hexdigest()[:24],
+                "workflow_run_id": workflow_run_id,
+                "operation_id": operation_id,
+                "command_id": command_id,
+                "outbox_type": normalized_type,
+                "status": "queued",
+                "idempotency_key": normalized_idempotency,
+                "payload": payload or {},
+                "not_before_at": not_before_at,
+                "attempt": 0,
+                "max_attempts": max(1, int(max_attempts or 5)),
+                "schema_version": "runtime_outbox_v1",
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        if self._should_prefer_read("runtime_outbox"):
+            row = self._call_native_write(
+                "enqueue_runtime_outbox",
+                table_name="runtime_outbox",
+                row=row_payload,
+            )
+            if row is not None:
+                return self._runtime_outbox_from_row(row)
+            if self._strict_authoritative("runtime_outbox"):
+                self._raise_write_failure(
+                    table_name="runtime_outbox",
+                    method_name="enqueue_runtime_outbox",
+                    reason="native writer returned no row",
+                )
+        self._raise_postgres_only_invariant(
+            table_name="runtime_outbox",
+            method_name="enqueue_runtime_outbox",
+        )
+
+    def mark_runtime_outbox_dispatched(
+        self,
+        outbox_id: str,
+        *,
+        lease_owner: str = "",
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("runtime_outbox")
+        normalized_outbox_id = str(outbox_id or "").strip()
+        if not normalized_outbox_id:
+            return {}
+        if self._should_prefer_read("runtime_outbox"):
+            native_kwargs: dict[str, Any] = {"outbox_id": normalized_outbox_id}
+            normalized_lease_owner = str(lease_owner or "").strip()
+            if normalized_lease_owner:
+                native_kwargs["lease_owner"] = normalized_lease_owner
+            row = self._call_native_write(
+                "mark_runtime_outbox_dispatched",
+                table_name="runtime_outbox",
+                **native_kwargs,
+            )
+            return self._runtime_outbox_from_row(row) if row is not None else {}
+        self._raise_postgres_only_invariant(
+            table_name="runtime_outbox",
+            method_name="mark_runtime_outbox_dispatched",
         )
 
     def _upsert_identity_runtime_row(
@@ -1936,3 +2184,12 @@ class WorkflowRuntimeRepository(Repository):
 
     def _entity_delta_from_row(self, row: Any) -> dict[str, Any]:
         return WORKFLOW_ENTITY_DELTAS.from_row(row)
+
+    def _workflow_event_from_row(self, row: Any) -> dict[str, Any]:
+        return WORKFLOW_EVENTS.from_row(row)
+
+    def _workflow_current_state_from_row(self, row: Any) -> dict[str, Any]:
+        return WORKFLOW_CURRENT_STATE.from_row(row)
+
+    def _runtime_outbox_from_row(self, row: Any) -> dict[str, Any]:
+        return RUNTIME_OUTBOX.from_row(row)

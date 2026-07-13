@@ -13511,7 +13511,7 @@ class PipelineTest(unittest.TestCase):
             plan_payload={},
             summary_payload={},
         )
-        self.store.upsert_workflow_current_state(
+        self.store.repos.workflow_runtime.upsert_workflow_current_state(
             workflow_run_id=legacy_job_workflow_run_id(job_id),
             operation_id=legacy_job_operation_id(job_id),
             status="completed",
@@ -13523,6 +13523,7 @@ class PipelineTest(unittest.TestCase):
                     "sequence_number": 1,
                 }
             },
+            last_processed_sequence_number=1,
         )
         self.store.repos.linkedin_profile_registry.mark_queued(
             "https://www.linkedin.com/in/provider-owned-only-tail/",
