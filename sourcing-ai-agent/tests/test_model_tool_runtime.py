@@ -326,14 +326,11 @@ def _static_string(node: ast.AST) -> str | None:
     return None
 
 
-def _is_runtime_module_loader(node: ast.AST) -> bool:
+def _is_runtime_module_acquisition(node: ast.AST) -> bool:
     if not isinstance(node, ast.Call) or not node.args:
         return False
-    is_loader = (isinstance(node.func, ast.Name) and node.func.id == "__import__") or (
-        isinstance(node.func, ast.Attribute) and node.func.attr == "import_module"
-    )
     module_name = _static_string(node.args[0])
-    return is_loader and module_name is not None and module_name.endswith("model_tool_runtime")
+    return module_name is not None and module_name.endswith("model_tool_runtime")
 
 
 def _temporary_usage_reference_lines(source: str) -> tuple[int, ...]:
@@ -356,11 +353,11 @@ def _temporary_usage_reference_lines(source: str) -> tuple[int, ...]:
                 alias.name in {"ModelTurnUsage", "*"} for alias in node.names
             ):
                 lines.add(node.lineno)
-            elif module_name.endswith("sourcing_agent") and any(
+            elif (node.level > 0 or module_name.endswith("sourcing_agent")) and any(
                 alias.name == "model_tool_runtime" for alias in node.names
             ):
                 lines.add(node.lineno)
-        elif _is_runtime_module_loader(node):
+        elif _is_runtime_module_acquisition(node):
             lines.add(node.lineno)
     return tuple(sorted(lines))
 
@@ -1187,6 +1184,10 @@ def test_temporary_usage_type_cannot_escape_into_production_modules() -> None:
         'import importlib\nruntime = importlib.import_module("sourcing_agent.model_tool_runtime")\n'
         "name = get_name()\nUsage = getattr(runtime, name)"
     )
+    assert _temporary_usage_reference_lines(
+        'from importlib import import_module as load\nruntime = load("sourcing_agent.model_tool_runtime")'
+    )
+    assert _temporary_usage_reference_lines("from . import model_tool_runtime as runtime")
     assert not _temporary_usage_reference_lines("from .model_tool_runtime import ToolSpec")
     assert _temporary_usage_reference_lines(
         'import sourcing_agent.model_tool_runtime as runtime\nTool = getattr(runtime, "ToolSpec")'
