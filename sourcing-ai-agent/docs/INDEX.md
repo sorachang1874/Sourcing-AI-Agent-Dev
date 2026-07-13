@@ -97,6 +97,7 @@
 - [TRACK_D_D0C_MODEL_INVOCATION_CONTRACT.md](TRACK_D_D0C_MODEL_INVOCATION_CONTRACT.md) — D0c 非 live invocation evidence 实施记录（单一不可变 envelope、exact serialization/digest、typed absence/quarantine、narrow result mirror、route manifest mechanical preflight；durable issuer/persistence/live 仍 deferred）。
 - [TRACK_D_D0D_TOOL_SESSION_BASE_IMPLEMENTATION.md](TRACK_D_D0D_TOOL_SESSION_BASE_IMPLEMENTATION.md) — D0d 非 live canonical session projection 实施记录（抽象 session base 唯一拥有 buffered/stream 投影，scripted 只实现一个 `ParsedToolTurn` canonical parse 路径；无 transport/storage/live/effect）。
 - [TRACK_D_D0E_REQUEST_ENVELOPE_BINDING_IMPLEMENTATION.md](TRACK_D_D0E_REQUEST_ENVELOPE_BINDING_IMPLEMENTATION.md) — D0e 非 live request→invocation-envelope provenance 实施记录（精确 request-owned 字段镜像 + request/messages/tools canonical digest 重算；不扩 schema、response/durable authority 或执行权限）。
+- [TRACK_D_D1A_ACTION_REQUEST_SURFACE_CHARACTERIZATION.md](TRACK_D_D1A_ACTION_REQUEST_SURFACE_CHARACTERIZATION.md) — D1a 非 live characterize-first 记录（ActionSpec/Registry、submit、dispatch、input→target→default precedence 与 command owner/Activity/control 关系；action/command 数量机械发现；零产品码）。
 - [TRACK_D_D3_COMPANY_IDENTITY_SELF_VERIFICATION_DESIGN.md](TRACK_D_D3_COMPANY_IDENTITY_SELF_VERIFICATION_DESIGN.md) — D3 批级设计（公司身份自验证 loop：`verify_company_identity` action + `company.identity.verify` 命令 + 置信阶梯出口；误确认率=0 硬门；不依赖 D0/D2/model_native_search）。
 - [NEXT_TODO.md](NEXT_TODO.md) — 活跃待办（滚动文件）。
 - [../PROGRESS.md](../PROGRESS.md) — 进展日志（滚动文件，月度归档于 `archive/progress/`）。
