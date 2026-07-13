@@ -54,6 +54,7 @@ def _valid_bundle(contract, root: Path, *, branch_lookup: str = "verified") -> d
     request = (
         "# Request\n\n"
         "Purpose: approach_review\n"
+        "Secondary question sets: none\n"
         "Authority: ADVISORY_ONLY\n"
         "Surface required: Chat\n"
         "Model required: GPT-5.6 Sol\n"
@@ -63,7 +64,12 @@ def _valid_bundle(contract, root: Path, *, branch_lookup: str = "verified") -> d
         "Connector sees dirty scope: false\n"
         "Dirty scope provided to Pro: false\n"
         f"Branch: {branch}\n"
-        "Branch requirement: provenance_only\n\n"
+        "Branch requirement: provenance_only\n"
+        f"Repository: {repository}\n"
+        f"Commit authority: {sha}\n"
+        "Consultation status: planned\n"
+        "Connector status: attached_pending\n"
+        "Redaction status: verified\n\n"
         "ADVISORY_ONLY — not an independent-review artifact or formal GO.\n\n"
         f"{contract.CONNECTOR_SCOPE_PREFIX} {contract._canonical_json(connector_scope)}\n\n"
         "Read /AGENTS.md at the pinned commit.\n"
@@ -91,7 +97,11 @@ def _valid_bundle(contract, root: Path, *, branch_lookup: str = "verified") -> d
         "# Decision\n\n"
         "## Authority\n\n"
         "ADVISORY_ONLY — not an independent-review artifact or formal GO.\n\n"
-        "## Local disposition\n\nAccept the advisory recommendation for local planning only.\n\n"
+        "## Local disposition\n\n"
+        "P0 disposition: none — no P0 finding.\n"
+        "P1 disposition: none — no P1 finding.\n"
+        "P2 disposition: none — no P2 finding.\n"
+        "Validation: targeted contract tests passed.\n\n"
         "## Follow-up\n\nRun repository validation and the independent review gate separately.\n"
     )
     excluded_categories = sorted(contract.REQUIRED_EXCLUDED_CATEGORIES)
@@ -108,6 +118,8 @@ def _valid_bundle(contract, root: Path, *, branch_lookup: str = "verified") -> d
         "formal_gate_eligible": False,
         "formal_review_status": "not_run",
         "consultation_status": "complete_validated",
+        "request_status": "planned",
+        "request_connector_status": "attached_pending",
         "consultation_valid": True,
         "usable_for_advisory_decision": True,
         "expected_response_path": artifact_path,
@@ -731,7 +743,7 @@ def test_decision_is_hash_bound_structured_and_cannot_claim_formal_go(tmp_path: 
         (formal_bundle / "decision.md")
         .read_text(encoding="utf-8")
         .replace(
-            "Accept the advisory recommendation for local planning only.",
+            "Run repository validation and the independent review gate separately.",
             "Formal review status: GO. Accept everything.",
         )
     )
@@ -824,6 +836,9 @@ def test_unused_connector_scope_is_valid_only_without_repository_paths_or_eviden
     request = request.replace("Read /AGENTS.md at the pinned commit.", "No Connector content is requested.")
     request = request.replace(f"Branch: {metadata['branch']}", "Branch: none")
     request = request.replace("Branch requirement: provenance_only", "Branch requirement: not_applicable")
+    request = request.replace(f"Repository: {metadata['repository']}", "Repository: none")
+    request = request.replace(f"Commit authority: {metadata['requested_commit_sha']}", "Commit authority: none")
+    request = request.replace("Connector status: attached_pending", "Connector status: unused")
     (bundle / "request.md").write_text(request, encoding="utf-8")
     response = (bundle / "response.md").read_text(encoding="utf-8")
     response = response.replace(
@@ -845,6 +860,7 @@ def test_unused_connector_scope_is_valid_only_without_repository_paths_or_eviden
             ),
             "transfer_content_preflight": contract.scan_transfer_content(new_scope),
             "connector_status": "unused",
+            "request_connector_status": "unused",
             "connector_evidence_valid": False,
             "outcome_code": "none",
             "connector_file_proof": [],
@@ -945,7 +961,7 @@ def test_broad_formal_gate_claim_is_rejected_even_with_recomputed_hash(tmp_path:
         (bundle / "decision.md")
         .read_text(encoding="utf-8")
         .replace(
-            "Accept the advisory recommendation for local planning only.",
+            "Run repository validation and the independent review gate separately.",
             "Repository independent review gate verdict: GO. Ship this scope.",
         )
     )
@@ -1141,4 +1157,204 @@ def test_decoded_secret_representations_and_aws_secret_assignment_fail_closed(tm
     assert result["consultation_valid"] is False
     assert result["retention_safe"] is False
     assert result["storage_valid"] is False
+
+
+def test_connector_citation_inside_fence_does_not_count_as_evidence(tmp_path: Path) -> None:
+    contract = _load_contract()
+    bundle = tmp_path / "fenced-citation"
+    metadata = _valid_bundle(contract, bundle)
+    citation = str(metadata["connector_file_proof"][0]["citation"])  # type: ignore[index]
+    response = (bundle / "response.md").read_text(encoding="utf-8")
+    response = response.replace(f"Connector citation: {citation}", f"```text\n{citation}\n```")
+    (bundle / "response.md").write_text(response, encoding="utf-8")
+    metadata["response_sha256"] = _sha256_text(response)
+    (bundle / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    result = contract.validate_bundle(bundle)
+    assert result["consultation_valid"] is False
+    assert "required Connector file proof is incomplete or uncited" in result["errors"]
+
+    for fence in ("````", "~~~~"):
+        nested_bundle = tmp_path / f"nested-{ord(fence[0])}"
+        metadata = _valid_bundle(contract, nested_bundle)
+        citation = str(metadata["connector_file_proof"][0]["citation"])  # type: ignore[index]
+        response = (nested_bundle / "response.md").read_text(encoding="utf-8")
+        response = response.replace(
+            f"Connector citation: {citation}",
+            f"{fence}text\n```\n{citation}\n```\n{fence}",
+        )
+        (nested_bundle / "response.md").write_text(response, encoding="utf-8")
+        metadata["response_sha256"] = _sha256_text(response)
+        (nested_bundle / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+        result = contract.validate_bundle(nested_bundle)
+        assert result["consultation_valid"] is False, fence
+        assert "required Connector file proof is incomplete or uncited" in result["errors"]
+
+
+def test_request_authority_headers_are_hash_bound_and_cannot_contradict_scope(tmp_path: Path) -> None:
+    contract = _load_contract()
+    bundle = tmp_path / "request-authority"
+    metadata = _valid_bundle(contract, bundle)
+    request = (bundle / "request.md").read_text(encoding="utf-8")
+    request = request.replace(f"Repository: {metadata['repository']}", "Repository: another/repository")
+    (bundle / "request.md").write_text(request, encoding="utf-8")
+    metadata["request_sha256"] = _sha256_text(request)
+    metadata["redaction_preflight"] = contract.scan_redacted_request(
+        request,
+        included_paths=["/AGENTS.md"],
+        excluded_categories=sorted(contract.REQUIRED_EXCLUDED_CATEGORIES),
+    )
+    (bundle / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    result = contract.validate_bundle(bundle)
+    assert result["consultation_valid"] is False
+    assert "request authority/UI/local/branch headers are invalid or inconsistent with metadata" in result["errors"]
+
+    sent_bundle = tmp_path / "sent-request"
+    metadata = _valid_bundle(contract, sent_bundle)
+    request = (sent_bundle / "request.md").read_text(encoding="utf-8")
+    request = request.replace("Consultation status: planned", "Consultation status: sent")
+    (sent_bundle / "request.md").write_text(request, encoding="utf-8")
+    metadata["request_status"] = "sent"
+    metadata["request_sha256"] = _sha256_text(request)
+    metadata["redaction_preflight"] = contract.scan_redacted_request(
+        request,
+        included_paths=["/AGENTS.md"],
+        excluded_categories=sorted(contract.REQUIRED_EXCLUDED_CATEGORIES),
+    )
+    (sent_bundle / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    assert contract.preflight_request(sent_bundle / "request.md")["preflight_status"] == "blocked"
+    result = contract.validate_bundle(sent_bundle)
+    assert result["consultation_valid"] is False
+    assert "persisted request failed the mandatory pre-send contract" in result["errors"]
+
+    unused_status_bundle = tmp_path / "wrong-connector-status"
+    metadata = _valid_bundle(contract, unused_status_bundle)
+    request = (unused_status_bundle / "request.md").read_text(encoding="utf-8")
+    request = request.replace("Connector status: attached_pending", "Connector status: unused")
+    (unused_status_bundle / "request.md").write_text(request, encoding="utf-8")
+    metadata["request_connector_status"] = "unused"
+    metadata["request_sha256"] = _sha256_text(request)
+    metadata["redaction_preflight"] = contract.scan_redacted_request(
+        request,
+        included_paths=["/AGENTS.md"],
+        excluded_categories=sorted(contract.REQUIRED_EXCLUDED_CATEGORIES),
+    )
+    (unused_status_bundle / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    assert contract.preflight_request(unused_status_bundle / "request.md")["preflight_status"] == "blocked"
+    result = contract.validate_bundle(unused_status_bundle)
+    assert result["consultation_valid"] is False
+    assert "request_connector_status is inconsistent with the Connector scope" in result["errors"]
+
+
+def test_authority_claim_without_literal_go_and_empty_decision_closure_fail(tmp_path: Path) -> None:
+    contract = _load_contract()
+    authority_bundle = tmp_path / "authority-claim"
+    metadata = _valid_bundle(contract, authority_bundle)
+    decision = (authority_bundle / "decision.md").read_text(encoding="utf-8")
+    decision = decision.replace(
+        "Run repository validation and the independent review gate separately.",
+        "Independent review completed; this is approved for production.",
+    )
+    (authority_bundle / "decision.md").write_text(decision, encoding="utf-8")
+    metadata["decision_sha256"] = _sha256_text(decision)
+    (authority_bundle / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    result = contract.validate_bundle(authority_bundle)
+    assert result["consultation_valid"] is False
+    assert "consultation artifacts must not claim formal or independent-review approval" in result["errors"]
+
+    for index, claim in enumerate(
+        (
+            "Formal review passed; this scope is cleared.",
+            "Independent audit succeeded; continue.",
+            "This output constitutes an independent review artifact.",
+        )
+    ):
+        claim_bundle = tmp_path / f"authority-claim-{index}"
+        metadata = _valid_bundle(contract, claim_bundle)
+        decision = (claim_bundle / "decision.md").read_text(encoding="utf-8")
+        decision = decision.replace(
+            "Run repository validation and the independent review gate separately.",
+            claim,
+        )
+        (claim_bundle / "decision.md").write_text(decision, encoding="utf-8")
+        metadata["decision_sha256"] = _sha256_text(decision)
+        (claim_bundle / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+        result = contract.validate_bundle(claim_bundle)
+        assert result["consultation_valid"] is False, claim
+        assert "consultation artifacts must not claim formal or independent-review approval" in result["errors"]
+
+    empty_bundle = tmp_path / "empty-decision"
+    metadata = _valid_bundle(contract, empty_bundle)
+    decision = f"# Decision\n\n## Authority\n\n{contract.ADVISORY_LABEL}\n\n## Local disposition\n\n## Follow-up\n"
+    (empty_bundle / "decision.md").write_text(decision, encoding="utf-8")
+    metadata["decision_sha256"] = _sha256_text(decision)
+    (empty_bundle / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    result = contract.validate_bundle(empty_bundle)
+    assert result["consultation_valid"] is False
+    assert "decision must contain one reasoned P0 disposition" in result["errors"]
+    assert "decision must contain one non-empty validation record" in result["errors"]
+    assert "decision Follow-up section must not be empty" in result["errors"]
+
+    whitespace_bundle = tmp_path / "whitespace-decision"
+    metadata = _valid_bundle(contract, whitespace_bundle)
+    decision = (whitespace_bundle / "decision.md").read_text(encoding="utf-8")
+    decision = decision.replace("P0 disposition: none — no P0 finding.", "P0 disposition: none —   ")
+    decision = decision.replace("Validation: targeted contract tests passed.", "Validation:   ")
+    decision = decision.replace(
+        "P1 disposition: none — no P1 finding.",
+        "P1 disposition: none — no P1 finding.\nP1 disposition: malformed duplicate",
+    )
+    (whitespace_bundle / "decision.md").write_text(decision, encoding="utf-8")
+    metadata["decision_sha256"] = _sha256_text(decision)
+    (whitespace_bundle / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    result = contract.validate_bundle(whitespace_bundle)
+    assert result["consultation_valid"] is False
+    assert "decision must contain one reasoned P0 disposition" in result["errors"]
+    assert "decision must contain one reasoned P1 disposition" in result["errors"]
+    assert "decision must contain one non-empty validation record" in result["errors"]
+
+
+def test_unknown_skill_hash_field_and_extra_symlink_fail_closed(tmp_path: Path) -> None:
+    contract = _load_contract()
+    hash_bundle = tmp_path / "unknown-hash"
+    metadata = _valid_bundle(contract, hash_bundle)
+    metadata["consultation_skill_sha256"] = "0" * 64
+    (hash_bundle / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    result = contract.validate_bundle(hash_bundle)
+    assert result["consultation_valid"] is False
     assert "metadata contains fields outside the v2 allowlist" in result["errors"]
+
+    symlink_bundle = tmp_path / "extra-symlink"
+    _valid_bundle(contract, symlink_bundle)
+    (symlink_bundle / "alias.md").symlink_to(symlink_bundle / "request.md")
+    result = contract.validate_bundle(symlink_bundle)
+    assert result["bundle_inventory_valid"] is False
+    assert result["storage_valid"] is False
+
+
+def test_preflight_request_cli_gates_exact_committed_scope_before_send(tmp_path: Path) -> None:
+    contract = _load_contract()
+    bundle = tmp_path / "preflight"
+    _valid_bundle(contract, bundle)
+    request_path = bundle / "request.md"
+    result = contract.preflight_request(request_path)
+    assert result["preflight_status"] == "passed", result
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "preflight-request", str(request_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stdout
+
+    unsafe_request = request_path.read_text(encoding="utf-8") + "Read /oauth_token.json too.\n"
+    request_path.write_text(unsafe_request, encoding="utf-8")
+    result = contract.preflight_request(request_path)
+    assert result["preflight_status"] == "blocked"
+    assert "request mentions absolute paths outside the Connector scope manifest" in result["errors"]
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "preflight-request", str(request_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 1

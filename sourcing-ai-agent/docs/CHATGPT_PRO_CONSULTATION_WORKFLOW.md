@@ -68,15 +68,19 @@ pathspecs. The scanner decodes common JSON/Markdown/URL escape forms before matc
 regular bundle files and scans every directory entry; a secret-like value makes `storage_valid=false`, including with
 `--allow-invalid-storage`.
 
-This repository's executable checks are:
+These are the repository's executable checks. `preflight-request` is mandatory immediately before the browser send; it
+derives the allowlist from `CONNECTOR_SCOPE_JSON`, binds the request headers to that immutable scope, verifies the local
+GitHub origin, reconstructs and scans the exact committed payload, and exits non-zero on any contradiction:
 
 ```bash
-PYTHONPATH=src .venv/bin/python scripts/pro_consultation_contract.py redaction-scan \
-  docs/pro-consults/<date-slug>/request.md --standard-exclusions \
-  --included-path /exact/allowed/path
+PYTHONPATH=src .venv/bin/python scripts/pro_consultation_contract.py preflight-request \
+  docs/pro-consults/<date-slug>/request.md
 PYTHONPATH=src .venv/bin/python scripts/pro_consultation_contract.py validate-bundle \
   docs/pro-consults/<date-slug>
 ```
+
+`redaction-scan` remains available for drafting diagnostics, but it does not replace the exact committed-content
+pre-send gate.
 
 The bundle command exits zero only for a usable consultation. Use `--allow-invalid-storage` solely to audit that a
 legacy/incomplete capture is honestly classified and safe to retain; it does not make that capture usable.
@@ -97,9 +101,12 @@ Mode: Pro
 `Work / Ultra` is not a substitute. If any observed value is unavailable, mark `blocked_pre_send` rather than inventing
 success metadata.
 
-Every request repeats the machine-checked header fields `Purpose`, `Authority`, `Surface required`, `Model required`,
-`Mode required`, `Browser required`, `Local state`, `Connector sees dirty scope`, `Dirty scope provided to Pro`,
-`Branch`, and `Branch requirement`. Duplicate or contradictory header lines fail validation.
+Every request repeats the machine-checked header fields `Purpose`, `Secondary question sets`, `Authority`,
+`Surface required`, `Model required`, `Mode required`, `Browser required`, `Local state`,
+`Connector sees dirty scope`, `Dirty scope provided to Pro`, `Branch`, `Branch requirement`, `Repository`,
+`Commit authority`, `Consultation status`, `Connector status`, and `Redaction status`. Before send,
+`Consultation status` is exactly `planned`; Connector-backed requests use `attached_pending`, while `unused` scope uses
+`unused`. Duplicate or contradictory header lines fail validation.
 
 ### 4. GitHub Connector handshake
 
@@ -127,7 +134,8 @@ mentioned in the request must belong to this manifest; `unused` mode permits non
 The modes cannot be mixed, and `blocked`/missing evidence never validates a Connector-required request.
 Each proof uses the exact immutable GitHub URL: `.../blob/<full-sha>/<path>` for a file or
 `.../compare/<base>...<head>` for a diff. The repository must equal the local GitHub `origin`, and each exact citation
-must also occur in the extracted Pro response. A truthy label or conversation URL is not a durable content citation.
+must also occur as unfenced text in the extracted Pro response. A fenced example, truthy label, or conversation URL is
+not a durable content citation.
 
 For `provenance_only`, a non-verified branch outcome does not invalidate otherwise proven commit content, but the
 workflow must not claim branch verification. For `required`, anything except `verified` blocks the consultation:
@@ -163,10 +171,13 @@ docs/pro-consults/YYYY-MM-DD-<slug>/
 of `Raw Pro verdict: keep|adjust|pivot`; its headings are ordered, and `## P0`, `## P1`, and `## P2` live inside
 `# Findings`. The advisory label immediately follows `BEGIN_ARTIFACT`; blockquoted/fenced/duplicate verdicts do not
 count. `decision.md` uses ordered `# Decision`, `## Authority`, `## Local disposition`, and `## Follow-up`
-sections and never claims formal `GO`. `metadata.json` records required/observed UI state, browser surface,
+sections and never claims formal or independent-review approval. `## Local disposition` contains exactly one reasoned
+`P0 disposition`, `P1 disposition`, and `P2 disposition` plus one non-empty `Validation` record; `## Follow-up` is
+non-empty. `metadata.json` records required/observed UI state, browser surface,
 redaction preflight, commit/file proof, raw branch outcome, dirty-scope visibility, completeness, schema validity,
-request/response/decision hashes, transfer-content preflight, retention safety, and the consultation-contract
-version/hash.
+request/response/decision hashes, transfer-content preflight, retention safety, schema version, and the repository-owned
+workflow and validator hashes. Personal skill/reference hashes are intentionally not accepted as evidence because they
+are outside the repository authority boundary.
 
 Derive one final validity result. `consultation_status=complete_validated`, `consultation_valid=true`, and
 `usable_for_advisory_decision=true` are allowed only when UI state, redaction preflight, marker envelope, response
@@ -187,9 +198,10 @@ them through the normal repository workflow.
 Keep Pro's raw verdict. Codex accepts only exact lower-case `keep`, `adjust`, or `pivot`; any other label, including `GO`, maps
 to `null` and makes the response schema-invalid. Confidence does not replace evidence.
 
-For every accepted P0/P1 recommendation, record the fix and an exact regression command. Reject advice that conflicts
-with current owner decisions or repository contracts. Defer live/provider/schema/canonical-writer scope until its
-explicit gate is satisfied.
+For every P0/P1/P2 level, record `accepted|rejected|deferred|none` and the reason. For every accepted P0/P1
+recommendation, record the fix and an exact regression command in `Validation`. Reject advice that conflicts with
+current owner decisions or repository contracts. Defer live/provider/schema/canonical-writer scope until its explicit
+gate is satisfied.
 
 ## Validated lessons from 2026-07-14
 
@@ -207,6 +219,7 @@ explicit gate is satisfied.
 ## Exit criteria
 
 A consultation is complete only when the response markers are intact, requested/observed scope and Connector proof are
-recorded, both redaction preflights are hash-bound, the persisted bundle is retention-safe, the computed contract result is valid, the decision artifact is
+recorded, the mandatory pre-send and persisted-bundle scans are hash-bound, the directory contains exactly the four
+regular contract files, the persisted bundle is retention-safe, the computed contract result is valid, the decision artifact is
 written, and accepted items have local validation. Formal gates remain pending until the canonical non-author runner
 produces matching hash-bound evidence.

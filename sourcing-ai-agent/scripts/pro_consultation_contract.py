@@ -20,6 +20,7 @@ PURPOSES = frozenset({"kickoff", "architecture", "approach_review", "critical_de
 CONNECTOR_SCOPE_PREFIX = "CONNECTOR_SCOPE_JSON:"
 REQUEST_HEADER_FIELDS = (
     "Purpose",
+    "Secondary question sets",
     "Authority",
     "Surface required",
     "Model required",
@@ -30,6 +31,11 @@ REQUEST_HEADER_FIELDS = (
     "Dirty scope provided to Pro",
     "Branch",
     "Branch requirement",
+    "Repository",
+    "Commit authority",
+    "Consultation status",
+    "Connector status",
+    "Redaction status",
 )
 REQUIRED_RESPONSE_HEADINGS = (
     "# Verdict",
@@ -121,8 +127,6 @@ METADATA_ALLOWED_FIELDS = frozenset(
         "connector_scope_manifest_sha256",
         "connector_sees_dirty_scope",
         "connector_status",
-        "consultation_contract_sha256",
-        "consultation_skill_sha256",
         "consultation_status",
         "consultation_valid",
         "contract_schema_version",
@@ -168,7 +172,23 @@ METADATA_ALLOWED_FIELDS = frozenset(
         "validator_sha256",
         "workflow_sha256",
         "request_sha256",
+        "request_connector_status",
+        "request_status",
     }
+)
+AUTHORITY_CLAIM_PATTERNS = (
+    re.compile(r"(?i)\bformal(?:ly)?\s+(?:approved|accepted|cleared)\b"),
+    re.compile(r"(?i)\bformal\s+(?:review|gate|audit)\s+(?:passed|succeeded|completed|approved|cleared)\b"),
+    re.compile(r"(?i)\bindependent\s+review\s+(?:passed|approved|complete|completed|cleared)\b"),
+    re.compile(
+        r"(?i)\bindependent\s+(?:review|gate|audit)\s+(?:passed|succeeded|complete|completed|approved|cleared)\b"
+    ),
+    re.compile(
+        r"(?i)\b(?:this|the)\s+(?:output|artifact|response|consultation)\s+(?:is|constitutes?)\s+"
+        r"(?:an?\s+)?(?:formal|independent)[-\s]+(?:review|gate|audit)(?:\s+artifact)?\b"
+    ),
+    re.compile(r"(?i)\bapproved\s+for\s+(?:release|production|deployment|live)\b"),
+    re.compile(r"(?i)\b(?:release|production|deployment|live)\s+approved\b"),
 )
 
 
@@ -494,17 +514,21 @@ def _scope_allowlist_entries(scope: dict[str, Any]) -> list[str]:
 def _outside_fenced_code_lines(value: str) -> list[str]:
     value = re.sub(r"<!--.*?-->", "", value, flags=re.DOTALL)
     lines: list[str] = []
-    fence: str | None = None
+    fence_character: str | None = None
+    fence_length = 0
     for line in value.splitlines():
-        marker_match = re.match(r"^\s*(```|~~~)", line)
+        marker_match = re.match(r"^\s*(`{3,}|~{3,})(.*)$", line)
         if marker_match:
             marker = marker_match.group(1)
-            if fence is None:
-                fence = marker
-            elif fence == marker:
-                fence = None
+            suffix = marker_match.group(2)
+            if fence_character is None:
+                fence_character = marker[0]
+                fence_length = len(marker)
+            elif marker[0] == fence_character and len(marker) >= fence_length and not suffix.strip():
+                fence_character = None
+                fence_length = 0
             continue
-        if fence is None:
+        if fence_character is None:
             lines.append(line)
     return lines
 
@@ -537,6 +561,108 @@ def _expected_diff_citation(*, repository: str, base_sha: str, head_sha: str) ->
     return f"https://github.com/{repository}/compare/{base_sha}...{head_sha}"
 
 
+def preflight_request(request_path: Path) -> dict[str, Any]:
+    """Fail closed before a request is sent to ChatGPT Pro."""
+
+    errors: list[str] = []
+    try:
+        request_text = request_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        return {
+            "contract_schema_version": CONTRACT_SCHEMA_VERSION,
+            "preflight_status": "blocked",
+            "errors": [f"request unreadable: {type(exc).__name__}"],
+        }
+
+    headers = _parse_request_headers(request_text, errors)
+    scope = _parse_connector_scope(request_text, errors)
+    purpose = headers.get("Purpose")
+    secondary = headers.get("Secondary question sets")
+    if purpose not in PURPOSES:
+        errors.append("request Purpose is invalid")
+    if secondary != "none":
+        secondary_values = secondary.split(",") if secondary else []
+        if (
+            not secondary_values
+            or any(value not in PURPOSES or value == purpose for value in secondary_values)
+            or len(set(secondary_values)) != len(secondary_values)
+        ):
+            errors.append("request Secondary question sets are invalid")
+    required_headers = {
+        "Authority": "ADVISORY_ONLY",
+        "Surface required": "Chat",
+        "Model required": "GPT-5.6 Sol",
+        "Mode required": "Pro",
+        "Browser required": "Codex in-app browser",
+        "Connector sees dirty scope": "false",
+        "Dirty scope provided to Pro": "false",
+        "Redaction status": "verified",
+    }
+    if any(headers.get(field) != expected for field, expected in required_headers.items()):
+        errors.append("request authority/UI/dirty/redaction headers are invalid")
+    if headers.get("Local state") not in {"clean", "dirty"}:
+        errors.append("request Local state must be clean or dirty")
+    if headers.get("Consultation status") != "planned":
+        errors.append("pre-send request Consultation status must be planned")
+
+    mode = scope.get("mode")
+    scope_repository = scope.get("repository")
+    requested_sha = scope.get("commit_sha") if mode == "files" else scope.get("head_sha")
+    if mode in {"files", "diff"}:
+        if (
+            headers.get("Repository") != scope_repository
+            or headers.get("Commit authority") != requested_sha
+            or headers.get("Connector status") != "attached_pending"
+            or headers.get("Branch requirement") not in {"provenance_only", "required"}
+            or not headers.get("Branch")
+            or headers.get("Branch") == "none"
+        ):
+            errors.append("request Connector authority headers do not match its immutable scope")
+        if _local_origin_repository() != scope_repository:
+            errors.append("request Connector repository does not match the local GitHub origin")
+    elif mode == "unused":
+        if any(
+            (
+                headers.get("Repository") != "none",
+                headers.get("Commit authority") != "none",
+                headers.get("Connector status") != "unused",
+                headers.get("Branch requirement") != "not_applicable",
+                headers.get("Branch") != "none",
+            )
+        ):
+            errors.append("unused Connector request has contradictory authority headers")
+
+    scope_paths = {
+        str(path) for path in (scope.get("required_files", []) if mode == "files" else scope.get("changed_files", []))
+    }
+    extra_request_paths = sorted(_request_absolute_paths(request_text) - scope_paths)
+    if extra_request_paths:
+        errors.append("request mentions absolute paths outside the Connector scope manifest")
+
+    redaction = scan_redacted_request(
+        request_text,
+        included_paths=_scope_allowlist_entries(scope),
+        excluded_categories=sorted(REQUIRED_EXCLUDED_CATEGORIES),
+    )
+    if redaction.get("status") != "passed":
+        errors.append("request redaction preflight failed")
+    transfer = scan_transfer_content(scope)
+    expected_transfer_status = "unused" if mode == "unused" else "passed"
+    if transfer.get("status") != expected_transfer_status:
+        errors.append("exact committed Connector payload failed transfer preflight")
+
+    return {
+        "contract_schema_version": CONTRACT_SCHEMA_VERSION,
+        "preflight_status": "passed" if not errors else "blocked",
+        "errors": sorted(set(errors)),
+        "request_sha256": _sha256_text(request_text),
+        "connector_scope_manifest": scope,
+        "connector_scope_manifest_sha256": _sha256_text(_canonical_json(scope)),
+        "redaction_preflight": redaction,
+        "transfer_content_preflight": transfer,
+    }
+
+
 def validate_bundle(directory: Path) -> dict[str, Any]:
     errors: list[str] = []
     paths = {name: directory / name for name in ("request.md", "response.md", "decision.md", "metadata.json")}
@@ -550,9 +676,10 @@ def validate_bundle(directory: Path) -> dict[str, Any]:
         }
     expected_entries = set(paths)
     actual_entries = {path.name for path in directory.iterdir()}
-    if actual_entries != expected_entries or any(
+    bundle_inventory_valid = actual_entries == expected_entries and not any(
         not path.is_file() or path.is_symlink() for path in directory.iterdir()
-    ):
+    )
+    if not bundle_inventory_valid:
         errors.append("bundle directory must contain exactly four regular contract files")
 
     request_text = paths["request.md"].read_text(encoding="utf-8")
@@ -588,6 +715,11 @@ def validate_bundle(directory: Path) -> dict[str, Any]:
     ):
         errors.append("secondary question sets are invalid")
     expected_request_headers = {
+        "Secondary question sets": (
+            ",".join(str(item) for item in secondary_question_sets)
+            if isinstance(secondary_question_sets, list) and secondary_question_sets
+            else "none"
+        ),
         "Authority": "ADVISORY_ONLY",
         "Surface required": "Chat",
         "Model required": "GPT-5.6 Sol",
@@ -598,10 +730,25 @@ def validate_bundle(directory: Path) -> dict[str, Any]:
         "Dirty scope provided to Pro": "false",
         "Branch": str(metadata.get("branch") if metadata.get("branch") is not None else "none"),
         "Branch requirement": str(metadata.get("branch_requirement")),
+        "Repository": str(metadata.get("repository") if metadata.get("repository") is not None else "none"),
+        "Commit authority": str(
+            metadata.get("requested_commit_sha") if metadata.get("requested_commit_sha") is not None else "none"
+        ),
+        "Consultation status": str(metadata.get("request_status")),
+        "Connector status": str(metadata.get("request_connector_status")),
+        "Redaction status": str(metadata.get("redaction_status")),
     }
     if any(request_headers.get(field) != expected for field, expected in expected_request_headers.items()):
         errors.append("request authority/UI/local/branch headers are invalid or inconsistent with metadata")
+    if metadata.get("request_status") != "planned":
+        errors.append("request_status must preserve the exact planned pre-send request phase")
     connector_scope = _parse_connector_scope(request_text, errors)
+    expected_request_connector_status = "unused" if connector_scope.get("mode") == "unused" else "attached_pending"
+    if metadata.get("request_connector_status") != expected_request_connector_status:
+        errors.append("request_connector_status is inconsistent with the Connector scope")
+    request_preflight = preflight_request(paths["request.md"])
+    if request_preflight.get("preflight_status") != "passed":
+        errors.append("persisted request failed the mandatory pre-send contract")
     if metadata.get("connector_scope_manifest") != connector_scope:
         errors.append("Connector scope metadata does not match the request manifest")
     if metadata.get("connector_scope_manifest_sha256") != _sha256_text(_canonical_json(connector_scope)):
@@ -677,6 +824,32 @@ def validate_bundle(directory: Path) -> dict[str, Any]:
     decision_without_authority = decision_text.replace(ADVISORY_LABEL, "")
     if re.search(r"(?i)(?<![-\w])GO(?![-\w])", decision_without_authority):
         errors.append("decision must not claim a formal GO")
+    authority_scan_text = "\n".join((decision_without_authority, response_text.replace(ADVISORY_LABEL, "")))
+    if any(pattern.search(authority_scan_text) for pattern in AUTHORITY_CLAIM_PATTERNS):
+        errors.append("consultation artifacts must not claim formal or independent-review approval")
+    if all(heading in decision_heading_indices for heading in REQUIRED_DECISION_HEADINGS):
+        local_start = decision_heading_indices["## Local disposition"] + 1
+        follow_start = decision_heading_indices["## Follow-up"]
+        disposition_lines = [line for line in decision_lines[local_start:follow_start] if line.strip()]
+        follow_up_lines = [line for line in decision_lines[follow_start + 1 :] if line.strip()]
+        for severity in ("P0", "P1", "P2"):
+            key = f"{severity} disposition:"
+            keyed_lines = [line for line in disposition_lines if line.startswith(key)]
+            match = (
+                re.fullmatch(
+                    rf"{severity} disposition: (?:accepted|rejected|deferred|none) — (.*)",
+                    keyed_lines[0],
+                )
+                if len(keyed_lines) == 1
+                else None
+            )
+            if match is None or not match.group(1).strip():
+                errors.append(f"decision must contain one reasoned {severity} disposition")
+        validation_lines = [line for line in disposition_lines if line.startswith("Validation:")]
+        if len(validation_lines) != 1 or not validation_lines[0].removeprefix("Validation:").strip():
+            errors.append("decision must contain one non-empty validation record")
+        if not follow_up_lines:
+            errors.append("decision Follow-up section must not be empty")
 
     dirty_paths = metadata.get("local_dirty_paths")
     if (
@@ -851,6 +1024,7 @@ def validate_bundle(directory: Path) -> dict[str, Any]:
             }
             if proof_paths != required_files or len(file_proofs) != len(required_files):
                 errors.append("Connector file proofs do not exactly match the required-file manifest")
+            unfenced_response_text = "\n".join(_outside_fenced_code_lines(response_text))
             for proof in file_proofs:
                 if not isinstance(proof, dict) or (
                     proof.get("observed_commit_sha") != requested_sha
@@ -861,7 +1035,7 @@ def validate_bundle(directory: Path) -> dict[str, Any]:
                         commit_sha=str(requested_sha),
                         path=str(proof.get("path") or ""),
                     )
-                    or str(proof.get("citation") or "") not in response_text
+                    or str(proof.get("citation") or "") not in unfenced_response_text
                 ):
                     errors.append("required Connector file proof is incomplete or uncited")
                     break
@@ -881,7 +1055,7 @@ def validate_bundle(directory: Path) -> dict[str, Any]:
                     base_sha=str(connector_scope.get("base_sha")),
                     head_sha=str(requested_sha),
                 )
-                or str(diff_proof.get("citation") or "") not in response_text
+                or str(diff_proof.get("citation") or "") not in "\n".join(_outside_fenced_code_lines(response_text))
             ):
                 errors.append("required Connector diff proof is incomplete or uncited")
     elif scope_mode == "unused":
@@ -975,7 +1149,8 @@ def validate_bundle(directory: Path) -> dict[str, Any]:
     return {
         "contract_schema_version": CONTRACT_SCHEMA_VERSION,
         "consultation_valid": consultation_valid,
-        "storage_valid": not consistency_errors and retention_safe,
+        "storage_valid": not consistency_errors and retention_safe and bundle_inventory_valid,
+        "bundle_inventory_valid": bundle_inventory_valid,
         "retention_safe": retention_safe,
         "persisted_secret_match_counts": persisted_secret_counts,
         "errors": sorted(set(errors)),
@@ -996,6 +1171,9 @@ def main() -> int:
     scan.add_argument("--excluded-category", action="append", default=[])
     scan.add_argument("--standard-exclusions", action="store_true")
 
+    preflight = subparsers.add_parser("preflight-request")
+    preflight.add_argument("request", type=Path)
+
     validate = subparsers.add_parser("validate-bundle")
     validate.add_argument("directory", type=Path)
     validate.add_argument("--allow-invalid-storage", action="store_true")
@@ -1012,6 +1190,11 @@ def main() -> int:
         )
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["status"] == "passed" else 1
+
+    if args.command == "preflight-request":
+        result = preflight_request(args.request)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["preflight_status"] == "passed" else 1
 
     result = validate_bundle(args.directory)
     print(json.dumps(result, indent=2, sort_keys=True))
