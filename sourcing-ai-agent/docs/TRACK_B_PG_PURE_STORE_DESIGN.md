@@ -805,7 +805,7 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     build-bound revision == current revision,completed generation 不可降级。ordinary projection publication/upsert
     必须保留三个 reserved keys;公开 reason 统一为
     `projection_person_search_index_unavailable`。
-  - **2026-07-13 对抗审计 fixed-forward**:facet/readiness 产品也绑定 generation/build-input/input revision;
+  - **2026-07-13 对抗审计 fixed-forward(`93d9f9e`)**:facet/readiness 产品也绑定 generation/build-input/input revision;
     semantic member 变化与新 reset 在事务内使旧产品 unavailable,finalize 原子重建并标 completed,empty projection
     发布 exact-zero 产品。公开 unfiltered reader 前后复核绑定;semantic no-op publication 通过共享 contract helper
     保留 facet/readiness/build metadata 与水位,且 builder-owned freshness watermark 不进入 durable command input identity。
@@ -816,7 +816,7 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     **87 errors / 4 files**。R-017 保持 pending,
     待修复 commit 的 pinned 独立 re-review GO;此前只冻结本 scope 的 live/W6/manual/里程碑签收。
 
-- **2026-07-10 ②.4a 完成 —— workflow_runtime operation-control 退役到 `store.repos.workflow_runtime`**:
+- **2026-07-10 ②.4a 完成(`93d9f9e`) —— workflow_runtime operation-control 退役到 `store.repos.workflow_runtime`**:
   - **范围/Scout**:`agent_actions`、`operation_runs`、`operation_events` 三表;11 个原 Store public + 3 mapper
     迁入 Repository,并新增 `reject_action_with_event` / `cancel_operation_with_event` 两个固定业务 UoW。
     `storage.py` **13,296 → 12,809**(-487),workflow repository **378 → 1,087** 行(含后述 fixed-forward);

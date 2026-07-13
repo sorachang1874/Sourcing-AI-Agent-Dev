@@ -1,7 +1,7 @@
 # Track B ② Repository 迁移 Handbook(新一轮的入口文档)
 
 > Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
-> 状态:**②.4a 完成(2026-07-10)** —— workflow_runtime 的 operation-control 分子域
+> 状态:**②.4a 完成(2026-07-10,implementation `93d9f9e`)** —— workflow_runtime 的 operation-control 分子域
 > (`agent_actions` / `operation_runs` / `operation_events`)已退役到 `store.repos.workflow_runtime`;
 > 当前分支 storage.py 13,296 → 12,809 行,production 91 + tests 46 个调用全部迁移,
 > 旧 11 facade / 3 mapper / 7 native dispatch key 清零。reject/cancel 的状态、关联 action 与 event
