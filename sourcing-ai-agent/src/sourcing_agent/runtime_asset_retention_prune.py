@@ -17,6 +17,7 @@ CONTRACT_VERSION = "runtime_asset_retention_prune_v1"
 BUNDLE_MANIFEST_CONTRACT_VERSION = "runtime_asset_supersession_cold_bundle_manifest_v1"
 INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION = "independent_review_effective_config_v2"
 INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION_V3 = "independent_review_effective_config_v3"
+INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION_V4 = "independent_review_effective_config_v4"
 REQUIRED_REVIEW_ARTIFACT_METADATA_FIELDS = (
     "reviewer_model",
     "reviewer_reasoning_effort",
@@ -90,7 +91,7 @@ _INDEPENDENT_REVIEW_APP_SERVER_CAUSAL_FIELDS = {
     "normalized_final_output_sha256",
     *_INDEPENDENT_REVIEW_APP_SERVER_CAUSAL_BOOLEAN_FIELDS,
 }
-_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS = (
+_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS_V3 = (
     "transcript_json_valid",
     "single_initialize_request",
     "single_initialize_response",
@@ -113,14 +114,208 @@ _INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS = (
     "no_model_reroute",
     "thread_settings_consistent",
 )
-_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_FIELDS = {
+_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_FIELDS_V3 = {
     "thread_id",
     "session_id",
     "turn_id",
     "prompt_sha256",
     "normalized_final_output_sha256",
+    *_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS_V3,
+}
+_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS = (
+    *_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS_V3,
+    "root_turn_start_response_exact",
+    "observed_turns_unique_complete",
+    "observed_turns_started_in_progress",
+    "observed_turns_status_completed",
+    "observed_turns_error_free",
+    "observed_turns_final_agent_message_exact",
+    "root_thread_turn_identity_exclusive",
+    "child_thread_ids_distinct",
+    "observed_final_item_ids_unique",
+    "completed_turn_items_binding_exact",
+    "no_orphan_final_agent_message",
+)
+_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_FIELDS = {
+    "thread_id",
+    "session_id",
+    "turn_id",
+    "observed_turn_count",
+    "prompt_sha256",
+    "normalized_final_output_sha256",
     *_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS,
 }
+
+
+def _independent_review_app_server_turn_key(message: dict[str, Any]) -> tuple[str, str]:
+    params_raw = message.get("params")
+    params = dict(params_raw) if isinstance(params_raw, dict) else {}
+    turn_raw = params.get("turn")
+    turn = dict(turn_raw) if isinstance(turn_raw, dict) else {}
+    return (
+        str(params.get("threadId") or "").strip(),
+        str(turn.get("id") or "").strip(),
+    )
+
+
+def _independent_review_app_server_final_item_key(message: dict[str, Any]) -> tuple[str, str]:
+    params_raw = message.get("params")
+    params = dict(params_raw) if isinstance(params_raw, dict) else {}
+    return (
+        str(params.get("threadId") or "").strip(),
+        str(params.get("turnId") or "").strip(),
+    )
+
+
+def _independent_review_app_server_observed_turn_binding(
+    *,
+    server_messages: list[dict[str, Any]],
+    root_thread_id: str,
+    root_turn_id: str,
+) -> tuple[
+    dict[tuple[str, str], list[tuple[int, dict[str, Any]]]],
+    dict[tuple[str, str], list[tuple[int, dict[str, Any]]]],
+    dict[tuple[str, str], list[tuple[int, dict[str, Any]]]],
+    dict[str, Any],
+]:
+    starts: dict[tuple[str, str], list[tuple[int, dict[str, Any]]]] = {}
+    completes: dict[tuple[str, str], list[tuple[int, dict[str, Any]]]] = {}
+    final_items: dict[tuple[str, str], list[tuple[int, dict[str, Any]]]] = {}
+    for index, message in enumerate(server_messages):
+        method = str(message.get("method") or "")
+        if method in {"turn/started", "turn/completed"} and isinstance(message.get("params"), dict):
+            key = _independent_review_app_server_turn_key(message)
+            target = starts if method == "turn/started" else completes
+            target.setdefault(key, []).append((index, message))
+            continue
+        if method != "item/completed" or not isinstance(message.get("params"), dict):
+            continue
+        params = dict(message["params"])
+        item_raw = params.get("item")
+        item = dict(item_raw) if isinstance(item_raw, dict) else {}
+        if str(item.get("type") or "") != "agentMessage" or str(item.get("phase") or "") != "final_answer":
+            continue
+        final_items.setdefault(_independent_review_app_server_final_item_key(message), []).append((index, item))
+
+    observed_keys = set(starts) | set(completes)
+    unique_complete = bool(observed_keys)
+    started_in_progress = bool(observed_keys)
+    status_completed = bool(observed_keys)
+    error_free = bool(observed_keys)
+    final_messages_exact = bool(observed_keys)
+    completed_items_binding_exact = bool(observed_keys)
+    final_item_ids: list[str] = []
+    final_item_count = 0
+    for key in observed_keys:
+        keyed_starts = starts.get(key, [])
+        keyed_completes = completes.get(key, [])
+        keyed_finals = final_items.get(key, [])
+        pair_exact = (
+            bool(key[0])
+            and bool(key[1])
+            and len(keyed_starts) == 1
+            and len(keyed_completes) == 1
+            and keyed_starts[0][0] < keyed_completes[0][0]
+        )
+        unique_complete = unique_complete and pair_exact
+
+        started_turn_raw = dict(keyed_starts[0][1]["params"]).get("turn") if len(keyed_starts) == 1 else None
+        started_turn = dict(started_turn_raw) if isinstance(started_turn_raw, dict) else {}
+        completed_turn_raw = (
+            dict(keyed_completes[0][1]["params"]).get("turn") if len(keyed_completes) == 1 else None
+        )
+        completed_turn = dict(completed_turn_raw) if isinstance(completed_turn_raw, dict) else {}
+        started_in_progress = started_in_progress and started_turn.get("status") == "inProgress"
+        status_completed = status_completed and completed_turn.get("status") == "completed"
+        error_free = (
+            error_free
+            and started_turn.get("error") is None
+            and completed_turn.get("error") is None
+        )
+
+        final_exact = len(keyed_finals) == 1
+        if final_exact:
+            final_index, final_item = keyed_finals[0]
+            final_item_id = final_item.get("id")
+            final_item_text = final_item.get("text")
+            final_exact = (
+                pair_exact
+                and keyed_starts[0][0] < final_index < keyed_completes[0][0]
+                and isinstance(final_item_id, str)
+                and bool(final_item_id.strip())
+                and isinstance(final_item_text, str)
+                and bool(final_item_text.strip())
+            )
+        final_messages_exact = final_messages_exact and final_exact
+
+        completed_items_raw = completed_turn.get("items")
+        completed_items = completed_items_raw if isinstance(completed_items_raw, list) else []
+        inline_finals = [
+            dict(item)
+            for item in completed_items
+            if isinstance(item, dict)
+            and str(item.get("type") or "") == "agentMessage"
+            and str(item.get("phase") or "") == "final_answer"
+        ]
+        items_view = str(completed_turn.get("itemsView") or "").strip()
+        if items_view == "notLoaded":
+            protocol_exact = isinstance(completed_items_raw, list) and not completed_items
+        else:
+            protocol_exact = (
+                items_view in {"", "loaded"}
+                and isinstance(completed_items_raw, list)
+                and len(inline_finals) == 1
+                and len(keyed_finals) == 1
+                and isinstance(inline_finals[0].get("id"), str)
+                and inline_finals[0].get("id") == keyed_finals[0][1].get("id")
+                and isinstance(inline_finals[0].get("text"), str)
+                and inline_finals[0].get("text") == keyed_finals[0][1].get("text")
+            )
+        completed_items_binding_exact = completed_items_binding_exact and protocol_exact
+
+    for keyed_finals in final_items.values():
+        for _, final_item in keyed_finals:
+            final_item_count += 1
+            final_item_id = final_item.get("id")
+            if isinstance(final_item_id, str) and final_item_id.strip():
+                final_item_ids.append(final_item_id)
+
+    root_key = (root_thread_id, root_turn_id)
+    root_thread_keys = {key for key in observed_keys if key[0] == root_thread_id}
+    child_keys = observed_keys - {root_key}
+    child_thread_ids = [key[0] for key in child_keys]
+    root_thread_turn_identity_exclusive = (
+        bool(root_thread_id)
+        and bool(root_turn_id)
+        and root_key in observed_keys
+        and root_thread_keys == {root_key}
+    )
+    child_thread_ids_distinct = (
+        all(thread_id and thread_id != root_thread_id for thread_id in child_thread_ids)
+        and len(set(child_thread_ids)) == len(child_thread_ids)
+    )
+    observed_final_item_ids_unique = (
+        final_item_count > 0
+        and len(final_item_ids) == final_item_count
+        and len(set(final_item_ids)) == len(final_item_ids)
+    )
+
+    binding: dict[str, Any] = {
+        "observed_turn_count": len(observed_keys),
+        "observed_turns_unique_complete": unique_complete,
+        "observed_turns_started_in_progress": started_in_progress,
+        "observed_turns_status_completed": status_completed,
+        "observed_turns_error_free": error_free,
+        "observed_turns_final_agent_message_exact": final_messages_exact,
+        "root_thread_turn_identity_exclusive": root_thread_turn_identity_exclusive,
+        "child_thread_ids_distinct": child_thread_ids_distinct,
+        "observed_final_item_ids_unique": observed_final_item_ids_unique,
+        "completed_turn_items_binding_exact": completed_items_binding_exact,
+        "no_orphan_final_agent_message": set(final_items).issubset(observed_keys),
+    }
+    return starts, completes, final_items, binding
+
+
 _INDEPENDENT_REVIEW_APP_SERVER_TRANSPORT = "app_server_stdio"
 _INDEPENDENT_REVIEW_APP_SERVER_PROTOCOL = "codex_app_server_jsonrpc_v2"
 _INDEPENDENT_REVIEW_APP_SERVER_ACTIVE_SETTINGS_SOURCE = "thread/start.response"
@@ -1434,7 +1629,10 @@ def validate_independent_review_effective_config_evidence(
         blockers.append("review_artifact_effective_config_invalid_json")
         return blockers
     contract_version = str(payload.get("contract_version") or "")
-    if contract_version == INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION_V3:
+    if contract_version in {
+        INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION_V3,
+        INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION_V4,
+    }:
         blockers.extend(
             _validate_independent_review_effective_config_evidence_v3(
                 payload=payload,
@@ -1444,6 +1642,7 @@ def validate_independent_review_effective_config_evidence(
                 expected_title=expected_title,
                 required_files=list(required_files or []),
                 expected_scope_digest=expected_scope_digest,
+                contract_version=contract_version,
             )
         )
         return _dedupe_strings(blockers)
@@ -1641,14 +1840,27 @@ def _validate_independent_review_effective_config_evidence_v3(
     expected_title: str,
     required_files: list[str],
     expected_scope_digest: str,
+    contract_version: str,
 ) -> list[str]:
     blockers: list[str] = []
+    is_v4 = contract_version == INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION_V4
+    contract_label = "v4" if is_v4 else "v3"
+    transcript_boolean_fields = (
+        _INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS
+        if is_v4
+        else _INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS_V3
+    )
+    transcript_fields = (
+        _INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_FIELDS
+        if is_v4
+        else _INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_FIELDS_V3
+    )
 
     def mapping(name: str) -> dict[str, Any]:
         value = payload.get(name)
         if isinstance(value, dict):
             return dict(value)
-        blockers.append(f"review_artifact_effective_config_v3_invalid_{name}")
+        blockers.append(f"review_artifact_effective_config_{contract_label}_invalid_{name}")
         return {}
 
     config = mapping("config")
@@ -1706,7 +1918,7 @@ def _validate_independent_review_effective_config_evidence_v3(
     if evidence_exit_code != 0:
         blockers.append("review_artifact_effective_config_exit_not_zero")
     if process.get("timed_out") is not False:
-        blockers.append("review_artifact_effective_config_v3_timed_out")
+        blockers.append(f"review_artifact_effective_config_{contract_label}_timed_out")
 
     session_id = str(session.get("session_id") or "").strip()
     thread_id = str(session.get("thread_id") or "").strip()
@@ -1750,13 +1962,13 @@ def _validate_independent_review_effective_config_evidence_v3(
         "binding",
     }
     if set(transport) != expected_transport_fields:
-        blockers.append("review_artifact_effective_config_v3_transport_invalid_fields")
+        blockers.append(f"review_artifact_effective_config_{contract_label}_transport_invalid_fields")
     if transport.get("kind") != _INDEPENDENT_REVIEW_APP_SERVER_TRANSPORT:
-        blockers.append("review_artifact_effective_config_v3_transport_kind_mismatch")
+        blockers.append(f"review_artifact_effective_config_{contract_label}_transport_kind_mismatch")
     if transport.get("protocol") != _INDEPENDENT_REVIEW_APP_SERVER_PROTOCOL:
-        blockers.append("review_artifact_effective_config_v3_transport_protocol_mismatch")
+        blockers.append(f"review_artifact_effective_config_{contract_label}_transport_protocol_mismatch")
     if transport.get("active_settings_source") != _INDEPENDENT_REVIEW_APP_SERVER_ACTIVE_SETTINGS_SOURCE:
-        blockers.append("review_artifact_effective_config_v3_active_settings_source_mismatch")
+        blockers.append(f"review_artifact_effective_config_{contract_label}_active_settings_source_mismatch")
     transport_transcript = dict(transport["transcript"]) if isinstance(transport.get("transcript"), dict) else {}
     claimed_transcript_binding = dict(transport["binding"]) if isinstance(transport.get("binding"), dict) else {}
     transcript_artifact = artifact("transcript")
@@ -1766,26 +1978,37 @@ def _validate_independent_review_effective_config_evidence_v3(
         or transport_transcript != transcript_artifact
         or events_artifact != transcript_artifact
     ):
-        blockers.append("review_artifact_effective_config_v3_transcript_binding_mismatch")
-    if set(claimed_transcript_binding) != _INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_FIELDS:
-        blockers.append("review_artifact_effective_config_v3_transcript_binding_invalid_fields")
+        blockers.append(f"review_artifact_effective_config_{contract_label}_transcript_binding_mismatch")
+    if set(claimed_transcript_binding) != transcript_fields:
+        blockers.append(f"review_artifact_effective_config_{contract_label}_transcript_binding_invalid_fields")
     if set(causal_binding) != _INDEPENDENT_REVIEW_APP_SERVER_CAUSAL_FIELDS:
         blockers.append("review_artifact_effective_config_causal_binding_invalid_fields")
     if (
         str(claimed_transcript_binding.get("turn_id") or "").strip() != turn_id
         or str(causal_binding.get("turn_id") or "").strip() != turn_id
     ):
-        blockers.append("review_artifact_effective_config_v3_turn_identity_mismatch")
+        blockers.append(f"review_artifact_effective_config_{contract_label}_turn_identity_mismatch")
     for binding_name, binding, boolean_fields in (
-        ("transcript", claimed_transcript_binding, _INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS),
+        ("transcript", claimed_transcript_binding, transcript_boolean_fields),
         ("causal", causal_binding, _INDEPENDENT_REVIEW_APP_SERVER_CAUSAL_BOOLEAN_FIELDS),
     ):
         if not _is_sha256(str(binding.get("prompt_sha256") or "")) or not _is_sha256(
             str(binding.get("normalized_final_output_sha256") or "")
         ):
-            blockers.append(f"review_artifact_effective_config_v3_{binding_name}_binding_invalid_hash")
+            blockers.append(
+                f"review_artifact_effective_config_{contract_label}_{binding_name}_binding_invalid_hash"
+            )
         if any(not isinstance(binding.get(field), bool) for field in boolean_fields):
-            blockers.append(f"review_artifact_effective_config_v3_{binding_name}_binding_invalid_boolean")
+            blockers.append(
+                f"review_artifact_effective_config_{contract_label}_{binding_name}_binding_invalid_boolean"
+            )
+    if is_v4 and (
+        type(claimed_transcript_binding.get("observed_turn_count")) is not int
+        or int(claimed_transcript_binding["observed_turn_count"]) < 1
+    ):
+        blockers.append(
+            "review_artifact_effective_config_v4_transcript_binding_invalid_observed_turn_count"
+        )
 
     prompt_raw, prompt_blockers = _read_independent_review_evidence_file(
         root=root,
@@ -1819,7 +2042,7 @@ def _validate_independent_review_effective_config_evidence_v3(
     )
     blockers.extend(prompt_blockers + transcript_blockers + events_blockers + output_blockers + rollout_blockers)
     if transcript_raw is not None and events_raw is not None and transcript_raw != events_raw:
-        blockers.append("review_artifact_effective_config_v3_events_transcript_mismatch")
+        blockers.append(f"review_artifact_effective_config_{contract_label}_events_transcript_mismatch")
     if prompt_raw is not None:
         blockers.extend(_independent_review_prompt_blockers(prompt_raw=prompt_raw, scope=scope))
     if raw_output is not None and review_text:
@@ -1840,10 +2063,11 @@ def _validate_independent_review_effective_config_evidence_v3(
             root=root,
             prompt_raw=prompt_raw,
             raw_output=raw_output,
+            transcript_contract_version=contract_version,
         )
         blockers.extend(replay_blockers)
         recomputed_binding = dict(transcript_evidence.get("binding") or {})
-        for field in sorted(_INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_FIELDS):
+        for field in sorted(transcript_fields):
             if claimed_transcript_binding.get(field) != recomputed_binding.get(field):
                 blockers.append(f"review_artifact_transcript_binding_recomputed_mismatch:{field}")
         recomputed_settings = dict(transcript_evidence.get("settings") or {})
@@ -1908,7 +2132,7 @@ def _validate_independent_review_effective_config_evidence_v3(
             *list(rollout_sources.get(field) or []),
         ]
     if effective.get("source") != expected_effective_source:
-        blockers.append("review_artifact_effective_config_v3_effective_source_mismatch")
+        blockers.append(f"review_artifact_effective_config_{contract_label}_effective_source_mismatch")
 
     if prompt_raw is not None and raw_output is not None and rollout_raw is not None:
         recomputed_causal, causal_blockers = _parse_independent_review_causal_binding(
@@ -2058,6 +2282,7 @@ def _parse_independent_review_app_server_transcript(
     root: Path,
     prompt_raw: bytes,
     raw_output: bytes,
+    transcript_contract_version: str = INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION_V4,
 ) -> tuple[dict[str, Any], list[str]]:
     blockers: list[str] = []
     transcript_json_valid = True
@@ -2128,13 +2353,18 @@ def _parse_independent_review_app_server_transcript(
     started_turn = dict(started_turn_raw) if isinstance(started_turn_raw, dict) else {}
     turn_id = str(started_turn.get("id") or "").strip()
 
-    completed_notifications = [
-        message
-        for message in server_messages
-        if str(message.get("method") or "") == "turn/completed"
-        and isinstance(message.get("params"), dict)
-        and str(dict(message["params"]).get("threadId") or "").strip() == thread_id
-    ]
+    turn_starts, turn_completes, turn_final_items, observed_turn_binding = (
+        _independent_review_app_server_observed_turn_binding(
+            server_messages=server_messages,
+            root_thread_id=thread_id,
+            root_turn_id=turn_id,
+        )
+    )
+    root_turn_key = (thread_id, turn_id)
+    root_started_observations = turn_starts.get(root_turn_key, [])
+    root_completed_observations = turn_completes.get(root_turn_key, [])
+    root_final_observations = turn_final_items.get(root_turn_key, [])
+    completed_notifications = [message for _, message in root_completed_observations]
     completed_params = (
         dict(completed_notifications[0]["params"])
         if len(completed_notifications) == 1 and isinstance(completed_notifications[0].get("params"), dict)
@@ -2143,31 +2373,9 @@ def _parse_independent_review_app_server_transcript(
     completed_turn_raw = completed_params.get("turn")
     completed_turn = dict(completed_turn_raw) if isinstance(completed_turn_raw, dict) else {}
 
-    completed_agent_items: list[dict[str, Any]] = []
-    for message in server_messages:
-        if str(message.get("method") or "") != "item/completed" or not isinstance(message.get("params"), dict):
-            continue
-        params = dict(message["params"])
-        item_raw = params.get("item")
-        item = dict(item_raw) if isinstance(item_raw, dict) else {}
-        if (
-            str(params.get("threadId") or "").strip() == thread_id
-            and str(params.get("turnId") or "").strip() == turn_id
-            and str(item.get("type") or "") == "agentMessage"
-            and str(item.get("phase") or "") == "final_answer"
-        ):
-            completed_agent_items.append(item)
-    completed_items_raw = completed_turn.get("items")
-    completed_items = completed_items_raw if isinstance(completed_items_raw, list) else []
-    turn_agent_items = [
-        dict(item)
-        for item in completed_items
-        if isinstance(item, dict)
-        and str(item.get("type") or "") == "agentMessage"
-        and str(item.get("phase") or "") == "final_answer"
-    ]
-    final_item = turn_agent_items[0] if len(turn_agent_items) == 1 else {}
-    final_text = str(final_item.get("text") or "")
+    final_item = root_final_observations[0][1] if len(root_final_observations) == 1 else {}
+    final_text_raw = final_item.get("text")
+    final_text = final_text_raw if isinstance(final_text_raw, str) else ""
     try:
         prompt = prompt_raw.decode("utf-8")
         expected_output = raw_output.decode("utf-8")
@@ -2222,11 +2430,7 @@ def _parse_independent_review_app_server_transcript(
     thread_source_exact = (
         bool(session_source) and thread.get("threadSource") == _INDEPENDENT_REVIEW_APP_SERVER_THREAD_SOURCE
     )
-    turn_started_notifications = [
-        message
-        for message in server_messages
-        if str(message.get("method") or "") == "turn/started" and isinstance(message.get("params"), dict)
-    ]
+    turn_started_notifications = [message for _, message in root_started_observations]
     notified_turn_params = dict(turn_started_notifications[0]["params"]) if len(turn_started_notifications) == 1 else {}
     notified_turn_raw = notified_turn_params.get("turn")
     notified_turn = dict(notified_turn_raw) if isinstance(notified_turn_raw, dict) else {}
@@ -2239,17 +2443,84 @@ def _parse_independent_review_app_server_transcript(
         and str(completed_params.get("threadId") or "").strip() == thread_id
         and str(completed_turn.get("id") or "").strip() == turn_id
     )
+    root_turn_start_response_exact = (
+        bool(turn_id)
+        and str(started_turn.get("id") or "").strip() == turn_id
+        and started_turn.get("status") == "inProgress"
+        and started_turn.get("error") is None
+        and len(turn_started_notifications) == 1
+        and str(notified_turn_params.get("threadId") or "").strip() == thread_id
+        and str(notified_turn.get("id") or "").strip() == turn_id
+        and notified_turn.get("status") == "inProgress"
+        and notified_turn.get("error") is None
+    )
     active_settings_exact = (
         settings["model"] == configured.get("model")
         and settings["reasoning_effort"] == configured.get("reasoning_effort")
         and _review_service_tier_matches(str(configured.get("service_tier") or ""), settings["service_tier"])
     )
     final_agent_message_exact = (
-        len(completed_agent_items) == 1
-        and len(turn_agent_items) == 1
-        and str(completed_agent_items[0].get("id") or "") == str(final_item.get("id") or "")
-        and _review_normalize_trailing_newlines(str(completed_agent_items[0].get("text") or "")) == normalized_expected
+        len(root_final_observations) == 1
+        and isinstance(final_item.get("id"), str)
+        and bool(final_item["id"].strip())
+        and isinstance(final_item.get("text"), str)
+        and bool(final_item["text"].strip())
         and _review_normalize_trailing_newlines(final_text) == normalized_expected
+        and bool(normalized_expected)
+    )
+
+    legacy_completed_notifications = [
+        message
+        for message in server_messages
+        if str(message.get("method") or "") == "turn/completed"
+        and isinstance(message.get("params"), dict)
+        and str(dict(message["params"]).get("threadId") or "").strip() == thread_id
+    ]
+    legacy_completed_params = (
+        dict(legacy_completed_notifications[0]["params"])
+        if len(legacy_completed_notifications) == 1
+        and isinstance(legacy_completed_notifications[0].get("params"), dict)
+        else {}
+    )
+    legacy_completed_turn_raw = legacy_completed_params.get("turn")
+    legacy_completed_turn = dict(legacy_completed_turn_raw) if isinstance(legacy_completed_turn_raw, dict) else {}
+    legacy_turn_started_notifications = [
+        message
+        for message in server_messages
+        if str(message.get("method") or "") == "turn/started" and isinstance(message.get("params"), dict)
+    ]
+    legacy_notified_turn_params = (
+        dict(legacy_turn_started_notifications[0]["params"])
+        if len(legacy_turn_started_notifications) == 1
+        else {}
+    )
+    legacy_notified_turn_raw = legacy_notified_turn_params.get("turn")
+    legacy_notified_turn = dict(legacy_notified_turn_raw) if isinstance(legacy_notified_turn_raw, dict) else {}
+    legacy_turn_identity_exact = (
+        bool(turn_id)
+        and str(started_turn.get("id") or "").strip() == turn_id
+        and len(legacy_turn_started_notifications) == 1
+        and str(legacy_notified_turn_params.get("threadId") or "").strip() == thread_id
+        and str(legacy_notified_turn.get("id") or "").strip() == turn_id
+        and str(legacy_completed_params.get("threadId") or "").strip() == thread_id
+        and str(legacy_completed_turn.get("id") or "").strip() == turn_id
+    )
+    legacy_completed_items_raw = legacy_completed_turn.get("items")
+    legacy_completed_items = legacy_completed_items_raw if isinstance(legacy_completed_items_raw, list) else []
+    legacy_inline_final_items = [
+        dict(item)
+        for item in legacy_completed_items
+        if isinstance(item, dict)
+        and str(item.get("type") or "") == "agentMessage"
+        and str(item.get("phase") or "") == "final_answer"
+    ]
+    legacy_inline_final = legacy_inline_final_items[0] if len(legacy_inline_final_items) == 1 else {}
+    legacy_final_agent_message_exact = (
+        len(root_final_observations) == 1
+        and len(legacy_inline_final_items) == 1
+        and str(final_item.get("id") or "") == str(legacy_inline_final.get("id") or "")
+        and _review_normalize_trailing_newlines(str(final_item.get("text") or "")) == normalized_expected
+        and _review_normalize_trailing_newlines(str(legacy_inline_final.get("text") or "")) == normalized_expected
         and bool(normalized_expected)
     )
     reroutes: list[dict[str, str]] = []
@@ -2301,19 +2572,40 @@ def _parse_independent_review_app_server_transcript(
         "thread_identity_exact": thread_identity_exact,
         "thread_source_exact": thread_source_exact,
         "turn_identity_exact": turn_identity_exact,
+        "root_turn_start_response_exact": root_turn_start_response_exact,
         "single_turn_completed": len(completed_notifications) == 1,
-        "turn_status_completed": completed_turn.get("status") == "completed",
+        "turn_status_completed": completed_turn.get("status") == "completed" and completed_turn.get("error") is None,
         "prompt_request_exact": request_settings_exact,
         "final_agent_message_exact": final_agent_message_exact,
+        **observed_turn_binding,
         "no_protocol_error": not protocol_errors,
         "no_model_reroute": not reroutes,
         "thread_settings_consistent": settings_consistent,
     }
-    for field in _INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS:
+    if transcript_contract_version == INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION_V3:
+        binding.update(
+            {
+                "turn_identity_exact": legacy_turn_identity_exact,
+                "single_turn_completed": len(legacy_completed_notifications) == 1,
+                "turn_status_completed": legacy_completed_turn.get("status") == "completed",
+                "final_agent_message_exact": legacy_final_agent_message_exact,
+            }
+        )
+    required_boolean_fields = (
+        _INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS_V3
+        if transcript_contract_version == INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION_V3
+        else _INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS
+    )
+    for field in required_boolean_fields:
         if binding[field] is not True:
             blockers.append(f"review_artifact_transcript_binding_invalid:{field}")
     if any(not str(binding.get(field) or "").strip() for field in ("thread_id", "session_id", "turn_id")):
         blockers.append("review_artifact_transcript_binding_incomplete_identity")
+    if (
+        transcript_contract_version != INDEPENDENT_REVIEW_EFFECTIVE_CONFIG_CONTRACT_VERSION_V3
+        and (type(binding.get("observed_turn_count")) is not int or int(binding["observed_turn_count"]) < 1)
+    ):
+        blockers.append("review_artifact_transcript_binding_invalid:observed_turn_count")
     return {
         "settings": settings,
         "thread_id": thread_id,

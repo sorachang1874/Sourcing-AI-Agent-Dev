@@ -317,7 +317,9 @@ def test_independent_review_gate_is_documented_and_executable() -> None:
     assert "codex --sandbox read-only app-server --strict-config --stdio" in gate
     assert "--strict-config" in gate
     assert "no model/effort/tier CLI overrides" in gate
-    assert "independent_review_effective_config_v3" in gate
+    assert "independent_review_effective_config_v4" in gate
+    assert "codex_app_server_jsonrpc_v2" in gate
+    assert "complete v3 artifacts retain their old exact transcript field set" in gate
     assert 'REVIEW_BASE="<pinned-base-SHA>"' in gate
     assert "review_scope_digest_sha256" in gate
     assert "unrelated work continues" in gate

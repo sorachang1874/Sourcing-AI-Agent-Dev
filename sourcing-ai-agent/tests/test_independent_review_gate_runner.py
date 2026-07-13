@@ -224,6 +224,119 @@ def _completed_app_server_transcript(
     )
 
 
+def _completed_app_server_transcript_v0144(
+    runner,
+    *,
+    root: Path,
+    configured,
+    prompt: str,
+    final_output: str,
+    include_different_thread_noise: bool = False,
+) -> bytes:
+    legacy_raw = _completed_app_server_transcript(
+        runner,
+        root=root,
+        configured=configured,
+        prompt=prompt,
+        final_output=final_output,
+    )
+    records = [json.loads(line) for line in legacy_raw.decode("utf-8").splitlines()]
+    for record in records:
+        message = record["message"]
+        if message.get("id") == runner._APP_SERVER_TURN_START_ID and "result" in message:
+            message["result"]["turn"].update({"error": None, "items": [], "itemsView": "notLoaded"})
+        if message.get("method") in {"turn/started", "turn/completed"}:
+            message["params"]["turn"].update({"error": None, "items": [], "itemsView": "notLoaded"})
+
+    child_records: list[dict[str, object]] = []
+    for child_index in range(3):
+        child_thread_id = f"child-thread-{child_index}"
+        child_turn_id = f"child-turn-{child_index}"
+        child_final_item = {
+            "id": f"child-final-{child_index}",
+            "type": "agentMessage",
+            "phase": "final_answer",
+            "text": f"Child review {child_index} complete.",
+        }
+        child_records.extend(
+            [
+                {
+                    "direction": "server",
+                    "message": {
+                        "method": "turn/started",
+                        "params": {
+                            "threadId": child_thread_id,
+                            "turn": {
+                                "error": None,
+                                "id": child_turn_id,
+                                "items": [],
+                                "itemsView": "notLoaded",
+                                "status": "inProgress",
+                            },
+                        },
+                    },
+                },
+                {
+                    "direction": "server",
+                    "message": {
+                        "method": "item/completed",
+                        "params": {
+                            "item": child_final_item,
+                            "threadId": child_thread_id,
+                            "turnId": child_turn_id,
+                        },
+                    },
+                },
+                {
+                    "direction": "server",
+                    "message": {
+                        "method": "turn/completed",
+                        "params": {
+                            "threadId": child_thread_id,
+                            "turn": {
+                                "error": None,
+                                "id": child_turn_id,
+                                "items": [],
+                                "itemsView": "notLoaded",
+                                "status": "completed",
+                            },
+                        },
+                    },
+                },
+            ]
+        )
+    if include_different_thread_noise:
+        child_records.extend(
+            [
+                {
+                    "direction": "server",
+                    "message": {
+                        "method": "thread/status/changed",
+                        "params": {"status": "idle", "threadId": "unrelated-thread"},
+                    },
+                },
+                {
+                    "direction": "server",
+                    "message": {
+                        "method": "item/completed",
+                        "params": {
+                            "item": {"id": "noise", "type": "reasoning"},
+                            "threadId": "unrelated-thread",
+                            "turnId": "unrelated-turn",
+                        },
+                    },
+                },
+            ]
+        )
+    root_final_index = next(
+        index
+        for index, record in enumerate(records)
+        if record["message"].get("method") == "item/completed"
+    )
+    records[root_final_index:root_final_index] = child_records
+    return b"".join(runner._canonical_json_line(record) for record in records)
+
+
 def _app_server_result(
     runner,
     *,
@@ -590,9 +703,222 @@ def test_app_server_transcript_binds_active_settings_ids_prompt_and_final_output
     assert evidence.session_source == "vscode"
     assert evidence.turn_id == TURN_ID
     assert evidence.final_output == final_output.rstrip("\r\n").encode("utf-8")
+    assert evidence.binding["observed_turn_count"] == 1
     records = [json.loads(line) for line in transcript_raw.decode("utf-8").splitlines()]
     assert records[0]["message"]["params"]["capabilities"] == {"experimentalApi": True}
     assert runner._app_server_transcript_binding_valid(evidence.binding) is True
+
+
+def test_app_server_transcript_accepts_v0144_multi_turn_not_loaded_protocol(tmp_path: Path) -> None:
+    runner = _load_runner()
+    from sourcing_agent import runtime_asset_retention_prune as verifier
+
+    configured = _configured(runner, tmp_path / "codex-home")
+    prompt = "Review the exact pinned scope."
+    final_output = "Consolidated review.\n\nGO\n"
+    transcript_raw = _completed_app_server_transcript_v0144(
+        runner,
+        root=tmp_path,
+        configured=configured,
+        prompt=prompt,
+        final_output=final_output,
+        include_different_thread_noise=True,
+    )
+
+    evidence = runner._parse_app_server_transcript(
+        transcript_raw=transcript_raw,
+        configured=configured,
+        root=tmp_path,
+        prompt_raw=prompt.encode("utf-8"),
+        raw_output=final_output.encode("utf-8"),
+    )
+    verifier_evidence, verifier_blockers = verifier._parse_independent_review_app_server_transcript(
+        transcript_raw=transcript_raw,
+        configured={
+            "model": configured.settings.model,
+            "reasoning_effort": configured.settings.reasoning_effort,
+            "service_tier": configured.settings.service_tier,
+        },
+        root=tmp_path,
+        prompt_raw=prompt.encode("utf-8"),
+        raw_output=final_output.encode("utf-8"),
+    )
+
+    assert evidence.final_output == final_output.rstrip("\r\n").encode("utf-8")
+    assert evidence.binding["observed_turn_count"] == 4
+    assert runner._app_server_transcript_binding_valid(evidence.binding) is True
+    assert verifier_evidence["binding"] == evidence.binding
+    assert verifier_blockers == []
+
+
+@pytest.mark.parametrize(
+    ("mutation", "failed_field"),
+    [
+        ("missing_child_completion", "observed_turns_unique_complete"),
+        ("missing_child_final", "observed_turns_final_agent_message_exact"),
+        ("child_error", "observed_turns_error_free"),
+        ("child_failed_status", "observed_turns_status_completed"),
+        ("duplicate_child_start", "observed_turns_unique_complete"),
+        ("duplicate_child_completion", "observed_turns_unique_complete"),
+        ("duplicate_child_final", "observed_turns_final_agent_message_exact"),
+        ("not_loaded_with_inline_final", "completed_turn_items_binding_exact"),
+        ("child_reuses_root_thread", "root_thread_turn_identity_exclusive"),
+        ("duplicate_child_thread", "child_thread_ids_distinct"),
+        ("empty_child_thread", "child_thread_ids_distinct"),
+        ("duplicate_final_id", "observed_final_item_ids_unique"),
+        ("final_nonstring_id", "observed_turns_final_agent_message_exact"),
+        ("final_whitespace_id", "observed_turns_final_agent_message_exact"),
+        ("final_nonstring_text", "observed_turns_final_agent_message_exact"),
+        ("final_whitespace_text", "observed_turns_final_agent_message_exact"),
+        ("root_wrong_final", "final_agent_message_exact"),
+        ("orphan_different_thread_final", "no_orphan_final_agent_message"),
+    ],
+)
+def test_app_server_v0144_multi_turn_mutations_fail_closed(
+    tmp_path: Path,
+    mutation: str,
+    failed_field: str,
+) -> None:
+    runner = _load_runner()
+    from sourcing_agent import runtime_asset_retention_prune as verifier
+
+    configured = _configured(runner, tmp_path / "codex-home")
+    prompt = "Review the exact pinned scope."
+    final_output = "Consolidated review.\n\nGO\n"
+    transcript_raw = _completed_app_server_transcript_v0144(
+        runner,
+        root=tmp_path,
+        configured=configured,
+        prompt=prompt,
+        final_output=final_output,
+    )
+    records = [json.loads(line) for line in transcript_raw.decode("utf-8").splitlines()]
+
+    def child_record(record: dict[str, object], method: str) -> bool:
+        message = dict(record.get("message") or {})
+        params = dict(message.get("params") or {})
+        return message.get("method") == method and params.get("threadId") == "child-thread-0"
+
+    if mutation == "missing_child_completion":
+        records.remove(next(record for record in records if child_record(record, "turn/completed")))
+    elif mutation == "missing_child_final":
+        records.remove(next(record for record in records if child_record(record, "item/completed")))
+    elif mutation == "child_error":
+        record = next(record for record in records if child_record(record, "turn/completed"))
+        record["message"]["params"]["turn"]["error"] = {"message": "child failed"}
+    elif mutation == "child_failed_status":
+        record = next(record for record in records if child_record(record, "turn/completed"))
+        record["message"]["params"]["turn"]["status"] = "failed"
+    elif mutation in {"duplicate_child_start", "duplicate_child_completion", "duplicate_child_final"}:
+        method = {
+            "duplicate_child_start": "turn/started",
+            "duplicate_child_completion": "turn/completed",
+            "duplicate_child_final": "item/completed",
+        }[mutation]
+        index = next(index for index, record in enumerate(records) if child_record(record, method))
+        records.insert(index + 1, json.loads(json.dumps(records[index])))
+    elif mutation == "not_loaded_with_inline_final":
+        final_record = next(record for record in records if child_record(record, "item/completed"))
+        completion_record = next(record for record in records if child_record(record, "turn/completed"))
+        completion_record["message"]["params"]["turn"]["items"] = [
+            json.loads(json.dumps(final_record["message"]["params"]["item"]))
+        ]
+    elif mutation in {"child_reuses_root_thread", "empty_child_thread"}:
+        replacement = THREAD_ID if mutation == "child_reuses_root_thread" else ""
+        for record in records:
+            message = record["message"]
+            params = message.get("params")
+            if isinstance(params, dict) and params.get("threadId") == "child-thread-0":
+                params["threadId"] = replacement
+    elif mutation == "duplicate_child_thread":
+        for record in records:
+            message = record["message"]
+            params = message.get("params")
+            if isinstance(params, dict) and params.get("threadId") == "child-thread-1":
+                params["threadId"] = "child-thread-0"
+    elif mutation in {
+        "duplicate_final_id",
+        "final_nonstring_id",
+        "final_whitespace_id",
+        "final_nonstring_text",
+        "final_whitespace_text",
+    }:
+        child_finals = [
+            record
+            for record in records
+            if record["message"].get("method") == "item/completed"
+            and str(record["message"]["params"].get("threadId") or "").startswith("child-thread-")
+        ]
+        item = child_finals[1 if mutation == "duplicate_final_id" else 0]["message"]["params"]["item"]
+        if mutation == "duplicate_final_id":
+            item["id"] = child_finals[0]["message"]["params"]["item"]["id"]
+        elif mutation == "final_nonstring_id":
+            item["id"] = 7
+        elif mutation == "final_whitespace_id":
+            item["id"] = "   "
+        elif mutation == "final_nonstring_text":
+            item["text"] = ["not", "text"]
+        else:
+            item["text"] = " \n\t "
+    elif mutation == "root_wrong_final":
+        record = next(
+            record
+            for record in records
+            if record["message"].get("method") == "item/completed"
+            and record["message"]["params"].get("threadId") == THREAD_ID
+        )
+        record["message"]["params"]["item"]["text"] = "Different root final."
+    else:
+        root_completion_index = next(
+            index
+            for index, record in enumerate(records)
+            if record["message"].get("method") == "turn/completed"
+            and record["message"]["params"].get("threadId") == THREAD_ID
+        )
+        records.insert(
+            root_completion_index,
+            {
+                "direction": "server",
+                "message": {
+                    "method": "item/completed",
+                    "params": {
+                        "item": {
+                            "id": "orphan-final",
+                            "phase": "final_answer",
+                            "text": "Orphan output.",
+                            "type": "agentMessage",
+                        },
+                        "threadId": "unrelated-thread",
+                        "turnId": "unrelated-turn",
+                    },
+                },
+            },
+        )
+    mutated_raw = b"".join(runner._canonical_json_line(record) for record in records)
+
+    evidence = runner._parse_app_server_transcript(
+        transcript_raw=mutated_raw,
+        configured=configured,
+        root=tmp_path,
+        prompt_raw=prompt.encode("utf-8"),
+        raw_output=final_output.encode("utf-8"),
+    )
+    verifier_evidence, verifier_blockers = verifier._parse_independent_review_app_server_transcript(
+        transcript_raw=mutated_raw,
+        configured={
+            "model": configured.settings.model,
+            "reasoning_effort": configured.settings.reasoning_effort,
+            "service_tier": configured.settings.service_tier,
+        },
+        root=tmp_path,
+        prompt_raw=prompt.encode("utf-8"),
+        raw_output=final_output.encode("utf-8"),
+    )
+
+    assert evidence.binding[failed_field] is False
+    assert runner._app_server_transcript_binding_valid(evidence.binding) is False
+    assert verifier_evidence["binding"] == evidence.binding
+    assert f"review_artifact_transcript_binding_invalid:{failed_field}" in verifier_blockers
 
 
 @pytest.mark.parametrize(
@@ -607,6 +933,8 @@ def test_app_server_transcript_binds_active_settings_ids_prompt_and_final_output
         ("thread_identity", "thread_identity_exact"),
         ("thread_session_identity", "thread_identity_exact"),
         ("turn_identity", "turn_identity_exact"),
+        ("root_start_response_failed", "root_turn_start_response_exact"),
+        ("inline_final_id", "completed_turn_items_binding_exact"),
         ("final_message", "final_agent_message_exact"),
     ],
 )
@@ -665,6 +993,12 @@ def test_app_server_transcript_mutations_fail_closed(
         records[4]["message"]["result"]["thread"]["sessionId"] = "different-session"
     elif mutation == "turn_identity":
         records[8]["message"]["params"]["turn"]["id"] = "different-turn"
+    elif mutation == "root_start_response_failed":
+        records[7]["message"]["result"]["turn"].update(
+            {"error": {"message": "failed before notification"}, "status": "failed"}
+        )
+    elif mutation == "inline_final_id":
+        records[-1]["message"]["params"]["turn"]["items"][0]["id"] = "different-final-item"
     else:
         records[9]["message"]["params"]["item"]["text"] = "different final"
     mutated_raw = b"".join(
@@ -1260,12 +1594,17 @@ def test_signoff_runner_binds_pinned_scope_and_all_raw_evidence(
     metadata = parse_independent_review_artifact_metadata(artifact_text)
     evidence_path = root / metadata["reviewer_effective_config_path"]
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-    assert evidence["contract_version"] == "independent_review_effective_config_v3"
+    assert evidence["contract_version"] == "independent_review_effective_config_v4"
     assert evidence["session"]["session_id"] == THREAD_ID
     assert evidence["session"]["thread_id"] == THREAD_ID
     assert evidence["session"]["turn_id"] == TURN_ID
     assert evidence["transport"]["kind"] == "app_server_stdio"
     assert evidence["transport"]["active_settings_source"] == "thread/start.response"
+    assert evidence["transport"]["binding"]["observed_turn_count"] == 1
+    assert all(
+        evidence["transport"]["binding"][field] is True
+        for field in runner._APP_SERVER_TRANSCRIPT_BOOLEAN_FIELDS
+    )
     assert metadata["reviewer_codex_executable"] == str(codex_executable)
     assert f"- command: `{codex_executable} --sandbox read-only app-server --strict-config --stdio`" in artifact_text
     assert evidence["scope"]["title"] == "pinned scope"
@@ -1290,6 +1629,56 @@ def test_signoff_runner_binds_pinned_scope_and_all_raw_evidence(
     )
 
     original_evidence_raw = evidence_path.read_bytes()
+    from sourcing_agent import runtime_asset_retention_prune as verifier
+
+    # Existing v3 artifacts retain their old exact field set and replay projection.
+    legacy_v3_evidence = json.loads(original_evidence_raw)
+    legacy_v3_evidence["contract_version"] = "independent_review_effective_config_v3"
+    legacy_v3_evidence["transport"]["binding"] = {
+        field: value
+        for field, value in legacy_v3_evidence["transport"]["binding"].items()
+        if field in verifier._INDEPENDENT_REVIEW_APP_SERVER_TRANSCRIPT_FIELDS_V3
+    }
+    legacy_v3_raw = (json.dumps(legacy_v3_evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    legacy_v3_sha = hashlib.sha256(legacy_v3_raw).hexdigest()
+    evidence_path.write_bytes(legacy_v3_raw)
+    output_path.write_text(
+        artifact_text.replace(metadata["reviewer_effective_config_sha256"], legacy_v3_sha),
+        encoding="utf-8",
+    )
+    assert validate_independent_review_artifact(
+        artifact_path=output_path,
+        workspace_root=root,
+        expected_title="pinned scope",
+        required_files=["src/example.py"],
+        expected_scope_digest=metadata["review_scope_digest_sha256"],
+    ) == []
+    evidence_path.write_bytes(original_evidence_raw)
+    output_path.write_text(artifact_text, encoding="utf-8")
+
+    invalid_turn_count_evidence = json.loads(original_evidence_raw)
+    invalid_turn_count_evidence["transport"]["binding"]["observed_turn_count"] = 0
+    invalid_turn_count_raw = (
+        json.dumps(invalid_turn_count_evidence, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    invalid_turn_count_sha = hashlib.sha256(invalid_turn_count_raw).hexdigest()
+    evidence_path.write_bytes(invalid_turn_count_raw)
+    output_path.write_text(
+        artifact_text.replace(metadata["reviewer_effective_config_sha256"], invalid_turn_count_sha),
+        encoding="utf-8",
+    )
+    assert (
+        "review_artifact_effective_config_v4_transcript_binding_invalid_observed_turn_count"
+        in validate_independent_review_artifact(
+            artifact_path=output_path,
+            workspace_root=root,
+            expected_title="pinned scope",
+            required_files=["src/example.py"],
+        )
+    )
+    evidence_path.write_bytes(original_evidence_raw)
+    output_path.write_text(artifact_text, encoding="utf-8")
+
     turn_mismatch_evidence = json.loads(original_evidence_raw)
     turn_mismatch_evidence["causal_binding"]["turn_id"] = "different-rollout-turn"
     turn_mismatch_raw = (json.dumps(turn_mismatch_evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
@@ -1299,7 +1688,7 @@ def test_signoff_runner_binds_pinned_scope_and_all_raw_evidence(
         artifact_text.replace(metadata["reviewer_effective_config_sha256"], turn_mismatch_sha),
         encoding="utf-8",
     )
-    assert "review_artifact_effective_config_v3_turn_identity_mismatch" in validate_independent_review_artifact(
+    assert "review_artifact_effective_config_v4_turn_identity_mismatch" in validate_independent_review_artifact(
         artifact_path=output_path,
         workspace_root=root,
         expected_title="pinned scope",
