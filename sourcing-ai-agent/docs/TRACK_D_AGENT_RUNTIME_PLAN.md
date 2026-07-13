@@ -125,10 +125,12 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
 ### D3 — 第一垂直切片：公司身份自验证 loop（详设 v2：`TRACK_D_D3_COMPANY_IDENTITY_SELF_VERIFICATION_DESIGN.md`）
 
 - v4 要点（与 D3 详设 v4 严格同词汇，历经三轮评审收敛）：
-  - **事件驱动 W11 接入（review-first）**：plan.build 结果事件 → reducer 计划 plan_review.request
-    → session 创建事件 → reducer 计划 `company.identity.verify.evidence`（session id 此刻已存在）
-    → 验证 terminal 事件 → reducer 计划幂等 `plan_review.identity_result.apply`，**由 apply 命令
-    owner**（非 reducer）CAS 更新 review gate；legacy 前门用同一共享 helper 读同一读模型。
+  - **事件驱动 W11 接入（review-first，v6 与 D3 详设逐字对齐）**：plan.build 结果事件 → reducer
+    计划 plan_review.request → session 创建事件 → reducer 计划 `company.identity.verify.evidence`
+    → 验证 terminal 事件 → reducer 计划 **`company.identity.verification.record`**（验证 owner
+    写验证聚合，全条件 CAS）→ recorded 域事件（仅 applied）→ reducer 计划
+    `plan_review.identity_result.apply`（plan review owner 写 gate，generation watermark 围栏，
+    阻塞方向恒占优）；commit owner 同事务复查 canonical 验证行；legacy 前门同一共享 helper。
   - **身份专属 gate reason**（TD-7）：`company_identity_unverified` OR 组合、只清自己；Phase 1
     shadow（`shadow_would_verify` 非授权态 + 人一键确认）→ 统计门 + owner GO + 逐行 revalidation
     + promotion 命令 → Phase 2（`verified_accepted`）。**修复今天低置信直接执行的真空洞**。
@@ -206,10 +208,10 @@ plan review 对话化；intent→plan 前门流式化（依赖 D0+C4）；`model
 产出新 findings（R5 例：R4 处方的单写者拆分→gate apply generation 围栏、grant 记录→re-grant
 连续性、槽围栏→retry ABA）。**文档层面不收敛**——剩余 findings 已属实现级分布式细节，正是各
 实施批 characterize-first + A/B + 变异自检 + per-batch gate 的处置对象。
-**设计作者建议**：按 gate Failure Policy 走 owner-accepted exception（引用 R5 artifact
-`20260713T133324Z_*`），R5 全部 findings（阻断 5 条 + 其余）与 §6 义务清单一并转为对应实施批的
-**开工义务**（batch step 1 处置、per-batch review 验收）；不再做纸面 v6。**该 exception 需 owner
-明示接受并记录在案**（gate 要求）；owner 亦可选择继续设计轮或改由 Codex 接管设计迭代。
+**owner 裁定（2026-07-13）**：Track D plan 不阻塞 Codex（瓶颈在其 Track C 执行），继续打磨而非
+exception 收官；同时要求方法论化解决逐层下潜问题。→ v6 起启用
+`docs/DESIGN_INVARIANT_CHECKLIST.md`（九类不变量，从五轮 findings 蒸馏）：作者先做机制×不变量
+全深度自查，评审改 checklist 驱动单遍扫描；终止规则见该文 §2.3。
 
 ## 6. 实施批义务清单（round-4 校准裁定：非设计阻断，随各实施批执行并逐条验收）
 

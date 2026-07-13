@@ -1,0 +1,12 @@
+# Independent reviewer Codex policy (operator-owned, checked in).
+# These three top-level values are FORCED into the reviewer CODEX_HOME config
+# by scripts/bootstrap_reviewer_codex_home.sh, overriding whatever the shared
+# ~/.codex/config.toml currently holds (ChatGPT Desktop rewrites that file).
+# Standing policy per docs/INDEPENDENT_REVIEW_GATE.md: newest available model
+# at its highest supported effort; service_tier must be a non-sentinel value
+# (the runner rejects "", "auto", "default", "inherit").
+# Update THIS file when the model lineup changes; never chase versions by
+# editing the runner or the gate doc.
+model = "gpt-5.6-sol"
+model_reasoning_effort = "ultra"
+service_tier = "priority"

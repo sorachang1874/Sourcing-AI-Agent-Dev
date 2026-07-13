@@ -82,9 +82,13 @@ class ToolTurnResult:         # 唯一可授权后续动作的 canonical 语义�
                                              # (v4 统一词汇:与解析器/授权集合同用 provider 语义 "length")
     provider_call_id: str | None
     route_id: str
-    route_revision: str                      # v4(#11):有效路由快照引用一并携带
-    effective_route_snapshot_ref: str
-    workspace_id: str; actor_id: str         # v4(#14):租户/主体随结果与转写、journal 全链携带
+    invocation_envelope_ref: str             # v6(R5#8):**单一物理 schema `ModelInvocationEnvelope`**
+                                             # 的引用——信封本体(一处定义,D0/D3 共用)含:快照 ref+digest、
+                                             # workspace/actor/permission/outbound-policy/model-safe-schema
+                                             # revisions、command/attempt 因果、provider 响应身份、
+                                             # result artifact ref+digest、成本暴露行引用;经 action/
+                                             # command/attempt/结果槽/journal 与接受 CAS 全链绑定
+    workspace_id: str; actor_id: str         # v4(#14):冗余镜像便于查询;信封为权威
 ```
 
 ### 2.3 执行上下文（v2 新增——live 的准入契约）
@@ -115,10 +119,12 @@ class ModelTurnExecutionContext:
     budget_reservation_ref: str      # 成本台账(v5 修正 round4#13——预留与物理调用暴露分账):
                                      # 单一 PG cost-ledger owner;父行 = worst-case 预留(挂 operation);
                                      # 子行 = (reservation, activity_attempt, physical_call_index)
-                                     # 暴露行,状态 prepared→sent→confirmed|uncertain|no_call——
-                                     # prepared 在 transport 前写入,sent 在发出后标记,故 crash 可
-                                     # 区分"未发送"与"发送未见结果"(uncertain);confirmed/uncertain
-                                     # 暴露对账后经 CAS 释放未用预留。live 付费路径落地前该台账必须在位。
+                                     # 暴露行,状态 prepared→dispatching→sent→confirmed|uncertain|no_call
+                                     # ——v6(R5#6):任何 wire 写之前先落 dispatching(保守可能已发送态);
+                                     # 只有可证明的 transport 前中止才转 no_call;停在 dispatching/sent
+                                     # 的 crash 一律按 uncertain 以 worst-case 预留计,直至 provider
+                                     # 对账或保守消耗;confirmed/uncertain 对账后经 CAS 释放未用预留。
+                                     # live 付费路径落地前该台账必须在位。
     activity_attempt_id: str         # v4:物理 attempt 身份(替代裸 int attempt 计数)
     approval_ref: str | None         # 审批证据引用(路由的 budget_class 要求时必填)
 ```
@@ -158,11 +164,14 @@ v3 追加：流路径消费到的 terminal 事件所载结果与 `run_tool_turn`
   tool_name + canonical_args_digest ⇒ 幂等命中既有 action）或 **quarantine**（不同内容 ⇒ 隔离
   证据，不产新 action）；**有意重新生成**必须显式推进槽 generation（新 step）。action 身份 =
   `(result_slot_id, slot_generation, tool_name, canonical_args_digest)`——tool_ordinal 不入身份。
-- **v5（round4#5）槽的取消/失效围栏**：槽自带 `slot_state ∈ {open, accepted, closed, superseded}`；
-  **接受 CAS 的全条件** = 槽 open + 所属 OperationRun/turn/WorkflowCommand 均非终态 + claim/attempt
-  身份匹配 + schema/route/policy pins 匹配；cancel/supersession 在其 UoW 内**原子关槽**
-  （open→closed）——此后任何晚到 terminal 结果只能落 quarantine 证据，**空槽不再可被取消后的
-  晚到结果占据**。
+- **v5（round4#5）槽的取消/失效围栏**：槽自带 `slot_state ∈ {open, accepted, consumed, closed,
+  superseded}`；**接受 CAS 的全条件** = 槽 open + 所属 OperationRun/turn/WorkflowCommand 均非终态
+  + claim/attempt 身份匹配 + schema/route/policy pins 匹配；cancel/supersession 原子关槽
+  （open→closed，**accepted→superseded**——v6 补 R5#5：已接受未消费的结果同样被失效）。
+- **消费 CAS（v6，R5#5）**：AgentAction 创建 = `accepted→consumed` 的 CAS（同 UoW 持久化 action
+  + journal）；approve 与 dispatch 各自复查槽 generation + canonical operation/turn/command/claim/
+  route/schema/policy pins——cancel 落在「接受后、消费前」窗口时，`accepted→superseded` 抢先，
+  action 创建 CAS 失配即拒。晚到 terminal 结果一律 quarantine 证据。
 - 部分输出保留为 quarantined 证据（attempt 级 artifact），不进结果。
 
 ### 2.6 OpenAI-compatible chat 流式实现：fail-closed 状态机（v2 全面收紧）

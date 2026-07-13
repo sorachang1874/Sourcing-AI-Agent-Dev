@@ -52,10 +52,18 @@ approved/ready（`acquisition_command_owner.py:1855-1867`）——v4 的审批�
   - review session 增加**类型化部分决定** `identity_search_budget_grant`：人在 review 卡上可
     **只授予搜索预算**（默认额度 = TD-5 的 3 次，可配置）而不终审通过 plan。**grant 是一等 PG
     记录**（v5 补 round4#6 生命周期）：键 =（workspace_id, review_session_id,
-    verification_intent generation, policy_revision），状态 `active/revoked/exhausted/reconciled`；
-    cancel/plan 重编译/intent supersession/review 终审 transition **原子 revoke** 关联 grant——
-    信封不跨代存活；**每次物理 search 调用在扣减+transport 前 CAS 当前 session+intent+grant
-    三者均活跃**；grant 进 §4b owner 矩阵（owner = plan review owner，消费方 = Tier-2 命令）；
+    verification_intent generation, policy_revision）+ **不可变签发身份**（v6，R5#3）：每次授予
+    = 新 `grant_id` + scoped 单调 `issuance_generation` + 授予事件 id——**终态 grant 永不复活**，
+    再授予 = 新行；命令/attempt/扣减/transport 绑定**精确签发身份**（旧授予事件驱动的 stale
+    Tier-2 命令不能消费新 grant）。状态 `active/revoked/exhausted/reconciled`。**retry 余额规则**
+    （v6 消解与上层"不重置"的矛盾）：intent supersession 时由 grant owner 命令原子做
+    「supersede-with-transfer」——旧 grant→superseded、新 grant 携带**恰好剩余额度**（不清零、
+    不回满）绑新 intent generation。**revoke 走单写者路径**（v6，R5#4）：cancel/重编译/终审等
+    非 plan-review-owner 的转移经 事件→reducer→plan-review owner 的 grant 命令收敛，不跨 owner
+    直写；**pre-transport 授权 CAS 扩展**（R5#4）：除 session+intent+grant 三活跃外，同谓词
+    fence 当前 OperationRun/WorkflowCommand 非终态 + claim generation/control epoch + attempt +
+    精确 grant 签发——cancel 后的异步收敛窗口内 provider 调用被 epoch 失配挡住；
+    grant 进 §4b owner 矩阵（owner = plan review owner，消费方 = Tier-2 命令）；
   - **plan 终审通过的前置** = 全部 blocking reasons 已清除或 human_confirmed（含身份 reason）；
     **commit owner 原子复查**：计划 provider 工作前在同一 UoW 内验证 blocking reasons 状态
     （修复 pinned 的 commit 只查 approved 状态的缺口——实施项，进 W11 commit owner 批）；
@@ -78,10 +86,20 @@ acquisition.plan.build 结果事件（含 plan 期廉价解析的置信度）
   → reducer 计划 company.identity.verification.record（owner = 验证 owner；幂等键 = intent_id）
   → record owner 单 UoW：§4c 全条件 CAS，只写自己的聚合（verification 行 + intent 迁移 +
     not_applied/applied 证据），发 company_identity_verification_recorded 域事件
-  → reducer 计划 plan_review.identity_result.apply（owner = plan review owner；幂等键 = intent_id）
-  → apply owner 单 UoW：只写自己的聚合（review session gate payload：证据卡 + 身份 reason 状态），
-    发 apply 结果事件
+  → reducer **仅对 record 结果 = applied** 计划 plan_review.identity_result.apply
+    （owner = plan review owner；幂等键 = intent_id；not_applied 永不触发 gate 更新）
+  → apply owner 单 UoW（v6 补 R5#1 的 gate 侧围栏）：CAS 于 {workspace + session 当前 revision +
+    verification generation > gate 携带的 identity watermark + source 事件 id 匹配}；通过则更新
+    gate payload 并把 watermark 推进到该 generation；**阻塞方向恒占优**——过期/supersession/
+    人工否决产生的 blocking apply 无视 watermark 直接生效，清除方向只能单调向前
+  → 发 apply 结果事件
 ```
+
+**反向失效与 commit 复查（v6，R5#1）**：expire/supersede 命令改变验证聚合后，同样发域事件 →
+reducer → `plan_review.identity_result.apply`（blocking 方向）**重开 gate**；expiry 定时事件携带
+generation，触发时 CAS 于当前 generation（旧定时器不可失效新决定）。`acquisition.plan.commit`
+owner 在计划任何 provider 工作的同一事务内**复查 canonical**：验证行 generation + `valid_until`
+有效 + gate watermark 与之一致——不信任 gate 上复制的 reasons 快照。
 
 **（v5，round4#1 单写者拆分）**两段各自单 owner 单聚合：验证状态/intent/generation 只由验证
 owner 写，gate 只由 plan review owner 写，两者以域事件+reducer 连接；两步之间 gate 保持
@@ -155,7 +173,7 @@ workflow_command_id / activity_run_id / attempt_id / entity_delta_id）；预算
 **状态迁移表（全量，注册期校验；readers 永不直写）**：
 | from | to | 触发（全部为类型化 owner 事件/命令） |
 |---|---|---|
-| pending | shadow_would_verify / needs_human / failed / timed_out | 验证 terminal（apply 命令） |
+| pending | shadow_would_verify / needs_human / failed / timed_out | 验证 terminal（**record 命令**，v6 更正——apply 只写 gate） |
 | shadow_would_verify | verified_accepted | **显式 promotion 命令**（Phase 2 + revalidation 过） |
 | shadow_would_verify | needs_human / superseded | 过期/policy 升版/新 intent |
 | verified_accepted | needs_human | **`company.identity.verification.expire` 命令**（v5 修正 round4#4——读者不得 enqueue：接受时**同 UoW 持久化 expiry not-before 定时事件**，定期域 owner 扫描发类型化事件 → reducer 计划 expire 命令；读路径只做 fail-closed 派生——过期行**按 needs_human 消费**但零写零 enqueue） |
@@ -197,21 +215,29 @@ route/schema revisions + **effective_route_snapshot digest（§6 共享契约）
 decision_generation；`intent_state ∈ {pending, applied, cancelled, timed_out, superseded}`。
 - retry、resume、cancel、timeout、plan 重编译、人工决定——每种经上述事件→reducer→域命令路径
   **原子 supersede 旧 intent**（含 generic retry：requeue 触发的域命令在同 UoW 铸新 intent）；
-- **record 命令 owner 的单 UoW 全条件 CAS**（v5：只写验证聚合，见 §2.2 拆分）：`workspace_id
-  匹配 AND intent_id 匹配 AND intent_state='pending' AND claim_generation 匹配 AND
-  activity_attempt_id 匹配 AND stored_fingerprint 匹配 AND decision_generation=<expected> AND
-  policy/schema/route/snapshot pins 匹配 AND 所属 operation/command 当前非终态 AND
-  review_session 当前仍 pending-review AND verification_state NOT IN (human_confirmed)`——全过
-  则原子：intent→applied + verification 行迁移 + applied 证据事件（gate 更新走后续 apply 命令）；
-  任一失配 ⇒ 全不动 + `not_applied` no-op 证据事件（显式终态，可审计）；
+- **record 命令 owner 的单 UoW 全条件 CAS**（v6 修正 R5#2 两向问题）：`workspace_id 匹配 AND
+  intent_id 匹配 AND intent_state='pending' AND claim_generation 匹配 AND activity_attempt_id
+  匹配 AND **源命令的 terminal-success 结果事件身份 = intent 记录的预期事件**（v6：源命令正常
+  完成后 record 才被计划，故谓词认"预期终态事件"而非"命令非终态"——后者会拒绝一切正常完成）
+  AND stored_fingerprint 匹配 AND decision_generation=<expected> AND policy/schema/route/snapshot
+  pins 匹配 AND review_session 当前仍 pending-review AND verification_state NOT IN
+  (human_confirmed)`——全过则原子：intent→applied + verification 行迁移 + applied 证据事件；
+  任一失配 ⇒ 全不动 + `not_applied` no-op 证据事件；
+- **retry ABA 窗口封堵（v6，R5#2）**：requeue 在同一控制 UoW 内先递增命令的 **durable control
+  epoch**（与 claim generation 分立、requeue 即变），intent 记录 epoch——旧结果在"已 requeue、
+  未重 claim"窗口内因 epoch 失配即拒；后继 intent 只在新 claim + 新 ActivityAttempt 创建事务内
+  铸造；
 - 竞态电池（批验收硬项，八项）：人工确认 vs 机器到达、cancel vs 回调、retry 子 vs 父晚到、
   重编译 vs 旧结果、双机器并发 CAS、cancel 后晚到 apply、timeout 后晚到 apply、
   **generic retry 重排队后旧 attempt 晚到 apply**。
 
 ## 5. 「人永远赢」
 
-机器 apply 走 §4c 全条件 CAS；人工确认 = 同 UoW：human_confirmed + generation+1 + supersede 活跃
-intent + superseded delta + review 决定记录。R-019 边界不变（本表自带围栏；全局 fencing 归 R-019）。
+机器路径走 §4c record 全条件 CAS + §2.2 apply 链。**人工确认（v6 按单写者拆分重述，R5#7）**：
+review owner 在自己 UoW 记录人工决定 + 发决定事件 → reducer 计划验证 owner 的 supersession
+命令（写 human_confirmed + generation+1 + supersede 活跃 intent + superseded delta）→ 域事件 →
+reducer → apply 命令更新 gate——同一编舞、两个单写者 UoW；两步间 gate 保持原状态（人工决定的
+效果不半途可见）。R-019 边界不变（本表自带围栏；全局 fencing 归 R-019）。
 
 ## 6. 裁决 schema 与调用信封（v4 收紧证据 provenance，round-3 #5）
 
@@ -222,8 +248,11 @@ intent + superseded delta + review 决定记录。R-019 边界不变（本表自
 - **owner 侧解析**：evidence_ids 逐一对照**不可变的 intent/attempt 证据 bundle**（bundle hash 绑
   入调用信封）resolve——URL/可注册域/kind 全部服务端派生；引用不存在的 id ⇒ needs_human。
   独立性计算（§7.3'）只用服务端记录。
-- **服务端调用信封**（transport 生成，模型不可自证；**= D0 §2.3 定义的共享模型调用契约**，
-  v5 依 round4#7 显式共享——D3 不依赖 D0 的 tool-calling 能力，但信封/路由快照契约同源实现）：
+- **服务端调用信封 = 单一物理 schema `ModelInvocationEnvelope`**（v6 收编 R5#8——不再散指
+  "D0 §2.3"：那里定义的是请求执行上下文，本信封是**独立命名的不可变结果侧契约**，D0 与 D3
+  同一物理定义一处落库，含 ref **与** digest 两者、tenant/permission/policy 身份、command/attempt
+  因果、provider 响应身份、result artifact ref+digest、成本暴露行引用；经 action/command/attempt/
+  结果槽/journal 与两侧接受 CAS 全链绑定）。字段：
   provider、requested/response/effective model（精确匹配）、`model_identity_provenance`、
   provider call id、route/api_style + route revision + **effective_route_snapshot digest**、
   bounded usage（`OpenAIModelUsage`，`model_provider.py:36-55`）+ usage_status、fallback/circuit
@@ -257,11 +286,11 @@ Phase 2 = owner GO 后逐行 revalidation + promotion 命令，旧 shadow 行不
   fetch_key=重定向解析**前**规范化 URL hash（final URL 另记证据属性）、judge_call_key=
   (candidate_key, evidence_set_hash, prompt_version)。
 - 语义：效果 at-most-once（幂等 apply + 去重键）、attempt at-least-once；
-- **计费口径（v4 修正）**：**每次物理 provider 调用各记一笔**——预留按 worst-case attempts 上限
-  预扣，每次实际调用（含 crash-before-persist 后的重跑）在 attempt 创建同事务落一笔实际计费行，
-  终局对账 reconcile 预留与实际；首次调用结果未持久化即 crash 的，其成本按「不确定已发生」显式
-  入账（不假设未花费）；provider 支持稳定幂等键时才允许把重跑记为同一笔。信封耗尽 ⇒ terminal
-  needs_human，永不静默超支。
+- **计费口径（v6 对齐 D0 成本台账，R5#6）**：worst-case 预留 + 每次物理调用一行暴露记录，状态
+  `prepared → dispatching → sent → confirmed | uncertain | no_call`——**任何 wire 写之前先落
+  `dispatching`（保守可能已发送态）**；只有可证明的 transport 前中止才转 `no_call`；crash 时
+  停在 dispatching/sent 的一律按 `uncertain` 以 worst-case 预留计，直至 provider 对账或保守
+  消耗。不存在"attempt 创建即记实际计费"的口径。信封耗尽 ⇒ terminal needs_human，永不静默超支。
 - cancel 前置停止；晚到结果按 §4c 隔离；重试限额/退避/熔断显式。
 
 ## 9. 验收与激活边界
