@@ -164,11 +164,34 @@ W9 backend control foundation is active; product Agent UI remains deferred.
 - `GET /api/operations/runs` lists bounded `OperationRun` rows by workspace/action/status/type/owner.
 - `GET /api/operations/runs/{operation_run_id}/provenance` returns the action, run, action/run events, action event timeline, and linked workflow commands without repairing or executing module state.
 - OperationRun records and control responses expose `control_state` from `operation_runtime.operation_run_control_state`; Agent/UI code must use its `allowed_actions` and `disabled_reasons` for dispatch/resume/retry/cancel buttons instead of local terminal-status sets. If retry returns a child OperationRun, the caller should continue with that child run id rather than mutating or re-dispatching the terminal parent.
+  All controls fail closed when the linked action is missing, and the API/repository boundary rejects a linked action
+  from another workspace rather than treating it as eligible control state.
 - `POST /api/operations/actions/{action_id}/approve` records approval and creates the idempotent queued `OperationRun` for approval-required actions.
-- `POST /api/operations/actions/{action_id}/reject` records rejection and keeps the action non-executable.
-- `POST /api/operations/runs/{operation_run_id}/cancel` marks the operation/action cancelled and appends `OperationCancelled`.
+- `POST /api/operations/actions/{action_id}/reject` atomically records `status=cancelled`,
+  `approval_status=rejected`, and `ActionRejected` in one PG UoW; it keeps the action non-executable.
+- `POST /api/operations/runs/{operation_run_id}/cancel` atomically marks the operation and eligible linked action
+  cancelled and appends `OperationCancelled` in one PG UoW. Event failure or workspace/entity/idempotency mismatch
+  rolls back the entire transition; repeated calls reuse the event and repair legacy target-state-without-event rows.
+- Reject/cancel return success only from the committed target state. If another terminal transition wins the CAS,
+  the API returns `status=conflict` / HTTP 409 and does not append the losing success event. Approve/resume/retry also
+  validate their committed target before creating downstream events or child runs. The wider command-plan and owner
+  completion UoWs remain tracked by `RESIDUAL_LEDGER.md` R-019.
 - `POST /api/operations/runs/{operation_run_id}/resume` appends `OperationResumeRequested` and moves a non-terminal run back to queued control state; it does not execute the owner.
 - `POST /api/operations/runs/{operation_run_id}/retry` creates an idempotent queued child `OperationRun` for failed/cancelled runs; it does not mutate the terminal parent or execute the owner.
+  A linked `failed` action, or a normally cancelled action whose approval was not rejected, is requeued through the
+  fixed `requeue_agent_action_for_operation_retry` PG primitive before child/event creation. Completed and rejected
+  actions remain fail-closed. The action's `retry_operation_run_id` is a single-chain pointer: only the current chain
+  tip may create its child, while an exact requested-child replay is idempotent; retrying a stale ancestor after the
+  pointer advances is rejected. Persisted child and event idempotency identities are parent-bound, so the same caller
+  key on different parents, including a key equal to a parent key, cannot alias another run. Before reserving the
+  action, retry looks up the deterministic child id and validates its persisted idempotency key, workspace, action,
+  owner, operation type, and parent identity. An exact replay returns that child's current state, including terminal
+  or other non-queued state, plus only the matching creation events already queryable from PG; it does not requeue the
+  action, rewrite the child, or recreate missing events. Any child or existing event identity mismatch fails closed.
+  The action retry reservation, child creation, and both retry events are not yet one transaction. A crash between
+  those steps can leave a reserved pointer without its child/events, or a child with only a subset of its events;
+  exact replay exposes but does not repair that partial state. That remaining UoW is tracked by
+  `RESIDUAL_LEDGER.md` R-019.
 - `POST /api/operations/runs/{operation_run_id}/dispatch` is the owner-adapter handoff. W9b.2 currently supports `export_candidates`: after approval, it plans `workflow_commands(command_type='export.projection.generate', owner='projection_exporter')` with `operation_id=<operation_run_id>` and appends `OperationCommandPlanned`. It does not run the export owner synchronously.
 - `POST /api/operations/runs/{operation_run_id}/dispatch` also supports read-only projection actions `filter_projection` and `search_projection`. These actions call the canonical projection reader, persist the bounded result in `OperationRun.result_ref`, and append `OperationReadCompleted` / `OperationReadFailed`; they do not create workflow commands or mutate projection/CRM/person-asset state.
 - `POST /api/operations/runs/{operation_run_id}/dispatch` supports `enrich_person_public_web` after approval/budget. Dispatch only plans `workflow_commands(command_type='crm.public_web.queue_batch', owner='crm_public_web_owner')` with `operation_id=<operation_run_id>`; the command owner creates CRM Public Web batch/run rows and queues workers. Operation dispatch must not call the synchronous CRM Public Web start route.

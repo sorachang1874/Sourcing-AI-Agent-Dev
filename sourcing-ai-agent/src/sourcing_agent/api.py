@@ -1708,6 +1708,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         status = HTTPStatus.ACCEPTED if result.get("status") == "queued" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "conflict":
+            status = HTTPStatus.CONFLICT
         return _json_response(status, result)
 
     add(["POST"], "/api/operations/actions/{action_id}/approve", post_operation_action_approve, read_body=True)
@@ -1721,6 +1723,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         status = HTTPStatus.OK if result.get("status") == "rejected" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "conflict":
+            status = HTTPStatus.CONFLICT
         return _json_response(status, result)
 
     add(["POST"], "/api/operations/actions/{action_id}/reject", post_operation_action_reject, read_body=True)
@@ -1734,6 +1738,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         status = HTTPStatus.OK if result.get("status") == "cancelled" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "conflict":
+            status = HTTPStatus.CONFLICT
         return _json_response(status, result)
 
     add(["POST"], "/api/operations/runs/{run_id}/cancel", post_operation_run_cancel, read_body=True)
@@ -1747,6 +1753,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         status = HTTPStatus.ACCEPTED if result.get("status") == "queued" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "conflict":
+            status = HTTPStatus.CONFLICT
         return _json_response(status, result)
 
     add(["POST"], "/api/operations/runs/{run_id}/retry", post_operation_run_retry, read_body=True)
@@ -1760,6 +1768,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         status = HTTPStatus.ACCEPTED if result.get("status") == "queued" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "conflict":
+            status = HTTPStatus.CONFLICT
         return _json_response(status, result)
 
     add(["POST"], "/api/operations/runs/{run_id}/resume", post_operation_run_resume, read_body=True)

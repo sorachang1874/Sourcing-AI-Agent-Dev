@@ -15,6 +15,7 @@ from .criteria_confidence import CriteriaConfidenceRepository
 from .linkedin_profile_registry import LinkedinProfileRegistryRepository
 from .manual_review import ManualReviewRepository
 from .serving_projection import ServingProjectionRepository
+from .workflow_runtime import WorkflowRuntimeRepository
 
 
 class ControlPlaneRepositories:
@@ -34,6 +35,7 @@ class ControlPlaneRepositories:
         self.criteria_confidence = CriteriaConfidenceRepository(adapter, job_lookup=job_lookup)
         self.manual_review = ManualReviewRepository(adapter)
         self.serving_projection = ServingProjectionRepository(adapter)
+        self.workflow_runtime = WorkflowRuntimeRepository(adapter)
 
 
 def linkedin_profile_registry_repo(store: Any) -> Any:

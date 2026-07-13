@@ -5,6 +5,10 @@ from typing import Any
 
 from .control_plane_repository import ControlPlaneAuthoritativeReadError
 from .media_asset_owner import media_asset_frontend_url
+from .projection_search_index_contract import (
+    PROJECTION_SEARCH_INDEX_BINDING_KEYS,
+    projection_search_index_publication_state,
+)
 from .public_candidate_facets import (
     apply_candidate_page_filter,
     candidate_page_filter_active,
@@ -74,6 +78,16 @@ class ServingProjectionReader:
                 projection_id=normalized_projection_id,
                 projection=projection,
             )
+        latest_projection = self.store.repos.serving_projection.get(normalized_projection_id)
+        if not latest_projection:
+            return self._projection_error("projection_not_found", projection_id=normalized_projection_id)
+        if str(latest_projection.get("state") or "").strip().lower() not in _SERVABLE_PROJECTION_STATES:
+            return self._projection_error(
+                "projection_not_servable",
+                projection_id=normalized_projection_id,
+                projection=latest_projection,
+            )
+        projection = latest_projection
         return {
             "status": "ready",
             "projection": self._public_projection_payload(
@@ -168,6 +182,14 @@ class ServingProjectionReader:
                 projection_id=normalized_projection_id,
                 projection=projection,
             )
+        if not filter_active:
+            final_projection_payload = self.get_projection(normalized_projection_id)
+            if str(final_projection_payload.get("status") or "") != "ready":
+                return final_projection_payload
+            projection = dict(final_projection_payload.get("projection") or {})
+            total_count = int(projection.get("visible_member_count") or 0)
+            filtered_count = total_count
+            index_filter_readiness = self._index_filter_readiness_payload(projection)
         crm_overlays_by_person = self._crm_overlays_for_members(members)
         if crm_overlays_by_person:
             members = [
@@ -319,10 +341,14 @@ class ServingProjectionReader:
                 "status": "unavailable",
                 "reason": "projection_person_search_index_unavailable",
             }
-        if str(search_result.get("status") or "") != "ready":
+        search_status = str(search_result.get("status") or "").strip()
+        if search_status != "ready":
+            public_reason = str(search_result.get("reason") or "").strip()
+            if search_status == "unavailable":
+                public_reason = "projection_person_search_index_unavailable"
             return {
                 "status": "not_ready",
-                "reason": str(search_result.get("reason") or "projection_person_search_index_unavailable"),
+                "reason": public_reason or "projection_person_search_index_unavailable",
                 "projection": projection,
                 "candidate_count": int(projection.get("visible_member_count") or 0),
                 "filtered_candidate_count": 0,
@@ -723,6 +749,36 @@ class ServingProjectionReader:
     ) -> dict[str, Any]:
         payload = dict(projection or {})
         counts = dict(payload.get("counts") or {})
+        readiness = dict(payload.get("readiness") or {})
+        public_facet_counts = dict(counts.get("public_facet_counts") or {})
+        facet_build_state = projection_search_index_publication_state(
+            dict(payload.get("metadata") or {}),
+            publication=public_facet_counts if public_facet_counts else None,
+        )
+        readiness_build_state = projection_search_index_publication_state(
+            dict(payload.get("metadata") or {}),
+            publication=readiness,
+        )
+        if public_facet_counts and str(facet_build_state.get("status") or "") == "ready":
+            counts["public_facet_counts"] = {
+                key: value
+                for key, value in public_facet_counts.items()
+                if key not in PROJECTION_SEARCH_INDEX_BINDING_KEYS
+            }
+        else:
+            counts.pop("public_facet_counts", None)
+            counts["facet_count_scope"] = "unavailable"
+            counts["facet_build_status"] = "unavailable"
+        index_filter_readiness = self._index_filter_readiness_payload(
+            {**payload, "counts": counts, "readiness": readiness}
+        )
+        if str(readiness_build_state.get("status") or "") != "ready":
+            readiness["index_count_scope"] = "unavailable"
+            counts["index_count_scope"] = "unavailable"
+            readiness.pop("profile_indexed_at", None)
+            readiness.pop("evidence_indexed_at", None)
+        for key in PROJECTION_SEARCH_INDEX_BINDING_KEYS:
+            readiness.pop(key, None)
         stored_member_count = max(
             _public_count(counts.get("member_count")),
             _public_count(counts.get("result_count")),
@@ -740,7 +796,6 @@ class ServingProjectionReader:
             if stored_member_count > visible_count:
                 counts["member_count"] = stored_member_count
             counts.setdefault("count_scope", "exact_projection")
-        readiness = dict(payload.get("readiness") or {})
         normalized_readiness_counts = dict(readiness_counts or {})
         if normalized_readiness_counts:
             # Public projection readiness is derived from visible members at
@@ -769,13 +824,19 @@ class ServingProjectionReader:
             "readiness": readiness,
             "provenance": dict(payload.get("provenance") or {}),
             "manual_overlay_version": str(payload.get("manual_overlay_version") or "").strip(),
-            "raw_profile_index_watermark": str(payload.get("raw_profile_index_watermark") or "").strip(),
-            "evidence_index_watermark": str(payload.get("evidence_index_watermark") or "").strip(),
+            "raw_profile_index_watermark": (
+                str(payload.get("raw_profile_index_watermark") or "").strip()
+                if str(readiness_build_state.get("status") or "") == "ready"
+                else ""
+            ),
+            "evidence_index_watermark": (
+                str(payload.get("evidence_index_watermark") or "").strip()
+                if str(readiness_build_state.get("status") or "") == "ready"
+                else ""
+            ),
             "visible_member_count": visible_count,
             "field_visibility": self._field_visibility_payload(),
-            "index_filter_readiness": self._index_filter_readiness_payload(
-                {**payload, "counts": counts, "readiness": readiness}
-            ),
+            "index_filter_readiness": index_filter_readiness,
             "read_contract": {
                 "source": "serving_projection_members",
                 "fallback_used": False,
@@ -795,7 +856,18 @@ class ServingProjectionReader:
                 "count_scope": "unavailable",
                 "reason": "projection_facet_build_product_missing",
             }
-        summary = public_facet_summary_from_counts(public_facet_counts)
+        if "metadata" in projection:
+            build_state = projection_search_index_publication_state(
+                dict(projection.get("metadata") or {}),
+                publication=public_facet_counts,
+            )
+            if str(build_state.get("status") or "") != "ready":
+                return {
+                    "status": "unavailable",
+                    "count_scope": "unavailable",
+                    "reason": "projection_facet_build_product_stale",
+                }
+        summary = public_facet_summary_from_counts(public_facet_counts, include_empty=True)
         if not summary:
             return {
                 "status": "unavailable",
@@ -889,8 +961,25 @@ class ServingProjectionReader:
     @staticmethod
     def _index_filter_readiness_payload(projection: dict[str, Any]) -> dict[str, Any]:
         payload = dict(projection or {})
+        existing_payload = dict(payload.get("index_filter_readiness") or {})
+        if existing_payload:
+            return existing_payload
         counts = dict(payload.get("counts") or {})
         readiness = dict(payload.get("readiness") or {})
+        build_state = projection_search_index_publication_state(
+            dict(payload.get("metadata") or {}),
+            publication=readiness,
+        )
+        if str(build_state.get("status") or "") != "ready":
+            return {
+                "raw_profile_index_watermark": "",
+                "evidence_index_watermark": "",
+                "count_scope": "unavailable",
+                "profile_fetched_at": str(readiness.get("profile_fetched_at") or "").strip(),
+                "profile_indexed_at": "",
+                "evidence_indexed_at": "",
+                "freshness_timezone": "Asia/Shanghai",
+            }
         raw_watermark = str(payload.get("raw_profile_index_watermark") or "").strip()
         evidence_watermark = str(payload.get("evidence_index_watermark") or "").strip()
         count_scope = str(
@@ -904,6 +993,7 @@ class ServingProjectionReader:
             "count_scope": count_scope or "unavailable",
             "profile_fetched_at": str(readiness.get("profile_fetched_at") or "").strip(),
             "profile_indexed_at": str(readiness.get("profile_indexed_at") or "").strip(),
+            "evidence_indexed_at": str(readiness.get("evidence_indexed_at") or "").strip(),
             "freshness_timezone": "Asia/Shanghai",
         }
 

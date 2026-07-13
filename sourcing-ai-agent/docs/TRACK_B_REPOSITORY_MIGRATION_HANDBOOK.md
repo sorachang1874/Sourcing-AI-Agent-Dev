@@ -1,12 +1,13 @@
 # Track B ② Repository 迁移 Handbook(新一轮的入口文档)
 
 > Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
-> 状态:**②.3d 完成(2026-07-10)** —— `projection_person_search_index` 9 公共方法 + 4 私有方法/
-> bespoke helpers 已退役到 `store.repos.serving_projection`;当前分支 storage.py 13,835 → 13,296 行,
-> production 12 + tests 14 个调用全部迁移,旧 facade/dispatch 清零。②.3 serving_projection 域至此整体闭合。
-> 同批 fixed-forward:权威 index read/count 故障和 membership 漂移 fail-closed、索引批量水合校验顺序/集合/可见性、
-> job candidates 透传 409、前端保留过滤计数 0、reset 首批改为原子 `replace_rows`。批记录见
-> `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。下一域进入 workflow_runtime 前必须重新 Scout。
+> 状态:**②.4a 完成(2026-07-10)** —— workflow_runtime 的 operation-control 分子域
+> (`agent_actions` / `operation_runs` / `operation_events`)已退役到 `store.repos.workflow_runtime`;
+> 当前分支 storage.py 13,296 → 12,809 行,production 91 + tests 46 个调用全部迁移,
+> 旧 11 facade / 3 mapper / 7 native dispatch key 清零。reject/cancel 的状态、关联 action 与 event
+> 已收敛为 PG 单事务 UoW;普通 action/run 更新增加 expected-status CAS。批记录见
+> `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。下一批为 **②.4b acquisition-control**;
+> command-plan / 通用 state-sync 的多行原子化另见残差 R-019,不得把 ②.4a 误读为整个 operation runtime 已原子化。
 > B4.3 影子拆除 100% 完成(commit 952f9ee)。本文档是路线图
 > **②「Repository 查询方法建设 + 按域迁移调用方」** 这一轮的执行手册。
 > 设计依据:`docs/TRACK_B_B4_2_PG_NATIVE_STORE_DESIGN.md`(B4.2 设计,owner 已 ratify);历史全记录:`docs/TRACK_B_PG_PURE_STORE_DESIGN.md` §6。
@@ -14,12 +15,13 @@
 
 ## 1. 当前基底(起点事实,勿再重推导)
 
-- `storage.py` = 13,296 行(②.3d 后;②.3d 当前分支起点 13,835,②.3c settled tree 13,822,
+- `storage.py` = 12,809 行(②.4a 后;②.4a 当前分支起点 13,296,②.3d 当前分支起点 13,835,②.3c settled tree 13,822,
   ②.3b 后 14,261,②.3a 后 14,355,②.2 后 14,635,②.1 后 15,091,②.0 后 16,382,试点前 19,187),
   **PG-pure**:零 sqlite3 / 零 `_connection` / 零 `_lock`。
   已整体退役的域:linkedin_profile_registry(②.0)、criteria/confidence(②.1,`store.repos.criteria_confidence`)、
   manual_review(②.2,`store.repos.manual_review`);serving_projection 的 catalog、manifest、members、person search index
   已由 ②.3a-d 整域退役到 `store.repos.serving_projection`;
+  workflow_runtime 的 operation-control 已由 ②.4a 退役到 `store.repos.workflow_runtime`;
   其余域仍在 God-class 门面上,按批推进。共享纯函数 `matching_bundle_payload`/`request_signature_context` 已外提到
   `request_matching.py`(storage 留别名 import)。
 - PG schema 唯一来源 = `migrations/0001_baseline.sql` + `migration_runner.py`(adapter `ensure_bootstrapped()` 驱动);遗留迁移表由 adapter 内字面 DDL(`_LEGACY_TARGET_PUBLIC_WEB_MIGRATION_TABLE_DDL`)按需建。
@@ -49,10 +51,12 @@
 2. ~~**②.1 criteria/confidence**~~ **DONE 2026-07-06**(8 表 24 方法;批记录见 TRACK_B doc §6 末条)。
 3. ~~**②.2 manual_review**~~ **DONE 2026-07-10**(1 表 7 公共方法;批记录见 Track B doc §6 末条)。
 4. **②.3 serving_projection 分子批推进完成**:~~②.3a catalog 三表~~ DONE → ~~②.3b manifest shards~~ DONE →
-   ~~②.3c members + D-4(a)~~ DONE → ~~②.3d person search index~~ DONE。serving_projection 整域闭合;
-   下一域进入 workflow_runtime(commands/workers/leases,调用面最宽,最后;`_call_native_write` 基座已就位)前重新 Scout。
+   ~~②.3c members + D-4(a)~~ DONE → ~~②.3d person search index~~ DONE。serving_projection 整域闭合。
    D-4 的四点显式 keyword 修复和全局 guard 已随 ②.3c 完成。
-5. **随批机会主义**:37 个 IRREGULAR read-mapper 里"软 irregular"(subscript 形式等价)可在其域批内顺手转 descriptor(harness 全列模式验证)。
+5. **②.4 workflow_runtime 分子批**:~~②.4a operation-control~~ DONE → **②.4b acquisition-control** →
+   activity spine → read-model trio → recovery intents → session/trace → job leases → workers → commands(last)。
+   每个分子批重新 Scout;不得因共享一个 repository 文件而合并状态机或跨批删除。
+6. **随批机会主义**:37 个 IRREGULAR read-mapper 里"软 irregular"(subscript 形式等价)可在其域批内顺手转 descriptor(harness 全列模式验证)。
    **②.1 反例警示**:criteria/confidence 的 8 个 mapper 看似可转,实为 None 直通 + 写路径真写 NULL FK —— Kind.INT 会 None→0 炸字节等价;
    判定"软 irregular"必须核对**写路径是否产 NULL** 与 mapper 的 default 语义,不能只看 subscript 形状。
 
@@ -81,6 +85,10 @@
      transaction lock key,不得让 delete/replace 与无锁增量 merge 竞态。`publish_serving_projection` 是 serving_projection 的 domain
      UoW:logical-scope lock 后锁内选 identity,再取 projection lock,并在同一连接/事务写 parent、members 与 route;不得拆回多次借连接或
      route-after-commit。
+     operation-control 的 reject/cancel 是固定业务 UoW:先取 event-stream advisory xact lock,再按 operation→action
+     顺序取 row lock,锁内判断 expected/terminal 状态、合并 patch、写 event,最后一次 commit。CAS miss、身份碰撞或 event
+     写失败均不得留下状态或关联 action 的部分提交。普通 action/run 更新的 expected-status CAS 只防 stale terminal reopen;
+     它不等于锁内 JSON merge,也不替代 command/action/event UoW(R-019)。
      onconflict 守卫已扩展(②.1):
      AST generated-id 扫描 + 字面扫描均覆盖 `repositories/*.py`,带非主键 conflict target 的方法可安全迁移。
    - "软 irregular" read-mapper 可顺手转 descriptor(全列 battery 验证)。
@@ -133,8 +141,8 @@ SOURCING_TEST_PG_ISOLATED_SCHEMA=1 \
 # REQUIRE flags 内建于 lane 命令 —— PG 不可用时 fail-closed 变红,Docker daemon 宕不再静默假绿)
 make ci-pre-agent-contract
 
-# 下一域方法清单(②.3 serving_projection;落批前仍须按 §4 Scout 扩成精确方法映射)
-rg -n '^    def .*projection' src/sourcing_agent/storage.py
+# 下一域方法清单(②.4b acquisition-control;落批前仍须按 §4 Scout 扩成精确方法映射)
+rg -n '^    def .*acquisition' src/sourcing_agent/storage.py
 ```
 
 ## 6. 已验证的 gotchas(付过学费的)
@@ -142,7 +150,7 @@ rg -n '^    def .*projection' src/sourcing_agent/storage.py
 - **A/B harness 教训**:descriptor 写 `default` 只在空值时生效 —— 非空 kwarg(如 status="running")必须走 public payload 传入,漏传会被 default 静默覆盖。
 - **`_select_control_plane_row(s)` 在 postgres_only 下 fail-closed raise**(不返 None-on-error);Repository 方法要保持同一错误语义。
 - **count/sentinel 语义**:个别 count 方法保留了历史 swallow-and-return-0 语义(B3.2 batch-2 决定);迁移时逐方法确认,不要顺手"修"。
-- **test_pipeline 是非 lane 的 SQLite 时代套件**:postgres_only 下有 ~15+ pre-existing 失败(含 ~33 个直写已删影子的测试,现 AttributeError)——不要把它们归因到你的改动;用 stash 控制实验。
+- **test_pipeline 是非 lane 的 SQLite 时代套件**:postgres_only 下有 ~15+ pre-existing 失败(含 ~33 个直写已删影子的测试,现 AttributeError)——不要把它们归因到你的改动;用 pinned git worktree 控制实验,严禁 stash。
 - **守卫测试断言源码文本**(test_crm_public_web_runtime_boundary、test_pre_agent_contract_review、test_pg_onconflict_guard):删 storage 方法前 grep 这些文件,守卫要随迁(onconflict guard 的 unique_sets 现解析 0001_baseline.sql + live 模块字面 DDL)。
 - **ultracode 工作流经验**:分类/审计批用「N 组分类 + 逐项对抗校验」两阶段;会话限额打断可用 `resumeFromRunId` 缓存续跑;`parallel()` 返回值要 `await` 后再 return。
 - **已知失败预算已升级为残差台账 `docs/RESIDUAL_LEDGER.md`(2026-07-09)**:逐条带 id/tripwire/归因证据,
@@ -179,7 +187,17 @@ rg -n '^    def .*projection' src/sourcing_agent/storage.py
   descriptor mutation 必须同时保留;(b) A/B 先逐字迁移历史 count-to-0 sentinel,切换后再把权威 count/select 故障收紧为
   `ControlPlaneAuthoritativeReadError`,否则 public reader 会把 PG 故障伪装成 missing index;(c) index key 到 member 的 join 不是
   可丢行 enrichment:必须批量读取后校验请求页长、键唯一/全集、projection id、visible 状态并恢复 index 顺序,任一漂移整页
-  fail-closed;(d) paged rebuild 的 reset 首批必须走 `replace_rows`,不能先 delete 再独立 upsert;空 projection 也以原子空替换清理。
+  fail-closed;(d) paged rebuild 的 reset 首批必须走 `replace_rows`,不能先 delete 再独立 upsert;空 projection 也以原子空替换清理;
+  (e) 同一个 advisory lock 只能串行化页面写入,不能识别"成员语义变化后迟到的旧 continuation"。必须使用
+  semantic input revision、build-bound input revision、build generation 三键,并把 compare、bind 与 replace/upsert/state
+  publication 放在同一锁与事务;identical member replay 保持 input revision,same-count replacement 也必须推进;
+  普通 projection publication/upsert 保留三键,completed generation 不可降级。
+- **②.4a 新增经验**:(a) operation event 的 sequence 分配、状态变更和 event append 必须复用同一 cursor/transaction;
+  helper 内调用另开连接的 read/write 会破坏 rollback;(b) UoW 锁序固定为 event stream → operation → linked action,
+  并验证 workspace/entity/type/idempotency identity,否则损坏的 cross-workspace link 或 collided event 会把审计证据配错;
+  (c) CAS miss 返回 winning row 后,调用者必须按 committed target 判断成功,不能无条件写 success event/API 状态;
+  (d) expected-status CAS 不阻止同状态 stale JSON merge。command-plan、approval/retry 和通用 operation+action+event sync
+  需要锁内 merge/UoW,已登记 R-019;本批只声明 reject/cancel UoW 原子。
 
 ## 7. 待 owner 决策(决策卡格式,2026-07-09 升级;每卡一问、有推荐、有截止、有超时默认)
 
@@ -190,6 +208,9 @@ rg -n '^    def .*projection' src/sourcing_agent/storage.py
   tolerant-read-first、staged、可回滚),越晚做迁移面越大;(b) 推迟到 Track C 容器化部署窗口一起停机 ——
   一次停机做两件事,但 ③ 的收益(descriptor 一行 Kind 切换、GIN 查询)全部延后。
 - **推荐**:(a)。②.3 及后续每多迁一域,③ 的 mapper 兼容面就多一块。
+- **现有实现约束**:`control_plane_live_postgres.py` 的 projection metadata reserved-key merge 当前针对 TEXT
+  `metadata_json` 使用 `::text` 结果;③ 把列切为 jsonb 时必须同步改写 cast/assignment,并保留 direct + temp-table
+  bulk conflict merge 的三键回归,不得把当前 SQL 原样带入迁移。
 - **截止**:2026-07-31;**决策人**:owner。
 - **超时默认**:维持 TEXT 列现状(安全、无停机),③ 冻结并在本卡记一次顺延;② 系列不受阻。
 

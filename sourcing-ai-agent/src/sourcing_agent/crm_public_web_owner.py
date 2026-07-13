@@ -2434,7 +2434,7 @@ class CrmPublicWebOwner:
             "command_type": str(command.get("command_type") or ""),
             "owner": str(command.get("owner") or ""),
         }
-        next_operation = self.store.update_operation_run_state(
+        next_operation = self.store.repos.workflow_runtime.update_operation_state(
             str(operation_run.get("operation_run_id") or ""),
             status="planned",
             progress_patch={"phase": "workflow_command_planned", "crm_record_ids": record_ids, **workflow_ref},
@@ -2442,12 +2442,12 @@ class CrmPublicWebOwner:
             result_ref_patch={"crm_record_ids": record_ids},
             metadata_patch={"last_planned_command_id": workflow_ref["command_id"], "dispatch_actor": actor},
         )
-        self.store.update_agent_action_state(
+        self.store.repos.workflow_runtime.update_action_state(
             str(action.get("action_id") or ""),
             status="planned",
             metadata_patch={"last_operation_run_id": operation_run.get("operation_run_id")},
         )
-        event = self.store.append_operation_event(
+        event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=workspace_id,
             event_stream_id=str(operation_run.get("operation_run_id") or ""),
             operation_run_id=str(operation_run.get("operation_run_id") or ""),
@@ -2463,7 +2463,7 @@ class CrmPublicWebOwner:
         )
         return {
             "status": "planned",
-            "action": self.store.get_agent_action(str(action.get("action_id") or "")) or action,
+            "action": self.store.repos.workflow_runtime.get_action(str(action.get("action_id") or "")) or action,
             "operation_run": next_operation,
             "workflow_command": self._kernel._workflow_command_api_record(command),
             "events": [event],

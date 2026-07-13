@@ -325,6 +325,11 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             mock.patch.object(self.orchestrator, "get_person_summary_api", return_value=not_ready),
             mock.patch.object(self.orchestrator, "get_projection_crm_state_api", return_value=not_ready),
             mock.patch.object(self.orchestrator, "get_job_candidate_page", return_value=index_not_ready),
+            mock.patch.object(
+                self.orchestrator,
+                "search_projection_person_index_api",
+                return_value=index_not_ready,
+            ),
             mock.patch.dict(os.environ, {"SOURCING_ALLOW_LEGACY_JOB_RESULT_ENDPOINTS": "1"}, clear=False),
         ):
             server = create_server(self.orchestrator, host="127.0.0.1", port=0)
@@ -338,6 +343,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 for path in (
                     "/api/persons/linkedin%3Aroute-fault",
                     "/api/projections/proj_route_fault/crm-state",
+                    "/api/projections/proj_route_fault/search?q=missing",
                     "/api/jobs/job-route-fault/candidates",
                 ):
                     try:
@@ -352,12 +358,13 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=5)
 
-        self.assertEqual(statuses, [409, 409, 409])
+        self.assertEqual(statuses, [409, 409, 409, 409])
         self.assertEqual(
             [payload["reason"] for payload in payloads],
             [
                 "projection_members_unavailable",
                 "projection_members_unavailable",
+                "projection_person_search_index_unavailable",
                 "projection_person_search_index_unavailable",
             ],
         )
@@ -371,13 +378,19 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         public_projection = {
             "result_mode": "asset_population",
             "result_view_lifecycle": {"state": "current_snapshot_serving"},
-            "board_runtime_state": {"expected_candidate_count": 3},
+            "board_runtime_state": {"expected_candidate_count": 5},
             "linkedin_stage_1_progress": {},
         }
         index_not_ready = {
             "status": "not_ready",
             "reason": "projection_person_search_index_unavailable",
             "candidate_count": 3,
+            "total_candidates": 3,
+            "offset": 2,
+            "limit": 0,
+            "filtered_candidate_count": 0,
+            "has_more": False,
+            "next_offset": None,
             "filter_signature": "filter-signature",
             "filter_contract": {"source": "projection_person_search_index"},
             "read_contract": {"fallback_used": False, "fail_closed": True},
@@ -632,11 +645,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         )
         overlay_path = Path(str(overlay_info["path"]))
         missing_snapshot_candidate_path = (
-            Path(self.tempdir.name)
-            / "company_assets"
-            / "google"
-            / snapshot_id
-            / "candidate_documents.json"
+            Path(self.tempdir.name) / "company_assets" / "google" / snapshot_id / "candidate_documents.json"
         )
         failed_layering = {
             "status": "failed",
@@ -785,7 +794,11 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 snapshot_id=snapshot_id,
             ),
             replace_members=True,
-            counts={"result_count": len(candidates), "candidate_count": len(candidates), "count_scope": "exact_projection"},
+            counts={
+                "result_count": len(candidates),
+                "candidate_count": len(candidates),
+                "count_scope": "exact_projection",
+            },
             readiness={"row": "complete", "profile": "partial", "card": "partial"},
             provenance={"source_run_id": job_id, "snapshot_id": snapshot_id},
         )
@@ -879,11 +892,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             workflow_run_id=legacy_job_workflow_run_id(job_id),
             limit=0,
         )
-        command = [
-            item
-            for item in command
-            if item["command_type"] == PROJECTION_FACET_LAYERING_BUILD_COMMAND_TYPE
-        ][0]
+        command = [item for item in command if item["command_type"] == PROJECTION_FACET_LAYERING_BUILD_COMMAND_TYPE][0]
         partial_result = dict(command["result"] or {})
         partial_item = dict(partial_result["item"])
         self.assertEqual(partial_item["status"], "partial")
@@ -906,7 +915,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     "projection_facet_layering_item_limit": 1,
                     "projection_facet_layering_chunk_size": 10,
                 }
-        )
+            )
         self.assertEqual(second["completed_count"], 1)
         completed_command = self.store.get_workflow_command(command["command_id"])
         completed_result = dict(completed_command["result"] or {})
@@ -1048,7 +1057,11 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 snapshot_id=snapshot_id,
             ),
             replace_members=True,
-            counts={"result_count": len(candidates), "candidate_count": len(candidates), "count_scope": "exact_projection"},
+            counts={
+                "result_count": len(candidates),
+                "candidate_count": len(candidates),
+                "count_scope": "exact_projection",
+            },
             readiness={"row": "complete", "profile": "partial", "card": "partial"},
             provenance={"source_run_id": job_id, "snapshot_id": snapshot_id},
         )
@@ -1137,11 +1150,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             workflow_run_id=legacy_job_workflow_run_id(job_id),
             limit=0,
         )
-        command = [
-            item
-            for item in command
-            if item["command_type"] == PROJECTION_FACET_LAYERING_BUILD_COMMAND_TYPE
-        ][0]
+        command = [item for item in command if item["command_type"] == PROJECTION_FACET_LAYERING_BUILD_COMMAND_TYPE][0]
         completed_command = self.store.get_workflow_command(command["command_id"])
         completed_result = dict(completed_command["result"] or {})
         completed_item = dict(completed_result["item"])
@@ -1477,7 +1486,10 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertTrue(outreach_layering.get("inline_overlay_layering_skipped"))
         event_details = [str(event.get("detail") or "") for event in self.store.list_job_events(job_id)]
         self.assertFalse(
-            any("Outreach layering completed from the public asset population overlay" in detail for detail in event_details)
+            any(
+                "Outreach layering completed from the public asset population overlay" in detail
+                for detail in event_details
+            )
         )
 
     def test_public_layer_zero_is_total_not_exclusive_distribution(self) -> None:
@@ -1754,7 +1766,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertNotIn("workflow_completion_blockers", summary)
         candidate_source_summary = dict(summary.get("candidate_source") or {})
         self.assertNotIn("asset_population_finalization_deferred", candidate_source_summary)
-        released_command = self.store.get_workflow_command(str(snapshot_compaction_command.get("command_id") or "")) or {}
+        released_command = (
+            self.store.get_workflow_command(str(snapshot_compaction_command.get("command_id") or "")) or {}
+        )
         self.assertEqual(released_command.get("status"), "queued")
         command_metadata = dict(dict(released_command.get("payload") or {}).get("materialization_metadata") or {})
         self.assertFalse(command_metadata.get("pending_until_workflow_completion"))
@@ -1857,9 +1871,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(dict(summary.get("candidate_source") or {}).get("candidate_count"), 7384)
         artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
         self.assertEqual(
-            dict(artifact.get("terminal_result_view_completion_proof") or {}).get(
-                "delta_profile_board_visible_count"
-            ),
+            dict(artifact.get("terminal_result_view_completion_proof") or {}).get("delta_profile_board_visible_count"),
             2384,
         )
         proof = dict(artifact.get("terminal_result_view_completion_proof") or {})
@@ -2815,7 +2827,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         else:
             candidate_source = dict(job_summary.get("candidate_source") or {})
             result_view_summary = dict(result_view.get("summary") or {})
-            served_snapshot_id = str(result_view.get("snapshot_id") or candidate_source.get("snapshot_id") or "").strip()
+            served_snapshot_id = str(
+                result_view.get("snapshot_id") or candidate_source.get("snapshot_id") or ""
+            ).strip()
             served_candidate_count = int(
                 result_view_summary.get("candidate_count") or candidate_source.get("candidate_count") or 0
             )
@@ -2826,7 +2840,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             if baseline_snapshot_id:
                 for row in self.store.list_organization_asset_registry(
                     target_company=str(request.target_company or ""),
-                    asset_view=str(candidate_source.get("asset_view") or result_view.get("asset_view") or "canonical_merged"),
+                    asset_view=str(
+                        candidate_source.get("asset_view") or result_view.get("asset_view") or "canonical_merged"
+                    ),
                     limit=50,
                 ):
                     if str(dict(row).get("snapshot_id") or "").strip() == baseline_snapshot_id:
@@ -3010,9 +3026,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 if isinstance(primary_email_metadata, dict) and primary_email_metadata:
                     overlay["primary_email_metadata"] = dict(primary_email_metadata)
                 publishable_lookup["by_candidate_id"][candidate_id] = dict(overlay)
-                linkedin_url = normalize_linkedin_profile_url_key(
-                    str(candidate.get("linkedin_url") or "").strip()
-                )
+                linkedin_url = normalize_linkedin_profile_url_key(str(candidate.get("linkedin_url") or "").strip())
                 if linkedin_url:
                     publishable_lookup["by_profile_url_key"][linkedin_url] = dict(overlay)
         for page_index in range(0, len(list(candidates or [])), page_size):
@@ -3214,6 +3228,11 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "public_facet_counts": facet_counts,
             },
         )
+        self.orchestrator.person_asset_writer.rebuild_projection_person_search_index(
+            projection_id="proj_job_public_reader_projection_facets",
+            count_scope="exact_projection",
+            rebuild_person_indexes=False,
+        )
         self.store.save_job(
             job_id=job_id,
             job_type="workflow",
@@ -3287,7 +3306,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             self.assertEqual(board_state["filter_contract"]["row_filter_scope"], "projection_membership")
             self.assertFalse(board_state["filter_contract"]["fallback_used"])
         for payload in (dashboard, page):
-            facet_summary = dict(payload.get("facet_summary") or dict(payload.get("asset_population") or {}).get("facet_summary") or {})
+            facet_summary = dict(
+                payload.get("facet_summary") or dict(payload.get("asset_population") or {}).get("facet_summary") or {}
+            )
             recall_counts = {
                 str(item.get("id") or ""): int(item.get("count") or 0)
                 for item in list(facet_summary.get("recall") or [])
@@ -3369,9 +3390,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(commands[0]["owner"], PROJECTION_RUN_SCOPE_FINALIZE_OWNER)
         self.assertEqual(commands[0]["status"], "succeeded")
         self.assertEqual(dict(commands[0]["result"] or {}).get("projection_id"), projection_id)
-        workflow_state = self.store.get_workflow_current_state(
-            legacy_job_workflow_run_id("job-projection-event-time")
-        )
+        workflow_state = self.store.get_workflow_current_state(legacy_job_workflow_run_id("job-projection-event-time"))
         serving_finalized = dict(dict(workflow_state.get("completion_proofs") or {}).get("serving_finalized") or {})
         self.assertEqual(serving_finalized.get("status"), "proved")
         self.assertEqual(len(merge_commands), 1)
@@ -3670,26 +3689,10 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.orchestrator._run_collection_authoritative_merge_queue_once(  # noqa: SLF001
             {"job_id": "job-projection-event-time-idempotent", "owner_id": "test-idempotent-merge"}
         )
-        projection = self.store.repos.serving_projection.get(projection_id)
-        self.store.repos.serving_projection.upsert(
-            {
-                **projection,
-                "counts": {
-                    **dict(projection.get("counts") or {}),
-                    "public_facet_counts": {
-                        "source": "projection_person_search_index",
-                        "candidate_count": 1,
-                    },
-                    "facet_count_scope": "exact_projection",
-                    "facet_build_status": "completed",
-                },
-                "readiness": {
-                    **dict(projection.get("readiness") or {}),
-                    "index_count_scope": "exact_projection",
-                    "profile_indexed_at": "2026-05-21T00:00:00Z",
-                    "evidence_indexed_at": "2026-05-21T00:00:00Z",
-                },
-            }
+        self.orchestrator.person_asset_writer.rebuild_projection_person_search_index(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+            rebuild_person_indexes=False,
         )
 
         self.orchestrator._persist_job_result_view(  # noqa: SLF001
@@ -3868,7 +3871,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ],
             replace_members=True,
         )
-        with mock.patch.object(SourcingOrchestrator, "_projection_person_search_index_default_member_page_size", return_value=1):
+        with mock.patch.object(
+            SourcingOrchestrator, "_projection_person_search_index_default_member_page_size", return_value=1
+        ):
             self.orchestrator._enqueue_projection_person_search_index_build_item(  # noqa: SLF001
                 projection_id="proj_index_pages",
                 job_id="job-index-pages",
@@ -3933,7 +3938,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ],
             replace_members=True,
         )
-        with mock.patch.object(SourcingOrchestrator, "_projection_person_search_index_default_member_page_size", return_value=1):
+        with mock.patch.object(
+            SourcingOrchestrator, "_projection_person_search_index_default_member_page_size", return_value=1
+        ):
             self.orchestrator._enqueue_projection_person_search_index_build_item(  # noqa: SLF001
                 projection_id="proj_index_self_progress",
                 job_id="job-index-self-progress",
@@ -3971,6 +3978,119 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(
             self.store.repos.serving_projection.count_person_search_index("proj_index_self_progress"),
             2,
+        )
+
+    def test_projection_index_command_identity_uses_semantic_storage_revision(self) -> None:
+        if not self.store.control_plane_postgres_is_postgres_only():
+            return self._run_with_pg_durable_runtime(
+                "projection_index_semantic_storage_revision",
+                self.test_projection_index_command_identity_uses_semantic_storage_revision,
+            )
+        projection_id = "proj_index_storage_revision"
+        job_id = "job-index-storage-revision"
+        first_member = {
+            "candidate_identity_key": "linkedin:index-storage-first",
+            "person_identity_key": "linkedin:index-storage-first",
+            "public_summary": {"display_name": "Index Storage First"},
+        }
+        self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+            run_id=job_id,
+            projection_id=projection_id,
+            members=[first_member],
+            replace_members=True,
+        )
+        first_projection = self.store.repos.serving_projection.get(projection_id)
+        first_revision = str(first_projection["metadata"]["projection_person_search_index_input_revision"])
+        first_item = self.orchestrator._enqueue_projection_person_search_index_build_item(  # noqa: SLF001
+            projection_id=projection_id,
+            job_id=job_id,
+            reason="unit_test_storage_revision_first",
+        )
+        completed = self.orchestrator._run_projection_person_search_index_queue_once(  # noqa: SLF001
+            {"job_id": job_id, "projection_person_search_index_item_limit": 1}
+        )
+        self.assertEqual(completed["completed_count"], 1)
+        completed_projection = self.store.repos.serving_projection.get(projection_id)
+        for binding_key in (
+            "projection_person_search_index_build_generation",
+            "projection_person_search_index_build_input_revision",
+            "projection_person_search_index_input_revision",
+        ):
+            self.assertEqual(
+                completed_projection["readiness"][binding_key],
+                completed_projection["metadata"][binding_key],
+            )
+
+        self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+            run_id=job_id,
+            projection_id=projection_id,
+            members=[first_member],
+            replace_members=True,
+        )
+        replay_projection = self.store.repos.serving_projection.get(projection_id)
+        replay_item = self.orchestrator._enqueue_projection_person_search_index_build_item(  # noqa: SLF001
+            projection_id=projection_id,
+            job_id=job_id,
+            reason="unit_test_storage_revision_replay",
+        )
+        self.assertEqual(
+            replay_projection["metadata"]["projection_person_search_index_input_revision"],
+            first_revision,
+        )
+        for binding_key in (
+            "projection_person_search_index_build_generation",
+            "projection_person_search_index_build_input_revision",
+            "projection_person_search_index_input_revision",
+        ):
+            self.assertEqual(
+                replay_projection["readiness"][binding_key],
+                replay_projection["metadata"][binding_key],
+            )
+            self.assertEqual(
+                replay_projection["counts"]["public_facet_counts"][binding_key],
+                replay_projection["metadata"][binding_key],
+            )
+        self.assertEqual(replay_item["status"], "completed")
+        self.assertEqual(replay_item["item_id"], first_item["item_id"])
+
+        replacement_member = {
+            "candidate_identity_key": "linkedin:index-storage-second",
+            "person_identity_key": "linkedin:index-storage-second",
+            "public_summary": {"display_name": "Index Storage Second"},
+        }
+        self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+            run_id=job_id,
+            projection_id=projection_id,
+            members=[replacement_member],
+            replace_members=True,
+        )
+        replaced_projection = self.store.repos.serving_projection.get(projection_id)
+        replacement_item = self.orchestrator._enqueue_projection_person_search_index_build_item(  # noqa: SLF001
+            projection_id=projection_id,
+            job_id=job_id,
+            reason="unit_test_storage_revision_replacement",
+        )
+        self.assertNotEqual(
+            replaced_projection["metadata"]["projection_person_search_index_input_revision"],
+            first_revision,
+        )
+        self.assertNotEqual(replacement_item["item_id"], first_item["item_id"])
+        self.assertEqual(replacement_item["status"], "queued")
+        commands = self.store.list_workflow_commands(
+            workflow_run_id=legacy_job_workflow_run_id(job_id),
+            owner=PROJECTION_PERSON_SEARCH_INDEX_BUILD_OWNER,
+            limit=0,
+        )
+        self.assertEqual(len(commands), 2)
+        self.assertEqual(
+            {
+                str(dict(command.get("payload") or {}).get("projection_index_input_version") or "")
+                for command in commands
+            },
+            {
+                str(dict(first_item.get("metadata") or {}).get("projection_index_input_version") or ""),
+                str(dict(replacement_item.get("metadata") or {}).get("projection_index_input_version") or ""),
+            },
         )
 
     def test_projection_person_search_index_obsoletes_when_semantic_projection_input_changes(self) -> None:
@@ -4938,6 +5058,11 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             },
             provenance={"source_run_id": job_id, "snapshot_id": snapshot_id},
         )
+        self.orchestrator.person_asset_writer.rebuild_projection_person_search_index(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+            rebuild_person_indexes=False,
+        )
         self.store.save_job(
             job_id=job_id,
             job_type="workflow",
@@ -5247,6 +5372,11 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "card_ready_count": len(projection_records),
             },
             provenance={"source_run_id": job_id, "snapshot_id": snapshot_id},
+        )
+        self.orchestrator.person_asset_writer.rebuild_projection_person_search_index(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+            rebuild_person_indexes=False,
         )
         snapshot_dir = self._write_materialized_snapshot_view(
             target_company="Google",
@@ -5559,15 +5689,18 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         }
 
         uncached_reader = self.orchestrator._read_asset_population_overlay_payload_uncached  # noqa: SLF001
-        with mock.patch.object(
-            self.orchestrator,
-            "_candidate_source_final_serving_artifact_outranks_overlay",
-            return_value=False,
-        ), mock.patch.object(
-            self.orchestrator,
-            "_read_asset_population_overlay_payload_uncached",
-            wraps=uncached_reader,
-        ) as read_overlay:
+        with (
+            mock.patch.object(
+                self.orchestrator,
+                "_candidate_source_final_serving_artifact_outranks_overlay",
+                return_value=False,
+            ),
+            mock.patch.object(
+                self.orchestrator,
+                "_read_asset_population_overlay_payload_uncached",
+                wraps=uncached_reader,
+            ) as read_overlay,
+        ):
             first = self.orchestrator._load_candidate_source_asset_population_overlay(candidate_source)  # noqa: SLF001
             second = self.orchestrator._load_candidate_source_asset_population_overlay(candidate_source)  # noqa: SLF001
 
@@ -6154,8 +6287,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
         try:
             with opener.open(
-                f"http://{host}:{port}/api/jobs/{job_id}/candidates"
-                "?offset=0&limit=1&lightweight=1&recall_buckets=Agent"
+                f"http://{host}:{port}/api/jobs/{job_id}/candidates?offset=0&limit=1&lightweight=1&recall_buckets=Agent"
             ) as response:
                 api_payload = json.loads(response.read().decode("utf-8"))
         finally:
@@ -6356,7 +6488,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
         harvest_prefetch = dict(dict(merged.get("background_reconcile") or {}).get("harvest_prefetch") or {})
         self.assertEqual(harvest_prefetch["status"], "inline_applied")
-        profile_completion = dict(dict(harvest_prefetch.get("resume_result") or {}).get("profile_completion_result") or {})
+        profile_completion = dict(
+            dict(harvest_prefetch.get("resume_result") or {}).get("profile_completion_result") or {}
+        )
         self.assertEqual(int(profile_completion.get("fetched_profile_url_count") or 0), 1)
         self.assertEqual(int(profile_completion.get("resolved_candidate_count") or 0), 1)
 
@@ -6718,9 +6852,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(progress["progress"]["provider_execution_manifest"], progress["provider_execution_manifest"])
         self.assertLess(len(json.dumps(progress)), 100_000)
         self.assertEqual(
-            progress["progress"]["latest_metrics"]["background_reconcile"]["harvest_prefetch"][
-                "deferred_url_count"
-            ],
+            progress["progress"]["latest_metrics"]["background_reconcile"]["harvest_prefetch"]["deferred_url_count"],
             500,
         )
         self.assertEqual(
@@ -7168,16 +7300,20 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             metadata={"target_scope": "full_company_asset"},
         )
 
-        with mock.patch.object(
-            self.orchestrator,
-            "_load_retrieval_candidate_source",
-            wraps=self.orchestrator._load_retrieval_candidate_source,  # noqa: SLF001
-        ) as load_source, mock.patch(
-            "sourcing_agent.orchestrator.derive_candidate_facets",
-            side_effect=AssertionError("event-time repair must not derive facets"),
-        ), mock.patch(
-            "sourcing_agent.orchestrator.derive_candidate_role_bucket",
-            side_effect=AssertionError("event-time repair must not derive role buckets"),
+        with (
+            mock.patch.object(
+                self.orchestrator,
+                "_load_retrieval_candidate_source",
+                wraps=self.orchestrator._load_retrieval_candidate_source,  # noqa: SLF001
+            ) as load_source,
+            mock.patch(
+                "sourcing_agent.orchestrator.derive_candidate_facets",
+                side_effect=AssertionError("event-time repair must not derive facets"),
+            ),
+            mock.patch(
+                "sourcing_agent.orchestrator.derive_candidate_role_bucket",
+                side_effect=AssertionError("event-time repair must not derive role buckets"),
+            ),
         ):
             reconcile = self.orchestrator._reconcile_completed_workflow_if_needed(job_id)  # noqa: SLF001
 
@@ -7206,9 +7342,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             if str(call.kwargs.get("snapshot_id") or "").strip() in {baseline_snapshot_id, current_snapshot_id}
         ]
         self.assertTrue(repair_load_calls)
-        self.assertTrue(
-            all(call.kwargs.get("allow_materialization_fallback") is False for call in repair_load_calls)
-        )
+        self.assertTrue(all(call.kwargs.get("allow_materialization_fallback") is False for call in repair_load_calls))
 
     def test_delta_only_result_view_recovers_to_current_candidate_documents_when_current_is_complete(self) -> None:
         baseline_snapshot_id = "20260420T150000"
@@ -8329,7 +8463,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             output_payload={"summary": {"status": "completed", "requested_urls": all_urls}},
         )
         for url in all_urls[:2]:
-            self.store.repos.linkedin_profile_registry.mark_fetched(url, raw_path=f"/tmp/{url.rstrip('/').rsplit('/', 1)[-1]}.json")
+            self.store.repos.linkedin_profile_registry.mark_fetched(
+                url, raw_path=f"/tmp/{url.rstrip('/').rsplit('/', 1)[-1]}.json"
+            )
         for url in all_urls[2:]:
             self.store.repos.linkedin_profile_registry.mark_queued(url)
 
@@ -9029,7 +9165,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             metadata={"recovery_kind": "harvest_profile_batch", "profile_urls": [fetched_url, queued_url]},
             handoff_from_lane="search_planner",
         )
-        self.store.repos.linkedin_profile_registry.mark_fetched(fetched_url, raw_path="/tmp/openai-chatgpt-fetched.json")
+        self.store.repos.linkedin_profile_registry.mark_fetched(
+            fetched_url, raw_path="/tmp/openai-chatgpt-fetched.json"
+        )
         self.store.repos.linkedin_profile_registry.mark_queued(queued_url)
 
         progress = self.orchestrator.get_job_progress(job_id)
@@ -9972,9 +10110,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         try:
             with opener.open(f"http://{host}:{port}/api/jobs/{job_id}/results") as response:
                 summary_payload = json.loads(response.read().decode("utf-8"))
-            with opener.open(
-                f"http://{host}:{port}/api/jobs/{job_id}/results?include_candidates=1"
-            ) as response:
+            with opener.open(f"http://{host}:{port}/api/jobs/{job_id}/results?include_candidates=1") as response:
                 full_payload = json.loads(response.read().decode("utf-8"))
         finally:
             server.shutdown()
@@ -10040,9 +10176,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             encoding="utf-8",
         )
 
-        page_path = (
-            snapshot_dir / "normalized_artifacts" / "pages" / "page-0001.json"
-        )
+        page_path = snapshot_dir / "normalized_artifacts" / "pages" / "page-0001.json"
         page_payload = json.loads(page_path.read_text(encoding="utf-8"))
         page_payload["candidates"][0]["source_path"] = str(raw_profile_path)
         page_payload["candidates"][0]["profile_capture_kind"] = "harvest_profile_detail"
@@ -10564,9 +10698,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     "2025~Present, Lovable, Beta + Discord Champion",
                     "2024~Present, TechTide AI, Founder & CTO",
                 ],
-                "education_lines": [
-                    "2013~2013, A+ Certification, Per Scholas, CompTia A+ and Network+ Certifications"
-                ],
+                "education_lines": ["2013~2013, A+ Certification, Per Scholas, CompTia A+ and Network+ Certifications"],
                 "has_profile_detail": True,
                 "needs_profile_completion": False,
             }
@@ -10950,9 +11082,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         overlay_path = Path(str(overlay_info.get("path") or ""))
         overlay_payload = json.loads(overlay_path.read_text(encoding="utf-8"))
         legacy_record = next(
-            item
-            for item in overlay_payload["candidates"]
-            if item["candidate_id"] == "openai-agent-current-0120"
+            item for item in overlay_payload["candidates"] if item["candidate_id"] == "openai-agent-current-0120"
         )
         self.assertEqual(
             legacy_record["experience_lines"],
@@ -11121,18 +11251,22 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ],
         )
 
-        with mock.patch.object(
-            self.orchestrator.store,
-            "list_job_events",
-            side_effect=AssertionError("runtime details should be skipped"),
-        ), mock.patch.object(
-            self.orchestrator.store,
-            "list_agent_trace_spans",
-            side_effect=AssertionError("runtime details should be skipped"),
-        ), mock.patch.object(
-            self.orchestrator.store,
-            "list_agent_workers",
-            side_effect=AssertionError("runtime details should be skipped"),
+        with (
+            mock.patch.object(
+                self.orchestrator.store,
+                "list_job_events",
+                side_effect=AssertionError("runtime details should be skipped"),
+            ),
+            mock.patch.object(
+                self.orchestrator.store,
+                "list_agent_trace_spans",
+                side_effect=AssertionError("runtime details should be skipped"),
+            ),
+            mock.patch.object(
+                self.orchestrator.store,
+                "list_agent_workers",
+                side_effect=AssertionError("runtime details should be skipped"),
+            ),
         ):
             payload = self.orchestrator.get_job_results_api(
                 job_id,
@@ -11345,9 +11479,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ):
                 with opener.open(f"http://{host}:{port}/api/jobs/{job_id}/candidates?offset=0&limit=1") as response:
                     page_payload = json.loads(response.read().decode("utf-8"))
-                with opener.open(
-                    f"http://{host}:{port}/api/jobs/{job_id}/candidates/{candidate_id}"
-                ) as response:
+                with opener.open(f"http://{host}:{port}/api/jobs/{job_id}/candidates/{candidate_id}") as response:
                     detail_payload = json.loads(response.read().decode("utf-8"))
         finally:
             server.shutdown()
@@ -12071,9 +12203,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         candidate = payload["candidates"][0]
         self.assertEqual(candidate["candidate_id"], "cand_batch_detail")
         self.assertEqual(candidate["experience_lines"], ["2024~Present, Anthropic, Research Engineer"])
-        self.assertEqual(
-            candidate["education_lines"], ["2016~2020, Bachelor, Stanford, Computer Science"]
-        )
+        self.assertEqual(candidate["education_lines"], ["2016~2020, Bachelor, Stanford, Computer Science"])
         self.assertEqual(candidate["avatar_url"], "https://cdn.example.com/batch-detail.jpg")
 
     def test_job_results_scrub_risky_harvest_email_from_profile_timeline(self) -> None:
@@ -13268,12 +13398,14 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(opt_in_payload["asset_population"]["candidate_count"], 0)
         self.assertFalse((snapshot_dir / "normalized_artifacts" / "manifest.json").exists())
 
-        internal_materialization = self.orchestrator._load_company_snapshot_candidate_documents_with_materialization_fallback(  # noqa: SLF001
-            target_company="Anthropic",
-            snapshot_id="20260416T225318",
-            view="canonical_merged",
-            allow_materialization_fallback=True,
-            allow_candidate_documents_fallback=True,
+        internal_materialization = (
+            self.orchestrator._load_company_snapshot_candidate_documents_with_materialization_fallback(  # noqa: SLF001
+                target_company="Anthropic",
+                snapshot_id="20260416T225318",
+                view="canonical_merged",
+                allow_materialization_fallback=True,
+                allow_candidate_documents_fallback=True,
+            )
         )
         self.assertEqual(internal_materialization["status"], "loaded")
         self.assertTrue((snapshot_dir / "normalized_artifacts" / "manifest.json").exists())
@@ -15749,15 +15881,17 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(self.store.list_agent_workers(), [])
 
     def test_legacy_public_web_retirement_api_reports_read_only_deletion_gate(self) -> None:
-        seed_legacy_target_public_web_batch(self.store,
+        seed_legacy_target_public_web_batch(
+            self.store,
             {
                 "batch_id": "legacy-public-web-audit-batch",
                 "idempotency_key": "legacy-public-web-audit-batch",
                 "status": "completed",
                 "summary": {"status": "completed"},
-            }
+            },
         )
-        seed_legacy_target_public_web_run(self.store,
+        seed_legacy_target_public_web_run(
+            self.store,
             {
                 "run_id": "legacy-public-web-audit-run",
                 "batch_id": "legacy-public-web-audit-batch",
@@ -15766,7 +15900,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "current_company": "Example AI",
                 "status": "completed",
                 "phase": "completed",
-            }
+            },
         )
 
         server = create_server(self.orchestrator, host="127.0.0.1", port=0)
@@ -15775,7 +15909,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         host, port = server.server_address
         opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
         try:
-            with opener.open(f"http://{host}:{port}/api/migrations/legacy-public-web?row_limit=100&sample_limit=5") as response:
+            with opener.open(
+                f"http://{host}:{port}/api/migrations/legacy-public-web?row_limit=100&sample_limit=5"
+            ) as response:
                 payload = json.loads(response.read().decode("utf-8"))
         finally:
             server.shutdown()
@@ -15841,10 +15977,14 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(payload["reason"], "legacy_target_public_web_endpoint_retired")
         self.assertEqual(payload["migration_override_status"], "removed")
         self.assertIsNone(self.store.get_target_candidate("crm-public-web-no-target-bridge"))
-        self.assertEqual(self.store.list_target_candidate_public_web_runs(record_id="crm-public-web-no-target-bridge"), [])
+        self.assertEqual(
+            self.store.list_target_candidate_public_web_runs(record_id="crm-public-web-no-target-bridge"), []
+        )
         self.assertEqual(self.store.list_crm_public_web_runs(workspace_id="default"), [])
 
-    @unittest.skip("legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage"
+    )
     @mock.patch.dict(os.environ, {"SOURCING_ALLOW_LEGACY_TARGET_PUBLIC_WEB_ENDPOINTS": "1"}, clear=False)
     def test_target_candidate_public_web_cancel_and_retry_are_durable_run_actions(self) -> None:
         record = self.store.upsert_target_candidate(
@@ -15940,7 +16080,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 }
             ),
         ]
-        seed_legacy_target_public_web_run(self.store,
+        seed_legacy_target_public_web_run(
+            self.store,
             {
                 "run_id": "public-web-poll-aaa-old",
                 "idempotency_key": "unit:public-web-poll-aaa-old",
@@ -15952,9 +16093,10 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "status": "failed",
                 "phase": "failed",
                 "updated_at": "2026-05-03 10:00:00",
-            }
+            },
         )
-        seed_legacy_target_public_web_run(self.store,
+        seed_legacy_target_public_web_run(
+            self.store,
             {
                 "run_id": "public-web-poll-zzz-a-latest",
                 "idempotency_key": "unit:public-web-poll-zzz-a-latest",
@@ -15966,9 +16108,10 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "status": "queued",
                 "phase": "queued",
                 "updated_at": "2026-05-03 10:02:00",
-            }
+            },
         )
-        seed_legacy_target_public_web_run(self.store,
+        seed_legacy_target_public_web_run(
+            self.store,
             {
                 "run_id": "public-web-poll-b-latest",
                 "idempotency_key": "unit:public-web-poll-b-latest",
@@ -15980,7 +16123,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "status": "completed",
                 "phase": "completed",
                 "updated_at": "2026-05-03 10:01:00",
-            }
+            },
         )
         server = create_server(self.orchestrator, host="127.0.0.1", port=0)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -16010,7 +16153,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(payload["reason"], "legacy_target_public_web_endpoint_retired")
         self.assertEqual(payload["migration_override_status"], "removed")
 
-    @unittest.skip("legacy target-candidate Public Web detail API is permanently retired; CRM Public Web owns detail coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web detail API is permanently retired; CRM Public Web owns detail coverage"
+    )
     @mock.patch.dict(os.environ, {"SOURCING_ALLOW_LEGACY_TARGET_PUBLIC_WEB_ENDPOINTS": "1"}, clear=False)
     def test_target_candidate_public_web_detail_api_returns_model_safe_signals(self) -> None:
         record = self.store.upsert_target_candidate(
@@ -16022,7 +16167,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "linkedin_url": "https://www.linkedin.com/in/alice-detail/",
             }
         )
-        run = seed_legacy_target_public_web_run(self.store,
+        run = seed_legacy_target_public_web_run(
+            self.store,
             {
                 "run_id": "public-web-detail-run-1",
                 "batch_id": "public-web-detail-batch-1",
@@ -16044,7 +16190,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     "nested": {"raw_payload": {"html": "<html></html>"}},
                 },
                 "analysis_checkpoint": {"stage": "completed", "status": "completed"},
-            }
+            },
         )
         asset = self.store.upsert_person_public_web_asset(
             {
@@ -16140,7 +16286,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(detail["person_asset"]["asset_id"], asset["asset_id"])
         self.assertEqual(detail["email_candidates"][0]["promotion_status"], "promotion_recommended")
         self.assertEqual(detail["profile_links"][0]["identity_match_label"], "ambiguous_identity")
-        self.assertEqual(detail["grouped_signals"]["email_candidates_by_type"]["academic"][0]["value"], "alice@example.edu")
+        self.assertEqual(
+            detail["grouped_signals"]["email_candidates_by_type"]["academic"][0]["value"], "alice@example.edu"
+        )
         payload_text = json.dumps(detail, ensure_ascii=False)
         self.assertNotIn("raw_path", payload_text)
         self.assertNotIn("raw_payload", payload_text)
@@ -16281,7 +16429,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(profile["profile"]["contact"]["selected_email_source"], "public_web_candidate")
         self.assertFalse(profile["profile"]["export_readiness"]["ready"])
         self.assertEqual(profile["profile"]["export_readiness"]["default_public_web_export_mode"], "promoted_only")
-        self.assertEqual(profile["profile"]["export_readiness"]["expanded_public_web_export_mode"], "promoted_and_publishable")
+        self.assertEqual(
+            profile["profile"]["export_readiness"]["expanded_public_web_export_mode"], "promoted_and_publishable"
+        )
         self.assertEqual(profile["profile"]["export_readiness"]["exportable_signal_count"], 0)
         self.assertEqual(profile["profile"]["export_readiness"]["promoted_exportable_signal_count"], 0)
         self.assertEqual(profile["profile"]["export_readiness"]["ai_publishable_unconfirmed_signal_count"], 2)
@@ -16370,9 +16520,13 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(promotions["status"], "retired")
         self.assertEqual(promotions["record_id"], record["id"])
 
-    @unittest.skip("legacy target-candidate Public Web promotion/export API is permanently retired; CRM Public Web owns coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web promotion/export API is permanently retired; CRM Public Web owns coverage"
+    )
     @mock.patch.dict(os.environ, {"SOURCING_ALLOW_LEGACY_TARGET_PUBLIC_WEB_ENDPOINTS": "1"}, clear=False)
-    def test_target_candidate_public_web_promotion_updates_primary_email_then_export_uses_promoted_signals(self) -> None:
+    def test_target_candidate_public_web_promotion_updates_primary_email_then_export_uses_promoted_signals(
+        self,
+    ) -> None:
         record = self.store.upsert_target_candidate(
             {
                 "record_id": "target-public-web-promote-1",
@@ -16382,7 +16536,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "linkedin_url": "https://www.linkedin.com/in/alice-promote/",
             }
         )
-        run = seed_legacy_target_public_web_run(self.store,
+        run = seed_legacy_target_public_web_run(
+            self.store,
             {
                 "run_id": "public-web-promote-run-1",
                 "batch_id": "public-web-promote-batch-1",
@@ -16403,7 +16558,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     "document_fetch_payload_path": "/tmp/document_fetch_payload.json",
                 },
                 "analysis_checkpoint": {"stage": "completed", "status": "completed"},
-            }
+            },
         )
         asset = self.store.upsert_person_public_web_asset(
             {
@@ -16616,7 +16771,11 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             signals_csv = archive.read(signals_name).decode("utf-8-sig")
             promotions_csv = archive.read(promotions_name).decode("utf-8-sig")
             manifest = json.loads(archive.read(manifest_name).decode("utf-8"))
-            archive_text = "\n".join(archive.read(name).decode("utf-8", errors="ignore") for name in names if name.endswith((".csv", ".json")))
+            archive_text = "\n".join(
+                archive.read(name).decode("utf-8", errors="ignore")
+                for name in names
+                if name.endswith((".csv", ".json"))
+            )
         with zipfile.ZipFile(io.BytesIO(publishable_archive_body), "r") as archive:
             names = set(archive.namelist())
             publishable_summary_name = next(name for name in names if name.endswith("/public_web_summary.csv"))
@@ -16663,7 +16822,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "linkedin_url": "https://www.linkedin.com/in/empty-public-web/",
             }
         )
-        seed_legacy_target_public_web_run(self.store,
+        seed_legacy_target_public_web_run(
+            self.store,
             {
                 "run_id": "public-web-empty-run-1",
                 "batch_id": "public-web-empty-batch-1",
@@ -16679,7 +16839,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "phase": "completed",
                 "summary": {"email_candidate_count": 0, "entry_link_count": 0},
                 "analysis_checkpoint": {"stage": "completed", "status": "completed"},
-            }
+            },
         )
 
         export = self.orchestrator.export_target_candidate_public_web_archive(
@@ -16742,7 +16902,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(start["write_contract"]["public_web_storage_owner"], "crm_public_web_v1")
         self.assertEqual(start["workflow_command"]["status"], "succeeded")
         run_id = start["runs"][0]["run_id"]
-        self.assertEqual(start["runs"][0]["run_control_state"]["source_of_truth"], "crm_public_web_owner.run_control_state")
+        self.assertEqual(
+            start["runs"][0]["run_control_state"]["source_of_truth"], "crm_public_web_owner.run_control_state"
+        )
         self.assertIn("cancel", start["runs"][0]["run_control_state"]["allowed_actions"])
         self.assertEqual(
             start["runs"][0]["run_display_contract"]["source_of_truth"],
@@ -17222,7 +17384,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertIn(promoted_url, archive_text)
         self.assertIn("manual-reviewer", archive_text)
 
-    @unittest.skip("legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage")
+    @unittest.skip(
+        "legacy target-candidate Public Web execution is permanently retired; CRM Public Web owns e2e coverage"
+    )
     @mock.patch.dict(os.environ, {"SOURCING_ALLOW_LEGACY_TARGET_PUBLIC_WEB_ENDPOINTS": "1"}, clear=False)
     def test_target_candidate_public_web_service_e2e_runs_to_detail_and_export_contract(self) -> None:
         record = self.store.upsert_target_candidate(
@@ -17369,8 +17533,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         baseline_snapshot_id = "20260430T130836"
         current_snapshot_id = "20260430T155907"
         baseline_candidates = [
-            {"candidate_id": f"infra_baseline_{i}", "display_name": f"Infra Baseline {i}"}
-            for i in range(1, 6)
+            {"candidate_id": f"infra_baseline_{i}", "display_name": f"Infra Baseline {i}"} for i in range(1, 6)
         ]
         self._write_candidate_documents_snapshot(
             target_company="OpenAI",
@@ -17936,7 +18099,10 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     "asset_view": "strict_roster_only",
                     "candidate_count": 1,
                     "source_path": str(
-                        snapshot_dir / "normalized_artifacts" / "strict_roster_only" / "materialized_candidate_documents.json"
+                        snapshot_dir
+                        / "normalized_artifacts"
+                        / "strict_roster_only"
+                        / "materialized_candidate_documents.json"
                     ),
                 }
             },
@@ -18658,10 +18824,13 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             job_id="job_patch_log",
             snapshot_id="20260420T130000",
         )
-        self.assertEqual([patch["patch_id"] for patch in patches], [
-            "job_patch_log|20260420T130000|delta_1",
-            "job_patch_log|20260420T130000|delta_2",
-        ])
+        self.assertEqual(
+            [patch["patch_id"] for patch in patches],
+            [
+                "job_patch_log|20260420T130000|delta_1",
+                "job_patch_log|20260420T130000|delta_2",
+            ],
+        )
         self.assertEqual([patch["sequence_index"] for patch in patches], [1, 2])
         self.assertEqual(patches[0]["candidate_ids"], ["delta_1"])
         self.assertEqual(patches[0]["serving_projection_id"], "/tmp/patch-1b.json")
@@ -19092,14 +19261,17 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             },
         )
 
-        with mock.patch.object(
-            self.orchestrator,
-            "_normalize_board_visible_profile_records",
-            side_effect=AssertionError("summary public read must not hydrate every overlay row"),
-        ), mock.patch.object(
-            self.orchestrator,
-            "_build_asset_population_facet_summary_payload",
-            side_effect=AssertionError("public page read must not rebuild global facets from all rows"),
+        with (
+            mock.patch.object(
+                self.orchestrator,
+                "_normalize_board_visible_profile_records",
+                side_effect=AssertionError("summary public read must not hydrate every overlay row"),
+            ),
+            mock.patch.object(
+                self.orchestrator,
+                "_build_asset_population_facet_summary_payload",
+                side_effect=AssertionError("public page read must not rebuild global facets from all rows"),
+            ),
         ):
             page = self.orchestrator.get_job_candidate_page(job_id, offset=0, limit=10, lightweight=True)
 
@@ -22402,7 +22574,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(projection_page["total_candidates"], 2)
         self.assertEqual(len(projection_page["candidates"]), 2)
         self.assertTrue(
-            all(str(candidate.get("card_readiness") or "") == "row_shell" for candidate in projection_page["candidates"])
+            all(
+                str(candidate.get("card_readiness") or "") == "row_shell" for candidate in projection_page["candidates"]
+            )
         )
 
     def test_lovable_board_visible_patches_extend_canonical_projection_membership(self) -> None:
@@ -22555,7 +22729,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(reference_state["facet_summary_candidate_count"], 0)
         self.assertEqual(reference_state["layering_status"], "")
         self.assertEqual(reference_filter_contract["facet_count_scope"], "unavailable")
-        self.assertEqual(reference_filter_contract["facet_unavailable_reason"], "projection_facet_build_product_missing")
+        self.assertEqual(
+            reference_filter_contract["facet_unavailable_reason"], "projection_facet_build_product_missing"
+        )
         self.assertEqual(reference_filter_contract["facet_summary_projection_id"], projection_id)
         for endpoint_name, payload in endpoint_payloads.items():
             assert payload is not None
@@ -22566,7 +22742,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 msg=f"{endpoint_name} must use canonical projection facet readiness",
             )
             self.assertEqual(endpoint_state["facet_summary_scope"], reference_state["facet_summary_scope"])
-            self.assertEqual(endpoint_state["facet_summary_candidate_count"], reference_state["facet_summary_candidate_count"])
+            self.assertEqual(
+                endpoint_state["facet_summary_candidate_count"], reference_state["facet_summary_candidate_count"]
+            )
             self.assertEqual(endpoint_state["layering_status"], reference_state["layering_status"])
             self.assertEqual(dict(endpoint_state["filter_contract"]), reference_filter_contract)
 
@@ -24711,11 +24889,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                         for index in range(223)
                     ]
                 },
-                "metadata": {
-                    "profile_urls": [
-                        f"https://www.linkedin.com/in/profile-{index}/" for index in range(297)
-                    ]
-                },
+                "metadata": {"profile_urls": [f"https://www.linkedin.com/in/profile-{index}/" for index in range(297)]},
             }
         ]
 
@@ -25379,7 +25553,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     "asset_view": "canonical_merged",
                     "source_path": str(manifest_path),
                     "candidate_count": 4,
-                    "asset_population_overlay_path": str(Path(self.tempdir.name) / "jobs" / "stale.asset_population.json"),
+                    "asset_population_overlay_path": str(
+                        Path(self.tempdir.name) / "jobs" / "stale.asset_population.json"
+                    ),
                 }
             },
         )
@@ -25446,7 +25622,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         assert dashboard is not None
         assert page is not None
         for payload in (dashboard, page):
-            facet_summary = dict(payload.get("facet_summary") or dict(payload.get("asset_population") or {}).get("facet_summary") or {})
+            facet_summary = dict(
+                payload.get("facet_summary") or dict(payload.get("asset_population") or {}).get("facet_summary") or {}
+            )
             recall_counts = {
                 str(item.get("id") or ""): int(item.get("count") or 0)
                 for item in list(facet_summary.get("recall") or [])
@@ -27323,9 +27501,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             "delta_profile_fetched_count",
             "projection_source_snapshot_id",
         ):
-            self.assertEqual(
-                before.get(field), after.get(field), msg=f"public read regressed Stage 1 field {field!r}"
-            )
+            self.assertEqual(before.get(field), after.get(field), msg=f"public read regressed Stage 1 field {field!r}")
 
     def test_job_result_lifecycle_stage1_event_time_write_before_public_read(self) -> None:
         """Stage 1 lifecycle projection must be written at workflow event-time,
@@ -28039,7 +28215,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         lifecycle_stored_after = self.orchestrator.store.get_job_result_lifecycle(job_id)
         self.assertEqual(lifecycle_stored_after["phase"], lifecycle_before["phase"])
         self.assertEqual(lifecycle_stored_after["state"], lifecycle_before["state"])
-        self.assertEqual(lifecycle_stored_after["source_validation_status"], lifecycle_before["source_validation_status"])
+        self.assertEqual(
+            lifecycle_stored_after["source_validation_status"], lifecycle_before["source_validation_status"]
+        )
         self.assertEqual(lifecycle_stored_after["updated_at"], lifecycle_before["updated_at"])
 
     def test_asset_governance_promote_default_api_persists_pointer(self) -> None:
@@ -28063,7 +28241,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             )
             with opener.open(request) as response:
                 promoted = json.loads(response.read().decode("utf-8"))
-            with opener.open(f"http://{host}:{port}/api/assets/governance/default-pointers?company_key=openai") as response:
+            with opener.open(
+                f"http://{host}:{port}/api/assets/governance/default-pointers?company_key=openai"
+            ) as response:
                 listed = json.loads(response.read().decode("utf-8"))
         finally:
             server.shutdown()

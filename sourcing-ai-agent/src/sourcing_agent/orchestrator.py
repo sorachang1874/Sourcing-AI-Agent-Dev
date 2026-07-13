@@ -203,6 +203,7 @@ from .operation_runtime import (
     ACTION_SET_CRM_STAGE,
     ACTION_START_ACQUISITION_RUN,
     DEFAULT_ACTION_REGISTRY,
+    OperationRuntimeStateConflict,
     OperationRuntimeWriter,
     operation_run_control_state,
 )
@@ -269,6 +270,11 @@ from .profile_timeline import (
 )
 from .profile_timeline import (
     timeline_has_complete_profile_detail as _timeline_has_complete_profile_detail,
+)
+from .projection_search_index_contract import (
+    PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY,
+    preserve_projection_search_index_products,
+    projection_search_index_members_changed,
 )
 from .public_candidate_facets import (
     EXCEL_INTAKE_CURRENT_JOB_MARKER_ID,
@@ -6747,6 +6753,7 @@ class SourcingOrchestrator:
         existing_projection: dict[str, Any],
         *,
         next_projection: dict[str, Any],
+        next_members: list[dict[str, Any]] | tuple[dict[str, Any], ...],
         member_count: int,
     ) -> bool:
         existing = dict(existing_projection or {})
@@ -6758,12 +6765,42 @@ class SourcingOrchestrator:
         )
         if int(existing_member_count or 0) != int(member_count or 0):
             return False
+        existing_members = self.store.repos.serving_projection.list_members(
+            str(existing.get("projection_id") or "").strip(),
+            visible_only=True,
+            limit=max(1, existing_member_count),
+        )
+        existing_members_by_key = {
+            str(member.get("candidate_identity_key") or "").strip(): member
+            for member in existing_members
+            if str(member.get("candidate_identity_key") or "").strip()
+        }
+        next_members_by_key = {
+            str(member.get("candidate_identity_key") or "").strip(): member
+            for member in next_members
+            if str(member.get("candidate_identity_key") or "").strip()
+            and str(member.get("visibility_state") or "visible").strip() == "visible"
+        }
+        if projection_search_index_members_changed(
+            existing_rows=existing_members_by_key,
+            next_rows=next_members_by_key,
+            replace_members=True,
+        ):
+            return False
         existing_version = self._projection_person_search_index_input_version(
             existing,
             member_count=existing_member_count,
         )
+        comparable_next_projection = dict(next_projection or {})
+        comparable_next_metadata = dict(comparable_next_projection.get("metadata") or {})
+        existing_input_revision = str(
+            dict(existing.get("metadata") or {}).get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
+        ).strip()
+        if existing_input_revision:
+            comparable_next_metadata[PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY] = existing_input_revision
+        comparable_next_projection["metadata"] = comparable_next_metadata
         next_version = self._projection_person_search_index_input_version(
-            dict(next_projection or {}),
+            comparable_next_projection,
             member_count=member_count,
         )
         return bool(existing_version and existing_version == next_version)
@@ -6778,35 +6815,14 @@ class SourcingOrchestrator:
     ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """Keep derived read-model products when row-scope publication is idempotent."""
 
-        existing_counts = dict(dict(existing_projection or {}).get("counts") or {})
-        existing_readiness = dict(dict(existing_projection or {}).get("readiness") or {})
-        existing_metadata = dict(dict(existing_projection or {}).get("metadata") or {})
-        next_counts = dict(counts or {})
-        next_readiness = dict(readiness or {})
-        next_metadata = dict(metadata or {})
-        for key in (
-            "public_facet_counts",
-            "facet_count_scope",
-            "facet_build_status",
-        ):
-            if key in existing_counts and key not in next_counts:
-                next_counts[key] = existing_counts.get(key)
-        for key in (
-            "index_count_scope",
-            "profile_indexed_at",
-            "evidence_indexed_at",
-        ):
-            if key in existing_readiness and key not in next_readiness:
-                next_readiness[key] = existing_readiness.get(key)
-        for key in (
-            "search_index_writer_id",
-            "search_index_build_status",
-            "search_indexed_member_count",
-            "search_index_completed_at",
-        ):
-            if key in existing_metadata and key not in next_metadata:
-                next_metadata[key] = existing_metadata.get(key)
-        return next_counts, next_readiness, next_metadata
+        return preserve_projection_search_index_products(
+            existing_counts=dict(dict(existing_projection or {}).get("counts") or {}),
+            existing_readiness=dict(dict(existing_projection or {}).get("readiness") or {}),
+            existing_metadata=dict(dict(existing_projection or {}).get("metadata") or {}),
+            next_counts=dict(counts or {}),
+            next_readiness=dict(readiness or {}),
+            next_metadata=dict(metadata or {}),
+        )
 
     def _extend_run_scope_projection_from_board_visible_records(
         self,
@@ -7801,6 +7817,7 @@ class SourcingOrchestrator:
                 },
                 "scope_spec": scope_spec,
             },
+            next_members=members,
             member_count=len(members),
         ):
             counts, readiness, metadata = self._preserve_projection_derived_products(
@@ -8132,6 +8149,7 @@ class SourcingOrchestrator:
             )
             if key in metadata
         }
+        storage_input_revision = str(metadata.get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or "").strip()
         semantic_provenance = {
             key: provenance.get(key)
             for key in (
@@ -8166,12 +8184,11 @@ class SourcingOrchestrator:
             "source_collection_version": str(payload.get("source_collection_version") or "").strip(),
             "candidate_identity_manifest_ref": str(payload.get("candidate_identity_manifest_ref") or "").strip(),
             "manual_overlay_version": str(payload.get("manual_overlay_version") or "").strip(),
-            "raw_profile_index_watermark": str(payload.get("raw_profile_index_watermark") or "").strip(),
-            "evidence_index_watermark": str(payload.get("evidence_index_watermark") or "").strip(),
             "visible_member_count": max(0, int(member_count or 0)),
             "counts": semantic_counts,
             "readiness": semantic_readiness,
             "metadata": semantic_metadata,
+            "storage_input_revision": storage_input_revision,
             "provenance": semantic_provenance,
             "scope_spec": semantic_scope,
         }
@@ -8673,6 +8690,9 @@ class SourcingOrchestrator:
                 0,
             ),
         )
+        build_generation = (
+            item_projection_index_input_version or item_projection_updated_at or current_projection_index_input_version
+        )
         result = self.person_asset_writer.rebuild_projection_person_search_index_page(
             projection_id=projection_id,
             count_scope=str(metadata.get("count_scope") or "exact_projection").strip() or "exact_projection",
@@ -8699,7 +8719,36 @@ class SourcingOrchestrator:
             offset=current_offset,
             reset_index=(current_offset == 0),
             rebuild_person_indexes=False,
+            build_generation=build_generation,
         )
+        if str(result.get("status") or "").strip() == "obsolete":
+            completed_item = (
+                {}
+                if command_owned_payload
+                else self.store.mark_job_materialization_item_completed(
+                    item_id,
+                    serving_projection_id=projection_id,
+                    metadata={
+                        "completed_by": str(lease_owner or "").strip(),
+                        "completion_reason": "projection_person_search_index_obsolete_build_generation",
+                        "projection_id": projection_id,
+                        "obsolete_projection_index_input_version": build_generation,
+                        "current_projection_index_input_version": str(
+                            result.get("current_build_generation") or ""
+                        ).strip(),
+                    },
+                )
+            )
+            return {
+                "status": "completed",
+                "reason": "projection_person_search_index_obsolete_build_generation",
+                "item": completed_item,
+                "projection_id": projection_id,
+                "indexed_count": 0,
+                "processed_member_count": 0,
+                "candidate_count": current_member_count,
+                "obsolete": True,
+            }
         if str(result.get("status") or "") != "indexed":
             failed_item = (
                 {}
@@ -30734,14 +30783,17 @@ class SourcingOrchestrator:
                 limit=normalized_limit,
             )
             if str(asset_population_page.get("status") or "").strip() == "not_ready":
-                canonical_total_candidates = self._canonical_public_projection_candidate_count(
-                    result_view_lifecycle=public_projection.get("result_view_lifecycle"),
-                    board_runtime_state=public_projection.get("board_runtime_state"),
-                )
-                total_candidates = max(
+                canonical_total_candidates = _coerce_int(
+                    asset_population_page.get("total_candidates"),
                     _coerce_int(asset_population_page.get("candidate_count"), 0),
-                    canonical_total_candidates,
                 )
+                page_offset = max(
+                    0,
+                    _coerce_int(asset_population_page.get("offset"), normalized_offset),
+                )
+                page_limit = max(0, _coerce_int(asset_population_page.get("limit"), 0))
+                page_candidates = list(asset_population_page.get("candidates") or [])
+                page_next_offset = asset_population_page.get("next_offset")
                 return {
                     "job_id": job_id,
                     "result_mode": "asset_population",
@@ -30749,13 +30801,19 @@ class SourcingOrchestrator:
                     "reason": str(
                         asset_population_page.get("reason") or "projection_person_search_index_unavailable"
                     ).strip(),
-                    "offset": normalized_offset,
-                    "limit": 0,
-                    "returned_count": 0,
-                    "total_candidates": total_candidates,
-                    "filtered_candidate_count": 0,
-                    "has_more": False,
-                    "next_offset": None,
+                    "offset": page_offset,
+                    "limit": page_limit,
+                    "returned_count": _coerce_int(
+                        asset_population_page.get("returned_count"),
+                        len(page_candidates),
+                    ),
+                    "total_candidates": canonical_total_candidates,
+                    "filtered_candidate_count": _coerce_int(
+                        asset_population_page.get("filtered_candidate_count"),
+                        0,
+                    ),
+                    "has_more": bool(asset_population_page.get("has_more")),
+                    "next_offset": (max(0, _coerce_int(page_next_offset, 0)) if page_next_offset is not None else None),
                     "profile_fetch_progress": dict(asset_population_page.get("profile_fetch_progress") or {}),
                     "card_materialization_summary": dict(
                         asset_population_page.get("card_materialization_summary") or {}
@@ -30770,7 +30828,7 @@ class SourcingOrchestrator:
                     "applied_filter": dict(asset_population_page.get("applied_filter") or normalized_candidate_filter),
                     "filter_contract": dict(asset_population_page.get("filter_contract") or {}),
                     "read_contract": dict(asset_population_page.get("read_contract") or {}),
-                    "candidates": [],
+                    "candidates": page_candidates,
                 }
             if asset_population_page:
                 pass
@@ -46500,7 +46558,7 @@ class SourcingOrchestrator:
             status_values = [item.strip() for item in statuses.split(",") if item.strip()]
         else:
             status_values = [str(item or "").strip() for item in list(statuses or []) if str(item or "").strip()]
-        actions = self.store.list_agent_actions(
+        actions = self.store.repos.workflow_runtime.list_actions(
             workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
             conversation_id=str(payload.get("conversation_id") or "").strip(),
             action_type=str(payload.get("action_type") or "").strip(),
@@ -46525,7 +46583,7 @@ class SourcingOrchestrator:
             status_values = [item.strip() for item in statuses.split(",") if item.strip()]
         else:
             status_values = [str(item or "").strip() for item in list(statuses or []) if str(item or "").strip()]
-        operation_runs = self.store.list_operation_runs(
+        operation_runs = self.store.repos.workflow_runtime.list_operations(
             workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
             action_id=str(payload.get("action_id") or "").strip(),
             owner_module=str(payload.get("owner_module") or "").strip(),
@@ -46583,25 +46641,25 @@ class SourcingOrchestrator:
         }
 
     def get_operation_action_api(self, action_id: str) -> dict[str, Any]:
-        action = self.store.get_agent_action(action_id)
+        action = self.store.repos.workflow_runtime.get_action(action_id)
         if not action:
             return {"status": "not_found", "action_id": str(action_id or "").strip()}
         return {
             "status": "ok",
             "action": self._operation_action_api_record(action),
-            "events": self.store.list_operation_events(action["action_id"]),
+            "events": self.store.repos.workflow_runtime.list_operation_events(action["action_id"]),
             "module_state_mutated": False,
             "contract": "w9_operation_action_query_v1",
         }
 
     def get_operation_run_api(self, operation_run_id: str) -> dict[str, Any]:
-        operation_run = self.store.get_operation_run(operation_run_id)
+        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation_run:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
         return {
             "status": "ok",
             "operation_run": self._operation_run_api_record_with_status_summary(operation_run),
-            "events": self.store.list_operation_events(operation_run["operation_run_id"]),
+            "events": self.store.repos.workflow_runtime.list_operation_events(operation_run["operation_run_id"]),
             "module_state_mutated": False,
             "contract": "w9_operation_run_query_v1",
         }
@@ -46631,7 +46689,7 @@ class SourcingOrchestrator:
                 if command_id and command_id not in command_ids:
                     commands.append(command)
                     command_ids.add(command_id)
-        events = self.store.list_operation_events(operation_run_id)
+        events = self.store.repos.workflow_runtime.list_operation_events(operation_run_id)
 
         command_status_counts: dict[str, int] = {}
         for command in commands:
@@ -46687,7 +46745,11 @@ class SourcingOrchestrator:
     def _operation_run_display_contract_record(self, operation_run: dict[str, Any]) -> dict[str, Any]:
         record = dict(operation_run or {})
         action_id = str(record.get("action_id") or "").strip()
-        action = self.store.get_agent_action(action_id) if action_id else {}
+        action = self.store.repos.workflow_runtime.get_action(action_id) if action_id else {}
+        operation_workspace_id = str(record.get("workspace_id") or "default").strip() or "default"
+        action_workspace_id = str((action or {}).get("workspace_id") or "default").strip() or "default"
+        if not action or action_workspace_id != operation_workspace_id:
+            action = {}
         if action:
             return self._operation_action_display_contract_record(action)
         metadata = dict(record.get("metadata") or {})
@@ -46713,11 +46775,19 @@ class SourcingOrchestrator:
     def _operation_run_control_state_record(self, operation_run: dict[str, Any]) -> dict[str, Any]:
         record = dict(operation_run or {})
         action_id = str(record.get("action_id") or "").strip()
-        action = self.store.get_agent_action(action_id) if action_id else {}
+        action = self.store.repos.workflow_runtime.get_action(action_id) if action_id else {}
+        operation_workspace_id = str(record.get("workspace_id") or "default").strip() or "default"
+        action_workspace_id = str((action or {}).get("workspace_id") or "default").strip() or "default"
+        if action and action_workspace_id != operation_workspace_id:
+            action = {}
         progress = dict(record.get("progress") or {})
+        action_metadata = dict((action or {}).get("metadata") or {})
         return operation_run_control_state(
             operation_status=str(record.get("status") or "").strip(),
+            operation_run_id=str(record.get("operation_run_id") or "").strip(),
             action_status=str((action or {}).get("status") or "").strip(),
+            action_approval_status=str((action or {}).get("approval_status") or "").strip(),
+            action_retry_operation_run_id=str(action_metadata.get("retry_operation_run_id") or "").strip(),
             operation_phase=str(progress.get("phase") or "").strip(),
         ).to_record()
 
@@ -46754,10 +46824,10 @@ class SourcingOrchestrator:
         return record
 
     def get_operation_run_provenance_api(self, operation_run_id: str) -> dict[str, Any]:
-        operation_run = self.store.get_operation_run(operation_run_id)
+        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation_run:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
-        action = self.store.get_agent_action(str(operation_run.get("action_id") or ""))
+        action = self.store.repos.workflow_runtime.get_action(str(operation_run.get("action_id") or ""))
         workflow_ref = dict(operation_run.get("workflow_ref") or {})
         workflow_run_id = str(workflow_ref.get("workflow_run_id") or "").strip()
         commands = self.store.list_workflow_commands(operation_id=operation_run["operation_run_id"], limit=100)
@@ -46772,9 +46842,15 @@ class SourcingOrchestrator:
             "status": "ok",
             "action": self._operation_action_api_record(action) if action else {},
             "operation_run": self._operation_run_api_record_with_status_summary(operation_run),
-            "action_events": self.store.list_operation_events(str(action.get("action_id") or "")) if action else [],
-            "operation_events": self.store.list_operation_events(operation_run["operation_run_id"]),
-            "event_timeline": self.store.list_operation_events_for_action(str(operation_run.get("action_id") or "")),
+            "action_events": self.store.repos.workflow_runtime.list_operation_events(str(action.get("action_id") or ""))
+            if action
+            else [],
+            "operation_events": self.store.repos.workflow_runtime.list_operation_events(
+                operation_run["operation_run_id"]
+            ),
+            "event_timeline": self.store.repos.workflow_runtime.list_operation_events_for_action(
+                str(operation_run.get("action_id") or "")
+            ),
             "workflow_commands": [
                 self._workflow_command_api_record_with_execution_summary(command) for command in commands
             ],
@@ -46795,6 +46871,18 @@ class SourcingOrchestrator:
             return {"status": "not_found", "action_id": str(action_id or "").strip()}
         except ValueError as exc:
             return {"status": "invalid", "reason": str(exc), "action_id": str(action_id or "").strip()}
+        except OperationRuntimeStateConflict as exc:
+            return {
+                "status": "conflict",
+                "reason": exc.reason,
+                "actual_status": str(exc.record.get("status") or "").strip(),
+                "action": self._operation_action_api_record(exc.record),
+                "events": self.store.repos.workflow_runtime.list_operation_events(
+                    str(exc.record.get("action_id") or action_id)
+                ),
+                "module_state_mutated": False,
+                "contract": "w9_operation_action_approval_v1",
+            }
         return {
             "status": "queued",
             "action": self._operation_action_api_record(result.action),
@@ -46815,10 +46903,16 @@ class SourcingOrchestrator:
             )
         except KeyError:
             return {"status": "not_found", "action_id": str(action_id or "").strip()}
+        rejected = (
+            str(action.get("status") or "").strip() == "cancelled"
+            and str(action.get("approval_status") or "").strip() == "rejected"
+        )
         return {
-            "status": "rejected",
+            "status": "rejected" if rejected else "conflict",
+            "reason": "" if rejected else "operation_action_rejection_conflict",
+            "actual_status": str(action.get("status") or "").strip(),
             "action": self._operation_action_api_record(action),
-            "events": self.store.list_operation_events(action["action_id"]),
+            "events": self.store.repos.workflow_runtime.list_operation_events(action["action_id"]),
             "module_state_mutated": False,
             "contract": "w9_operation_action_rejection_v1",
         }
@@ -46834,10 +46928,13 @@ class SourcingOrchestrator:
             )
         except KeyError:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
+        cancelled = str(operation_run.get("status") or "").strip() == "cancelled"
         return {
-            "status": "cancelled",
+            "status": "cancelled" if cancelled else "conflict",
+            "reason": "" if cancelled else "operation_run_cancel_conflict",
+            "actual_status": str(operation_run.get("status") or "").strip(),
             "operation_run": self._operation_run_api_record_with_status_summary(operation_run),
-            "events": self.store.list_operation_events(operation_run["operation_run_id"]),
+            "events": self.store.repos.workflow_runtime.list_operation_events(operation_run["operation_run_id"]),
             "module_state_mutated": False,
             "contract": "w9_operation_run_cancel_v1",
         }
@@ -46856,6 +46953,15 @@ class SourcingOrchestrator:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
         except ValueError as exc:
             return {"status": "invalid", "reason": str(exc), "operation_run_id": str(operation_run_id or "").strip()}
+        except OperationRuntimeStateConflict as exc:
+            return {
+                "status": "conflict",
+                "reason": exc.reason,
+                "actual_status": str(exc.record.get("status") or "").strip(),
+                "action": self._operation_action_api_record(exc.record),
+                "module_state_mutated": False,
+                "contract": "w9_operation_run_retry_v1",
+            }
         return {
             "status": "queued",
             "parent_operation_run": self._operation_run_api_record_with_status_summary(result["parent_operation_run"]),
@@ -46878,6 +46984,18 @@ class SourcingOrchestrator:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
         except ValueError as exc:
             return {"status": "invalid", "reason": str(exc), "operation_run_id": str(operation_run_id or "").strip()}
+        except OperationRuntimeStateConflict as exc:
+            return {
+                "status": "conflict",
+                "reason": exc.reason,
+                "actual_status": str(exc.record.get("status") or "").strip(),
+                "operation_run": self._operation_run_api_record_with_status_summary(exc.record),
+                "events": self.store.repos.workflow_runtime.list_operation_events(
+                    str(exc.record.get("operation_run_id") or operation_run_id)
+                ),
+                "module_state_mutated": False,
+                "contract": "w9_operation_run_resume_v1",
+            }
         return {
             "status": "queued",
             "operation_run": self._operation_run_api_record_with_status_summary(result["operation_run"]),
@@ -46892,10 +47010,10 @@ class SourcingOrchestrator:
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload = dict(payload or {})
-        operation_run = self.store.get_operation_run(operation_run_id)
+        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation_run:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
-        action = self.store.get_agent_action(str(operation_run.get("action_id") or ""))
+        action = self.store.repos.workflow_runtime.get_action(str(operation_run.get("action_id") or ""))
         if not action:
             return {
                 "status": "invalid",
@@ -47021,7 +47139,7 @@ class SourcingOrchestrator:
             "command_type": str(command.get("command_type") or ""),
             "owner": str(command.get("owner") or ""),
         }
-        next_operation = self.store.update_operation_run_state(
+        next_operation = self.store.repos.workflow_runtime.update_operation_state(
             str(operation_run.get("operation_run_id") or ""),
             status="planned",
             progress_patch={
@@ -47033,12 +47151,12 @@ class SourcingOrchestrator:
             result_ref_patch={"workflow_command": {**workflow_ref, "status": str(command.get("status") or "")}},
             metadata_patch={"last_planned_command_id": workflow_ref["command_id"], "dispatch_actor": actor},
         )
-        self.store.update_agent_action_state(
+        self.store.repos.workflow_runtime.update_action_state(
             str(action.get("action_id") or ""),
             status="planned",
             metadata_patch={"last_operation_run_id": operation_run.get("operation_run_id")},
         )
-        event = self.store.append_operation_event(
+        event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=str(operation_run.get("workspace_id") or "default").strip() or "default",
             event_stream_id=str(operation_run.get("operation_run_id") or ""),
             operation_run_id=str(operation_run.get("operation_run_id") or ""),
@@ -47058,7 +47176,7 @@ class SourcingOrchestrator:
         )
         return {
             "status": "planned",
-            "action": self.store.get_agent_action(str(action.get("action_id") or "")) or action,
+            "action": self.store.repos.workflow_runtime.get_action(str(action.get("action_id") or "")) or action,
             "operation_run": next_operation,
             "workflow_command": self._workflow_command_api_record(command),
             "events": [event],
@@ -48357,19 +48475,19 @@ class SourcingOrchestrator:
             }
         approval_reason = self._crm_writer_operation_approval_reason(action)
         if approval_reason and str(action.get("approval_status") or "").strip() != "approved":
-            next_action = self.store.update_agent_action_state(
+            next_action = self.store.repos.workflow_runtime.update_action_state(
                 str(action.get("action_id") or ""),
                 status="approval_required",
                 approval_status="required",
                 metadata_patch={"approval_required_reason": approval_reason},
             )
-            next_operation = self.store.update_operation_run_state(
+            next_operation = self.store.repos.workflow_runtime.update_operation_state(
                 str(operation_run.get("operation_run_id") or ""),
                 status="queued",
                 progress_patch={"phase": "approval_required", "reason": approval_reason},
                 metadata_patch={"approval_required_reason": approval_reason},
             )
-            event = self.store.append_operation_event(
+            event = self.store.repos.workflow_runtime.append_operation_event(
                 workspace_id=str(operation_run.get("workspace_id") or "default").strip() or "default",
                 event_stream_id=str(operation_run.get("operation_run_id") or ""),
                 operation_run_id=str(operation_run.get("operation_run_id") or ""),
@@ -48426,7 +48544,7 @@ class SourcingOrchestrator:
             "command_type": str(command.get("command_type") or ""),
             "owner": str(command.get("owner") or ""),
         }
-        next_operation = self.store.update_operation_run_state(
+        next_operation = self.store.repos.workflow_runtime.update_operation_state(
             str(operation_run.get("operation_run_id") or ""),
             status="planned",
             progress_patch={
@@ -48438,12 +48556,12 @@ class SourcingOrchestrator:
             result_ref_patch={},
             metadata_patch={"last_planned_command_id": workflow_ref["command_id"], "dispatch_actor": actor},
         )
-        self.store.update_agent_action_state(
+        self.store.repos.workflow_runtime.update_action_state(
             str(action.get("action_id") or ""),
             status="planned",
             metadata_patch={"last_operation_run_id": operation_run.get("operation_run_id")},
         )
-        event = self.store.append_operation_event(
+        event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=str(operation_run.get("workspace_id") or "default").strip() or "default",
             event_stream_id=str(operation_run.get("operation_run_id") or ""),
             operation_run_id=str(operation_run.get("operation_run_id") or ""),
@@ -48459,7 +48577,7 @@ class SourcingOrchestrator:
         )
         return {
             "status": "planned",
-            "action": self.store.get_agent_action(str(action.get("action_id") or "")) or action,
+            "action": self.store.repos.workflow_runtime.get_action(str(action.get("action_id") or "")) or action,
             "operation_run": next_operation,
             "workflow_command": self._workflow_command_api_record(command),
             "events": [event],
@@ -48795,7 +48913,7 @@ class SourcingOrchestrator:
             "reason": str(read_payload.get("reason") or "").strip(),
             "read_result": read_payload,
         }
-        next_operation = self.store.update_operation_run_state(
+        next_operation = self.store.repos.workflow_runtime.update_operation_state(
             str(operation_run.get("operation_run_id") or ""),
             status=terminal_status,
             progress_patch={
@@ -48806,7 +48924,7 @@ class SourcingOrchestrator:
             result_ref_patch=result_ref,
             metadata_patch={"dispatch_actor": actor, "read_only_adapter": True},
         )
-        self.store.update_agent_action_state(
+        self.store.repos.workflow_runtime.update_action_state(
             str(action.get("action_id") or ""),
             status="completed" if terminal_status == "completed" else "queued",
             result_ref_patch={
@@ -48816,7 +48934,7 @@ class SourcingOrchestrator:
             },
             metadata_patch={"last_operation_run_id": operation_run.get("operation_run_id")},
         )
-        event = self.store.append_operation_event(
+        event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=str(operation_run.get("workspace_id") or "default").strip() or "default",
             event_stream_id=str(operation_run.get("operation_run_id") or ""),
             operation_run_id=str(operation_run.get("operation_run_id") or ""),
@@ -48835,7 +48953,7 @@ class SourcingOrchestrator:
         )
         return {
             "status": terminal_status,
-            "action": self.store.get_agent_action(str(action.get("action_id") or "")) or action,
+            "action": self.store.repos.workflow_runtime.get_action(str(action.get("action_id") or "")) or action,
             "operation_run": next_operation,
             "events": [event],
             "module_state_mutated": False,
@@ -48911,7 +49029,7 @@ class SourcingOrchestrator:
             "command_type": str(command.get("command_type") or ""),
             "owner": str(command.get("owner") or ""),
         }
-        next_operation = self.store.update_operation_run_state(
+        next_operation = self.store.repos.workflow_runtime.update_operation_state(
             str(operation_run.get("operation_run_id") or ""),
             status="planned",
             progress_patch={"phase": "workflow_command_planned", **workflow_ref},
@@ -48919,12 +49037,12 @@ class SourcingOrchestrator:
             result_ref_patch={},
             metadata_patch={"last_planned_command_id": workflow_ref["command_id"], "dispatch_actor": actor},
         )
-        self.store.update_agent_action_state(
+        self.store.repos.workflow_runtime.update_action_state(
             str(action.get("action_id") or ""),
             status="planned",
             metadata_patch={"last_operation_run_id": operation_run.get("operation_run_id")},
         )
-        event = self.store.append_operation_event(
+        event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=str(operation_run.get("workspace_id") or "default").strip() or "default",
             event_stream_id=str(operation_run.get("operation_run_id") or ""),
             operation_run_id=str(operation_run.get("operation_run_id") or ""),
@@ -48940,7 +49058,7 @@ class SourcingOrchestrator:
         )
         return {
             "status": "planned",
-            "action": self.store.get_agent_action(str(action.get("action_id") or "")) or action,
+            "action": self.store.repos.workflow_runtime.get_action(str(action.get("action_id") or "")) or action,
             "operation_run": next_operation,
             "workflow_command": self._workflow_command_api_record(command),
             "events": [event],
@@ -48975,7 +49093,7 @@ class SourcingOrchestrator:
             operation_run_id = str(dict(command_payload.get("payload") or {}).get("operation_id") or "").strip()
         if not operation_run_id:
             return {"status": "skipped", "reason": "operation_id_missing"}
-        operation_run = self.store.get_operation_run(operation_run_id)
+        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation_run:
             return {
                 "status": "skipped",
@@ -49023,7 +49141,7 @@ class SourcingOrchestrator:
         }
         command_status = str(command_payload.get("status") or "").strip()
         command_result = dict(command_payload.get("result") or {})
-        operation_patch = self.store.update_operation_run_state(
+        operation_patch = self.store.repos.workflow_runtime.update_operation_state(
             operation_run_id,
             status=next_status,
             progress_patch={
@@ -49046,7 +49164,7 @@ class SourcingOrchestrator:
         )
         action_id = str(operation_patch.get("action_id") or operation_run.get("action_id") or "").strip()
         if action_id:
-            self.store.update_agent_action_state(
+            self.store.repos.workflow_runtime.update_action_state(
                 action_id,
                 status=action_status,
                 result_ref_patch={
@@ -49055,7 +49173,7 @@ class SourcingOrchestrator:
                 },
                 metadata_patch={"last_operation_command_control_action": normalized_action},
             )
-        event = self.store.append_operation_event(
+        event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=str(
                 operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default"
             ).strip()

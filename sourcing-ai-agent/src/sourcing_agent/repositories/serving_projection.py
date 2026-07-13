@@ -28,6 +28,14 @@ from ..person_identity import (
     resolve_person_identity_key,
     resolve_profile_url_key,
 )
+from ..projection_search_index_contract import (
+    PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY,
+    PROJECTION_SEARCH_INDEX_BUILD_INPUT_REVISION_KEY,
+    PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY,
+    new_projection_search_index_input_revision,
+    preserve_projection_search_index_products,
+    projection_search_index_members_changed,
+)
 from ..public_candidate_facets import (
     candidate_matches_candidate_page_filter as _candidate_matches_candidate_page_filter,
 )
@@ -300,6 +308,21 @@ class ServingProjectionRepository(Repository):
     def _projection_from_row(self, row: Any) -> dict[str, Any]:
         return SERVING_PROJECTIONS.from_row(row)
 
+    @staticmethod
+    def _with_new_person_search_index_input_revision(
+        payload: dict[str, Any],
+        *,
+        input_revision: str = "",
+    ) -> dict[str, Any]:
+        normalized = dict(payload or {})
+        metadata = _normalize_json_object_payload(normalized.get("metadata") or normalized.get("metadata_json"))
+        metadata[PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY] = (
+            str(input_revision or "").strip() or new_projection_search_index_input_revision()
+        )
+        normalized["metadata"] = metadata
+        normalized.pop("metadata_json", None)
+        return normalized
+
     def _run_link_from_row(self, row: Any) -> dict[str, Any]:
         return RUN_PROJECTION_LINKS.from_row(row)
 
@@ -458,15 +481,19 @@ class ServingProjectionRepository(Repository):
         if not row_payloads:
             return 0
         if self._should_prefer_read("serving_projection_members"):
-            return int(
-                self._call_native_write(
-                    "bulk_upsert_rows",
-                    table_name="serving_projection_members",
-                    rows=row_payloads,
-                    transaction_lock_key=f"serving_projection_publication:{normalized_projection_id}",
-                )
-                or 0
+            result = self._call_native_write(
+                "write_serving_projection_members_with_input_revision",
+                table_name="serving_projection_members",
+                projection_id=normalized_projection_id,
+                rows=row_payloads,
+                replace_members=False,
+                input_revision=new_projection_search_index_input_revision(),
+                transaction_lock_key=f"serving_projection_publication:{normalized_projection_id}",
             )
+            if isinstance(result, dict) and bool(result.get("applied")):
+                return int(result.get("member_count") or 0)
+            if not self._strict_authoritative("serving_projection_members"):
+                return 0
         self._raise_postgres_only_invariant(
             table_name="serving_projection_members",
             method_name="upsert_serving_projection_members",
@@ -550,17 +577,19 @@ class ServingProjectionRepository(Repository):
             return 0
         if self._should_prefer_read("serving_projection_members"):
             row_payloads = self._member_row_payloads(normalized_projection_id, members)
-            return int(
-                self._call_native_write(
-                    "replace_rows",
-                    table_name="serving_projection_members",
-                    where_sql="projection_id = %s",
-                    params=[normalized_projection_id],
-                    rows=row_payloads,
-                    transaction_lock_key=f"serving_projection_publication:{normalized_projection_id}",
-                )
-                or 0
+            result = self._call_native_write(
+                "write_serving_projection_members_with_input_revision",
+                table_name="serving_projection_members",
+                projection_id=normalized_projection_id,
+                rows=row_payloads,
+                replace_members=True,
+                input_revision=new_projection_search_index_input_revision(),
+                transaction_lock_key=f"serving_projection_publication:{normalized_projection_id}",
             )
+            if isinstance(result, dict) and bool(result.get("applied")):
+                return int(result.get("member_count") or 0)
+            if not self._strict_authoritative("serving_projection_members"):
+                return 0
         self._raise_postgres_only_invariant(
             table_name="serving_projection_members",
             method_name="replace_serving_projection_members",
@@ -771,8 +800,13 @@ class ServingProjectionRepository(Repository):
         self,
         projection_id: str,
         rows: builtins.list[dict[str, Any]] | tuple[dict[str, Any], ...],
+        *,
+        build_generation: str = "",
+        expected_build_generation: str | None = None,
+        expected_input_revision: str | None = None,
     ) -> dict[str, Any]:
         normalized_projection_id = str(projection_id or "").strip()
+        normalized_generation = str(build_generation or "").strip()
         if not normalized_projection_id:
             return {"status": "invalid", "reason": "projection_id_required", "indexed_count": 0}
         normalized_rows = [
@@ -782,6 +816,63 @@ class ServingProjectionRepository(Repository):
         ]
         normalized_rows = [row for row in normalized_rows if str(row.get("candidate_identity_key") or "").strip()]
         if self._should_prefer_read("projection_person_search_index"):
+            if normalized_generation:
+                if expected_build_generation is None:
+                    return {
+                        "status": "invalid",
+                        "reason": "projection_person_search_index_expected_build_generation_required",
+                        "projection_id": normalized_projection_id,
+                        "indexed_count": 0,
+                        "build_generation": normalized_generation,
+                    }
+                if expected_input_revision is None:
+                    return {
+                        "status": "invalid",
+                        "reason": "projection_person_search_index_expected_input_revision_required",
+                        "projection_id": normalized_projection_id,
+                        "indexed_count": 0,
+                        "build_generation": normalized_generation,
+                    }
+                generation_result = self._call_native_write(
+                    "write_projection_person_search_index_generation",
+                    table_name="projection_person_search_index",
+                    projection_id=normalized_projection_id,
+                    rows=normalized_rows,
+                    build_generation=normalized_generation,
+                    reset_index=True,
+                    expected_build_generation=str(expected_build_generation or "").strip(),
+                    expected_input_revision=str(expected_input_revision or "").strip(),
+                    transaction_lock_key=f"projection_person_search_index:{normalized_projection_id}",
+                )
+                if isinstance(generation_result, dict):
+                    if not bool(generation_result.get("applied")):
+                        status = str(generation_result.get("status") or "generation_fence_rejected").strip()
+                        return {
+                            "status": "obsolete" if status == "stale_generation" else "not_ready",
+                            "reason": f"projection_person_search_index_{status}",
+                            "projection_id": normalized_projection_id,
+                            "indexed_count": 0,
+                            "build_generation": normalized_generation,
+                            "current_build_generation": str(
+                                generation_result.get("current_build_generation") or ""
+                            ).strip(),
+                        }
+                    return {
+                        "status": "indexed",
+                        "projection_id": normalized_projection_id,
+                        "indexed_count": len(normalized_rows),
+                        "build_generation": normalized_generation,
+                        "read_contract": {
+                            "source": "projection_person_search_index",
+                            "fallback_used": False,
+                            "fail_closed": True,
+                        },
+                    }
+                self._raise_write_failure(
+                    table_name="projection_person_search_index",
+                    method_name="write_projection_person_search_index_generation",
+                    reason="generation-fenced reset returned no confirmation",
+                )
             replaced_count = self._call_native_write(
                 "replace_rows",
                 table_name="projection_person_search_index",
@@ -845,8 +936,11 @@ class ServingProjectionRepository(Repository):
         self,
         projection_id: str,
         rows: builtins.list[dict[str, Any]] | tuple[dict[str, Any], ...],
+        *,
+        build_generation: str = "",
     ) -> dict[str, Any]:
         normalized_projection_id = str(projection_id or "").strip()
+        normalized_generation = str(build_generation or "").strip()
         if not normalized_projection_id:
             return {"status": "invalid", "reason": "projection_id_required", "indexed_count": 0}
         normalized_rows = [
@@ -856,6 +950,45 @@ class ServingProjectionRepository(Repository):
         ]
         normalized_rows = [row for row in normalized_rows if str(row.get("candidate_identity_key") or "").strip()]
         if self._should_prefer_read("projection_person_search_index"):
+            if normalized_generation:
+                generation_result = self._call_native_write(
+                    "write_projection_person_search_index_generation",
+                    table_name="projection_person_search_index",
+                    projection_id=normalized_projection_id,
+                    rows=normalized_rows,
+                    build_generation=normalized_generation,
+                    reset_index=False,
+                    transaction_lock_key=f"projection_person_search_index:{normalized_projection_id}",
+                )
+                if isinstance(generation_result, dict):
+                    if not bool(generation_result.get("applied")):
+                        status = str(generation_result.get("status") or "generation_fence_rejected").strip()
+                        return {
+                            "status": "obsolete" if status == "stale_generation" else "not_ready",
+                            "reason": f"projection_person_search_index_{status}",
+                            "projection_id": normalized_projection_id,
+                            "indexed_count": 0,
+                            "build_generation": normalized_generation,
+                            "current_build_generation": str(
+                                generation_result.get("current_build_generation") or ""
+                            ).strip(),
+                        }
+                    return {
+                        "status": "indexed",
+                        "projection_id": normalized_projection_id,
+                        "indexed_count": len(normalized_rows),
+                        "build_generation": normalized_generation,
+                        "read_contract": {
+                            "source": "projection_person_search_index",
+                            "fallback_used": False,
+                            "fail_closed": True,
+                        },
+                    }
+                self._raise_write_failure(
+                    table_name="projection_person_search_index",
+                    method_name="write_projection_person_search_index_generation",
+                    reason="generation-fenced continuation returned no confirmation",
+                )
             try:
                 if normalized_rows:
                     self._call_native_write(
@@ -887,10 +1020,65 @@ class ServingProjectionRepository(Repository):
             "returned False; legacy SQLite tail retired (B4)"
         )
 
+    def update_person_search_index_build_state(
+        self,
+        projection_id: str,
+        *,
+        build_generation: str,
+        index_values: dict[str, Any] | None = None,
+        counts_patch: dict[str, Any] | None = None,
+        readiness_patch: dict[str, Any] | None = None,
+        metadata_patch: dict[str, Any] | None = None,
+        raw_profile_index_watermark: str = "",
+        evidence_index_watermark: str = "",
+    ) -> dict[str, Any]:
+        normalized_projection_id = str(projection_id or "").strip()
+        normalized_generation = str(build_generation or "").strip()
+        if not normalized_projection_id or not normalized_generation:
+            return {
+                "status": "invalid",
+                "reason": "projection_id_and_build_generation_required",
+                "projection_id": normalized_projection_id,
+                "updated_count": 0,
+            }
+        result = self._call_native_write(
+            "update_projection_person_search_index_generation_state",
+            table_name="serving_projections",
+            projection_id=normalized_projection_id,
+            build_generation=normalized_generation,
+            index_values=dict(index_values or {}),
+            counts_patch=dict(counts_patch or {}),
+            readiness_patch=dict(readiness_patch or {}),
+            metadata_patch=dict(metadata_patch or {}),
+            raw_profile_index_watermark=str(raw_profile_index_watermark or "").strip(),
+            evidence_index_watermark=str(evidence_index_watermark or "").strip(),
+            transaction_lock_key=f"projection_person_search_index:{normalized_projection_id}",
+        )
+        if not isinstance(result, dict):
+            self._raise_write_failure(
+                table_name="serving_projections",
+                method_name="update_projection_person_search_index_generation_state",
+                reason="generation-fenced projection index state update returned no confirmation",
+            )
+        if not bool(result.get("applied")):
+            status = str(result.get("status") or "generation_fence_rejected").strip()
+            return {
+                **result,
+                "status": "obsolete" if status == "stale_generation" else "not_ready",
+                "reason": f"projection_person_search_index_{status}",
+            }
+        projection_row = result.get("projection_row")
+        return {
+            **result,
+            "status": "updated",
+            "projection": self._projection_from_row(projection_row) if projection_row is not None else {},
+        }
+
     def update_person_search_index_scope(
         self,
         projection_id: str,
         *,
+        build_generation: str,
         count_scope: str,
         raw_profile_index_watermark: str = "",
         evidence_index_watermark: str = "",
@@ -899,10 +1087,8 @@ class ServingProjectionRepository(Repository):
         normalized_count_scope = str(count_scope or "").strip() or "index_partial"
         if not normalized_projection_id:
             return {"status": "invalid", "reason": "projection_id_required", "updated_count": 0}
-        now = utc_now_timestamp()
         values = {
             "count_scope": normalized_count_scope,
-            "updated_at": now,
         }
         raw_watermark = str(raw_profile_index_watermark or "").strip()
         evidence_watermark = str(evidence_index_watermark or "").strip()
@@ -910,39 +1096,20 @@ class ServingProjectionRepository(Repository):
             values["raw_profile_index_watermark"] = raw_watermark
         if evidence_watermark:
             values["evidence_index_watermark"] = evidence_watermark
-        if self._should_prefer_read("projection_person_search_index"):
-            try:
-                updated_count = self._call_native_write(
-                    "update_rows",
-                    table_name="projection_person_search_index",
-                    where_sql="projection_id = %s",
-                    params=[normalized_projection_id],
-                    values=values,
-                )
-                if updated_count is not None:
-                    return {
-                        "status": "updated",
-                        "projection_id": normalized_projection_id,
-                        "updated_count": int(updated_count or 0),
-                        "count_scope": normalized_count_scope,
-                        "read_contract": {
-                            "source": "projection_person_search_index",
-                            "fallback_used": False,
-                            "fail_closed": True,
-                        },
-                    }
-            except Exception as exc:
-                if self._strict_authoritative("projection_person_search_index"):
-                    self._raise_write_failure(
-                        table_name="projection_person_search_index",
-                        method_name="update_projection_person_search_index_scope",
-                        reason=f"{type(exc).__name__}: {exc}",
-                        error=exc,
-                    )
-        raise RuntimeError(
-            "postgres-only invariant violated for projection_person_search_index in update_projection_person_search_index_scope: should_prefer_read "
-            "returned False; legacy SQLite tail retired (B4)"
+        result = self.update_person_search_index_build_state(
+            normalized_projection_id,
+            build_generation=build_generation,
+            index_values=values,
         )
+        return {
+            **result,
+            "count_scope": normalized_count_scope,
+            "read_contract": {
+                "source": "projection_person_search_index",
+                "fallback_used": False,
+                "fail_closed": True,
+            },
+        }
 
     def count_person_search_index(self, projection_id: str) -> int:
         normalized_projection_id = str(projection_id or "").strip()
@@ -978,6 +1145,60 @@ class ServingProjectionRepository(Repository):
                 )
             return 0
 
+    def _person_search_index_read_state(self, projection_id: str) -> dict[str, Any]:
+        normalized_projection_id = str(projection_id or "").strip()
+        projection = self.get(normalized_projection_id) if normalized_projection_id else {}
+        if not projection:
+            return {
+                "status": "unavailable",
+                "reason": "projection_missing",
+                "projection_id": normalized_projection_id,
+                "read_token": "",
+            }
+        metadata = dict(projection.get("metadata") or {})
+        build_generation = str(metadata.get(PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY) or "").strip()
+        input_revision = str(metadata.get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or "").strip()
+        build_input_revision = str(metadata.get(PROJECTION_SEARCH_INDEX_BUILD_INPUT_REVISION_KEY) or "").strip()
+        if not build_generation or not input_revision or build_input_revision != input_revision:
+            return {
+                "status": "unavailable",
+                "reason": "projection_person_search_index_stale_input_revision",
+                "projection_id": normalized_projection_id,
+                "build_generation": build_generation,
+                "input_revision": input_revision,
+                "build_input_revision": build_input_revision,
+                "read_token": "",
+            }
+        return {
+            "status": "ready",
+            "projection_id": normalized_projection_id,
+            "build_generation": build_generation,
+            "input_revision": input_revision,
+            "build_input_revision": build_input_revision,
+            "read_token": f"{build_generation}:{input_revision}",
+        }
+
+    @staticmethod
+    def _person_search_index_unavailable_result(
+        projection_id: str,
+        *,
+        reason: str,
+    ) -> dict[str, Any]:
+        return {
+            "status": "unavailable",
+            "reason": str(reason or "projection_person_search_index_unavailable").strip()
+            or "projection_person_search_index_unavailable",
+            "projection_id": projection_id,
+            "matched_count": 0,
+            "candidate_identity_keys": [],
+            "index_filter_readiness": {
+                "count_scope": "unavailable",
+                "raw_profile_index_watermark": "",
+                "evidence_index_watermark": "",
+                "freshness_timezone": "Asia/Shanghai",
+            },
+        }
+
     def search_person_index(
         self,
         projection_id: str,
@@ -1004,6 +1225,12 @@ class ServingProjectionRepository(Repository):
                 "matched_count": 0,
                 "candidate_identity_keys": [],
             }
+        initial_read_state = self._person_search_index_read_state(normalized_projection_id)
+        if str(initial_read_state.get("status") or "") != "ready":
+            return self._person_search_index_unavailable_result(
+                normalized_projection_id,
+                reason=str(initial_read_state.get("reason") or ""),
+            )
         if self.count_person_search_index(normalized_projection_id) <= 0:
             return {
                 "status": "unavailable",
@@ -1025,6 +1252,12 @@ class ServingProjectionRepository(Repository):
         matched_count = len(rows)
         paged_rows = rows[normalized_offset : normalized_offset + normalized_limit]
         readiness_rows = rows or self._list_person_search_index_rows(normalized_projection_id, limit=1000)
+        final_read_state = self._person_search_index_read_state(normalized_projection_id)
+        if final_read_state.get("read_token") != initial_read_state.get("read_token"):
+            return self._person_search_index_unavailable_result(
+                normalized_projection_id,
+                reason="projection_person_search_index_changed_during_read",
+            )
         return {
             "status": "ready",
             "projection_id": normalized_projection_id,
@@ -1077,6 +1310,12 @@ class ServingProjectionRepository(Repository):
                 "matched_count": 0,
                 "candidate_identity_keys": [],
             }
+        initial_read_state = self._person_search_index_read_state(normalized_projection_id)
+        if str(initial_read_state.get("status") or "") != "ready":
+            return self._person_search_index_unavailable_result(
+                normalized_projection_id,
+                reason=str(initial_read_state.get("reason") or ""),
+            )
         if self.count_person_search_index(normalized_projection_id) <= 0:
             return {
                 "status": "unavailable",
@@ -1115,7 +1354,13 @@ class ServingProjectionRepository(Repository):
             ):
                 matched_rows.append(row)
         readiness_rows = rows or self._list_person_search_index_rows(normalized_projection_id, limit=1000)
-        if missing_filter_record_count and not matched_rows and rows:
+        final_read_state = self._person_search_index_read_state(normalized_projection_id)
+        if final_read_state.get("read_token") != initial_read_state.get("read_token"):
+            return self._person_search_index_unavailable_result(
+                normalized_projection_id,
+                reason="projection_person_search_index_changed_during_read",
+            )
+        if missing_filter_record_count:
             return {
                 "status": "unavailable",
                 "reason": "projection_person_search_index_filter_record_missing",
@@ -1176,6 +1421,18 @@ class ServingProjectionRepository(Repository):
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             return {"status": "invalid", "reason": "projection_id_required"}
+        initial_read_state = self._person_search_index_read_state(normalized_projection_id)
+        if str(initial_read_state.get("status") or "") != "ready":
+            return {
+                **initial_read_state,
+                "indexed_count": 0,
+                "index_filter_readiness": {
+                    "count_scope": "unavailable",
+                    "raw_profile_index_watermark": "",
+                    "evidence_index_watermark": "",
+                    "freshness_timezone": "Asia/Shanghai",
+                },
+            }
         rows = self._list_person_search_index_rows(normalized_projection_id, limit=1000)
         if not rows:
             return {
@@ -1189,10 +1446,25 @@ class ServingProjectionRepository(Repository):
                     "freshness_timezone": "Asia/Shanghai",
                 },
             }
+        indexed_count = self.count_person_search_index(normalized_projection_id)
+        final_read_state = self._person_search_index_read_state(normalized_projection_id)
+        if final_read_state.get("read_token") != initial_read_state.get("read_token"):
+            return {
+                "status": "unavailable",
+                "reason": "projection_person_search_index_changed_during_read",
+                "projection_id": normalized_projection_id,
+                "indexed_count": 0,
+                "index_filter_readiness": {
+                    "count_scope": "unavailable",
+                    "raw_profile_index_watermark": "",
+                    "evidence_index_watermark": "",
+                    "freshness_timezone": "Asia/Shanghai",
+                },
+            }
         return {
             "status": "ready",
             "projection_id": normalized_projection_id,
-            "indexed_count": self.count_person_search_index(normalized_projection_id),
+            "indexed_count": indexed_count,
             "index_filter_readiness": _person_search_index_readiness(rows),
             "read_contract": {
                 "source": "projection_person_search_index",
@@ -1208,11 +1480,18 @@ class ServingProjectionRepository(Repository):
         offset: int = 0,
         limit: int = 1000,
     ) -> builtins.list[dict[str, Any]]:
-        return self._list_person_search_index_rows(
+        initial_read_state = self._person_search_index_read_state(projection_id)
+        if str(initial_read_state.get("status") or "") != "ready":
+            return []
+        rows = self._list_person_search_index_rows(
             projection_id,
             offset=offset,
             limit=limit,
         )
+        final_read_state = self._person_search_index_read_state(projection_id)
+        if final_read_state.get("read_token") != initial_read_state.get("read_token"):
+            return []
+        return rows
 
     def _list_person_search_index_rows(
         self,
@@ -1364,7 +1643,9 @@ class ServingProjectionRepository(Repository):
                 table_name="serving_projection_members",
                 method_name="upsert_serving_projection_with_replaced_members",
             )
-        projection_id, projection_row = self._projection_row_payload(payload)
+        projection_id, projection_row = self._projection_row_payload(
+            self._with_new_person_search_index_input_revision(payload)
+        )
         member_rows = self._member_row_payloads(projection_id, members)
         result = self._call_native_write(
             "upsert_row_and_replace_rows",
@@ -1374,6 +1655,7 @@ class ServingProjectionRepository(Repository):
             replace_where_sql="projection_id = %s",
             replace_params=[projection_id],
             replace_rows=member_rows,
+            update_projection_index_input_revision=True,
             transaction_lock_key=f"serving_projection_publication:{projection_id}",
         )
         if not isinstance(result, dict):
@@ -1411,7 +1693,9 @@ class ServingProjectionRepository(Repository):
                 table_name="serving_projection_members",
                 method_name="upsert_serving_projection_with_members",
             )
-        projection_id, projection_row = self._projection_row_payload(payload)
+        projection_id, projection_row = self._projection_row_payload(
+            self._with_new_person_search_index_input_revision(payload)
+        )
         member_rows = self._member_row_payloads(projection_id, members)
         result = self._call_native_write(
             "upsert_row_and_upsert_rows",
@@ -1419,6 +1703,7 @@ class ServingProjectionRepository(Repository):
             row=projection_row,
             upsert_table_name="serving_projection_members",
             upsert_rows=member_rows,
+            update_projection_index_input_revision=True,
             transaction_lock_key=f"serving_projection_publication:{projection_id}",
         )
         if not isinstance(result, dict):
@@ -1515,6 +1800,7 @@ class ServingProjectionRepository(Repository):
         replace_members: bool,
     ) -> dict[str, Any]:
         normalized_members = self._normalized_member_inputs(members)
+        projection_input_revision = new_projection_search_index_input_revision()
         explicit_projection_id = str(
             projection_payload.get("projection_id") or projection_payload.get("id") or ""
         ).strip()
@@ -1527,7 +1813,12 @@ class ServingProjectionRepository(Repository):
             existing_route: dict[str, Any],
             publication_now: str,
         ) -> dict[str, Any]:
-            effective_projection_payload = dict(projection_payload)
+            effective_projection_payload = self._with_new_person_search_index_input_revision(
+                projection_payload,
+                input_revision=projection_input_revision,
+            )
+            effective_projection_metadata = _normalize_json_object_payload(effective_projection_payload.get("metadata"))
+            effective_projection_payload["metadata"] = effective_projection_metadata
             if scope_kind == "run_scope" and not str(effective_projection_payload.get("collection_id") or "").strip():
                 effective_projection_payload["collection_id"] = str(existing_route.get("collection_id") or "").strip()
             _, projection_row = self._projection_row_payload(
@@ -1542,6 +1833,42 @@ class ServingProjectionRepository(Repository):
                 existing_by_key=existing_members_by_key,
                 now=publication_now,
             )
+            next_members_by_key = {
+                str(row.get("candidate_identity_key") or "").strip(): row
+                for row in member_rows
+                if str(row.get("candidate_identity_key") or "").strip()
+            }
+            membership_changed = projection_search_index_members_changed(
+                existing_rows=existing_members_by_key,
+                next_rows=next_members_by_key,
+                replace_members=replace_members,
+            )
+            existing_metadata = _loads_json_dict(existing_projection.get("metadata_json"))
+            existing_input_revision = str(
+                existing_metadata.get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
+            ).strip()
+            if existing_input_revision and not membership_changed:
+                projection_metadata = _loads_json_dict(projection_row.get("metadata_json"))
+                projection_metadata[PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY] = existing_input_revision
+                projection_counts, projection_readiness, projection_metadata = (
+                    preserve_projection_search_index_products(
+                        existing_counts=_loads_json_dict(existing_projection.get("counts_json")),
+                        existing_readiness=_loads_json_dict(existing_projection.get("readiness_json")),
+                        existing_metadata=existing_metadata,
+                        next_counts=_loads_json_dict(projection_row.get("counts_json")),
+                        next_readiness=_loads_json_dict(projection_row.get("readiness_json")),
+                        next_metadata=projection_metadata,
+                    )
+                )
+                projection_row["counts_json"] = json.dumps(projection_counts, ensure_ascii=False)
+                projection_row["readiness_json"] = json.dumps(projection_readiness, ensure_ascii=False)
+                projection_row["metadata_json"] = json.dumps(projection_metadata, ensure_ascii=False)
+                for watermark_field in (
+                    "raw_profile_index_watermark",
+                    "evidence_index_watermark",
+                ):
+                    if not str(projection_row.get(watermark_field) or "").strip():
+                        projection_row[watermark_field] = existing_projection.get(watermark_field) or ""
             if scope_kind == "run_scope":
                 routing_row = self._run_link_row_payload(
                     {

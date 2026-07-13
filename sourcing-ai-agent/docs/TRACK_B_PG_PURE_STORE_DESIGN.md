@@ -795,3 +795,60 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
   - **台账/接续**:R-001/R-007/D-3 看板分子合同未改；R-009 规则未触发慢 pipeline；R-011 未增长；
     D-1/D-2/D-3 截止仍为 **2026-07-31**。异步 Codex review 在 implementation commit 固定后登记为 R-017，
     只冻结本 scope 的 live/W6/manual/里程碑签收，不阻断下一域 Scout/开发。
+  - **独立评审 fixed-forward**:独立 Codex artifact
+    `runtime/reviews/20260710_async-reference-track-b-2-3d-codex-subagent.md` 给出 scope-local **NO-GO**:
+    mixed missing `filter_record` 被误报 exact-ready、job not-ready 覆盖 canonical projection count、paged build
+    缺 generation fence、公开 reason 泄漏内部 `..._missing`。四项均已修复:任一缺失 filter record 整页
+    fail-closed;job 保留 projection count/pagination;索引写入改为三键合同:semantic input revision、
+    build-bound input revision、build generation。成员 publication 仅在 index-relevant 语义变化时推进 input revision,
+    identical replay 保持;reset/continuation/partial/finalize/facet 与公开读均校验 generation 和
+    build-bound revision == current revision,completed generation 不可降级。ordinary projection publication/upsert
+    必须保留三个 reserved keys;公开 reason 统一为
+    `projection_person_search_index_unavailable`。
+  - **2026-07-13 对抗审计 fixed-forward**:facet/readiness 产品也绑定 generation/build-input/input revision;
+    semantic member 变化与新 reset 在事务内使旧产品 unavailable,finalize 原子重建并标 completed,empty projection
+    发布 exact-zero 产品。公开 unfiltered reader 前后复核绑定;semantic no-op publication 通过共享 contract helper
+    保留 facet/readiness/build metadata 与水位,且 builder-owned freshness watermark 不进入 durable command input identity。
+  - **fixed-forward 复验**:core/surface **77 passed + 3 subtests**、live-PG **61 passed + 4 subtests**、
+    results 精确组 **8 passed / 297 deselected**、projection/storage 全量 **122 passed + 7 subtests**、
+    semantic no-op durable identity **1 passed**。最终 `make ci-pre-agent-contract` **279 passed / 0 skip** + 后续门
+    **2/11/1/2 passed**,`dry_run_ready failures=[]`;`make lint` **49 files** 全绿,mypy 维持
+    **87 errors / 4 files**。R-017 保持 pending,
+    待修复 commit 的 pinned 独立 re-review GO;此前只冻结本 scope 的 live/W6/manual/里程碑签收。
+
+- **2026-07-10 ②.4a 完成 —— workflow_runtime operation-control 退役到 `store.repos.workflow_runtime`**:
+  - **范围/Scout**:`agent_actions`、`operation_runs`、`operation_events` 三表;11 个原 Store public + 3 mapper
+    迁入 Repository,并新增 `reject_action_with_event` / `cancel_operation_with_event` 两个固定业务 UoW。
+    `storage.py` **13,296 → 12,809**(-487),workflow repository **378 → 1,087** 行(含后述 fixed-forward);
+    旧 11 facade、
+    3 mapper、7 native dispatch key 清零。
+  - **调用面**:production **91 / 5 files**(orchestrator 41、operation_runtime 25、acquisition owner 17、
+    CRM owner 4、command kernel 4),tests **46 / 1 file**;fake/getattr/whitebox/ambiguous 均 0。
+  - **逐字与 A/B**:approved mapping 后 **11/11 AST 等价**;同树 battery **2 passed**，受控输出变异
+    **1 failed / 1 passed**。Pinned `4140073` old Store 与新 repo snapshot 均 **11,837 bytes**，SHA-256
+    `bbcc134a6577eed4029746830f289768cc224ddf3e8db6493790a70aebfb971d`;descriptor mutation 为
+    11,900 bytes / `10f81890540a8c7bff70fe335804dd16648b9e3d3488b01f38b2eab9943b8378`，native-event
+    mutation 为 11,802 bytes / `6e62addfa9c690efc9eec235911b4e52caa3c619bb21f569cdba3fd6223f482a`。
+  - **并发 fixed-forward**:普通 action/run 更新使用 expected-status CAS,terminal row 不可被 stale writer reopen;
+    `rejected` 纳入 action terminal 集。reject/cancel 按 event-stream advisory lock → operation → linked action
+    锁序,在单连接事务内写状态、关联 action 和 operation event;event failure 整笔 rollback,重复调用幂等,
+    legacy partial state 可补 event/关联 action,冲突不追加成功 event。workspace/entity/type/idempotency collision
+    fail-closed。reject/cancel API 只按 committed row 报 success,否则 `conflict` / HTTP 409。approve/resume/retry
+    在创建后续 event/child run 前也验证 committed target;retry 先取得 action transition,失败时不创建 child/event。
+  - **retry fixed-forward**:控制状态在 linked action 缺失或跨 workspace 时全部 fail-closed;action metadata
+    只允许 chain tip 或 exact requested child 继续 retry,stale ancestor 不得再建 sibling。持久化 retry key 绑定
+    parent + child identity,相同 caller key 跨 parent 及 caller key 等于 parent key 均不碰撞;child row 的
+    workspace/action/status/parent identity 在写 event 前验证。reservation 与 child/events 尚未合成单事务,保留 R-019。
+    2026-07-13 对抗审计再发现 terminal exact-child replay 会先 requeue action 后冲突;现已在 reservation 前
+    只读校验既有 child/event identity并返回其当前状态,不写 action/child/event。公开 control_state 也把
+    cross-workspace action 当 missing,四种控制全部禁用;missing child/events partial state 仍留 R-019。
+  - **验证**:完整 `test_operation_runtime.py` **109 passed**;UoW/CAS/rollback/repair/identity/HTTP 精确电池
+    **40 passed**;retry/control 扩展 **10 passed**,新增真实 PG **3 passed**;projection/storage 全量
+    **122 passed + 7 subtests**;最终 `make ci-pre-agent-contract` **279 passed / 0 skip** + 后续门 **2/11/1/2 passed**，
+    `dry_run_ready failures=[]`;`make lint` **49 files** 全绿，compileall/diff-check 绿;
+    mypy 保持 R-011 基线 **87 errors / 4 files**。
+    未运行 full `test_pipeline.py`、live provider、W6 或 manual signoff。
+  - **边界/台账**:27 个普通 state-sync/dispatch 调用的同状态 stale JSON merge、command-plan 与
+    operation/action/event 跨表原子性尚未由 expected-status CAS 解决,登记 R-019;不得宣称整个 operation runtime
+    已原子化。R-018 登记本批 pinned 异步 Codex review;GO 前只冻结 ②.4a 的 live/W6/manual/里程碑签收。
+    下一批为 ②.4b acquisition-control。D-1/D-2/D-3 截止仍为 **2026-07-31**。

@@ -36,6 +36,14 @@ from .local_postgres import (
     resolve_default_control_plane_db_path,
 )
 from .migration_runner import apply_pending_migrations
+from .projection_search_index_contract import (
+    PROJECTION_SEARCH_INDEX_BINDING_KEYS,
+    PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY,
+    PROJECTION_SEARCH_INDEX_BUILD_INPUT_REVISION_KEY,
+    PROJECTION_SEARCH_INDEX_BUILD_STATUS_KEY,
+    PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY,
+    projection_search_index_members_changed,
+)
 from .runtime_lease_utils import worker_lease_owner_is_dead_local_process
 
 CONTROL_PLANE_LIVE_TABLES = (
@@ -1131,6 +1139,20 @@ class LiveControlPlanePostgresAdapter:
                         )
                     )
                     continue
+                if normalized_table == "serving_projections" and column == "metadata_json":
+                    update_assignments.append(
+                        f"{quoted_column} = "
+                        + _projection_metadata_merge_sql(
+                            quoted_table_name=quoted_table_name,
+                            quoted_column=quoted_column,
+                            preserve_keys=(
+                                PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY,
+                                PROJECTION_SEARCH_INDEX_BUILD_INPUT_REVISION_KEY,
+                                PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY,
+                            ),
+                        )
+                    )
+                    continue
                 if normalized_table == "job_result_lifecycle" and column in {
                     "phase",
                     "state",
@@ -1240,6 +1262,7 @@ class LiveControlPlanePostgresAdapter:
         row: dict[str, Any],
         upsert_table_name: str,
         upsert_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        update_projection_index_input_revision: bool = False,
         transaction_lock_key: str = "",
     ) -> dict[str, int] | None:
         """Atomically publish a parent row and merge child rows under one lock."""
@@ -1251,6 +1274,11 @@ class LiveControlPlanePostgresAdapter:
         parent_rows = self._normalize_bulk_upsert_rows([row])
         if len(parent_rows) != 1:
             raise ValueError("upsert_row_and_upsert_rows requires one non-empty row")
+        if update_projection_index_input_revision and normalized_parent_table == "serving_projections":
+            parent_rows[0] = _invalidate_projection_search_index_products(
+                parent_rows[0],
+                build_status="stale",
+            )
         child_rows = self._normalize_bulk_upsert_rows(upsert_rows)
         parent_plan = self._bulk_upsert_plan(
             normalized_parent_table,
@@ -1278,6 +1306,7 @@ class LiveControlPlanePostgresAdapter:
                             table_name=normalized_parent_table,
                             payload_rows=parent_rows,
                             plan=parent_plan,
+                            preserve_projection_index_input_revision=not bool(update_projection_index_input_revision),
                         )
                         child_count = self._bulk_upsert_rows_with_cursor(
                             cursor,
@@ -1346,6 +1375,539 @@ class LiveControlPlanePostgresAdapter:
                     raise
                 time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
+    def write_serving_projection_members_with_input_revision(
+        self,
+        *,
+        table_name: str,
+        projection_id: str,
+        rows: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        replace_members: bool,
+        input_revision: str,
+        transaction_lock_key: str = "",
+    ) -> dict[str, Any] | None:
+        normalized_table = _normalize_postgres_identifier(table_name)
+        normalized_projection_id = str(projection_id or "").strip()
+        normalized_input_revision = str(input_revision or "").strip()
+        if normalized_table != "serving_projection_members":
+            raise ValueError(
+                "write_serving_projection_members_with_input_revision requires table_name=serving_projection_members"
+            )
+        if not normalized_projection_id or not normalized_input_revision:
+            return None
+        if not self.should_prefer_read(normalized_table) or not self.should_prefer_read("serving_projections"):
+            return None
+        payload_rows = self._normalize_bulk_upsert_rows(rows)
+        plan = self._bulk_upsert_plan(
+            normalized_table,
+            payload_rows,
+            require_primary_key_values=True,
+        )
+        self.ensure_bootstrapped()
+        self._ensure_table_write_schema(normalized_table)
+        self._ensure_table_write_schema("serving_projections")
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        self._acquire_transaction_lock(cursor, transaction_lock_key)
+                        cursor.execute(
+                            "SELECT * FROM serving_projections WHERE projection_id = %s FOR UPDATE",
+                            (normalized_projection_id,),
+                        )
+                        projection_row = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if projection_row is None:
+                            result = {
+                                "status": "projection_missing",
+                                "applied": False,
+                                "projection_id": normalized_projection_id,
+                                "input_revision": normalized_input_revision,
+                                "member_count": 0,
+                            }
+                        else:
+                            metadata = _json_load_dict(projection_row.get("metadata_json"))
+                            next_members_by_key = {
+                                str(row.get("candidate_identity_key") or "").strip(): row
+                                for row in payload_rows
+                                if str(row.get("candidate_identity_key") or "").strip()
+                            }
+                            existing_members_by_key: dict[str, dict[str, Any]] = {}
+                            if replace_members:
+                                cursor.execute(
+                                    'SELECT * FROM "serving_projection_members" WHERE projection_id = %s',
+                                    (normalized_projection_id,),
+                                )
+                                existing_rows = _fetch_all_dict_rows(cursor)
+                            elif next_members_by_key:
+                                candidate_keys = sorted(next_members_by_key)
+                                existing_rows = []
+                                for offset in range(0, len(candidate_keys), 500):
+                                    chunk = candidate_keys[offset : offset + 500]
+                                    placeholders = ", ".join("%s" for _ in chunk)
+                                    cursor.execute(
+                                        'SELECT * FROM "serving_projection_members" '
+                                        f"WHERE projection_id = %s AND candidate_identity_key IN ({placeholders})",
+                                        (normalized_projection_id, *chunk),
+                                    )
+                                    existing_rows.extend(_fetch_all_dict_rows(cursor))
+                            else:
+                                existing_rows = []
+                            for existing_row in existing_rows:
+                                candidate_key = str(existing_row.get("candidate_identity_key") or "").strip()
+                                if candidate_key:
+                                    existing_members_by_key[candidate_key] = existing_row
+                            semantic_changed = projection_search_index_members_changed(
+                                existing_rows=existing_members_by_key,
+                                next_rows=next_members_by_key,
+                                replace_members=replace_members,
+                            )
+                            current_input_revision = str(
+                                metadata.get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
+                            ).strip()
+                            effective_input_revision = (
+                                normalized_input_revision
+                                if semantic_changed or not current_input_revision
+                                else current_input_revision
+                            )
+                            metadata[PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY] = effective_input_revision
+                            projection_update = {
+                                **projection_row,
+                                "metadata_json": _json_dump(metadata),
+                            }
+                            if semantic_changed:
+                                projection_update = _invalidate_projection_search_index_products(
+                                    projection_update,
+                                    build_status="stale",
+                                )
+                            cursor.execute(
+                                """
+                                UPDATE serving_projections
+                                SET metadata_json = %s,
+                                    counts_json = %s,
+                                    readiness_json = %s,
+                                    raw_profile_index_watermark = %s,
+                                    evidence_index_watermark = %s,
+                                    updated_at = %s
+                                WHERE projection_id = %s
+                                """,
+                                (
+                                    projection_update.get("metadata_json") or _json_dump(metadata),
+                                    projection_update.get("counts_json")
+                                    or projection_row.get("counts_json")
+                                    or _json_dump({}),
+                                    projection_update.get("readiness_json")
+                                    or projection_row.get("readiness_json")
+                                    or _json_dump({}),
+                                    str(projection_update.get("raw_profile_index_watermark") or "").strip(),
+                                    str(projection_update.get("evidence_index_watermark") or "").strip(),
+                                    _utc_now_sql_timestamp(),
+                                    normalized_projection_id,
+                                ),
+                            )
+                            if replace_members:
+                                member_count = self._replace_rows_with_cursor(
+                                    cursor,
+                                    table_name=normalized_table,
+                                    where_sql="projection_id = %s",
+                                    params=[normalized_projection_id],
+                                    payload_rows=payload_rows,
+                                    plan=plan,
+                                )
+                            else:
+                                member_count = self._bulk_upsert_rows_with_cursor(
+                                    cursor,
+                                    table_name=normalized_table,
+                                    payload_rows=payload_rows,
+                                    plan=plan,
+                                )
+                            result = {
+                                "status": "applied",
+                                "applied": True,
+                                "projection_id": normalized_projection_id,
+                                "input_revision": effective_input_revision,
+                                "semantic_changed": semantic_changed,
+                                "member_count": int(member_count or 0),
+                            }
+                    connection.commit()
+                return result
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def write_projection_person_search_index_generation(
+        self,
+        *,
+        table_name: str,
+        projection_id: str,
+        rows: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        build_generation: str,
+        reset_index: bool,
+        expected_build_generation: str | None = None,
+        expected_input_revision: str | None = None,
+        transaction_lock_key: str = "",
+    ) -> dict[str, Any] | None:
+        """Compare and write one search-index build generation atomically.
+
+        The generation marker lives on the projection rather than an index row,
+        so an empty reset still fences delayed continuation pages.  The marker
+        comparison and index mutation share the same transaction and advisory
+        lock; serializing writes alone is insufficient because an old page can
+        otherwise run after a newer reset.
+        """
+
+        normalized_table = _normalize_postgres_identifier(table_name)
+        normalized_projection_id = str(projection_id or "").strip()
+        normalized_generation = str(build_generation or "").strip()
+        normalized_expected_generation = (
+            None if expected_build_generation is None else str(expected_build_generation or "").strip()
+        )
+        normalized_expected_input_revision = (
+            None if expected_input_revision is None else str(expected_input_revision or "").strip()
+        )
+        if normalized_table != "projection_person_search_index":
+            raise ValueError("generation-fenced writer only supports projection_person_search_index")
+        if not normalized_projection_id:
+            raise ValueError("projection_id is required for generation-fenced index writes")
+        if not normalized_generation:
+            raise ValueError("build_generation is required for generation-fenced index writes")
+        if reset_index and normalized_expected_generation is None:
+            raise ValueError("expected_build_generation is required for generation-fenced index resets")
+        if reset_index and normalized_expected_input_revision is None:
+            raise ValueError("expected_input_revision is required for generation-fenced index resets")
+        if not self.should_prefer_read(normalized_table) or not self.should_prefer_read("serving_projections"):
+            return None
+
+        payload_rows = self._normalize_bulk_upsert_rows(rows)
+        plan = self._bulk_upsert_plan(
+            normalized_table,
+            payload_rows,
+            require_primary_key_values=True,
+        )
+        self.ensure_bootstrapped()
+        self._ensure_table_write_schema(normalized_table)
+        self._ensure_table_write_schema("serving_projections")
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        self._acquire_transaction_lock(cursor, transaction_lock_key)
+                        cursor.execute(
+                            "SELECT * FROM serving_projections WHERE projection_id = %s FOR UPDATE",
+                            (normalized_projection_id,),
+                        )
+                        projection_row = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if projection_row is None:
+                            result = {
+                                "status": "projection_missing",
+                                "applied": False,
+                                "projection_id": normalized_projection_id,
+                                "build_generation": normalized_generation,
+                                "indexed_count": 0,
+                            }
+                        else:
+                            raw_metadata = projection_row.get("metadata_json")
+                            if isinstance(raw_metadata, dict):
+                                metadata = dict(raw_metadata)
+                            else:
+                                try:
+                                    parsed_metadata = json.loads(str(raw_metadata or "{}"))
+                                except (TypeError, ValueError, json.JSONDecodeError):
+                                    parsed_metadata = {}
+                                metadata = dict(parsed_metadata) if isinstance(parsed_metadata, dict) else {}
+                            current_generation = str(
+                                metadata.get(PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY) or ""
+                            ).strip()
+                            current_input_revision = str(
+                                metadata.get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
+                            ).strip()
+                            build_input_revision = str(
+                                metadata.get(PROJECTION_SEARCH_INDEX_BUILD_INPUT_REVISION_KEY) or ""
+                            ).strip()
+                            current_build_status = str(metadata.get("search_index_build_status") or "").strip()
+                            reset_already_applied = (
+                                bool(reset_index)
+                                and current_generation == normalized_generation
+                                and build_input_revision == current_input_revision
+                                and current_input_revision == normalized_expected_input_revision
+                            )
+                            stale_reset = bool(reset_index) and (
+                                current_generation != normalized_expected_generation
+                                or current_input_revision != normalized_expected_input_revision
+                            )
+                            stale_continuation = not reset_index and (
+                                current_generation != normalized_generation
+                                or build_input_revision != current_input_revision
+                                or current_build_status == "completed"
+                            )
+                            if reset_already_applied:
+                                result = {
+                                    "status": "already_applied",
+                                    "applied": True,
+                                    "projection_id": normalized_projection_id,
+                                    "build_generation": normalized_generation,
+                                    "current_build_generation": current_generation,
+                                    "current_input_revision": current_input_revision,
+                                    "indexed_count": 0,
+                                }
+                            elif stale_reset or stale_continuation:
+                                result = {
+                                    "status": "stale_generation",
+                                    "applied": False,
+                                    "projection_id": normalized_projection_id,
+                                    "build_generation": normalized_generation,
+                                    "current_build_generation": current_generation,
+                                    "current_input_revision": current_input_revision,
+                                    "build_input_revision": build_input_revision,
+                                    "indexed_count": 0,
+                                }
+                            else:
+                                if reset_index:
+                                    metadata[PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY] = normalized_generation
+                                    metadata[PROJECTION_SEARCH_INDEX_BUILD_INPUT_REVISION_KEY] = current_input_revision
+                                    projection_update = _invalidate_projection_search_index_products(
+                                        {
+                                            **projection_row,
+                                            "metadata_json": _json_dump(metadata),
+                                        },
+                                        build_status="building",
+                                    )
+                                    cursor.execute(
+                                        """
+                                        UPDATE serving_projections
+                                        SET metadata_json = %s,
+                                            counts_json = %s,
+                                            readiness_json = %s,
+                                            raw_profile_index_watermark = %s,
+                                            evidence_index_watermark = %s,
+                                            updated_at = %s
+                                        WHERE projection_id = %s
+                                        """,
+                                        (
+                                            projection_update["metadata_json"],
+                                            projection_update["counts_json"],
+                                            projection_update["readiness_json"],
+                                            projection_update["raw_profile_index_watermark"],
+                                            projection_update["evidence_index_watermark"],
+                                            _utc_now_sql_timestamp(),
+                                            normalized_projection_id,
+                                        ),
+                                    )
+                                    affected = self._replace_rows_with_cursor(
+                                        cursor,
+                                        table_name=normalized_table,
+                                        where_sql="projection_id = %s",
+                                        params=[normalized_projection_id],
+                                        payload_rows=payload_rows,
+                                        plan=plan,
+                                    )
+                                else:
+                                    affected = self._bulk_upsert_rows_with_cursor(
+                                        cursor,
+                                        table_name=normalized_table,
+                                        payload_rows=payload_rows,
+                                        plan=plan,
+                                    )
+                                result = {
+                                    "status": "applied",
+                                    "applied": True,
+                                    "projection_id": normalized_projection_id,
+                                    "build_generation": normalized_generation,
+                                    "current_build_generation": normalized_generation,
+                                    "current_input_revision": current_input_revision,
+                                    "build_input_revision": current_input_revision,
+                                    "indexed_count": int(affected or 0),
+                                }
+                    connection.commit()
+                return result
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def update_projection_person_search_index_generation_state(
+        self,
+        *,
+        table_name: str = "serving_projections",
+        projection_id: str,
+        build_generation: str,
+        index_values: dict[str, Any] | None = None,
+        counts_patch: dict[str, Any] | None = None,
+        readiness_patch: dict[str, Any] | None = None,
+        metadata_patch: dict[str, Any] | None = None,
+        raw_profile_index_watermark: str = "",
+        evidence_index_watermark: str = "",
+        transaction_lock_key: str = "",
+    ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "serving_projections":
+            raise ValueError(
+                "update_projection_person_search_index_generation_state requires table_name=serving_projections"
+            )
+        normalized_projection_id = str(projection_id or "").strip()
+        normalized_generation = str(build_generation or "").strip()
+        if not normalized_projection_id or not normalized_generation:
+            return None
+        if not self.should_prefer_read("serving_projections") or not self.should_prefer_read(
+            "projection_person_search_index"
+        ):
+            return None
+        requested_index_values = dict(index_values or {})
+        normalized_index_values = {
+            _normalize_postgres_identifier(key): value
+            for key, value in requested_index_values.items()
+            if _normalize_postgres_identifier(key)
+            in {
+                "count_scope",
+                "raw_profile_index_watermark",
+                "evidence_index_watermark",
+            }
+        }
+        unsupported_index_values = {
+            str(key or "").strip()
+            for key in requested_index_values
+            if _normalize_postgres_identifier(key) not in normalized_index_values
+        }
+        if unsupported_index_values:
+            raise ValueError(
+                "unsupported projection search-index state columns: " + ", ".join(sorted(unsupported_index_values))
+            )
+        self.ensure_bootstrapped()
+        self._ensure_table_write_schema("serving_projections")
+        self._ensure_table_write_schema("projection_person_search_index")
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        self._acquire_transaction_lock(cursor, transaction_lock_key)
+                        cursor.execute(
+                            "SELECT * FROM serving_projections WHERE projection_id = %s FOR UPDATE",
+                            (normalized_projection_id,),
+                        )
+                        projection_row = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if projection_row is None:
+                            result = {
+                                "status": "projection_missing",
+                                "applied": False,
+                                "projection_id": normalized_projection_id,
+                                "build_generation": normalized_generation,
+                                "updated_count": 0,
+                            }
+                        else:
+                            metadata = _json_load_dict(projection_row.get("metadata_json"))
+                            current_generation = str(
+                                metadata.get(PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY) or ""
+                            ).strip()
+                            current_input_revision = str(
+                                metadata.get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
+                            ).strip()
+                            build_input_revision = str(
+                                metadata.get(PROJECTION_SEARCH_INDEX_BUILD_INPUT_REVISION_KEY) or ""
+                            ).strip()
+                            current_build_status = str(metadata.get("search_index_build_status") or "").strip()
+                            requested_build_status = str(
+                                dict(metadata_patch or {}).get("search_index_build_status") or ""
+                            ).strip()
+                            if (
+                                current_generation != normalized_generation
+                                or build_input_revision != current_input_revision
+                                or (
+                                    current_build_status == "completed"
+                                    and requested_build_status in {"building", "partial"}
+                                )
+                            ):
+                                result = {
+                                    "status": "stale_generation",
+                                    "applied": False,
+                                    "projection_id": normalized_projection_id,
+                                    "build_generation": normalized_generation,
+                                    "current_build_generation": current_generation,
+                                    "current_input_revision": current_input_revision,
+                                    "build_input_revision": build_input_revision,
+                                    "updated_count": 0,
+                                }
+                            else:
+                                now = _utc_now_sql_timestamp()
+                                updated_count = 0
+                                if normalized_index_values:
+                                    assignments = ", ".join(
+                                        f"{_quote_identifier(key)} = %s" for key in normalized_index_values
+                                    )
+                                    cursor.execute(
+                                        f"UPDATE projection_person_search_index SET {assignments} "
+                                        "WHERE projection_id = %s",
+                                        (
+                                            *(
+                                                _normalize_postgres_payload(value)
+                                                for value in normalized_index_values.values()
+                                            ),
+                                            normalized_projection_id,
+                                        ),
+                                    )
+                                    updated_count = int(cursor.rowcount or 0)
+                                counts = {
+                                    **_json_load_dict(projection_row.get("counts_json")),
+                                    **dict(counts_patch or {}),
+                                }
+                                readiness = {
+                                    **_json_load_dict(projection_row.get("readiness_json")),
+                                    **dict(readiness_patch or {}),
+                                }
+                                safe_metadata_patch = dict(metadata_patch or {})
+                                for reserved_key in (
+                                    PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY,
+                                    PROJECTION_SEARCH_INDEX_BUILD_INPUT_REVISION_KEY,
+                                    PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY,
+                                ):
+                                    safe_metadata_patch.pop(reserved_key, None)
+                                metadata.update(safe_metadata_patch)
+                                cursor.execute(
+                                    """
+                                    UPDATE serving_projections
+                                    SET counts_json = %s,
+                                        readiness_json = %s,
+                                        metadata_json = %s,
+                                        raw_profile_index_watermark = %s,
+                                        evidence_index_watermark = %s,
+                                        updated_at = %s
+                                    WHERE projection_id = %s
+                                    RETURNING *
+                                    """,
+                                    (
+                                        _json_dump(counts),
+                                        _json_dump(readiness),
+                                        _json_dump(metadata),
+                                        str(raw_profile_index_watermark or "").strip()
+                                        or str(projection_row.get("raw_profile_index_watermark") or "").strip(),
+                                        str(evidence_index_watermark or "").strip()
+                                        or str(projection_row.get("evidence_index_watermark") or "").strip(),
+                                        now,
+                                        normalized_projection_id,
+                                    ),
+                                )
+                                updated_projection = _fetch_one_dict_row(cursor, cursor.fetchone())
+                                result = {
+                                    "status": "applied",
+                                    "applied": True,
+                                    "projection_id": normalized_projection_id,
+                                    "build_generation": normalized_generation,
+                                    "current_build_generation": current_generation,
+                                    "current_input_revision": current_input_revision,
+                                    "build_input_revision": build_input_revision,
+                                    "updated_count": updated_count,
+                                    "projection_row": updated_projection,
+                                }
+                    connection.commit()
+                return result
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
     def upsert_row_and_replace_rows(
         self,
         *,
@@ -1355,6 +1917,7 @@ class LiveControlPlanePostgresAdapter:
         replace_where_sql: str,
         replace_params: list[Any] | tuple[Any, ...] = (),
         replace_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+        update_projection_index_input_revision: bool = False,
         transaction_lock_key: str = "",
     ) -> dict[str, int] | None:
         """Atomically publish a parent row and replace its child row scope."""
@@ -1371,6 +1934,11 @@ class LiveControlPlanePostgresAdapter:
         upsert_payload_rows = self._normalize_bulk_upsert_rows([row])
         if len(upsert_payload_rows) != 1:
             raise ValueError("upsert_row_and_replace_rows requires one non-empty row")
+        if update_projection_index_input_revision and normalized_upsert_table == "serving_projections":
+            upsert_payload_rows[0] = _invalidate_projection_search_index_products(
+                upsert_payload_rows[0],
+                build_status="stale",
+            )
         replacement_payload_rows = self._normalize_bulk_upsert_rows(replace_rows)
         upsert_plan = self._bulk_upsert_plan(
             normalized_upsert_table,
@@ -1398,6 +1966,7 @@ class LiveControlPlanePostgresAdapter:
                             table_name=normalized_upsert_table,
                             payload_rows=upsert_payload_rows,
                             plan=upsert_plan,
+                            preserve_projection_index_input_revision=not bool(update_projection_index_input_revision),
                         )
                         replaced_count = self._replace_rows_with_cursor(
                             cursor,
@@ -1524,14 +2093,29 @@ class LiveControlPlanePostgresAdapter:
                         )
                         existing_projection = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
                         existing_members_by_key: dict[str, dict[str, Any]] = {}
-                        for offset in range(0, len(normalized_member_keys), 500):
-                            chunk = normalized_member_keys[offset : offset + 500]
-                            placeholders = ", ".join("%s" for _ in chunk)
-                            cursor.execute(
-                                'SELECT * FROM "serving_projection_members" '
-                                f"WHERE projection_id = %s AND candidate_identity_key IN ({placeholders})",
-                                (selected_projection_id, *chunk),
-                            )
+                        member_key_chunks = (
+                            [None]
+                            if replace_members
+                            else [
+                                normalized_member_keys[offset : offset + 500]
+                                for offset in range(0, len(normalized_member_keys), 500)
+                            ]
+                        )
+                        for chunk in member_key_chunks:
+                            if chunk is None:
+                                cursor.execute(
+                                    'SELECT * FROM "serving_projection_members" WHERE projection_id = %s',
+                                    (selected_projection_id,),
+                                )
+                            elif chunk:
+                                placeholders = ", ".join("%s" for _ in chunk)
+                                cursor.execute(
+                                    'SELECT * FROM "serving_projection_members" '
+                                    f"WHERE projection_id = %s AND candidate_identity_key IN ({placeholders})",
+                                    (selected_projection_id, *chunk),
+                                )
+                            else:
+                                continue
                             for row in _fetch_all_dict_rows(cursor):
                                 candidate_key = str(row.get("candidate_identity_key") or "").strip()
                                 if candidate_key:
@@ -1560,6 +2144,21 @@ class LiveControlPlanePostgresAdapter:
                         route_projection_id = str(routing_rows[0].get(str(route_spec["projection_field"])) or "")
                         if route_projection_id != selected_projection_id:
                             raise ValueError("routing payload does not use the selected projection_id")
+                        next_members_by_key = {
+                            str(row.get("candidate_identity_key") or "").strip(): row
+                            for row in member_rows
+                            if str(row.get("candidate_identity_key") or "").strip()
+                        }
+                        semantic_changed = projection_search_index_members_changed(
+                            existing_rows=existing_members_by_key,
+                            next_rows=next_members_by_key,
+                            replace_members=replace_members,
+                        )
+                        if semantic_changed:
+                            projection_rows[0] = _invalidate_projection_search_index_products(
+                                projection_rows[0],
+                                build_status="stale",
+                            )
 
                         projection_plan = self._bulk_upsert_plan(
                             "serving_projections",
@@ -1581,6 +2180,7 @@ class LiveControlPlanePostgresAdapter:
                             table_name="serving_projections",
                             payload_rows=projection_rows,
                             plan=projection_plan,
+                            preserve_projection_index_input_revision=False,
                         )
                         if projection_count <= 0:
                             raise RuntimeError("serving projection parent upsert returned no confirmation")
@@ -1678,6 +2278,7 @@ class LiveControlPlanePostgresAdapter:
         table_name: str,
         payload_rows: list[dict[str, Any]],
         plan: tuple[list[str], list[str]] | None,
+        preserve_projection_index_input_revision: bool = True,
     ) -> int:
         if not payload_rows:
             return 0
@@ -1698,9 +2299,30 @@ class LiveControlPlanePostgresAdapter:
 
         def _merge_clause() -> str:
             if update_columns:
-                return f" ON CONFLICT ({conflict_target}) DO UPDATE SET " + ", ".join(
-                    f"{_quote_identifier(column)} = EXCLUDED.{_quote_identifier(column)}" for column in update_columns
-                )
+                assignments: list[str] = []
+                for column in update_columns:
+                    quoted_column = _quote_identifier(column)
+                    if table_name == "serving_projections" and column == "metadata_json":
+                        preserve_keys = (
+                            PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY,
+                            PROJECTION_SEARCH_INDEX_BUILD_INPUT_REVISION_KEY,
+                            *(
+                                (PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY,)
+                                if preserve_projection_index_input_revision
+                                else ()
+                            ),
+                        )
+                        assignments.append(
+                            f"{quoted_column} = "
+                            + _projection_metadata_merge_sql(
+                                quoted_table_name=quoted_table_name,
+                                quoted_column=quoted_column,
+                                preserve_keys=preserve_keys,
+                            )
+                        )
+                        continue
+                    assignments.append(f"{quoted_column} = EXCLUDED.{quoted_column}")
+                return f" ON CONFLICT ({conflict_target}) DO UPDATE SET " + ", ".join(assignments)
             return f" ON CONFLICT ({conflict_target}) DO NOTHING"
 
         if _bulk_upsert_prefers_direct_values(
@@ -3680,7 +4302,14 @@ class LiveControlPlanePostgresAdapter:
                     raise
                 time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
-    def upsert_agent_action(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
+    def upsert_agent_action(
+        self,
+        row: dict[str, Any] | None = None,
+        *,
+        table_name: str = "agent_actions",
+    ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "agent_actions":
+            raise ValueError("upsert_agent_action requires table_name=agent_actions")
         if not self._require_operation_runtime_table("agent_actions"):
             return None
         payload = _normalize_postgres_row_payload(dict(row or {}))
@@ -3768,13 +4397,17 @@ class LiveControlPlanePostgresAdapter:
 
     def update_agent_action_state(
         self,
-        action_id: str,
+        action_id: str = "",
         *,
+        table_name: str = "agent_actions",
+        expected_status: str = "",
         status: str = "",
         approval_status: str = "",
         result_ref: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "agent_actions":
+            raise ValueError("update_agent_action_state requires table_name=agent_actions")
         if not self._require_operation_runtime_table("agent_actions"):
             return None
         normalized_action_id = str(action_id or "").strip()
@@ -3783,12 +4416,16 @@ class LiveControlPlanePostgresAdapter:
         current = self.select_one("agent_actions", where_sql="action_id = %s", params=[normalized_action_id])
         if current is None:
             return None
-        terminal = str(current.get("status") or "").strip() in {"completed", "failed", "cancelled"}
-        requested_status = str(status or current.get("status") or "").strip() or "planned"
-        if terminal and requested_status != str(current.get("status") or "").strip():
+        current_status = str(current.get("status") or "").strip()
+        normalized_expected_status = str(expected_status or "").strip()
+        terminal = current_status in {"completed", "failed", "cancelled", "rejected"}
+        requested_status = str(status or current_status or "").strip() or "planned"
+        if normalized_expected_status and normalized_expected_status != current_status:
+            return current
+        if terminal and requested_status != current_status:
             return current
         now = _utc_now_sql_timestamp()
-        return self._execute_returning_one(
+        updated = self._execute_returning_one(
             """
             UPDATE agent_actions
             SET status = %s,
@@ -3796,7 +4433,7 @@ class LiveControlPlanePostgresAdapter:
                 result_ref_json = %s,
                 metadata_json = %s,
                 updated_at = %s
-            WHERE action_id = %s
+            WHERE action_id = %s AND status = %s
             RETURNING *
             """,
             (
@@ -3806,10 +4443,108 @@ class LiveControlPlanePostgresAdapter:
                 _json_dump(metadata if metadata is not None else _json_load_dict(current.get("metadata_json"))),
                 now,
                 normalized_action_id,
+                current_status,
             ),
         )
+        if updated is not None:
+            return updated
+        return self.select_one("agent_actions", where_sql="action_id = %s", params=[normalized_action_id])
 
-    def upsert_operation_run(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
+    def requeue_agent_action_for_operation_retry(
+        self,
+        *,
+        table_name: str = "agent_actions",
+        action_id: str,
+        workspace_id: str,
+        expected_status: str,
+        parent_operation_run_id: str,
+        retry_operation_run_id: str,
+    ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "agent_actions":
+            raise ValueError("requeue_agent_action_for_operation_retry requires table_name=agent_actions")
+        if not self._require_operation_runtime_table("agent_actions"):
+            return None
+        normalized_action_id = str(action_id or "").strip()
+        normalized_workspace_id = str(workspace_id or "").strip()
+        normalized_expected_status = str(expected_status or "").strip()
+        normalized_parent_run_id = str(parent_operation_run_id or "").strip()
+        normalized_retry_run_id = str(retry_operation_run_id or "").strip()
+        if (
+            not normalized_action_id
+            or not normalized_workspace_id
+            or normalized_expected_status not in {"queued", "failed", "cancelled"}
+            or not normalized_parent_run_id
+            or not normalized_retry_run_id
+        ):
+            return None
+        now = _utc_now_sql_timestamp()
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT * FROM agent_actions WHERE action_id = %s FOR UPDATE",
+                            (normalized_action_id,),
+                        )
+                        current = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        if current is None:
+                            action = None
+                        elif (str(current.get("workspace_id") or "default").strip() or "default") != (
+                            normalized_workspace_id
+                        ):
+                            action = current
+                        elif str(current.get("status") or "").strip() != normalized_expected_status:
+                            action = current
+                        elif str(current.get("approval_status") or "").strip() == "rejected":
+                            action = current
+                        else:
+                            metadata = _json_load_dict(current.get("metadata_json"))
+                            existing_retry_run_id = str(metadata.get("retry_operation_run_id") or "").strip()
+                            if existing_retry_run_id and existing_retry_run_id not in {
+                                normalized_parent_run_id,
+                                normalized_retry_run_id,
+                            }:
+                                action = current
+                            else:
+                                metadata["retry_operation_run_id"] = normalized_retry_run_id
+                                cursor.execute(
+                                    """
+                                    UPDATE agent_actions
+                                    SET status = 'queued', metadata_json = %s, updated_at = %s
+                                    WHERE action_id = %s AND status = %s
+                                    RETURNING *
+                                    """,
+                                    (
+                                        _json_dump(metadata),
+                                        now,
+                                        normalized_action_id,
+                                        normalized_expected_status,
+                                    ),
+                                )
+                                action = _fetch_one_dict_row(cursor, cursor.fetchone())
+                                if action is None:
+                                    cursor.execute(
+                                        "SELECT * FROM agent_actions WHERE action_id = %s",
+                                        (normalized_action_id,),
+                                    )
+                                    action = _fetch_one_dict_row(cursor, cursor.fetchone())
+                    connection.commit()
+                return action
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def upsert_operation_run(
+        self,
+        row: dict[str, Any] | None = None,
+        *,
+        table_name: str = "operation_runs",
+    ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "operation_runs":
+            raise ValueError("upsert_operation_run requires table_name=operation_runs")
         if not self._require_operation_runtime_table("operation_runs"):
             return None
         payload = _normalize_postgres_row_payload(dict(row or {}))
@@ -3903,14 +4638,18 @@ class LiveControlPlanePostgresAdapter:
 
     def update_operation_run_state(
         self,
-        operation_run_id: str,
+        operation_run_id: str = "",
         *,
+        table_name: str = "operation_runs",
+        expected_status: str = "",
         status: str = "",
         progress: dict[str, Any] | None = None,
         workflow_ref: dict[str, Any] | None = None,
         result_ref: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "operation_runs":
+            raise ValueError("update_operation_run_state requires table_name=operation_runs")
         if not self._require_operation_runtime_table("operation_runs"):
             return None
         normalized_operation_id = str(operation_run_id or "").strip()
@@ -3920,14 +4659,17 @@ class LiveControlPlanePostgresAdapter:
         if current is None:
             return None
         current_status = str(current.get("status") or "").strip()
+        normalized_expected_status = str(expected_status or "").strip()
         requested_status = str(status or current_status or "queued").strip() or "queued"
+        if normalized_expected_status and normalized_expected_status != current_status:
+            return current
         if current_status in {"completed", "failed", "cancelled"} and requested_status != current_status:
             return current
         now = _utc_now_sql_timestamp()
         completed_at = str(current.get("completed_at") or "").strip()
         if requested_status in {"completed", "failed", "cancelled"} and not completed_at:
             completed_at = now
-        return self._execute_returning_one(
+        updated = self._execute_returning_one(
             """
             UPDATE operation_runs
             SET status = %s,
@@ -3937,7 +4679,7 @@ class LiveControlPlanePostgresAdapter:
                 metadata_json = %s,
                 completed_at = %s,
                 updated_at = %s
-            WHERE operation_run_id = %s
+            WHERE operation_run_id = %s AND status = %s
             RETURNING *
             """,
             (
@@ -3951,13 +4693,71 @@ class LiveControlPlanePostgresAdapter:
                 completed_at,
                 now,
                 normalized_operation_id,
+                current_status,
             ),
         )
+        if updated is not None:
+            return updated
+        return self.select_one(
+            "operation_runs",
+            where_sql="operation_run_id = %s",
+            params=[normalized_operation_id],
+        )
 
-    def append_operation_event(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
-        if not self._require_operation_runtime_table("operation_events"):
-            return None
-        payload = _normalize_postgres_row_payload(dict(row or {}))
+    def _acquire_operation_event_stream_lock(self, cursor: Any, event_stream_id: str) -> None:
+        cursor.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+            (self._advisory_lock_key(f"operation_events:{event_stream_id}"),),
+        )
+
+    def _get_operation_event_with_cursor(
+        self,
+        cursor: Any,
+        *,
+        event_stream_id: str,
+        idempotency_key: str,
+    ) -> dict[str, Any] | None:
+        cursor.execute(
+            """
+            SELECT * FROM operation_events
+            WHERE event_stream_id = %s AND idempotency_key = %s
+            LIMIT 1
+            """,
+            (event_stream_id, idempotency_key),
+        )
+        return _fetch_one_dict_row(cursor, cursor.fetchone())
+
+    @staticmethod
+    def _validate_operation_control_event_identity(
+        event: dict[str, Any],
+        *,
+        expected: dict[str, Any],
+    ) -> None:
+        identity_fields = (
+            "workspace_id",
+            "event_stream_id",
+            "operation_run_id",
+            "action_id",
+            "event_family",
+            "event_type",
+            "idempotency_key",
+        )
+        mismatches = [
+            field
+            for field in identity_fields
+            if str(event.get(field) or "").strip() != str(expected.get(field) or "").strip()
+        ]
+        if mismatches:
+            raise RuntimeError("operation control event identity collision: " + ", ".join(mismatches))
+
+    def _append_operation_event_with_cursor(
+        self,
+        cursor: Any,
+        *,
+        payload: dict[str, Any],
+        now: str,
+        acquire_stream_lock: bool = True,
+    ) -> dict[str, Any] | None:
         workspace_id = str(payload.get("workspace_id") or "default").strip() or "default"
         event_stream_id = str(payload.get("event_stream_id") or "").strip()
         idempotency_key = str(payload.get("idempotency_key") or "").strip()
@@ -3965,96 +4765,462 @@ class LiveControlPlanePostgresAdapter:
         event_type = str(payload.get("event_type") or "").strip()
         if not workspace_id or not event_stream_id or not idempotency_key or not event_family or not event_type:
             return None
+        if acquire_stream_lock:
+            self._acquire_operation_event_stream_lock(cursor, event_stream_id)
+        existing = self._get_operation_event_with_cursor(
+            cursor,
+            event_stream_id=event_stream_id,
+            idempotency_key=idempotency_key,
+        )
+        if existing is not None:
+            return existing
+        sequence_number = int(payload.get("sequence_number") or 0)
+        if sequence_number <= 0:
+            cursor.execute(
+                "SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM operation_events WHERE event_stream_id = %s",
+                (event_stream_id,),
+            )
+            row_value = cursor.fetchone()
+            sequence_number = int(
+                (row_value[0] if isinstance(row_value, (list, tuple)) and row_value else row_value) or 1
+            )
+        event_id = str(payload.get("event_id") or "").strip() or (
+            "opevt_" + sha1(f"{event_stream_id}:{sequence_number}:{idempotency_key}".encode("utf-8")).hexdigest()[:24]
+        )
+        row_payload = {
+            "event_id": event_id,
+            "workspace_id": workspace_id,
+            "event_stream_id": event_stream_id,
+            "operation_run_id": str(payload.get("operation_run_id") or "").strip(),
+            "action_id": str(payload.get("action_id") or "").strip(),
+            "event_family": event_family,
+            "event_type": event_type,
+            "sequence_number": sequence_number,
+            "idempotency_key": idempotency_key,
+            "occurred_at": str(payload.get("occurred_at") or now).strip(),
+            "recorded_at": str(payload.get("recorded_at") or now).strip(),
+            "actor": str(payload.get("actor") or "").strip(),
+            "source": str(payload.get("source") or "").strip(),
+            "payload_json": str(payload.get("payload_json") or "{}"),
+            "schema_version": str(payload.get("schema_version") or "operation_event_v1").strip(),
+            "created_at": str(payload.get("created_at") or now).strip(),
+        }
+        columns = list(row_payload.keys())
+        cursor.execute(
+            (
+                f"INSERT INTO operation_events ({', '.join(_quote_identifier(column) for column in columns)}) "
+                f"VALUES ({', '.join(['%s'] * len(columns))}) "
+                "ON CONFLICT DO NOTHING RETURNING *"
+            ),
+            tuple(row_payload[column] for column in columns),
+        )
+        inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
+        if inserted is not None:
+            return inserted
+        existing = self._get_operation_event_with_cursor(
+            cursor,
+            event_stream_id=event_stream_id,
+            idempotency_key=idempotency_key,
+        )
+        if existing is None:
+            cursor.execute(
+                """
+                SELECT * FROM operation_events
+                WHERE event_stream_id = %s AND sequence_number = %s
+                LIMIT 1
+                """,
+                (event_stream_id, sequence_number),
+            )
+            existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+        return existing
+
+    def append_operation_event(
+        self,
+        row: dict[str, Any] | None = None,
+        *,
+        table_name: str = "operation_events",
+    ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "operation_events":
+            raise ValueError("append_operation_event requires table_name=operation_events")
+        if not self._require_operation_runtime_table("operation_events"):
+            return None
+        payload = _normalize_postgres_row_payload(dict(row or {}))
         now = _utc_now_sql_timestamp()
         attempt = 0
         while True:
             try:
                 with self._connect() as connection:
                     with connection.cursor() as cursor:
-                        cursor.execute(
-                            "SELECT pg_advisory_xact_lock(hashtext(%s))",
-                            (self._advisory_lock_key(f"operation_events:{event_stream_id}"),),
-                        )
-                        cursor.execute(
-                            """
-                            SELECT * FROM operation_events
-                            WHERE event_stream_id = %s AND idempotency_key = %s
-                            LIMIT 1
-                            """,
-                            (event_stream_id, idempotency_key),
-                        )
-                        existing = _fetch_one_dict_row(cursor, cursor.fetchone())
-                        if existing is not None:
-                            connection.commit()
-                            return existing
-                        sequence_number = int(payload.get("sequence_number") or 0)
-                        if sequence_number <= 0:
-                            cursor.execute(
-                                "SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM operation_events WHERE event_stream_id = %s",
-                                (event_stream_id,),
-                            )
-                            row_value = cursor.fetchone()
-                            sequence_number = int(
-                                (row_value[0] if isinstance(row_value, (list, tuple)) and row_value else row_value) or 1
-                            )
-                        event_id = str(payload.get("event_id") or "").strip() or (
-                            "opevt_"
-                            + sha1(
-                                f"{event_stream_id}:{sequence_number}:{idempotency_key}".encode("utf-8")
-                            ).hexdigest()[:24]
-                        )
-                        row_payload = {
-                            "event_id": event_id,
-                            "workspace_id": workspace_id,
-                            "event_stream_id": event_stream_id,
-                            "operation_run_id": str(payload.get("operation_run_id") or "").strip(),
-                            "action_id": str(payload.get("action_id") or "").strip(),
-                            "event_family": event_family,
-                            "event_type": event_type,
-                            "sequence_number": sequence_number,
-                            "idempotency_key": idempotency_key,
-                            "occurred_at": str(payload.get("occurred_at") or now).strip(),
-                            "recorded_at": str(payload.get("recorded_at") or now).strip(),
-                            "actor": str(payload.get("actor") or "").strip(),
-                            "source": str(payload.get("source") or "").strip(),
-                            "payload_json": str(payload.get("payload_json") or "{}"),
-                            "schema_version": str(payload.get("schema_version") or "operation_event_v1").strip(),
-                            "created_at": str(payload.get("created_at") or now).strip(),
-                        }
-                        columns = list(row_payload.keys())
-                        cursor.execute(
-                            (
-                                f"INSERT INTO operation_events ({', '.join(_quote_identifier(column) for column in columns)}) "
-                                f"VALUES ({', '.join(['%s'] * len(columns))}) "
-                                "ON CONFLICT DO NOTHING RETURNING *"
-                            ),
-                            tuple(row_payload[column] for column in columns),
-                        )
-                        inserted = _fetch_one_dict_row(cursor, cursor.fetchone())
-                        if inserted is not None:
-                            connection.commit()
-                            return inserted
-                        cursor.execute(
-                            """
-                            SELECT * FROM operation_events
-                            WHERE event_stream_id = %s AND idempotency_key = %s
-                            LIMIT 1
-                            """,
-                            (event_stream_id, idempotency_key),
-                        )
-                        existing = _fetch_one_dict_row(cursor, cursor.fetchone())
-                        if existing is None:
-                            cursor.execute(
-                                """
-                                SELECT * FROM operation_events
-                                WHERE event_stream_id = %s AND sequence_number = %s
-                                LIMIT 1
-                                """,
-                                (event_stream_id, sequence_number),
-                            )
-                            existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        event = self._append_operation_event_with_cursor(cursor, payload=payload, now=now)
                     connection.commit()
-                    return existing
+                    return event
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def reject_agent_action_with_event(
+        self,
+        *,
+        table_name: str = "agent_actions",
+        action_id: str,
+        expected_status: str,
+        status: str = "cancelled",
+        approval_status: str = "rejected",
+        result_ref_patch: dict[str, Any] | None = None,
+        metadata_patch: dict[str, Any] | None = None,
+        event_row: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "agent_actions":
+            raise ValueError("reject_agent_action_with_event requires table_name=agent_actions")
+        if not self._require_operation_runtime_table("agent_actions"):
+            return None
+        if not self._require_operation_runtime_table("operation_events"):
+            return None
+        normalized_action_id = str(action_id or "").strip()
+        normalized_expected_status = str(expected_status or "").strip()
+        requested_status = str(status or "cancelled").strip() or "cancelled"
+        requested_approval_status = str(approval_status or "rejected").strip() or "rejected"
+        if requested_status != "cancelled" or requested_approval_status != "rejected":
+            raise ValueError("reject action UoW only supports status=cancelled and approval_status=rejected")
+        event_payload = _normalize_postgres_row_payload(dict(event_row or {}))
+        event_stream_id = str(event_payload.get("event_stream_id") or "").strip()
+        event_idempotency_key = str(event_payload.get("idempotency_key") or "").strip()
+        if not normalized_action_id or not normalized_expected_status or not event_idempotency_key:
+            return None
+        if (
+            event_stream_id != normalized_action_id
+            or str(event_payload.get("action_id") or "").strip() != normalized_action_id
+            or str(event_payload.get("event_family") or "").strip() != "operation_event"
+            or str(event_payload.get("event_type") or "").strip() != "ActionRejected"
+        ):
+            raise ValueError("reject action event identity does not match the locked action")
+        now = _utc_now_sql_timestamp()
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        self._acquire_operation_event_stream_lock(cursor, event_stream_id)
+                        cursor.execute(
+                            "SELECT * FROM agent_actions WHERE action_id = %s FOR UPDATE",
+                            (normalized_action_id,),
+                        )
+                        current = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        action = current
+                        event = None
+                        outcome = "not_found"
+                        if current is not None:
+                            if (str(event_payload.get("workspace_id") or "default").strip() or "default") != (
+                                str(current.get("workspace_id") or "default").strip() or "default"
+                            ):
+                                raise ValueError("reject action event workspace does not match the locked action")
+                            current_status = str(current.get("status") or "").strip()
+                            current_approval_status = str(current.get("approval_status") or "").strip()
+                            target_already_applied = (
+                                current_status == requested_status
+                                and current_approval_status == requested_approval_status
+                            )
+                            if target_already_applied:
+                                event = self._get_operation_event_with_cursor(
+                                    cursor,
+                                    event_stream_id=event_stream_id,
+                                    idempotency_key=event_idempotency_key,
+                                )
+                                if event is None:
+                                    event = self._append_operation_event_with_cursor(
+                                        cursor,
+                                        payload=event_payload,
+                                        now=now,
+                                        acquire_stream_lock=False,
+                                    )
+                                    if event is None:
+                                        raise RuntimeError("operation control repair produced no rejection event")
+                                    self._validate_operation_control_event_identity(
+                                        event,
+                                        expected=event_payload,
+                                    )
+                                    outcome = "repaired"
+                                else:
+                                    self._validate_operation_control_event_identity(
+                                        event,
+                                        expected=event_payload,
+                                    )
+                                    outcome = "already_applied"
+                            elif current_status != normalized_expected_status or current_status in {
+                                "completed",
+                                "failed",
+                                "cancelled",
+                                "rejected",
+                            }:
+                                outcome = "conflict"
+                            else:
+                                result_ref = {
+                                    **_json_load_dict(current.get("result_ref_json")),
+                                    **dict(result_ref_patch or {}),
+                                }
+                                metadata = {
+                                    **_json_load_dict(current.get("metadata_json")),
+                                    **dict(metadata_patch or {}),
+                                }
+                                cursor.execute(
+                                    """
+                                    UPDATE agent_actions
+                                    SET status = %s,
+                                        approval_status = %s,
+                                        result_ref_json = %s,
+                                        metadata_json = %s,
+                                        updated_at = %s
+                                    WHERE action_id = %s AND status = %s
+                                    RETURNING *
+                                    """,
+                                    (
+                                        requested_status,
+                                        requested_approval_status,
+                                        _json_dump(result_ref),
+                                        _json_dump(metadata),
+                                        now,
+                                        normalized_action_id,
+                                        current_status,
+                                    ),
+                                )
+                                action = _fetch_one_dict_row(cursor, cursor.fetchone())
+                                if action is None:
+                                    raise RuntimeError("operation rejection lost the locked action row")
+                                event = self._append_operation_event_with_cursor(
+                                    cursor,
+                                    payload=event_payload,
+                                    now=now,
+                                    acquire_stream_lock=False,
+                                )
+                                if event is None:
+                                    raise RuntimeError("operation control transition produced no rejection event")
+                                self._validate_operation_control_event_identity(
+                                    event,
+                                    expected=event_payload,
+                                )
+                                outcome = "applied"
+                    connection.commit()
+                    return {
+                        "outcome": outcome,
+                        "applied": outcome == "applied",
+                        "action": action,
+                        "event": event,
+                    }
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+
+    def cancel_operation_run_with_event(
+        self,
+        *,
+        table_name: str = "operation_runs",
+        operation_run_id: str,
+        expected_status: str,
+        status: str = "cancelled",
+        progress_patch: dict[str, Any] | None = None,
+        workflow_ref_patch: dict[str, Any] | None = None,
+        result_ref_patch: dict[str, Any] | None = None,
+        metadata_patch: dict[str, Any] | None = None,
+        linked_action_metadata_patch: dict[str, Any] | None = None,
+        event_row: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "operation_runs":
+            raise ValueError("cancel_operation_run_with_event requires table_name=operation_runs")
+        if not self._require_operation_runtime_table("operation_runs"):
+            return None
+        if not self._require_operation_runtime_table("agent_actions"):
+            return None
+        if not self._require_operation_runtime_table("operation_events"):
+            return None
+        normalized_operation_id = str(operation_run_id or "").strip()
+        normalized_expected_status = str(expected_status or "").strip()
+        requested_status = str(status or "cancelled").strip() or "cancelled"
+        if requested_status != "cancelled":
+            raise ValueError("cancel operation UoW only supports status=cancelled")
+        event_payload = _normalize_postgres_row_payload(dict(event_row or {}))
+        event_stream_id = str(event_payload.get("event_stream_id") or "").strip()
+        event_idempotency_key = str(event_payload.get("idempotency_key") or "").strip()
+        if not normalized_operation_id or not normalized_expected_status or not event_idempotency_key:
+            return None
+        if (
+            event_stream_id != normalized_operation_id
+            or str(event_payload.get("operation_run_id") or "").strip() != normalized_operation_id
+            or str(event_payload.get("event_family") or "").strip() != "operation_event"
+            or str(event_payload.get("event_type") or "").strip() != "OperationCancelled"
+        ):
+            raise ValueError("cancel operation event identity does not match the locked operation")
+        now = _utc_now_sql_timestamp()
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        self._acquire_operation_event_stream_lock(cursor, event_stream_id)
+                        cursor.execute(
+                            "SELECT * FROM operation_runs WHERE operation_run_id = %s FOR UPDATE",
+                            (normalized_operation_id,),
+                        )
+                        current = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        operation = current
+                        linked_action = None
+                        event = None
+                        outcome = "not_found"
+                        if current is not None:
+                            current_action_id = str(current.get("action_id") or "").strip()
+                            if (str(event_payload.get("workspace_id") or "default").strip() or "default") != (
+                                str(current.get("workspace_id") or "default").strip() or "default"
+                            ):
+                                raise ValueError("cancel operation event workspace does not match the locked operation")
+                            if str(event_payload.get("action_id") or "").strip() != current_action_id:
+                                raise ValueError("cancel operation event action does not match the locked operation")
+                            current_status = str(current.get("status") or "").strip()
+                            target_already_applied = current_status == requested_status
+                            if target_already_applied:
+                                outcome = "already_applied"
+                            elif current_status != normalized_expected_status or current_status in {
+                                "completed",
+                                "failed",
+                                "cancelled",
+                            }:
+                                outcome = "conflict"
+                            else:
+                                progress = {
+                                    **_json_load_dict(current.get("progress_json")),
+                                    **dict(progress_patch or {}),
+                                }
+                                workflow_ref = {
+                                    **_json_load_dict(current.get("workflow_ref_json")),
+                                    **dict(workflow_ref_patch or {}),
+                                }
+                                result_ref = {
+                                    **_json_load_dict(current.get("result_ref_json")),
+                                    **dict(result_ref_patch or {}),
+                                }
+                                metadata = {
+                                    **_json_load_dict(current.get("metadata_json")),
+                                    **dict(metadata_patch or {}),
+                                }
+                                completed_at = str(current.get("completed_at") or "").strip() or now
+                                cursor.execute(
+                                    """
+                                    UPDATE operation_runs
+                                    SET status = %s,
+                                        progress_json = %s,
+                                        workflow_ref_json = %s,
+                                        result_ref_json = %s,
+                                        metadata_json = %s,
+                                        completed_at = %s,
+                                        updated_at = %s
+                                    WHERE operation_run_id = %s AND status = %s
+                                    RETURNING *
+                                    """,
+                                    (
+                                        requested_status,
+                                        _json_dump(progress),
+                                        _json_dump(workflow_ref),
+                                        _json_dump(result_ref),
+                                        _json_dump(metadata),
+                                        completed_at,
+                                        now,
+                                        normalized_operation_id,
+                                        current_status,
+                                    ),
+                                )
+                                operation = _fetch_one_dict_row(cursor, cursor.fetchone())
+                                if operation is None:
+                                    raise RuntimeError("operation cancellation lost the locked operation row")
+                                outcome = "applied"
+                            if outcome in {"applied", "already_applied"}:
+                                action_id = str((operation or {}).get("action_id") or "").strip()
+                                if action_id:
+                                    cursor.execute(
+                                        "SELECT * FROM agent_actions WHERE action_id = %s FOR UPDATE",
+                                        (action_id,),
+                                    )
+                                    linked_action = _fetch_one_dict_row(cursor, cursor.fetchone())
+                                    if linked_action is not None:
+                                        action_status = str(linked_action.get("status") or "").strip()
+                                        if (
+                                            str(linked_action.get("workspace_id") or "default").strip() or "default"
+                                        ) != (str(current.get("workspace_id") or "default").strip() or "default"):
+                                            raise ValueError(
+                                                "cancel operation linked action workspace does not match the operation"
+                                            )
+                                        current_action_metadata = _json_load_dict(linked_action.get("metadata_json"))
+                                        action_metadata = {
+                                            **current_action_metadata,
+                                            **dict(linked_action_metadata_patch or {}),
+                                        }
+                                        action_terminal_conflict = action_status in {
+                                            "completed",
+                                            "failed",
+                                            "rejected",
+                                        }
+                                        action_needs_update = not action_terminal_conflict and (
+                                            action_status != "cancelled" or action_metadata != current_action_metadata
+                                        )
+                                        if action_needs_update:
+                                            cursor.execute(
+                                                """
+                                                UPDATE agent_actions
+                                                SET status = %s,
+                                                    metadata_json = %s,
+                                                    updated_at = %s
+                                                WHERE action_id = %s AND status = %s
+                                                RETURNING *
+                                                """,
+                                                (
+                                                    "cancelled",
+                                                    _json_dump(action_metadata),
+                                                    now,
+                                                    action_id,
+                                                    action_status,
+                                                ),
+                                            )
+                                            linked_action = _fetch_one_dict_row(cursor, cursor.fetchone())
+                                            if linked_action is None:
+                                                raise RuntimeError("operation cancel lost the linked action row lock")
+                                            if outcome == "already_applied":
+                                                outcome = "repaired"
+                                event = self._get_operation_event_with_cursor(
+                                    cursor,
+                                    event_stream_id=event_stream_id,
+                                    idempotency_key=event_idempotency_key,
+                                )
+                                if event is None:
+                                    event = self._append_operation_event_with_cursor(
+                                        cursor,
+                                        payload=event_payload,
+                                        now=now,
+                                        acquire_stream_lock=False,
+                                    )
+                                    if event is None:
+                                        raise RuntimeError(
+                                            "operation control transition produced no cancellation event"
+                                        )
+                                    self._validate_operation_control_event_identity(
+                                        event,
+                                        expected=event_payload,
+                                    )
+                                    if outcome == "already_applied":
+                                        outcome = "repaired"
+                                else:
+                                    self._validate_operation_control_event_identity(
+                                        event,
+                                        expected=event_payload,
+                                    )
+                    connection.commit()
+                    return {
+                        "outcome": outcome,
+                        "applied": outcome == "applied",
+                        "operation": operation,
+                        "linked_action": linked_action,
+                        "event": event,
+                    }
             except Exception as exc:
                 attempt += 1
                 if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
@@ -6980,6 +8146,27 @@ def _quote_identifier(identifier: str) -> str:
     return f'"{escaped}"'
 
 
+def _projection_metadata_merge_sql(
+    *,
+    quoted_table_name: str,
+    quoted_column: str,
+    preserve_keys: tuple[str, ...],
+) -> str:
+    incoming = f"EXCLUDED.{quoted_column}::jsonb"
+    for key in preserve_keys:
+        incoming = f"({incoming} - '{key}')"
+    preserved = " || ".join(
+        (
+            f"CASE WHEN {quoted_table_name}.{quoted_column}::jsonb ? '{key}' "
+            f"THEN jsonb_build_object('{key}', "
+            f"{quoted_table_name}.{quoted_column}::jsonb ->> '{key}') "
+            "ELSE '{}'::jsonb END"
+        )
+        for key in preserve_keys
+    )
+    return f"(({incoming}) || {preserved})::text"
+
+
 def _postgres_table_exists(cursor: Any, table_name: str, *, schema: str = "") -> bool:
     normalized_table = _normalize_postgres_identifier(table_name)
     if not normalized_table:
@@ -7108,6 +8295,40 @@ def _json_load_dict(payload: Any) -> dict[str, Any]:
     except (TypeError, ValueError, json.JSONDecodeError):
         return {}
     return dict(loaded) if isinstance(loaded, dict) else {}
+
+
+def _invalidate_projection_search_index_products(
+    projection_row: dict[str, Any],
+    *,
+    build_status: str,
+) -> dict[str, Any]:
+    """Make index-derived public products unavailable in the caller's transaction."""
+
+    payload = dict(projection_row or {})
+    metadata = _json_load_dict(payload.get("metadata_json"))
+    counts = _json_load_dict(payload.get("counts_json"))
+    readiness = _json_load_dict(payload.get("readiness_json"))
+    metadata[PROJECTION_SEARCH_INDEX_BUILD_STATUS_KEY] = str(build_status or "stale").strip() or "stale"
+    metadata["public_facet_counts_build_status"] = "pending"
+    counts.pop("public_facet_counts", None)
+    counts["facet_count_scope"] = "unavailable"
+    counts["facet_build_status"] = "pending"
+    counts["index_count_scope"] = "unavailable"
+    readiness["index_count_scope"] = "unavailable"
+    readiness.pop("profile_indexed_at", None)
+    readiness.pop("evidence_indexed_at", None)
+    for key in PROJECTION_SEARCH_INDEX_BINDING_KEYS:
+        readiness.pop(key, None)
+    payload.update(
+        {
+            "metadata_json": _json_dump(metadata),
+            "counts_json": _json_dump(counts),
+            "readiness_json": _json_dump(readiness),
+            "raw_profile_index_watermark": "",
+            "evidence_index_watermark": "",
+        }
+    )
+    return payload
 
 
 def _json_load_list(payload: Any) -> list[Any]:

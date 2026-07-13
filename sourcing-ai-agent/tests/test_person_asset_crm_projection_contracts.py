@@ -1,5 +1,6 @@
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -96,7 +97,8 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
             replace_members=True,
         )
         repository = self.store.repos.serving_projection
-        repository.upsert_person_search_index_rows(
+        projection = repository.get(projection_id)
+        repository.replace_person_search_index(
             projection_id,
             [
                 {
@@ -105,6 +107,11 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
                     "indexed_text": "old searchable row",
                 }
             ],
+            build_generation="generation-before-reset-failure",
+            expected_build_generation="",
+            expected_input_revision=str(
+                dict(projection.get("metadata") or {}).get("projection_person_search_index_input_revision") or ""
+            ),
         )
 
         with (
@@ -130,6 +137,715 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
             repository.search_person_index(projection_id, search_keyword="old")["candidate_identity_keys"],
             [candidate_key],
         )
+
+    def test_projection_index_filter_fails_closed_for_mixed_missing_filter_records(self) -> None:
+        projection_id = "proj_index_mixed_filter_record"
+        first_key = "linkedin:mixed-filter-first"
+        second_key = "linkedin:mixed-filter-second"
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-index-mixed-filter-record",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": first_key,
+                    "person_identity_key": first_key,
+                    "public_summary": {"display_name": "First", "location": "San Francisco, CA"},
+                },
+                {
+                    "candidate_identity_key": second_key,
+                    "person_identity_key": second_key,
+                    "public_summary": {"display_name": "Second", "location": "New York, NY"},
+                },
+            ],
+            replace_members=True,
+        )
+        self.person_asset_writer.rebuild_projection_person_search_index(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+            rebuild_person_indexes=False,
+        )
+        repository = self.store.repos.serving_projection
+        rows = repository.list_person_search_index_rows(projection_id, limit=10)
+        damaged_row = next(row for row in rows if row["candidate_identity_key"] == second_key)
+        repository.upsert_person_search_index_rows(
+            projection_id,
+            [{**damaged_row, "metadata": {"writer_id": "damaged-test-row"}}],
+        )
+
+        repository_result = repository.filter_person_search_index(
+            projection_id,
+            candidate_filter={"locations": ["us"]},
+            limit=10,
+        )
+        public_result = self.projection_reader.get_projection_candidates(
+            projection_id,
+            candidate_filter={"locations": ["us"]},
+            limit=10,
+        )
+
+        self.assertEqual(repository_result["status"], "unavailable")
+        self.assertEqual(repository_result["missing_filter_record_count"], 1)
+        self.assertEqual(repository_result["candidate_identity_keys"], [])
+        self.assertEqual(public_result["status"], "not_ready")
+        self.assertEqual(public_result["reason"], "projection_person_search_index_unavailable")
+        self.assertEqual(public_result["candidate_count"], 2)
+        self.assertEqual(public_result["filtered_candidate_count"], 0)
+        self.assertEqual(public_result["candidates"], [])
+
+    def test_projection_index_generation_fence_rejects_delayed_old_continuation(self) -> None:
+        projection_id = "proj_index_generation_fence"
+        repository = self.store.repos.serving_projection
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-index-generation-fence",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:generation-member",
+                    "person_identity_key": "linkedin:generation-member",
+                }
+            ],
+            replace_members=True,
+        )
+        v1_projection = repository.get(projection_id)
+        repository.replace_person_search_index(
+            projection_id,
+            [
+                {
+                    "candidate_identity_key": "linkedin:v1-first",
+                    "person_identity_key": "linkedin:v1-first",
+                    "indexed_text": "v1 first",
+                }
+            ],
+            build_generation="generation-v1",
+            expected_build_generation="",
+            expected_input_revision=str(
+                dict(v1_projection.get("metadata") or {}).get("projection_person_search_index_input_revision") or ""
+            ),
+        )
+        delayed_v1_projection_metadata = repository.get(projection_id)
+
+        continuation_entered = threading.Event()
+        release_continuation = threading.Event()
+        continuation_result: dict[str, object] = {}
+        original_write = self.store._control_plane_postgres.write_projection_person_search_index_generation  # noqa: SLF001
+
+        def delayed_write(**kwargs: object) -> dict[str, object] | None:
+            if kwargs.get("build_generation") == "generation-v1" and not bool(kwargs.get("reset_index")):
+                continuation_entered.set()
+                self.assertTrue(release_continuation.wait(timeout=10))
+            return original_write(**kwargs)
+
+        def write_old_continuation() -> None:
+            continuation_result.update(
+                repository.upsert_person_search_index_rows(
+                    projection_id,
+                    [
+                        {
+                            "candidate_identity_key": "linkedin:v1-second",
+                            "person_identity_key": "linkedin:v1-second",
+                            "indexed_text": "v1 second",
+                        }
+                    ],
+                    build_generation="generation-v1",
+                )
+            )
+
+        with mock.patch.object(
+            self.store._control_plane_postgres,  # noqa: SLF001
+            "write_projection_person_search_index_generation",
+            side_effect=delayed_write,
+        ):
+            continuation_thread = threading.Thread(target=write_old_continuation, daemon=True)
+            continuation_thread.start()
+            self.assertTrue(continuation_entered.wait(timeout=10))
+            v2_projection = repository.get(projection_id)
+            v2_result = repository.replace_person_search_index(
+                projection_id,
+                [
+                    {
+                        "candidate_identity_key": "linkedin:v2-only",
+                        "person_identity_key": "linkedin:v2-only",
+                        "indexed_text": "v2 only",
+                    }
+                ],
+                build_generation="generation-v2",
+                expected_build_generation="generation-v1",
+                expected_input_revision=str(
+                    dict(v2_projection.get("metadata") or {}).get("projection_person_search_index_input_revision") or ""
+                ),
+            )
+            repository.upsert(
+                {
+                    **delayed_v1_projection_metadata,
+                    "metadata": {
+                        **dict(delayed_v1_projection_metadata.get("metadata") or {}),
+                        "search_index_build_status": "partial",
+                    },
+                }
+            )
+            release_continuation.set()
+            continuation_thread.join(timeout=10)
+
+        self.assertFalse(continuation_thread.is_alive())
+        self.assertEqual(v2_result["status"], "indexed")
+        self.assertEqual(continuation_result["status"], "obsolete")
+        self.assertEqual(continuation_result["current_build_generation"], "generation-v2")
+        projection = repository.get(projection_id)
+        self.assertEqual(
+            projection["metadata"]["projection_person_search_index_build_generation"],
+            "generation-v2",
+        )
+        rows = repository.list_person_search_index_rows(projection_id, limit=10)
+        self.assertEqual([row["candidate_identity_key"] for row in rows], ["linkedin:v2-only"])
+
+    def test_projection_index_generation_fence_rejects_delayed_old_reset(self) -> None:
+        projection_id = "proj_index_generation_reset_fence"
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-index-generation-reset-fence",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:generation-reset-member",
+                    "person_identity_key": "linkedin:generation-reset-member",
+                }
+            ],
+            replace_members=True,
+        )
+        reset_entered = threading.Event()
+        release_reset = threading.Event()
+        v1_result: dict[str, object] = {}
+        original_write = self.store._control_plane_postgres.write_projection_person_search_index_generation  # noqa: SLF001
+
+        def delayed_write(**kwargs: object) -> dict[str, object] | None:
+            if kwargs.get("build_generation") == "generation-reset-v1" and bool(kwargs.get("reset_index")):
+                reset_entered.set()
+                self.assertTrue(release_reset.wait(timeout=10))
+            return original_write(**kwargs)
+
+        def write_old_reset() -> None:
+            v1_result.update(
+                self.person_asset_writer.rebuild_projection_person_search_index_page(
+                    projection_id=projection_id,
+                    member_page_size=1,
+                    reset_index=True,
+                    rebuild_person_indexes=False,
+                    build_generation="generation-reset-v1",
+                )
+            )
+
+        with mock.patch.object(
+            self.store._control_plane_postgres,  # noqa: SLF001
+            "write_projection_person_search_index_generation",
+            side_effect=delayed_write,
+        ):
+            v1_thread = threading.Thread(target=write_old_reset, daemon=True)
+            v1_thread.start()
+            self.assertTrue(reset_entered.wait(timeout=10))
+            v2_result = self.person_asset_writer.rebuild_projection_person_search_index_page(
+                projection_id=projection_id,
+                member_page_size=1,
+                reset_index=True,
+                rebuild_person_indexes=False,
+                build_generation="generation-reset-v2",
+            )
+            release_reset.set()
+            v1_thread.join(timeout=10)
+
+        self.assertFalse(v1_thread.is_alive())
+        self.assertEqual(v2_result["status"], "indexed")
+        self.assertEqual(v1_result["status"], "obsolete")
+        self.assertEqual(v1_result["current_build_generation"], "generation-reset-v2")
+        projection = self.store.repos.serving_projection.get(projection_id)
+        self.assertEqual(
+            projection["metadata"]["projection_person_search_index_build_generation"],
+            "generation-reset-v2",
+        )
+
+    def test_projection_input_revision_preserves_noop_and_invalidates_same_count_replacement(self) -> None:
+        projection_id = "proj_index_semantic_revision"
+        run_id = "job-index-semantic-revision"
+        first_member = {
+            "candidate_identity_key": "linkedin:semantic-first",
+            "person_identity_key": "linkedin:semantic-first",
+            "public_summary": {"display_name": "Semantic First"},
+        }
+        self.projection_writer.publish_run_scope_projection(
+            run_id=run_id,
+            projection_id=projection_id,
+            members=[first_member],
+            replace_members=True,
+        )
+        repository = self.store.repos.serving_projection
+        initial_projection = repository.get(projection_id)
+        initial_revision = str(initial_projection["metadata"]["projection_person_search_index_input_revision"])
+        first_build = self.person_asset_writer.rebuild_projection_person_search_index_page(
+            projection_id=projection_id,
+            member_page_size=1,
+            reset_index=True,
+            rebuild_person_indexes=False,
+            build_generation="generation-semantic-first",
+        )
+        self.assertEqual(first_build["status"], "indexed")
+        self.assertEqual(repository.search_person_index(projection_id, search_keyword="semantic")["status"], "ready")
+
+        self.projection_writer.publish_run_scope_projection(
+            run_id=run_id,
+            projection_id=projection_id,
+            members=[first_member],
+            replace_members=True,
+        )
+        replayed_projection = repository.get(projection_id)
+        self.assertEqual(
+            replayed_projection["metadata"]["projection_person_search_index_input_revision"],
+            initial_revision,
+        )
+        self.assertEqual(repository.search_person_index(projection_id, search_keyword="semantic")["status"], "ready")
+
+        replacement_member = {
+            "candidate_identity_key": "linkedin:semantic-second",
+            "person_identity_key": "linkedin:semantic-second",
+            "public_summary": {"display_name": "Semantic Second"},
+        }
+        self.projection_writer.publish_run_scope_projection(
+            run_id=run_id,
+            projection_id=projection_id,
+            members=[replacement_member],
+            replace_members=True,
+        )
+        replaced_projection = repository.get(projection_id)
+        self.assertNotEqual(
+            replaced_projection["metadata"]["projection_person_search_index_input_revision"],
+            initial_revision,
+        )
+        self.assertEqual(
+            replaced_projection["metadata"]["projection_person_search_index_build_input_revision"],
+            initial_revision,
+        )
+        self.assertEqual(
+            repository.search_person_index(projection_id, search_keyword="semantic")["status"], "unavailable"
+        )
+        self.assertEqual(
+            self.projection_reader.search_projection_person_index(projection_id, search_keyword="semantic")["status"],
+            "not_ready",
+        )
+
+    def test_projection_input_revision_rejects_same_timestamp_delayed_reset(self) -> None:
+        projection_id = "proj_index_same_timestamp_reset"
+        run_id = "job-index-same-timestamp-reset"
+        initial_member = {
+            "candidate_identity_key": "linkedin:same-timestamp",
+            "person_identity_key": "linkedin:same-timestamp",
+            "public_summary": {"display_name": "Same Timestamp Initial"},
+        }
+        reset_entered = threading.Event()
+        release_reset = threading.Event()
+        reset_result: dict[str, object] = {}
+        adapter = self.store._control_plane_postgres  # noqa: SLF001
+        original_write = adapter.write_projection_person_search_index_generation
+
+        def delayed_write(**kwargs: object) -> dict[str, object] | None:
+            if kwargs.get("build_generation") == "generation-same-timestamp-v1":
+                reset_entered.set()
+                self.assertTrue(release_reset.wait(timeout=10))
+            return original_write(**kwargs)
+
+        def run_delayed_reset() -> None:
+            reset_result.update(
+                self.person_asset_writer.rebuild_projection_person_search_index_page(
+                    projection_id=projection_id,
+                    member_page_size=1,
+                    reset_index=True,
+                    rebuild_person_indexes=False,
+                    build_generation="generation-same-timestamp-v1",
+                )
+            )
+
+        with mock.patch(
+            "sourcing_agent.control_plane_live_postgres._utc_now_sql_timestamp",
+            return_value="2026-07-10 00:00:00",
+        ):
+            self.projection_writer.publish_run_scope_projection(
+                run_id=run_id,
+                projection_id=projection_id,
+                members=[initial_member],
+                replace_members=True,
+            )
+            initial_revision = str(
+                self.store.repos.serving_projection.get(projection_id)["metadata"][
+                    "projection_person_search_index_input_revision"
+                ]
+            )
+            with mock.patch.object(
+                adapter, "write_projection_person_search_index_generation", side_effect=delayed_write
+            ):
+                reset_thread = threading.Thread(target=run_delayed_reset, daemon=True)
+                reset_thread.start()
+                self.assertTrue(reset_entered.wait(timeout=10))
+                self.projection_writer.publish_run_scope_projection(
+                    run_id=run_id,
+                    projection_id=projection_id,
+                    members=[
+                        {
+                            **initial_member,
+                            "public_summary": {"display_name": "Same Timestamp Changed"},
+                        }
+                    ],
+                    replace_members=True,
+                )
+                release_reset.set()
+                reset_thread.join(timeout=10)
+
+        self.assertFalse(reset_thread.is_alive())
+        self.assertEqual(reset_result["status"], "obsolete")
+        self.assertNotEqual(
+            self.store.repos.serving_projection.get(projection_id)["metadata"][
+                "projection_person_search_index_input_revision"
+            ],
+            initial_revision,
+        )
+
+    def test_public_facet_and_index_readiness_follow_completed_three_key_build(self) -> None:
+        projection_id = "proj_index_publication_fence"
+        run_id = "job-index-publication-fence"
+        members = [
+            {
+                "candidate_identity_key": "linkedin:publication-current",
+                "person_identity_key": "linkedin:publication-current",
+                "employment_scope": "current",
+                "public_summary": {
+                    "display_name": "Publication Current",
+                    "headline": "Search infrastructure engineer",
+                },
+            },
+            {
+                "candidate_identity_key": "linkedin:publication-former",
+                "person_identity_key": "linkedin:publication-former",
+                "employment_scope": "former",
+                "public_summary": {
+                    "display_name": "Publication Former",
+                    "headline": "Former search engineer",
+                },
+            },
+        ]
+        self.projection_writer.publish_run_scope_projection(
+            run_id=run_id,
+            projection_id=projection_id,
+            members=members,
+            replace_members=True,
+        )
+        initial_build = self.person_asset_writer.rebuild_projection_person_search_index_page(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+            member_page_size=2,
+            reset_index=True,
+            rebuild_person_indexes=False,
+            build_generation="generation-publication-fence-v1",
+        )
+        self.assertTrue(initial_build["completed"])
+        initially_ready = self.projection_reader.get_projection_candidates(projection_id, limit=10)
+        self.assertEqual(initially_ready["facet_summary"]["status"], "complete")
+        self.assertEqual(initially_ready["filter_contract"]["facet_count_scope"], "exact_projection")
+        self.assertEqual(initially_ready["index_filter_readiness"]["count_scope"], "exact_projection")
+
+        replacement_members = [
+            members[0],
+            {
+                "candidate_identity_key": "linkedin:publication-replacement",
+                "person_identity_key": "linkedin:publication-replacement",
+                "employment_scope": "former",
+                "public_summary": {
+                    "display_name": "Publication Replacement",
+                    "headline": "Replacement search engineer",
+                },
+            },
+        ]
+        repository = self.store.repos.serving_projection
+        original_list_members = repository.list_members
+        replacement_applied = False
+
+        def replace_members_before_public_member_read(*args: object, **kwargs: object) -> list[dict[str, object]]:
+            nonlocal replacement_applied
+            if not replacement_applied:
+                replacement_applied = True
+                self.projection_writer.publish_run_scope_projection(
+                    run_id=run_id,
+                    projection_id=projection_id,
+                    members=replacement_members,
+                    replace_members=True,
+                )
+            return original_list_members(*args, **kwargs)
+
+        with mock.patch.object(repository, "list_members", side_effect=replace_members_before_public_member_read):
+            stale_page = self.projection_reader.get_projection_candidates(projection_id, limit=10)
+        stale_projection = repository.get(projection_id)
+        self.assertTrue(replacement_applied)
+        self.assertEqual(stale_projection["metadata"]["search_index_build_status"], "stale")
+        self.assertNotIn("public_facet_counts", stale_projection["counts"])
+        self.assertEqual(stale_page["facet_summary"]["status"], "unavailable")
+        self.assertEqual(stale_page["filter_contract"]["facet_count_scope"], "unavailable")
+        self.assertEqual(stale_page["index_filter_readiness"]["count_scope"], "unavailable")
+
+        reset_page = self.person_asset_writer.rebuild_projection_person_search_index_page(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+            member_page_size=1,
+            reset_index=True,
+            rebuild_person_indexes=False,
+            build_generation="generation-publication-fence-v2",
+        )
+        self.assertFalse(reset_page["completed"])
+        reset_projection = self.store.repos.serving_projection.get(projection_id)
+        reset_public_page = self.projection_reader.get_projection_candidates(projection_id, limit=10)
+        self.assertEqual(reset_projection["metadata"]["search_index_build_status"], "partial")
+        self.assertNotIn("public_facet_counts", reset_projection["counts"])
+        self.assertEqual(reset_public_page["facet_summary"]["status"], "unavailable")
+        self.assertEqual(reset_public_page["index_filter_readiness"]["count_scope"], "unavailable")
+
+        final_page = self.person_asset_writer.rebuild_projection_person_search_index_page(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+            member_page_size=1,
+            offset=1,
+            rebuild_person_indexes=False,
+            build_generation="generation-publication-fence-v2",
+        )
+        self.assertTrue(final_page["completed"])
+        finalized_projection = self.store.repos.serving_projection.get(projection_id)
+        finalized_public_page = self.projection_reader.get_projection_candidates(projection_id, limit=10)
+        facet_product = dict(finalized_projection["counts"]["public_facet_counts"])
+        for key in (
+            "projection_person_search_index_build_generation",
+            "projection_person_search_index_build_input_revision",
+            "projection_person_search_index_input_revision",
+        ):
+            self.assertEqual(facet_product[key], finalized_projection["metadata"][key])
+            self.assertEqual(finalized_projection["readiness"][key], finalized_projection["metadata"][key])
+        self.assertEqual(finalized_projection["metadata"]["search_index_build_status"], "completed")
+        self.assertEqual(finalized_public_page["facet_summary"]["status"], "complete")
+        self.assertEqual(finalized_public_page["filter_contract"]["facet_count_scope"], "exact_projection")
+        self.assertEqual(finalized_public_page["index_filter_readiness"]["count_scope"], "exact_projection")
+
+    def test_empty_projection_finalizes_zero_facet_product_under_three_key_fence(self) -> None:
+        projection_id = "proj_index_empty_publication_fence"
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-index-empty-publication-fence",
+            projection_id=projection_id,
+            members=[],
+            replace_members=True,
+        )
+
+        result = self.person_asset_writer.rebuild_projection_person_search_index_page(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+            reset_index=True,
+            rebuild_person_indexes=False,
+            build_generation="generation-empty-publication-fence",
+        )
+        page = self.projection_reader.get_projection_candidates(projection_id, limit=10)
+
+        self.assertTrue(result["completed"])
+        self.assertEqual(result["indexed_count"], 0)
+        self.assertEqual(page["candidate_count"], 0)
+        self.assertEqual(page["facet_summary"]["status"], "complete")
+        self.assertEqual(page["facet_summary"]["candidate_count"], 0)
+        self.assertEqual(page["filter_contract"]["facet_count_scope"], "exact_projection")
+        self.assertEqual(page["index_filter_readiness"]["count_scope"], "exact_projection")
+
+    def test_projection_revision_fence_rejects_old_continuation_and_completed_downgrade(self) -> None:
+        projection_id = "proj_index_revision_continuation"
+        run_id = "job-index-revision-continuation"
+        members = [
+            {
+                "candidate_identity_key": f"linkedin:revision-{index}",
+                "person_identity_key": f"linkedin:revision-{index}",
+                "public_summary": {"display_name": f"Revision {index}"},
+            }
+            for index in range(2)
+        ]
+        self.projection_writer.publish_run_scope_projection(
+            run_id=run_id,
+            projection_id=projection_id,
+            members=members,
+            replace_members=True,
+        )
+        first_page = self.person_asset_writer.rebuild_projection_person_search_index_page(
+            projection_id=projection_id,
+            member_page_size=1,
+            reset_index=True,
+            rebuild_person_indexes=False,
+            build_generation="generation-revision-v1",
+        )
+        self.assertEqual(first_page["status"], "indexed")
+        self.assertFalse(first_page["completed"])
+
+        changed_members = [
+            members[0],
+            {
+                **members[1],
+                "public_summary": {"display_name": "Revision Changed"},
+            },
+        ]
+        self.projection_writer.publish_run_scope_projection(
+            run_id=run_id,
+            projection_id=projection_id,
+            members=changed_members,
+            replace_members=True,
+        )
+        stale_continuation = self.person_asset_writer.rebuild_projection_person_search_index_page(
+            projection_id=projection_id,
+            member_page_size=1,
+            offset=1,
+            rebuild_person_indexes=False,
+            build_generation="generation-revision-v1",
+        )
+        self.assertEqual(stale_continuation["status"], "obsolete")
+
+        current_projection = self.store.repos.serving_projection.get(projection_id)
+        current_revision = str(current_projection["metadata"]["projection_person_search_index_input_revision"])
+        rebuilt = self.person_asset_writer.rebuild_projection_person_search_index_page(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+            member_page_size=2,
+            reset_index=True,
+            rebuild_person_indexes=False,
+            build_generation="generation-revision-v2",
+        )
+        self.assertEqual(rebuilt["status"], "indexed")
+        completed_projection = self.store.repos.serving_projection.get(projection_id)
+        self.assertEqual(
+            completed_projection["metadata"]["projection_person_search_index_build_input_revision"],
+            current_revision,
+        )
+
+        stale_state = self.store.repos.serving_projection.update_person_search_index_build_state(
+            projection_id,
+            build_generation="generation-revision-v1",
+            readiness_patch={"index_count_scope": "index_partial"},
+            metadata_patch={"search_index_build_status": "partial"},
+        )
+        delayed_same_generation_partial = self.person_asset_writer._mark_projection_person_search_index_partial(  # noqa: SLF001
+            projection_id=projection_id,
+            build_generation="generation-revision-v2",
+            total_member_count=2,
+            truncated=False,
+        )
+        self.assertEqual(stale_state["status"], "obsolete")
+        self.assertEqual(delayed_same_generation_partial["status"], "obsolete")
+        final_projection = self.store.repos.serving_projection.get(projection_id)
+        self.assertEqual(final_projection["metadata"]["search_index_build_status"], "completed")
+        self.assertEqual(final_projection["readiness"]["index_count_scope"], "exact_projection")
+
+    def test_projection_member_uow_advances_input_revision_only_for_semantic_change(self) -> None:
+        projection_id = "proj_index_member_revision"
+        member = {
+            "candidate_identity_key": "linkedin:member-revision",
+            "person_identity_key": "linkedin:member-revision",
+            "public_summary": {"display_name": "Member Revision"},
+        }
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-index-member-revision",
+            projection_id=projection_id,
+            members=[member],
+            replace_members=True,
+        )
+        repository = self.store.repos.serving_projection
+        initial_revision = str(
+            repository.get(projection_id)["metadata"]["projection_person_search_index_input_revision"]
+        )
+        completed_build = self.person_asset_writer.rebuild_projection_person_search_index_page(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+            reset_index=True,
+            rebuild_person_indexes=False,
+            build_generation="generation-member-revision",
+        )
+        self.assertTrue(completed_build["completed"])
+
+        self.assertEqual(repository.upsert_members(projection_id, [member]), 1)
+        replayed_projection = repository.get(projection_id)
+        self.assertEqual(
+            replayed_projection["metadata"]["projection_person_search_index_input_revision"], initial_revision
+        )
+        self.assertIn("public_facet_counts", replayed_projection["counts"])
+
+        self.assertEqual(
+            repository.upsert_members(
+                projection_id,
+                [
+                    {
+                        **member,
+                        "public_summary": {"display_name": "Member Revision Changed"},
+                    }
+                ],
+            ),
+            1,
+        )
+        changed_projection = repository.get(projection_id)
+        self.assertNotEqual(
+            changed_projection["metadata"]["projection_person_search_index_input_revision"], initial_revision
+        )
+        self.assertEqual(changed_projection["metadata"]["search_index_build_status"], "stale")
+        self.assertNotIn("public_facet_counts", changed_projection["counts"])
+        self.assertEqual(changed_projection["readiness"]["index_count_scope"], "unavailable")
+
+    def test_projection_publication_bulk_upsert_preserves_index_generation_marker(self) -> None:
+        projection_id = "proj_index_generation_publication"
+        run_id = "job-index-generation-publication"
+        member = {
+            "candidate_identity_key": "linkedin:generation-publication-member",
+            "person_identity_key": "linkedin:generation-publication-member",
+        }
+        self.projection_writer.publish_run_scope_projection(
+            run_id=run_id,
+            projection_id=projection_id,
+            members=[member],
+            replace_members=True,
+        )
+        build_result = self.person_asset_writer.rebuild_projection_person_search_index_page(
+            projection_id=projection_id,
+            member_page_size=1,
+            reset_index=True,
+            rebuild_person_indexes=False,
+            build_generation="generation-publication-v1",
+        )
+        self.assertEqual(build_result["status"], "indexed")
+
+        self.projection_writer.publish_run_scope_projection(
+            run_id=run_id,
+            projection_id=projection_id,
+            members=[member],
+            replace_members=False,
+            metadata={"publication_reason": "marker-preservation-regression"},
+        )
+
+        projection = self.store.repos.serving_projection.get(projection_id)
+        self.assertEqual(
+            projection["metadata"]["projection_person_search_index_build_generation"],
+            "generation-publication-v1",
+        )
+
+    def test_public_projection_search_normalizes_missing_index_reason(self) -> None:
+        projection_id = "proj_search_missing_index_reason"
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-search-missing-index-reason",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:missing-index",
+                    "person_identity_key": "linkedin:missing-index",
+                }
+            ],
+            replace_members=True,
+        )
+
+        result = self.projection_reader.search_projection_person_index(
+            projection_id,
+            search_keyword="missing",
+        )
+
+        self.assertEqual(result["status"], "not_ready")
+        self.assertEqual(result["reason"], "projection_person_search_index_unavailable")
+        self.assertEqual(result["candidate_count"], 1)
 
     def test_public_projection_member_consumers_fail_closed_after_count_succeeds(self) -> None:
         projection_id = "proj_member_second_read_fault"
@@ -203,7 +919,9 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
 
         self.assertEqual(row["person_identity_key"], "linkedin:https://www.linkedin.com/in/ada-example")
         self.assertEqual(row["profile_url_key"], "https://www.linkedin.com/in/ada-example")
-        self.assertEqual(row["public_summary"]["person_identity_key"], "linkedin:https://www.linkedin.com/in/ada-example")
+        self.assertEqual(
+            row["public_summary"]["person_identity_key"], "linkedin:https://www.linkedin.com/in/ada-example"
+        )
         self.assertEqual(row["public_summary"]["source_projection_id"], "proj_identity")
 
     def test_projection_search_index_publishes_canonical_public_facet_counts(self) -> None:
@@ -309,7 +1027,9 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
             }
         )
 
-        self.assertEqual(self.store.list_person_assets(person_identity_key="linkedin:ada-example")[0]["asset_id"], "pa_avatar")
+        self.assertEqual(
+            self.store.list_person_assets(person_identity_key="linkedin:ada-example")[0]["asset_id"], "pa_avatar"
+        )
         self.assertEqual(self.store.list_person_evidence(asset_id="pa_avatar")[0]["evidence_id"], "pe_homepage")
         self.assertEqual(
             self.store.list_person_assertions(person_identity_key="linkedin:ada-example")[0]["assertion_id"],
@@ -562,7 +1282,9 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         self.assertTrue(new_pointer["active_projection_id"].startswith("proj_localasset_"))
         self.assertEqual(new_pointer["active_collection_version"], "20260501T000000")
         self.assertEqual(new_members[0]["profile_readiness"], "ready")
-        self.assertEqual(new_members[0]["public_summary"]["experience_lines"], ["2026~Present, NewCo, Research Engineer"])
+        self.assertEqual(
+            new_members[0]["public_summary"]["experience_lines"], ["2026~Present, NewCo, Research Engineer"]
+        )
         self.assertEqual(new_members[0]["public_summary"]["source_snapshot_id"], "20260501T000000")
 
     def test_collection_projection_layer_backfill_writes_canonical_member_fields(self) -> None:
@@ -595,7 +1317,9 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         self.assertEqual(result["status"], "backfilled")
         self.assertEqual(result["processed_member_count"], 1)
         self.assertEqual(row["public_summary"]["outreach_layer"], 3)
-        self.assertEqual(row["public_summary"]["outreach_layer_key"], "layer_3_mainland_china_experience_or_chinese_language")
+        self.assertEqual(
+            row["public_summary"]["outreach_layer_key"], "layer_3_mainland_china_experience_or_chinese_language"
+        )
         self.assertEqual(row["public_summary"]["outreach_layer_key"], row["metadata"]["outreach_layer_key"])
         self.assertEqual(projection["readiness"]["layering"], "complete")
         self.assertEqual(projection["metadata"]["layer_assignment_source"], "collection_projection_layer_backfill")
@@ -655,7 +1379,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
                 "action": "promote",
                 "promoted_field": "public_web_profile_link",
                 "operator": "unit-test",
-            }
+            },
         )
         backfill = CRMTargetCandidateMigrationBackfill(
             self.store,
@@ -669,9 +1393,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
             person_identity_key="linkedin:ada-public-web",
             assertion_type="homepage_url",
         )
-        event = self.store.get_crm_event_by_idempotency(
-            "crm:migrate-public-web-promotion:promotion-ada-homepage"
-        )
+        event = self.store.get_crm_event_by_idempotency("crm:migrate-public-web-promotion:promotion-ada-homepage")
 
         self.assertEqual(result["status"], "backfilled")
         self.assertEqual(result["migrated_count"], 1)
@@ -748,8 +1470,12 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         self.assertEqual(detail["read_contract"]["source"], "serving_projection_members+person_assets+crm_records")
         self.assertNotIn("primary_email", detail["public_summary"])
         self.assertNotIn("raw_profile", detail["public_summary"])
-        active_assertion = next(item for item in detail["assertions"] if item["assertion_id"] == "assertion-detail-active-email")
-        review_assertion = next(item for item in detail["assertions"] if item["assertion_id"] == "assertion-detail-review-email")
+        active_assertion = next(
+            item for item in detail["assertions"] if item["assertion_id"] == "assertion-detail-active-email"
+        )
+        review_assertion = next(
+            item for item in detail["assertions"] if item["assertion_id"] == "assertion-detail-review-email"
+        )
         self.assertEqual(active_assertion["value"], "active@example.com")
         self.assertTrue(review_assertion["value_redacted"])
         self.assertNotIn("value", review_assertion)
@@ -764,7 +1490,9 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         self.assertEqual(summary["media_summary"]["avatar_asset_id"], "avatar-detail-ada")
         self.assertEqual(page["status"], "ready")
         self.assertEqual(page["candidates"][0]["media_summary"]["avatar_asset_id"], "avatar-detail-ada")
-        self.assertEqual(page["candidates"][0]["media_summary"]["avatar_url"], "https://static.example.com/avatar-detail-ada.png")
+        self.assertEqual(
+            page["candidates"][0]["media_summary"]["avatar_url"], "https://static.example.com/avatar-detail-ada.png"
+        )
 
     def test_person_media_summary_does_not_promote_provider_hotlink_without_asset(self) -> None:
         self.projection_writer.publish_run_scope_projection(
@@ -839,7 +1567,8 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         self.assertEqual(projection["readiness"]["profile_required_count"], 2)
         self.assertEqual(projection["readiness"]["profile_ready_count"], 1)
         self.assertEqual(projection["readiness"]["card_ready_count"], 2)
-        self.assertEqual(page["index_filter_readiness"]["count_scope"], "index_partial")
+        self.assertEqual(page["index_filter_readiness"]["count_scope"], "unavailable")
+        self.assertEqual(page["index_filter_readiness"]["profile_indexed_at"], "")
         self.assertEqual(page["index_filter_readiness"]["freshness_timezone"], "Asia/Shanghai")
 
     def test_projection_person_search_index_serves_keyword_filter_without_raw_payload_leak(self) -> None:
@@ -977,8 +1706,12 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         )
         raw_index = self.store.get_raw_profile_index("linkedin:person-index-ada")
         evidence_index = self.store.get_candidate_evidence_index("linkedin:person-index-ada")
-        vector_search = self.projection_reader.search_projection_person_index("proj_person_index", search_keyword="vector")
-        substack_search = self.projection_reader.search_projection_person_index("proj_person_index", search_keyword="Substack")
+        vector_search = self.projection_reader.search_projection_person_index(
+            "proj_person_index", search_keyword="vector"
+        )
+        substack_search = self.projection_reader.search_projection_person_index(
+            "proj_person_index", search_keyword="Substack"
+        )
         rows = self.store.repos.serving_projection._list_person_search_index_rows(  # noqa: SLF001
             "proj_person_index", limit=10
         )

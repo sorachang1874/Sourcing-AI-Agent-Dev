@@ -400,6 +400,63 @@ class _FakeLiveControlPlanePostgresAdapter:
             self.upsert_row(normalized_table, payload)
         return len(payload_rows)
 
+    def write_serving_projection_members_with_input_revision(
+        self,
+        *,
+        table_name: str,
+        projection_id: str,
+        rows: list[dict[str, object]] | tuple[dict[str, object], ...],
+        replace_members: bool,
+        input_revision: str,
+        transaction_lock_key: str = "",
+    ) -> dict[str, object]:
+        normalized_projection_id = str(projection_id or "").strip()
+        projection_rows = list(self.generic_rows.get("serving_projections", []))
+        projection = next(
+            (
+                dict(row)
+                for row in projection_rows
+                if str(row.get("projection_id") or "").strip() == normalized_projection_id
+            ),
+            {},
+        )
+        if not projection:
+            return {
+                "status": "projection_missing",
+                "applied": False,
+                "projection_id": normalized_projection_id,
+                "member_count": 0,
+            }
+        metadata = json.loads(str(projection.get("metadata_json") or "{}"))
+        metadata["projection_person_search_index_input_revision"] = str(input_revision or "").strip()
+        updated_projection = {
+            **projection,
+            "metadata_json": json.dumps(metadata, ensure_ascii=False),
+        }
+        self.generic_rows["serving_projections"] = [
+            row
+            for row in projection_rows
+            if str(row.get("projection_id") or "").strip() != normalized_projection_id
+        ] + [updated_projection]
+        if replace_members:
+            self.generic_rows[table_name] = [
+                row
+                for row in self.generic_rows.get(table_name, [])
+                if str(row.get("projection_id") or "").strip() != normalized_projection_id
+            ]
+        member_count = self.bulk_upsert_rows(
+            table_name,
+            rows,
+            transaction_lock_key=transaction_lock_key,
+        )
+        return {
+            "status": "applied",
+            "applied": True,
+            "projection_id": normalized_projection_id,
+            "input_revision": str(input_revision or "").strip(),
+            "member_count": member_count,
+        }
+
     def replace_candidate_materialization_state_scope(
         self,
         *,
@@ -1611,16 +1668,21 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
 
         for table_name, call in cases:
             with self.subTest(table_name=table_name):
+                expected_method = (
+                    "write_serving_projection_members_with_input_revision"
+                    if table_name == "serving_projection_members"
+                    else "bulk_upsert_rows"
+                )
                 with mock.patch.object(
                     adapter,
-                    "bulk_upsert_rows",
-                    side_effect=RuntimeError("bulk-upsert-boom"),
+                    expected_method,
+                    side_effect=RuntimeError("native-write-boom"),
                 ):
                     with self.assertRaises(RuntimeError) as raised:
                         call()
                 self.assertIn(table_name, str(raised.exception))
-                self.assertIn("bulk_upsert_rows", str(raised.exception))
-                self.assertIn("bulk-upsert-boom", str(raised.exception))
+                self.assertIn(expected_method, str(raised.exception))
+                self.assertIn("native-write-boom", str(raised.exception))
 
     def test_serving_projection_foundation_mirrors_sqlite_writes(self) -> None:
         store = self._build_store(mode="postgres_only")
@@ -3973,19 +4035,19 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
                 "Postgres authoritative table is missing: crm_public_web_runs",
             ):
                 adapter.select_many(
-                "crm_public_web_runs",
-                where_sql="workspace_id = %s",
-                params=["default"],
-            )
+                    "crm_public_web_runs",
+                    where_sql="workspace_id = %s",
+                    params=["default"],
+                )
             with self.assertRaisesRegex(
                 RuntimeError,
                 "Postgres authoritative table is missing: crm_public_web_runs",
             ):
                 adapter.count_rows(
-                "crm_public_web_runs",
-                where_sql="workspace_id = %s",
-                params=["default"],
-            )
+                    "crm_public_web_runs",
+                    where_sql="workspace_id = %s",
+                    params=["default"],
+                )
             adapter.ensure_bootstrapped.assert_not_called()
             self.assertEqual([call["sql"] for call in calls], ["SELECT to_regclass(%s)", "SELECT to_regclass(%s)"])
 
@@ -4223,16 +4285,16 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
 
             with (
                 mock.patch.dict(
-                os.environ,
-                {
-                    "SOURCING_LOCAL_POSTGRES_ENV_FILE": "",
-                    "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "public",
-                    "SOURCING_RUNTIME_ENVIRONMENT": "",
-                },
+                    os.environ,
+                    {
+                        "SOURCING_LOCAL_POSTGRES_ENV_FILE": "",
+                        "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "public",
+                        "SOURCING_RUNTIME_ENVIRONMENT": "",
+                    },
                 ),
                 mock.patch(
-                "sourcing_agent.control_plane_live_postgres.configure_control_plane_postgres_session",
-                side_effect=_capture_configured_session,
+                    "sourcing_agent.control_plane_live_postgres.configure_control_plane_postgres_session",
+                    side_effect=_capture_configured_session,
                 ),
             ):
                 adapter._connect()
@@ -4279,17 +4341,17 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
             # stubbed so no real Postgres connection is needed.
             with (
                 mock.patch.dict(
-                os.environ,
-                {
-                    "SOURCING_LOCAL_POSTGRES_ENV_FILE": "",
-                    "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "public",
-                    "SOURCING_RUNTIME_ENVIRONMENT": "",
-                },
+                    os.environ,
+                    {
+                        "SOURCING_LOCAL_POSTGRES_ENV_FILE": "",
+                        "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "public",
+                        "SOURCING_RUNTIME_ENVIRONMENT": "",
+                    },
                 ),
                 mock.patch.object(adapter, "_connect", return_value=mock.MagicMock()),
                 mock.patch(
-                "sourcing_agent.control_plane_live_postgres.apply_pending_migrations",
-                side_effect=_capture_apply,
+                    "sourcing_agent.control_plane_live_postgres.apply_pending_migrations",
+                    side_effect=_capture_apply,
                 ),
             ):
                 adapter.ensure_bootstrapped()
@@ -4481,8 +4543,8 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
             self.assertEqual(
                 [row["profile_url_key"] for row in list(rows or [])],
                 [
-                "linkedin.com/in/batch-pg-a",
-                "linkedin.com/in/batch-pg-b",
+                    "linkedin.com/in/batch-pg-a",
+                    "linkedin.com/in/batch-pg-b",
                 ],
             )
 
@@ -4510,6 +4572,43 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
             self.assertEqual(commit_counter["count"], 1)
             self.assertEqual(sum("CREATE TEMP TABLE" in str(call["sql"]) for call in calls), 1)
             self.assertEqual(sum("SELECT" in str(call["sql"]) for call in calls), 1)
+
+    def test_projection_metadata_temp_bulk_merge_preserves_generation_contract_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+            )
+            adapter.ensure_bootstrapped = lambda: None  # type: ignore[method-assign]
+            adapter._ensure_table_write_schema = lambda _table_name: None  # type: ignore[method-assign]
+            calls: list[dict[str, object]] = []
+            commit_counter = {"count": 0}
+            adapter._connect = lambda: _RecordingConnection(calls, commit_counter)  # type: ignore[method-assign]
+
+            with mock.patch("sourcing_agent.control_plane_live_postgres._BULK_UPSERT_DIRECT_PARAM_LIMIT", 2):
+                adapter.bulk_upsert_rows(
+                    "serving_projections",
+                    [
+                        {
+                            "projection_id": "proj-generation-temp-merge",
+                            "state": "serving",
+                            "metadata_json": '{"writer_id":"test"}',
+                        }
+                    ],
+                )
+
+            sql_calls = [str(call["sql"]) for call in calls]
+            self.assertTrue(any("CREATE TEMP TABLE" in sql for sql in sql_calls))
+            merge_sql = next(sql for sql in sql_calls if 'INSERT INTO "serving_projections"' in sql and "SELECT" in sql)
+            for reserved_key in (
+                "projection_person_search_index_build_generation",
+                "projection_person_search_index_build_input_revision",
+                "projection_person_search_index_input_revision",
+            ):
+                self.assertIn(reserved_key, merge_sql)
+            self.assertEqual(commit_counter["count"], 1)
 
     def test_projection_parent_and_member_replace_share_one_locked_transaction(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

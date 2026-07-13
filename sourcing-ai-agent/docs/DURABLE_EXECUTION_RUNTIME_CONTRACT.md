@@ -44,6 +44,20 @@ W8 operation persistence contract:
 - Budget-required actions require explicit budget before persistence.
 - Operation-layer persistence must not create `workflow_commands`, CRM rows, projection rows, person assets/evidence/assertions, provider registry rows, or export artifacts. Those remain module-owner effects.
 - W9 backend operation controls may approve, reject, query, and cancel operation state through operation runtime tables and append-only events. They must still not execute module side effects or bypass workflow command owners.
+- `store.repos.workflow_runtime` is the public storage owner for `agent_actions`, `operation_runs`, and
+  `operation_events`; the retired `ControlPlaneStore` operation-control facade must not be restored.
+- Ordinary action/run state updates use expected-status compare-and-set and return the committed row. Callers
+  must validate the committed target before emitting a success event or reporting success. A stale writer must
+  not reopen `completed`, `failed`, `cancelled`, or `rejected` action state, or a terminal operation run.
+- Reject and cancel are fixed PG UoWs. `ActionRejected` commits atomically with action
+  `status=cancelled, approval_status=rejected`; `OperationCancelled` commits atomically with operation
+  `status=cancelled` and the eligible linked-action cancellation. Event failure, identity mismatch, or CAS conflict
+  rolls back the whole control transition. Duplicate target-state requests reuse the idempotent event; a legacy
+  target state with a missing event is repaired in the same transaction.
+- Operation control APIs report `rejected` / `cancelled` only from the committed row. A concurrent terminal winner
+  returns `status=conflict` and HTTP 409 and must not create a loser success event. This guarantee is bounded to
+  the implemented reject/cancel UoWs plus committed-target guards for approve/resume/retry. Command planning and
+  generic operation+action+event synchronization still require the UoWs tracked by `RESIDUAL_LEDGER.md` R-019.
 
 ### Workflow Layer
 
@@ -231,6 +245,10 @@ Hard rules:
 - Large raw profile data, raw HTML, provider datasets, candidate arrays, and full export files belong in domain asset stores or object storage and are referenced by artifact refs.
 - Every event that changes state must have an idempotency key.
 - Events must be ordered per workflow by `sequence_number`.
+- An operation control transition and its corresponding `operation_event` must share one Postgres connection,
+  cursor, transaction, and commit. The lock order is event stream advisory lock, operation row when present, then
+  linked action row. Existing idempotent events must match workspace, stream, operation, action, family, type, and
+  idempotency identity; a collision is a rollback condition, not proof that the transition was audited.
 
 ## Current State Contract
 
@@ -620,10 +638,35 @@ Required behavior:
 - Projection publication, layer assignment publication, and person assertion promotion must plan a reducer-owned `CommandPlanRequested` event for `projection.person_search_index.build`.
 - The normal-path typed command payload is self-contained in `workflow_commands`: `job_id`, `projection_id`, `item_id`, projection type, collection id, source run id, member count, count scope, page size, input version, and materialization metadata.
 - `legacy_materialization_item` is allowed only on commands produced by the report-visible migration adapter for historical `job_materialization_items` rows. Normal-path planners must not include it.
-- The command idempotency key includes projection id, item id, semantic projection-index input version, and build scope. Replaying the same projection publication must not create a second index build command or duplicate index rows.
+- The command idempotency key includes projection id, item id, semantic projection-index input version, and build scope.
+  The semantic input version includes the storage-owned `projection_person_search_index_input_revision`, not
+  `serving_projections.updated_at`. An identical publication replay preserves that revision and therefore reuses the
+  durable item/command identity; a semantic member change, including a same-count replacement, advances the revision
+  and produces new durable build identity. Builder-owned raw/evidence index watermarks are output freshness evidence,
+  not command input identity; finalization must not make its own command obsolete or create a new command on replay.
 - The `projection_index_owner` recovery/service phase claims ready `projection.person_search_index.build` commands, marks them `running`, synthesizes the former item envelope from command-owned payload, executes one bounded index page, and then marks the command `succeeded`, re-queues it for partial progress, or records retry/terminal failure. It may claim/read `projection_person_search_index_build` only when the command carries an explicit migration-adapter legacy reference.
 - Partial progress is not a failure and must not burn retry attempts. The command and legacy item both retain page progress so large projections can finish across bounded background ticks.
 - Obsolete projection input/version checks are terminal success with `candidate_count=0`; they prevent stale index builds from overwriting newer projection semantics.
+- Each paged build is fenced by three reserved projection metadata keys:
+  `projection_person_search_index_input_revision` is the storage-owned semantic member-input revision,
+  `projection_person_search_index_build_input_revision` is the revision captured by the current build, and
+  `projection_person_search_index_build_generation` is the build identity. Member publication advances the input
+  revision only for an index-relevant semantic change and preserves it for an identical replay.
+- A reset compares the previously observed generation and input revision, then binds the new generation to the current
+  input revision and performs the scoped replace in one advisory-lock transaction. `updated_at` is deliberately not a
+  build fence. Continuation, partial progress, finalization, and facet/state publication must compare the generation
+  and require build-bound revision to equal current input revision in their write transaction. A delayed reset,
+  continuation, or state write returns obsolete without mutating the newer index, and a completed generation cannot be
+  downgraded to `building` or `partial`.
+- Public index reads validate a non-empty generation and equality of build-bound/current input revision before and
+  after the read. Stale or changing input fails closed. Projection-row upsert, including bulk conflict metadata merge,
+  preserves all three reserved keys; only the fixed member-publication UoW may advance the storage revision, and only
+  the index writer may claim build ownership.
+- Public facet counts and index-readiness mirrors carry the same three-key binding and become visible only after the
+  generation-fenced finalization UoW marks that build `completed`. Semantic membership mutation and reset both
+  invalidate the prior product in their own transaction, so an unfiltered projection page cannot expose the previous
+  exact facet/readiness state between reset and finalization. A completed empty projection remains an exact-zero
+  product under this same contract.
 - Recovery/service summaries must expose index command-owner evidence through `projection_person_search_index`: `command_count`, `executed_command_count`, `claimed_count`, `completed_count`, `partial_count`, `waiting_prerequisite_count`, `failed_count`, `skipped_count`, `runtime_namespace_skipped_count`, `candidate_count`, `indexed_count`, `legacy_bridge_used=false`, and `migration_phase=W2c_projection_person_search_index_build`.
 - The old item queue must not execute, even with explicit migration/emergency allow flags. The compatibility entrypoint may convert supported `job_materialization_items` rows into `workflow_commands`, then the typed owner executes those commands. Disabling the typed command owner returns `legacy_job_materialization_recovery_bridge_disabled`.
 

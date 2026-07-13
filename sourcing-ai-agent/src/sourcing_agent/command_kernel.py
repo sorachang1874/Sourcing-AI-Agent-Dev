@@ -441,7 +441,7 @@ class CommandKernel:
             operation_run_id = str(dict(command_payload.get("payload") or {}).get("operation_id") or "").strip()
         if not operation_run_id:
             return {"status": "skipped", "reason": "operation_id_missing"}
-        operation_run = self._store.get_operation_run(operation_run_id)
+        operation_run = self._store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation_run:
             return {
                 "status": "skipped",
@@ -486,7 +486,7 @@ class CommandKernel:
             "owner": str(command_payload.get("owner") or ""),
         }
         command_result = dict(command_payload.get("result") or {})
-        operation_patch = self._store.update_operation_run_state(
+        operation_patch = self._store.repos.workflow_runtime.update_operation_state(
             operation_run_id,
             status=next_status,
             progress_patch={
@@ -508,7 +508,7 @@ class CommandKernel:
         )
         action_id = str(operation_patch.get("action_id") or operation_run.get("action_id") or "").strip()
         if action_id:
-            self._store.update_agent_action_state(
+            self._store.repos.workflow_runtime.update_action_state(
                 action_id,
                 status=action_status,
                 result_ref_patch={
@@ -517,7 +517,7 @@ class CommandKernel:
                 },
                 metadata_patch={"last_operation_command_status": command_status},
             )
-        event = self._store.append_operation_event(
+        event = self._store.repos.workflow_runtime.append_operation_event(
             workspace_id=str(operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default").strip()
             or "default",
             event_stream_id=operation_run_id,

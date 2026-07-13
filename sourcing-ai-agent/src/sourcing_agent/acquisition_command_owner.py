@@ -1067,7 +1067,7 @@ class AcquisitionCommandOwner:
             ).strip()
         if not operation_run_id:
             return {"status": "skipped", "reason": "operation_id_missing"}
-        operation_run = self.store.get_operation_run(operation_run_id)
+        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation_run:
             return {
                 "status": "skipped",
@@ -1090,7 +1090,7 @@ class AcquisitionCommandOwner:
             "command_type": str(command_payload.get("command_type") or ""),
             "owner": str(command_payload.get("owner") or ""),
         }
-        operation_patch = self.store.update_operation_run_state(
+        operation_patch = self.store.repos.workflow_runtime.update_operation_state(
             operation_run_id,
             status="running",
             progress_patch={
@@ -1115,7 +1115,7 @@ class AcquisitionCommandOwner:
         )
         action_id = str(operation_patch.get("action_id") or operation_run.get("action_id") or "").strip()
         if action_id:
-            self.store.update_agent_action_state(
+            self.store.repos.workflow_runtime.update_action_state(
                 action_id,
                 status="running",
                 result_ref_patch={
@@ -1128,7 +1128,7 @@ class AcquisitionCommandOwner:
                     "awaiting_plan_review": True,
                 },
             )
-        event = self.store.append_operation_event(
+        event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=str(operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default").strip()
             or "default",
             event_stream_id=operation_run_id,
@@ -1454,7 +1454,7 @@ class AcquisitionCommandOwner:
             operation_run_id = str(dict(command_payload.get("payload") or {}).get("operation_id") or "").strip()
         if not operation_run_id:
             return {"status": "skipped", "reason": "operation_id_missing"}
-        operation_run = self.store.get_operation_run(operation_run_id)
+        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation_run:
             return {
                 "status": "skipped",
@@ -1477,7 +1477,7 @@ class AcquisitionCommandOwner:
             "command_type": str(command_payload.get("command_type") or ""),
             "owner": str(command_payload.get("owner") or ""),
         }
-        operation_patch = self.store.update_operation_run_state(
+        operation_patch = self.store.repos.workflow_runtime.update_operation_state(
             operation_run_id,
             status="running",
             progress_patch={
@@ -1503,7 +1503,7 @@ class AcquisitionCommandOwner:
         )
         action_id = str(operation_patch.get("action_id") or operation_run.get("action_id") or "").strip()
         if action_id:
-            self.store.update_agent_action_state(
+            self.store.repos.workflow_runtime.update_action_state(
                 action_id,
                 status="running",
                 result_ref_patch={
@@ -1517,7 +1517,7 @@ class AcquisitionCommandOwner:
                     "plan_review_id": int(review_session.get("review_id") or 0),
                 },
             )
-        event = self.store.append_operation_event(
+        event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=str(operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default").strip()
             or "default",
             event_stream_id=operation_run_id,
@@ -1946,7 +1946,7 @@ class AcquisitionCommandOwner:
             operation_run_id = str(dict(command_payload.get("payload") or {}).get("operation_id") or "").strip()
         if not operation_run_id:
             return {"status": "skipped", "reason": "operation_id_missing"}
-        operation_run = self.store.get_operation_run(operation_run_id)
+        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation_run:
             return {
                 "status": "skipped",
@@ -1971,7 +1971,7 @@ class AcquisitionCommandOwner:
             "command_type": str(command_payload.get("command_type") or ""),
             "owner": str(command_payload.get("owner") or ""),
         }
-        operation_patch = self.store.update_operation_run_state(
+        operation_patch = self.store.repos.workflow_runtime.update_operation_state(
             operation_run_id,
             status="running",
             progress_patch={
@@ -1998,7 +1998,7 @@ class AcquisitionCommandOwner:
         )
         action_id = str(operation_patch.get("action_id") or operation_run.get("action_id") or "").strip()
         if action_id:
-            self.store.update_agent_action_state(
+            self.store.repos.workflow_runtime.update_action_state(
                 action_id,
                 status="running",
                 result_ref_patch={
@@ -2013,7 +2013,7 @@ class AcquisitionCommandOwner:
                     "awaiting_plan_review": False,
                 },
             )
-        event = self.store.append_operation_event(
+        event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=str(operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default").strip()
             or "default",
             event_stream_id=operation_run_id,
@@ -2090,7 +2090,7 @@ class AcquisitionCommandOwner:
             or ""
         ).strip()
         plan_id = str(payload.get("plan_id") or plan_payload.get("plan_id") or request_payload.get("plan_id") or "").strip()
-        operation_run = self.store.get_operation_run(operation_run_id)
+        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         workspace_id = str(
             (operation_run or {}).get("workspace_id")
             or payload.get("workspace_id")
@@ -2306,7 +2306,7 @@ class AcquisitionCommandOwner:
             operation_run_id = str(dict(command_payload.get("payload") or {}).get("operation_id") or "").strip()
         if not operation_run_id:
             return {"status": "skipped", "reason": "operation_id_missing"}
-        operation_run = self.store.get_operation_run(operation_run_id)
+        operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation_run:
             return {
                 "status": "skipped",
@@ -2331,7 +2331,7 @@ class AcquisitionCommandOwner:
             "command_type": str(command_payload.get("command_type") or ""),
             "owner": str(command_payload.get("owner") or ""),
         }
-        operation_patch = self.store.update_operation_run_state(
+        operation_patch = self.store.repos.workflow_runtime.update_operation_state(
             operation_run_id,
             status="running",
             progress_patch={
@@ -2359,7 +2359,7 @@ class AcquisitionCommandOwner:
         )
         action_id = str(operation_patch.get("action_id") or operation_run.get("action_id") or "").strip()
         if action_id:
-            self.store.update_agent_action_state(
+            self.store.repos.workflow_runtime.update_action_state(
                 action_id,
                 status="running",
                 result_ref_patch={
@@ -2376,7 +2376,7 @@ class AcquisitionCommandOwner:
                     "awaiting_discovery_commands": operation_phase == "acquisition_scale_planned_pending_discovery",
                 },
             )
-        event = self.store.append_operation_event(
+        event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=str(operation_patch.get("workspace_id") or operation_run.get("workspace_id") or "default").strip()
             or "default",
             event_stream_id=operation_run_id,

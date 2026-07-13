@@ -123,6 +123,19 @@ Behavior:
 - `make ci-workflow-browser-gate` uses disposable PG, fake Apify HTTP, real backend API, real workflow submission through `/api/workflows`, event-time run projection publication, recovery-driven `projection_person_search_index` build, Vite preview, and Playwright against the resulting `/projections/{projection_id}`. The gate validates candidate count, pagination, backend-filtered search, and `filter_contract.fallback_used=false` without manually seeding projection rows.
 - `make ci-containerized-pre-release` is the current pre-release aggregation entrypoint. It runs Docker preflight plus `ci-pg-contract`, `ci-workflow-fake-provider`, `ci-frontend-browser-gate`, and `ci-workflow-browser-gate` in sequence so missing Docker, PG contract drift, fake-provider webhook drift, frontend projection-board drift, or workflow-to-browser projection drift fail one command.
 - Projection search/filter tests must build `projection_person_search_index` or assert fail-closed `projection_person_search_index_unavailable`. Integrity coverage must include authoritative count/select faults plus missing, hidden, duplicate, reordered, and partial member hydration; a ready response may not silently drop index keys. Normal workflow confidence must not enable `SOURCING_ALLOW_LEGACY_PROJECTION_FILTER_SCAN_FALLBACK`; that flag is migration/debug-only and any hit is a public-reader compatibility finding.
+- Paged projection-index tests must cover the full three-key fence. Required regressions include: a delayed old reset
+  rejected after semantic input revision changes even when `updated_at` is unchanged; an old continuation rejected
+  after a newer reset or input revision; a same-count member replacement advancing input revision and invalidating the
+  old public index; an identical member replay preserving input revision and durable item/command identity; and a
+  completed generation rejecting a partial/building downgrade. Public reads must fail closed when generation is
+  missing, build-bound revision differs from current input revision, or revision changes during a read. Direct and
+  temp-table bulk projection publication must preserve the input revision, build-bound revision, and build generation
+  reserved keys. Mixed rows where only some index entries lack `filter_record` must fail the whole filtered page closed;
+  they must not be reported as an exact partial result.
+- Real-PG public-reader coverage must also prove the facet/readiness publication lifecycle: exact facets are available
+  after finalization; a same-count semantic member replacement makes the old product unavailable; a new reset keeps it
+  unavailable through partial pages; finalization restores it with matching three-key bindings. The same regression
+  must include an empty projection and require a completed exact-zero facet product.
 - `make local-container-smoke` sets `SOURCING_RUN_TESTCONTAINERS=1` but does not require Docker. If Docker/Testcontainers cannot start locally, the unittest reports a skip rather than blocking ordinary local development.
 - Plain `python -m unittest tests.testcontainers_pg_contract` skips unless `SOURCING_RUN_TESTCONTAINERS=1` is set.
 - The current harness validates PG-only `ControlPlaneStore` bootstrap and writes for `serving_projections`, `serving_projection_members`, `projection_manifest_shards`, `run_projection_links`, and `collection_authoritative_pointers`.
@@ -216,6 +229,9 @@ make test-env-seed-assets TEST_ENV_SEED_COMPANIES="anthropic"
 ## Control Plane 默认约定
 
 - SQLite compatibility shadow 已随 Track B B4.3 全量退役：`ControlPlaneStore` 是 PG-pure，轻量单元测试与 workflow confidence 一律走 PG-only control plane（per-test 隔离使用专属 PG schema，而非 SQLite）。
+- Operation-control atomicity must be tested against a real isolated PG schema. Required regressions include stale
+  terminal CAS, event-insert rollback, duplicate event idempotency, legacy missing-event repair, cross-workspace link
+  rejection, collided event identity, and loser responses mapped to HTTP 409; mocks alone do not prove transaction rollback.
 - `scripts/dev_backend.sh` 会在普通 `test/simulate/scripted/replay` runtime 下自动写入：
   - `runtime/test_env/.isolated-local-postgres.env`
 - 这个空 sentinel 会阻断 repo-level PG fallback，避免测试 job / assets / registry 写进本地或生产 PG namespace

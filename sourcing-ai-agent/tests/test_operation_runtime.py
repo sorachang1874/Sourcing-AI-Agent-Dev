@@ -5,6 +5,8 @@ import threading
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from urllib import error as urllib_error
 from urllib import request as urllib_request
 from unittest import mock
 
@@ -29,7 +31,9 @@ from sourcing_agent.operation_runtime import (
     ActionRegistry,
     ActionSpec,
     DEFAULT_ACTION_REGISTRY,
+    OperationRuntimeStateConflict,
     OperationRuntimeWriter,
+    operation_retry_run_id_for,
     operation_run_control_state,
 )
 from sourcing_agent.durable_runtime import (
@@ -147,20 +151,63 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
 
         failed = operation_run_control_state(
             operation_status="failed",
-            action_status="queued",
+            action_status="failed",
+            action_approval_status="not_required",
             operation_phase="failed",
         ).to_record()
         self.assertTrue(failed["can_retry"])
         self.assertFalse(failed["can_dispatch"])
-        self.assertEqual(failed["disabled_reasons"]["dispatch"], "dispatch_requires_queued_operation")
+        self.assertEqual(failed["disabled_reasons"]["dispatch"], "linked_action_terminal")
 
         cancelled_action = operation_run_control_state(
             operation_status="cancelled",
             action_status="cancelled",
+            action_approval_status="rejected",
             operation_phase="cancelled",
         ).to_record()
         self.assertFalse(cancelled_action["can_retry"])
-        self.assertEqual(cancelled_action["disabled_reasons"]["retry"], "linked_action_terminal")
+        self.assertEqual(cancelled_action["disabled_reasons"]["retry"], "linked_action_rejected")
+
+        cancelled_run = operation_run_control_state(
+            operation_status="cancelled",
+            action_status="cancelled",
+            action_approval_status="not_required",
+            operation_phase="cancelled",
+        ).to_record()
+        self.assertTrue(cancelled_run["can_retry"])
+
+        planned_action = operation_run_control_state(
+            operation_status="failed",
+            action_status="planned",
+            action_approval_status="not_required",
+            operation_phase="failed",
+        ).to_record()
+        self.assertFalse(planned_action["can_retry"])
+        self.assertEqual(planned_action["disabled_reasons"]["retry"], "linked_action_not_retryable")
+
+        retry_already_planned = operation_run_control_state(
+            operation_status="failed",
+            action_status="queued",
+            action_approval_status="not_required",
+            action_retry_operation_run_id="op_retry_existing",
+            operation_phase="failed",
+        ).to_record()
+        self.assertFalse(retry_already_planned["can_retry"])
+        self.assertEqual(
+            retry_already_planned["disabled_reasons"]["retry"],
+            "linked_action_retry_already_planned",
+        )
+
+        missing_action = operation_run_control_state(
+            operation_status="failed",
+            operation_run_id="op-missing-action",
+            operation_phase="failed",
+        ).to_record()
+        self.assertFalse(missing_action["can_retry"])
+        self.assertFalse(missing_action["can_dispatch"])
+        self.assertFalse(missing_action["can_cancel"])
+        self.assertFalse(missing_action["can_resume"])
+        self.assertEqual(missing_action["disabled_reasons"]["retry"], "linked_action_missing")
 
     def test_action_registry_unknown_action_fails_closed(self) -> None:
         with self.assertRaisesRegex(KeyError, "unknown operation action type"):
@@ -187,7 +234,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 }
             )
 
-        with self.assertRaisesRegex(ValueError, "default workflow command type must be in allowed_workflow_command_types"):
+        with self.assertRaisesRegex(
+            ValueError, "default workflow command type must be in allowed_workflow_command_types"
+        ):
             ActionRegistry(
                 {
                     "mismatched_default": ActionSpec(
@@ -398,9 +447,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
         )
         self.assertEqual(
-            registry[ACTION_EXPORT_CANDIDATES]["workflow_command_control_summary"][
-                "running_control_maturity_counts"
-            ],
+            registry[ACTION_EXPORT_CANDIDATES]["workflow_command_control_summary"]["running_control_maturity_counts"],
             {"owner_specific_cancel_resume": 2},
         )
         self.assertEqual(
@@ -472,9 +519,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(set(registry_response["command_registry"]), set(owner_registry))
         for command_type, registry_record in registry_response["command_registry"].items():
             expected_status = (
-                "action_registry_allowlisted"
-                if command_type in allowed_commands
-                else "not_action_registry_allowlisted"
+                "action_registry_allowlisted" if command_type in allowed_commands else "not_action_registry_allowlisted"
             )
             self.assertEqual(
                 registry_record["agent_exposure_gate"],
@@ -497,9 +542,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             payload={"workspace_id": "default"},
         )
 
-        command_rows = orchestrator.list_workflow_commands_api(
-            {"workflow_run_id": "wf-agent-exposure", "limit": 50}
-        )["workflow_commands"]
+        command_rows = orchestrator.list_workflow_commands_api({"workflow_run_id": "wf-agent-exposure", "limit": 50})[
+            "workflow_commands"
+        ]
         exposure_by_id = {row["command_id"]: row["agent_exposure_status"] for row in command_rows}
         self.assertEqual(
             exposure_by_id[allowlisted_command["command_id"]],
@@ -830,7 +875,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             "workflow_orchestrator.cancel_acquisition_plan_commit_before_probe",
         )
         self.assertEqual(response["control_policy"]["running_control_maturity"], "owner_specific_cancel_resume")
-        self.assertEqual(response["workflow_command"]["result"]["cancel_boundary"], "acquisition_plan_commit_before_probe")
+        self.assertEqual(
+            response["workflow_command"]["result"]["cancel_boundary"], "acquisition_plan_commit_before_probe"
+        )
         self.assertFalse(response["workflow_command"]["result"]["downstream_command_planned"])
         self.assertTrue(response["workflow_command"]["result"]["acquisition_run_cancelled"])
         cancelled_run = self.store.get_acquisition_run(acquisition_run["acquisition_run_id"])
@@ -933,7 +980,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             "workflow_orchestrator.cancel_acquisition_scale_plan_before_discovery",
         )
         self.assertEqual(response["control_policy"]["running_control_maturity"], "owner_specific_cancel_resume")
-        self.assertEqual(response["workflow_command"]["result"]["cancel_boundary"], "acquisition_scale_plan_before_discovery")
+        self.assertEqual(
+            response["workflow_command"]["result"]["cancel_boundary"], "acquisition_scale_plan_before_discovery"
+        )
         self.assertEqual(response["workflow_command"]["result"]["activity_run_cancelled_count"], 1)
         self.assertEqual(response["workflow_command"]["result"]["discovery_lane_cancelled_count"], 1)
         cancelled_activity = self.store.get_workflow_activity_run(activity["activity_run_id"])
@@ -1034,7 +1083,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             "scale_planned_pending_discovery",
         )
 
-    def test_running_crm_public_web_queue_batch_cancel_marks_batch_and_runs_cancelled_before_phase_commands(self) -> None:
+    def test_running_crm_public_web_queue_batch_cancel_marks_batch_and_runs_cancelled_before_phase_commands(
+        self,
+    ) -> None:
         settings = AppSettings(
             project_root=self.runtime_dir,
             runtime_dir=self.runtime_dir,
@@ -1178,7 +1229,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             jobs_dir=settings.jobs_dir,
             model_client=DeterministicModelClient(),
             semantic_provider=LocalSemanticProvider(),
-            acquisition_engine=AcquisitionEngine(AssetCatalog.discover(), settings, api_store, DeterministicModelClient()),
+            acquisition_engine=AcquisitionEngine(
+                AssetCatalog.discover(), settings, api_store, DeterministicModelClient()
+            ),
         )
         try:
             api_store.upsert_crm_record(
@@ -1253,7 +1306,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             jobs_dir=settings.jobs_dir,
             model_client=DeterministicModelClient(),
             semantic_provider=LocalSemanticProvider(),
-            acquisition_engine=AcquisitionEngine(AssetCatalog.discover(), settings, api_store, DeterministicModelClient()),
+            acquisition_engine=AcquisitionEngine(
+                AssetCatalog.discover(), settings, api_store, DeterministicModelClient()
+            ),
         )
         try:
             api_store.upsert_crm_record(
@@ -1920,11 +1975,19 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(first.operation_run["owner_module"], "projection_search_service")
         self.assertEqual(first.operation_run["status"], "queued")
         self.assertEqual(
-            [event["event_type"] for event in self.store.list_operation_events(first.action["action_id"])],
+            [
+                event["event_type"]
+                for event in self.store.repos.workflow_runtime.list_operation_events(first.action["action_id"])
+            ],
             ["AgentActionQueued"],
         )
         self.assertEqual(
-            [event["event_type"] for event in self.store.list_operation_events(first.operation_run["operation_run_id"])],
+            [
+                event["event_type"]
+                for event in self.store.repos.workflow_runtime.list_operation_events(
+                    first.operation_run["operation_run_id"]
+                )
+            ],
             ["OperationRunQueued"],
         )
         self.assertEqual(self.store.list_workflow_commands(limit=0), [])
@@ -1944,7 +2007,10 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(result.action["approval_status"], "required")
         self.assertEqual(result.action["status"], "approval_required")
         self.assertEqual(
-            [event["event_type"] for event in self.store.list_operation_events(result.action["action_id"])],
+            [
+                event["event_type"]
+                for event in self.store.repos.workflow_runtime.list_operation_events(result.action["action_id"])
+            ],
             ["ActionApprovalRequired"],
         )
         self.assertEqual(self.store.list_workflow_commands(limit=0), [])
@@ -1995,11 +2061,19 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         )
         self.assertEqual(first_approval.operation_run["operation_type"], "export")
         self.assertEqual(
-            [event["event_type"] for event in self.store.list_operation_events(submitted.action["action_id"])],
+            [
+                event["event_type"]
+                for event in self.store.repos.workflow_runtime.list_operation_events(submitted.action["action_id"])
+            ],
             ["ActionApprovalRequired", "ActionApproved"],
         )
         self.assertEqual(
-            [event["event_type"] for event in self.store.list_operation_events(first_approval.operation_run["operation_run_id"])],
+            [
+                event["event_type"]
+                for event in self.store.repos.workflow_runtime.list_operation_events(
+                    first_approval.operation_run["operation_run_id"]
+                )
+            ],
             ["OperationRunQueued"],
         )
         self.assertEqual(self.store.list_workflow_commands(limit=0), [])
@@ -2018,16 +2092,380 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             actor="unit-test",
             reason="operator_cancelled",
         )
+        duplicate = self.writer.cancel_operation(
+            operation_run_id=result.operation_run["operation_run_id"],
+            actor="unit-test",
+            reason="operator_cancelled",
+        )
 
-        action = self.store.get_agent_action(result.action["action_id"])
+        action = self.store.repos.workflow_runtime.get_action(result.action["action_id"])
         self.assertEqual(cancelled["status"], "cancelled")
+        self.assertEqual(duplicate["operation_run_id"], cancelled["operation_run_id"])
         self.assertEqual(cancelled["progress"]["phase"], "cancelled")
         self.assertEqual(action["status"], "cancelled")
         self.assertEqual(
-            [event["event_type"] for event in self.store.list_operation_events(result.operation_run["operation_run_id"])],
+            [
+                event["event_type"]
+                for event in self.store.repos.workflow_runtime.list_operation_events(
+                    result.operation_run["operation_run_id"]
+                )
+            ],
             ["OperationRunQueued", "OperationCancelled"],
         )
         self.assertEqual(self.store.list_workflow_commands(limit=0), [])
+
+    def test_reject_action_is_atomic_idempotent_and_repairs_missing_event(self) -> None:
+        submitted = self.writer.submit_action(
+            action_type=ACTION_EXPORT_CANDIDATES,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-reject"},
+            input_payload={"include_crm_notes": True},
+            idempotency_key="export:proj-reject",
+        )
+
+        rejected = self.writer.reject_action(
+            action_id=submitted.action["action_id"],
+            actor="unit-test",
+            reason="operator_rejected",
+        )
+        duplicate = self.writer.reject_action(
+            action_id=submitted.action["action_id"],
+            actor="unit-test",
+            reason="ignored_duplicate_reason",
+        )
+
+        self.assertEqual(rejected["status"], "cancelled")
+        self.assertEqual(rejected["approval_status"], "rejected")
+        self.assertEqual(duplicate["action_id"], rejected["action_id"])
+        self.assertEqual(duplicate["metadata"]["rejection_reason"], "operator_rejected")
+        self.assertEqual(
+            [
+                event["event_type"]
+                for event in self.store.repos.workflow_runtime.list_operation_events(rejected["action_id"])
+            ],
+            ["ActionApprovalRequired", "ActionRejected"],
+        )
+
+        partial = self.writer.submit_action(
+            action_type=ACTION_EXPORT_CANDIDATES,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-reject-repair"},
+            input_payload={"include_crm_notes": True},
+            idempotency_key="export:proj-reject-repair",
+        )
+        self.store.repos.workflow_runtime.update_action_state(
+            partial.action["action_id"],
+            status="cancelled",
+            approval_status="rejected",
+            metadata_patch={"rejection_reason": "legacy_partial"},
+        )
+        repaired = self.writer.reject_action(
+            action_id=partial.action["action_id"],
+            actor="unit-test",
+            reason="legacy_partial",
+        )
+        self.assertEqual(repaired["approval_status"], "rejected")
+        self.assertEqual(
+            [
+                event["event_type"]
+                for event in self.store.repos.workflow_runtime.list_operation_events(partial.action["action_id"])
+            ],
+            ["ActionApprovalRequired", "ActionRejected"],
+        )
+
+    def test_cancel_operation_repairs_legacy_partial_state(self) -> None:
+        submitted = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-cancel-repair"},
+            idempotency_key="filter:proj-cancel-repair",
+        )
+        operation_run_id = submitted.operation_run["operation_run_id"]
+        self.store.repos.workflow_runtime.update_operation_state(
+            operation_run_id,
+            status="cancelled",
+            progress_patch={"phase": "cancelled", "reason": "legacy_partial"},
+        )
+
+        repaired = self.writer.cancel_operation(
+            operation_run_id=operation_run_id,
+            actor="unit-test",
+            reason="legacy_partial",
+        )
+
+        linked_action = self.store.repos.workflow_runtime.get_action(submitted.action["action_id"])
+        self.assertEqual(repaired["status"], "cancelled")
+        self.assertEqual(linked_action["status"], "cancelled")
+        self.assertEqual(linked_action["metadata"]["cancelled_operation_run_id"], operation_run_id)
+        self.assertEqual(
+            [
+                event["event_type"]
+                for event in self.store.repos.workflow_runtime.list_operation_events(operation_run_id)
+            ],
+            ["OperationRunQueued", "OperationCancelled"],
+        )
+
+    def test_operation_control_event_failure_rolls_back_state(self) -> None:
+        reject_submission = self.writer.submit_action(
+            action_type=ACTION_EXPORT_CANDIDATES,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-reject-rollback"},
+            input_payload={"include_crm_notes": True},
+            idempotency_key="export:proj-reject-rollback",
+        )
+        cancel_submission = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-cancel-rollback"},
+            idempotency_key="filter:proj-cancel-rollback",
+        )
+        adapter = self.store._control_plane_postgres
+
+        with mock.patch.object(
+            adapter,
+            "_append_operation_event_with_cursor",
+            side_effect=RuntimeError("injected-event-write-failure"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected-event-write-failure"):
+                self.writer.reject_action(action_id=reject_submission.action["action_id"])
+            with self.assertRaisesRegex(RuntimeError, "injected-event-write-failure"):
+                self.writer.cancel_operation(operation_run_id=cancel_submission.operation_run["operation_run_id"])
+
+        rejected_action = self.store.repos.workflow_runtime.get_action(reject_submission.action["action_id"])
+        cancelled_operation = self.store.repos.workflow_runtime.get_operation(
+            cancel_submission.operation_run["operation_run_id"]
+        )
+        linked_action = self.store.repos.workflow_runtime.get_action(cancel_submission.action["action_id"])
+        self.assertEqual(rejected_action["status"], "approval_required")
+        self.assertEqual(rejected_action["approval_status"], "required")
+        self.assertEqual(cancelled_operation["status"], "queued")
+        self.assertEqual(linked_action["status"], "queued")
+        self.assertEqual(
+            [
+                event["event_type"]
+                for event in self.store.repos.workflow_runtime.list_operation_events(rejected_action["action_id"])
+            ],
+            ["ActionApprovalRequired"],
+        )
+        self.assertEqual(
+            [
+                event["event_type"]
+                for event in self.store.repos.workflow_runtime.list_operation_events(
+                    cancelled_operation["operation_run_id"]
+                )
+            ],
+            ["OperationRunQueued"],
+        )
+
+    def test_operation_control_rejects_cross_workspace_links_and_event_collisions(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        repository.upsert_action(
+            action_id="action-workspace-b",
+            workspace_id="workspace-b",
+            action_type="candidate.lookup",
+            owner_module="operation_runtime",
+            operation_type="projection.read",
+            idempotency_key="action-workspace-b-idem",
+            status="queued",
+        )
+        repository.upsert_operation(
+            operation_run_id="operation-workspace-a",
+            workspace_id="workspace-a",
+            action_id="action-workspace-b",
+            owner_module="operation_runtime",
+            operation_type="projection.read",
+            idempotency_key="operation-workspace-a-idem",
+            status="queued",
+        )
+        with self.assertRaisesRegex(RuntimeError, "linked action workspace"):
+            self.writer.cancel_operation(operation_run_id="operation-workspace-a")
+        self.assertEqual(repository.get_operation("operation-workspace-a")["status"], "queued")
+        self.assertEqual(repository.get_action("action-workspace-b")["status"], "queued")
+        self.assertEqual(repository.list_operation_events("operation-workspace-a"), [])
+        orchestrator = object.__new__(SourcingOrchestrator)
+        orchestrator.store = self.store
+        public_run = orchestrator.get_operation_run_api("operation-workspace-a")["operation_run"]
+        control_state = public_run["control_state"]
+        self.assertEqual(control_state["allowed_actions"], [])
+        self.assertFalse(control_state["can_dispatch"])
+        self.assertFalse(control_state["can_resume"])
+        self.assertFalse(control_state["can_retry"])
+        self.assertFalse(control_state["can_cancel"])
+        self.assertEqual(control_state["disabled_reasons"]["dispatch"], "linked_action_missing")
+        self.assertEqual(control_state["disabled_reasons"]["resume"], "linked_action_missing")
+        self.assertEqual(control_state["disabled_reasons"]["cancel"], "linked_action_missing")
+        self.assertEqual(
+            control_state["disabled_reasons"]["retry"],
+            "retry_requires_failed_or_cancelled_operation",
+        )
+
+        submitted = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-event-collision"},
+            idempotency_key="filter:proj-event-collision",
+        )
+        operation_run_id = submitted.operation_run["operation_run_id"]
+        repository.append_operation_event(
+            workspace_id="default",
+            event_stream_id=operation_run_id,
+            operation_run_id=operation_run_id,
+            action_id=submitted.action["action_id"],
+            event_family="operation_event",
+            event_type="WrongCancellationEvent",
+            idempotency_key=f"{submitted.operation_run['idempotency_key']}:OperationCancelled",
+        )
+        with self.assertRaisesRegex(RuntimeError, "event identity collision"):
+            self.writer.cancel_operation(operation_run_id=operation_run_id)
+        self.assertEqual(repository.get_operation(operation_run_id)["status"], "queued")
+        self.assertEqual(repository.get_action(submitted.action["action_id"])["status"], "queued")
+        self.assertNotIn(
+            "OperationCancelled",
+            [event["event_type"] for event in repository.list_operation_events(operation_run_id)],
+        )
+
+        event_row = repository._operation_event_row_payload(
+            event_stream_id=operation_run_id,
+            event_family="operation_event",
+            event_type="OperationCancelled",
+            idempotency_key="invalid-target-status",
+            operation_run_id=operation_run_id,
+            action_id=submitted.action["action_id"],
+        )
+        with self.assertRaisesRegex(ValueError, "only supports status=cancelled"):
+            self.store._control_plane_postgres.cancel_operation_run_with_event(
+                table_name="operation_runs",
+                operation_run_id=operation_run_id,
+                expected_status="queued",
+                status="completed",
+                event_row=event_row,
+            )
+
+    def test_operation_control_cas_conflicts_do_not_report_success_or_append_events(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        orchestrator = object.__new__(SourcingOrchestrator)
+        orchestrator.store = self.store
+        orchestrator.operation_runtime_writer = self.writer
+
+        reject_submission = self.writer.submit_action(
+            action_type=ACTION_EXPORT_CANDIDATES,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-reject-race"},
+            input_payload={"include_crm_notes": True},
+            idempotency_key="export:proj-reject-race",
+        )
+        original_reject = repository.reject_action_with_event
+
+        def complete_before_reject(*args: object, **kwargs: object) -> dict[str, object]:
+            repository.update_action_state(reject_submission.action["action_id"], status="completed")
+            return original_reject(*args, **kwargs)
+
+        with mock.patch.object(repository, "reject_action_with_event", side_effect=complete_before_reject):
+            reject_response = orchestrator.reject_operation_action_api(
+                reject_submission.action["action_id"],
+                {"actor": "unit-test", "reason": "lost-race"},
+            )
+        self.assertEqual(reject_response["status"], "conflict")
+        self.assertEqual(reject_response["actual_status"], "completed")
+        self.assertNotIn(
+            "ActionRejected",
+            [event["event_type"] for event in repository.list_operation_events(reject_submission.action["action_id"])],
+        )
+
+        cancel_submission = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-cancel-race"},
+            idempotency_key="filter:proj-cancel-race",
+        )
+        original_cancel = repository.cancel_operation_with_event
+
+        def complete_before_cancel(*args: object, **kwargs: object) -> dict[str, object]:
+            repository.update_operation_state(
+                cancel_submission.operation_run["operation_run_id"],
+                status="completed",
+            )
+            return original_cancel(*args, **kwargs)
+
+        with mock.patch.object(repository, "cancel_operation_with_event", side_effect=complete_before_cancel):
+            cancel_response = orchestrator.cancel_operation_run_api(
+                cancel_submission.operation_run["operation_run_id"],
+                {"actor": "unit-test", "reason": "lost-race"},
+            )
+        self.assertEqual(cancel_response["status"], "conflict")
+        self.assertEqual(cancel_response["actual_status"], "completed")
+        self.assertNotIn(
+            "OperationCancelled",
+            [
+                event["event_type"]
+                for event in repository.list_operation_events(cancel_submission.operation_run["operation_run_id"])
+            ],
+        )
+
+    def test_approve_and_resume_cas_conflicts_stop_downstream_writes(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        orchestrator = object.__new__(SourcingOrchestrator)
+        orchestrator.store = self.store
+        orchestrator.operation_runtime_writer = self.writer
+
+        approval = self.writer.submit_action(
+            action_type=ACTION_EXPORT_CANDIDATES,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-approve-race"},
+            input_payload={"include_crm_notes": True},
+            idempotency_key="export:proj-approve-race",
+        )
+        original_action_update = repository.update_action_state
+
+        def reject_before_approve(*args: object, **kwargs: object) -> dict[str, object]:
+            self.writer.reject_action(
+                action_id=approval.action["action_id"],
+                actor="race-winner",
+                reason="rejected-first",
+            )
+            return original_action_update(*args, **kwargs)
+
+        with mock.patch.object(repository, "update_action_state", side_effect=reject_before_approve):
+            approve_response = orchestrator.approve_operation_action_api(
+                approval.action["action_id"],
+                {"actor": "race-loser"},
+            )
+        self.assertEqual(approve_response["status"], "conflict")
+        self.assertEqual(repository.list_operations(action_id=approval.action["action_id"]), [])
+        self.assertEqual(
+            [event["event_type"] for event in repository.list_operation_events(approval.action["action_id"])],
+            ["ActionApprovalRequired", "ActionRejected"],
+        )
+
+        resumable = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-resume-race"},
+            idempotency_key="filter:proj-resume-race",
+        )
+        original_operation_update = repository.update_operation_state
+
+        def cancel_before_resume(*args: object, **kwargs: object) -> dict[str, object]:
+            self.writer.cancel_operation(
+                operation_run_id=resumable.operation_run["operation_run_id"],
+                actor="race-winner",
+                reason="cancelled-first",
+            )
+            return original_operation_update(*args, **kwargs)
+
+        with mock.patch.object(repository, "update_operation_state", side_effect=cancel_before_resume):
+            resume_response = orchestrator.resume_operation_run_api(
+                resumable.operation_run["operation_run_id"],
+                {"actor": "race-loser"},
+            )
+        self.assertEqual(resume_response["status"], "conflict")
+        self.assertEqual(
+            [
+                event["event_type"]
+                for event in repository.list_operation_events(resumable.operation_run["operation_run_id"])
+            ],
+            ["OperationRunQueued", "OperationCancelled"],
+        )
 
     def test_list_provenance_resume_and_retry_stay_inside_operation_runtime(self) -> None:
         result = self.writer.submit_action(
@@ -2054,10 +2492,15 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(duplicate_resume["events"][0]["event_id"], resumed["events"][0]["event_id"])
         self.assertEqual(resumed["operation_run"]["progress"]["phase"], "resume_requested")
 
-        self.store.update_operation_run_state(
+        self.store.repos.workflow_runtime.update_operation_state(
             operation_run_id,
             status="failed",
             progress_patch={"phase": "failed", "reason": "owner_timeout"},
+        )
+        self.store.repos.workflow_runtime.update_action_state(
+            result.action["action_id"],
+            status="failed",
+            metadata_patch={"last_operation_command_status": "failed_terminal"},
         )
         retry = self.writer.retry_operation(
             operation_run_id=operation_run_id,
@@ -2076,21 +2519,390 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(retry_run["metadata"]["parent_operation_run_id"], operation_run_id)
         self.assertEqual(duplicate_retry["operation_run"]["operation_run_id"], retry_run["operation_run_id"])
         self.assertEqual(
-            {run["operation_run_id"] for run in self.store.list_operation_runs(action_id=result.action["action_id"])},
+            {
+                run["operation_run_id"]
+                for run in self.store.repos.workflow_runtime.list_operations(action_id=result.action["action_id"])
+            },
             {retry_run["operation_run_id"], operation_run_id},
         )
         self.assertEqual(
-            [action["action_id"] for action in self.store.list_agent_actions(conversation_id="conv-ops")],
+            [
+                action["action_id"]
+                for action in self.store.repos.workflow_runtime.list_actions(conversation_id="conv-ops")
+            ],
             [result.action["action_id"]],
         )
         event_types = [
             event["event_type"]
-            for event in self.store.list_operation_events_for_action(result.action["action_id"])
+            for event in self.store.repos.workflow_runtime.list_operation_events_for_action(result.action["action_id"])
         ]
         self.assertIn("AgentActionQueued", event_types)
         self.assertIn("OperationResumeRequested", event_types)
         self.assertIn("OperationRetryRequested", event_types)
         self.assertEqual(self.store.list_workflow_commands(limit=0), [])
+
+    def test_retry_operation_requeues_normally_cancelled_action(self) -> None:
+        result = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-cancel-retry"},
+            idempotency_key="filter:proj-cancel-retry",
+        )
+        operation_run_id = result.operation_run["operation_run_id"]
+        self.writer.cancel_operation(
+            operation_run_id=operation_run_id,
+            actor="unit-test",
+            reason="operator_cancelled",
+        )
+
+        retry = self.writer.retry_operation(
+            operation_run_id=operation_run_id,
+            actor="unit-test",
+            reason="operator_retry",
+        )
+
+        self.assertEqual(retry["parent_operation_run"]["status"], "cancelled")
+        self.assertEqual(retry["operation_run"]["status"], "queued")
+        action = self.store.repos.workflow_runtime.get_action(result.action["action_id"])
+        self.assertEqual(action["status"], "queued")
+        self.assertEqual(
+            action["metadata"]["retry_operation_run_id"],
+            retry["operation_run"]["operation_run_id"],
+        )
+
+    def test_retry_operation_rejects_second_child_with_different_idempotency_key(self) -> None:
+        result = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-retry-single-child"},
+            idempotency_key="filter:proj-retry-single-child",
+        )
+        operation_run_id = result.operation_run["operation_run_id"]
+        self.store.repos.workflow_runtime.update_operation_state(operation_run_id, status="failed")
+        self.store.repos.workflow_runtime.update_action_state(result.action["action_id"], status="failed")
+        first = self.writer.retry_operation(
+            operation_run_id=operation_run_id,
+            idempotency_key="retry:first-child",
+        )
+
+        with self.assertRaises(OperationRuntimeStateConflict):
+            self.writer.retry_operation(
+                operation_run_id=operation_run_id,
+                idempotency_key="retry:second-child",
+            )
+
+        action = self.store.repos.workflow_runtime.get_action(result.action["action_id"])
+        self.assertEqual(
+            action["metadata"]["retry_operation_run_id"],
+            first["operation_run"]["operation_run_id"],
+        )
+        self.assertEqual(
+            len(self.store.repos.workflow_runtime.list_operations(action_id=result.action["action_id"])),
+            2,
+        )
+
+    def test_retry_operation_exact_terminal_child_replay_is_read_only(self) -> None:
+        result = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-retry-terminal-replay"},
+            idempotency_key="filter:proj-retry-terminal-replay",
+        )
+        repository = self.store.repos.workflow_runtime
+        parent_run_id = result.operation_run["operation_run_id"]
+        repository.update_operation_state(parent_run_id, status="failed")
+        repository.update_action_state(result.action["action_id"], status="failed")
+        retry_key = "retry:terminal-replay"
+        first = self.writer.retry_operation(
+            operation_run_id=parent_run_id,
+            idempotency_key=retry_key,
+        )
+        child_run_id = first["operation_run"]["operation_run_id"]
+        repository.update_operation_state(child_run_id, status="failed")
+        repository.update_action_state(
+            result.action["action_id"],
+            status="failed",
+            metadata_patch={"terminal_replay_marker": "preserved"},
+        )
+        action_before = repository.get_action(result.action["action_id"])
+        operation_ids_before = {
+            operation["operation_run_id"]
+            for operation in repository.list_operations(action_id=result.action["action_id"])
+        }
+        event_ids_before = [
+            event["event_id"] for event in repository.list_operation_events_for_action(result.action["action_id"])
+        ]
+
+        replay = self.writer.retry_operation(
+            operation_run_id=parent_run_id,
+            idempotency_key=retry_key,
+        )
+
+        self.assertEqual(replay["operation_run"]["operation_run_id"], child_run_id)
+        self.assertEqual(replay["operation_run"]["status"], "failed")
+        self.assertEqual(repository.get_action(result.action["action_id"]), action_before)
+        self.assertEqual(
+            {
+                operation["operation_run_id"]
+                for operation in repository.list_operations(action_id=result.action["action_id"])
+            },
+            operation_ids_before,
+        )
+        self.assertEqual(
+            [event["event_id"] for event in repository.list_operation_events_for_action(result.action["action_id"])],
+            event_ids_before,
+        )
+        self.assertEqual(
+            [event["event_id"] for event in replay["events"]],
+            [event["event_id"] for event in first["events"]],
+        )
+
+    def test_retry_operation_existing_child_identity_conflict_is_read_only(self) -> None:
+        result = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-retry-child-collision"},
+            idempotency_key="filter:proj-retry-child-collision",
+        )
+        repository = self.store.repos.workflow_runtime
+        parent_run_id = result.operation_run["operation_run_id"]
+        repository.update_operation_state(parent_run_id, status="failed")
+        repository.update_action_state(result.action["action_id"], status="failed")
+        retry_key = "retry:child-collision"
+        retry_run_id = operation_retry_run_id_for(
+            parent_operation_run_id=parent_run_id,
+            idempotency_key=retry_key,
+        )
+        repository.upsert_operation(
+            operation_run_id=retry_run_id,
+            workspace_id="default",
+            action_id=result.action["action_id"],
+            owner_module=result.operation_run["owner_module"],
+            operation_type=result.operation_run["operation_type"],
+            status="queued",
+            idempotency_key="conflicting-persisted-retry-key",
+            metadata={"parent_operation_run_id": parent_run_id},
+        )
+        action_before = repository.get_action(result.action["action_id"])
+        event_ids_before = [
+            event["event_id"] for event in repository.list_operation_events_for_action(result.action["action_id"])
+        ]
+
+        with self.assertRaisesRegex(OperationRuntimeStateConflict, "operation_run_retry_identity_conflict"):
+            self.writer.retry_operation(
+                operation_run_id=parent_run_id,
+                idempotency_key=retry_key,
+            )
+
+        self.assertEqual(repository.get_action(result.action["action_id"]), action_before)
+        self.assertEqual(
+            [event["event_id"] for event in repository.list_operation_events_for_action(result.action["action_id"])],
+            event_ids_before,
+        )
+
+    def test_retry_operation_different_key_race_creates_one_child(self) -> None:
+        result = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-retry-race"},
+            idempotency_key="filter:proj-retry-race",
+        )
+        operation_run_id = result.operation_run["operation_run_id"]
+        repository = self.store.repos.workflow_runtime
+        repository.update_operation_state(operation_run_id, status="failed")
+        repository.update_action_state(result.action["action_id"], status="failed")
+        original_requeue = repository.requeue_action_for_operation_retry
+        barrier = threading.Barrier(2)
+        results: list[dict[str, object]] = []
+        errors: list[BaseException] = []
+
+        def synchronized_requeue(*args: object, **kwargs: object) -> dict[str, object]:
+            barrier.wait(timeout=10)
+            return original_requeue(*args, **kwargs)
+
+        def run_retry(idempotency_key: str) -> None:
+            try:
+                results.append(
+                    self.writer.retry_operation(
+                        operation_run_id=operation_run_id,
+                        idempotency_key=idempotency_key,
+                    )
+                )
+            except BaseException as exc:  # noqa: BLE001
+                errors.append(exc)
+
+        with mock.patch.object(repository, "requeue_action_for_operation_retry", side_effect=synchronized_requeue):
+            threads = [
+                threading.Thread(target=run_retry, args=("retry:race-a",), daemon=True),
+                threading.Thread(target=run_retry, args=("retry:race-b",), daemon=True),
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=10)
+
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        self.assertEqual(len(results), 1)
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], OperationRuntimeStateConflict)
+        operations = repository.list_operations(action_id=result.action["action_id"])
+        self.assertEqual(len(operations), 2)
+        action = repository.get_action(result.action["action_id"])
+        self.assertEqual(
+            action["metadata"]["retry_operation_run_id"],
+            results[0]["operation_run"]["operation_run_id"],
+        )
+
+    def test_retry_operation_rejects_cross_workspace_action_link(self) -> None:
+        result = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="workspace-a",
+            target_ref={"projection_id": "proj-retry-workspace"},
+            idempotency_key="filter:proj-retry-workspace",
+        )
+        repository = self.store.repos.workflow_runtime
+        repository.update_action_state(result.action["action_id"], status="failed")
+        foreign_operation_id = "op_retry_workspace_b"
+        repository.upsert_operation(
+            operation_run_id=foreign_operation_id,
+            workspace_id="workspace-b",
+            action_id=result.action["action_id"],
+            owner_module=result.operation_run["owner_module"],
+            operation_type=result.operation_run["operation_type"],
+            status="failed",
+            progress={"phase": "failed"},
+            workflow_ref={},
+            cost_budget={},
+            idempotency_key="retry-workspace-b-parent",
+        )
+
+        with self.assertRaises(OperationRuntimeStateConflict):
+            self.writer.retry_operation(
+                operation_run_id=foreign_operation_id,
+                idempotency_key="retry-workspace-b-child",
+            )
+
+        action = repository.get_action(result.action["action_id"])
+        self.assertEqual(action["workspace_id"], "workspace-a")
+        self.assertEqual(action["status"], "failed")
+        self.assertNotIn("retry_operation_run_id", action["metadata"])
+        self.assertEqual(
+            {
+                operation["operation_run_id"]
+                for operation in repository.list_operations(
+                    workspace_id="workspace-a",
+                    action_id=result.action["action_id"],
+                )
+            },
+            {result.operation_run["operation_run_id"]},
+        )
+        self.assertEqual(
+            {
+                operation["operation_run_id"]
+                for operation in repository.list_operations(
+                    workspace_id="workspace-b",
+                    action_id=result.action["action_id"],
+                )
+            },
+            {foreign_operation_id},
+        )
+
+    def test_retry_operation_rejects_stale_ancestor_and_allows_chain_tip(self) -> None:
+        result = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-retry-chain"},
+            idempotency_key="filter:proj-retry-chain",
+        )
+        repository = self.store.repos.workflow_runtime
+        parent_id = result.operation_run["operation_run_id"]
+        repository.update_operation_state(parent_id, status="failed")
+        repository.update_action_state(result.action["action_id"], status="failed")
+        first_retry = self.writer.retry_operation(
+            operation_run_id=parent_id,
+            idempotency_key="retry:chain:first",
+        )
+        first_child_id = first_retry["operation_run"]["operation_run_id"]
+        repository.update_operation_state(first_child_id, status="failed")
+        repository.update_action_state(result.action["action_id"], status="failed")
+
+        with self.assertRaises(OperationRuntimeStateConflict):
+            self.writer.retry_operation(
+                operation_run_id=parent_id,
+                idempotency_key="retry:chain:stale-sibling",
+            )
+
+        grandchild = self.writer.retry_operation(
+            operation_run_id=first_child_id,
+            idempotency_key="retry:chain:grandchild",
+        )
+        grandchild_id = grandchild["operation_run"]["operation_run_id"]
+        action = repository.get_action(result.action["action_id"])
+        self.assertEqual(action["metadata"]["retry_operation_run_id"], grandchild_id)
+        self.assertEqual(
+            {
+                operation["operation_run_id"]
+                for operation in repository.list_operations(action_id=result.action["action_id"])
+            },
+            {parent_id, first_child_id, grandchild_id},
+        )
+
+    def test_retry_operation_namespaces_explicit_key_to_parent_identity(self) -> None:
+        first = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-retry-key-first"},
+            idempotency_key="filter:proj-retry-key-first",
+        )
+        second = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-retry-key-second"},
+            idempotency_key="filter:proj-retry-key-second",
+        )
+        repository = self.store.repos.workflow_runtime
+        for submitted in (first, second):
+            repository.update_operation_state(submitted.operation_run["operation_run_id"], status="failed")
+            repository.update_action_state(submitted.action["action_id"], status="failed")
+
+        shared_key = "retry:shared-caller-key"
+        first_retry = self.writer.retry_operation(
+            operation_run_id=first.operation_run["operation_run_id"],
+            idempotency_key=shared_key,
+        )
+        second_retry = self.writer.retry_operation(
+            operation_run_id=second.operation_run["operation_run_id"],
+            idempotency_key=shared_key,
+        )
+
+        self.assertNotEqual(
+            first_retry["operation_run"]["operation_run_id"],
+            second_retry["operation_run"]["operation_run_id"],
+        )
+        self.assertNotEqual(
+            first_retry["operation_run"]["idempotency_key"],
+            second_retry["operation_run"]["idempotency_key"],
+        )
+        self.assertEqual(first_retry["operation_run"]["action_id"], first.action["action_id"])
+        self.assertEqual(second_retry["operation_run"]["action_id"], second.action["action_id"])
+
+        third = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-retry-parent-key"},
+            idempotency_key="filter:proj-retry-parent-key",
+        )
+        repository.update_operation_state(third.operation_run["operation_run_id"], status="failed")
+        repository.update_action_state(third.action["action_id"], status="failed")
+        parent_key_retry = self.writer.retry_operation(
+            operation_run_id=third.operation_run["operation_run_id"],
+            idempotency_key=third.operation_run["idempotency_key"],
+        )
+        self.assertNotEqual(
+            parent_key_retry["operation_run"]["operation_run_id"],
+            third.operation_run["operation_run_id"],
+        )
+        self.assertEqual(parent_key_retry["operation_run"]["status"], "queued")
 
     def test_operation_and_acquisition_runtime_state_are_pg_only(self) -> None:
         self._stop_pg_durable_runtime()
@@ -2114,6 +2926,107 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self._start_pg_durable_runtime(runtime_dir=self.runtime_dir)
         self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
         self.writer = OperationRuntimeWriter(self.store)
+
+    def test_operation_control_cas_prevents_stale_writers_from_reopening_terminal_rows(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        repository.upsert_action(
+            action_id="action-cas",
+            action_type="candidate.lookup",
+            owner_module="operation_runtime",
+            operation_type="projection.read",
+            idempotency_key="action-cas-idem",
+            status="queued",
+        )
+        repository.upsert_operation(
+            operation_run_id="operation-cas",
+            action_id="action-cas",
+            owner_module="operation_runtime",
+            operation_type="projection.read",
+            idempotency_key="operation-cas-idem",
+            status="queued",
+        )
+        repository.upsert_action(
+            action_id="action-rejected-terminal",
+            action_type="candidate.lookup",
+            owner_module="operation_runtime",
+            operation_type="projection.read",
+            idempotency_key="action-rejected-terminal-idem",
+            status="rejected",
+        )
+        rejected_action = repository.update_action_state(
+            "action-rejected-terminal",
+            status="queued",
+            metadata_patch={"stale_writer": True},
+        )
+        self.assertEqual(rejected_action["status"], "rejected")
+        self.assertNotIn("stale_writer", rejected_action["metadata"])
+        stale_store = ControlPlaneStore(self.runtime_dir / "stale-writer.db")
+        stale_repository = stale_store.repos.workflow_runtime
+        stale_adapter = stale_store._control_plane_postgres
+        original_execute = stale_adapter._execute_returning_one
+
+        def assert_stale_update_is_rejected(
+            *,
+            table_name: str,
+            stale_update: object,
+            terminal_update: object,
+            read_current: object,
+        ) -> None:
+            entered = threading.Event()
+            release = threading.Event()
+
+            def delayed_execute(query: str, params: object) -> object:
+                if f"UPDATE {table_name}" in query:
+                    entered.set()
+                    self.assertTrue(release.wait(timeout=5))
+                return original_execute(query, params)
+
+            outcome: dict[str, object] = {}
+            errors: list[BaseException] = []
+
+            def run_stale_update() -> None:
+                try:
+                    outcome["row"] = stale_update()
+                except BaseException as exc:  # pragma: no cover - assertion below reports thread failures.
+                    errors.append(exc)
+
+            with mock.patch.object(stale_adapter, "_execute_returning_one", side_effect=delayed_execute):
+                thread = threading.Thread(target=run_stale_update)
+                thread.start()
+                self.assertTrue(entered.wait(timeout=5))
+                terminal_update()
+                release.set()
+                thread.join(timeout=5)
+                self.assertFalse(thread.is_alive())
+            self.assertEqual(errors, [])
+            self.assertEqual(outcome["row"]["status"], "completed")
+            current = read_current()
+            self.assertEqual(current["status"], "completed")
+            self.assertNotIn("stale_writer", current["metadata"])
+
+        try:
+            assert_stale_update_is_rejected(
+                table_name="agent_actions",
+                stale_update=lambda: stale_repository.update_action_state(
+                    "action-cas",
+                    status="running",
+                    metadata_patch={"stale_writer": True},
+                ),
+                terminal_update=lambda: repository.update_action_state("action-cas", status="completed"),
+                read_current=lambda: repository.get_action("action-cas"),
+            )
+            assert_stale_update_is_rejected(
+                table_name="operation_runs",
+                stale_update=lambda: stale_repository.update_operation_state(
+                    "operation-cas",
+                    status="running",
+                    metadata_patch={"stale_writer": True},
+                ),
+                terminal_update=lambda: repository.update_operation_state("operation-cas", status="completed"),
+                read_current=lambda: repository.get_operation("operation-cas"),
+            )
+        finally:
+            stale_store.close()
 
     def test_company_asset_writer_records_pg_only_asset_evidence_and_assertion(self) -> None:
         writer = CompanyAssetWriter(self.store)
@@ -2156,7 +3069,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
 
         self.assertEqual(asset["metadata"]["writer_id"], "company_asset_writer_v1")
         self.assertEqual(self.store.list_company_assets(company_key="openai")[0]["asset_id"], "ca_openai_logo")
-        self.assertEqual(self.store.list_company_evidence(asset_id="ca_openai_logo")[0]["evidence_id"], "ce_openai_homepage")
+        self.assertEqual(
+            self.store.list_company_evidence(asset_id="ca_openai_logo")[0]["evidence_id"], "ce_openai_homepage"
+        )
         self.assertEqual(
             self.store.list_company_assertions(company_key="openai", verification_status="active")[0]["assertion_id"],
             assertion["assertion_id"],
@@ -2246,7 +3161,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 dispatched["workflow_command"]["command_id"],
             )
             self.assertEqual(duplicate["events"][0]["event_id"], dispatched["events"][0]["event_id"])
-            operation = api_store.get_operation_run(operation_run_id)
+            operation = api_store.repos.workflow_runtime.get_operation(operation_run_id)
             self.assertEqual(operation["status"], "planned")
             self.assertEqual(operation["workflow_ref"]["command_id"], dispatched["workflow_command"]["command_id"])
             provenance = orchestrator.get_operation_run_provenance_api(operation_run_id)
@@ -2727,7 +3642,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 self.assertEqual(cancel_result["status"], "cancelled")
                 self.assertEqual(api_store.get_job(job_id)["status"], "cancelled")
 
-            with mock.patch.object(orchestrator, "_run_excel_intake_workflow", side_effect=_cancel_then_attempt_completion):
+            with mock.patch.object(
+                orchestrator, "_run_excel_intake_workflow", side_effect=_cancel_then_attempt_completion
+            ):
                 orchestrator._run_excel_intake_workflow_command_thread(  # noqa: SLF001
                     command_id=command["command_id"],
                     job_id="excel-job-running-cancel",
@@ -2862,7 +3779,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             missing_operation_id = missing["operation_run"]["operation_run_id"]
             failed = orchestrator.dispatch_operation_run_api(missing_operation_id, {"actor": "unit-test"})
             self.assertEqual(failed["status"], "failed")
-            self.assertEqual(api_store.get_agent_action(missing["action"]["action_id"])["status"], "queued")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_action(missing["action"]["action_id"])["status"], "queued"
+            )
             retried = orchestrator.retry_operation_run_api(missing_operation_id, {"actor": "unit-test"})
             self.assertEqual(retried["status"], "queued")
             self.assertNotEqual(retried["operation_run"]["operation_run_id"], missing_operation_id)
@@ -2915,7 +3834,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "public-web:crmrec-public-web-op",
                 }
             )
-            approved = orchestrator.approve_operation_action_api(submitted["action"]["action_id"], {"actor": "unit-test"})
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"], {"actor": "unit-test"}
+            )
             operation_run_id = approved["operation_run"]["operation_run_id"]
 
             dispatched = orchestrator.dispatch_operation_run_api(operation_run_id, {"actor": "unit-test"})
@@ -2935,7 +3856,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 api_store.get_workflow_command(dispatched["workflow_command"]["command_id"])["status"],
                 "succeeded",
             )
-            operation_after_owner = api_store.get_operation_run(operation_run_id)
+            operation_after_owner = api_store.repos.workflow_runtime.get_operation(operation_run_id)
             self.assertEqual(operation_after_owner["status"], "running")
             self.assertEqual(
                 operation_after_owner["progress"]["phase"],
@@ -2946,10 +3867,10 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 dispatched["workflow_command"]["command_id"],
             )
             self.assertEqual(
-                api_store.get_agent_action(approved["action"]["action_id"])["status"],
+                api_store.repos.workflow_runtime.get_action(approved["action"]["action_id"])["status"],
                 "running",
             )
-            operation_events = api_store.list_operation_events(operation_run_id)
+            operation_events = api_store.repos.workflow_runtime.list_operation_events(operation_run_id)
             self.assertIn(
                 "OperationCommandDownstreamQueued",
                 [event["event_type"] for event in operation_events],
@@ -3038,14 +3959,10 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 ["workflow_command_status_claimed_or_running", "artifact_not_published"],
             )
             self.assertTrue(
-                command_registry["command_registry"]["excel.intake.run"]["control_policy"][
-                    "running_cancel_supported"
-                ]
+                command_registry["command_registry"]["excel.intake.run"]["control_policy"]["running_cancel_supported"]
             )
             self.assertEqual(
-                command_registry["command_registry"]["excel.intake.run"]["control_policy"][
-                    "running_cancel_delegate"
-                ],
+                command_registry["command_registry"]["excel.intake.run"]["control_policy"]["running_cancel_delegate"],
                 "excel_intake_owner.cancel_excel_intake_run_command",
             )
             self.assertTrue(
@@ -3182,10 +4099,10 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(len(phase_deltas), 1)
             self.assertEqual(phase_deltas[0]["delta_kind"], "crm_public_web_search_submitted")
             self.assertEqual(phase_deltas[0]["status"], "recorded")
-            operation_after_phase = api_store.get_operation_run(operation_run_id)
+            operation_after_phase = api_store.repos.workflow_runtime.get_operation(operation_run_id)
             self.assertEqual(operation_after_phase["status"], "completed")
             self.assertEqual(operation_after_phase["progress"]["phase"], "workflow_command_succeeded")
-            operation_events = api_store.list_operation_events(operation_run_id)
+            operation_events = api_store.repos.workflow_runtime.list_operation_events(operation_run_id)
             self.assertIn("OperationCommandSucceeded", [event["event_type"] for event in operation_events])
             self.assertFalse(dispatched["module_state_mutated"])
         finally:
@@ -3237,7 +4154,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "public-web-full-phase:crmrec-public-web-full-phase",
                 }
             )
-            approved = orchestrator.approve_operation_action_api(submitted["action"]["action_id"], {"actor": "unit-test"})
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"], {"actor": "unit-test"}
+            )
             operation_run_id = approved["operation_run"]["operation_run_id"]
             dispatched = orchestrator.dispatch_operation_run_api(operation_run_id, {"actor": "unit-test"})
             workflow_run_id = dispatched["workflow_command"]["workflow_run_id"]
@@ -3252,7 +4171,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             runs = api_store.list_crm_public_web_runs(batch_id=batch_id, workspace_id="default")
             self.assertEqual(len(runs), 1)
             run_id = runs[0]["run_id"]
-            self.assertEqual(api_store.get_operation_run(operation_run_id)["status"], "running")
+            self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"], "running")
 
             phase_calls: list[str] = []
             poll_calls = {"count": 0}
@@ -3398,7 +4317,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     {"workflow_run_id": workflow_run_id, "command_limit": 10}
                 )
                 self.assertEqual(search_drain["completed_count"], 1)
-                self.assertEqual(api_store.get_operation_run(operation_run_id)["status"], "running")
+                self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"], "running")
 
                 poll_deferred = orchestrator._drain_crm_public_web_phase_commands(  # noqa: SLF001
                     {"workflow_run_id": workflow_run_id, "command_limit": 10}
@@ -3480,7 +4399,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 6,
             )
 
-            final_operation = api_store.get_operation_run(operation_run_id)
+            final_operation = api_store.repos.workflow_runtime.get_operation(operation_run_id)
             self.assertEqual(final_operation["status"], "completed")
             self.assertEqual(final_operation["progress"]["phase"], "workflow_command_succeeded")
             phase_activities = api_store.list_workflow_activity_runs(
@@ -3628,10 +4547,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
 
             self.assertEqual(poll_response["status"], "ok")
-            latest_by_record = {
-                run["crm_record_id"]: run["run_id"]
-                for run in poll_response["runs"]
-            }
+            latest_by_record = {run["crm_record_id"]: run["run_id"] for run in poll_response["runs"]}
             self.assertEqual(latest_by_record, expected_latest_by_record)
             for record in records:
                 detail_response = orchestrator.get_crm_record_public_web_search_detail(record["crm_record_id"])
@@ -3841,7 +4757,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "public-web:crmrec-command-control",
                 }
             )
-            approved = orchestrator.approve_operation_action_api(submitted["action"]["action_id"], {"actor": "unit-test"})
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"], {"actor": "unit-test"}
+            )
             operation_run_id = approved["operation_run"]["operation_run_id"]
             command = api_store.upsert_workflow_command(
                 workflow_run_id="wf-command-control-op",
@@ -3900,18 +4818,28 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(cancelled["workflow_command"]["status"], "cancelled")
             self.assertEqual(cancelled["control_policy"]["command_type"], "crm.public_web.search.submit")
             self.assertEqual(cancelled["activity_spine_policy"]["command_type"], "crm.public_web.search.submit")
-            self.assertEqual(cancelled["activity_spine_policy"]["requirement"], "activity_attempt_entity_delta_required")
+            self.assertEqual(
+                cancelled["activity_spine_policy"]["requirement"], "activity_attempt_entity_delta_required"
+            )
             self.assertEqual(cancelled["operation_sync"]["status"], "cancelled")
-            self.assertEqual(api_store.get_operation_run(operation_run_id)["status"], "cancelled")
-            self.assertEqual(api_store.get_agent_action(approved["action"]["action_id"])["status"], "cancelled")
+            self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"], "cancelled")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_action(approved["action"]["action_id"])["status"], "cancelled"
+            )
             self.assertIn(
                 "OperationCommandCancelled",
-                [event["event_type"] for event in api_store.list_operation_events(operation_run_id)],
+                [
+                    event["event_type"]
+                    for event in api_store.repos.workflow_runtime.list_operation_events(operation_run_id)
+                ],
             )
             self.assertEqual(export_cancelled["status"], "cancelled")
             self.assertEqual(export_cancelled["workflow_command"]["status"], "cancelled")
             self.assertTrue(export_cancelled["control_policy"]["running_cancel_supported"])
-            self.assertEqual(export_cancelled["control_policy"]["running_cancel_delegate"], "projection_exporter.cancel_export_command")
+            self.assertEqual(
+                export_cancelled["control_policy"]["running_cancel_delegate"],
+                "projection_exporter.cancel_export_command",
+            )
             self.assertEqual(export_cancelled["activity_spine_policy"]["command_type"], "export.projection.generate")
             self.assertEqual(
                 export_cancelled["activity_spine_policy"]["requirement"],
@@ -4153,7 +5081,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
 
             self.assertTrue(running_before_resume["workflow_command"]["control_state"]["can_resume"])
-            self.assertEqual(running_before_resume["workflow_command"]["control_state"]["resume_mode"], "owner_specific")
+            self.assertEqual(
+                running_before_resume["workflow_command"]["control_state"]["resume_mode"], "owner_specific"
+            )
             self.assertEqual(
                 running_before_resume["workflow_command"]["control_policy"]["running_resume_delegate"],
                 "crm_public_web_owner.resume_crm_public_web_phase_command",
@@ -4191,7 +5121,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
                 max_attempts=6,
             )
-            api_store.claim_workflow_command(documents_command["command_id"], lease_owner="documents-worker", lease_seconds=60)
+            api_store.claim_workflow_command(
+                documents_command["command_id"], lease_owner="documents-worker", lease_seconds=60
+            )
             api_store.mark_workflow_command_running(documents_command["command_id"], lease_owner="documents-worker")
             documents_before_resume = orchestrator.get_workflow_command_api(documents_command["command_id"])
             documents_forced_resume = orchestrator.resume_workflow_command_api(
@@ -4297,9 +5229,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "workflow_orchestration_command",
             )
             self.assertEqual(forced_resume["workflow_entity_delta"]["status"], "queued")
-            self.assertTrue(
-                forced_resume["workflow_entity_delta"]["projection_effect"]["orchestration_requeued"]
-            )
+            self.assertTrue(forced_resume["workflow_entity_delta"]["projection_effect"]["orchestration_requeued"])
         finally:
             api_store.close()
 
@@ -4382,9 +5312,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "workflow_provider_attempt_command",
             )
             self.assertEqual(forced_resume["workflow_entity_delta"]["status"], "queued")
-            self.assertTrue(
-                forced_resume["workflow_entity_delta"]["projection_effect"]["provider_attempt_requeued"]
-            )
+            self.assertTrue(forced_resume["workflow_entity_delta"]["projection_effect"]["provider_attempt_requeued"])
         finally:
             api_store.close()
 
@@ -4453,7 +5381,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "workflow_provider_owner.cancel_or_poll_stop_provider_attempt",
             )
             self.assertEqual(response["control_policy"]["running_control_maturity"], "owner_specific_cancel_resume")
-            self.assertEqual(response["workflow_command"]["result"]["cancel_boundary"], "provider_attempt_before_activity_attempt")
+            self.assertEqual(
+                response["workflow_command"]["result"]["cancel_boundary"], "provider_attempt_before_activity_attempt"
+            )
             self.assertEqual(response["workflow_command"]["result"]["activity_run_cancelled_count"], 1)
             cancelled_activity = api_store.get_workflow_activity_run(activity["activity_run_id"])
             self.assertEqual(cancelled_activity["status"], "cancelled_before_provider_attempt")
@@ -4692,7 +5622,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "https://www.linkedin.com/in/ada-lovelace/",
                 "https://www.linkedin.com/in/grace-hopper/",
             ]
-            api_store.upsert_operation_run(
+            api_store.repos.workflow_runtime.upsert_operation(
                 operation_run_id=operation_run_id,
                 action_id="action-operation-native-profile-partial",
                 owner_module=LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER,
@@ -4714,7 +5644,10 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "phase": "provider_profile_fetch_pending",
                     "input": {"profile_urls": profile_urls},
                     "output": {},
-                    "entity_counts": {"profile_url_count": len(profile_urls), "fetch_required_count": len(profile_urls)},
+                    "entity_counts": {
+                        "profile_url_count": len(profile_urls),
+                        "fetch_required_count": len(profile_urls),
+                    },
                     "idempotency_key": "workflow_activity:operation-native-profile-partial",
                 }
             )
@@ -4880,7 +5813,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
                 max_attempts=6,
             )
-            api_store.claim_workflow_command(command["command_id"], lease_owner="projection-index-worker", lease_seconds=60)
+            api_store.claim_workflow_command(
+                command["command_id"], lease_owner="projection-index-worker", lease_seconds=60
+            )
             api_store.mark_workflow_command_running(command["command_id"], lease_owner="projection-index-worker")
 
             running_before_resume = orchestrator.get_workflow_command_api(command["command_id"])
@@ -4919,13 +5854,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "workflow_domain_mutation_command",
             )
             self.assertEqual(forced_resume["workflow_entity_delta"]["status"], "queued")
-            self.assertTrue(
-                forced_resume["workflow_entity_delta"]["projection_effect"]["domain_mutation_requeued"]
-            )
+            self.assertTrue(forced_resume["workflow_entity_delta"]["projection_effect"]["domain_mutation_requeued"])
             self.assertEqual(
-                api_store.repos.serving_projection.count_person_search_index(
-                    projection_id="proj-domain-resume"
-                ),
+                api_store.repos.serving_projection.count_person_search_index(projection_id="proj-domain-resume"),
                 0,
             )
         finally:
@@ -4984,7 +5915,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "workflow_activity:domain-cancel",
                 }
             )
-            api_store.claim_workflow_command(command["command_id"], lease_owner="projection-index-worker", lease_seconds=60)
+            api_store.claim_workflow_command(
+                command["command_id"], lease_owner="projection-index-worker", lease_seconds=60
+            )
             api_store.mark_workflow_command_running(command["command_id"], lease_owner="projection-index-worker")
 
             response = orchestrator.cancel_workflow_command_api(
@@ -4999,15 +5932,15 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "workflow_domain_owner.cancel_before_domain_mutation_attempt",
             )
             self.assertEqual(response["control_policy"]["running_control_maturity"], "owner_specific_cancel_resume")
-            self.assertEqual(response["workflow_command"]["result"]["cancel_boundary"], "domain_mutation_before_attempt")
+            self.assertEqual(
+                response["workflow_command"]["result"]["cancel_boundary"], "domain_mutation_before_attempt"
+            )
             self.assertEqual(response["workflow_command"]["result"]["activity_run_cancelled_count"], 1)
             cancelled_activity = api_store.get_workflow_activity_run(activity["activity_run_id"])
             self.assertEqual(cancelled_activity["status"], "cancelled_before_domain_mutation")
             self.assertEqual(cancelled_activity["phase"], "cancelled")
             self.assertEqual(
-                api_store.repos.serving_projection.count_person_search_index(
-                    projection_id="proj-domain-cancel"
-                ),
+                api_store.repos.serving_projection.count_person_search_index(projection_id="proj-domain-cancel"),
                 0,
             )
         finally:
@@ -5079,7 +6012,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "workflow_activity_attempt:domain-cancel-blocked",
                 }
             )
-            api_store.claim_workflow_command(command["command_id"], lease_owner="projection-index-worker", lease_seconds=60)
+            api_store.claim_workflow_command(
+                command["command_id"], lease_owner="projection-index-worker", lease_seconds=60
+            )
             api_store.mark_workflow_command_running(command["command_id"], lease_owner="projection-index-worker")
 
             response = orchestrator.cancel_workflow_command_api(
@@ -5171,9 +6106,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 forced_resume["workflow_entity_delta"]["entity_type"],
                 "excel_intake_command",
             )
-            self.assertTrue(
-                forced_resume["workflow_entity_delta"]["projection_effect"]["excel_intake_requeued"]
-            )
+            self.assertTrue(forced_resume["workflow_entity_delta"]["projection_effect"]["excel_intake_requeued"])
         finally:
             api_store.close()
 
@@ -5195,7 +6128,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             jobs_dir=settings.jobs_dir,
             model_client=DeterministicModelClient(),
             semantic_provider=LocalSemanticProvider(),
-            acquisition_engine=AcquisitionEngine(AssetCatalog.discover(), settings, self.store, DeterministicModelClient()),
+            acquisition_engine=AcquisitionEngine(
+                AssetCatalog.discover(), settings, self.store, DeterministicModelClient()
+            ),
         )
         self.store.upsert_crm_public_web_run(
             {
@@ -5256,7 +6191,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             jobs_dir=settings.jobs_dir,
             model_client=DeterministicModelClient(),
             semantic_provider=LocalSemanticProvider(),
-            acquisition_engine=AcquisitionEngine(AssetCatalog.discover(), settings, self.store, DeterministicModelClient()),
+            acquisition_engine=AcquisitionEngine(
+                AssetCatalog.discover(), settings, self.store, DeterministicModelClient()
+            ),
         )
         self.store.upsert_crm_public_web_run(
             {
@@ -5339,7 +6276,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             jobs_dir=settings.jobs_dir,
             model_client=DeterministicModelClient(),
             semantic_provider=LocalSemanticProvider(),
-            acquisition_engine=AcquisitionEngine(AssetCatalog.discover(), settings, self.store, DeterministicModelClient()),
+            acquisition_engine=AcquisitionEngine(
+                AssetCatalog.discover(), settings, self.store, DeterministicModelClient()
+            ),
         )
         self.store.upsert_crm_public_web_run(
             {
@@ -5398,7 +6337,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             jobs_dir=settings.jobs_dir,
             model_client=DeterministicModelClient(),
             semantic_provider=LocalSemanticProvider(),
-            acquisition_engine=AcquisitionEngine(AssetCatalog.discover(), settings, self.store, DeterministicModelClient()),
+            acquisition_engine=AcquisitionEngine(
+                AssetCatalog.discover(), settings, self.store, DeterministicModelClient()
+            ),
         )
         self.store.upsert_crm_public_web_run(
             {
@@ -5847,7 +6788,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "profile-sample:job-profile-sample",
                 }
             )
-            approved = orchestrator.approve_operation_action_api(submitted["action"]["action_id"], {"actor": "unit-test"})
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"], {"actor": "unit-test"}
+            )
             operation_run_id = approved["operation_run"]["operation_run_id"]
 
             dispatched = orchestrator.dispatch_operation_run_api(operation_run_id, {"actor": "unit-test"})
@@ -5867,8 +6810,10 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 dispatched["workflow_command"]["payload"]["normal_path_executes_legacy_profile_refill_owner"]
             )
             self.assertNotIn("job_id", dispatched["workflow_command"]["payload"])
-            self.assertEqual(api_store.get_operation_run(operation_run_id)["status"], "planned")
-            self.assertEqual(api_store.get_agent_action(approved["action"]["action_id"])["status"], "planned")
+            self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"], "planned")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_action(approved["action"]["action_id"])["status"], "planned"
+            )
             self.assertFalse(dispatched["module_state_mutated"])
             self.assertEqual(api_store.list_jobs(), [])
         finally:
@@ -5910,7 +6855,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "discovery:job-discovery",
                 }
             )
-            approved = orchestrator.approve_operation_action_api(submitted["action"]["action_id"], {"actor": "unit-test"})
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"], {"actor": "unit-test"}
+            )
             operation_run_id = approved["operation_run"]["operation_run_id"]
 
             dispatched = orchestrator.dispatch_operation_run_api(operation_run_id, {"actor": "unit-test"})
@@ -5928,7 +6875,11 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 dispatched["workflow_command"]["payload"]["workflow_payload"]["query"],
                 "site:linkedin.com/in OpenAI research engineer",
             )
-            self.assertFalse(dispatched["workflow_command"]["payload"]["decomposition_contract"]["normal_path_executes_queue_workflow_inline"])
+            self.assertFalse(
+                dispatched["workflow_command"]["payload"]["decomposition_contract"][
+                    "normal_path_executes_queue_workflow_inline"
+                ]
+            )
             self.assertEqual(api_store.list_jobs(), [])
             self.assertFalse(dispatched["module_state_mutated"])
 
@@ -5964,7 +6915,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertFalse(terminal_intent_command["result"]["queue_workflow_called"])
             self.assertEqual(terminal_intent_command["result"]["resolved_intent"]["target_company"], "OpenAI")
             self.assertEqual(terminal_intent_command["result"]["downstream_command_count"], 1)
-            plan_command = api_store.get_workflow_command(terminal_intent_command["result"]["downstream_command_ids"][0])
+            plan_command = api_store.get_workflow_command(
+                terminal_intent_command["result"]["downstream_command_ids"][0]
+            )
             self.assertEqual(plan_command["command_type"], ACQUISITION_PLAN_BUILD_COMMAND_TYPE)
             self.assertEqual(plan_command["owner"], ACQUISITION_PLAN_BUILD_OWNER)
             self.assertEqual(plan_command["parent_command_id"], terminal_intent_command["command_id"])
@@ -6013,7 +6966,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 terminal_review_command["result"]["plan_review_session"]["review_id"]
             )
             self.assertEqual(review_session["status"], "pending")
-            self.assertEqual(review_session["request"]["plan_id"], terminal_plan_command["result"]["acquisition_plan"]["plan_id"])
+            self.assertEqual(
+                review_session["request"]["plan_id"], terminal_plan_command["result"]["acquisition_plan"]["plan_id"]
+            )
 
             reviewed = orchestrator.review_plan_session(
                 {
@@ -6060,12 +7015,16 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(probe_submit_command["command_type"], ACQUISITION_PROBE_SUBMIT_COMMAND_TYPE)
             self.assertEqual(probe_submit_command["owner"], ACQUISITION_PROBE_OWNER)
             self.assertEqual(probe_submit_command["parent_command_id"], terminal_commit_command["command_id"])
-            self.assertEqual(probe_submit_command["payload"]["acquisition_run_id"], acquisition_run["acquisition_run_id"])
+            self.assertEqual(
+                probe_submit_command["payload"]["acquisition_run_id"], acquisition_run["acquisition_run_id"]
+            )
             self.assertEqual(terminal_commit_command["result"]["next_phase"], "W11c_acquisition_probe_scale")
-            operation_after_owner = api_store.get_operation_run(operation_run_id)
+            operation_after_owner = api_store.repos.workflow_runtime.get_operation(operation_run_id)
             self.assertEqual(operation_after_owner["status"], "running")
             self.assertEqual(operation_after_owner["progress"]["phase"], "acquisition_plan_committed_pending_probe")
-            self.assertEqual(operation_after_owner["progress"]["acquisition_run_id"], acquisition_run["acquisition_run_id"])
+            self.assertEqual(
+                operation_after_owner["progress"]["acquisition_run_id"], acquisition_run["acquisition_run_id"]
+            )
             self.assertEqual(
                 operation_after_owner["result_ref"]["acquisition_run"]["acquisition_run_id"],
                 acquisition_run["acquisition_run_id"],
@@ -6074,7 +7033,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 operation_after_owner["result_ref"]["plan_review_session"]["review_id"],
                 terminal_review_command["result"]["plan_review_session"]["review_id"],
             )
-            self.assertEqual(api_store.get_agent_action(approved["action"]["action_id"])["status"], "running")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_action(approved["action"]["action_id"])["status"], "running"
+            )
             self.assertEqual(api_store.list_jobs(), [])
 
             probe_submit_result = orchestrator._drain_acquisition_probe_commands(  # noqa: SLF001
@@ -6097,7 +7058,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             acquisition_after_probe_submit = api_store.get_acquisition_run(acquisition_run["acquisition_run_id"])
             self.assertEqual(acquisition_after_probe_submit["status"], "probe_submitted")
             self.assertEqual(acquisition_after_probe_submit["current_phase"], "probe_submitted")
-            operation_after_probe_submit = api_store.get_operation_run(operation_run_id)
+            operation_after_probe_submit = api_store.repos.workflow_runtime.get_operation(operation_run_id)
             self.assertEqual(operation_after_probe_submit["progress"]["phase"], "acquisition_probe_submitted")
 
             probe_collect_result = orchestrator._drain_acquisition_probe_commands(  # noqa: SLF001
@@ -6108,7 +7069,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             terminal_probe_collect_command = api_store.get_workflow_command(probe_collect_command["command_id"])
             self.assertEqual(terminal_probe_collect_command["status"], "succeeded")
             self.assertEqual(terminal_probe_collect_command["result"]["status"], "probe_collected")
-            self.assertTrue(terminal_probe_collect_command["result"]["probe_result"]["requires_provider_backed_discovery_owner"])
+            self.assertTrue(
+                terminal_probe_collect_command["result"]["probe_result"]["requires_provider_backed_discovery_owner"]
+            )
             scale_plan_command = api_store.get_workflow_command(
                 terminal_probe_collect_command["result"]["downstream_command_ids"][0]
             )
@@ -6118,8 +7081,10 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             acquisition_after_probe_collect = api_store.get_acquisition_run(acquisition_run["acquisition_run_id"])
             self.assertEqual(acquisition_after_probe_collect["status"], "probe_collected")
             self.assertEqual(acquisition_after_probe_collect["current_phase"], "probe_collected")
-            operation_after_probe_collect = api_store.get_operation_run(operation_run_id)
-            self.assertEqual(operation_after_probe_collect["progress"]["phase"], "acquisition_probe_collected_pending_scale")
+            operation_after_probe_collect = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            self.assertEqual(
+                operation_after_probe_collect["progress"]["phase"], "acquisition_probe_collected_pending_scale"
+            )
 
             scale_plan_result = orchestrator._drain_acquisition_scale_plan_commands(  # noqa: SLF001
                 {"acquisition_scale_plan_command_limit": 5}
@@ -6167,8 +7132,10 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 acquisition_after_scale_plan["metadata"]["activity_boundary"],
                 "workflow_activity_runs",
             )
-            operation_after_scale_plan = api_store.get_operation_run(operation_run_id)
-            self.assertEqual(operation_after_scale_plan["progress"]["phase"], "acquisition_scale_planned_pending_discovery")
+            operation_after_scale_plan = api_store.repos.workflow_runtime.get_operation(operation_run_id)
+            self.assertEqual(
+                operation_after_scale_plan["progress"]["phase"], "acquisition_scale_planned_pending_discovery"
+            )
 
             continue_discovery = orchestrator.submit_operation_action(
                 {
@@ -6199,10 +7166,16 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             operation_native_command = continue_dispatch["workflow_command"]
             self.assertEqual(operation_native_command["command_type"], LINKEDIN_DISCOVERY_QUERY_RUN_COMMAND_TYPE)
             self.assertEqual(operation_native_command["owner"], LINKEDIN_DISCOVERY_QUERY_RUN_OWNER)
-            self.assertEqual(operation_native_command["payload"]["runtime_execution_mode"], "operation_native_discovery")
-            self.assertEqual(operation_native_command["payload"]["acquisition_run_id"], acquisition_run["acquisition_run_id"])
+            self.assertEqual(
+                operation_native_command["payload"]["runtime_execution_mode"], "operation_native_discovery"
+            )
+            self.assertEqual(
+                operation_native_command["payload"]["acquisition_run_id"], acquisition_run["acquisition_run_id"]
+            )
             self.assertEqual(operation_native_command["payload"]["lane_id"], discovery_lanes[0]["lane_id"])
-            self.assertEqual(operation_native_command["payload"]["activity_run_id"], activity_runs[0]["activity_run_id"])
+            self.assertEqual(
+                operation_native_command["payload"]["activity_run_id"], activity_runs[0]["activity_run_id"]
+            )
             self.assertNotIn("job_id", operation_native_command["payload"])
             self.assertNotIn("snapshot_id", operation_native_command["payload"])
 
@@ -6299,7 +7272,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual({delta["delta_kind"] for delta in entity_deltas}, {"provider_discovered"})
             self.assertEqual({delta["status"] for delta in entity_deltas}, {"recorded"})
             self.assertTrue(all(not delta["projection_effect"]["entered_projection"] for delta in entity_deltas))
-            discovery_operation = api_store.get_operation_run(approved_continue["operation_run"]["operation_run_id"])
+            discovery_operation = api_store.repos.workflow_runtime.get_operation(
+                approved_continue["operation_run"]["operation_run_id"]
+            )
             self.assertEqual(discovery_operation["status"], "running")
             self.assertEqual(discovery_operation["result_ref"]["workflow_command"]["status"], "succeeded")
             self.assertEqual(api_store.list_jobs(), [])
@@ -6357,7 +7332,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual({delta["delta_kind"] for delta in profile_deltas}, {"profile_fetch_required"})
             self.assertEqual({delta["status"] for delta in profile_deltas}, {"not_applied"})
             self.assertTrue(all(not delta["projection_effect"]["entered_projection"] for delta in profile_deltas))
-            profile_operation = api_store.get_operation_run(approved_continue["operation_run"]["operation_run_id"])
+            profile_operation = api_store.repos.workflow_runtime.get_operation(
+                approved_continue["operation_run"]["operation_run_id"]
+            )
             self.assertEqual(profile_operation["status"], "running")
             self.assertEqual(profile_operation["progress"]["phase"], "operation_native_profile_fetch_activity_planned")
             self.assertEqual(api_store.list_jobs(), [])
@@ -6418,10 +7395,14 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 {delta["delta_kind"] for delta in final_profile_deltas},
                 {"profile_fetch_required", "profile_provider_fetched"},
             )
-            fetched_registry = api_store.repos.linkedin_profile_registry.get("https://www.linkedin.com/in/ada-lovelace/")
+            fetched_registry = api_store.repos.linkedin_profile_registry.get(
+                "https://www.linkedin.com/in/ada-lovelace/"
+            )
             self.assertEqual(fetched_registry["status"], "fetched")
             self.assertIn("operation_activities", fetched_registry["last_raw_path"])
-            provider_operation = api_store.get_operation_run(approved_continue["operation_run"]["operation_run_id"])
+            provider_operation = api_store.repos.workflow_runtime.get_operation(
+                approved_continue["operation_run"]["operation_run_id"]
+            )
             self.assertEqual(provider_operation["status"], "running")
             self.assertEqual(
                 provider_operation["progress"]["phase"],
@@ -6450,7 +7431,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 PROJECTION_PROFILE_ADMISSION_APPLY_COMMAND_TYPE,
             )
             self.assertEqual(projection_admission_command["owner"], PROJECTION_PROFILE_ADMISSION_APPLY_OWNER)
-            self.assertEqual(projection_admission_command["parent_command_id"], completed_terminal_command["command_id"])
+            self.assertEqual(
+                projection_admission_command["parent_command_id"], completed_terminal_command["command_id"]
+            )
             self.assertFalse(projection_admission_command["payload"]["legacy_job_shell_created"])
             self.assertFalse(projection_admission_command["payload"]["queue_workflow_called"])
             self.assertEqual(
@@ -6472,7 +7455,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 {delta["projection_effect"]["reason"] for delta in terminal_deltas},
                 {"projection_admission_pending_owner"},
             )
-            terminal_operation = api_store.get_operation_run(approved_continue["operation_run"]["operation_run_id"])
+            terminal_operation = api_store.repos.workflow_runtime.get_operation(
+                approved_continue["operation_run"]["operation_run_id"]
+            )
             self.assertEqual(terminal_operation["status"], "running")
             self.assertEqual(
                 terminal_operation["progress"]["phase"],
@@ -6578,7 +7563,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 entity_type="collection_projection",
             )
             self.assertEqual({delta["delta_kind"] for delta in collection_deltas}, {"collection_authoritative_merged"})
-            completed_operation = api_store.get_operation_run(approved_continue["operation_run"]["operation_run_id"])
+            completed_operation = api_store.repos.workflow_runtime.get_operation(
+                approved_continue["operation_run"]["operation_run_id"]
+            )
             self.assertEqual(completed_operation["status"], "completed")
             self.assertEqual(
                 completed_operation["progress"]["phase"],
@@ -7186,9 +8173,8 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     },
                 },
             ):
-                owner_result = (
-                    orchestrator.acquisition_engine.multi_source_enricher
-                    .run_linkedin_profile_refill_submit_command_once(command)
+                owner_result = orchestrator.acquisition_engine.multi_source_enricher.run_linkedin_profile_refill_submit_command_once(
+                    command
                 )
 
             self.assertEqual(owner_result["status"], "completed")
@@ -7219,9 +8205,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual({delta["status"] for delta in deltas}, {"recorded"})
             self.assertTrue(all(delta["projection_effect"]["provider_submit_queued"] for delta in deltas))
             self.assertEqual(
-                workflow_command_activity_spine_policy(
-                    LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH_COMMAND_TYPE
-                ).requirement,
+                workflow_command_activity_spine_policy(LINKEDIN_PROFILE_REFILL_SUBMIT_BATCH_COMMAND_TYPE).requirement,
                 ACTIVITY_SPINE_REQUIRED,
             )
         finally:
@@ -7289,9 +8273,8 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 },
             )
 
-            owner_result = (
-                orchestrator.acquisition_engine.multi_source_enricher
-                .run_linkedin_profile_url_terminal_record_command_once(command)
+            owner_result = orchestrator.acquisition_engine.multi_source_enricher.run_linkedin_profile_url_terminal_record_command_once(
+                command
             )
 
             self.assertEqual(owner_result["status"], "completed")
@@ -7331,11 +8314,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(terminal_statuses["https://www.linkedin.com/in/ada-lovelace"], "fetched")
             self.assertEqual(terminal_statuses["https://www.linkedin.com/in/grace-hopper"], "failed")
             self.assertTrue(
-                next(
-                    delta
-                    for delta in deltas
-                    if delta["entity_key"] == "https://www.linkedin.com/in/ada-lovelace"
-                )[
+                next(delta for delta in deltas if delta["entity_key"] == "https://www.linkedin.com/in/ada-lovelace")[
                     "projection_effect"
                 ]["profile_terminal_recorded"]
             )
@@ -7354,9 +8333,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 registry_rows["https://www.linkedin.com/in/grace-hopper"]["status"],
             )
             self.assertEqual(
-                workflow_command_activity_spine_policy(
-                    LINKEDIN_PROFILE_URL_TERMINAL_RECORD_COMMAND_TYPE
-                ).requirement,
+                workflow_command_activity_spine_policy(LINKEDIN_PROFILE_URL_TERMINAL_RECORD_COMMAND_TYPE).requirement,
                 ACTIVITY_SPINE_REQUIRED,
             )
         finally:
@@ -7398,7 +8375,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "continue:reject-export-command",
                 }
             )
-            approved = orchestrator.approve_operation_action_api(submitted["action"]["action_id"], {"actor": "unit-test"})
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"], {"actor": "unit-test"}
+            )
             operation_run_id = approved["operation_run"]["operation_run_id"]
 
             dispatched = orchestrator.dispatch_operation_run_api(operation_run_id, {"actor": "unit-test"})
@@ -7489,15 +8468,18 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(drain["completed_count"], 1)
             record = api_store.get_crm_record_by_person_identity("linkedin:crm-op", workspace_id="default")
             self.assertEqual(record["display_name_cache"], "CRM Operation Person")
-            operation_after_owner = api_store.get_operation_run(operation_run_id)
+            operation_after_owner = api_store.repos.workflow_runtime.get_operation(operation_run_id)
             self.assertEqual(operation_after_owner["status"], "completed")
             self.assertEqual(
-                api_store.get_agent_action(submitted["action"]["action_id"])["status"],
+                api_store.repos.workflow_runtime.get_action(submitted["action"]["action_id"])["status"],
                 "completed",
             )
             self.assertIn(
                 "OperationCommandSucceeded",
-                [event["event_type"] for event in api_store.list_operation_events(operation_run_id)],
+                [
+                    event["event_type"]
+                    for event in api_store.repos.workflow_runtime.list_operation_events(operation_run_id)
+                ],
             )
             command_after_owner = api_store.get_workflow_command(dispatched["workflow_command"]["command_id"])
             activity_run_id = command_after_owner["result"]["activity_run_id"]
@@ -7570,7 +8552,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(blocked["status"], "approval_required")
             self.assertEqual(api_store.list_workflow_commands(operation_id=operation_run_id, limit=0), [])
             self.assertEqual(
-                api_store.get_agent_action(submitted["action"]["action_id"])["status"],
+                api_store.repos.workflow_runtime.get_action(submitted["action"]["action_id"])["status"],
                 "approval_required",
             )
 
@@ -7587,7 +8569,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             updated = api_store.get_crm_record(record["crm_record_id"])
             engagement = api_store.get_crm_engagement(updated["current_engagement_id"])
             self.assertEqual(engagement["stage"], "do_not_contact")
-            self.assertEqual(api_store.get_operation_run(operation_run_id)["status"], "completed")
+            self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"], "completed")
         finally:
             api_store.close()
 
@@ -7655,9 +8637,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(tasks[0]["status"], "open")
             self.assertEqual(tasks[0]["due_at"], "2026-06-01T00:00:00Z")
             self.assertEqual(tasks[0]["source_event_id"][:7], "crmevt_")
-            events = api_store.list_operation_events(operation_run_id)
+            events = api_store.repos.workflow_runtime.list_operation_events(operation_run_id)
             self.assertIn("OperationCommandSucceeded", [event["event_type"] for event in events])
-            self.assertEqual(api_store.get_operation_run(operation_run_id)["status"], "completed")
+            self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"], "completed")
             command_after_owner = api_store.get_workflow_command(planned["workflow_command"]["command_id"])
             activity_run_id = command_after_owner["result"]["activity_run_id"]
             self.assertTrue(activity_run_id.startswith("actrun_"))
@@ -7765,9 +8747,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(forced_resume["workflow_entity_delta"]["entity_type"], "crm_write_command")
             self.assertEqual(forced_resume["workflow_entity_delta"]["status"], "queued")
             self.assertTrue(
-                forced_resume["workflow_entity_delta"]["projection_effect"][
-                    "crm_mutation_deferred_to_command_owner"
-                ]
+                forced_resume["workflow_entity_delta"]["projection_effect"]["crm_mutation_deferred_to_command_owner"]
             )
             self.assertEqual(api_store.list_crm_tasks(crm_record_id=record["crm_record_id"]), [])
         finally:
@@ -7847,7 +8827,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "crm_writer.cancel_before_mutation_attempt",
             )
             self.assertEqual(response["control_policy"]["running_control_maturity"], "owner_specific_cancel_resume")
-            self.assertEqual(response["workflow_command"]["result"]["cancel_boundary"], "crm_writer_before_mutation_attempt")
+            self.assertEqual(
+                response["workflow_command"]["result"]["cancel_boundary"], "crm_writer_before_mutation_attempt"
+            )
             self.assertEqual(response["workflow_command"]["result"]["activity_run_cancelled_count"], 1)
             cancelled_activity = api_store.get_workflow_activity_run(activity["activity_run_id"])
             self.assertEqual(cancelled_activity["status"], "cancelled_before_crm_mutation")
@@ -7983,7 +8965,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     "idempotency_key": "company-public-web:openai-homepage",
                 }
             )
-            approved = orchestrator.approve_operation_action_api(submitted["action"]["action_id"], {"actor": "unit-test"})
+            approved = orchestrator.approve_operation_action_api(
+                submitted["action"]["action_id"], {"actor": "unit-test"}
+            )
             operation_run_id = approved["operation_run"]["operation_run_id"]
 
             planned = orchestrator.dispatch_operation_run_api(operation_run_id, {"actor": "unit-test"})
@@ -8049,10 +9033,14 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
             self.assertEqual(joined_source_drain["completed_count"], 1)
             joined_root_after_owner = api_store.get_workflow_command(joined_planned["workflow_command"]["command_id"])
-            joined_source_command = api_store.get_workflow_command(joined_root_after_owner["result"]["downstream_command_ids"][0])
+            joined_source_command = api_store.get_workflow_command(
+                joined_root_after_owner["result"]["downstream_command_ids"][0]
+            )
             self.assertEqual(joined_source_command["command_type"], COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE)
             self.assertEqual(joined_source_command["status"], "succeeded")
-            self.assertEqual(joined_source_command["result"]["reason"], "company_public_web_refresh_joined_existing_run")
+            self.assertEqual(
+                joined_source_command["result"]["reason"], "company_public_web_refresh_joined_existing_run"
+            )
             self.assertEqual(
                 joined_source_command["result"]["company_asset_sync"]["reason"],
                 "company_asset_sync_deferred_to_typed_command",
@@ -8078,7 +9066,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             command_after_owner = api_store.get_workflow_command(materialize_command_id)
             self.assertEqual(command_after_owner["command_type"], COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE)
             self.assertEqual(command_after_owner["status"], "succeeded")
-            self.assertEqual(command_after_owner["result"]["activity_spine_contract"], "command_activity_attempt_entity_delta_v1")
+            self.assertEqual(
+                command_after_owner["result"]["activity_spine_contract"], "command_activity_attempt_entity_delta_v1"
+            )
             activity_run_id = command_after_owner["result"]["activity_run_id"]
             activities = api_store.list_workflow_activity_runs(
                 command_id=command_after_owner["command_id"],
@@ -8100,7 +9090,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(len(run_deltas), 1)
             self.assertEqual(len(asset_deltas), 1)
             self.assertEqual(asset_deltas[0]["delta_kind"], "company_asset_synced_from_public_web")
-            self.assertEqual(api_store.get_operation_run(operation_run_id)["status"], "completed")
+            self.assertEqual(api_store.repos.workflow_runtime.get_operation(operation_run_id)["status"], "completed")
         finally:
             api_store.close()
 
@@ -8254,7 +9244,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "company_public_web_owner.cancel_or_poll_stop_source_collect",
             )
             self.assertEqual(response["control_policy"]["running_control_maturity"], "owner_specific_cancel_resume")
-            self.assertEqual(response["workflow_command"]["result"]["cancel_boundary"], "provider_attempt_before_activity_attempt")
+            self.assertEqual(
+                response["workflow_command"]["result"]["cancel_boundary"], "provider_attempt_before_activity_attempt"
+            )
             self.assertEqual(response["workflow_command"]["result"]["activity_run_cancelled_count"], 1)
             cancelled_activity = api_store.get_workflow_activity_run(activity["activity_run_id"])
             self.assertEqual(cancelled_activity["status"], "cancelled_before_provider_attempt")
@@ -8629,7 +9621,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             company_after = api_store.get_workflow_command(company_command["command_id"])
             self.assertEqual(person_after["status"], "succeeded")
             self.assertEqual(company_after["status"], "succeeded")
-            self.assertEqual(person_after["result"]["activity_spine_contract"], "command_activity_attempt_entity_delta_v1")
+            self.assertEqual(
+                person_after["result"]["activity_spine_contract"], "command_activity_attempt_entity_delta_v1"
+            )
             activities = api_store.list_workflow_activity_runs(
                 command_id=person_command["command_id"],
                 activity_type=MEDIA_ASSET_CACHE_COMMAND_TYPE,
@@ -9289,9 +10283,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                         "experience": [
                             {
                                 "companyName": "Expired Co",
-                                "companyLogo": {
-                                    "url": "https://media.licdn.example/expired-logo.png?e=1700000000"
-                                },
+                                "companyLogo": {"url": "https://media.licdn.example/expired-logo.png?e=1700000000"},
                             }
                         ]
                     },
@@ -9347,9 +10339,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                             "experience": [
                                 {
                                     "companyName": "OpenAI",
-                                    "companyLogo": {
-                                        "url": "https://media.licdn.example/openai-logo.png?e=4102444800"
-                                    },
+                                    "companyLogo": {"url": "https://media.licdn.example/openai-logo.png?e=4102444800"},
                                 }
                             ],
                         },
@@ -9447,9 +10437,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 {contract["command_type"] for contract in continue_contracts},
             )
             self.assertEqual(
-                registry["action_registry"][ACTION_FETCH_PROFILE_SAMPLE]["default_workflow_command_contract"][
-                    "owner"
-                ],
+                registry["action_registry"][ACTION_FETCH_PROFILE_SAMPLE]["default_workflow_command_contract"]["owner"],
                 LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER,
             )
             self.assertEqual(
@@ -9584,7 +10572,9 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             with opener.open(activity_list_req) as response:
                 activity_list = json.loads(response.read().decode("utf-8"))
             self.assertEqual(activity_list["status"], "ok")
-            self.assertEqual(activity_list["workflow_activities"][0]["activity_run_id"], api_activity["activity_run_id"])
+            self.assertEqual(
+                activity_list["workflow_activities"][0]["activity_run_id"], api_activity["activity_run_id"]
+            )
             self.assertFalse(activity_list["workflow_activities"][0]["module_state_mutated"])
             self.assertEqual(
                 activity_list["workflow_activities"][0]["mutation_contract"],
@@ -9840,7 +10830,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(resumed["status"], "queued")
             self.assertEqual(resumed["operation_run"]["progress"]["phase"], "resume_requested")
 
-            api_store.update_operation_run_state(
+            api_store.repos.workflow_runtime.update_operation_state(
                 operation_run_id,
                 status="failed",
                 progress_patch={"phase": "failed", "reason": "api-test"},
@@ -9872,6 +10862,59 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             server.server_close()
             thread.join(timeout=2)
             api_store.close()
+
+
+class OperationControlHttpConflictTest(unittest.TestCase):
+    def test_operation_control_conflicts_map_to_http_409(self) -> None:
+        orchestrator = SimpleNamespace(
+            approve_operation_action_api=lambda *_args, **_kwargs: {
+                "status": "conflict",
+                "reason": "operation_action_approval_conflict",
+            },
+            reject_operation_action_api=lambda *_args, **_kwargs: {
+                "status": "conflict",
+                "reason": "operation_action_rejection_conflict",
+            },
+            cancel_operation_run_api=lambda *_args, **_kwargs: {
+                "status": "conflict",
+                "reason": "operation_run_cancel_conflict",
+            },
+            retry_operation_run_api=lambda *_args, **_kwargs: {
+                "status": "conflict",
+                "reason": "operation_run_retry_conflict",
+            },
+            resume_operation_run_api=lambda *_args, **_kwargs: {
+                "status": "conflict",
+                "reason": "operation_run_resume_conflict",
+            },
+        )
+        server = create_server(orchestrator, host="127.0.0.1", port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        try:
+            for path in (
+                "/api/operations/actions/action-conflict/approve",
+                "/api/operations/actions/action-conflict/reject",
+                "/api/operations/runs/operation-conflict/cancel",
+                "/api/operations/runs/operation-conflict/retry",
+                "/api/operations/runs/operation-conflict/resume",
+            ):
+                request = urllib_request.Request(
+                    f"http://{host}:{port}{path}",
+                    data=b"{}",
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with self.assertRaises(urllib_error.HTTPError) as raised:
+                    urllib_request.urlopen(request)
+                self.assertEqual(raised.exception.code, 409)
+                payload = json.loads(raised.exception.read().decode("utf-8"))
+                self.assertEqual(payload["status"], "conflict")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
 
 
 if __name__ == "__main__":

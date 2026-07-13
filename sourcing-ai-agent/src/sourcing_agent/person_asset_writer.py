@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
+from .projection_search_index_contract import (
+    PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY,
+    PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY,
+    projection_search_index_build_binding,
+    projection_search_index_publication_state,
+)
 from .public_candidate_facets import (
     candidate_page_filter_corpus,
     public_facet_counts_from_records,
@@ -64,7 +71,9 @@ class PersonAssetWriter:
                     [str(asset.get("fetched_at") or "") for asset in raw_profile_assets]
                     + [str(dict(public_summary or {}).get("profile_fetched_at") or "")]
                 ),
-                "profile_indexed_at": _latest_non_empty(str(asset.get("updated_at") or "") for asset in raw_profile_assets),
+                "profile_indexed_at": _latest_non_empty(
+                    str(asset.get("updated_at") or "") for asset in raw_profile_assets
+                ),
                 "metadata": {"writer_id": self.writer_id},
             }
         )
@@ -208,7 +217,9 @@ class PersonAssetWriter:
             public_summary_by_person: dict[str, dict[str, Any]] = {}
             for member in members:
                 public_summary = dict(member.get("public_summary") or {})
-                person_key = str(member.get("person_identity_key") or public_summary.get("person_identity_key") or "").strip()
+                person_key = str(
+                    member.get("person_identity_key") or public_summary.get("person_identity_key") or ""
+                ).strip()
                 if not person_key:
                     continue
                 person_keys.append(person_key)
@@ -249,6 +260,7 @@ class PersonAssetWriter:
         member_page_size: int = 1000,
         max_members: int = 100_000,
         rebuild_person_indexes: bool = True,
+        build_generation: str = "",
     ) -> dict[str, Any]:
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
@@ -259,6 +271,7 @@ class PersonAssetWriter:
         raw_indexed_count = 0
         evidence_indexed_count = 0
         offset = 0
+        normalized_generation = str(build_generation or "").strip() or f"idxgen_{uuid4().hex}"
         last_page: dict[str, Any] = {}
         while True:
             page = self.rebuild_projection_person_search_index_page(
@@ -271,6 +284,7 @@ class PersonAssetWriter:
                 offset=offset,
                 reset_index=(offset == 0),
                 rebuild_person_indexes=rebuild_person_indexes,
+                build_generation=normalized_generation,
             )
             last_page = page
             if str(page.get("status") or "") != "indexed":
@@ -297,6 +311,7 @@ class PersonAssetWriter:
             "max_members": resolved_max_members,
             "completed": bool(last_page.get("completed", True)),
             "next_offset": int(last_page.get("next_offset") or indexed_count),
+            "build_generation": normalized_generation,
             "person_index": {
                 "status": "indexed" if bool(rebuild_person_indexes) else "skipped",
                 "reason": "" if bool(rebuild_person_indexes) else "projection_index_consumes_existing_person_indexes",
@@ -324,37 +339,95 @@ class PersonAssetWriter:
         offset: int = 0,
         reset_index: bool = False,
         rebuild_person_indexes: bool = True,
+        build_generation: str = "",
     ) -> dict[str, Any]:
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
             return {"status": "invalid", "reason": "projection_id_required", "indexed_count": 0}
-        total_member_count = self.store.repos.serving_projection.count_members(
-            normalized_projection_id, visible_only=True
-        )
         resolved_page_size = max(1, min(5000, int(member_page_size or 100)))
         resolved_max_members = max(1, int(max_members or 100_000))
         resolved_offset = max(0, int(offset or 0))
+        replace_first_page = bool(reset_index) and resolved_offset == 0
+        normalized_generation = str(build_generation or "").strip()
+        if replace_first_page and not normalized_generation:
+            normalized_generation = f"idxgen_{uuid4().hex}"
+        if not normalized_generation:
+            return {
+                "status": "invalid",
+                "reason": "projection_person_search_index_build_generation_required",
+                "projection_id": normalized_projection_id,
+                "indexed_count": 0,
+                "processed_member_count": 0,
+            }
+        expected_build_generation: str | None = None
+        expected_input_revision: str | None = None
+        if replace_first_page:
+            projection_at_start = self.store.repos.serving_projection.get(normalized_projection_id)
+            projection_metadata_at_start = dict(projection_at_start.get("metadata") or {})
+            expected_build_generation = str(
+                projection_metadata_at_start.get(PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY) or ""
+            ).strip()
+            expected_input_revision = str(
+                projection_metadata_at_start.get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
+            ).strip()
+        total_member_count = self.store.repos.serving_projection.count_members(
+            normalized_projection_id, visible_only=True
+        )
         effective_member_limit = min(total_member_count, resolved_max_members)
         truncated = total_member_count > resolved_max_members
         requested_count_scope = str(count_scope or "index_partial").strip() or "index_partial"
         final_count_scope = "index_partial" if truncated else requested_count_scope
-        replace_first_page = bool(reset_index) and resolved_offset == 0
         if resolved_offset >= effective_member_limit:
             if replace_first_page:
-                self.store.repos.serving_projection.replace_person_search_index(normalized_projection_id, [])
-                self._mark_projection_person_search_index_partial(
+                batch_result = self.store.repos.serving_projection.replace_person_search_index(
+                    normalized_projection_id,
+                    [],
+                    build_generation=normalized_generation,
+                    expected_build_generation=expected_build_generation,
+                    expected_input_revision=expected_input_revision,
+                )
+                if str(batch_result.get("status") or "") != "indexed":
+                    return {
+                        **batch_result,
+                        "processed_member_count": 0,
+                        "next_offset": resolved_offset,
+                        "completed": False,
+                        "total_member_count": total_member_count,
+                        "build_generation": normalized_generation,
+                    }
+                partial_result = self._mark_projection_person_search_index_partial(
                     projection_id=normalized_projection_id,
+                    build_generation=normalized_generation,
                     total_member_count=total_member_count,
                     truncated=truncated,
                 )
-            self._finalize_projection_person_search_index(
+                if str(partial_result.get("status") or "") != "updated":
+                    return {
+                        **partial_result,
+                        "processed_member_count": 0,
+                        "next_offset": resolved_offset,
+                        "completed": False,
+                        "total_member_count": total_member_count,
+                        "build_generation": normalized_generation,
+                    }
+            finalize_result = self._finalize_projection_person_search_index(
                 projection_id=normalized_projection_id,
+                build_generation=normalized_generation,
                 count_scope=final_count_scope,
                 raw_profile_index_watermark=raw_profile_index_watermark,
                 evidence_index_watermark=evidence_index_watermark,
                 total_member_count=total_member_count,
                 truncated=truncated,
             )
+            if str(finalize_result.get("status") or "") != "published":
+                return {
+                    **finalize_result,
+                    "processed_member_count": 0,
+                    "next_offset": resolved_offset,
+                    "completed": False,
+                    "total_member_count": total_member_count,
+                    "build_generation": normalized_generation,
+                }
             return {
                 "status": "indexed",
                 "projection_id": normalized_projection_id,
@@ -366,6 +439,7 @@ class PersonAssetWriter:
                 "truncated": truncated,
                 "member_page_size": resolved_page_size,
                 "max_members": resolved_max_members,
+                "build_generation": normalized_generation,
                 "person_index": {"status": "indexed", "person_count": 0},
                 "read_contract": {
                     "source": "projection_person_search_index",
@@ -387,7 +461,9 @@ class PersonAssetWriter:
         public_summary_by_person: dict[str, dict[str, Any]] = {}
         for member in members:
             public_summary = dict(member.get("public_summary") or {})
-            person_key = str(member.get("person_identity_key") or public_summary.get("person_identity_key") or "").strip()
+            person_key = str(
+                member.get("person_identity_key") or public_summary.get("person_identity_key") or ""
+            ).strip()
             if not person_key:
                 continue
             person_keys.append(person_key)
@@ -426,34 +502,69 @@ class PersonAssetWriter:
             batch_result = self.store.repos.serving_projection.replace_person_search_index(
                 normalized_projection_id,
                 rows,
+                build_generation=normalized_generation,
+                expected_build_generation=expected_build_generation,
+                expected_input_revision=expected_input_revision,
             )
-            self._mark_projection_person_search_index_partial(
+            if str(batch_result.get("status") or "") != "indexed":
+                return {
+                    **batch_result,
+                    "processed_member_count": 0,
+                    "next_offset": resolved_offset,
+                    "completed": False,
+                    "total_member_count": total_member_count,
+                    "build_generation": normalized_generation,
+                }
+            partial_result = self._mark_projection_person_search_index_partial(
                 projection_id=normalized_projection_id,
+                build_generation=normalized_generation,
                 total_member_count=total_member_count,
                 truncated=truncated,
             )
+            if str(partial_result.get("status") or "") != "updated":
+                return {
+                    **partial_result,
+                    "processed_member_count": 0,
+                    "next_offset": resolved_offset,
+                    "completed": False,
+                    "total_member_count": total_member_count,
+                    "build_generation": normalized_generation,
+                }
         else:
             batch_result = self.store.repos.serving_projection.upsert_person_search_index_rows(
                 normalized_projection_id,
                 rows,
+                build_generation=normalized_generation,
             )
+            if str(batch_result.get("status") or "") != "indexed":
+                return {
+                    **batch_result,
+                    "processed_member_count": 0,
+                    "next_offset": resolved_offset,
+                    "completed": False,
+                    "total_member_count": total_member_count,
+                    "build_generation": normalized_generation,
+                }
         indexed_count = int(batch_result.get("indexed_count") or 0)
         if completed:
-            if row_count_scope != final_count_scope:
-                self.store.repos.serving_projection.update_person_search_index_scope(
-                    normalized_projection_id,
-                    count_scope=final_count_scope,
-                    raw_profile_index_watermark=raw_profile_index_watermark,
-                    evidence_index_watermark=evidence_index_watermark,
-                )
-            self._finalize_projection_person_search_index(
+            finalize_result = self._finalize_projection_person_search_index(
                 projection_id=normalized_projection_id,
+                build_generation=normalized_generation,
                 count_scope=final_count_scope,
                 raw_profile_index_watermark=raw_profile_index_watermark,
                 evidence_index_watermark=evidence_index_watermark,
                 total_member_count=total_member_count,
                 truncated=truncated,
             )
+            if str(finalize_result.get("status") or "") != "published":
+                return {
+                    **finalize_result,
+                    "processed_member_count": len(members),
+                    "next_offset": next_offset,
+                    "completed": False,
+                    "total_member_count": total_member_count,
+                    "build_generation": normalized_generation,
+                }
         return {
             "status": "indexed",
             "projection_id": normalized_projection_id,
@@ -465,6 +576,7 @@ class PersonAssetWriter:
             "truncated": truncated,
             "member_page_size": resolved_page_size,
             "max_members": resolved_max_members,
+            "build_generation": normalized_generation,
             "person_index": person_index_result,
             "read_contract": {
                 "source": "projection_person_search_index",
@@ -477,89 +589,87 @@ class PersonAssetWriter:
         self,
         *,
         projection_id: str,
+        build_generation: str,
         total_member_count: int,
         truncated: bool,
-    ) -> None:
+    ) -> dict[str, Any]:
         normalized_projection_id = str(projection_id or "").strip()
         if not normalized_projection_id:
-            return
-        projection = self.store.repos.serving_projection.get(normalized_projection_id)
-        if projection:
-            readiness = {
-                **dict(projection.get("readiness") or {}),
+            return {"status": "invalid", "reason": "projection_id_required", "updated_count": 0}
+        return self.store.repos.serving_projection.update_person_search_index_build_state(
+            normalized_projection_id,
+            build_generation=build_generation,
+            readiness_patch={
                 "index_count_scope": "index_partial",
-            }
-            self.store.repos.serving_projection.upsert(
-                {
-                    **projection,
-                    "readiness": readiness,
-                    "metadata": {
-                        **dict(projection.get("metadata") or {}),
-                        "search_index_writer_id": self.writer_id,
-                        "search_indexed_member_count": self.store.repos.serving_projection.count_person_search_index(
-                            normalized_projection_id
-                        ),
-                        "search_index_total_member_count": total_member_count,
-                        "search_index_truncated": truncated,
-                        "search_index_build_status": "partial",
-                    },
-                }
-            )
+            },
+            metadata_patch={
+                "search_index_writer_id": self.writer_id,
+                "search_indexed_member_count": self.store.repos.serving_projection.count_person_search_index(
+                    normalized_projection_id
+                ),
+                "search_index_total_member_count": total_member_count,
+                "search_index_truncated": truncated,
+                "search_index_build_status": "partial",
+            },
+        )
 
     def _finalize_projection_person_search_index(
         self,
         *,
         projection_id: str,
+        build_generation: str,
         count_scope: str,
         raw_profile_index_watermark: str,
         evidence_index_watermark: str,
         total_member_count: int,
         truncated: bool,
-    ) -> None:
+    ) -> dict[str, Any]:
         projection = self.store.repos.serving_projection.get(projection_id)
         if not projection:
-            return
+            return {
+                "status": "invalid",
+                "reason": "projection_missing",
+                "projection_id": projection_id,
+                "updated_count": 0,
+            }
         index_summary = self.store.repos.serving_projection.get_person_search_index_summary(projection_id)
         readiness_payload = dict(index_summary.get("index_filter_readiness") or {})
-        readiness = {
-            **dict(projection.get("readiness") or {}),
+        readiness_patch = {
             "index_count_scope": str(count_scope or "index_partial").strip() or "index_partial",
             "profile_indexed_at": str(readiness_payload.get("profile_indexed_at") or "").strip(),
             "evidence_indexed_at": str(readiness_payload.get("evidence_indexed_at") or "").strip(),
         }
         indexed_count = self.store.repos.serving_projection.count_person_search_index(projection_id)
-        self.store.repos.serving_projection.upsert(
-            {
-                **projection,
-                "raw_profile_index_watermark": str(raw_profile_index_watermark or "").strip()
-                or str(projection.get("raw_profile_index_watermark") or "").strip(),
-                "evidence_index_watermark": str(evidence_index_watermark or "").strip()
-                or str(projection.get("evidence_index_watermark") or "").strip(),
-                "readiness": readiness,
-                "metadata": {
-                    **dict(projection.get("metadata") or {}),
-                    "search_index_writer_id": self.writer_id,
-                    "search_indexed_member_count": indexed_count,
-                    "search_index_total_member_count": total_member_count,
-                    "search_index_truncated": truncated,
-                    "search_index_build_status": "completed",
-                },
-            }
-        )
-        self.rebuild_projection_public_facet_counts(
+        return self.rebuild_projection_public_facet_counts(
             projection_id=projection_id,
+            build_generation=build_generation,
             count_scope=count_scope,
             total_indexed_count=indexed_count,
+            raw_profile_index_watermark=raw_profile_index_watermark,
+            evidence_index_watermark=evidence_index_watermark,
+            readiness_patch=readiness_patch,
+            metadata_patch={
+                "search_index_writer_id": self.writer_id,
+                "search_indexed_member_count": indexed_count,
+                "search_index_total_member_count": total_member_count,
+                "search_index_truncated": truncated,
+                "search_index_build_status": "completed",
+            },
         )
 
     def rebuild_projection_public_facet_counts(
         self,
         *,
         projection_id: str,
+        build_generation: str,
         count_scope: str = "exact_projection",
         page_size: int = 1000,
         max_rows: int = 100_000,
         total_indexed_count: int | None = None,
+        raw_profile_index_watermark: str = "",
+        evidence_index_watermark: str = "",
+        readiness_patch: dict[str, Any] | None = None,
+        metadata_patch: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Publish canonical projection facet counts from persisted index records.
 
@@ -570,8 +680,16 @@ class PersonAssetWriter:
         """
 
         normalized_projection_id = str(projection_id or "").strip()
+        normalized_generation = str(build_generation or "").strip()
         if not normalized_projection_id:
             return {"status": "invalid", "reason": "projection_id_required", "facet_record_count": 0}
+        if not normalized_generation:
+            return {
+                "status": "invalid",
+                "reason": "projection_person_search_index_build_generation_required",
+                "projection_id": normalized_projection_id,
+                "facet_record_count": 0,
+            }
         projection = self.store.repos.serving_projection.get(normalized_projection_id)
         if not projection:
             return {
@@ -580,18 +698,28 @@ class PersonAssetWriter:
                 "projection_id": normalized_projection_id,
                 "facet_record_count": 0,
             }
+        projection_metadata = dict(projection.get("metadata") or {})
+        build_state = projection_search_index_publication_state(
+            projection_metadata,
+            require_completed=False,
+        )
+        if (
+            str(build_state.get("status") or "") != "ready"
+            or str(build_state.get(PROJECTION_SEARCH_INDEX_BUILD_GENERATION_KEY) or "") != normalized_generation
+        ):
+            return {
+                "status": "obsolete",
+                "reason": str(build_state.get("reason") or "projection_person_search_index_stale_generation"),
+                "projection_id": normalized_projection_id,
+                "build_generation": normalized_generation,
+                "facet_record_count": 0,
+            }
+        build_binding = projection_search_index_build_binding(projection_metadata)
         indexed_count = (
             max(0, int(total_indexed_count))
             if total_indexed_count is not None
             else self.store.repos.serving_projection.count_person_search_index(normalized_projection_id)
         )
-        if indexed_count <= 0:
-            return {
-                "status": "unavailable",
-                "reason": "projection_person_search_index_missing",
-                "projection_id": normalized_projection_id,
-                "facet_record_count": 0,
-            }
         resolved_page_size = max(1, min(5000, int(page_size or 1000)))
         resolved_max_rows = max(1, int(max_rows or 100_000))
         effective_limit = min(indexed_count, resolved_max_rows)
@@ -616,56 +744,81 @@ class PersonAssetWriter:
             offset += len(page)
             if len(page) < page_limit:
                 break
-        if not records:
-            return {
-                "status": "unavailable",
-                "reason": "projection_person_search_index_filter_record_missing",
-                "projection_id": normalized_projection_id,
-                "facet_record_count": 0,
-                "missing_filter_record_count": missing_filter_record_count,
-            }
         truncated = indexed_count > len(records) + missing_filter_record_count or indexed_count > resolved_max_rows
+        filter_records_unavailable = indexed_count > 0 and not records
         effective_count_scope = (
-            "index_partial"
-            if truncated or missing_filter_record_count > 0
-            else (str(count_scope or "exact_projection").strip() or "exact_projection")
+            "unavailable"
+            if filter_records_unavailable
+            else (
+                "index_partial"
+                if truncated or missing_filter_record_count > 0
+                else (str(count_scope or "exact_projection").strip() or "exact_projection")
+            )
         )
-        public_facet_counts = public_facet_counts_from_records(records)
-        public_facet_counts.update(
-            {
-                "count_scope": effective_count_scope,
-                "source": "projection_person_search_index",
-                "indexed_count": indexed_count,
+        public_facet_counts = {} if filter_records_unavailable else public_facet_counts_from_records(records)
+        if public_facet_counts:
+            public_facet_counts.update(
+                {
+                    **build_binding,
+                    "count_scope": effective_count_scope,
+                    "source": "projection_person_search_index",
+                    "indexed_count": indexed_count,
+                    "facet_record_count": len(records),
+                    "missing_filter_record_count": missing_filter_record_count,
+                    "truncated": truncated,
+                }
+            )
+        facet_build_status = (
+            "unavailable"
+            if effective_count_scope == "unavailable"
+            else ("partial" if effective_count_scope == "index_partial" else "completed")
+        )
+        counts_patch = {
+            "public_facet_counts": public_facet_counts,
+            "facet_count_scope": effective_count_scope,
+            "facet_build_status": facet_build_status,
+            "index_count_scope": str(count_scope or "index_partial").strip() or "index_partial",
+        }
+        index_values: dict[str, Any] = {
+            "count_scope": str(count_scope or "index_partial").strip() or "index_partial",
+        }
+        if str(raw_profile_index_watermark or "").strip():
+            index_values["raw_profile_index_watermark"] = str(raw_profile_index_watermark).strip()
+        if str(evidence_index_watermark or "").strip():
+            index_values["evidence_index_watermark"] = str(evidence_index_watermark).strip()
+        update_result = self.store.repos.serving_projection.update_person_search_index_build_state(
+            normalized_projection_id,
+            build_generation=normalized_generation,
+            index_values=index_values,
+            counts_patch=counts_patch,
+            readiness_patch={
+                **dict(readiness_patch or {}),
+                **build_binding,
+            },
+            metadata_patch={
+                **dict(metadata_patch or {}),
+                "public_facet_counts_writer_id": self.writer_id,
+                "public_facet_counts_source": "projection_person_search_index",
+                "public_facet_counts_build_status": facet_build_status,
+                "public_facet_counts_record_count": len(records),
+                "public_facet_counts_missing_filter_record_count": missing_filter_record_count,
+                "public_facet_counts_truncated": truncated,
+            },
+            raw_profile_index_watermark=raw_profile_index_watermark,
+            evidence_index_watermark=evidence_index_watermark,
+        )
+        if str(update_result.get("status") or "") != "updated":
+            return {
+                **update_result,
                 "facet_record_count": len(records),
+                "indexed_count": indexed_count,
                 "missing_filter_record_count": missing_filter_record_count,
                 "truncated": truncated,
             }
-        )
-        latest_projection = self.store.repos.serving_projection.get(normalized_projection_id) or projection
-        counts = {
-            **dict(latest_projection.get("counts") or {}),
-            "public_facet_counts": public_facet_counts,
-            "facet_count_scope": effective_count_scope,
-            "facet_build_status": "partial" if effective_count_scope == "index_partial" else "completed",
-        }
-        self.store.repos.serving_projection.upsert(
-            {
-                **latest_projection,
-                "counts": counts,
-                "metadata": {
-                    **dict(latest_projection.get("metadata") or {}),
-                    "public_facet_counts_writer_id": self.writer_id,
-                    "public_facet_counts_source": "projection_person_search_index",
-                    "public_facet_counts_build_status": counts["facet_build_status"],
-                    "public_facet_counts_record_count": len(records),
-                    "public_facet_counts_missing_filter_record_count": missing_filter_record_count,
-                    "public_facet_counts_truncated": truncated,
-                },
-            }
-        )
         return {
             "status": "published",
             "projection_id": normalized_projection_id,
+            "build_generation": normalized_generation,
             "count_scope": effective_count_scope,
             "facet_record_count": len(records),
             "indexed_count": indexed_count,
@@ -703,7 +856,10 @@ class PersonAssetWriter:
             else (self.store.get_candidate_evidence_index(person_key) if person_key else {})
         )
         raw_profile_terms = _non_empty_terms(
-            [*_projection_raw_profile_terms(public_summary, []), *list(raw_profile_index.get("raw_profile_terms") or [])]
+            [
+                *_projection_raw_profile_terms(public_summary, []),
+                *list(raw_profile_index.get("raw_profile_terms") or []),
+            ]
         )
         evidence_terms = _non_empty_terms(list(candidate_evidence_index.get("evidence_terms") or []))
         assertion_terms = _non_empty_terms(list(candidate_evidence_index.get("assertion_terms") or []))
@@ -861,12 +1017,10 @@ def _projection_filter_record(
         "profile_readiness": str(member.get("profile_readiness") or "").strip(),
         "card_readiness": str(member.get("card_readiness") or "").strip(),
         "needs_profile_completion": bool(
-            public_summary.get("needs_profile_completion")
-            or projection_metrics.get("needs_profile_completion")
+            public_summary.get("needs_profile_completion") or projection_metrics.get("needs_profile_completion")
         ),
         "low_profile_richness": bool(
-            public_summary.get("low_profile_richness")
-            or projection_metrics.get("low_profile_richness")
+            public_summary.get("low_profile_richness") or projection_metrics.get("low_profile_richness")
         ),
         "metadata": {
             **dict(public_summary.get("metadata") or {}),

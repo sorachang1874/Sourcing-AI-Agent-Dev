@@ -79,9 +79,7 @@ PERSON_ASSET_CONTRACT_PATH = REPO_ROOT / "docs" / "PERSON_ASSET_EVIDENCE_ASSERTI
 DATA_ASSET_GOVERNANCE_PATH = REPO_ROOT / "docs" / "DATA_ASSET_GOVERNANCE.md"
 MODEL_NATIVE_SEARCH_CONTRACT_PATH = REPO_ROOT / "docs" / "MODEL_NATIVE_SEARCH_PROVIDER_CONTRACT.md"
 LEGACY_PUBLIC_WEB_DROP_SCRIPT_PATH = REPO_ROOT / "scripts" / "archive_drop_legacy_public_web_tables.py"
-CRM_PUBLIC_WEB_LIVE_VALIDATION_SCRIPT_PATH = (
-    REPO_ROOT / "scripts" / "run_crm_public_web_live_product_validation.py"
-)
+CRM_PUBLIC_WEB_LIVE_VALIDATION_SCRIPT_PATH = REPO_ROOT / "scripts" / "run_crm_public_web_live_product_validation.py"
 ASSET_MEDIA_BACKFILL_SCRIPT_PATH = REPO_ROOT / "scripts" / "backfill_person_company_asset_media.py"
 FRONTEND_API_CONTRACT_DOC_PATH = REPO_ROOT / "docs" / "FRONTEND_API_CONTRACT.md"
 FRONTEND_API_TYPES_PATH = REPO_ROOT / "contracts" / "frontend_api_contract.ts"
@@ -120,6 +118,8 @@ def _load_independent_review_runner_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
 PROJECTION_CRM_API_CONTRACTS_PATH = REPO_ROOT / "tests" / "test_projection_crm_api_contracts.py"
 
 DURABLE_OPERATION_TABLES = {
@@ -226,15 +226,8 @@ def _typescript_block(source: str, start_marker: str, end_marker: str) -> str:
 
 def _frontend_normal_source_texts() -> dict[str, str]:
     frontend_src = REPO_ROOT / "frontend-demo" / "src"
-    source_paths = sorted(
-        path
-        for path in frontend_src.rglob("*")
-        if path.suffix in {".ts", ".tsx"} and path.is_file()
-    )
-    return {
-        str(path.relative_to(REPO_ROOT)): path.read_text(encoding="utf-8")
-        for path in source_paths
-    }
+    source_paths = sorted(path for path in frontend_src.rglob("*") if path.suffix in {".ts", ".tsx"} and path.is_file())
+    return {str(path.relative_to(REPO_ROOT)): path.read_text(encoding="utf-8") for path in source_paths}
 
 
 def test_pre_agent_contract_review_has_complete_owner_matrix() -> None:
@@ -247,12 +240,14 @@ def test_pre_agent_contract_review_has_complete_owner_matrix() -> None:
         assert len(cells) == 5
         assert all(cell for cell in cells), module
         fast_preflight = cells[3].lower()
-        assert any(
-            marker in fast_preflight
-            for marker in ("test", "metrics", "signoff", "preflight", "browser")
-        ), module
+        assert any(marker in fast_preflight for marker in ("test", "metrics", "signoff", "preflight", "browser")), (
+            module
+        )
     assert "Operation/Command/Activity contract active" in rows["Frontend API"][4]
-    assert "Command control responses must expose `display_contract`, `control_policy`, and `activity_spine_policy`" in markdown
+    assert (
+        "Command control responses must expose `display_contract`, `control_policy`, and `activity_spine_policy`"
+        in markdown
+    )
 
 
 def test_pre_agent_completion_evidence_matrix_records_current_gates() -> None:
@@ -278,7 +273,10 @@ def test_pre_agent_completion_evidence_matrix_records_current_gates() -> None:
     assert "DataForSEO item-level batch retry isolation" in markdown
     assert "Provider ActivityAttempt after-start control v1 is confirmed" in markdown
     assert "broader product UI polish remains W9/Phase-13-adjacent, not an atomization blocker" in markdown
-    assert "W7g real live/product validation requires reviewed CRM record ids plus explicit live-provider confirmation" in markdown
+    assert (
+        "W7g real live/product validation requires reviewed CRM record ids plus explicit live-provider confirmation"
+        in markdown
+    )
     assert "W7g guarded dry-run" in markdown
     assert "docs/INDEPENDENT_REVIEW_GATE.md" in markdown
     assert "make independent-review-gate" in markdown
@@ -287,9 +285,10 @@ def test_pre_agent_completion_evidence_matrix_records_current_gates() -> None:
     assert rows["W7e legacy Public Web physical deletion / isolation"][2].startswith("None for normal runtime")
     assert "not a missing typed-command boundary" in rows["W7f CRM Public Web typed-command phases"][2]
     assert "poll-cancel/quarantine" in rows["W11 Agent-callable workflow atomization"][1]
-    assert "stronger provider remote-interrupt semantics must first update this Contract" in rows[
-        "W10 full contract review / fail-closed signoff"
-    ][2]
+    assert (
+        "stronger provider remote-interrupt semantics must first update this Contract"
+        in rows["W10 full contract review / fail-closed signoff"][2]
+    )
     assert "NO-GO" in rows["Independent review gate"][1]
     assert "live provider validation" in rows["Independent review gate"][2]
 
@@ -300,9 +299,7 @@ def test_independent_review_gate_is_documented_and_executable() -> None:
     runner = INDEPENDENT_REVIEW_RUNNER_PATH.read_text(encoding="utf-8")
     makefile = MAKEFILE_PATH.read_text(encoding="utf-8")
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    live_runner = (REPO_ROOT / "scripts" / "run_crm_public_web_live_product_validation.py").read_text(
-        encoding="utf-8"
-    )
+    live_runner = (REPO_ROOT / "scripts" / "run_crm_public_web_live_product_validation.py").read_text(encoding="utf-8")
 
     assert "Independent Review Gate" in agents
     assert "reviewer must not be the author" in agents
@@ -359,15 +356,22 @@ def test_independent_review_gate_is_documented_and_executable() -> None:
     assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED ?= 0" in makefile
     assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT ?=" in makefile
     assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256 ?=" in makefile
-    assert "Refusing to execute CRM Public Web live validation without CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED=1" in makefile
+    assert (
+        "Refusing to execute CRM Public Web live validation without CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED=1"
+        in makefile
+    )
     assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT does not exist" in makefile
     assert "without a valid CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256" in makefile
-    assert "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED=1 CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT=" in makefile
+    assert (
+        "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED=1 CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT=" in makefile
+    )
     assert 'INDEPENDENT_REVIEW_PASSED_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_PASSED"' in live_runner
     assert 'INDEPENDENT_REVIEW_ARTIFACT_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_ARTIFACT"' in live_runner
     assert "_validate_independent_review_artifact" in live_runner
     assert 'INDEPENDENT_REVIEW_SCOPE_TOKENS_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_TOKENS"' in live_runner
-    assert 'INDEPENDENT_REVIEW_REQUIRED_FILES_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_REQUIRED_FILES"' in live_runner
+    assert (
+        'INDEPENDENT_REVIEW_REQUIRED_FILES_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_REQUIRED_FILES"' in live_runner
+    )
     assert (
         'INDEPENDENT_REVIEW_SCOPE_DIGEST_ENV = "CRM_PUBLIC_WEB_LIVE_INDEPENDENT_REVIEW_SCOPE_DIGEST_SHA256"'
         in live_runner
@@ -510,7 +514,9 @@ def test_independent_review_gate_has_mandatory_contract_and_milestone_triggers()
     assert "feature or phase being claimed as complete" in agents
     assert "Independent review is a scoped read-only gate" in agents
     assert "it should not read full `PROGRESS.md`, full `docs/NEXT_TODO.md`, or full long Contract files" in agents
-    assert "W6/nightly, live provider validation, or manual browser review should validate long-chain behavior" in agents
+    assert (
+        "W6/nightly, live provider validation, or manual browser review should validate long-chain behavior" in agents
+    )
 
 
 def test_model_native_search_contract_is_fail_closed_before_implementation() -> None:
@@ -522,17 +528,19 @@ def test_model_native_search_contract_is_fail_closed_before_implementation() -> 
     makefile = MAKEFILE_PATH.read_text(encoding="utf-8")
 
     assert "Provider id reserved: `model_native_search`" in contract
-    assert "Normal runtime behavior: fail closed if `model_native_search` appears in `SEARCH_PROVIDER_ORDER`" in contract
+    assert (
+        "Normal runtime behavior: fail closed if `model_native_search` appears in `SEARCH_PROVIDER_ORDER`" in contract
+    )
     assert "experimental_evidence_only" in contract
     assert "must not silently replace DataForSEO evidence" in durable_doc
     assert "bypass DataForSEO item-level retry semantics" in durable_doc
     assert "Model-native Search" in pre_agent
     assert "Reserved/fail-closed" in pre_agent
-    assert "MODEL_NATIVE_SEARCH_PROVIDER_NAME = \"model_native_search\"" in search_provider
+    assert 'MODEL_NATIVE_SEARCH_PROVIDER_NAME = "model_native_search"' in search_provider
     assert "must not silently fall back to DataForSEO" in search_provider
     assert "no registered provider implementation and owner contract" in search_provider
     assert "enable_model_native_search: bool = False" in settings
-    assert "model_native_search_mode: str = \"disabled\"" in settings
+    assert 'model_native_search_mode: str = "disabled"' in settings
     assert "SEARCH_PROVIDER_ENABLE_MODEL_NATIVE_SEARCH" in settings
     assert "model_native_search_provider_order_fails_closed_without_contract" in makefile
 
@@ -550,7 +558,10 @@ def test_pre_agent_direction_gates_are_explicit_before_goal_closeout() -> None:
     assert "CRM_PUBLIC_WEB_LIVE_PRE_AGENT_CONTRACT_PASSED=1" in markdown
     assert "--reviewed-crm-record-ids" in markdown
     assert "CRM_PUBLIC_WEB_LIVE_RECORD_IDS_REVIEWED=1" in markdown
-    assert "Do not mark W7g product validation complete from dry-run, fake-provider, Qwen healthcheck, or W6/nightly evidence alone" in markdown
+    assert (
+        "Do not mark W7g product validation complete from dry-run, fake-provider, Qwen healthcheck, or W6/nightly evidence alone"
+        in markdown
+    )
     assert "Do not re-enable `/api/target-candidates/public-web...` as a validation shortcut" in markdown
     assert "Provider after-start control v1 is confirmed" in markdown
     assert "Harvest/Apify/DataForSEO use local `poll_cancel_late_result_quarantine`" in markdown
@@ -559,7 +570,10 @@ def test_pre_agent_direction_gates_are_explicit_before_goal_closeout() -> None:
     assert "provider_after_start_control_mode='poll_cancel_late_result_quarantine'" in markdown
     assert "provider_after_start_control_contract='w11_provider_after_start_control_v1'" in durable_doc
     assert "Do not implement remote interruption from the workflow command API" in markdown
-    assert "Do not mutate provider registry, projection, CRM, Public Web, Excel, media, asset, or lane rows from a control endpoint to simulate cancellation" in markdown
+    assert (
+        "Do not mutate provider registry, projection, CRM, Public Web, Excel, media, asset, or lane rows from a control endpoint to simulate cancellation"
+        in markdown
+    )
     assert "late provider result must be quarantined unless an explicit owner adoption command accepts it" in markdown
     for source in (markdown, durable_doc, provider_retry_owner_source):
         assert "profile_provider_retry_bucketed" in source
@@ -602,7 +616,7 @@ def test_query_batch_identity_sources_do_not_use_display_ordinals() -> None:
 
     assert "_exploration_query_task_key" in exploratory_source
     assert 'task_key = f"{candidate_id}::{index:02d}"' not in exploratory_source
-    assert 'return f"{str(candidate_id or \'\').strip()}::q_{query_hash}"' in exploratory_source
+    assert "return f\"{str(candidate_id or '').strip()}::q_{query_hash}\"" in exploratory_source
 
 
 def test_w10_review_exposes_w11d_direction_decision_before_phase_13() -> None:
@@ -624,9 +638,15 @@ def test_w10_review_exposes_w11d_direction_decision_before_phase_13() -> None:
     assert "Future W11 extension rule" in next_todo
     assert "must not own retry, cancel, resume, provider attempts, or recovery state" in next_todo
     assert "PRE_AGENT_CONTRACT_REVIEW.md" in next_todo
-    assert "command-owned `display_contract`, `control_policy`, `control_state`, `activity_spine_policy`, and `fallback_status=fail_closed`" in next_todo
+    assert (
+        "command-owned `display_contract`, `control_policy`, `control_state`, `activity_spine_policy`, and `fallback_status=fail_closed`"
+        in next_todo
+    )
     assert "never infer display/control state from domain read-model fields" in next_todo
-    assert "Current remaining W11 work is product UI polish beyond the minimal `/operations` queue and manual/live validation of CRM Public Web quality" in next_todo
+    assert (
+        "Current remaining W11 work is product UI polish beyond the minimal `/operations` queue and manual/live validation of CRM Public Web quality"
+        in next_todo
+    )
     assert "stronger remote provider interruption remains a future provider-specific contract" in next_todo
     assert "current goal pause line" in next_todo
     assert "W7e and W7f are closed for normal runtime" in next_todo
@@ -638,9 +658,10 @@ def test_w10_review_exposes_w11d_direction_decision_before_phase_13() -> None:
     assert "richer product/API status surfaces" not in next_todo
     assert "no Operation dispatch inline `queue_workflow`" in rows["Acquisition root/plan"][4]
     assert "Operation-native Activity spine" in rows["Acquisition probe/scale"][4]
-    assert "operation-native discovery writes ActivityRun/Attempt/EntityDelta/lane evidence" in rows[
-        "Provider-backed discovery"
-    ][4]
+    assert (
+        "operation-native discovery writes ActivityRun/Attempt/EntityDelta/lane evidence"
+        in rows["Provider-backed discovery"][4]
+    )
     assert "Active through W11c" not in markdown
     assert "provider-backed discovery handoff is W11d" not in markdown
     assert "first slices materialize activity/lane/entity-delta boundaries" not in markdown
@@ -706,10 +727,7 @@ def test_w10_review_exposes_w11e_profile_activity_boundary() -> None:
         LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE,
         LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE,
     ):
-        assert (
-            _DURABLE_COMMAND_OWNER_CONTRACTS[command_type]["expected_owner"]
-            == LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER
-        )
+        assert _DURABLE_COMMAND_OWNER_CONTRACTS[command_type]["expected_owner"] == LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER
 
 
 def test_pre_agent_contract_gate_is_single_fast_entrypoint() -> None:
@@ -742,7 +760,9 @@ def test_pre_agent_contract_gate_is_single_fast_entrypoint() -> None:
     assert ci_pre_agent_contract is not None
     ci_pre_agent_contract_cmd = ci_pre_agent_contract.group(1)
     assert "tests/test_independent_review_gate_runner.py" in ci_pre_agent_contract_cmd
-    assert "tests/test_enrichment.py -k 'isolates_retry_wait or retry_wait_as_isolated_batch'" in ci_pre_agent_contract_cmd
+    assert (
+        "tests/test_enrichment.py -k 'isolates_retry_wait or retry_wait_as_isolated_batch'" in ci_pre_agent_contract_cmd
+    )
     assert "SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1" in ci_pre_agent_contract_cmd
     assert "dataforseo_provider_submit_batch_retries_only_failed_query_item" in ci_pre_agent_contract_cmd
     assert "dataforseo_provider_submit_batch_fails_closed_without_provider_identity" in ci_pre_agent_contract_cmd
@@ -751,7 +771,9 @@ def test_pre_agent_contract_gate_is_single_fast_entrypoint() -> None:
     assert "public_web_batch_query_identity_is_candidate_query_scoped_not_order_scoped" in ci_pre_agent_contract_cmd
     assert "search_seed_worker_key_uses_query_identity_not_order_ordinal" in ci_pre_agent_contract_cmd
     assert "exploration_query_task_key_uses_query_identity_not_order_ordinal" in ci_pre_agent_contract_cmd
-    assert "dataforseo_provider_fetch_ready_batch_preserves_success_when_one_task_get_fails" in ci_pre_agent_contract_cmd
+    assert (
+        "dataforseo_provider_fetch_ready_batch_preserves_success_when_one_task_get_fails" in ci_pre_agent_contract_cmd
+    )
     assert "run_crm_public_web_live_product_validation.py" in ci_pre_agent_contract_cmd
     assert "--expected-model" not in ci_pre_agent_contract_cmd
     assert "--report-json" in ci_pre_agent_contract_cmd
@@ -843,7 +865,7 @@ def test_w7g_crm_public_web_live_validation_has_guarded_runner() -> None:
     assert "Poll timeout is a run-terminality failure" in next_todo
     assert "guarded W7g runner dry-run" in review_doc
     assert "live_prerequisites" in review_doc
-    assert "CRM_PUBLIC_WEB_LIVE_RECORD_IDS=\"...\"" in review_doc
+    assert 'CRM_PUBLIC_WEB_LIVE_RECORD_IDS="..."' in review_doc
     assert "immutable required-file set" in review_doc
     assert "fields spread across unrelated payload objects" in review_doc
 
@@ -878,10 +900,7 @@ def test_w7g_live_runner_requires_pre_agent_contract_gate_env(tmp_path: Path) ->
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["status"] == "failed"
     assert report["responses"] == {}
-    assert any(
-        "CRM_PUBLIC_WEB_LIVE_PRE_AGENT_CONTRACT_PASSED=1" in failure
-        for failure in report["guard_failures"]
-    )
+    assert any("CRM_PUBLIC_WEB_LIVE_PRE_AGENT_CONTRACT_PASSED=1" in failure for failure in report["guard_failures"])
 
 
 def test_w7g_live_runner_dry_run_reports_next_live_prerequisites(tmp_path: Path) -> None:
@@ -1941,9 +1960,7 @@ def test_person_and_company_asset_media_contract_tracks_unfinished_boundaries() 
     collections_page = (REPO_ROOT / "frontend-demo" / "src" / "pages" / "CollectionsPage.tsx").read_text(
         encoding="utf-8"
     )
-    collection_page = (REPO_ROOT / "frontend-demo" / "src" / "pages" / "CollectionPage.tsx").read_text(
-        encoding="utf-8"
-    )
+    collection_page = (REPO_ROOT / "frontend-demo" / "src" / "pages" / "CollectionPage.tsx").read_text(encoding="utf-8")
     frontend_api = (REPO_ROOT / "frontend-demo" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
     projection_crm_api_contracts = PROJECTION_CRM_API_CONTRACTS_PATH.read_text(encoding="utf-8")
     makefile = MAKEFILE_PATH.read_text(encoding="utf-8")
@@ -2049,9 +2066,9 @@ def test_person_and_company_asset_media_contract_tracks_unfinished_boundaries() 
     assert "CompanyAsset.logo_media" in _class_method_source("_collection_company_media_contract")
     assert "CompanyAssetWriter" in _class_method_source("ingest_company_logo_from_profile_experience_api")
     assert "MEDIA_ASSET_CACHE_COMMAND_TYPE" in _class_method_source("_run_media_asset_cache_command")
-    assert "media_asset_cache_owner_v1" in (
-        REPO_ROOT / "src" / "sourcing_agent" / "media_asset_owner.py"
-    ).read_text(encoding="utf-8")
+    assert "media_asset_cache_owner_v1" in (REPO_ROOT / "src" / "sourcing_agent" / "media_asset_owner.py").read_text(
+        encoding="utf-8"
+    )
     assert "company_asset_writer_v1" in (REPO_ROOT / "src" / "sourcing_agent" / "company_asset_writer.py").read_text(
         encoding="utf-8"
     )
@@ -2103,14 +2120,20 @@ def test_candidate_documents_fallback_is_migration_only_contract() -> None:
     assert "SOURCING_ENABLE_LEGACY_CANDIDATE_DOCUMENTS_FALLBACK" in review_doc
     assert "must default off" in review_doc
     assert "normal projection/public-reader paths must pass `allow_candidate_documents_fallback=False`" in review_doc
-    assert "default=False" in storage_source.split("def candidate_documents_fallback_enabled", 1)[1].split(
-        "def _control_plane_postgres_should_prefer_read",
-        1,
-    )[0]
-    assert "return False" in retrieval_source.split("def candidate_documents_fallback_enabled", 1)[1].split(
-        "def bootstrap_candidate_store_enabled",
-        1,
-    )[0]
+    assert (
+        "default=False"
+        in storage_source.split("def candidate_documents_fallback_enabled", 1)[1].split(
+            "def _control_plane_postgres_should_prefer_read",
+            1,
+        )[0]
+    )
+    assert (
+        "return False"
+        in retrieval_source.split("def candidate_documents_fallback_enabled", 1)[1].split(
+            "def bootstrap_candidate_store_enabled",
+            1,
+        )[0]
+    )
     assert "legacy_candidate_documents_fallback_enabled" in candidate_artifacts_source
     _assert_token_in_sourcing_agent_sources("allow_candidate_documents_fallback=False")
 
@@ -2241,9 +2264,7 @@ def test_migration_only_env_inventory_is_contract_visible() -> None:
             review_doc,
             next_todo,
         ),
-        "SOURCING_ENABLE_SQLITE_PROFILE_REGISTRY_FALLBACK": (
-            review_doc,
-        ),
+        "SOURCING_ENABLE_SQLITE_PROFILE_REGISTRY_FALLBACK": (review_doc,),
     }
     for env_name, sources in env_contracts.items():
         assert env_name in review_doc, env_name
@@ -2261,9 +2282,12 @@ def test_migration_only_env_inventory_is_contract_visible() -> None:
     assert "retired documentation-only evidence" in review_doc
     assert "retired storage-env name" in review_doc
     assert "new legacy/fallback env" in review_doc
-    assert "return False" in public_web_runtime_source.split(
-        "def legacy_target_public_web_execution_enabled", 1
-    )[1].split("def _is_legacy_target_public_web_owner", 1)[0]
+    assert (
+        "return False"
+        in public_web_runtime_source.split("def legacy_target_public_web_execution_enabled", 1)[1].split(
+            "def _is_legacy_target_public_web_owner", 1
+        )[0]
+    )
     assert '"migration_override_status": "removed"' in api_source
     _assert_token_in_sourcing_agent_sources('"migration_override_status": "removed"')
     assert "from .public_web_search import" not in cli_source
@@ -2412,13 +2436,16 @@ def test_w7f_crm_public_web_phase_commands_are_contract_visible() -> None:
     assert "running_command_requires_owner_specific_cancel" in review_doc
     assert "running_command_requires_owner_specific_cancel" in agent_doc
     assert "Excel intake commands delegate cancel/resume to `excel_intake_owner`" in agent_doc
-    assert "Orchestration, provider-attempt, and domain-mutation commands expose owner-specific running cancel/resume at safe checkpoints" in agent_doc
+    assert (
+        "Orchestration, provider-attempt, and domain-mutation commands expose owner-specific running cancel/resume at safe checkpoints"
+        in agent_doc
+    )
     assert "provider-attempt before provider EntityDelta/downstream evidence" in agent_doc
     assert "After those boundaries, cancellation remains fail-closed" in agent_doc
     crm_public_web_phase_cancel_source = _class_method_source(
         "_cancel_running_crm_public_web_phase_command", class_name="CrmPublicWebOwner"
     )
-    assert "from_statuses=(\"claimed\", \"running\")" in crm_public_web_phase_cancel_source
+    assert 'from_statuses=("claimed", "running")' in crm_public_web_phase_cancel_source
 
 
 def test_agent_action_registry_exposes_default_typed_command_surfaces() -> None:
@@ -2485,9 +2512,7 @@ def test_agent_callable_commands_have_activity_spine_policy() -> None:
             assert policy.requirement != ACTIVITY_SPINE_LEGACY_INTERNAL, (action_type, command_type)
             assert policy.agent_callable is True, (action_type, command_type)
 
-    continue_commands = set(
-        action_registry[ACTION_CONTINUE_ACQUISITION_RUN]["allowed_workflow_command_types"]
-    )
+    continue_commands = set(action_registry[ACTION_CONTINUE_ACQUISITION_RUN]["allowed_workflow_command_types"])
     assert "linkedin.profile_refill.submit_batch" not in continue_commands
     assert "linkedin.profile_url_terminal.record" not in continue_commands
     assert "linkedin.local_profile_delta.apply" not in continue_commands
@@ -2531,7 +2556,9 @@ def test_action_registry_allowlist_is_agent_command_exposure_gate() -> None:
         expected_status = "action_registry_allowlisted" if allowed_types else "no_workflow_command_surface"
         assert action_record["workflow_command_exposure_status"] == expected_status, action_type
         control_summary = dict(action_record.get("workflow_command_control_summary") or {})
-        assert control_summary["source_of_truth"] == "operation_runtime.ActionRegistry.allowed_workflow_command_contracts"
+        assert (
+            control_summary["source_of_truth"] == "operation_runtime.ActionRegistry.allowed_workflow_command_contracts"
+        )
         assert control_summary["fallback_status"] == "fail_closed"
         assert control_summary["command_count"] == len(allowed_types)
         assert "agent_ui_guidance" in control_summary
@@ -2573,9 +2600,7 @@ def test_action_registry_allowlist_is_agent_command_exposure_gate() -> None:
         assert "running_control_maturity" in source
         assert "running_control_gap_status" in source
         assert "running_control_surface" in source
-    assert "agentExposureStatus" in (REPO_ROOT / "frontend-demo" / "src" / "lib" / "api.ts").read_text(
-        encoding="utf-8"
-    )
+    assert "agentExposureStatus" in (REPO_ROOT / "frontend-demo" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
     frontend_api = (REPO_ROOT / "frontend-demo" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
     operations_source = FRONTEND_OPERATIONS_PAGE_PATH.read_text(encoding="utf-8")
     assert "runningControlCategory" in frontend_api
@@ -2610,9 +2635,7 @@ def test_action_registry_allowlist_status_is_total_over_owner_registry() -> None
     assert owner_registry.keys() - allowed_commands
     for command_type in owner_registry:
         expected_status = (
-            "action_registry_allowlisted"
-            if command_type in allowed_commands
-            else "not_action_registry_allowlisted"
+            "action_registry_allowlisted" if command_type in allowed_commands else "not_action_registry_allowlisted"
         )
         matching_contracts = [
             command_contract
@@ -2761,7 +2784,9 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
             continue
         assert running_state["can_resume"] is False, command_type
         assert record["running_control_maturity"] == "fail_closed_with_upgrade_requirements", command_type
-        assert record["running_control_gap_status"] == "accepted_fail_closed_pending_owner_specific_control", command_type
+        assert record["running_control_gap_status"] == "accepted_fail_closed_pending_owner_specific_control", (
+            command_type
+        )
         assert running_state["disabled_reasons"]["cancel"] == "running_command_requires_owner_specific_cancel"
         assert running_state["disabled_reasons"]["resume"] == "running_command_requires_owner_specific_resume"
         assert policy.running_cancel_blocked_reason, command_type
@@ -2827,7 +2852,9 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
         assert phase_policy.running_cancel_supported is True, command_type
         assert phase_policy.running_cancel_delegate == "crm_public_web_owner.cancel_crm_public_web_run", command_type
         assert phase_policy.running_resume_supported is True, command_type
-        assert phase_policy.running_resume_delegate == "crm_public_web_owner.resume_crm_public_web_phase_command", command_type
+        assert phase_policy.running_resume_delegate == "crm_public_web_owner.resume_crm_public_web_phase_command", (
+            command_type
+        )
         assert phase_policy.running_resume_prerequisites == (
             "payload.run_id",
             "crm_public_web_run_exists",
@@ -2838,7 +2865,9 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
         phase_record = phase_policy.to_record()
         if command_type in {CRM_PUBLIC_WEB_SEARCH_SUBMIT_COMMAND_TYPE, CRM_PUBLIC_WEB_SEARCH_POLL_FETCH_COMMAND_TYPE}:
             assert phase_record["provider_after_start_control_status"] == "active", command_type
-            assert phase_record["provider_after_start_control_mode"] == "poll_cancel_late_result_quarantine", command_type
+            assert phase_record["provider_after_start_control_mode"] == "poll_cancel_late_result_quarantine", (
+                command_type
+            )
             assert phase_record["provider_after_start_control_blocked_reason"] == "", command_type
         elif command_type in {
             CRM_PUBLIC_WEB_DOCUMENTS_FETCH_COMMAND_TYPE,
@@ -2878,10 +2907,7 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
                 "command_lease_expired_or_force",
             )
             assert orchestration_policy.running_resume_supported is True
-            assert (
-                orchestration_policy.running_resume_delegate
-                == "workflow_orchestrator.resume_orchestration_command"
-            )
+            assert orchestration_policy.running_resume_delegate == "workflow_orchestrator.resume_orchestration_command"
             continue
         if command_type == ACQUISITION_PLAN_COMMIT_COMMAND_TYPE:
             assert orchestration_policy.to_record()["running_control_maturity"] == "owner_specific_cancel_resume"
@@ -2898,10 +2924,7 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
                 "acquisition_run_cancel_checkpoint",
             )
             assert orchestration_policy.running_resume_supported is True
-            assert (
-                orchestration_policy.running_resume_delegate
-                == "workflow_orchestrator.resume_orchestration_command"
-            )
+            assert orchestration_policy.running_resume_delegate == "workflow_orchestrator.resume_orchestration_command"
             continue
         if command_type == ACQUISITION_SCALE_PLAN_COMMAND_TYPE:
             assert orchestration_policy.to_record()["running_control_maturity"] == "owner_specific_cancel_resume"
@@ -2919,10 +2942,7 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
                 "activity_lane_cancel_checkpoint",
             )
             assert orchestration_policy.running_resume_supported is True
-            assert (
-                orchestration_policy.running_resume_delegate
-                == "workflow_orchestrator.resume_orchestration_command"
-            )
+            assert orchestration_policy.running_resume_delegate == "workflow_orchestrator.resume_orchestration_command"
             continue
         if command_type == CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE:
             assert orchestration_policy.to_record()["running_control_maturity"] == "owner_specific_cancel_resume"
@@ -2939,10 +2959,7 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
                 "batch_run_cancel_checkpoint",
             )
             assert orchestration_policy.running_resume_supported is True
-            assert (
-                orchestration_policy.running_resume_delegate
-                == "workflow_orchestrator.resume_orchestration_command"
-            )
+            assert orchestration_policy.running_resume_delegate == "workflow_orchestrator.resume_orchestration_command"
             continue
         if command_type == ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE:
             assert orchestration_policy.to_record()["running_control_maturity"] == "owner_specific_cancel_resume"
@@ -2958,19 +2975,19 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
                 "plan_review_session_cancel_checkpoint",
             )
             assert orchestration_policy.running_resume_supported is True
-            assert (
-                orchestration_policy.running_resume_delegate
-                == "workflow_orchestrator.resume_orchestration_command"
-            )
+            assert orchestration_policy.running_resume_delegate == "workflow_orchestrator.resume_orchestration_command"
             continue
-        assert orchestration_policy.to_record()["running_control_maturity"] == "owner_specific_resume_only", command_type
-        assert orchestration_policy.to_record()["running_control_gap_status"] == "partial_cancel_gap_reported", command_type
+        assert orchestration_policy.to_record()["running_control_maturity"] == "owner_specific_resume_only", (
+            command_type
+        )
+        assert orchestration_policy.to_record()["running_control_gap_status"] == "partial_cancel_gap_reported", (
+            command_type
+        )
         assert orchestration_policy.running_cancel_supported is False, command_type
         assert orchestration_policy.running_resume_supported is True, command_type
-        assert (
-            orchestration_policy.running_resume_delegate
-            == "workflow_orchestrator.resume_orchestration_command"
-        ), command_type
+        assert orchestration_policy.running_resume_delegate == "workflow_orchestrator.resume_orchestration_command", (
+            command_type
+        )
         assert orchestration_policy.running_resume_prerequisites == (
             "workflow_command_status_claimed_or_running",
             "command_lease_expired_or_force",
@@ -2993,7 +3010,9 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
         ), command_type
         assert provider_policy.to_record()["provider_after_start_control_blocked_reason"] == "", command_type
         assert provider_policy.to_record()["provider_after_start_control_upgrade_requirements"] == [], command_type
-        assert provider_policy.to_record()["module_state_mutated_on_provider_after_start_control"] is False, command_type
+        assert provider_policy.to_record()["module_state_mutated_on_provider_after_start_control"] is False, (
+            command_type
+        )
         assert provider_policy.running_cancel_supported is True, command_type
         assert provider_policy.running_cancel_prerequisites == (
             "workflow_command_status_claimed_or_running",
@@ -3005,8 +3024,7 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
         assert provider_policy.running_resume_supported is True, command_type
         if command_type == COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE:
             assert (
-                provider_policy.running_cancel_delegate
-                == "company_public_web_owner.cancel_or_poll_stop_source_collect"
+                provider_policy.running_cancel_delegate == "company_public_web_owner.cancel_or_poll_stop_source_collect"
             )
             assert provider_policy.running_resume_delegate == "company_public_web_owner.resume_source_collect"
             assert provider_policy.running_resume_prerequisites == (
@@ -3020,8 +3038,7 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
                 == "workflow_provider_owner.cancel_or_poll_stop_provider_attempt"
             ), command_type
             assert (
-                provider_policy.running_resume_delegate
-                == "workflow_provider_owner.resume_provider_attempt_command"
+                provider_policy.running_resume_delegate == "workflow_provider_owner.resume_provider_attempt_command"
             ), command_type
             assert provider_policy.running_resume_prerequisites == (
                 "workflow_command_status_claimed_or_running",
@@ -3111,10 +3128,9 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
         assert domain_record["running_control_maturity"] == "owner_specific_cancel_resume", command_type
         assert domain_record["running_control_gap_status"] == "closed", command_type
         assert domain_policy.running_cancel_supported is True, command_type
-        assert (
-            domain_policy.running_cancel_delegate
-            == "workflow_domain_owner.cancel_before_domain_mutation_attempt"
-        ), command_type
+        assert domain_policy.running_cancel_delegate == "workflow_domain_owner.cancel_before_domain_mutation_attempt", (
+            command_type
+        )
         assert domain_policy.running_cancel_prerequisites == (
             "workflow_command_status_claimed_or_running",
             "no_domain_mutation_activity_attempt_started",
@@ -3123,10 +3139,9 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
             "command_lease_expired_or_force",
         ), command_type
         assert domain_policy.running_resume_supported is True, command_type
-        assert (
-            domain_policy.running_resume_delegate
-            == "workflow_domain_owner.resume_domain_mutation_command"
-        ), command_type
+        assert domain_policy.running_resume_delegate == "workflow_domain_owner.resume_domain_mutation_command", (
+            command_type
+        )
         assert domain_policy.running_resume_prerequisites == (
             "workflow_command_status_claimed_or_running",
             "command_lease_expired_or_force",
@@ -3154,8 +3169,7 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
     )
     assert profile_fetch_activity_policy.running_resume_supported is True
     assert (
-        profile_fetch_activity_policy.running_resume_delegate
-        == "workflow_domain_owner.resume_domain_mutation_command"
+        profile_fetch_activity_policy.running_resume_delegate == "workflow_domain_owner.resume_domain_mutation_command"
     )
     company_public_web_policy = workflow_command_control_policy(
         command_type=COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
@@ -3186,8 +3200,7 @@ def test_owner_registry_running_command_control_is_explicit() -> None:
     assert company_source_policy.to_record()["running_control_gap_status"] == "closed"
     assert company_source_policy.running_cancel_supported is True
     assert (
-        company_source_policy.running_cancel_delegate
-        == "company_public_web_owner.cancel_or_poll_stop_source_collect"
+        company_source_policy.running_cancel_delegate == "company_public_web_owner.cancel_or_poll_stop_source_collect"
     )
     assert company_source_policy.running_cancel_prerequisites == (
         "workflow_command_status_claimed_or_running",
@@ -3274,7 +3287,8 @@ def test_operation_run_control_state_is_contract_owned() -> None:
 
     failed_state = operation_run_control_state(
         operation_status="failed",
-        action_status="queued",
+        action_status="failed",
+        action_approval_status="not_required",
         operation_phase="failed",
     ).to_record()
     assert failed_state["can_retry"] is True
@@ -3282,10 +3296,11 @@ def test_operation_run_control_state_is_contract_owned() -> None:
     cancelled_action_state = operation_run_control_state(
         operation_status="cancelled",
         action_status="cancelled",
+        action_approval_status="rejected",
         operation_phase="cancelled",
     ).to_record()
     assert cancelled_action_state["can_retry"] is False
-    assert cancelled_action_state["disabled_reasons"]["retry"] == "linked_action_terminal"
+    assert cancelled_action_state["disabled_reasons"]["retry"] == "linked_action_rejected"
 
     for source in (review_doc, frontend_doc, agent_doc):
         assert "operation_runtime.operation_run_control_state" in source
@@ -3379,12 +3394,17 @@ def test_frontend_contract_exposes_operation_command_activity_spine_policy() -> 
     assert "running_resume_supported: asOptionalBoolean(source.running_resume_supported)" in adapter_source
     assert "unsupported_running_resume_reason" in types_source
     assert "unsupported_running_resume_reason" in schema_source
-    assert "unsupported_running_resume_reason: asOptionalString(source.unsupported_running_resume_reason)" in adapter_source
+    assert (
+        "unsupported_running_resume_reason: asOptionalString(source.unsupported_running_resume_reason)"
+        in adapter_source
+    )
     assert '"display_contract": { "$ref": "#/$defs/WorkflowCommandDisplayContract" }' in control_response_schema
     assert '"control_state": { "$ref": "#/$defs/WorkflowCommandControlState" }' in control_response_schema
     assert "mapWorkflowCommandDisplayContract(source.display_contract)" in control_response_adapter
     assert "mapWorkflowCommandControlState(source.control_state)" in control_response_adapter
-    assert '"activity_spine_policy": { "$ref": "#/$defs/WorkflowCommandActivitySpinePolicy" }' in control_response_schema
+    assert (
+        '"activity_spine_policy": { "$ref": "#/$defs/WorkflowCommandActivitySpinePolicy" }' in control_response_schema
+    )
     assert "mapWorkflowCommandActivitySpinePolicy(source.activity_spine_policy)" in control_response_adapter
     assert "execution_summary?: WorkflowCommandExecutionSummary" in types_source
     assert '"execution_summary": { "$ref": "#/$defs/WorkflowCommandExecutionSummary" }' in schema_source
@@ -3413,14 +3433,22 @@ def test_frontend_contract_exposes_operation_command_activity_spine_policy() -> 
     assert "Status-specific command controls must also be explicit" in review_doc
     assert "workflow_command_control_state" in review_doc
     assert "workflow_command_control_state" in frontend_doc
-    assert "plus its `display_contract`, `control_policy`, `control_state`, `activity_spine_policy`, and `fallback_status=fail_closed`" in review_doc
-    assert "Rows include `control_target` back to the owning workflow command plus its `display_contract`, `control_policy`, and `activity_spine_policy`" in agent_doc
-    assert "Discovery-lane read models expose the same command-owned `control_target` shape" in agent_doc
-    assert "携带 command-owned `display_contract`、`control_policy`、`control_state`、`activity_spine_policy` 和 `fallback_status=fail_closed`" in frontend_doc
-    assert "不得从 activity、attempt、delta、lane 字段推导展示文案或控制能力" in frontend_doc
     assert (
-        '"display_contract": self._workflow_command_display_contract_record'
-        in _class_method_source("_workflow_command_control_target_record")
+        "plus its `display_contract`, `control_policy`, `control_state`, `activity_spine_policy`, and `fallback_status=fail_closed`"
+        in review_doc
+    )
+    assert (
+        "Rows include `control_target` back to the owning workflow command plus its `display_contract`, `control_policy`, and `activity_spine_policy`"
+        in agent_doc
+    )
+    assert "Discovery-lane read models expose the same command-owned `control_target` shape" in agent_doc
+    assert (
+        "携带 command-owned `display_contract`、`control_policy`、`control_state`、`activity_spine_policy` 和 `fallback_status=fail_closed`"
+        in frontend_doc
+    )
+    assert "不得从 activity、attempt、delta、lane 字段推导展示文案或控制能力" in frontend_doc
+    assert '"display_contract": self._workflow_command_display_contract_record' in _class_method_source(
+        "_workflow_command_control_target_record"
     )
     assert "响应顶层 `activity_spine_policy`" in frontend_doc
     assert "正常 command registry 不应出现" in frontend_doc
@@ -3626,11 +3654,21 @@ def test_operations_page_is_operation_api_only_control_surface() -> None:
 
     operation_helper_block = "\n".join(
         [
-            _typescript_block(api_source, "export async function listOperationRuns", "export async function listOperationActions"),
-            _typescript_block(api_source, "export async function listOperationActions", "async function postOperationActionDecision"),
-            _typescript_block(api_source, "async function postOperationActionDecision", "export function approveOperationAction"),
-            _typescript_block(api_source, "export function approveOperationAction", "export async function getOperationRunProvenance"),
-            _typescript_block(api_source, "export async function getOperationRunProvenance", "function extractCandidateArray"),
+            _typescript_block(
+                api_source, "export async function listOperationRuns", "export async function listOperationActions"
+            ),
+            _typescript_block(
+                api_source, "export async function listOperationActions", "async function postOperationActionDecision"
+            ),
+            _typescript_block(
+                api_source, "async function postOperationActionDecision", "export function approveOperationAction"
+            ),
+            _typescript_block(
+                api_source, "export function approveOperationAction", "export async function getOperationRunProvenance"
+            ),
+            _typescript_block(
+                api_source, "export async function getOperationRunProvenance", "function extractCandidateArray"
+            ),
         ]
     )
     for endpoint in re.findall(r'["`](/api/[^"`]+)', operation_helper_block):
@@ -3709,8 +3747,14 @@ def test_frontend_public_web_uses_crm_canonical_endpoints_only() -> None:
         assert "/api/target-candidates/public-web" not in block
     assert "function requireCrmPublicWebWorkspaceId" in contract_adapter_source
     assert "CRM Public Web body-style requests require workspace_id." in contract_adapter_source
-    assert "const workspaceId = requireCrmPublicWebWorkspaceId(filters.workspace_id ?? filters.workspaceId)" in contract_adapter_source
-    assert "const workspaceId = requireCrmPublicWebWorkspaceId(payload.workspace_id ?? payload.workspaceId)" in contract_adapter_source
+    assert (
+        "const workspaceId = requireCrmPublicWebWorkspaceId(filters.workspace_id ?? filters.workspaceId)"
+        in contract_adapter_source
+    )
+    assert (
+        "const workspaceId = requireCrmPublicWebWorkspaceId(payload.workspace_id ?? payload.workspaceId)"
+        in contract_adapter_source
+    )
     assert "workspace_id: workspaceId" in contract_adapter_source
     batch_mapper_block = _typescript_block(
         contract_adapter_source,
@@ -3726,8 +3770,13 @@ def test_frontend_public_web_uses_crm_canonical_endpoints_only() -> None:
     assert "workspace_id: asOptionalString(source.workspace_id)" in run_mapper_block
     assert "phase_commands: source.phase_commands ? asJsonObject(source.phase_commands) : {}" in run_mapper_block
     assert "phase_command_display_line: asOptionalString(source.phase_command_display_line)" in run_mapper_block
-    assert "run_control_state: source.run_control_state ? asJsonObject(source.run_control_state) : {}" in run_mapper_block
-    assert "run_display_contract: source.run_display_contract ? asJsonObject(source.run_display_contract) : {}" in run_mapper_block
+    assert (
+        "run_control_state: source.run_control_state ? asJsonObject(source.run_control_state) : {}" in run_mapper_block
+    )
+    assert (
+        "run_display_contract: source.run_display_contract ? asJsonObject(source.run_display_contract) : {}"
+        in run_mapper_block
+    )
     assert "created_at: asOptionalString(source.created_at)" in run_mapper_block
     batch_contract_block = _typescript_block(
         contract_types_source,
@@ -3867,7 +3916,7 @@ def test_excel_intake_owner_is_activity_spine_visible() -> None:
     assert "activity_type=EXCEL_INTAKE_RUN_COMMAND_TYPE" in _class_method_source(
         "_run_excel_intake_run_command", class_name="ExcelIntakeOwner"
     )
-    assert "entity_type=\"excel_intake_job\"" in _class_method_source(
+    assert 'entity_type="excel_intake_job"' in _class_method_source(
         "_record_excel_intake_command_cancelled_terminal", class_name="ExcelIntakeOwner"
     )
     find_class_method("_raise_if_excel_intake_command_cancelled", class_name="ExcelIntakeOwner")

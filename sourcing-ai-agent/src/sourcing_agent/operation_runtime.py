@@ -6,15 +6,16 @@ from hashlib import sha1
 from typing import Any
 
 from sourcing_agent.durable_runtime import (
-    ACTIVITY_SPINE_LEGACY_INTERNAL,
     ACQUISITION_RUN_CREATE_COMMAND_TYPE,
-    COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
+    ACTIVITY_SPINE_LEGACY_INTERNAL,
     COLLECTION_AUTHORITATIVE_MERGE_COMMAND_TYPE,
+    COMPANY_PUBLIC_WEB_REFRESH_COMMAND_TYPE,
     CRM_NOTE_ADD_COMMAND_TYPE,
     CRM_PUBLIC_WEB_QUEUE_BATCH_COMMAND_TYPE,
     CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE,
     CRM_RECORD_UPDATE_COMMAND_TYPE,
     CRM_TASK_CREATE_COMMAND_TYPE,
+    DEFAULT_COMMAND_OWNER_REGISTRY,
     EXCEL_INTAKE_RUN_COMMAND_TYPE,
     EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE,
     EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
@@ -24,14 +25,12 @@ from sourcing_agent.durable_runtime import (
     LINKEDIN_PROFILE_TERMINAL_ADMIT_COMMAND_TYPE,
     PROJECTION_PERSON_SEARCH_INDEX_BUILD_COMMAND_TYPE,
     PROJECTION_PROFILE_ADMISSION_APPLY_COMMAND_TYPE,
-    DEFAULT_COMMAND_OWNER_REGISTRY,
     default_readiness_effect_for_command_type,
     default_stage_id_for_command_type,
     workflow_command_activity_spine_policy,
     workflow_command_control_policy,
     workflow_command_display_contract,
 )
-
 
 ACTION_PLAN_ACQUISITION = "plan_acquisition"
 ACTION_START_ACQUISITION_RUN = "start_acquisition_run"
@@ -202,10 +201,10 @@ class ActionRegistry:
                 default_gap_status = gap_status
         command_count = len(command_contracts)
         fail_closed_count = int(maturity_counts.get("fail_closed_with_upgrade_requirements", 0))
-        owner_specific_count = int(maturity_counts.get("owner_specific_cancel_resume", 0)) + int(
-            maturity_counts.get("owner_specific_cancel_only", 0)
-        ) + int(
-            maturity_counts.get("owner_specific_resume_only", 0)
+        owner_specific_count = (
+            int(maturity_counts.get("owner_specific_cancel_resume", 0))
+            + int(maturity_counts.get("owner_specific_cancel_only", 0))
+            + int(maturity_counts.get("owner_specific_resume_only", 0))
         )
         return {
             "source_of_truth": "operation_runtime.ActionRegistry.allowed_workflow_command_contracts",
@@ -461,6 +460,13 @@ class OperationSubmissionResult:
         return bool(self.operation_run) and self.action.get("status") != "approval_required"
 
 
+class OperationRuntimeStateConflict(RuntimeError):
+    def __init__(self, reason: str, record: dict[str, Any]) -> None:
+        self.reason = str(reason or "operation_runtime_state_conflict").strip()
+        self.record = dict(record or {})
+        super().__init__(self.reason)
+
+
 @dataclass(frozen=True)
 class OperationRunControlState:
     operation_status: str
@@ -495,22 +501,67 @@ class OperationRunControlState:
         }
 
 
+def operation_action_retry_eligibility(
+    *,
+    operation_status: str,
+    operation_run_id: str = "",
+    action_status: str = "",
+    action_approval_status: str = "",
+    action_retry_operation_run_id: str = "",
+    requested_retry_operation_run_id: str = "",
+) -> tuple[bool, str]:
+    normalized_operation_status = str(operation_status or "").strip()
+    normalized_operation_run_id = str(operation_run_id or "").strip()
+    normalized_action_status = str(action_status or "").strip()
+    normalized_approval_status = str(action_approval_status or "").strip()
+    normalized_existing_retry_id = str(action_retry_operation_run_id or "").strip()
+    normalized_requested_retry_id = str(requested_retry_operation_run_id or "").strip()
+    if normalized_operation_status == "completed":
+        return False, "completed_operation_cannot_retry"
+    if normalized_operation_status not in {"failed", "cancelled"}:
+        return False, "retry_requires_failed_or_cancelled_operation"
+    if normalized_approval_status == "rejected":
+        return False, "linked_action_rejected"
+    if not normalized_action_status:
+        return False, "linked_action_missing"
+    if normalized_existing_retry_id and normalized_existing_retry_id not in {
+        normalized_operation_run_id,
+        normalized_requested_retry_id,
+    }:
+        return False, "linked_action_retry_already_planned"
+    if normalized_action_status == "queued":
+        return True, ""
+    if normalized_action_status == normalized_operation_status:
+        return True, ""
+    return False, "linked_action_not_retryable"
+
+
 def operation_run_control_state(
     *,
     operation_status: str,
+    operation_run_id: str = "",
     action_status: str = "",
+    action_approval_status: str = "",
+    action_retry_operation_run_id: str = "",
     operation_phase: str = "",
 ) -> OperationRunControlState:
     normalized_status = str(operation_status or "").strip() or "unknown"
     normalized_action_status = str(action_status or "").strip()
     normalized_phase = str(operation_phase or "").strip()
+    linked_action_present = bool(normalized_action_status)
     operation_terminal = normalized_status in OPERATION_RUN_TERMINAL_STATUSES
     action_terminal = normalized_action_status in OPERATION_ACTION_TERMINAL_STATUSES
+    can_retry, retry_disabled_reason = operation_action_retry_eligibility(
+        operation_status=normalized_status,
+        operation_run_id=operation_run_id,
+        action_status=normalized_action_status,
+        action_approval_status=action_approval_status,
+        action_retry_operation_run_id=action_retry_operation_run_id,
+    )
 
-    can_dispatch = normalized_status == "queued" and not action_terminal
-    can_cancel = not operation_terminal and not action_terminal
-    can_retry = normalized_status in {"failed", "cancelled"} and not action_terminal
-    can_resume = not operation_terminal and not action_terminal
+    can_dispatch = linked_action_present and normalized_status == "queued" and not action_terminal
+    can_cancel = linked_action_present and not operation_terminal and not action_terminal
+    can_resume = linked_action_present and not operation_terminal and not action_terminal
 
     allowed_actions = tuple(
         action
@@ -525,28 +576,23 @@ def operation_run_control_state(
     disabled_reasons: dict[str, str] = {}
     if not can_dispatch:
         disabled_reasons["dispatch"] = (
-            "linked_action_terminal"
-            if action_terminal
-            else "dispatch_requires_queued_operation"
+            "linked_action_missing"
+            if not linked_action_present
+            else ("linked_action_terminal" if action_terminal else "dispatch_requires_queued_operation")
         )
     if not can_resume:
         disabled_reasons["resume"] = (
-            "linked_action_terminal"
-            if action_terminal
-            else "terminal_operation_cannot_resume"
+            "linked_action_missing"
+            if not linked_action_present
+            else ("linked_action_terminal" if action_terminal else "terminal_operation_cannot_resume")
         )
     if not can_retry:
-        if action_terminal:
-            disabled_reasons["retry"] = "linked_action_terminal"
-        elif normalized_status == "completed":
-            disabled_reasons["retry"] = "completed_operation_cannot_retry"
-        else:
-            disabled_reasons["retry"] = "retry_requires_failed_or_cancelled_operation"
+        disabled_reasons["retry"] = retry_disabled_reason
     if not can_cancel:
         disabled_reasons["cancel"] = (
-            "linked_action_terminal"
-            if action_terminal
-            else "terminal_operation_cannot_cancel"
+            "linked_action_missing"
+            if not linked_action_present
+            else ("linked_action_terminal" if action_terminal else "terminal_operation_cannot_cancel")
         )
 
     return OperationRunControlState(
@@ -636,7 +682,7 @@ class OperationRuntimeWriter:
         )
         approval_status = APPROVAL_REQUIRED if spec.requires_approval else APPROVAL_NOT_REQUIRED
         action_status = "approval_required" if spec.requires_approval else "queued"
-        action = self.store.upsert_agent_action(
+        action = self.store.repos.workflow_runtime.upsert_action(
             action_id=action_id,
             workspace_id=normalized_workspace_id,
             conversation_id=conversation_id,
@@ -657,7 +703,7 @@ class OperationRuntimeWriter:
             },
         )
         event_type = "ActionApprovalRequired" if spec.requires_approval else "AgentActionQueued"
-        action_event = self.store.append_operation_event(
+        action_event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=normalized_workspace_id,
             event_stream_id=action_id,
             action_id=action_id,
@@ -681,7 +727,7 @@ class OperationRuntimeWriter:
             operation_type=spec.operation_type,
             idempotency_key=normalized_idempotency,
         )
-        operation_run = self.store.upsert_operation_run(
+        operation_run = self.store.repos.workflow_runtime.upsert_operation(
             operation_run_id=operation_id,
             workspace_id=normalized_workspace_id,
             action_id=action_id,
@@ -697,7 +743,7 @@ class OperationRuntimeWriter:
                 "source_action_type": spec.action_type,
             },
         )
-        operation_event = self.store.append_operation_event(
+        operation_event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=normalized_workspace_id,
             event_stream_id=operation_id,
             operation_run_id=operation_id,
@@ -728,7 +774,7 @@ class OperationRuntimeWriter:
         source: str = "operation_runtime",
         approval_payload: dict[str, Any] | None = None,
     ) -> OperationSubmissionResult:
-        action = self.store.get_agent_action(action_id)
+        action = self.store.repos.workflow_runtime.get_action(action_id)
         if not action:
             raise KeyError(f"agent action not found: {action_id}")
         if action.get("approval_status") == "rejected":
@@ -737,13 +783,18 @@ class OperationRuntimeWriter:
             raise ValueError(f"terminal action cannot be approved: {action.get('status')}")
         workspace_id = str(action.get("workspace_id") or "default").strip() or "default"
         idempotency_key = str(action.get("idempotency_key") or "").strip()
-        action = self.store.update_agent_action_state(
+        action = self.store.repos.workflow_runtime.update_action_state(
             str(action.get("action_id") or ""),
             status="queued",
             approval_status="approved",
             metadata_patch={"approval": dict(approval_payload or {}), "approval_actor": actor},
         )
-        approval_event = self.store.append_operation_event(
+        if (
+            str(action.get("status") or "").strip() != "queued"
+            or str(action.get("approval_status") or "").strip() != "approved"
+        ):
+            raise OperationRuntimeStateConflict("operation_action_approval_conflict", action)
+        approval_event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=workspace_id,
             event_stream_id=str(action.get("action_id") or ""),
             action_id=str(action.get("action_id") or ""),
@@ -759,7 +810,7 @@ class OperationRuntimeWriter:
             operation_type=str(action.get("operation_type") or ""),
             idempotency_key=idempotency_key,
         )
-        operation_run = self.store.upsert_operation_run(
+        operation_run = self.store.repos.workflow_runtime.upsert_operation(
             operation_run_id=operation_id,
             workspace_id=workspace_id,
             action_id=str(action.get("action_id") or ""),
@@ -775,7 +826,7 @@ class OperationRuntimeWriter:
                 "source_action_type": action.get("action_type"),
             },
         )
-        operation_event = self.store.append_operation_event(
+        operation_event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=workspace_id,
             event_stream_id=operation_id,
             operation_run_id=operation_id,
@@ -807,28 +858,28 @@ class OperationRuntimeWriter:
         source: str = "operation_runtime",
         reason: str = "",
     ) -> dict[str, Any]:
-        action = self.store.get_agent_action(action_id)
+        action = self.store.repos.workflow_runtime.get_action(action_id)
         if not action:
             raise KeyError(f"agent action not found: {action_id}")
-        if action.get("status") in {"completed", "cancelled", "failed"}:
+        action_status = str(action.get("status") or "").strip()
+        approval_status = str(action.get("approval_status") or "").strip()
+        if action_status in OPERATION_ACTION_TERMINAL_STATUSES and not (
+            action_status == "cancelled" and approval_status == "rejected"
+        ):
             return action
-        next_action = self.store.update_agent_action_state(
+        control_result = self.store.repos.workflow_runtime.reject_action_with_event(
             str(action.get("action_id") or ""),
-            status="cancelled",
-            approval_status="rejected",
+            expected_status=action_status,
+            workspace_id=str(action.get("workspace_id") or "default").strip() or "default",
             metadata_patch={"rejection_reason": str(reason or "").strip()},
-        )
-        self.store.append_operation_event(
-            workspace_id=str(next_action.get("workspace_id") or "default").strip() or "default",
-            event_stream_id=str(next_action.get("action_id") or ""),
-            action_id=str(next_action.get("action_id") or ""),
-            event_family="operation_event",
-            event_type="ActionRejected",
-            idempotency_key=f"{next_action.get('idempotency_key')}:ActionRejected",
+            event_idempotency_key=f"{action.get('idempotency_key')}:ActionRejected",
             actor=actor,
             source=source,
-            payload={"reason": str(reason or "").strip(), "module_state_mutated": False},
+            event_payload={"reason": str(reason or "").strip(), "module_state_mutated": False},
         )
+        next_action = dict(control_result.get("action") or {})
+        if str(control_result.get("outcome") or "").strip() == "not_found" or not next_action:
+            raise KeyError(f"agent action not found: {action_id}")
         return next_action
 
     def cancel_operation(
@@ -839,37 +890,32 @@ class OperationRuntimeWriter:
         source: str = "operation_runtime",
         reason: str = "",
     ) -> dict[str, Any]:
-        operation = self.store.get_operation_run(operation_run_id)
+        operation = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation:
             raise KeyError(f"operation run not found: {operation_run_id}")
-        if operation.get("status") in {"completed", "failed", "cancelled"}:
+        operation_status = str(operation.get("status") or "").strip()
+        if operation_status in OPERATION_RUN_TERMINAL_STATUSES and operation_status != "cancelled":
             return operation
-        next_operation = self.store.update_operation_run_state(
+        action_id = str(operation.get("action_id") or "")
+        control_result = self.store.repos.workflow_runtime.cancel_operation_with_event(
             str(operation.get("operation_run_id") or ""),
-            status="cancelled",
+            expected_status=operation_status,
+            action_id=action_id,
+            workspace_id=str(operation.get("workspace_id") or "default").strip() or "default",
             progress_patch={"phase": "cancelled", "reason": str(reason or "").strip()},
             result_ref_patch={},
             metadata_patch={"cancelled_by": actor},
-        )
-        action_id = str(next_operation.get("action_id") or "")
-        if action_id:
-            self.store.update_agent_action_state(
-                action_id,
-                status="cancelled",
-                metadata_patch={"cancelled_operation_run_id": next_operation.get("operation_run_id")},
-            )
-        self.store.append_operation_event(
-            workspace_id=str(next_operation.get("workspace_id") or "default").strip() or "default",
-            event_stream_id=str(next_operation.get("operation_run_id") or ""),
-            operation_run_id=str(next_operation.get("operation_run_id") or ""),
-            action_id=action_id,
-            event_family="operation_event",
-            event_type="OperationCancelled",
-            idempotency_key=f"{next_operation.get('idempotency_key')}:OperationCancelled",
+            linked_action_metadata_patch={
+                "cancelled_operation_run_id": operation.get("operation_run_id"),
+            },
+            event_idempotency_key=f"{operation.get('idempotency_key')}:OperationCancelled",
             actor=actor,
             source=source,
-            payload={"reason": str(reason or "").strip(), "module_state_mutated": False},
+            event_payload={"reason": str(reason or "").strip(), "module_state_mutated": False},
         )
+        next_operation = dict(control_result.get("operation") or {})
+        if str(control_result.get("outcome") or "").strip() == "not_found" or not next_operation:
+            raise KeyError(f"operation run not found: {operation_run_id}")
         return next_operation
 
     def retry_operation(
@@ -881,7 +927,7 @@ class OperationRuntimeWriter:
         reason: str = "",
         idempotency_key: str = "",
     ) -> dict[str, Any]:
-        operation = self.store.get_operation_run(operation_run_id)
+        operation = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation:
             raise KeyError(f"operation run not found: {operation_run_id}")
         status = str(operation.get("status") or "").strip()
@@ -890,16 +936,110 @@ class OperationRuntimeWriter:
         if status not in {"failed", "cancelled"}:
             raise ValueError(f"operation retry requires failed or cancelled status, got {status!r}")
         action_id = str(operation.get("action_id") or "").strip()
-        action = self.store.get_agent_action(action_id) if action_id else {}
-        if action and str(action.get("status") or "").strip() in {"completed", "cancelled"}:
-            raise ValueError(f"terminal action cannot be retried: {action.get('status')}")
+        action = self.store.repos.workflow_runtime.get_action(action_id) if action_id else {}
+        action_status = str(action.get("status") or "").strip()
+        action_approval_status = str(action.get("approval_status") or "").strip()
         workspace_id = str(operation.get("workspace_id") or "default").strip() or "default"
         retry_key = str(idempotency_key or "").strip() or f"{operation.get('idempotency_key')}:retry"
+        parent_operation_run_id = str(operation.get("operation_run_id") or "").strip()
         retry_run_id = operation_retry_run_id_for(
-            parent_operation_run_id=str(operation.get("operation_run_id") or ""),
+            parent_operation_run_id=parent_operation_run_id,
             idempotency_key=retry_key,
         )
-        retry_run = self.store.upsert_operation_run(
+        persisted_retry_key = f"operation_retry:{parent_operation_run_id}:{retry_run_id}"
+        action_workspace_id = str(action.get("workspace_id") or "default").strip() or "default"
+        if not action:
+            raise ValueError("linked_action_missing")
+        if action and action_workspace_id != workspace_id:
+            raise OperationRuntimeStateConflict("operation_run_retry_workspace_conflict", action)
+        existing_retry_run = self.store.repos.workflow_runtime.get_operation(retry_run_id)
+        if existing_retry_run:
+            retry_metadata = dict(existing_retry_run.get("metadata") or {})
+            if (
+                str(existing_retry_run.get("operation_run_id") or "").strip() != retry_run_id
+                or (str(existing_retry_run.get("workspace_id") or "default").strip() or "default") != workspace_id
+                or str(existing_retry_run.get("action_id") or "").strip() != action_id
+                or str(existing_retry_run.get("owner_module") or "").strip()
+                != str(operation.get("owner_module") or "").strip()
+                or str(existing_retry_run.get("operation_type") or "").strip()
+                != str(operation.get("operation_type") or "").strip()
+                or str(existing_retry_run.get("idempotency_key") or "").strip() != persisted_retry_key
+                or str(retry_metadata.get("parent_operation_run_id") or "").strip() != parent_operation_run_id
+            ):
+                raise OperationRuntimeStateConflict(
+                    "operation_run_retry_identity_conflict",
+                    existing_retry_run,
+                )
+            expected_events = (
+                (
+                    parent_operation_run_id,
+                    f"{persisted_retry_key}:OperationRetryRequested",
+                    "OperationRetryRequested",
+                    parent_operation_run_id,
+                ),
+                (
+                    retry_run_id,
+                    f"{persisted_retry_key}:OperationRunQueued",
+                    "OperationRunQueued",
+                    retry_run_id,
+                ),
+            )
+            replay_events: list[dict[str, Any]] = []
+            for stream_id, event_key, event_type, event_operation_run_id in expected_events:
+                matching_events = [
+                    event
+                    for event in self.store.repos.workflow_runtime.list_operation_events(stream_id)
+                    if str(event.get("idempotency_key") or "").strip() == event_key
+                ]
+                if not matching_events:
+                    continue
+                event = matching_events[0]
+                if (
+                    len(matching_events) != 1
+                    or str(event.get("event_stream_id") or "").strip() != stream_id
+                    or str(event.get("event_type") or "").strip() != event_type
+                    or str(event.get("operation_run_id") or "").strip() != event_operation_run_id
+                    or str(event.get("action_id") or "").strip() != action_id
+                    or (str(event.get("workspace_id") or "default").strip() or "default") != workspace_id
+                ):
+                    raise OperationRuntimeStateConflict(
+                        "operation_run_retry_event_identity_conflict",
+                        event,
+                    )
+                replay_events.append(event)
+            return {
+                "parent_operation_run": operation,
+                "operation_run": existing_retry_run,
+                "events": replay_events,
+            }
+        action_retry_run_id = str(dict(action.get("metadata") or {}).get("retry_operation_run_id") or "").strip()
+        retry_allowed, retry_disabled_reason = operation_action_retry_eligibility(
+            operation_status=status,
+            operation_run_id=parent_operation_run_id,
+            action_status=action_status,
+            action_approval_status=action_approval_status,
+            action_retry_operation_run_id=action_retry_run_id,
+            requested_retry_operation_run_id=retry_run_id,
+        )
+        if not retry_allowed:
+            if retry_disabled_reason == "linked_action_retry_already_planned":
+                raise OperationRuntimeStateConflict("operation_run_retry_conflict", action)
+            raise ValueError(retry_disabled_reason)
+        if action_id:
+            action = self.store.repos.workflow_runtime.requeue_action_for_operation_retry(
+                action_id,
+                workspace_id=workspace_id,
+                expected_status=action_status,
+                parent_operation_run_id=parent_operation_run_id,
+                retry_operation_run_id=retry_run_id,
+            )
+            if (
+                str(action.get("status") or "").strip() != "queued"
+                or (str(action.get("workspace_id") or "default").strip() or "default") != workspace_id
+                or str(dict(action.get("metadata") or {}).get("retry_operation_run_id") or "").strip() != retry_run_id
+            ):
+                raise OperationRuntimeStateConflict("operation_run_retry_conflict", action)
+        retry_run = self.store.repos.workflow_runtime.upsert_operation(
             operation_run_id=retry_run_id,
             workspace_id=workspace_id,
             action_id=action_id,
@@ -913,21 +1053,30 @@ class OperationRuntimeWriter:
             },
             workflow_ref={},
             cost_budget=dict(operation.get("cost_budget") or {}),
-            idempotency_key=retry_key,
+            idempotency_key=persisted_retry_key,
             metadata={
                 "operation_runtime_contract": "w9_operation_retry_v1",
                 "parent_operation_run_id": operation.get("operation_run_id"),
                 "retry_requested_by": actor,
             },
         )
-        retry_requested_event = self.store.append_operation_event(
+        retry_metadata = dict(retry_run.get("metadata") or {})
+        if (
+            str(retry_run.get("operation_run_id") or "").strip() != retry_run_id
+            or (str(retry_run.get("workspace_id") or "default").strip() or "default") != workspace_id
+            or str(retry_run.get("action_id") or "").strip() != action_id
+            or str(retry_run.get("status") or "").strip() != "queued"
+            or str(retry_metadata.get("parent_operation_run_id") or "").strip() != parent_operation_run_id
+        ):
+            raise OperationRuntimeStateConflict("operation_run_retry_identity_conflict", retry_run)
+        retry_requested_event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=workspace_id,
             event_stream_id=str(operation.get("operation_run_id") or ""),
             operation_run_id=str(operation.get("operation_run_id") or ""),
             action_id=action_id,
             event_family="operation_event",
             event_type="OperationRetryRequested",
-            idempotency_key=f"{retry_key}:OperationRetryRequested",
+            idempotency_key=f"{persisted_retry_key}:OperationRetryRequested",
             actor=actor,
             source=source,
             payload={
@@ -936,14 +1085,14 @@ class OperationRuntimeWriter:
                 "module_state_mutated": False,
             },
         )
-        queued_event = self.store.append_operation_event(
+        queued_event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=workspace_id,
             event_stream_id=str(retry_run.get("operation_run_id") or ""),
             operation_run_id=str(retry_run.get("operation_run_id") or ""),
             action_id=action_id,
             event_family="operation_event",
             event_type="OperationRunQueued",
-            idempotency_key=f"{retry_key}:OperationRunQueued",
+            idempotency_key=f"{persisted_retry_key}:OperationRunQueued",
             actor=actor,
             source=source,
             payload={
@@ -953,12 +1102,6 @@ class OperationRuntimeWriter:
                 "module_state_mutated": False,
             },
         )
-        if action_id:
-            self.store.update_agent_action_state(
-                action_id,
-                status="queued",
-                metadata_patch={"retry_operation_run_id": retry_run.get("operation_run_id")},
-            )
         return {
             "parent_operation_run": operation,
             "operation_run": retry_run,
@@ -973,19 +1116,24 @@ class OperationRuntimeWriter:
         source: str = "operation_runtime",
         reason: str = "",
     ) -> dict[str, Any]:
-        operation = self.store.get_operation_run(operation_run_id)
+        operation = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation:
             raise KeyError(f"operation run not found: {operation_run_id}")
         status = str(operation.get("status") or "").strip()
         if status in {"completed", "failed", "cancelled"}:
             raise ValueError(f"terminal operation cannot be resumed: {status}")
-        next_operation = self.store.update_operation_run_state(
+        next_operation = self.store.repos.workflow_runtime.update_operation_state(
             str(operation.get("operation_run_id") or ""),
             status="queued",
             progress_patch={"phase": "resume_requested", "reason": str(reason or "").strip()},
             metadata_patch={"resume_requested_by": actor},
         )
-        event = self.store.append_operation_event(
+        if (
+            str(next_operation.get("status") or "").strip() != "queued"
+            or str(dict(next_operation.get("progress") or {}).get("phase") or "").strip() != "resume_requested"
+        ):
+            raise OperationRuntimeStateConflict("operation_run_resume_conflict", next_operation)
+        event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=str(next_operation.get("workspace_id") or "default").strip() or "default",
             event_stream_id=str(next_operation.get("operation_run_id") or ""),
             operation_run_id=str(next_operation.get("operation_run_id") or ""),

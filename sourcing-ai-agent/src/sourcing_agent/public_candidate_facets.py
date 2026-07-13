@@ -256,10 +256,11 @@ def public_facet_summary_from_counts(
     counts: dict[str, Any],
     *,
     intent_keywords: list[str] | None = None,
+    include_empty: bool = False,
 ) -> dict[str, Any]:
     source = dict(counts or {})
     candidate_count = max(0, int(source.get("candidate_count") or 0))
-    if candidate_count <= 0:
+    if candidate_count <= 0 and not include_empty:
         return {}
 
     normalized_intent_keywords = _dedupe_texts(

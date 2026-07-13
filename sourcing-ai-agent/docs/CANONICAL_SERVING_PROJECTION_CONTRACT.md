@@ -162,7 +162,36 @@ Implementation slice added 2026-05-19:
 - An authoritative index count or row read failure has the same fail-closed public reason as a missing index; it must not be converted to an empty result. A later authoritative membership read failure is classified separately as `projection_members_unavailable`.
 - Index results are membership claims, not best-effort enrichment hints. Public readers batch-load visible members, require the requested page length and unique key set to match exactly, reject missing/hidden/cross-projection rows, and restore index order before CRM/media enrichment. Any mismatch fails the entire page with `projection_person_search_index_unavailable`; it must not reduce the row count while retaining the old `matched_count`/offset.
 - `/api/jobs/{job_id}/candidates` propagates canonical projection-index `not_ready` without recomputing counts or pagination and returns HTTP `409`. Both job and projection frontend adapters preserve an explicit `filtered_candidate_count=0`; they must not replace it with the total count through truthiness fallback.
-- A reset rebuild keeps the previous index until the replacement first page is ready, then uses one scoped `replace_rows` transaction and a projection-specific advisory lock. Empty projections use the same atomic replace with zero rows. Later pages incrementally upsert under that same advisory-lock key, so reset and continuation pages cannot interleave; a failed first-page replacement must leave the previous index intact and must not publish partial-build metadata.
+- Projection-index fencing uses three reserved metadata keys with separate ownership:
+  `projection_person_search_index_input_revision` is the current semantic member-input revision,
+  `projection_person_search_index_build_input_revision` binds a build to that input, and
+  `projection_person_search_index_build_generation` identifies the individual build. Ordinary member publication owns
+  the input revision and advances it only when index-relevant member semantics change; a semantically identical replay
+  preserves it. A same-count member replacement is still a semantic change and must advance it.
+- A reset rebuild keeps the previous index until the replacement first page is ready. Under one projection-specific
+  advisory-lock transaction, it compares the previously observed build generation and semantic input revision, writes
+  the new generation, binds `projection_person_search_index_build_input_revision` to the current input revision, and
+  performs the scoped replace. Empty projections use the same fenced atomic replace with zero rows. `updated_at` is not
+  an index-input identity or CAS token; a delayed reset is obsolete even when the projection timestamp has not changed.
+- Continuation row writes, partial-state publication, finalization, and public facet publication must all compare the
+  same build generation and require the build-bound input revision to equal the current semantic input revision in the
+  transaction that applies the write. A delayed page or state write returns obsolete and leaves the current index and
+  projection metadata intact. Once a generation is `completed`, the same generation cannot downgrade it to `building`
+  or `partial`.
+- Public index search, filter, summary, and list reads require a non-empty build generation and
+  `projection_person_search_index_build_input_revision == projection_person_search_index_input_revision`. Readers
+  validate this state before and after the indexed read; stale input or a revision change during the read fails closed
+  as index unavailable rather than serving mixed-generation rows.
+- Index-derived public facet counts and index readiness are completion products, not independent mirrors. Finalization
+  binds both products to the same generation, build-input revision, and current input revision in the generation-fenced
+  UoW that marks the build `completed`. A semantic member change atomically advances the input revision and invalidates
+  the old facet/readiness product; a reset atomically invalidates it again before replacing the first index page.
+  Unfiltered public readers require `completed`, equal build/current revisions, and matching product bindings before
+  reporting facet or index readiness. Empty completed projections publish the same verified product with exact zero
+  counts; they are not treated as a missing product.
+- Projection-row publication/upsert, including bulk conflict metadata updates, must preserve all three reserved keys.
+  Only the fixed semantic member-publication UoW may advance the input revision, and only the generation-fenced index
+  writer may bind build revision/generation or publish build state.
 - Event-time index scheduling is durable: run-scope projection publication, collection-authoritative projection publication, and Public Web assertion promotion enqueue `projection_person_search_index_build`; recovery drains it through `projection_person_search_index_queue`.
 - Projection global facet counts are an index build product. When `projection_person_search_index` finalizes, the writer pages persisted public `filter_record` rows and publishes `counts.public_facet_counts` onto `serving_projections`. Public projection readers may render those counts, but they must not compute global facets by scanning job overlays, raw profile JSON, stage files, or frontend-loaded candidate rows.
 - `projection_facet_layering_build` is projection-owned work. The builder must resolve classifier input from canonical `serving_projection_members`, even when `overlay_info` still carries a legacy overlay path. Its completion updates projection member layer fields and enqueues `projection_person_search_index_build`; the old overlay is an artifact compatibility surface, not the canonical layer/filter source for projection reads. Jobs without a canonical projection link fail closed with `canonical_projection_link_required_for_projection_facet_layering`; they must be backfilled into a run projection before layering can run.
