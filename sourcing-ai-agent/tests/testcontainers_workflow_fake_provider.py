@@ -115,20 +115,22 @@ class TestcontainersWorkflowFakeProviderTest(unittest.TestCase):
                             semantic_provider=LocalSemanticProvider(),
                             acquisition_engine=acquisition_engine,
                         )
-                        dispatches: list[dict[str, object]] = []
+                        recovery_signals: list[dict[str, object]] = []
 
-                        def _record_dispatch(job_id: str, payload: dict[str, object]) -> dict[str, object]:
-                            dispatch = {
-                                "status": "already_running",
-                                "scope": "job_scoped",
-                                "service_name": f"job-recovery-{job_id}",
-                                "job_id": job_id,
-                                "payload": dict(payload or {}),
+                        def _record_signal(**kwargs: object) -> dict[str, object]:
+                            recovery_signals.append(dict(kwargs))
+                            return {
+                                "status": "signaled",
+                                "scope": "shared",
+                                "mode": "signal_only",
+                                "service_name": "worker-recovery-daemon",
                             }
-                            dispatches.append(dispatch)
-                            return dispatch
 
-                        with mock.patch.object(orchestrator, "ensure_job_scoped_recovery", side_effect=_record_dispatch):
+                        with mock.patch.object(
+                            orchestrator,
+                            "_signal_shared_recovery_wakeup",
+                            side_effect=_record_signal,
+                        ):
                             session = store.create_agent_runtime_session(
                                 job_id="job-container-fake-provider",
                                 target_company="Container Test Co",
@@ -175,7 +177,9 @@ class TestcontainersWorkflowFakeProviderTest(unittest.TestCase):
                             try:
                                 host, port = server.server_address
                                 webhook_url = f"http://{host}:{port}/api/providers/apify/webhook"
-                                with mock.patch.dict(os.environ, {"SOURCING_APIFY_WEBHOOK_URL": webhook_url}, clear=False):
+                                with mock.patch.dict(
+                                    os.environ, {"SOURCING_APIFY_WEBHOOK_URL": webhook_url}, clear=False
+                                ):
                                     submit_payload = _submit_harvest_actor_run(
                                         settings.harvest.profile_scraper,
                                         {"urls": ["https://www.linkedin.com/in/ada-lovelace-real/"]},
@@ -223,9 +227,16 @@ class TestcontainersWorkflowFakeProviderTest(unittest.TestCase):
         self.assertTrue(checkpoint.get("force_scripted_terminal_fetch"))
         self.assertEqual(checkpoint["remote_provider_terminal_event"]["run_id"], "run-container-fake-apify")
         self.assertEqual(checkpoint["remote_provider_terminal_event"]["dataset_id"], "dataset-container-fake-apify")
-        self.assertEqual(dispatches[0]["job_id"], "job-container-fake-provider")
-        dispatch_payload = dict(dispatches[0]["payload"])
-        self.assertEqual(dispatch_payload["remote_provider_event_worker_ids"], [int(final_worker["worker_id"])])
+        self.assertEqual(
+            recovery_signals,
+            [
+                {
+                    "reason": "remote_provider_event",
+                    "requested_by": mock.ANY,
+                    "scope": "shared",
+                }
+            ],
+        )
         self.assertTrue(provider_event_object_visible)
         self.assertEqual(pg_worker_count, 1)
         self.assertTrue(any(event.get("stage") == "remote_provider_event" for event in events))

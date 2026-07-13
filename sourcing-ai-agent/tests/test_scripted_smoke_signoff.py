@@ -1514,7 +1514,7 @@ def test_scripted_smoke_signoff_blocks_recovery_without_phase_report() -> None:
     } >= {"recovery_phase_metrics_report_missing"}
 
 
-def test_scripted_smoke_signoff_treats_async_recovery_dispatch_as_recovery_work() -> None:
+def test_scripted_smoke_signoff_does_not_treat_shared_signal_as_execution_evidence() -> None:
     report = build_scripted_smoke_signoff_report(
         records=[
             {
@@ -1526,7 +1526,8 @@ def test_scripted_smoke_signoff_treats_async_recovery_dispatch_as_recovery_work(
                             "status": "accepted",
                             "source": "provider_webhook",
                             "recovery_count": 0,
-                            "recovery_dispatch_count": 1,
+                            "recovery_dispatch_count": 0,
+                            "shared_recovery_signal_count": 1,
                         }
                     ]
                 },
@@ -1544,10 +1545,9 @@ def test_scripted_smoke_signoff_treats_async_recovery_dispatch_as_recovery_work(
         expected_provider_mode="scripted",
     )
 
-    assert report["status"] == "blocked"
-    assert {
+    assert "recovery_phase_metrics_report_missing" not in {
         item["name"] for item in report["blocking_findings"]
-    } >= {"recovery_phase_metrics_report_missing"}
+    }
 
 
 def test_scripted_smoke_signoff_blocks_missing_parity_report() -> None:

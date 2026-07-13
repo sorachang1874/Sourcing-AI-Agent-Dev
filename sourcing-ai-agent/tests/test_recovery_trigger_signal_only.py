@@ -32,7 +32,10 @@ file lands under ``runtime_dir``.
 
 from __future__ import annotations
 
+import ast
+import inspect
 import tempfile
+import textwrap
 import threading
 import unittest
 from pathlib import Path
@@ -60,6 +63,76 @@ from sourcing_agent.storage import ControlPlaneStore
 from tests.pg_durable_runtime import PGDurableRuntimeTestMixin
 
 SHARED_DAEMON = "worker-recovery-daemon"
+
+
+class RecoveryApiSignalOnlyContractTest(unittest.TestCase):
+    """No-PG boundary checks for API-safe recovery signaling."""
+
+    def test_public_shared_signal_never_accepts_or_forwards_recovery_controls(self) -> None:
+        signal = mock.Mock(
+            return_value={
+                "status": "signaled",
+                "scope": "shared",
+                "mode": "signal_only",
+                "service_name": SHARED_DAEMON,
+            }
+        )
+        orchestrator = mock.Mock()
+        orchestrator._signal_shared_recovery_wakeup = signal
+
+        result = SourcingOrchestrator.signal_shared_recovery(
+            orchestrator,
+            reason="operator_api_recovery_signal",
+            requested_by="operator_api",
+        )
+
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(result["mode"], "shared_recovery_signal")
+        signal.assert_called_once_with(
+            reason="operator_api_recovery_signal",
+            requested_by="operator_api",
+            scope="shared",
+        )
+        forwarded = dict(signal.call_args.kwargs)
+        self.assertNotIn("payload", forwarded)
+        self.assertNotIn("job_id", forwarded)
+
+    def test_public_shared_signal_fails_closed_when_wakeup_is_unavailable(self) -> None:
+        orchestrator = mock.Mock()
+        orchestrator._signal_shared_recovery_wakeup.return_value = {
+            "status": "signal_skipped",
+            "scope": "shared",
+            "mode": "signal_only",
+            "reason": "runtime_dir_unset",
+        }
+
+        result = SourcingOrchestrator.signal_shared_recovery(
+            orchestrator,
+            reason="operator_api_recovery_signal",
+            requested_by="operator_api",
+        )
+
+        self.assertEqual(result["status"], "unavailable")
+        self.assertEqual(result["reason"], "shared_recovery_signal_unavailable")
+
+    def test_provider_event_handler_has_no_request_thread_recovery_executor_calls(self) -> None:
+        source = textwrap.dedent(inspect.getsource(SourcingOrchestrator.handle_remote_provider_event))
+        tree = ast.parse(source)
+        called_attributes = {
+            node.func.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        }
+
+        self.assertTrue(
+            {
+                "ensure_job_scoped_recovery",
+                "run_worker_recovery_once",
+                "request_service_wakeup",
+            }.isdisjoint(called_attributes),
+            called_attributes,
+        )
+        self.assertIn("_signal_shared_recovery_wakeup", called_attributes)
 
 
 class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase):

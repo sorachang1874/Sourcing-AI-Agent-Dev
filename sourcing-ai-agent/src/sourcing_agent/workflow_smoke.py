@@ -22,7 +22,6 @@ from .durable_runtime import (
     PROJECTION_PERSON_SEARCH_INDEX_BUILD_COMMAND_TYPE,
     SNAPSHOT_COMPACTION_RUN_COMMAND_TYPE,
 )
-from .recovery_contract import remote_provider_event_recovery_total_limit
 from .runtime_tuning import (
     build_materialization_streaming_budget_report,
     build_provider_backpressure_budget_report,
@@ -370,53 +369,10 @@ def _worker_can_receive_smoke_provider_webhook(worker: dict[str, Any]) -> bool:
     return bool(pending and not reason)
 
 
-def _smoke_worker_recovery_payload(
-    job_id: str,
-    *,
-    explicit_worker_ids: list[int] | None = None,
-    force_release_explicit_worker_leases: bool = False,
-    snapshot_full_materialization_enabled: bool = False,
-    projection_facet_layering_enabled: bool = False,
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "job_id": job_id,
-        "workflow_stale_scope_job_id": job_id,
-        "workflow_resume_explicit_job": True,
-        "workflow_auto_resume_enabled": True,
-        "workflow_resume_stale_after_seconds": 0,
-        "workflow_resume_limit": 1,
-        "workflow_queue_auto_takeover_enabled": True,
-        "workflow_queue_resume_stale_after_seconds": 0,
-        "workflow_queue_resume_limit": 1,
-        "explicit_job_followup_rounds": 0,
-        "total_limit": remote_provider_event_recovery_total_limit(),
-        "local_apply_closure_item_limit": 1,
-        "event_level_local_apply_limit": 1,
-        "remote_event_followup_rounds": 0,
-        "stale_after_seconds": 0,
-        "profile_prefetch_nonblocking_submit": True,
-        "profile_prefetch_refill_enabled": True,
-        "search_seed_discovery_enabled": False,
-        "snapshot_full_materialization_enabled": bool(snapshot_full_materialization_enabled),
-        "projection_facet_layering_enabled": bool(projection_facet_layering_enabled),
-        "excel_intake_recovery_enabled": False,
-        "post_recovery_housekeeping_enabled": False,
-        "post_completion_reconcile_enabled": True,
-        "runtime_heartbeat_source": "hosted_smoke_poll",
-        "runtime_heartbeat_interval_seconds": 0,
-    }
-    normalized_worker_ids: list[int] = []
-    seen_worker_ids: set[int] = set()
-    for worker_id in list(explicit_worker_ids or []):
-        normalized_worker_id = _safe_int(worker_id)
-        if normalized_worker_id <= 0 or normalized_worker_id in seen_worker_ids:
-            continue
-        seen_worker_ids.add(normalized_worker_id)
-        normalized_worker_ids.append(normalized_worker_id)
-    if normalized_worker_ids:
-        payload["explicit_worker_ids"] = normalized_worker_ids
-        payload["force_release_explicit_worker_leases"] = bool(force_release_explicit_worker_leases)
-    return payload
+def _smoke_shared_recovery_signal_payload() -> dict[str, Any]:
+    """Return the only payload allowed across the API-to-daemon signal boundary."""
+
+    return {}
 
 
 def _smoke_provider_webhook_headers() -> dict[str, str]:
@@ -540,14 +496,18 @@ def _drive_smoke_remote_provider_webhook_recovery_once(
         reason = str(event.get("reason") or "").strip()
         if status != "accepted":
             return False
-        if _safe_int(event.get("recovery_count")) > 0 or _safe_int(event.get("recovery_dispatch_count")) > 0:
+        if (
+            _safe_int(event.get("recovery_count")) > 0
+            or _safe_int(event.get("recovery_dispatch_count")) > 0
+            or _safe_int(event.get("shared_recovery_signal_count")) > 0
+        ):
             return True
         if reason == "remote_provider_event_recovery_already_in_flight":
             return True
         if reason in {"no_matching_remote_wait_workers", "matching_remote_provider_workers_not_recoverable"}:
             return False
         mode = str(event.get("mode") or "").strip()
-        return mode in {"", "async_recovery", "job_scoped_recovery"} and not reason
+        return mode in {"", "async_recovery", "job_scoped_recovery", "shared_recovery_signal"} and not reason
 
     def _post_event(worker: dict[str, Any], *, source: str, sequence: int) -> dict[str, Any]:
         request_started_at = time.perf_counter()
@@ -571,6 +531,7 @@ def _drive_smoke_remote_provider_webhook_recovery_once(
                 "mode": str(result.get("mode") or ""),
                 "recovery_count": _safe_int(result.get("recovery_count")),
                 "recovery_dispatch_count": _safe_int(result.get("recovery_dispatch_count")),
+                "shared_recovery_signal_count": _safe_int(result.get("shared_recovery_signal_count")),
                 "webhook_to_response_ms": elapsed_ms,
             }
         except Exception as exc:
@@ -625,6 +586,7 @@ def _drive_smoke_remote_provider_webhook_recovery_once(
                     "source": source,
                     "recovery_count": 0,
                     "recovery_dispatch_count": 0,
+                    "shared_recovery_signal_count": 0,
                     "webhook_to_response_ms": 0.0,
                 }
             normalized_results.append(result)
@@ -677,6 +639,7 @@ def _drive_smoke_remote_provider_webhook_recovery_once(
                     "source": normalized_primary_source,
                     "recovery_count": 0,
                     "recovery_dispatch_count": 0,
+                    "shared_recovery_signal_count": 0,
                     "webhook_to_response_ms": 0.0,
                 }
             normalized_results.append(result)
@@ -749,6 +712,7 @@ def _drive_smoke_remote_provider_late_watcher_duplicates(
                     "mode": str(result.get("mode") or ""),
                     "recovery_count": _safe_int(result.get("recovery_count")),
                     "recovery_dispatch_count": _safe_int(result.get("recovery_dispatch_count")),
+                    "shared_recovery_signal_count": _safe_int(result.get("shared_recovery_signal_count")),
                     "webhook_to_response_ms": elapsed_ms,
                 }
             )
@@ -763,52 +727,15 @@ def _drive_smoke_remote_provider_late_watcher_duplicates(
                     "source": normalized_duplicate_source,
                     "recovery_count": 0,
                     "recovery_dispatch_count": 0,
+                    "shared_recovery_signal_count": 0,
                     "webhook_to_response_ms": elapsed_ms,
                 }
             )
     return events
 
 
-def _worker_recovery_result_made_progress(recovery: dict[str, Any]) -> bool:
-    daemon = dict(recovery.get("daemon") or {})
-    if int(daemon.get("claimed_count") or 0) > 0 or int(daemon.get("executed_count") or 0) > 0:
-        return True
-    for phase_metric in dict(recovery.get("recovery_phase_metrics") or {}).values():
-        if not isinstance(phase_metric, dict):
-            continue
-        status = str(phase_metric.get("status") or "").strip().lower()
-        if status not in {"active", "completed"}:
-            continue
-        counts = dict(phase_metric.get("counts") or {})
-        if any(
-            _safe_int(counts.get(key)) > 0
-            for key in (
-                "claimed_count",
-                "completed_count",
-                "candidate_count",
-                "processed_candidate_count",
-                "processed_member_count",
-            )
-        ):
-            return True
-    for item in list(recovery.get("post_completion_reconcile") or []):
-        if not isinstance(item, dict):
-            continue
-        status = str(item.get("status") or "").strip().lower()
-        if status and status not in {"skipped", "noop", "no_op"}:
-            return True
-    for item in list(recovery.get("workflow_resume") or []):
-        if not isinstance(item, dict):
-            continue
-        status = str(item.get("status") or "").strip().lower()
-        if status and status not in {"skipped", "noop", "no_op"}:
-            return True
-    daemon_status = str(dict(recovery.get("daemon") or {}).get("status") or "").strip().lower()
-    return bool(daemon_status and daemon_status not in {"completed", "idle", "skipped", "noop", "no_op"})
-
-
-def _smoke_worker_recovery_run_record(
-    recovery: dict[str, Any],
+def _smoke_shared_recovery_signal_record(
+    response: dict[str, Any],
     *,
     tick: int | None = None,
     round_index: int | None = None,
@@ -817,12 +744,21 @@ def _smoke_worker_recovery_run_record(
     recoverable_worker_ids: list[int] | None = None,
     materialization_wait_state: dict[str, Any] | None = None,
     allow_background_snapshot_full_materialization: bool = False,
+    service_status_payload: dict[str, Any] | None = None,
+    progress_observed: bool | None = None,
 ) -> dict[str, Any]:
-    daemon = dict(recovery.get("daemon") or {})
+    signal = dict(response.get("shared_recovery_signal") or {})
+    signal_status = str(signal.get("status") or "").strip()
     record: dict[str, Any] = {
-        "status": recovery.get("status"),
-        "daemon_status": daemon.get("status"),
-        "worker_count": daemon.get("worker_count"),
+        "event_type": "shared_recovery_signal",
+        "status": response.get("status"),
+        "mode": str(response.get("mode") or "shared_recovery_signal"),
+        "reason": str(response.get("reason") or ""),
+        "signal_status": signal_status,
+        "signal_reason": str(signal.get("reason") or ""),
+        "signal_service_name": str(signal.get("service_name") or ""),
+        "shared_recovery_signal_count": 1 if signal_status == "signaled" else 0,
+        "progress_observation_source": "worker_and_recovery_service_status",
     }
     normalized_phase = str(phase or "").strip()
     if normalized_phase:
@@ -838,26 +774,75 @@ def _smoke_worker_recovery_run_record(
     ]
     if normalized_worker_ids:
         record["recoverable_worker_ids"] = normalized_worker_ids
-    workflow_resume = list(recovery.get("workflow_resume") or [])
-    if workflow_resume:
-        record["workflow_resume"] = workflow_resume
-    post_completion_reconcile = list(recovery.get("post_completion_reconcile") or [])
-    if post_completion_reconcile:
-        record["post_completion_reconcile"] = post_completion_reconcile
     if materialization_wait_state is not None:
         record["materialization_wait_state"] = dict(materialization_wait_state or {})
     if allow_background_snapshot_full_materialization:
         record["allow_background_snapshot_full_materialization"] = True
-    phase_metrics = {
-        str(key): dict(value)
-        for key, value in dict(recovery.get("recovery_phase_metrics") or {}).items()
-        if str(key).strip() and isinstance(value, dict)
-    }
-    if phase_metrics:
-        record["recovery_phase_metrics"] = phase_metrics
-    if bool(recovery.get("next_tick_requested")):
-        record["next_tick_requested"] = True
+    service_status_report = _smoke_recovery_service_status_report(service_status_payload)
+    if service_status_report.get("service_count"):
+        record["recovery_service_status"] = service_status_report
+    if progress_observed is not None:
+        record["progress_observed"] = bool(progress_observed)
     return record
+
+
+def _fetch_smoke_recovery_service_status(
+    client: HostedWorkflowSmokeClient,
+    *,
+    job_id: str,
+) -> dict[str, Any]:
+    try:
+        return client.get(f"/api/workers/daemon/status?job_id={quote(str(job_id or ''))}&include_details=1")
+    except Exception:
+        return {}
+
+
+def _smoke_recovery_observation_fingerprint(
+    *,
+    workers: list[dict[str, Any]],
+    materialization_wait_state: dict[str, Any],
+    service_status_payload: dict[str, Any],
+) -> tuple[Any, ...]:
+    worker_state = tuple(
+        sorted(
+            (
+                _safe_int(worker.get("worker_id") or worker.get("workerId")),
+                str(worker.get("status") or "").strip().lower(),
+                str(worker.get("updated_at") or "").strip(),
+            )
+            for worker in workers
+        )
+    )
+    item_state = tuple(
+        sorted(
+            (
+                str(item.get("item_id") or item.get("command_id") or "").strip(),
+                str(item.get("status") or "").strip().lower(),
+                str(item.get("phase") or "").strip().lower(),
+            )
+            for key in (
+                "handoff_items",
+                "background_snapshot_full_materialization_items",
+                "projection_facet_layering_items",
+                "projection_person_search_index_items",
+            )
+            for item in list(materialization_wait_state.get(key) or [])
+            if isinstance(item, dict)
+        )
+    )
+    service_report = _smoke_recovery_service_status_report(service_status_payload)
+    service_state = tuple(
+        sorted(
+            (
+                str(role),
+                str(status.get("status") or "").strip().lower(),
+                _safe_int(status.get("tick")),
+            )
+            for role, status in dict(service_report.get("services") or {}).items()
+            if isinstance(status, dict)
+        )
+    )
+    return worker_state, item_state, service_state
 
 
 def _recovery_runs_from_service_status_payload(
@@ -865,10 +850,9 @@ def _recovery_runs_from_service_status_payload(
 ) -> list[dict[str, Any]]:
     """Expose daemon-owned recovery ticks to smoke service metrics.
 
-    Smoke can trigger explicit `/run-once` recovery, but production-like hosted
-    runs also use job-scoped daemons. Their ticks must be first-class SLO
-    evidence; otherwise a slow daemon board-visible apply can be hidden behind a
-    passing explicit smoke recovery run.
+    Smoke can only signal the shared daemon. Daemon-owned ticks from the status
+    endpoint are therefore the execution evidence used for service SLOs; a
+    successful signal response is never treated as a completed recovery tick.
     """
 
     root = dict(payload or {})
@@ -1187,7 +1171,7 @@ def _settle_post_terminal_worker_recovery(
                 "no_progress_rounds": 0,
             },
         )
-    recovery_runs: list[dict[str, Any]] = []
+    signal_runs: list[dict[str, Any]] = []
     timings_ms = 0.0
     latest_job_payload: dict[str, Any] = {}
     latest_results_payload: dict[str, Any] = {}
@@ -1220,35 +1204,18 @@ def _settle_post_terminal_worker_recovery(
             for worker in recoverable_workers
             if _safe_int(worker.get("worker_id")) > 0
         ]
+        service_status_before = _fetch_smoke_recovery_service_status(client, job_id=normalized_job_id)
+        observation_before = _smoke_recovery_observation_fingerprint(
+            workers=recoverable_workers,
+            materialization_wait_state=materialization_wait_state,
+            service_status_payload=service_status_before,
+        )
         started_at = time.perf_counter()
-        recovery = client.post(
+        signal_response = client.post(
             "/api/workers/daemon/run-once",
-            _smoke_worker_recovery_payload(
-                normalized_job_id,
-                explicit_worker_ids=recoverable_worker_ids,
-                force_release_explicit_worker_leases=True,
-                snapshot_full_materialization_enabled=(
-                    bool(drain_background_snapshot_full_materialization)
-                    and _safe_int(materialization_wait_state.get("snapshot_full_materialization_pending_count")) > 0
-                ),
-                projection_facet_layering_enabled=(
-                    bool(drain_projection_facet_layering)
-                    and _safe_int(materialization_wait_state.get("projection_facet_layering_pending_count")) > 0
-                ),
-            ),
+            _smoke_shared_recovery_signal_payload(),
         )
         timings_ms += (time.perf_counter() - started_at) * 1000
-        recovery_runs.append(
-            _smoke_worker_recovery_run_record(
-                recovery,
-                round_index=round_index,
-                phase="post_terminal",
-                recoverable_workers=recoverable_workers,
-                recoverable_worker_ids=recoverable_worker_ids,
-                materialization_wait_state=materialization_wait_state,
-                allow_background_snapshot_full_materialization=bool(drain_background_snapshot_full_materialization),
-            )
-        )
         latest_job_payload = client.get(f"/api/jobs/{normalized_job_id}")
         latest_results_payload = _fetch_smoke_results_payload(
             client,
@@ -1264,6 +1231,26 @@ def _settle_post_terminal_worker_recovery(
             if isinstance(item, dict) and _worker_needs_smoke_recovery(dict(item))
         ]
         materialization_wait_state = _post_terminal_materialization_wait_state(client, job_id=normalized_job_id)
+        service_status_after = _fetch_smoke_recovery_service_status(client, job_id=normalized_job_id)
+        observation_after = _smoke_recovery_observation_fingerprint(
+            workers=remaining_workers,
+            materialization_wait_state=materialization_wait_state,
+            service_status_payload=service_status_after,
+        )
+        progress_observed = observation_after != observation_before
+        signal_runs.append(
+            _smoke_shared_recovery_signal_record(
+                signal_response,
+                round_index=round_index,
+                phase="post_terminal_signal",
+                recoverable_workers=recoverable_workers,
+                recoverable_worker_ids=recoverable_worker_ids,
+                materialization_wait_state=materialization_wait_state,
+                allow_background_snapshot_full_materialization=bool(drain_background_snapshot_full_materialization),
+                service_status_payload=service_status_after,
+                progress_observed=progress_observed,
+            )
+        )
         materialization_settle_pending_count = _safe_int(materialization_wait_state.get("handoff_pending_count"))
         if drain_background_snapshot_full_materialization:
             materialization_settle_pending_count += _safe_int(
@@ -1278,7 +1265,7 @@ def _settle_post_terminal_worker_recovery(
             )
         if not remaining_workers and materialization_settle_pending_count <= 0:
             break
-        if _worker_recovery_result_made_progress(recovery):
+        if progress_observed:
             no_progress_rounds = 0
         else:
             wait_seconds = _safe_float(materialization_wait_state.get("seconds_until_next_ready"))
@@ -1355,11 +1342,11 @@ def _settle_post_terminal_worker_recovery(
         "projection_person_search_index_items": list(
             materialization_wait_state.get("projection_person_search_index_items") or []
         ),
-        "round_count": len(recovery_runs),
+        "round_count": len(signal_runs),
         "max_rounds": normalized_max_rounds,
         "max_rounds_exhausted": bool(
             (remaining_worker_ids or settled_materialization_item_count > 0)
-            and len(recovery_runs) >= normalized_max_rounds
+            and len(signal_runs) >= normalized_max_rounds
         ),
         "no_progress_rounds": no_progress_rounds,
         "background_snapshot_full_materialization_drain_requested": bool(
@@ -1367,7 +1354,7 @@ def _settle_post_terminal_worker_recovery(
         ),
         "projection_facet_layering_drain_requested": bool(drain_projection_facet_layering),
     }
-    return latest_job_payload, latest_results_payload, recovery_runs, round(timings_ms, 2), recovery_state
+    return latest_job_payload, latest_results_payload, signal_runs, round(timings_ms, 2), recovery_state
 
 
 def _target_public_web_action_enabled(action: dict[str, Any] | None) -> bool:
@@ -1584,7 +1571,7 @@ def _run_target_public_web_smoke_action(
     batch = dict(search_result.get("batch") or {})
     batch_id = str(batch.get("batch_id") or "").strip()
     public_web_job_id = str(dict(search_result.get("job") or {}).get("job_id") or "").strip()
-    recovery_runs: list[dict[str, Any]] = []
+    signal_runs: list[dict[str, Any]] = []
     latest_poll: dict[str, Any] = {}
     for round_index in range(max_recovery_rounds):
         if batch_id:
@@ -1616,22 +1603,20 @@ def _run_target_public_web_smoke_action(
             if _safe_int(worker.get("worker_id")) > 0
         ]
         started_at = time.perf_counter()
-        recovery = client.post(
+        signal_response = client.post(
             "/api/workers/daemon/run-once",
-            _smoke_worker_recovery_payload(
-                public_web_job_id,
-                explicit_worker_ids=worker_ids,
-                force_release_explicit_worker_leases=True,
-            ),
+            _smoke_shared_recovery_signal_payload(),
         )
         timings_ms += (time.perf_counter() - started_at) * 1000
-        recovery_runs.append(
-            _smoke_worker_recovery_run_record(
-                recovery,
+        service_status = _fetch_smoke_recovery_service_status(client, job_id=public_web_job_id)
+        signal_runs.append(
+            _smoke_shared_recovery_signal_record(
+                signal_response,
                 round_index=round_index,
-                phase="target_public_web_action",
+                phase="target_public_web_action_signal",
                 recoverable_workers=recoverable_workers,
                 recoverable_worker_ids=worker_ids,
+                service_status_payload=service_status,
             )
         )
         time.sleep(max(0.05, poll_seconds))
@@ -1664,12 +1649,12 @@ def _run_target_public_web_smoke_action(
             "latest_batch": batch,
             "latest_poll": latest_poll,
             "recovery": {
-                "round_count": len(recovery_runs),
+                "round_count": len(signal_runs),
                 "max_rounds": max_recovery_rounds,
                 "settled": _target_public_web_batch_terminal(batch),
             },
         },
-        recovery_runs,
+        signal_runs,
         round(timings_ms, 2),
     )
 
@@ -6069,7 +6054,11 @@ def _evaluate_smoke_expectations(
         driver_events = [dict(item) for item in list(remote_provider_event_driver.get("events") or [])]
         watcher_recovery = any(
             str(item.get("source") or "").strip() == "local_provider_event_watcher"
-            and (_safe_int(item.get("recovery_count")) > 0 or _safe_int(item.get("recovery_dispatch_count")) > 0)
+            and (
+                _safe_int(item.get("recovery_count")) > 0
+                or _safe_int(item.get("recovery_dispatch_count")) > 0
+                or _safe_int(item.get("shared_recovery_signal_count")) > 0
+            )
             for item in driver_events
         )
         provider_late = any(
@@ -7917,6 +7906,7 @@ def run_hosted_smoke_case(
     job_payload: dict[str, Any] = {}
     stage2_continue_requested = False
     worker_recovery_runs: list[dict[str, Any]] = []
+    shared_recovery_signal_runs: list[dict[str, Any]] = []
     remote_provider_event_driver_runs: list[dict[str, Any]] = []
     remote_provider_event_driver_accepted_workers: list[dict[str, Any]] = []
     remote_provider_event_driver_accepted_keys: set[tuple[str, str]] = set()
@@ -8087,15 +8077,20 @@ def run_hosted_smoke_case(
                         and time.monotonic() >= remote_event_recovery_grace_until
                     ):
                         try:
-                            recovery = client.post(
+                            signal_response = client.post(
                                 "/api/workers/daemon/run-once",
-                                _smoke_worker_recovery_payload(str(job_id or "")),
+                                _smoke_shared_recovery_signal_payload(),
                             )
-                            worker_recovery_runs.append(
-                                _smoke_worker_recovery_run_record(
-                                    recovery,
+                            service_status = _fetch_smoke_recovery_service_status(
+                                client,
+                                job_id=str(job_id or ""),
+                            )
+                            shared_recovery_signal_runs.append(
+                                _smoke_shared_recovery_signal_record(
+                                    signal_response,
                                     tick=tick,
-                                    phase="poll_auto_recovery",
+                                    phase="poll_auto_recovery_signal",
+                                    service_status_payload=service_status,
                                 )
                             )
                             timeline.append(
@@ -8103,7 +8098,7 @@ def run_hosted_smoke_case(
                                     "tick": tick,
                                     "status": snapshot.get("status"),
                                     "stage": snapshot.get("stage"),
-                                    "message": "Smoke runner triggered worker recovery daemon once for blocked acquisition.",
+                                    "message": "Smoke runner signaled the shared recovery daemon for blocked acquisition.",
                                     "awaiting_user_action": "",
                                     "observed_at_ms": round((time.perf_counter() - case_started_at) * 1000, 2),
                                 }
@@ -8118,11 +8113,12 @@ def run_hosted_smoke_case(
                                 "observed_at_ms": round((time.perf_counter() - case_started_at) * 1000, 2),
                             }
                             poll_auto_recovery_errors.append(error_record)
-                            worker_recovery_runs.append(
+                            shared_recovery_signal_runs.append(
                                 {
                                     **error_record,
                                     "status": "failed",
-                                    "reason": "poll_auto_recovery_request_failed",
+                                    "event_type": "shared_recovery_signal",
+                                    "reason": "poll_auto_recovery_signal_failed",
                                 }
                             )
                     last_worker_recovery_at = now
@@ -8221,7 +8217,7 @@ def run_hosted_smoke_case(
             (
                 post_terminal_job_payload,
                 post_terminal_results,
-                post_terminal_recovery_runs,
+                post_terminal_signal_runs,
                 post_terminal_recovery_ms,
                 post_terminal_recovery_state,
             ) = _settle_post_terminal_worker_recovery(
@@ -8238,8 +8234,8 @@ def run_hosted_smoke_case(
                 ),
             )
             record["post_terminal_recovery"] = post_terminal_recovery_state
-            if post_terminal_recovery_runs:
-                worker_recovery_runs.extend(post_terminal_recovery_runs)
+            if post_terminal_signal_runs:
+                shared_recovery_signal_runs.extend(post_terminal_signal_runs)
                 post_terminal_tick = (
                     max(
                         [
@@ -8291,6 +8287,8 @@ def run_hosted_smoke_case(
             record["recovery_service_status"] = service_status_report
     if worker_recovery_runs:
         record["worker_recovery"] = worker_recovery_runs
+    if shared_recovery_signal_runs:
+        record["shared_recovery_signals"] = shared_recovery_signal_runs
     if running_results_probe_errors:
         record["running_results_probe_errors"] = running_results_probe_errors
     if poll_auto_recovery_errors:
@@ -8361,7 +8359,7 @@ def run_hosted_smoke_case(
             2,
         )
         if _target_public_web_action_enabled(normalized_target_public_web_action):
-            public_web_action, public_web_action_recovery_runs, public_web_action_ms = (
+            public_web_action, public_web_action_signal_runs, public_web_action_ms = (
                 _run_target_public_web_smoke_action(
                     client,
                     source_job_id=job_id,
@@ -8372,8 +8370,8 @@ def run_hosted_smoke_case(
             )
             timings_ms["target_public_web_action"] = round(public_web_action_ms, 2)
             record["target_public_web_action"] = public_web_action
-            if public_web_action_recovery_runs:
-                record["target_public_web_action_recovery"] = public_web_action_recovery_runs
+            if public_web_action_signal_runs:
+                record["target_public_web_action_recovery_signals"] = public_web_action_signal_runs
             workflow_commands.extend(_workflow_commands_from_target_public_web_action(public_web_action))
             target_public_web_action_batch_id = str(
                 dict(public_web_action.get("search") or {}).get("batch_id") or ""
@@ -8605,7 +8603,7 @@ def run_hosted_smoke_case(
                     (
                         post_terminal_job_payload,
                         post_terminal_results,
-                        post_terminal_recovery_runs,
+                        post_terminal_signal_runs,
                         post_terminal_recovery_ms,
                         post_terminal_recovery_state,
                     ) = _settle_post_terminal_worker_recovery(
@@ -8627,8 +8625,8 @@ def run_hosted_smoke_case(
                         + float(post_terminal_recovery_ms or 0.0),
                         2,
                     )
-                    if post_terminal_recovery_runs:
-                        worker_recovery_runs.extend(post_terminal_recovery_runs)
+                    if post_terminal_signal_runs:
+                        shared_recovery_signal_runs.extend(post_terminal_signal_runs)
                         post_terminal_tick = (
                             max(
                                 [
@@ -8708,6 +8706,9 @@ def run_hosted_smoke_case(
             "recovery_count": sum(_safe_int(item.get("recovery_count")) for item in remote_provider_event_driver_runs),
             "recovery_dispatch_count": sum(
                 _safe_int(item.get("recovery_dispatch_count")) for item in remote_provider_event_driver_runs
+            ),
+            "shared_recovery_signal_count": sum(
+                _safe_int(item.get("shared_recovery_signal_count")) for item in remote_provider_event_driver_runs
             ),
             "late_duplicate_count": sum(
                 1

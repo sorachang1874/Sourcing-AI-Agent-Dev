@@ -237,8 +237,8 @@ If the webhook endpoint returns `404`, hosted code does not contain the current 
 
 Correct behavior:
 
-- First terminal event for a recoverable/running worker starts job-scoped recovery for explicit worker IDs.
-- Later duplicate events for the same run/dataset record `received_late` and return `recovery_count=0`.
+- First terminal event for a recoverable/running worker persists the terminal checkpoint, releases the matching lease/limiter, and sends a pure wake-now signal to the fresh external shared recovery daemon. The webhook/watcher request path cannot start a sidecar or execute a tick.
+- Later duplicate events for the same run/dataset record `received_late`; `recovery_count` and `recovery_dispatch_count` remain zero. `shared_recovery_signal_count` is signal evidence only, while worker/service status is execution evidence.
 - This protection is bidirectional: watcher-first/webhook-late and webhook-first/watcher-late must both be safe.
 
 Important interpretation:

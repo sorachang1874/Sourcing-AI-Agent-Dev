@@ -36,7 +36,7 @@ function parseArgs(argv) {
     expectedBaselineSnapshotId: "",
     expectedBaselineMinCount: 0,
     deltaObservationPollMs: 500,
-    driveWorkerRecovery: false,
+    signalSharedRecovery: false,
     driveProviderWebhookEvents: false,
     providerWebhookToken: process.env.SOURCING_SCRIPTED_PROVIDER_WEBHOOK_TOKEN || "",
     workerRecoveryPollMs: 1000,
@@ -101,8 +101,8 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
-    if (current === "--drive-worker-recovery") {
-      options.driveWorkerRecovery = true;
+    if (current === "--drive-worker-recovery" || current === "--signal-shared-recovery") {
+      options.signalSharedRecovery = true;
       continue;
     }
     if (current === "--drive-provider-webhook-events") {
@@ -138,7 +138,8 @@ function parseArgs(argv) {
           "  node ./scripts/run_workflow_e2e.mjs --start-url 'http://127.0.0.1:4173/?history=...&job=...' --restore-existing-results",
           "    [--check-pagination-stability --pagination-target-page 2 --pagination-hydration-timeout-ms 20000]",
           "    [--observe-delta-streaming --api-base-url http://127.0.0.1:8765 --expected-baseline-snapshot-id 20260414T120300]",
-          "    [--drive-worker-recovery --worker-recovery-poll-ms 1000]",
+          "    [--signal-shared-recovery --worker-recovery-poll-ms 1000]",
+          "    [--drive-worker-recovery  # compatibility alias; signal-only, never executes a tick]",
           "    [--drive-provider-webhook-events --provider-webhook-token test-token --worker-recovery-poll-ms 1000]",
         ].join("\n"),
       );
@@ -742,36 +743,6 @@ function workerNeedsScriptedRecovery(worker) {
   return recoveryKind !== "harvest_profile_batch" && !String(inlineIngest.applied_at || "").trim();
 }
 
-function buildWorkerRecoveryPayload(jobId, workerIds) {
-  const payload = {
-    job_id: jobId,
-    workflow_stale_scope_job_id: jobId,
-    workflow_resume_explicit_job: true,
-    workflow_auto_resume_enabled: true,
-    workflow_resume_stale_after_seconds: 0,
-    workflow_resume_limit: 1,
-    workflow_queue_auto_takeover_enabled: true,
-    workflow_queue_resume_stale_after_seconds: 0,
-    workflow_queue_resume_limit: 1,
-    explicit_job_followup_rounds: 6,
-    stale_after_seconds: 0,
-    runtime_heartbeat_source: "frontend_browser_delta_streaming",
-    runtime_heartbeat_interval_seconds: 0,
-  };
-  const normalizedWorkerIds = Array.from(
-    new Set(
-      (workerIds || [])
-        .map((workerId) => Number(workerId))
-        .filter((workerId) => Number.isFinite(workerId) && workerId > 0),
-    ),
-  );
-  if (normalizedWorkerIds.length > 0) {
-    payload.explicit_worker_ids = normalizedWorkerIds;
-    payload.force_release_explicit_worker_leases = true;
-  }
-  return payload;
-}
-
 function remoteCheckpointForWorker(worker) {
   const payload = worker && typeof worker === "object" ? worker : {};
   const checkpoint = payload.checkpoint && typeof payload.checkpoint === "object" ? payload.checkpoint : {};
@@ -906,7 +877,7 @@ function summarizeProviderWebhookEvents(events) {
 
 function createDeltaStreamingObserver(page, options, startedAtMs, getObservedJobId) {
   const samples = [];
-  const workerRecoveryEvents = [];
+  const sharedRecoverySignalEvents = [];
   const providerWebhookEvents = [];
   const maxSamples = 600;
   let lastPollAtMs = 0;
@@ -1058,9 +1029,9 @@ function createDeltaStreamingObserver(page, options, startedAtMs, getObservedJob
     }
   };
 
-  const maybeDriveWorkerRecovery = async (jobId) => {
+  const maybeSignalSharedRecovery = async (jobId) => {
     if (
-      !options.driveWorkerRecovery ||
+      !options.signalSharedRecovery ||
       options.driveProviderWebhookEvents ||
       !options.apiBaseUrl ||
       !jobId
@@ -1085,7 +1056,7 @@ function createDeltaStreamingObserver(page, options, startedAtMs, getObservedJob
         recoverableWorkers = (Array.isArray(workersPayload?.agent_workers) ? workersPayload.agent_workers : [])
           .filter((worker) => workerNeedsScriptedRecovery(worker));
       } catch (error) {
-        workerRecoveryEvents.push({
+        sharedRecoverySignalEvents.push({
           offsetMs: Math.max(0, Date.now() - startedAtMs),
           status: "workers_fetch_failed",
           error: error instanceof Error ? error.message : String(error),
@@ -1099,27 +1070,48 @@ function createDeltaStreamingObserver(page, options, startedAtMs, getObservedJob
         .map((worker) => Number(worker.worker_id || worker.workerId || 0))
         .filter((workerId) => Number.isFinite(workerId) && workerId > 0);
       try {
-        const recovery = await postApiJson(
+        const signalResponse = await postApiJson(
           options.apiBaseUrl,
           "/api/workers/daemon/run-once",
-          buildWorkerRecoveryPayload(jobId, workerIds),
+          {},
         );
-        const daemon = recovery?.daemon && typeof recovery.daemon === "object" ? recovery.daemon : {};
-        workerRecoveryEvents.push({
+        const signal =
+          signalResponse?.shared_recovery_signal && typeof signalResponse.shared_recovery_signal === "object"
+            ? signalResponse.shared_recovery_signal
+            : {};
+        let serviceStatus = {};
+        try {
+          serviceStatus = await fetchApiJson(
+            options.apiBaseUrl,
+            `/api/workers/daemon/status?job_id=${encodeURIComponent(jobId)}&include_details=1`,
+          );
+        } catch {
+          serviceStatus = {};
+        }
+        const sharedService =
+          serviceStatus?.recovery_services?.shared && typeof serviceStatus.recovery_services.shared === "object"
+            ? serviceStatus.recovery_services.shared
+            : {};
+        sharedRecoverySignalEvents.push({
           offsetMs: Math.max(0, Date.now() - startedAtMs),
-          status: String(recovery?.status || ""),
-          daemonStatus: String(daemon.status || ""),
-          workerCount: Number(daemon.worker_count || 0) || 0,
+          status: String(signalResponse?.status || ""),
+          mode: String(signalResponse?.mode || ""),
+          signalStatus: String(signal.status || ""),
+          signalReason: String(signal.reason || signalResponse?.reason || ""),
+          signalServiceName: String(signal.service_name || ""),
+          observedSharedServiceStatus: String(sharedService.status || ""),
+          observedSharedServiceTick: Number(sharedService.tick || 0) || 0,
+          progressObservationSource: "subsequent_progress_workers_and_service_status_polls",
           recoverableWorkerCount: recoverableWorkers.length,
           recoverableWorkerIds: workerIds,
         });
-        if (workerRecoveryEvents.length > 80) {
-          workerRecoveryEvents.shift();
+        if (sharedRecoverySignalEvents.length > 80) {
+          sharedRecoverySignalEvents.shift();
         }
       } catch (error) {
-        workerRecoveryEvents.push({
+        sharedRecoverySignalEvents.push({
           offsetMs: Math.max(0, Date.now() - startedAtMs),
-          status: "worker_recovery_failed",
+          status: "shared_recovery_signal_failed",
           recoverableWorkerCount: recoverableWorkers.length,
           recoverableWorkerIds: workerIds,
           error: error instanceof Error ? error.message : String(error),
@@ -1247,7 +1239,7 @@ function createDeltaStreamingObserver(page, options, startedAtMs, getObservedJob
     backgroundSamplingPromise = (async () => {
       while (!backgroundSamplingStopped) {
         const sample = await record("background_poll").catch(() => null);
-        void maybeDriveWorkerRecovery(sample?.jobId || lastJobId).catch(() => null);
+        void maybeSignalSharedRecovery(sample?.jobId || lastJobId).catch(() => null);
         void maybeDriveProviderWebhookEvents(sample?.jobId || lastJobId).catch(() => null);
         await page.waitForTimeout(Math.max(100, options.deltaObservationPollMs)).catch(() => null);
       }
@@ -1449,7 +1441,8 @@ function createDeltaStreamingObserver(page, options, startedAtMs, getObservedJob
     return {
       attempted: true,
       apiBaseUrl: options.apiBaseUrl,
-      workerRecoveryDriven: Boolean(options.driveWorkerRecovery),
+      workerRecoveryDriven: false,
+      sharedRecoverySignalDriven: Boolean(options.signalSharedRecovery),
       providerWebhookDriven: Boolean(options.driveProviderWebhookEvents),
       jobId: lastJobId,
       expectedBaselineSnapshotId,
@@ -1505,7 +1498,7 @@ function createDeltaStreamingObserver(page, options, startedAtMs, getObservedJob
       profileProgressCompletedSample,
       firstCandidateSyncProfileProgressSample: candidateSyncProfileProgressSamples[0] || null,
       firstExecutionProfileProgressSample: executionProfileProgressSamples[0] || null,
-      workerRecoveryEvents,
+      sharedRecoverySignalEvents,
       providerWebhookEvents,
       providerWebhookSummary: summarizeProviderWebhookEvents(providerWebhookEvents),
       samples,

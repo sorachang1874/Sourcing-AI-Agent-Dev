@@ -351,9 +351,6 @@ from .public_candidate_facets import (
 )
 from .query_intent_policy import list_business_rewrite_policy_catalog
 from .query_intent_rewrite import interpret_query_intent_rewrite, summarize_query_intent_rewrite
-from .recovery_contract import (
-    remote_provider_event_recovery_total_limit as _remote_provider_event_recovery_total_limit,
-)
 from .recovery_drain_registry import (
     DEFAULT_RECOVERY_DRAIN_BINDINGS,
     build_recovery_drain_registry,
@@ -2771,6 +2768,39 @@ class SourcingOrchestrator:
             "status": "signaled",
             "service_name": service_name,
             "wakeup": dict(wakeup or {}),
+        }
+
+    def signal_shared_recovery(
+        self,
+        *,
+        reason: str,
+        requested_by: str,
+    ) -> dict[str, Any]:
+        """Expose the shared-daemon nudge without accepting recovery controls.
+
+        This is the only API-safe recovery trigger: callers may identify why a
+        wakeup was requested, but cannot select a job, stale threshold, limit,
+        phase, or fallback runner. The external daemon remains the sole recovery
+        executor.
+        """
+
+        signal = self._signal_shared_recovery_wakeup(
+            reason=str(reason or "shared_recovery_signal").strip() or "shared_recovery_signal",
+            requested_by=str(requested_by or "api").strip() or "api",
+            scope="shared",
+        )
+        signal_status = str(signal.get("status") or "").strip().lower()
+        if signal_status == "signaled":
+            return {
+                "status": "accepted",
+                "mode": "shared_recovery_signal",
+                "shared_recovery_signal": signal,
+            }
+        return {
+            "status": "unavailable",
+            "reason": "shared_recovery_signal_unavailable",
+            "mode": "shared_recovery_signal",
+            "shared_recovery_signal": signal,
         }
 
     def queue_workflow(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -39377,12 +39407,31 @@ class SourcingOrchestrator:
             str(
                 payload.get("recovery_mode")
                 or payload.get("remote_provider_event_recovery_mode")
-                or "job_scoped_recovery"
+                or "shared_recovery_signal"
             )
             .strip()
             .lower()
         )
-        inline_recovery = recovery_mode in {"inline", "sync", "sync_recovery", "direct", "direct_recovery"}
+        if recovery_mode in {"inline", "sync", "sync_recovery", "direct", "direct_recovery"}:
+            return {
+                "status": "invalid",
+                "reason": "remote_provider_event_sync_recovery_retired",
+                "mode": "shared_recovery_signal",
+            }
+        if recovery_mode not in {
+            "shared_recovery_signal",
+            "signal",
+            "signal_only",
+            # Compatibility inputs are accepted, but their old execution
+            # semantics are retired: all normal events take the signal-only path.
+            "async_recovery",
+            "job_scoped_recovery",
+        }:
+            return {
+                "status": "invalid",
+                "reason": "remote_provider_event_recovery_mode_unsupported",
+                "mode": "shared_recovery_signal",
+            }
         event = normalize_remote_provider_event(payload, provider=str(payload.get("provider") or "apify"))
         local_event_seen_at = _utc_now_iso()
         remote_completed_at = str(event.get("remote_completed_at") or "").strip()
@@ -39477,6 +39526,15 @@ class SourcingOrchestrator:
                         "event_metrics": event_metrics,
                     },
                 )
+            owner_id = (
+                str(payload.get("owner_id") or "").strip()
+                or f"remote-provider-event-{str(event.get('provider') or 'provider')}-{uuid.uuid4().hex[:8]}"
+            )
+            shared_recovery_signal = self._signal_shared_recovery_wakeup(
+                reason="remote_provider_event",
+                requested_by=owner_id,
+                scope="shared",
+            )
             return {
                 "status": "accepted",
                 "reason": "remote_provider_terminal_event_already_recorded",
@@ -39487,6 +39545,9 @@ class SourcingOrchestrator:
                 "recoveries": [],
                 "recovery_dispatch_count": 0,
                 "recovery_dispatches": [],
+                "shared_recovery_signal_count": 1,
+                "shared_recovery_signal": shared_recovery_signal,
+                "mode": "shared_recovery_signal",
                 "released_provider_limiter_worker_ids": released_provider_limiter_worker_ids,
             }
         if not target_job_ids:
@@ -39588,6 +39649,15 @@ class SourcingOrchestrator:
                             "event_metrics": event_metrics,
                         },
                     )
+                owner_id = (
+                    str(payload.get("owner_id") or "").strip()
+                    or f"remote-provider-event-{str(event.get('provider') or 'provider')}-{uuid.uuid4().hex[:8]}"
+                )
+                shared_recovery_signal = self._signal_shared_recovery_wakeup(
+                    reason="remote_provider_event",
+                    requested_by=owner_id,
+                    scope="shared",
+                )
                 return {
                     "status": "accepted",
                     "reason": "remote_provider_event_recovery_already_in_flight",
@@ -39596,6 +39666,11 @@ class SourcingOrchestrator:
                     "targets": in_flight_targets,
                     "recovery_count": 0,
                     "recoveries": [],
+                    "recovery_dispatch_count": 0,
+                    "recovery_dispatches": [],
+                    "shared_recovery_signal_count": 1,
+                    "shared_recovery_signal": shared_recovery_signal,
+                    "mode": "shared_recovery_signal",
                     "released_provider_limiter_worker_ids": released_provider_limiter_worker_ids,
                 }
             elif known_job_ids:
@@ -39630,6 +39705,16 @@ class SourcingOrchestrator:
                     "targets": late_targets,
                     "recovery_count": 0,
                     "recoveries": [],
+                    "recovery_dispatch_count": 0,
+                    "recovery_dispatches": [],
+                    "shared_recovery_signal_count": 0,
+                    "shared_recovery_signal": {
+                        "status": "not_needed",
+                        "scope": "shared",
+                        "mode": "signal_only",
+                        "reason": "matching_remote_provider_workers_not_recoverable",
+                    },
+                    "mode": "shared_recovery_signal",
                 }
             else:
                 return {
@@ -39638,6 +39723,18 @@ class SourcingOrchestrator:
                     "event": event,
                     "event_metrics": event_metrics,
                     "targets": targets,
+                    "recovery_count": 0,
+                    "recoveries": [],
+                    "recovery_dispatch_count": 0,
+                    "recovery_dispatches": [],
+                    "shared_recovery_signal_count": 0,
+                    "shared_recovery_signal": {
+                        "status": "not_needed",
+                        "scope": "shared",
+                        "mode": "signal_only",
+                        "reason": "no_matching_remote_wait_workers",
+                    },
+                    "mode": "shared_recovery_signal",
                 }
         owner_id = (
             str(payload.get("owner_id") or "").strip()
@@ -39648,10 +39745,6 @@ class SourcingOrchestrator:
             for worker_id in list(targets.get("worker_ids") or [])
             if _coerce_int(worker_id, 0) > 0
         ]
-        remote_event_recovery_total_limit = _remote_provider_event_recovery_total_limit(
-            payload.get("remote_provider_event_recovery_total_limit"),
-            payload.get("job_recovery_total_limit"),
-        )
         if bool(event.get("is_terminal")):
             _mark_remote_provider_terminal_event_on_workers(
                 self.store,
@@ -39671,8 +39764,6 @@ class SourcingOrchestrator:
         else:
             released_provider_limiter_worker_ids = []
             released_worker_ids = []
-        recoveries: list[dict[str, Any]] = []
-        recovery_dispatches: list[dict[str, Any]] = []
         for job_id in target_job_ids:
             self.store.append_job_event(
                 job_id,
@@ -39689,115 +39780,25 @@ class SourcingOrchestrator:
                     "event_metrics": event_metrics,
                 },
             )
-            recovery_payload = {
-                "job_id": job_id,
-                "owner_id": owner_id,
-                "stale_after_seconds": 0,
-                "total_limit": remote_event_recovery_total_limit,
-                "explicit_job_followup_rounds": _coerce_int(payload.get("explicit_job_followup_rounds"), 1),
-                "search_seed_discovery_enabled": False,
-                "post_completion_reconcile_enabled": True,
-                "post_recovery_housekeeping_enabled": False,
-                "profile_prefetch_refill_enabled": True,
-                "remote_event_followup_enabled": False,
-                "snapshot_full_materialization_enabled": False,
-                "excel_intake_recovery_enabled": False,
-                "workflow_auto_resume_enabled": True,
-                "workflow_queue_auto_takeover_enabled": False,
-                "workflow_queue_resume_stale_after_seconds": 0,
-                "workflow_stale_scope_job_id": job_id,
-                "explicit_worker_ids": target_worker_ids,
-                "force_release_explicit_worker_leases": True,
-                "profile_prefetch_refill_before_worker_recovery": True,
-            }
-            if inline_recovery:
-                recovery = self.run_worker_recovery_once(recovery_payload)
-                recoveries.append(
-                    {
-                        "job_id": job_id,
-                        "daemon": dict(recovery.get("daemon") or {}),
-                        "workflow_resume": list(recovery.get("workflow_resume") or []),
-                        "post_completion_reconcile": list(recovery.get("post_completion_reconcile") or []),
-                    }
-                )
-            else:
-                dispatch_payload = {
-                    "source": "remote_provider_event",
-                    "auto_job_daemon": True,
-                    "recovery_bootstrap_enabled": False,
-                    "explicit_worker_ids": target_worker_ids,
-                    "force_release_explicit_worker_leases": True,
-                    "profile_prefetch_nonblocking_submit": True,
-                    "profile_prefetch_refill_enabled": True,
-                    "profile_prefetch_refill_before_worker_recovery": True,
-                    "remote_event_followup_enabled": False,
-                    "search_seed_discovery_enabled": False,
-                    "snapshot_full_materialization_enabled": False,
-                    "excel_intake_recovery_enabled": False,
-                    "post_recovery_housekeeping_enabled": False,
-                    "workflow_auto_resume_enabled": True,
-                    "workflow_queue_auto_takeover_enabled": False,
-                    "job_recovery_poll_seconds": max(
-                        0.5,
-                        float(payload.get("job_recovery_poll_seconds") or 0.5),
-                    ),
-                    "job_recovery_max_ticks": max(1, _coerce_int(payload.get("job_recovery_max_ticks"), 900)),
-                    "job_recovery_idle_stop_ticks": max(1, _coerce_int(payload.get("job_recovery_idle_stop_ticks"), 3)),
-                    "job_recovery_stale_after_seconds": 0,
-                    "job_recovery_total_limit": remote_event_recovery_total_limit,
-                    "workflow_queue_resume_stale_after_seconds": 0,
-                    "workflow_stale_scope_job_id": job_id,
-                    "remote_provider_event_worker_ids": target_worker_ids,
-                    "remote_provider_event_owner_id": owner_id,
-                }
-                dispatch = self.ensure_job_scoped_recovery(job_id, dispatch_payload)
-                recovery_service_name = str(dict(dispatch or {}).get("service_name") or "").strip()
-                if not recovery_service_name:
-                    try:
-                        recovery_service_name = str(
-                            _build_job_scoped_recovery_config(job_id, dispatch_payload).get("service_name") or ""
-                        ).strip()
-                    except Exception:
-                        recovery_service_name = f"job-recovery-{job_id}"
-                wakeup = request_service_wakeup(
-                    self.runtime_dir,
-                    recovery_service_name,
-                    reason="remote_provider_event",
-                    requested_by=owner_id,
-                    callback_payload={
-                        "source": "remote_provider_event",
-                        "explicit_worker_ids": target_worker_ids,
-                        "remote_provider_event_worker_ids": target_worker_ids,
-                        "force_release_explicit_worker_leases": True,
-                        "total_limit": remote_event_recovery_total_limit,
-                        "profile_prefetch_nonblocking_submit": True,
-                        "profile_prefetch_refill_enabled": True,
-                        "profile_prefetch_refill_before_worker_recovery": True,
-                        "remote_event_followup_enabled": False,
-                        "search_seed_discovery_enabled": False,
-                        "snapshot_full_materialization_enabled": False,
-                        "excel_intake_recovery_enabled": False,
-                        "post_recovery_housekeeping_enabled": False,
-                        "workflow_auto_resume_enabled": True,
-                        "workflow_queue_auto_takeover_enabled": False,
-                        "workflow_queue_resume_stale_after_seconds": 0,
-                        "workflow_stale_scope_job_id": job_id,
-                        "remote_provider_event_owner_id": owner_id,
-                    },
-                )
-                recovery_dispatches.append({"job_id": job_id, **dict(dispatch or {})})
-                if recovery_dispatches:
-                    recovery_dispatches[-1]["wakeup"] = wakeup
+        shared_recovery_signal = self._signal_shared_recovery_wakeup(
+            reason="remote_provider_event",
+            requested_by=owner_id,
+            scope="shared",
+        )
         return {
             "status": "accepted",
             "event": event,
             "event_metrics": event_metrics,
             "targets": targets,
-            "recovery_count": len(recoveries),
-            "recoveries": recoveries,
-            "recovery_dispatch_count": len(recovery_dispatches),
-            "recovery_dispatches": recovery_dispatches,
-            "mode": "sync_recovery" if inline_recovery else "job_scoped_recovery",
+            "recovery_count": 0,
+            "recoveries": [],
+            # Compatibility fields stay total but can no longer imply a
+            # request-thread runner/sidecar dispatch.
+            "recovery_dispatch_count": 0,
+            "recovery_dispatches": [],
+            "shared_recovery_signal_count": 1,
+            "shared_recovery_signal": shared_recovery_signal,
+            "mode": "shared_recovery_signal",
             "released_worker_ids": released_worker_ids,
             "released_provider_limiter_worker_ids": released_provider_limiter_worker_ids,
         }

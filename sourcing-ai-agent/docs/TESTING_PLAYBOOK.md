@@ -1061,8 +1061,8 @@ PYTHONPATH=src ./.venv-tests/bin/pytest \
 - 默认模式要求测试跑通并记录 lifecycle/progress/UI 观测，不再要求必须复现旧缺口。
 - 2026-04-29 hard mode 已通过；`SOURCING_EXPECT_DELTA_STREAMING_BROWSER_E2E=1` 是 Delta asset board streaming 的用户交互级回归门禁。
 - 运行任何 live webhook smoke 前先执行 `scripts/apify_webhook_preflight.py`；scripted/browser 环境可用 `--mode scripted` 明确确认“不需要外部 Apify callback URL”的边界。
-- 这个 browser driver 现在默认使用测试侧 webhook-event driver：它在 isolated hosted runtime 中向 `/api/providers/apify/webhook` 发送 Apify-shaped terminal event，验证 quick-ack `remote_provider_event -> background recovery -> next worker submit`，而不是直接调用 `/api/workers/daemon/run-once`。不要在压力/浏览器 smoke 中使用 `?sync=1`；它只是低并发调试入口，会把完整 recovery/materialization 绑进 webhook response 并制造不真实的客户端 timeout/lag。
-- 旧 `--drive-worker-recovery` 仍可用于排障下游 recovery/reconcile，但不能用来证明 webhook/event-level discovery 延迟；它会绕过 provider webhook endpoint。
+- 这个 browser driver 现在默认使用测试侧 webhook-event driver：它在 isolated hosted runtime 中向 `/api/providers/apify/webhook` 发送 Apify-shaped terminal event，验证 quick-ack `terminal checkpoint/lease release -> shared_recovery_signal -> external daemon recovery -> next worker submit`。endpoint 返回的 `mode=shared_recovery_signal` / `shared_recovery_signal_count` 是信号证据；`recovery_dispatch_count` 保留为零值兼容字段，不再代表 sidecar。`?sync=1` 已 fail-closed 退役并返回 `410 provider_webhook_sync_recovery_retired`，任何测试都不得依赖 API 线程内 recovery。
+- 兼容参数 `--drive-worker-recovery` 现在只向 `POST /api/workers/daemon/run-once` 发送空 payload，并记录 shared-signal 与只读 daemon status；它不能选择 job/worker/phase，也不能证明 recovery 已执行。实际推进必须从后续 progress/workers/service-status 观测，确定性单 tick 诊断只能使用 worker-owned CLI。
 - webhook-event driver 不调用真实 Harvest/DataForSEO provider，也不验证外部 Apify 网络 callback roundtrip。真实 webhook 仍需要单独 tunnel/live smoke。
 - hard mode 会断言：
   - baseline board 在 current snapshot materialization 之前可见

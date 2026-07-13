@@ -1672,10 +1672,15 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
                 },
             )
         if _provider_webhook_sync_requested(query):
-            result = orchestrator.handle_remote_provider_event({**event_payload, "recovery_mode": "sync_recovery"})
-            status = HTTPStatus.ACCEPTED if result.get("status") == "accepted" else HTTPStatus.BAD_REQUEST
-            return _json_response(status, result)
-        result = orchestrator.handle_remote_provider_event({**event_payload, "recovery_mode": "job_scoped_recovery"})
+            return _json_response(
+                HTTPStatus.GONE,
+                {
+                    "status": "retired",
+                    "reason": "provider_webhook_sync_recovery_retired",
+                    "mode": "shared_recovery_signal",
+                },
+            )
+        result = orchestrator.handle_remote_provider_event({**event_payload, "recovery_mode": "shared_recovery_signal"})
         if result.get("status") != "accepted":
             return _json_response(HTTPStatus.BAD_REQUEST, result)
         return _json_response(
@@ -1683,11 +1688,12 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             {
                 "status": "accepted",
                 "provider": "apify",
-                "mode": "job_scoped_recovery",
+                "mode": "shared_recovery_signal",
+                "reason": str(result.get("reason") or ""),
                 "event": _provider_event_response_payload(event),
                 "targets": dict(result.get("targets") or {}),
-                "recovery_dispatch_count": int(result.get("recovery_dispatch_count") or 0),
-                "recovery_dispatches": list(result.get("recovery_dispatches") or []),
+                "shared_recovery_signal_count": int(result.get("shared_recovery_signal_count") or 0),
+                "shared_recovery_signal": dict(result.get("shared_recovery_signal") or {}),
                 "released_worker_ids": list(result.get("released_worker_ids") or []),
             },
         )
@@ -2486,7 +2492,15 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["POST"], "/api/workers/cleanup", post_workers_cleanup, read_body=True)
 
     def post_workers_daemon_run_once(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        return _json_response(HTTPStatus.OK, orchestrator.run_worker_recovery_once(payload))
+        # C3a: the API process is a signaler, never a recovery runner. Client
+        # payload fields are deliberately ignored so stale thresholds, limits,
+        # job scope, phases, or fallback controls cannot cross this boundary.
+        result = orchestrator.signal_shared_recovery(
+            reason="operator_api_recovery_signal",
+            requested_by="operator_api",
+        )
+        status = HTTPStatus.ACCEPTED if result.get("status") == "accepted" else HTTPStatus.SERVICE_UNAVAILABLE
+        return _json_response(status, result)
 
     add(["POST"], "/api/workers/daemon/run-once", post_workers_daemon_run_once, read_body=True)
 

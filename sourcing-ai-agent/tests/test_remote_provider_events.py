@@ -15,8 +15,24 @@ from sourcing_agent.remote_provider_events import (
     normalize_remote_provider_event,
     remote_provider_event_matches_worker,
 )
-from sourcing_agent.service_daemon import read_service_wakeup_request
 from sourcing_agent.workflow_event_response import remote_event_lane_for_worker
+
+
+def _forbidden_request_thread_recovery(*_args, **_kwargs):
+    raise AssertionError("provider-event request handling must not execute or spawn recovery")
+
+
+def _record_shared_recovery_signal(calls: list[dict[str, object]]):
+    def _signal(**kwargs):
+        calls.append(dict(kwargs))
+        return {
+            "status": "signaled",
+            "scope": "shared",
+            "mode": "signal_only",
+            "service_name": "worker-recovery-daemon",
+        }
+
+    return _signal
 
 
 def _load_apify_webhook_smoke_module():
@@ -128,7 +144,29 @@ def test_remote_provider_event_targets_matching_linkedin_stage_1_worker() -> Non
     assert targets["lane_counts"] == {"linkedin_stage_1": 1}
 
 
-def test_handle_remote_provider_event_triggers_job_scoped_recovery_for_matching_worker(tmp_path: Path) -> None:
+def test_handle_remote_provider_event_retires_sync_mode_before_store_access() -> None:
+    store = mock.Mock()
+    result = SourcingOrchestrator.handle_remote_provider_event(
+        SimpleNamespace(store=store),
+        {
+            "provider": "apify",
+            "recovery_mode": "sync_recovery",
+            "eventType": "ACTOR.RUN.SUCCEEDED",
+            "eventData": {"actorRunId": "run-retired-sync"},
+        },
+    )
+
+    assert result == {
+        "status": "invalid",
+        "reason": "remote_provider_event_sync_recovery_retired",
+        "mode": "shared_recovery_signal",
+    }
+    store.list_recoverable_agent_workers.assert_not_called()
+
+
+def test_handle_remote_provider_event_persists_terminal_handoff_then_signals_shared_recovery(
+    tmp_path: Path,
+) -> None:
     class _FakeStore:
         def __init__(self) -> None:
             self.events: list[dict[str, object]] = []
@@ -170,20 +208,14 @@ def test_handle_remote_provider_event_triggers_job_scoped_recovery_for_matching_
             return {"worker_id": worker_id}
 
     fake_store = _FakeStore()
-    dispatch_payloads: list[dict[str, object]] = []
-
-    def _run_worker_recovery_once(payload):
-        raise AssertionError("normal remote provider events must not run inline recovery")
-
-    def _ensure_job_scoped_recovery(job_id, payload):
-        dispatch_payloads.append({"job_id": job_id, **dict(payload or {})})
-        return {"status": "already_running", "scope": "job_scoped", "job_id": job_id}
+    signal_calls: list[dict[str, object]] = []
 
     fake_orchestrator = SimpleNamespace(
         runtime_dir=tmp_path,
         store=fake_store,
-        run_worker_recovery_once=_run_worker_recovery_once,
-        ensure_job_scoped_recovery=_ensure_job_scoped_recovery,
+        run_worker_recovery_once=_forbidden_request_thread_recovery,
+        ensure_job_scoped_recovery=_forbidden_request_thread_recovery,
+        _signal_shared_recovery_wakeup=_record_shared_recovery_signal(signal_calls),
     )
 
     result = SourcingOrchestrator.handle_remote_provider_event(
@@ -203,20 +235,19 @@ def test_handle_remote_provider_event_triggers_job_scoped_recovery_for_matching_
     assert result["targets"]["job_ids"] == ["job-linkedin-stage-1"]
     assert result["targets"]["worker_ids"] == [901]
     assert result["recovery_count"] == 0
-    assert result["recovery_dispatch_count"] == 1
-    assert result["recovery_dispatches"][0]["wakeup"]["service_name"] == "job-recovery-job-linkedin-stage-1"
-    assert result["mode"] == "job_scoped_recovery"
+    assert result["recovery_dispatch_count"] == 0
+    assert result["recovery_dispatches"] == []
+    assert result["shared_recovery_signal_count"] == 1
+    assert result["shared_recovery_signal"]["service_name"] == "worker-recovery-daemon"
+    assert result["mode"] == "shared_recovery_signal"
     assert result["released_worker_ids"] == [901]
-    wakeup = read_service_wakeup_request(tmp_path, "job-recovery-job-linkedin-stage-1")
-    assert wakeup["status"] == "requested"
-    assert wakeup["reason"] == "remote_provider_event"
-    assert wakeup["requested_by"] == "provider-webhook-test"
-    assert wakeup["callback_payload"]["explicit_worker_ids"] == [901]
-    assert wakeup["callback_payload"]["remote_provider_event_worker_ids"] == [901]
-    assert wakeup["callback_payload"]["total_limit"] == 4
-    assert wakeup["callback_payload"]["profile_prefetch_refill_before_worker_recovery"] is True
-    assert wakeup["callback_payload"]["remote_event_followup_enabled"] is False
-    assert wakeup["callback_payload"]["search_seed_discovery_enabled"] is False
+    assert signal_calls == [
+        {
+            "reason": "remote_provider_event",
+            "requested_by": "provider-webhook-test",
+            "scope": "shared",
+        }
+    ]
     assert fake_store.list_kwargs == {"limit": 500, "stale_after_seconds": 0}
     assert fake_store.events[0]["job_id"] == "job-linkedin-stage-1"
     assert fake_store.events[0]["stage"] == "remote_provider_event"
@@ -225,35 +256,6 @@ def test_handle_remote_provider_event_triggers_job_scoped_recovery_for_matching_
     assert event_metrics["local_event_seen_at"]
     assert "remote_to_local_event_lag_ms" in event_metrics
     assert fake_store.events[0]["payload"]["released_worker_ids"] == [901]
-    assert dispatch_payloads == [
-        {
-            "job_id": "job-linkedin-stage-1",
-            "source": "remote_provider_event",
-            "auto_job_daemon": True,
-            "recovery_bootstrap_enabled": False,
-            "explicit_worker_ids": [901],
-            "force_release_explicit_worker_leases": True,
-            "profile_prefetch_nonblocking_submit": True,
-            "profile_prefetch_refill_enabled": True,
-            "profile_prefetch_refill_before_worker_recovery": True,
-            "remote_event_followup_enabled": False,
-            "search_seed_discovery_enabled": False,
-            "snapshot_full_materialization_enabled": False,
-            "excel_intake_recovery_enabled": False,
-            "post_recovery_housekeeping_enabled": False,
-            "workflow_auto_resume_enabled": True,
-            "workflow_queue_auto_takeover_enabled": False,
-            "job_recovery_poll_seconds": 0.5,
-            "job_recovery_max_ticks": 900,
-            "job_recovery_idle_stop_ticks": 3,
-            "job_recovery_stale_after_seconds": 0,
-            "job_recovery_total_limit": 4,
-            "workflow_queue_resume_stale_after_seconds": 0,
-            "workflow_stale_scope_job_id": "job-linkedin-stage-1",
-            "remote_provider_event_worker_ids": [901],
-            "remote_provider_event_owner_id": "provider-webhook-test",
-        }
-    ]
 
 
 def test_handle_remote_provider_event_wakes_known_running_worker_without_stale_wait(tmp_path: Path) -> None:
@@ -302,20 +304,14 @@ def test_handle_remote_provider_event_wakes_known_running_worker_without_stale_w
             return {"worker_id": worker_id}
 
     fake_store = _FakeStore()
-    dispatch_payloads: list[dict[str, object]] = []
-
-    def _run_worker_recovery_once(payload):
-        raise AssertionError("normal remote provider events must not run inline recovery")
-
-    def _ensure_job_scoped_recovery(job_id, payload):
-        dispatch_payloads.append({"job_id": job_id, **dict(payload or {})})
-        return {"status": "already_running", "scope": "job_scoped", "job_id": job_id}
+    signal_calls: list[dict[str, object]] = []
 
     fake_orchestrator = SimpleNamespace(
         runtime_dir=tmp_path,
         store=fake_store,
-        run_worker_recovery_once=_run_worker_recovery_once,
-        ensure_job_scoped_recovery=_ensure_job_scoped_recovery,
+        run_worker_recovery_once=_forbidden_request_thread_recovery,
+        ensure_job_scoped_recovery=_forbidden_request_thread_recovery,
+        _signal_shared_recovery_wakeup=_record_shared_recovery_signal(signal_calls),
     )
 
     result = SourcingOrchestrator.handle_remote_provider_event(
@@ -336,19 +332,16 @@ def test_handle_remote_provider_event_wakes_known_running_worker_without_stale_w
     assert result["targets"]["status_counts"] == {"running": 1}
     assert result["targets"]["source"] == "known_remote_provider_workers"
     assert result["recovery_count"] == 0
-    assert result["recovery_dispatch_count"] == 1
+    assert result["recovery_dispatch_count"] == 0
+    assert result["shared_recovery_signal_count"] == 1
     assert result["released_worker_ids"] == [904]
-    assert dispatch_payloads[0]["remote_provider_event_worker_ids"] == [904]
-    assert dispatch_payloads[0]["job_recovery_stale_after_seconds"] == 0
-    assert dispatch_payloads[0]["profile_prefetch_refill_enabled"] is True
-    assert dispatch_payloads[0]["profile_prefetch_refill_before_worker_recovery"] is True
-    assert dispatch_payloads[0]["remote_event_followup_enabled"] is False
-    assert dispatch_payloads[0]["search_seed_discovery_enabled"] is False
-    assert dispatch_payloads[0]["snapshot_full_materialization_enabled"] is False
-    assert dispatch_payloads[0]["excel_intake_recovery_enabled"] is False
-    assert dispatch_payloads[0]["post_recovery_housekeeping_enabled"] is False
-    assert dispatch_payloads[0]["workflow_auto_resume_enabled"] is True
-    assert dispatch_payloads[0]["workflow_queue_auto_takeover_enabled"] is False
+    assert signal_calls == [
+        {
+            "reason": "remote_provider_event",
+            "requested_by": "provider-webhook-running-test",
+            "scope": "shared",
+        }
+    ]
     assert fake_store.events[0]["status"] == "received"
     assert fake_store.events[0]["payload"]["target_source"] == "known_remote_provider_workers"
 
@@ -420,20 +413,14 @@ def test_handle_remote_provider_event_wakes_active_remote_wait_lease_once(tmp_pa
             return {"worker_id": worker_id}
 
     fake_store = _FakeStore()
-    dispatch_payloads: list[dict[str, object]] = []
-
-    def _run_worker_recovery_once(payload):
-        raise AssertionError("normal remote provider events must not run inline recovery")
-
-    def _ensure_job_scoped_recovery(job_id, payload):
-        dispatch_payloads.append({"job_id": job_id, **dict(payload or {})})
-        return {"status": "already_running", "scope": "job_scoped", "job_id": job_id}
+    signal_calls: list[dict[str, object]] = []
 
     fake_orchestrator = SimpleNamespace(
         runtime_dir=tmp_path,
         store=fake_store,
-        run_worker_recovery_once=_run_worker_recovery_once,
-        ensure_job_scoped_recovery=_ensure_job_scoped_recovery,
+        run_worker_recovery_once=_forbidden_request_thread_recovery,
+        ensure_job_scoped_recovery=_forbidden_request_thread_recovery,
+        _signal_shared_recovery_wakeup=_record_shared_recovery_signal(signal_calls),
     )
 
     result = SourcingOrchestrator.handle_remote_provider_event(
@@ -451,16 +438,28 @@ def test_handle_remote_provider_event_wakes_active_remote_wait_lease_once(tmp_pa
 
     assert result["status"] == "accepted"
     assert result["recovery_count"] == 0
-    assert result["recovery_dispatch_count"] == 1
+    assert result["recovery_dispatch_count"] == 0
+    assert result["shared_recovery_signal_count"] == 1
     assert result["targets"]["worker_ids"] == [906]
     assert result["targets"]["source"] == "known_remote_provider_workers"
     assert result["released_worker_ids"] == [906]
-    assert dispatch_payloads[0]["remote_provider_event_worker_ids"] == [906]
+    assert signal_calls == [
+        {
+            "reason": "remote_provider_event",
+            "requested_by": "provider-webhook-duplicate-test",
+            "scope": "shared",
+        }
+    ]
     assert fake_store.events[0]["stage"] == "remote_provider_event"
     assert fake_store.events[0]["status"] == "received"
     assert fake_store.checkpoints[0]["worker_id"] == 906
-    assert fake_store.checkpoints[0]["checkpoint"]["remote_provider_terminal_event"]["run_id"] == "run-webhook-in-flight"
-    assert fake_store.checkpoints[0]["checkpoint"]["remote_provider_terminal_event_metrics"]["source"] == "provider_webhook"
+    assert (
+        fake_store.checkpoints[0]["checkpoint"]["remote_provider_terminal_event"]["run_id"] == "run-webhook-in-flight"
+    )
+    assert (
+        fake_store.checkpoints[0]["checkpoint"]["remote_provider_terminal_event_metrics"]["source"]
+        == "provider_webhook"
+    )
 
 
 def test_handle_remote_provider_event_does_not_rewake_checkpointed_terminal_event() -> None:
@@ -544,10 +543,13 @@ def test_handle_remote_provider_event_does_not_rewake_checkpointed_terminal_even
 
     fake_store = _FakeStore()
 
-    def _run_worker_recovery_once(payload):
-        raise AssertionError("checkpointed duplicate provider events must not rerun recovery")
-
-    fake_orchestrator = SimpleNamespace(store=fake_store, run_worker_recovery_once=_run_worker_recovery_once)
+    signal_calls: list[dict[str, object]] = []
+    fake_orchestrator = SimpleNamespace(
+        store=fake_store,
+        run_worker_recovery_once=_forbidden_request_thread_recovery,
+        ensure_job_scoped_recovery=_forbidden_request_thread_recovery,
+        _signal_shared_recovery_wakeup=_record_shared_recovery_signal(signal_calls),
+    )
 
     result = SourcingOrchestrator.handle_remote_provider_event(
         fake_orchestrator,
@@ -567,6 +569,8 @@ def test_handle_remote_provider_event_does_not_rewake_checkpointed_terminal_even
     assert result["recovery_count"] == 0
     assert result["targets"]["worker_ids"] == [906]
     assert result["targets"]["source"] == "known_remote_provider_workers_in_flight"
+    assert result["recovery_dispatch_count"] == 0
+    assert result["shared_recovery_signal_count"] == 1
     assert result["released_provider_limiter_worker_ids"] == [906]
     assert fake_store.events[0]["stage"] == "remote_provider_event"
     assert fake_store.events[0]["status"] == "received_in_flight"
@@ -576,6 +580,13 @@ def test_handle_remote_provider_event_does_not_rewake_checkpointed_terminal_even
             "lease_token": "provider-lease-906-in-flight",
             "limiter_key": "harvest_profile_scraper_actor",
             "lease_owner": "harvest_profile_batch:job-linkedin-stage-1:payload",
+        }
+    ]
+    assert signal_calls == [
+        {
+            "reason": "remote_provider_event",
+            "requested_by": "provider-webhook-duplicate-test",
+            "scope": "shared",
         }
     ]
 
@@ -625,10 +636,13 @@ def test_handle_remote_provider_event_dedupes_recoverable_worker_with_terminal_m
 
     fake_store = _FakeStore()
 
-    def _run_worker_recovery_once(payload):
-        raise AssertionError("duplicate terminal events must not rerun recovery")
-
-    fake_orchestrator = SimpleNamespace(store=fake_store, run_worker_recovery_once=_run_worker_recovery_once)
+    signal_calls: list[dict[str, object]] = []
+    fake_orchestrator = SimpleNamespace(
+        store=fake_store,
+        run_worker_recovery_once=_forbidden_request_thread_recovery,
+        ensure_job_scoped_recovery=_forbidden_request_thread_recovery,
+        _signal_shared_recovery_wakeup=_record_shared_recovery_signal(signal_calls),
+    )
 
     result = SourcingOrchestrator.handle_remote_provider_event(
         fake_orchestrator,
@@ -649,8 +663,17 @@ def test_handle_remote_provider_event_dedupes_recoverable_worker_with_terminal_m
     assert result["recovery_count"] == 0
     assert result["targets"]["worker_ids"] == [906]
     assert result["targets"]["source"] == "recoverable_workers_with_terminal_event_marker"
+    assert result["recovery_dispatch_count"] == 0
+    assert result["shared_recovery_signal_count"] == 1
     assert fake_store.events[0]["stage"] == "remote_provider_event"
     assert fake_store.events[0]["status"] == "received_in_flight"
+    assert signal_calls == [
+        {
+            "reason": "remote_provider_event",
+            "requested_by": "provider-webhook-duplicate-test",
+            "scope": "shared",
+        }
+    ]
 
 
 def test_handle_remote_provider_event_marks_terminal_checkpoint_before_recovery(tmp_path: Path) -> None:
@@ -687,7 +710,9 @@ def test_handle_remote_provider_event_marks_terminal_checkpoint_before_recovery(
                 return dict(self.worker)
             return None
 
-        def checkpoint_agent_worker(self, worker_id, *, checkpoint_payload=None, output_payload=None, status="running"):
+        def checkpoint_agent_worker(
+            self, worker_id, *, checkpoint_payload=None, output_payload=None, status="running"
+        ):
             self.checkpoints.append(
                 {
                     "worker_id": worker_id,
@@ -731,20 +756,14 @@ def test_handle_remote_provider_event_marks_terminal_checkpoint_before_recovery(
             return True
 
     fake_store = _FakeStore()
-    dispatch_payloads: list[dict[str, object]] = []
-
-    def _run_worker_recovery_once(payload):
-        raise AssertionError("normal remote provider events must not run inline recovery")
-
-    def _ensure_job_scoped_recovery(job_id, payload):
-        dispatch_payloads.append({"job_id": job_id, **dict(payload or {})})
-        return {"status": "already_running", "scope": "job_scoped", "job_id": job_id}
+    signal_calls: list[dict[str, object]] = []
 
     fake_orchestrator = SimpleNamespace(
         runtime_dir=tmp_path,
         store=fake_store,
-        run_worker_recovery_once=_run_worker_recovery_once,
-        ensure_job_scoped_recovery=_ensure_job_scoped_recovery,
+        run_worker_recovery_once=_forbidden_request_thread_recovery,
+        ensure_job_scoped_recovery=_forbidden_request_thread_recovery,
+        _signal_shared_recovery_wakeup=_record_shared_recovery_signal(signal_calls),
     )
 
     result = SourcingOrchestrator.handle_remote_provider_event(
@@ -762,15 +781,17 @@ def test_handle_remote_provider_event_marks_terminal_checkpoint_before_recovery(
 
     assert result["status"] == "accepted"
     assert result["recovery_count"] == 0
-    assert result["recovery_dispatch_count"] == 1
+    assert result["recovery_dispatch_count"] == 0
+    assert result["shared_recovery_signal_count"] == 1
     assert result["released_worker_ids"] == [907]
     assert result["released_provider_limiter_worker_ids"] == [907]
-    assert dispatch_payloads[0]["remote_provider_event_worker_ids"] == [907]
-    assert dispatch_payloads[0]["explicit_worker_ids"] == [907]
-    assert dispatch_payloads[0]["force_release_explicit_worker_leases"] is True
-    assert dispatch_payloads[0]["profile_prefetch_nonblocking_submit"] is True
-    assert dispatch_payloads[0]["job_recovery_max_ticks"] == 900
-    assert dispatch_payloads[0]["job_recovery_idle_stop_ticks"] == 3
+    assert signal_calls == [
+        {
+            "reason": "remote_provider_event",
+            "requested_by": "provider-webhook-terminal-test",
+            "scope": "shared",
+        }
+    ]
     assert fake_store.checkpoints
     checkpoint = fake_store.checkpoints[0]["checkpoint"]
     assert checkpoint["force_scripted_terminal_fetch"] is True
@@ -1128,20 +1149,14 @@ def test_handle_remote_provider_event_late_duplicate_does_not_reopen_durable_que
             return {"worker_id": worker_id}
 
     fake_store = _FakeStore()
-    dispatch_payloads: list[dict[str, object]] = []
-
-    def _run_worker_recovery_once(payload):
-        raise AssertionError("normal remote provider events must not run inline recovery")
-
-    def _ensure_job_scoped_recovery(job_id, payload):
-        dispatch_payloads.append({"job_id": job_id, **dict(payload or {})})
-        return {"status": "already_running", "scope": "job_scoped", "job_id": job_id}
+    signal_calls: list[dict[str, object]] = []
 
     fake_orchestrator = SimpleNamespace(
         runtime_dir=tmp_path,
         store=fake_store,
-        run_worker_recovery_once=_run_worker_recovery_once,
-        ensure_job_scoped_recovery=_ensure_job_scoped_recovery,
+        run_worker_recovery_once=_forbidden_request_thread_recovery,
+        ensure_job_scoped_recovery=_forbidden_request_thread_recovery,
+        _signal_shared_recovery_wakeup=_record_shared_recovery_signal(signal_calls),
     )
 
     webhook_result = SourcingOrchestrator.handle_remote_provider_event(
@@ -1178,12 +1193,19 @@ def test_handle_remote_provider_event_late_duplicate_does_not_reopen_durable_que
 
     assert webhook_result["status"] == "accepted"
     assert webhook_result["recovery_count"] == 0
-    assert webhook_result["recovery_dispatch_count"] == 1
+    assert webhook_result["recovery_dispatch_count"] == 0
+    assert webhook_result["shared_recovery_signal_count"] == 1
     assert watcher_result["status"] == "accepted"
     assert watcher_result["reason"] == "matching_remote_provider_workers_not_recoverable"
     assert watcher_result["recovery_count"] == 0
-    assert len(dispatch_payloads) == 1
-    assert dispatch_payloads[0]["remote_provider_event_worker_ids"] == [906]
+    assert watcher_result["shared_recovery_signal_count"] == 0
+    assert signal_calls == [
+        {
+            "reason": "remote_provider_event",
+            "requested_by": "provider-webhook-first",
+            "scope": "shared",
+        }
+    ]
     assert [event["status"] for event in fake_store.events] == ["received", "received_late"]
     assert fake_store.events[1]["payload"]["event_metrics"]["source"] == "local_provider_event_watcher"
 
@@ -1228,21 +1250,15 @@ def test_failed_apify_event_wakes_matching_worker_without_inline_materialize(tmp
             }
             return {"worker_id": worker_id}
 
-    dispatch_payloads: list[dict[str, object]] = []
-
-    def _run_worker_recovery_once(payload):
-        raise AssertionError("normal remote provider events must not run inline recovery")
-
-    def _ensure_job_scoped_recovery(job_id, payload):
-        dispatch_payloads.append({"job_id": job_id, **dict(payload or {})})
-        return {"status": "already_running", "scope": "job_scoped", "job_id": job_id}
+    signal_calls: list[dict[str, object]] = []
 
     fake_store = _FakeStore()
     fake_orchestrator = SimpleNamespace(
         runtime_dir=tmp_path,
         store=fake_store,
-        run_worker_recovery_once=_run_worker_recovery_once,
-        ensure_job_scoped_recovery=_ensure_job_scoped_recovery,
+        run_worker_recovery_once=_forbidden_request_thread_recovery,
+        ensure_job_scoped_recovery=_forbidden_request_thread_recovery,
+        _signal_shared_recovery_wakeup=_record_shared_recovery_signal(signal_calls),
     )
 
     result = SourcingOrchestrator.handle_remote_provider_event(
@@ -1262,8 +1278,15 @@ def test_failed_apify_event_wakes_matching_worker_without_inline_materialize(tmp
     assert result["event"]["status"] == "FAILED"
     assert result["targets"]["worker_ids"] == [902]
     assert result["recovery_count"] == 0
-    assert result["recovery_dispatch_count"] == 1
-    assert dispatch_payloads[0]["remote_provider_event_worker_ids"] == [902]
+    assert result["recovery_dispatch_count"] == 0
+    assert result["shared_recovery_signal_count"] == 1
+    assert signal_calls == [
+        {
+            "reason": "remote_provider_event",
+            "requested_by": "provider-webhook-failed-test",
+            "scope": "shared",
+        }
+    ]
     assert fake_store.events[0]["payload"]["event"]["event_type"] == "ACTOR.RUN.FAILED"
 
 
@@ -1274,7 +1297,17 @@ def test_apify_webhook_endpoint_requires_token_and_dispatches_valid_event() -> N
 
         def handle_remote_provider_event(self, payload):
             self.payloads.append(dict(payload or {}))
-            return {"status": "accepted", "event": {"run_id": "run-api-1"}}
+            return {
+                "status": "accepted",
+                "event": {"run_id": "run-api-1"},
+                "shared_recovery_signal_count": 1,
+                "shared_recovery_signal": {
+                    "status": "signaled",
+                    "scope": "shared",
+                    "mode": "signal_only",
+                    "service_name": "worker-recovery-daemon",
+                },
+            }
 
     orchestrator = _FakeOrchestrator()
     body = json.dumps(
@@ -1320,10 +1353,12 @@ def test_apify_webhook_endpoint_requires_token_and_dispatches_valid_event() -> N
 
             assert accepted_status == 202
             assert accepted_body["status"] == "accepted"
-            assert accepted_body["mode"] == "job_scoped_recovery"
+            assert accepted_body["mode"] == "shared_recovery_signal"
+            assert accepted_body["shared_recovery_signal_count"] == 1
+            assert accepted_body["shared_recovery_signal"]["service_name"] == "worker-recovery-daemon"
             assert orchestrator.payloads[0]["provider"] == "apify"
             assert orchestrator.payloads[0]["eventType"] == "ACTOR.RUN.SUCCEEDED"
-            assert orchestrator.payloads[0]["recovery_mode"] == "job_scoped_recovery"
+            assert orchestrator.payloads[0]["recovery_mode"] == "shared_recovery_signal"
         finally:
             server.shutdown()
             server.server_close()
@@ -1462,20 +1497,14 @@ def test_apify_webhook_preflight_scripted_mode_does_not_require_public_callback_
     assert report["scripted_contract"]["external_apify_webhook_required"] is False
 
 
-def test_apify_webhook_endpoint_sync_mode_returns_recovery_result() -> None:
+def test_apify_webhook_endpoint_sync_mode_is_retired_without_calling_orchestrator() -> None:
     class _FakeOrchestrator:
         def __init__(self) -> None:
             self.payloads: list[dict[str, object]] = []
 
         def handle_remote_provider_event(self, payload):
             self.payloads.append(dict(payload or {}))
-            return {
-                "status": "accepted",
-                "event": {"run_id": "run-sync-1"},
-                "targets": {"job_ids": ["job-sync"], "worker_ids": [1001]},
-                "recovery_count": 1,
-                "recoveries": [{"job_id": "job-sync", "daemon": {"executed_count": 1}}],
-            }
+            raise AssertionError("retired sync webhook must fail before orchestration")
 
     orchestrator = _FakeOrchestrator()
     body = json.dumps(
@@ -1500,15 +1529,19 @@ def test_apify_webhook_endpoint_sync_mode_returns_recovery_result() -> None:
                 },
                 method="POST",
             )
-            with urllib_request.urlopen(signed_req, timeout=5) as response:
-                accepted_body = json.loads(response.read().decode("utf-8"))
-                accepted_status = response.status
+            try:
+                urllib_request.urlopen(signed_req, timeout=5)
+                raise AssertionError("retired sync webhook should fail closed")
+            except urllib_error.HTTPError as exc:
+                response_body = json.loads(exc.read().decode("utf-8"))
+                assert exc.code == 410
 
-            assert accepted_status == 202
-            assert accepted_body["status"] == "accepted"
-            assert accepted_body["recovery_count"] == 1
-            assert accepted_body["recoveries"][0]["daemon"]["executed_count"] == 1
-            assert orchestrator.payloads[0]["source"] == "provider_webhook"
+            assert response_body == {
+                "status": "retired",
+                "reason": "provider_webhook_sync_recovery_retired",
+                "mode": "shared_recovery_signal",
+            }
+            assert orchestrator.payloads == []
         finally:
             server.shutdown()
             server.server_close()

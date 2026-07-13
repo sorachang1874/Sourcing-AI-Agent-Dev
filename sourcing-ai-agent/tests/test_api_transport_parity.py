@@ -183,6 +183,7 @@ class _StubOrchestrator:
         self.trace_gate = threading.Event()
         self.trace_entered: list[str] = []
         self.webhook_events: list[dict] = []
+        self.recovery_signal_requests: list[dict[str, str]] = []
 
     def get_runtime_metrics(self, _query):
         return {"status": "ok"}
@@ -194,7 +195,30 @@ class _StubOrchestrator:
 
     def handle_remote_provider_event(self, event_payload):
         self.webhook_events.append(dict(event_payload))
-        return {"status": "accepted", "targets": {}, "recovery_dispatch_count": 0}
+        return {
+            "status": "accepted",
+            "targets": {},
+            "shared_recovery_signal_count": 1,
+            "shared_recovery_signal": {
+                "status": "signaled",
+                "scope": "shared",
+                "mode": "signal_only",
+                "service_name": "worker-recovery-daemon",
+            },
+        }
+
+    def signal_shared_recovery(self, *, reason, requested_by):
+        self.recovery_signal_requests.append({"reason": reason, "requested_by": requested_by})
+        return {
+            "status": "accepted",
+            "mode": "shared_recovery_signal",
+            "shared_recovery_signal": {
+                "status": "signaled",
+                "scope": "shared",
+                "mode": "signal_only",
+                "service_name": "worker-recovery-daemon",
+            },
+        }
 
     def get_media_asset_content_api(self, asset_id):
         if asset_id == "asset-ready":
@@ -452,7 +476,7 @@ class ApiTransportParityTest(unittest.TestCase):
                 json.loads(response_body).get("reason"),
                 "remote_provider_event_missing_run_or_dataset_id",
             )
-            # Valid token with run id -> accepted job-scoped recovery.
+            # Valid token with run id -> durable handoff plus shared-daemon signal.
             status, _headers, response_body = self._request(
                 opener,
                 webhook_url,
@@ -463,9 +487,79 @@ class ApiTransportParityTest(unittest.TestCase):
             self.assertEqual(status, 202)
             payload = json.loads(response_body)
             self.assertEqual(payload.get("status"), "accepted")
-            self.assertEqual(payload.get("mode"), "job_scoped_recovery")
+            self.assertEqual(payload.get("mode"), "shared_recovery_signal")
+            self.assertEqual(payload.get("shared_recovery_signal_count"), 1)
             self.assertEqual(len(orchestrator.webhook_events), 1)
-            self.assertEqual(orchestrator.webhook_events[0].get("recovery_mode"), "job_scoped_recovery")
+            self.assertEqual(orchestrator.webhook_events[0].get("recovery_mode"), "shared_recovery_signal")
+
+            # sync=1 is retired fail-closed and never reaches the orchestrator.
+            status, _headers, response_body = self._request(
+                opener,
+                f"{webhook_url}?sync=1",
+                method="POST",
+                data=body,
+                headers={**json_headers, "X-Sourcing-Provider-Webhook-Token": "expected-token"},
+            )
+            self.assertEqual(status, 410)
+            retired = json.loads(response_body)
+            self.assertEqual(retired.get("reason"), "provider_webhook_sync_recovery_retired")
+            self.assertEqual(len(orchestrator.webhook_events), 1)
+
+    def test_worker_daemon_run_once_route_is_signal_only_and_ignores_control_payload(self) -> None:
+        _server, _thread, base_url, opener, orchestrator = self._start_server()
+        status, _headers, response_body = self._request(
+            opener,
+            f"{base_url}/api/workers/daemon/run-once",
+            method="POST",
+            data=json.dumps(
+                {
+                    "job_id": "must-not-cross-api-boundary",
+                    "stale_after_seconds": 0,
+                    "total_limit": 999,
+                    "workflow_auto_resume_enabled": True,
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+
+        self.assertEqual(status, 202)
+        payload = json.loads(response_body)
+        self.assertEqual(payload.get("status"), "accepted")
+        self.assertEqual(payload.get("mode"), "shared_recovery_signal")
+        self.assertEqual(payload.get("shared_recovery_signal", {}).get("service_name"), "worker-recovery-daemon")
+        self.assertEqual(
+            orchestrator.recovery_signal_requests,
+            [{"reason": "operator_api_recovery_signal", "requested_by": "operator_api"}],
+        )
+
+    def test_worker_daemon_run_once_route_fails_closed_when_signal_is_unavailable(self) -> None:
+        class _UnavailableSignalOrchestrator(_StubOrchestrator):
+            def signal_shared_recovery(self, *, reason, requested_by):
+                self.recovery_signal_requests.append({"reason": reason, "requested_by": requested_by})
+                return {
+                    "status": "unavailable",
+                    "reason": "shared_recovery_signal_unavailable",
+                    "mode": "shared_recovery_signal",
+                    "shared_recovery_signal": {
+                        "status": "signal_skipped",
+                        "scope": "shared",
+                        "mode": "signal_only",
+                        "reason": "runtime_dir_unset",
+                    },
+                }
+
+        orchestrator = _UnavailableSignalOrchestrator()
+        _server, _thread, base_url, opener, _orchestrator = self._start_server(orchestrator)
+        status, _headers, response_body = self._request(
+            opener,
+            f"{base_url}/api/workers/daemon/run-once",
+            method="POST",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+
+        self.assertEqual(status, 503)
+        self.assertEqual(json.loads(response_body).get("reason"), "shared_recovery_signal_unavailable")
 
     def test_bytes_endpoints_preserve_payload_and_headers(self) -> None:
         _server, _thread, base_url, opener, _orchestrator = self._start_server()

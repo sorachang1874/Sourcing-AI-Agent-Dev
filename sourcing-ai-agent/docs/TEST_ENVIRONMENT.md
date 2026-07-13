@@ -39,7 +39,7 @@
 - scripted provider fixture 如果声明 remote wait / pending rounds，测试必须通过 scripted local provider event watcher、terminal event checkpoint，或显式 recovery tick 推进到 terminal fetch；不能依赖“连续本地轮询 N 次自然完成”这种旧轮询 contract。
 - 测试环境可以使用专用 PG schema 验证并发 workflow，但 provider mode 仍必须是 non-live，且 live provider access boundary 必须继续 fail-closed。
 - 隔离 runtime env file 本身也必须通过 non-live validation。即使 helper 会覆盖 env payload，文件中也不能声明 `SOURCING_EXTERNAL_PROVIDER_MODE=live`、非隔离 `SOURCING_RUNTIME_ENVIRONMENT`、`SOURCING_LIVE_PROVIDER_ACCESS_DISABLED=0`，或任何非空 Apify/Harvest/DataForSEO/Serper secret。
-- 测试环境里的 durable work 必须自带可判定的 runtime ownership path，例如 `snapshot_dir` / `candidate_documents_path` / `artifact_paths`。任何 root/local-dev daemon 或 recovery sidecar 扫到这些行时，必须在 claim 前识别 `runtime/test_env/<case>` 并跳过。
+- 测试环境里的 durable work 必须自带可判定的 runtime ownership path，例如 `snapshot_dir` / `candidate_documents_path` / `artifact_paths`。任何 root/local-dev shared recovery daemon 扫到这些行时，必须在 claim 前识别 `runtime/test_env/<case>` 并跳过。
 - `isolated_hosted_test_runtime(...)` 退出前必须等待 runtime-owned background threads。Webhook/event/recovery 线程不能在 `patched_environment(...)` 恢复 root/local env 后继续执行，否则会把 test job/refill/worker 写进 root namespace。
 - Scripted smoke preflight/postflight 必须 fail-closed：运行前后都检查 root/local-dev daemon pid/status 文件、live provider cache synthetic fixture manifests、public/root PG 指向目标 test runtime 的行；non-live provider invocation report 里出现缺失 `provider_mode` 或 `provider_mode=live` 也是失败。
 - Test/runtime dependencies should be isolated at the namespace/schema/container level. A future Testcontainers-style harness is acceptable for CI if it creates disposable PG/object-store/provider-stub dependencies and still emits the same smoke reports.
@@ -265,7 +265,7 @@ make test-env-seed-assets TEST_ENV_SEED_COMPANIES="anthropic"
 2026-05-07 事故复盘规则：
 
 - 不要把 scripted/browser smoke 的 webhook driver 改成会在环境恢复后继续执行的后台线程。
-- 如果 HTTP webhook 需要 quick ack，入口只能记录 terminal event 并同步启动/确认 job-scoped recovery owner；完整 materialization 由 recovery owner 继续推进。
+- HTTP webhook 的 quick ack 入口只能持久化 terminal checkpoint、释放匹配 lease/limiter，并向已经运行的 shared recovery daemon 发送不含 job/stale/limit/phase 控制的纯信号；完整 materialization 由 daemon 继续推进。`POST /api/workers/daemon/run-once` 同样只是 `202` signal-only，测试不得把它伪装成同步 tick。
 - smoke 超时或 context 退出时，必须确认没有 provider-webhook / job-recovery / shared-recovery / background materialization thread 遗留。
 - 任何 `runtime/provider_cache/local_dev/live/...` artifact 中出现 `openai-agent-*`、`lovable-roster-*` 等 scripted fixture URL 都是隔离事故，不是可接受的缓存命中。
 - 在重新运行 PG-backed scripted smoke 前，先跑只读污染审计；审计不删除文件、不改 PG、不调用 provider：

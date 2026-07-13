@@ -1098,6 +1098,64 @@ class CliWorkflowRunnerTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         )
         print_mock.assert_called_once()
 
+
+class ServeTopologyCliTest(unittest.TestCase):
+    def _fake_python_executable(self, tempdir: str) -> tuple[Path, Path]:
+        fake_python = Path(tempdir) / "fake-python"
+        argv_log = Path(tempdir) / "python-argv.log"
+        fake_python.write_text(
+            """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "${FAKE_PYTHON_ARGV_LOG:?}"
+if [[ "$*" == *"run-worker-daemon-service"* ]]; then
+  trap 'exit 0' TERM INT
+  while true; do sleep 0.1; done
+fi
+exit 0
+""",
+            encoding="utf-8",
+        )
+        fake_python.chmod(0o755)
+        return fake_python, argv_log
+
+    def _wrapper_env(
+        self,
+        *,
+        tempdir: str,
+        fake_python: Path,
+        argv_log: Path,
+        hosted: bool,
+    ) -> dict[str, str]:
+        empty_pg_env = Path(tempdir) / "empty-postgres.env"
+        empty_pg_env.write_text("", encoding="utf-8")
+        env = {
+            **os.environ,
+            "FAKE_PYTHON_ARGV_LOG": str(argv_log),
+            "SOURCING_LOCAL_POSTGRES_ENV_FILE": str(empty_pg_env),
+            "SOURCING_RUNTIME_ENVIRONMENT": "test",
+            "SOURCING_EXTERNAL_PROVIDER_MODE": "simulate",
+            "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "test_schema",
+        }
+        for key in (
+            "SOURCING_CONTROL_PLANE_POSTGRES_DSN",
+            "SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE",
+            "SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES",
+        ):
+            env.pop(key, None)
+        if hosted:
+            env.update(
+                {
+                    "HOSTED_PYTHON_BIN": str(fake_python),
+                    "SOURCING_CONTROL_PLANE_POSTGRES_DSN": (
+                        "postgresql://sourcing@127.0.0.1:55432/no_connection_is_attempted"
+                    ),
+                    "SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE": "postgres_only",
+                }
+            )
+        else:
+            env["DEV_PYTHON_BIN"] = str(fake_python)
+        return env
+
     def test_serve_defaults_to_external_recovery_without_starting_in_process_threads(self) -> None:
         orchestrator = mock.Mock()
         server = mock.Mock()
@@ -1347,63 +1405,174 @@ class CliWorkflowRunnerTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 self.assertEqual(completed.returncode, 2)
                 self.assertIn("Conflicting runtime watchdog flags", completed.stderr)
 
-    def test_hosted_backend_defaults_to_external_daemon_and_forwards_only_explicit_uncovered_opt_out(self) -> None:
+    def test_hosted_backend_real_argv_starts_daemon_before_external_only_serve(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         script_path = repo_root / "scripts" / "run_hosted_trial_backend.sh"
-        script_source = script_path.read_text(encoding="utf-8")
-        self.assertLess(script_source.index("run-worker-daemon-service"), script_source.index("serve_args=(serve"))
-        self.assertIn("serve_args+=(--allow-uncovered-recovery)", script_source)
-        self.assertNotIn("--enable-runtime-watchdog", script_source)
-
-        cases = (
-            ((), {"start_daemon": "1", "allow_uncovered_recovery": "0"}),
-            (("--no-daemon",), {"start_daemon": "0", "allow_uncovered_recovery": "0"}),
-            (
-                ("--no-daemon", "--allow-uncovered-recovery"),
-                {"start_daemon": "0", "allow_uncovered_recovery": "1"},
-            ),
-        )
         with tempfile.TemporaryDirectory() as tempdir:
-            empty_pg_env = Path(tempdir) / "empty-postgres.env"
-            empty_pg_env.write_text("", encoding="utf-8")
-            env = {
-                **os.environ,
-                "HOSTED_PYTHON_BIN": cli.sys.executable,
-                "SOURCING_LOCAL_POSTGRES_ENV_FILE": str(empty_pg_env),
-                "SOURCING_CONTROL_PLANE_POSTGRES_DSN": "postgresql://sourcing@127.0.0.1:55432/sourcing_test",
-                "SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE": "postgres_only",
-                "SOURCING_RUNTIME_ENVIRONMENT": "test",
-                "SOURCING_EXTERNAL_PROVIDER_MODE": "simulate",
-            }
-            for flags, expected in cases:
-                with self.subTest(flags=flags):
-                    completed = subprocess.run(
-                        [
-                            "bash",
-                            str(script_path),
-                            "--runtime-dir",
-                            str(Path(tempdir) / "runtime"),
-                            *flags,
-                            "--print-config",
-                        ],
-                        cwd=repo_root,
-                        env=env,
-                        check=False,
-                        capture_output=True,
-                        text=True,
-                    )
-                    self.assertEqual(completed.returncode, 0, completed.stderr)
-                    config = dict(line.split("=", 1) for line in completed.stdout.splitlines() if "=" in line)
-                    for key, value in expected.items():
-                        self.assertEqual(config[key], value)
+            fake_python, argv_log = self._fake_python_executable(tempdir)
+            env = self._wrapper_env(
+                tempdir=tempdir,
+                fake_python=fake_python,
+                argv_log=argv_log,
+                hosted=True,
+            )
+            completed = subprocess.run(
+                [
+                    "bash",
+                    str(script_path),
+                    "--runtime-dir",
+                    str(Path(tempdir) / "hosted-runtime"),
+                ],
+                cwd=repo_root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            argv = argv_log.read_text(encoding="utf-8").splitlines()
+            daemon_index = next(index for index, item in enumerate(argv) if "run-worker-daemon-service" in item)
+            serve_index = next(index for index, item in enumerate(argv) if "sourcing_agent.cli serve" in item)
+            self.assertLess(daemon_index, serve_index)
+            self.assertNotIn("--enable-runtime-watchdog", argv[serve_index])
+            self.assertNotIn("--allow-uncovered-recovery", argv[serve_index])
+
+    def test_hosted_backend_real_argv_forwards_only_explicit_uncovered_opt_out(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        script_path = repo_root / "scripts" / "run_hosted_trial_backend.sh"
+        with tempfile.TemporaryDirectory() as tempdir:
+            fake_python, argv_log = self._fake_python_executable(tempdir)
+            env = self._wrapper_env(
+                tempdir=tempdir,
+                fake_python=fake_python,
+                argv_log=argv_log,
+                hosted=True,
+            )
+            completed = subprocess.run(
+                [
+                    "bash",
+                    str(script_path),
+                    "--runtime-dir",
+                    str(Path(tempdir) / "hosted-runtime"),
+                    "--no-daemon",
+                    "--allow-uncovered-recovery",
+                ],
+                cwd=repo_root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            argv = argv_log.read_text(encoding="utf-8").splitlines()
+            self.assertFalse(any("run-worker-daemon-service" in item for item in argv))
+            serve_argv = next(item for item in argv if "sourcing_agent.cli serve" in item)
+            self.assertIn("--allow-uncovered-recovery", serve_argv)
+            self.assertNotIn("--enable-runtime-watchdog", serve_argv)
+
+    def test_dev_backend_real_argv_forwards_explicit_dev_watchdog_without_daemon(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        script_path = repo_root / "scripts" / "dev_backend.sh"
+        with tempfile.TemporaryDirectory() as tempdir:
+            fake_python, argv_log = self._fake_python_executable(tempdir)
+            env = self._wrapper_env(
+                tempdir=tempdir,
+                fake_python=fake_python,
+                argv_log=argv_log,
+                hosted=False,
+            )
+            completed = subprocess.run(
+                [
+                    "bash",
+                    str(script_path),
+                    "--runtime-dir",
+                    str(Path(tempdir) / "dev-runtime"),
+                    "--no-daemon",
+                    "--enable-runtime-watchdog",
+                ],
+                cwd=repo_root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            argv = argv_log.read_text(encoding="utf-8").splitlines()
+            self.assertFalse(any("run-worker-daemon-service" in item for item in argv))
+            serve_argv = next(item for item in argv if "sourcing_agent.cli serve" in item)
+            self.assertIn("--enable-runtime-watchdog", serve_argv)
+            self.assertNotIn("--allow-uncovered-recovery", serve_argv)
+
+    def test_dev_backend_real_argv_starts_daemon_before_external_only_serve(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        script_path = repo_root / "scripts" / "dev_backend.sh"
+        with tempfile.TemporaryDirectory() as tempdir:
+            fake_python, argv_log = self._fake_python_executable(tempdir)
+            env = self._wrapper_env(
+                tempdir=tempdir,
+                fake_python=fake_python,
+                argv_log=argv_log,
+                hosted=False,
+            )
+            completed = subprocess.run(
+                [
+                    "bash",
+                    str(script_path),
+                    "--runtime-dir",
+                    str(Path(tempdir) / "dev-runtime"),
+                ],
+                cwd=repo_root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            argv = argv_log.read_text(encoding="utf-8").splitlines()
+            daemon_index = next(index for index, item in enumerate(argv) if "run-worker-daemon-service" in item)
+            serve_index = next(index for index, item in enumerate(argv) if "sourcing_agent.cli serve" in item)
+            self.assertLess(daemon_index, serve_index)
+            self.assertNotIn("--enable-runtime-watchdog", argv[serve_index])
+            self.assertNotIn("--allow-uncovered-recovery", argv[serve_index])
 
     def test_local_proxy_raw_serve_example_uses_explicit_dev_only_recovery_opt_in(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
-        script_source = (repo_root / "scripts" / "local_dev_proxy_guard.sh").read_text(encoding="utf-8")
+        script_path = repo_root / "scripts" / "local_dev_proxy_guard.sh"
+        completed = subprocess.run(
+            [
+                "bash",
+                str(script_path),
+                "/bin/echo",
+                "sourcing_agent.cli",
+                "serve",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8765",
+                "--enable-runtime-watchdog",
+            ],
+            cwd=repo_root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
 
-        self.assertIn("sourcing_agent.cli serve", script_source)
-        self.assertIn("serve --host 0.0.0.0 --port 8765 --enable-runtime-watchdog", script_source)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(
+            completed.stdout.strip(),
+            "sourcing_agent.cli serve --host 0.0.0.0 --port 8765 --enable-runtime-watchdog",
+        )
 
+
+class CliWorkflowRunnerContinuationTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def test_upload_asset_bundle_command_defaults_to_auto_archive_mode(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             manifest_path = Path(tempdir) / "bundle_manifest.json"

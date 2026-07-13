@@ -42,10 +42,9 @@ from sourcing_agent.workflow_smoke import (
     _should_auto_run_worker_recovery,
     _should_drive_smoke_remote_provider_events,
     _smoke_remote_provider_webhook_payload,
-    _smoke_worker_recovery_payload,
+    _smoke_shared_recovery_signal_payload,
     _synchronize_post_terminal_recovery_with_service_metrics,
     _worker_can_receive_smoke_provider_webhook,
-    _worker_recovery_result_made_progress,
     load_smoke_cases,
     run_hosted_smoke_case,
     run_hosted_smoke_matrix,
@@ -136,40 +135,6 @@ class WorkflowSmokeTest(unittest.TestCase):
         self.assertEqual(state["projection_person_search_index_pending_count"], 0)
         self.assertEqual(state["running_count"], 1)
         self.assertEqual({item["source"] for item in state["items"]}, {"workflow_commands"})
-
-    def test_worker_recovery_progress_detects_partial_durable_phase_chunks(self) -> None:
-        self.assertTrue(
-            _worker_recovery_result_made_progress(
-                {
-                    "status": "completed",
-                    "recovery_phase_metrics": {
-                        "projection_facet_layering": {
-                            "status": "active",
-                            "reason": "projection_facet_layering_phase_budget_exhausted",
-                            "counts": {
-                                "claimed_count": 1,
-                                "completed_count": 0,
-                                "candidate_count": 500,
-                            },
-                        }
-                    },
-                }
-            )
-        )
-        self.assertFalse(
-            _worker_recovery_result_made_progress(
-                {
-                    "status": "completed",
-                    "recovery_phase_metrics": {
-                        "projection_facet_layering": {
-                            "status": "skipped",
-                            "reason": "no_ready_projection_facet_layering_items",
-                            "counts": {},
-                        }
-                    },
-                }
-            )
-        )
 
     def test_recovery_runs_from_service_status_payload_preserves_job_daemon_tick_metrics(self) -> None:
         service_status_payload = {
@@ -433,25 +398,8 @@ class WorkflowSmokeTest(unittest.TestCase):
         )
         self.assertTrue(any("legacy artifact coherence" in failure for failure in failures))
 
-    def test_smoke_worker_recovery_payload_uses_lightweight_job_scoped_contract(self) -> None:
-        payload = _smoke_worker_recovery_payload("job-1", explicit_worker_ids=[3, 3, 4])
-
-        self.assertEqual(payload["job_id"], "job-1")
-        self.assertEqual(payload["explicit_worker_ids"], [3, 4])
-        self.assertEqual(payload["explicit_job_followup_rounds"], 0)
-        self.assertEqual(payload["total_limit"], 4)
-        self.assertEqual(payload["local_apply_closure_item_limit"], 1)
-        self.assertEqual(payload["event_level_local_apply_limit"], 1)
-        self.assertEqual(payload["remote_event_followup_rounds"], 0)
-        self.assertTrue(payload["profile_prefetch_nonblocking_submit"])
-        self.assertTrue(payload["profile_prefetch_refill_enabled"])
-        self.assertFalse(payload["search_seed_discovery_enabled"])
-        self.assertFalse(payload["snapshot_full_materialization_enabled"])
-        self.assertFalse(payload["excel_intake_recovery_enabled"])
-        self.assertFalse(payload["post_recovery_housekeeping_enabled"])
-        full_payload = _smoke_worker_recovery_payload("job-1", snapshot_full_materialization_enabled=True)
-        self.assertTrue(full_payload["snapshot_full_materialization_enabled"])
-        self.assertTrue(payload["post_completion_reconcile_enabled"])
+    def test_smoke_shared_recovery_signal_payload_carries_no_recovery_controls(self) -> None:
+        self.assertEqual(_smoke_shared_recovery_signal_payload(), {})
 
     def test_smoke_reader_helpers_follow_projection_cutover_410(self) -> None:
         class FakeClient:
@@ -712,6 +660,7 @@ class WorkflowSmokeTest(unittest.TestCase):
             def __init__(self) -> None:
                 self.posts: list[tuple[str, dict]] = []
                 self.gets: list[str] = []
+                self.shared_signal_count = 0
 
             def post(self, path: str, payload: dict, headers: dict | None = None) -> dict:
                 self.posts.append((path, dict(payload)))
@@ -725,7 +674,23 @@ class WorkflowSmokeTest(unittest.TestCase):
                     return {"status": "reviewed", "review_id": 42}
                 if path == "/api/workflows":
                     return {"status": "queued", "job_id": "job-managed-review"}
+                if path == "/api/workers/daemon/run-once":
+                    self.assert_signal_payload(payload)
+                    self.shared_signal_count += 1
+                    return {
+                        "status": "accepted",
+                        "mode": "shared_recovery_signal",
+                        "shared_recovery_signal": {
+                            "status": "signaled",
+                            "service_name": "worker-recovery-daemon",
+                        },
+                    }
                 raise AssertionError(f"unexpected POST {path}")
+
+            @staticmethod
+            def assert_signal_payload(payload: dict) -> None:
+                if payload != {}:
+                    raise AssertionError(f"shared recovery signal carried controls: {payload}")
 
             def get(self, path: str) -> dict:
                 self.gets.append(path)
@@ -743,6 +708,14 @@ class WorkflowSmokeTest(unittest.TestCase):
                         },
                     }
                 if path == "/api/jobs/job-managed-review/progress":
+                    if self.shared_signal_count <= 0:
+                        return {
+                            "job_id": "job-managed-review",
+                            "status": "blocked",
+                            "stage": "acquiring",
+                            "current_message": "waiting for shared recovery",
+                            "progress": {"counters": {"queued_worker_count": 1}},
+                        }
                     return {
                         "job_id": "job-managed-review",
                         "status": "completed",
@@ -765,6 +738,28 @@ class WorkflowSmokeTest(unittest.TestCase):
                     return {"patches": []}
                 if path == "/api/jobs/job-managed-review/workers":
                     return {"agent_workers": []}
+                if path.startswith("/api/workers/daemon/status?"):
+                    return {
+                        "status": "ok",
+                        "recovery_services": {
+                            "shared": {
+                                "service_name": "worker-recovery-daemon",
+                                "status": "running",
+                                "tick": self.shared_signal_count,
+                                "last_nonempty_summary": {
+                                    "status": "completed",
+                                    "recovery_phase_metrics": {
+                                        "total": {
+                                            "status": "completed",
+                                            "owner": "run_worker_recovery_once",
+                                            "elapsed_ms": 1,
+                                            "counts": {},
+                                        }
+                                    },
+                                },
+                            }
+                        },
+                    }
                 raise AssertionError(f"unexpected GET {path}")
 
         client = FakeClient()
@@ -790,6 +785,11 @@ class WorkflowSmokeTest(unittest.TestCase):
         self.assertEqual(record["job_id"], "job-managed-review")
         self.assertEqual(record["final"]["job_id"], "job-managed-review")
         self.assertEqual(record["status"], "completed")
+        self.assertEqual(len(record["shared_recovery_signals"]), 1)
+        self.assertEqual(record["shared_recovery_signals"][0]["signal_status"], "signaled")
+        self.assertEqual(len(record["worker_recovery"]), 1)
+        self.assertIn("recovery_phase_metrics", record["worker_recovery"][0])
+        self.assertNotIn("recovery_phase_metrics", record["shared_recovery_signals"][0])
 
     def test_load_smoke_cases_preserves_expectations(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -913,12 +913,13 @@ class WorkflowSmokeTest(unittest.TestCase):
         self.assertEqual(client.posts[0][1]["collector_sources"][0]["collector_type"], "arxiv")
         self.assertIn("/api/company-assets/public-web?target_company=OpenAI", client.last_get)
 
-    def test_target_public_web_smoke_action_imports_triggers_and_drives_worker(self) -> None:
+    def test_target_public_web_smoke_action_imports_and_signals_shared_worker(self) -> None:
         test_case = self
 
         class FakeClient:
             def __init__(self) -> None:
-                self.recovery_calls = 0
+                self.signal_calls = 0
+                self.daemon_completed = False
                 self.batch = {
                     "batch_id": "batch-1",
                     "status": "queued",
@@ -967,24 +968,44 @@ class WorkflowSmokeTest(unittest.TestCase):
                     test_case.assertEqual(payload["batch_id"], "batch-1")
                     return {"status": "ok", "batches": [self.batch], "runs": []}
                 if path == "/api/workers/daemon/run-once":
-                    test_case.assertEqual(payload["job_id"], "tc-public-web-batch-1")
-                    self.recovery_calls += 1
-                    self.batch = {
-                        **self.batch,
-                        "status": "completed",
-                        "summary": {
-                            "run_count": 1,
-                            "completed_count": 1,
-                            "phase_metrics": {
-                                "service_guardrail_violation_detected": False,
-                                "metric_run_count": 1,
-                            },
+                    test_case.assertEqual(payload, {})
+                    self.signal_calls += 1
+                    return {
+                        "status": "accepted",
+                        "mode": "shared_recovery_signal",
+                        "shared_recovery_signal": {
+                            "status": "signaled",
+                            "service_name": "worker-recovery-daemon",
                         },
                     }
-                    return {"status": "completed", "daemon": {"status": "completed", "worker_count": 1}}
                 raise AssertionError(f"unexpected POST {path}")
 
             def get(self, path: str) -> dict:
+                if path.startswith("/api/workers/daemon/status?"):
+                    self.daemon_completed = self.signal_calls > 0
+                    if self.daemon_completed:
+                        self.batch = {
+                            **self.batch,
+                            "status": "completed",
+                            "summary": {
+                                "run_count": 1,
+                                "completed_count": 1,
+                                "phase_metrics": {
+                                    "service_guardrail_violation_detected": False,
+                                    "metric_run_count": 1,
+                                },
+                            },
+                        }
+                    return {
+                        "status": "ok",
+                        "recovery_services": {
+                            "shared": {
+                                "service_name": "worker-recovery-daemon",
+                                "status": "running",
+                                "tick": self.signal_calls,
+                            }
+                        },
+                    }
                 if path == "/api/runs/job-1/projection-link":
                     return {"status": "ready", "run_id": "job-1", "projection_id": "proj-job-1"}
                 if path == "/api/projections/proj-job-1/candidates?offset=0&limit=1":
@@ -995,7 +1016,7 @@ class WorkflowSmokeTest(unittest.TestCase):
                         "filtered_candidate_count": 1,
                     }
                 if path == "/api/jobs/tc-public-web-batch-1/workers":
-                    status = "completed" if self.recovery_calls else "running"
+                    status = "completed" if self.daemon_completed else "running"
                     return {
                         "agent_workers": [
                             {
@@ -1028,6 +1049,8 @@ class WorkflowSmokeTest(unittest.TestCase):
         self.assertEqual(action["search"]["workflow_command"]["owner"], "crm_public_web_owner")
         self.assertTrue(action["recovery"]["settled"])
         self.assertEqual(len(recovery_runs), 1)
+        self.assertEqual(recovery_runs[0]["signal_status"], "signaled")
+        self.assertEqual(recovery_runs[0]["shared_recovery_signal_count"], 1)
         self.assertGreaterEqual(timings_ms, 0.0)
 
     def test_load_smoke_cases_rejects_unknown_expectation_keys(self) -> None:
@@ -1378,7 +1401,13 @@ class WorkflowSmokeTest(unittest.TestCase):
                 if path != "/api/providers/apify/webhook":
                     raise AssertionError(f"unexpected path {path}")
                 self.posts.append(dict(payload))
-                return {"status": "accepted", "recovery_count": 0, "recovery_dispatch_count": 1}
+                return {
+                    "status": "accepted",
+                    "mode": "shared_recovery_signal",
+                    "recovery_count": 0,
+                    "recovery_dispatch_count": 0,
+                    "shared_recovery_signal_count": 1,
+                }
 
         client = FakeClient()
 
@@ -1426,12 +1455,19 @@ class WorkflowSmokeTest(unittest.TestCase):
                     raise AssertionError(f"unexpected path {path}")
                 self.posts.append(dict(payload))
                 if payload["source"] == "local_provider_event_watcher":
-                    return {"status": "accepted", "recovery_count": 0, "recovery_dispatch_count": 1}
+                    return {
+                        "status": "accepted",
+                        "mode": "shared_recovery_signal",
+                        "recovery_count": 0,
+                        "recovery_dispatch_count": 0,
+                        "shared_recovery_signal_count": 1,
+                    }
                 return {
                     "status": "accepted",
                     "reason": "matching_remote_provider_workers_not_recoverable",
                     "recovery_count": 0,
                     "recovery_dispatch_count": 0,
+                    "shared_recovery_signal_count": 0,
                 }
 
         client = FakeClient()
@@ -1451,7 +1487,8 @@ class WorkflowSmokeTest(unittest.TestCase):
 
         self.assertEqual([event["source"] for event in events], ["local_provider_event_watcher"])
         self.assertEqual(events[0]["recovery_count"], 0)
-        self.assertEqual(events[0]["recovery_dispatch_count"], 1)
+        self.assertEqual(events[0]["recovery_dispatch_count"], 0)
+        self.assertEqual(events[0]["shared_recovery_signal_count"], 1)
         self.assertEqual(len(accepted_workers), 1)
         self.assertEqual([event["source"] for event in late_events], ["provider_webhook"])
         self.assertEqual(late_events[0]["reason"], "matching_remote_provider_workers_not_recoverable")
@@ -2417,14 +2454,19 @@ class WorkflowSmokeTest(unittest.TestCase):
                 return {"job_id": "job-1", "summary": {}}
 
             def post(self, path: str, payload: dict) -> dict:
+                self.assert_signal(path, payload)
                 self.post_payloads.append(dict(payload))
                 self.post_count += 1
                 return {
-                    "status": "completed",
-                    "daemon": {"claimed_count": 0, "executed_count": 0},
-                    "workflow_resume": [],
-                    "post_completion_reconcile": [],
+                    "status": "accepted",
+                    "mode": "shared_recovery_signal",
+                    "shared_recovery_signal": {"status": "signaled"},
                 }
+
+            @staticmethod
+            def assert_signal(path: str, payload: dict) -> None:
+                if path != "/api/workers/daemon/run-once" or payload != {}:
+                    raise AssertionError(f"unexpected signal request {path}: {payload}")
 
         client = FakeClient()
         _, _, recovery_runs, _, recovery_state = _settle_post_terminal_worker_recovery(
@@ -2437,8 +2479,7 @@ class WorkflowSmokeTest(unittest.TestCase):
         self.assertEqual(len(recovery_runs), 2)
         self.assertTrue(recovery_state["settled"])
         self.assertEqual(recovery_state["remaining_recoverable_worker_count"], 0)
-        self.assertEqual([payload["explicit_worker_ids"] for payload in client.post_payloads], [[33], [33]])
-        self.assertTrue(all(payload["force_release_explicit_worker_leases"] for payload in client.post_payloads))
+        self.assertEqual(client.post_payloads, [{}, {}])
 
     def test_post_terminal_worker_recovery_reports_unsettled_when_workers_remain(self) -> None:
         class FakeClient:
@@ -2462,12 +2503,13 @@ class WorkflowSmokeTest(unittest.TestCase):
                 return {"job_id": "job-1", "summary": {}}
 
             def post(self, path: str, payload: dict) -> dict:
+                if path != "/api/workers/daemon/run-once" or payload != {}:
+                    raise AssertionError(f"unexpected signal request {path}: {payload}")
                 self.post_count += 1
                 return {
-                    "status": "completed",
-                    "daemon": {"claimed_count": 0, "executed_count": 0},
-                    "workflow_resume": [],
-                    "post_completion_reconcile": [],
+                    "status": "accepted",
+                    "mode": "shared_recovery_signal",
+                    "shared_recovery_signal": {"status": "signaled"},
                 }
 
         _, _, recovery_runs, _, recovery_state = _settle_post_terminal_worker_recovery(
@@ -2509,13 +2551,14 @@ class WorkflowSmokeTest(unittest.TestCase):
                 return {"job_id": "job-1", "summary": {}}
 
             def post(self, path: str, payload: dict) -> dict:
+                if path != "/api/workers/daemon/run-once" or payload != {}:
+                    raise AssertionError(f"unexpected signal request {path}: {payload}")
                 self.post_payloads.append(dict(payload))
                 self.post_count += 1
                 return {
-                    "status": "completed",
-                    "daemon": {"claimed_count": 0, "executed_count": 0},
-                    "workflow_resume": [],
-                    "post_completion_reconcile": [],
+                    "status": "accepted",
+                    "mode": "shared_recovery_signal",
+                    "shared_recovery_signal": {"status": "signaled"},
                 }
 
         client = FakeClient()
@@ -2529,7 +2572,7 @@ class WorkflowSmokeTest(unittest.TestCase):
 
         self.assertEqual(len(recovery_runs), 1)
         self.assertTrue(recovery_state["settled"])
-        self.assertTrue(client.post_payloads[0]["snapshot_full_materialization_enabled"])
+        self.assertEqual(client.post_payloads, [{}])
 
     def test_post_terminal_worker_recovery_does_not_block_on_background_full_materialization_by_default(self) -> None:
         class FakeClient:
@@ -2599,13 +2642,14 @@ class WorkflowSmokeTest(unittest.TestCase):
                 return {"job_id": "job-1", "summary": {}}
 
             def post(self, path: str, payload: dict) -> dict:
+                if path != "/api/workers/daemon/run-once" or payload != {}:
+                    raise AssertionError(f"unexpected signal request {path}: {payload}")
                 self.post_payloads.append(dict(payload))
                 self.post_count += 1
                 return {
-                    "status": "completed",
-                    "daemon": {"claimed_count": 0, "executed_count": 0},
-                    "workflow_resume": [],
-                    "post_completion_reconcile": [],
+                    "status": "accepted",
+                    "mode": "shared_recovery_signal",
+                    "shared_recovery_signal": {"status": "signaled"},
                 }
 
         client = FakeClient()
@@ -2620,7 +2664,7 @@ class WorkflowSmokeTest(unittest.TestCase):
         self.assertEqual(len(recovery_runs), 1)
         self.assertTrue(recovery_state["settled"])
         self.assertTrue(recovery_state["projection_facet_layering_drain_requested"])
-        self.assertTrue(client.post_payloads[0]["projection_facet_layering_enabled"])
+        self.assertEqual(client.post_payloads, [{}])
 
     def test_post_terminal_worker_recovery_does_not_block_on_projection_layering_by_default(self) -> None:
         class FakeClient:
@@ -2689,12 +2733,13 @@ class WorkflowSmokeTest(unittest.TestCase):
                 return {"job_id": "job-1", "summary": {}}
 
             def post(self, path: str, payload: dict) -> dict:
+                if path != "/api/workers/daemon/run-once" or payload != {}:
+                    raise AssertionError(f"unexpected signal request {path}: {payload}")
                 self.post_count += 1
                 return {
-                    "status": "completed",
-                    "daemon": {"claimed_count": 0, "executed_count": 0},
-                    "workflow_resume": [],
-                    "post_completion_reconcile": [],
+                    "status": "accepted",
+                    "mode": "shared_recovery_signal",
+                    "shared_recovery_signal": {"status": "signaled"},
                 }
 
         _, _, recovery_runs, _, recovery_state = _settle_post_terminal_worker_recovery(
@@ -4448,7 +4493,8 @@ class WorkflowSmokeTest(unittest.TestCase):
                             "status": "accepted",
                             "source": "local_provider_event_watcher",
                             "recovery_count": 0,
-                            "recovery_dispatch_count": 1,
+                            "recovery_dispatch_count": 0,
+                            "shared_recovery_signal_count": 1,
                         },
                         {
                             "status": "accepted",
@@ -4498,7 +4544,8 @@ class WorkflowSmokeTest(unittest.TestCase):
                             "status": "accepted",
                             "source": "provider_webhook",
                             "recovery_count": 0,
-                            "recovery_dispatch_count": 1,
+                            "recovery_dispatch_count": 0,
+                            "shared_recovery_signal_count": 1,
                         },
                         {
                             "status": "accepted",

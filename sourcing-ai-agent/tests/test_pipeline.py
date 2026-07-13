@@ -39642,14 +39642,17 @@ class PipelineTest(unittest.TestCase):
 
             daemon_req = urllib_request.Request(
                 f"http://{host}:{port}/api/workers/daemon/run-once",
-                data=json.dumps({"owner_id": "test-daemon", "total_limit": 1}).encode("utf-8"),
+                data=b"{}",
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
             with opener.open(daemon_req) as response:
+                self.assertEqual(response.status, 202)
                 daemon_resp = json.loads(response.read().decode("utf-8"))
-            self.assertEqual(daemon_resp["status"], "completed")
-            self.assertIn("daemon", daemon_resp)
+            self.assertEqual(daemon_resp["status"], "accepted")
+            self.assertEqual(daemon_resp["mode"], "shared_recovery_signal")
+            self.assertEqual(daemon_resp["shared_recovery_signal"]["status"], "signaled")
+            self.assertNotIn("daemon", daemon_resp)
 
             daemon_status_req = urllib_request.Request(
                 f"http://{host}:{port}/api/workers/daemon/status",

@@ -122,8 +122,8 @@ The 2026-04-29 OpenAI ChatGPT live smoke recorded only `source=local_provider_ev
 
 `provider_webhook` and `local_provider_event_watcher` both normalize into the same `remote_provider_event` path.
 
-- If either source arrives first while the worker is recoverable or running, the handler records `remote_provider_event: received` and starts job-scoped recovery for the explicit worker IDs.
-- If the other source arrives later for the same run/dataset after the worker is already completed, the handler records `remote_provider_event: received_late`, returns `recovery_count=0`, and does not re-run recovery, provider submit, ingest, materialization, or reconcile.
+- If either source arrives first while the worker is recoverable or running, the handler first persists the terminal checkpoint and releases the matching worker lease/limiter, then sends one pure wake-now signal to the already-running shared recovery daemon. The request path never starts a job-scoped sidecar, forwards worker/job/phase controls, or executes recovery inline.
+- If the other source arrives later for the same run/dataset after the worker is already completed, the handler records `remote_provider_event: received_late`, leaves `recovery_count=0` and `recovery_dispatch_count=0`, and does not re-run recovery, provider submit, ingest, materialization, or reconcile. `shared_recovery_signal_count` reports only whether a shared wake signal was sent; it is not execution evidence.
 - This protection is intentionally bidirectional: watcher-first/webhook-late and webhook-first/watcher-late are both treated as late duplicates once the matching worker is completed.
 - Smoke/service reports expose this as `service_metrics.remote_provider_events`: source/status counts, late/in-flight duplicate counts, target worker counts, total `remote_to_local_event_lag_ms`, actionable `actionable_remote_to_local_event_lag_ms`, and `late_duplicate_remote_to_local_event_lag_ms`. Use `max_remote_provider_event_lag_ms` to fail slow actionable terminal wakeup in webhook/watcher matrices. Do not treat `received_late` by itself as recovery backlog or actionable wakeup lag.
 
@@ -304,7 +304,7 @@ Exit codes:
 - `remote_provider_event_missing_run_or_dataset_id`: callback payload does not include `actorRunId`, `runId`, `defaultDatasetId`, or equivalent fields.
 - Apify dispatch exists but stays active or does not reach backend: check tunnel/domain stability, TLS, security group, reverse proxy path, and backend logs.
 - Apify dispatch is `SUCCEEDED` but a one-profile smoke returned exit code `3`: check whether the actor finished before webhook delivery. The backend now records a `remote_provider_event` with status `received_late` when the event matches an already completed worker by `run_id` or `dataset_id`; rerun the smoke on current code or inspect job events for `received_late`.
-- Worker remains queued after Apify run succeeded: run `show-workers --job-id <job_id>` and `show-recoverable-workers --job-id <job_id> --stale-after-seconds=0`, then use job-scoped recovery if needed.
+- Worker remains queued after Apify run succeeded: run `show-workers --job-id <job_id>` and `show-recoverable-workers --job-id <job_id> --stale-after-seconds=0`, inspect `GET /api/workers/daemon/status?job_id=<job_id>&include_details=1`, and diagnose the external shared daemon. If a deterministic diagnostic tick is required, use the worker-owned CLI `worker-recovery-daemon --run-once`; never use an API request to execute recovery.
 - Actor errors with too many requests: lower global Harvest actor concurrency. Webhooks improve completion discovery; they do not remove provider rate limits.
 - Batch materialization is slow after worker completion: keep submit/materialize decoupled. Optimize downstream delta materialization or writer budget; do not put full materialization back into the webhook request or provider submit path.
 
