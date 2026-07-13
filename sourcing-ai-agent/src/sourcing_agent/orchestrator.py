@@ -1566,7 +1566,8 @@ class SourcingOrchestrator:
     def submit_plan_workflow(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized_payload = normalize_workflow_submission_payload(dict(payload or {}))
         identity_provenance = str(normalized_payload.pop(PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY, "") or "").strip()
-        history_id = str(normalized_payload.get("history_id") or uuid.uuid4()).strip()
+        requested_history_id = str(normalized_payload.get("history_id") or "").strip()
+        history_id = requested_history_id or str(uuid.uuid4())
         query_text = str(normalized_payload.get("raw_user_request") or "").strip()
         if not query_text:
             return {
@@ -1598,7 +1599,16 @@ class SourcingOrchestrator:
             existing_link = dict(existing_link_raw or {})
             if authenticated_submit:
                 owner_matches = bool(plan_submit_identity)
-                if existing_link_raw is not None and owner_matches:
+                if not requested_history_id:
+                    # Authenticated first-create IDs are server-generated. This
+                    # avoids a cross-process check-then-claim race without
+                    # inventing a pre-C1c durable owner/CAS row.
+                    owner_matches = owner_matches and existing_link_raw is None
+                elif existing_link_raw is None:
+                    # A caller-provided ID is a resubmit/replacement handle,
+                    # never authority to claim an absent row.
+                    owner_matches = False
+                elif owner_matches:
                     existing_job_id = str(existing_link.get("job_id") or "").strip()
                     if existing_job_id:
                         existing_job = self.store.get_job(existing_job_id)

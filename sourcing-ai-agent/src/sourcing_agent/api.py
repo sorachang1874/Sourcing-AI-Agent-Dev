@@ -686,16 +686,18 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         """Reject authenticated replacement unless an existing row has exact owner proof.
 
         Read compatibility for old non-Plan/unlinked rows must not become write
-        authority. A missing row is a new server-provenance-bearing Plan submit;
-        an existing linked row uses job ownership, and an existing unlinked Plan
-        row uses the C1b metadata proof. Every other existing row fails closed.
+        authority. Authenticated first-create omits ``history_id`` and receives
+        a server-generated id; therefore an explicit missing id is an invalid
+        replacement handle. An existing linked row uses job ownership, and an
+        existing unlinked Plan row uses the C1b metadata proof. Every other
+        explicit id fails closed.
         """
 
         if _server_identity(request) is None:
             return None
         link = orchestrator.store.get_frontend_history_link(history_id)
         if link is None:
-            return None
+            return _json_response(HTTPStatus.NOT_FOUND, {"status": "not_found", "history_id": history_id})
         job_id = str((link or {}).get("job_id") or "").strip()
         if job_id:
             job_row = orchestrator.store.get_job(job_id)

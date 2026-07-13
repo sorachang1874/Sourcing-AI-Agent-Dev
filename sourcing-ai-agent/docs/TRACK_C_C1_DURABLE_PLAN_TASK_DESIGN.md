@@ -709,9 +709,11 @@ independent review because public status and download semantics change.
   owner-gated publication; no durable/live/manual/product signoff may treat this C1b fence as that split.
 - The AST ratchet now follows callable aliases and `partial`/`getattr`, plus thread and executor targets. Mutation
   fixtures prove aliased direct compile, aliased hydration thread, and executor submit bypasses are detected.
-- Authenticated unlinked Plan rows carry API-authored requester/tenant provenance. The first-create owner check, claim,
-  queued projection, and process-local registration share the hydration lock, so two authenticated callers cannot both
-  claim an absent explicit `history_id`. Submit, exact read, list, and resubmit use one fail-closed matrix: missing,
+- Authenticated unlinked Plan rows carry API-authored requester/tenant provenance. First-create history IDs are always
+  server-generated; an authenticated caller-provided absent `history_id` is rejected rather than claimed, which closes
+  the cross-process check/claim gap without inventing a pre-C1c durable CAS row. Within one API process, owner recheck,
+  queued projection, and registration also share the hydration lock. Submit, exact read, list, and resubmit use one
+  fail-closed matrix: missing,
   partial, mismatched, or body-authored ownership is 404/excluded. Non-Plan legacy rows retain read compatibility but
   never gain Plan replacement authority; open mode retains its explicit compatibility behavior. This bridge adds no
   schema and is deleted after durable consumer identity and legacy-owner repair are authoritative.

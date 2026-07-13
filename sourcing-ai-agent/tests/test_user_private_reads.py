@@ -334,6 +334,11 @@ class UserPrivateReadGateTest(unittest.TestCase):
         body = {"history_id": "hist-unlinked-unresolved", "raw_user_request": "find people"}
         self.assertEqual(self._post(opener, f"{base}/api/plan/submit", body, token="tok-alice"), 404)
 
+    def test_authenticated_plan_submit_rejects_explicit_missing_history_id(self) -> None:
+        base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
+        body = {"history_id": "hist-never-created", "raw_user_request": "find people"}
+        self.assertEqual(self._post(opener, f"{base}/api/plan/submit", body, token="tok-alice"), 404)
+
     def test_authenticated_plan_submit_cannot_convert_existing_unlinked_nonplan_history(self) -> None:
         base, opener = self._start_server(env={"SOURCING_API_BEARER_TOKENS": _TOKENS})
         body = {"history_id": "hist-unlinked-nonplan", "raw_user_request": "find people"}

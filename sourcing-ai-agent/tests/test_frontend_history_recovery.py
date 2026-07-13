@@ -186,18 +186,18 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         )
 
     def test_submit_plan_workflow_consumes_authenticated_identity_provenance_into_metadata(self) -> None:
-        history_id = "history-plan-submit-identity-1"
         with mock.patch.object(self.orchestrator, "_queue_plan_hydration", return_value=None) as queue_mock:
             submitted = self.orchestrator.submit_plan_workflow(
                 {
                     "raw_user_request": "Find OpenAI researchers",
-                    "history_id": history_id,
                     "requester_id": "alice",
                     "tenant_id": "user-alice",
                     PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY: PLAN_SUBMIT_IDENTITY_PROVENANCE_SERVER,
                 }
             )
 
+        history_id = str(submitted.get("history_id") or "")
+        self.assertTrue(history_id)
         link = self.store.get_frontend_history_link(history_id)
         assert link is not None
         self.assertEqual(
@@ -212,7 +212,7 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         queued_payload = dict(queue_mock.call_args.kwargs["payload"])
         self.assertNotIn(PLAN_SUBMIT_IDENTITY_PROVENANCE_PAYLOAD_KEY, queued_payload)
 
-    def test_authenticated_first_create_history_claim_is_atomic(self) -> None:
+    def test_authenticated_explicit_absent_history_cannot_be_claimed_concurrently(self) -> None:
         history_id = "history-plan-first-create-race"
         start_barrier = threading.Barrier(3)
         results: dict[str, dict[str, object]] = {}
@@ -243,19 +243,13 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertTrue(all(not thread.is_alive() for thread in threads))
-        winners = [user_id for user_id, result in results.items() if result.get("status") == "pending"]
         rejected = [
             result
             for result in results.values()
             if result.get("reason") == PLAN_SUBMIT_HISTORY_OWNER_UNRESOLVED_REASON
         ]
-        self.assertEqual(len(winners), 1)
-        self.assertEqual(len(rejected), 1)
-        link = self.store.get_frontend_history_link(history_id)
-        assert link is not None
-        proof = dict(link["metadata"].get(PLAN_SUBMIT_IDENTITY_METADATA_KEY) or {})
-        self.assertEqual(proof.get("requester_id"), winners[0])
-        self.assertEqual(proof.get("tenant_id"), f"user-{winners[0]}")
+        self.assertEqual(len(rejected), 2)
+        self.assertIsNone(self.store.get_frontend_history_link(history_id))
 
     def test_plan_hydration_thread_start_failure_terminalizes_and_retires_owner(self) -> None:
         history_id = "history-plan-thread-start-failure"

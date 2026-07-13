@@ -20,8 +20,9 @@ helper，不属于 serving 链。共享 async-task adapter 的 public `task_id` 
 durable consumer、202 cutover、compute/publish split、TTL 或 replay；这些仍受 D-C1-1..4 与 C1c-e 顺序约束。
 Pinned advisory fixed-forward closes the process-local late-consumer snapshot/cleanup gap with a shared lock,
 owner-token retirement barrier, and successor rule; history writes are generation-guarded and authenticated unlinked
-Plan history submit/read/list/resubmit is provenance-gated. First-create owner claim and registration use that same
-lock; old non-Plan read compatibility never authorizes Plan replacement. Thread-start failure retires the dead owner
+Plan history submit/read/list/resubmit is provenance-gated. Authenticated first-create IDs are server-generated;
+caller-provided absent IDs reject, while in-process owner recheck and registration share the same lock. Old non-Plan
+read compatibility never authorizes Plan replacement. Thread-start failure retires the dead owner
 and returns retryable `503`, but permanent history-store failure still cannot guarantee a durable terminal projection.
 It also does **not** close compiler side effects: a deterministic real-compiler race still produces orphan
 review/criteria rows after same-history supersession. That evidence is an explicit D-C1-3/C1d compute/publish blocker,
