@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 from collections import Counter
 from dataclasses import fields
 from pathlib import Path
@@ -69,6 +71,8 @@ EXPECTED_ACTION_DEFAULT_COMMANDS = {
     "external_intake": "excel.intake.run",
 }
 
+SUBMIT_ACTION_CALL_INVENTORY_SHA256 = "9d9a79d8bfc49e742a81f959080cf1e2ccf8be5952b3bbb202aef49a8138ddbe"
+
 
 def _class_method(tree: ast.Module, class_name: str, method_name: str) -> ast.FunctionDef:
     class_nodes = [node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name]
@@ -91,6 +95,65 @@ def _dotted_name(node: ast.AST | None) -> str:
 
 def _unparse_optional(node: ast.expr | None) -> str | None:
     return ast.unparse(node) if node is not None else None
+
+
+def _required_argument_contract(argument: ast.arg) -> tuple[str, str | None]:
+    return argument.arg, _unparse_optional(argument.annotation)
+
+
+def _argument_contract(argument: ast.arg | None) -> tuple[str, str | None] | None:
+    return _required_argument_contract(argument) if argument is not None else None
+
+
+def _signature_contract(method: ast.FunctionDef) -> dict[str, Any]:
+    return {
+        "positional_only": tuple(_argument_contract(argument) for argument in method.args.posonlyargs),
+        "positional": tuple(_argument_contract(argument) for argument in method.args.args),
+        "vararg": _argument_contract(method.args.vararg),
+        "keyword_only": tuple(
+            (
+                *_required_argument_contract(argument),
+                _unparse_optional(default),
+            )
+            for argument, default in zip(method.args.kwonlyargs, method.args.kw_defaults, strict=True)
+        ),
+        "kwarg": _argument_contract(method.args.kwarg),
+        "returns": _unparse_optional(method.returns),
+        "decorators": tuple(ast.unparse(decorator) for decorator in method.decorator_list),
+    }
+
+
+def _call_inventory(method: ast.FunctionDef) -> tuple[str, ...]:
+    calls = sorted(
+        (node for node in ast.walk(method) if isinstance(node, ast.Call)),
+        key=lambda node: (
+            node.lineno,
+            node.col_offset,
+            node.end_lineno or node.lineno,
+            node.end_col_offset or node.col_offset,
+        ),
+    )
+    return tuple(ast.dump(node, annotate_fields=True, include_attributes=False) for node in calls)
+
+
+def _call_inventory_digest(method: ast.FunctionDef) -> str:
+    serialized = json.dumps(_call_inventory(method), ensure_ascii=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _call_inventory_roots(method: ast.FunctionDef) -> tuple[str, ...]:
+    return tuple(
+        ast.unparse(node.func)
+        for node in sorted(
+            (candidate for candidate in ast.walk(method) if isinstance(candidate, ast.Call)),
+            key=lambda candidate: (
+                candidate.lineno,
+                candidate.col_offset,
+                candidate.end_lineno or candidate.lineno,
+                candidate.end_col_offset or candidate.col_offset,
+            ),
+        )
+    )
 
 
 def _action_constants() -> dict[str, str]:
@@ -146,6 +209,27 @@ class _WorkflowRuntimeRepoProbe:
     def append_operation_event(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("append_operation_event", dict(kwargs)))
         return {"event_id": f"event-{len(self.calls)}", **dict(kwargs)}
+
+
+class _FailClosedRepoNamespace:
+    def __init__(self, workflow_runtime: _WorkflowRuntimeRepoProbe) -> None:
+        self.workflow_runtime = workflow_runtime
+
+    def __getattr__(self, name: str) -> Any:
+        raise AssertionError(f"submit_action accessed unexpected repository/outbox surface: {name}")
+
+
+class _FailClosedStoreProbe:
+    def __init__(self, workflow_runtime: _WorkflowRuntimeRepoProbe) -> None:
+        self.repos = _FailClosedRepoNamespace(workflow_runtime)
+
+    def __getattr__(self, name: str) -> Any:
+        raise AssertionError(f"submit_action accessed unexpected store callback/outbox surface: {name}")
+
+
+class _FailClosedOperationRuntimeWriter(OperationRuntimeWriter):
+    def __getattr__(self, name: str) -> Any:
+        raise AssertionError(f"submit_action invoked unexpected writer callback/outbox hook: {name}")
 
 
 class _DispatchProbe:
@@ -270,35 +354,35 @@ def test_action_command_contracts_share_owner_activity_and_fail_closed_control_s
 
 
 def test_submit_action_ast_freezes_keyword_only_surface_and_write_order() -> None:
-    tree = ast.parse(OPERATION_RUNTIME_PATH.read_text(encoding="utf-8"))
+    source = OPERATION_RUNTIME_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
     method = _class_method(tree, "OperationRuntimeWriter", "submit_action")
 
-    assert [argument.arg for argument in method.args.args] == ["self"]
-    assert [argument.arg for argument in method.args.kwonlyargs] == [
-        "action_type",
-        "workspace_id",
-        "conversation_id",
-        "target_ref",
-        "input_payload",
-        "budget",
-        "idempotency_key",
-        "actor",
-        "source",
-        "metadata",
-    ]
-    assert [_unparse_optional(default) for default in method.args.kw_defaults] == [
-        None,
-        "'default'",
-        "''",
-        "None",
-        "None",
-        "None",
-        "''",
-        "'operation_runtime'",
-        "'operation_runtime'",
-        "None",
-    ]
-    assert _unparse_optional(method.returns) == "OperationSubmissionResult"
+    expected_signature = {
+        "positional_only": (),
+        "positional": (("self", None),),
+        "vararg": None,
+        "keyword_only": (
+            ("action_type", "str", None),
+            ("workspace_id", "str", "'default'"),
+            ("conversation_id", "str", "''"),
+            ("target_ref", "dict[str, Any] | None", "None"),
+            ("input_payload", "dict[str, Any] | None", "None"),
+            ("budget", "dict[str, Any] | None", "None"),
+            ("idempotency_key", "str", "''"),
+            ("actor", "str", "'operation_runtime'"),
+            ("source", "str", "'operation_runtime'"),
+            ("metadata", "dict[str, Any] | None", "None"),
+        ),
+        "kwarg": None,
+        "returns": "OperationSubmissionResult",
+        "decorators": (),
+    }
+    assert _signature_contract(method) == expected_signature
+
+    call_inventory = _call_inventory(method)
+    assert len(call_inventory) == 41
+    assert _call_inventory_digest(method) == SUBMIT_ACTION_CALL_INVENTORY_SHA256, _call_inventory_roots(method)
 
     repository_calls = sorted(
         (
@@ -321,10 +405,39 @@ def test_submit_action_ast_freezes_keyword_only_surface_and_write_order() -> Non
         and any(token in _dotted_name(node.func) for token in ("dispatch", "workflow_command"))
     ]
 
+    kwargs_mutation = source.replace(
+        "        metadata: dict[str, Any] | None = None,\n    ) -> OperationSubmissionResult:",
+        "        metadata: dict[str, Any] | None = None,\n        **kwargs: Any,\n    ) -> OperationSubmissionResult:",
+        1,
+    )
+    assert kwargs_mutation != source
+    kwargs_method = _class_method(
+        ast.parse(kwargs_mutation),
+        "OperationRuntimeWriter",
+        "submit_action",
+    )
+    assert _signature_contract(kwargs_method) != expected_signature
+    assert _signature_contract(kwargs_method)["kwarg"] == ("kwargs", "Any")
+
+    runner_mutation = source.replace(
+        "        requested_identity = {\n",
+        "        runner(action)\n        requested_identity = {\n",
+        1,
+    )
+    assert runner_mutation != source
+    runner_method = _class_method(
+        ast.parse(runner_mutation),
+        "OperationRuntimeWriter",
+        "submit_action",
+    )
+    assert len(_call_inventory(runner_method)) == len(call_inventory) + 1
+    assert _call_inventory_digest(runner_method) != SUBMIT_ACTION_CALL_INVENTORY_SHA256
+    assert "runner" in _call_inventory_roots(runner_method)
+
 
 def test_submit_action_preserves_current_validation_and_non_dispatch_baseline() -> None:
     repository = _WorkflowRuntimeRepoProbe()
-    writer = OperationRuntimeWriter(SimpleNamespace(repos=SimpleNamespace(workflow_runtime=repository)))
+    writer = _FailClosedOperationRuntimeWriter(_FailClosedStoreProbe(repository))
 
     target_ref = {"owner_bound_future_field": {"unexpected": [1, 2, 3]}}
     input_payload = {"unregistered_option": {"nested": True}}
@@ -354,7 +467,7 @@ def test_submit_action_preserves_current_validation_and_non_dispatch_baseline() 
     ]
 
     empty_repository = _WorkflowRuntimeRepoProbe()
-    guarded_writer = OperationRuntimeWriter(SimpleNamespace(repos=SimpleNamespace(workflow_runtime=empty_repository)))
+    guarded_writer = _FailClosedOperationRuntimeWriter(_FailClosedStoreProbe(empty_repository))
     with pytest.raises(KeyError, match="unknown operation action type"):
         guarded_writer.submit_action(action_type="unknown_action")
     assert empty_repository.calls == []
@@ -441,11 +554,154 @@ def test_command_plan_selection_and_fields_preserve_input_target_default_precede
     )
     assert ast.unparse(mutated_assignment.value) != expected_precedence
 
+    query_text_assignments = [
+        node
+        for node in ast.walk(method)
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "query_text" for target in node.targets)
+        and "raw_user_request" in ast.unparse(node.value)
+    ]
+    assert len(query_text_assignments) == 1
+    expected_query_precedence = (
+        "str(input_payload.get('query') or input_payload.get('raw_user_request') or target_ref.get('query') "
+        "or explicit_workflow_payload.get('raw_user_request') or explicit_workflow_payload.get('query') or "
+        "'').strip()"
+    )
+    assert ast.unparse(query_text_assignments[0].value) == expected_query_precedence
+
+    raw_request_target_query_order = 'input_payload.get("raw_user_request")\n                or target_ref.get("query")'
+    assert raw_request_target_query_order in source
+    query_order_mutation = source.replace(
+        raw_request_target_query_order,
+        'target_ref.get("query")\n                or input_payload.get("raw_user_request")',
+        1,
+    )
+    mutated_query_method = _class_method(
+        ast.parse(query_order_mutation),
+        "SourcingOrchestrator",
+        "_build_agent_callable_workflow_command_plan",
+    )
+    mutated_query_assignments = [
+        node
+        for node in ast.walk(mutated_query_method)
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "query_text" for target in node.targets)
+        and "raw_user_request" in ast.unparse(node.value)
+    ]
+    assert len(mutated_query_assignments) == 1
+    assert ast.unparse(mutated_query_assignments[0].value) != expected_query_precedence
+
     operation_run = {
         "operation_run_id": "operation-start-a",
         "workspace_id": "workspace-a",
         "idempotency_key": "operation-start-a",
     }
+
+    def build_start_plan(
+        suffix: str,
+        *,
+        input_payload: dict[str, Any],
+        target_ref: dict[str, Any],
+    ) -> dict[str, Any]:
+        return SourcingOrchestrator._build_agent_callable_workflow_command_plan(
+            _plan_probe(),
+            operation_run=operation_run,
+            action={
+                "action_id": f"action-start-{suffix}",
+                "action_type": operation_runtime.ACTION_START_ACQUISITION_RUN,
+                "input": input_payload,
+                "target_ref": target_ref,
+            },
+        )
+
+    query_precedence_cases: tuple[tuple[str, dict[str, Any], dict[str, Any], str], ...] = (
+        (
+            "input-query",
+            {
+                "query": "sentinel-input-query",
+                "raw_user_request": "sentinel-input-raw",
+                "workflow_payload": {
+                    "raw_user_request": "sentinel-nested-raw",
+                    "query": "sentinel-nested-query",
+                },
+            },
+            {"query": "sentinel-target-query"},
+            "sentinel-input-query",
+        ),
+        (
+            "input-raw-over-target",
+            {
+                "raw_user_request": "sentinel-input-raw",
+                "workflow_payload": {
+                    "raw_user_request": "sentinel-nested-raw",
+                    "query": "sentinel-nested-query",
+                },
+            },
+            {"query": "sentinel-target-query"},
+            "sentinel-input-raw",
+        ),
+        (
+            "target-over-nested",
+            {
+                "workflow_payload": {
+                    "raw_user_request": "sentinel-nested-raw",
+                    "query": "sentinel-nested-query",
+                }
+            },
+            {"query": "sentinel-target-query"},
+            "sentinel-target-query",
+        ),
+        (
+            "nested-raw-over-query",
+            {
+                "workflow_payload": {
+                    "raw_user_request": "sentinel-nested-raw",
+                    "query": "sentinel-nested-query",
+                }
+            },
+            {},
+            "sentinel-nested-raw",
+        ),
+        (
+            "nested-query-fallback",
+            {"workflow_payload": {"query": "sentinel-nested-query"}},
+            {},
+            "sentinel-nested-query",
+        ),
+    )
+    for suffix, input_payload, target_ref, expected_query in query_precedence_cases:
+        plan = build_start_plan(suffix, input_payload=input_payload, target_ref=target_ref)
+        assert plan["status"] == "ok", suffix
+        assert plan["command_payload"]["query"] == expected_query, suffix
+
+    input_nested_source = build_start_plan(
+        "input-nested-source",
+        input_payload={
+            "workflow_payload": {"query": "sentinel-input-nested"},
+            "command_payload": {"workflow_payload": {"query": "sentinel-command-nested"}},
+        },
+        target_ref={"workflow_payload": {"query": "sentinel-target-nested"}},
+    )
+    assert input_nested_source["command_payload"]["query"] == "sentinel-input-nested"
+
+    target_nested_source = build_start_plan(
+        "target-nested-source",
+        input_payload={
+            "command_payload": {"workflow_payload": {"query": "sentinel-command-nested"}},
+        },
+        target_ref={"workflow_payload": {"query": "sentinel-target-nested"}},
+    )
+    assert target_nested_source["command_payload"]["query"] == "sentinel-target-nested"
+
+    command_nested_source = build_start_plan(
+        "command-nested-source",
+        input_payload={
+            "command_payload": {"workflow_payload": {"query": "sentinel-command-nested"}},
+        },
+        target_ref={},
+    )
+    assert command_nested_source["command_payload"]["query"] == "sentinel-command-nested"
+
     default_plan = SourcingOrchestrator._build_agent_callable_workflow_command_plan(
         _plan_probe(),
         operation_run=operation_run,

@@ -1,8 +1,9 @@
 # Track D D1a — Action request surface characterize-first freeze
 
-> Status: Author characterization batch (2026-07-14). This is a zero-product-code, non-live baseline for the later
-> `ActionRequestSpec` implementation. It is not a D1 completion claim, independent-review `GO`, live-provider
-> approval, or Agent tool activation.
+> Status: Author characterization batch with pinned-review fixed-forward (2026-07-14). The review of pinned commit
+> `d88161e` returned `NO-GO` for two false-green oracles; both are addressed here and re-review is pending. This is a
+> zero-product-code, non-live baseline for the later `ActionRequestSpec` implementation. It is not a D1 completion
+> claim, independent-review `GO`, live-provider approval, or Agent tool activation.
 
 ## 1. Outcome and boundary
 
@@ -36,14 +37,18 @@ inferring it from registration or from `allowed_workflow_command_types`.
 |---|---|---|---|
 | Action metadata | `operation_runtime.ActionSpec` | exact ten-field dataclass surface: identity/owner/operation, approval/budget, display, allowed/default command types | no `request_schema`, version/digest, dispatch adapter, or model-safe result schema |
 | Registry serialization | `operation_runtime.ActionRegistry.to_record()` | action constant↔registry parity; exact compact record keys; optional command contract projection | request shape is not serialized or pinned |
-| Submission | `OperationRuntimeWriter.submit_action` | exact keyword-only signature; unknown action and required-budget fail-closed gates; payload identity replay fence; action/event/run write order; approval-required actions stop before run creation | `target_ref` and `input_payload` currently pass through without structural request-schema validation |
+| Submission | `OperationRuntimeWriter.submit_action` | exact complete signature/decorators; complete structural `ast.Call` inventory; unknown action and required-budget fail-closed gates; payload identity replay fence; action/event/run write order; approval-required actions stop before run creation; unexpected writer/store/repository callback or outbox access fails the runtime probe | `target_ref` and `input_payload` currently pass through without structural request-schema validation |
 | Dispatch | `SourcingOrchestrator._dispatch_operation_run_from_records` | runtime branch classification for every discovered registered action; unsupported response for the three current gaps | adapter ownership is a hard-coded branch, not registry metadata |
 | Command exposure mirror | `_agent_callable_workflow_command_types_for_action` | exact set projection of `ActionSpec.allowed_workflow_command_types`; unknown action returns empty | no served-tool predicate or result-schema gate |
 | Command plan selection | `_build_agent_callable_workflow_command_plan` | command selection is `input.command_type` → `target.command_type` → registry default; a present but disallowed higher-priority value fails closed instead of falling back | input and target remain dual behavior-driving sources pending D1 normalization |
 | Command execution contracts | command owner registry + Activity/control policy registries | every exposed command resolves to the same owner; Activity policy is Agent-callable and non-legacy; Activity and control records are fail-closed | this proves command readiness only, not action adapter or model-safe output readiness |
 
-The start-acquisition runtime probe also pins existing field precedence: direct `input` values outrank `target_ref`,
-which outranks nested workflow payload defaults for the characterized company/query fields. This documents the bypass
+The start-acquisition runtime probe pins the complete current query chain with adjacent sentinels:
+`input.query` > `input.raw_user_request` > `target_ref.query` > selected nested `raw_user_request` > selected nested
+`query`. The selected nested payload is the first truthy whole mapping from
+`input.workflow_payload` > `target_ref.workflow_payload` > `input.command_payload.workflow_payload`; the implementation
+does not merge those three nested mappings. Separate company/query cases prove direct input beats target, target beats a
+selected nested payload, and nested values are used when both direct sources are absent. This documents the bypass
 surface that the D1 design intends to remove; it does not endorse preserving dual-source request semantics after the
 schema owner is introduced.
 
@@ -84,13 +89,18 @@ The suite fails when any of these current facts drift without an intentional D1 
    change;
 2. a registered command loses its owner, becomes legacy/non-Agent-callable on the Activity spine, or stops exposing a
    fail-closed control record;
-3. `submit_action` changes its keyword-only API, repository write order, early validation gates, approval boundary, or
-   starts dispatching/planning work;
+3. `submit_action` changes any positional-only/positional/vararg/keyword-only/kwarg parameter or annotation/default,
+   return annotation, decorator, complete call expression structure, repository write order, early validation gate,
+   approval boundary, or starts a callback/outbox/dispatch/planning hook. In-memory mutations add `**kwargs` and an
+   indirect `runner(action)` call; both are rejected. Fail-closed runtime namespaces also reject unexpected writer,
+   store, or repository/outbox access;
 4. a registered action moves between adapter families, including accidentally treating `external_intake` command
    metadata as an executable action adapter;
 5. command-type precedence changes. An in-memory source mutation swaps input/target order and proves the AST oracle
-   rejects the mutation; no product source is edited;
-6. a disallowed input/target command starts falling through to a lower-priority/default command.
+   rejects the mutation; a second mutation swaps `input.raw_user_request` with `target_ref.query` and is likewise
+   rejected; no product source is edited;
+6. any adjacent start-acquisition query sentinel or nested source priority changes, or a disallowed input/target command
+   starts falling through to a lower-priority/default command.
 
 The probes use synthetic dictionaries and local stubs only. They create no PG rows, files, network traffic, provider
 requests, model calls, or external side effects.
