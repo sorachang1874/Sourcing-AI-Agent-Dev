@@ -5,6 +5,7 @@ import hashlib
 import json
 from dataclasses import FrozenInstanceError, fields, replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Mapping
 
 import pytest
@@ -963,13 +964,112 @@ def test_tool_calling_session_base_is_abstract_and_owns_both_public_projections(
     assert session.parse_calls == 2
 
 
+def test_tool_calling_session_base_rejects_duck_typed_and_subclassed_parsed_outcomes() -> None:
+    request = _request()
+    messages = _messages()
+    tools = _tools()
+    parsed = parse_openai_chat_sse(
+        [_tool_turn_bytes()],
+        request=request,
+        messages=messages,
+        tools=tools,
+    )
+
+    class ParsedToolTurnSubclass(ParsedToolTurn):
+        pass
+
+    class ExploitToolCallingSession(ToolCallingSessionBase):
+        def __init__(self, outcome) -> None:
+            self.outcome = outcome
+
+        def _parse_tool_turn(self, actual_request, actual_messages, actual_tools):
+            assert actual_request is request
+            assert tuple(actual_messages) == messages
+            assert tuple(actual_tools) == tools
+            return self.outcome
+
+    outcomes = (
+        SimpleNamespace(
+            advisory_events=parsed.advisory_events,
+            terminal_result=parsed.terminal_result,
+        ),
+        ParsedToolTurnSubclass(parsed.advisory_events, parsed.terminal_result),
+    )
+    for outcome in outcomes:
+        session = ExploitToolCallingSession(outcome)
+        with pytest.raises(ModelToolProtocolError, match="parsed_turn_type_invalid"):
+            session.run_tool_turn(request, messages, tools)
+        with pytest.raises(ModelToolProtocolError, match="parsed_turn_type_invalid"):
+            tuple(session.stream_tool_turn(request, messages, tools))
+
+
 def test_scripted_session_cannot_override_the_canonical_public_projections() -> None:
     assert ScriptedToolTurnSession.run_tool_turn is ToolCallingSessionBase.run_tool_turn
     assert ScriptedToolTurnSession.stream_tool_turn is ToolCallingSessionBase.stream_tool_turn
     assert ScriptedToolTurnSession._parse_tool_turn is not ToolCallingSessionBase._parse_tool_turn
 
 
-def test_parsed_tool_turn_rejects_missing_or_mismatched_terminal_projection() -> None:
+def test_d0a_session_projection_ownership_row_preserves_all_seven_columns() -> None:
+    document = (
+        Path(__file__).resolve().parents[1] / "docs/TRACK_D_D0A_PROVIDER_NEUTRAL_RUNTIME_IMPLEMENTATION.md"
+    ).read_text()
+    header = next(line for line in document.splitlines() if line.startswith("| Contract | Owner / source of truth |"))
+    session_row = next(line for line in document.splitlines() if line.startswith("| Session projections |"))
+
+    header_cells = [cell.strip() for cell in header.strip("|").split("|")]
+    session_cells = [cell.strip() for cell in session_row.strip("|").split("|")]
+
+    assert len(header_cells) == 7
+    assert len(session_cells) == len(header_cells)
+    assert session_cells[3] == "scripted replay and future non-live/live session adapters"
+    assert session_cells[4].startswith("Separate buffered/stream parsing")
+
+
+def test_parsed_tool_turn_rejects_non_exact_container_event_and_result_types() -> None:
+    payload = _tool_turn_bytes()
+    parsed = parse_openai_chat_sse(
+        [payload],
+        request=_request(transcript=payload),
+        messages=_messages(),
+        tools=_tools(),
+    )
+
+    class AdvisoryEventTuple(tuple):
+        pass
+
+    class TerminalEventSubclass(TerminalEvent):
+        pass
+
+    with pytest.raises(ModelToolProtocolError, match="advisory_events_type_invalid"):
+        ParsedToolTurn(
+            advisory_events=list(parsed.advisory_events),  # type: ignore[arg-type]
+            terminal_result=parsed.terminal_result,
+        )
+    with pytest.raises(ModelToolProtocolError, match="advisory_events_type_invalid"):
+        ParsedToolTurn(
+            advisory_events=AdvisoryEventTuple(parsed.advisory_events),  # type: ignore[arg-type]
+            terminal_result=parsed.terminal_result,
+        )
+    with pytest.raises(ModelToolProtocolError, match="advisory_event_type_invalid:0"):
+        ParsedToolTurn(
+            advisory_events=(SimpleNamespace(event_type="text_delta", text="duck"), *parsed.advisory_events[1:]),  # type: ignore[arg-type]
+            terminal_result=parsed.terminal_result,
+        )
+    with pytest.raises(ModelToolProtocolError, match="advisory_event_type_invalid:0"):
+        ParsedToolTurn(
+            advisory_events=(TerminalEventSubclass(parsed.terminal_result),),
+            terminal_result=parsed.terminal_result,
+        )
+
+    duck_result = SimpleNamespace(canonical_request_sha256=parsed.terminal_result.canonical_request_sha256)
+    with pytest.raises(ModelToolProtocolError, match="terminal_result_type_invalid"):
+        ParsedToolTurn(
+            advisory_events=(TerminalEvent(duck_result),),  # type: ignore[arg-type]
+            terminal_result=duck_result,  # type: ignore[arg-type]
+        )
+
+
+def test_parsed_tool_turn_requires_one_final_terminal_with_object_identical_result() -> None:
     payload = _tool_turn_bytes()
     parsed = parse_openai_chat_sse(
         [payload],
@@ -984,10 +1084,18 @@ def test_parsed_tool_turn_rejects_missing_or_mismatched_terminal_projection() ->
             terminal_result=parsed.terminal_result,
         )
 
-    different_result = replace(parsed.terminal_result, text="A different canonical result.")
-    with pytest.raises(ModelToolProtocolError, match="terminal_event_result_mismatch"):
+    with pytest.raises(ModelToolProtocolError, match="terminal_event_not_final:0"):
         ParsedToolTurn(
-            advisory_events=(*parsed.advisory_events[:-1], TerminalEvent(different_result)),
+            advisory_events=(TerminalEvent(parsed.terminal_result), *parsed.advisory_events),
+            terminal_result=parsed.terminal_result,
+        )
+
+    equal_but_distinct_result = replace(parsed.terminal_result)
+    assert equal_but_distinct_result == parsed.terminal_result
+    assert equal_but_distinct_result is not parsed.terminal_result
+    with pytest.raises(ModelToolProtocolError, match="terminal_event_result_identity_mismatch"):
+        ParsedToolTurn(
+            advisory_events=(*parsed.advisory_events[:-1], TerminalEvent(equal_but_distinct_result)),
             terminal_result=parsed.terminal_result,
         )
 

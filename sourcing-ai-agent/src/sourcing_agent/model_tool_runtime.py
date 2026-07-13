@@ -891,6 +891,14 @@ class TerminalEvent:
 
 
 AgentTurnEvent: TypeAlias = TextDeltaEvent | ToolCallPartialEvent | UsageEvent | StopEvent | ErrorEvent | TerminalEvent
+_AGENT_TURN_EVENT_TYPES = (
+    TextDeltaEvent,
+    ToolCallPartialEvent,
+    UsageEvent,
+    StopEvent,
+    ErrorEvent,
+    TerminalEvent,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -899,12 +907,23 @@ class ParsedToolTurn:
     terminal_result: ToolTurnResult
 
     def __post_init__(self) -> None:
-        if not self.advisory_events or not isinstance(self.advisory_events[-1], TerminalEvent):
+        if type(self.advisory_events) is not tuple:
+            raise ModelToolProtocolError("model_tool_advisory_events_type_invalid")
+        if type(self.terminal_result) is not ToolTurnResult:
+            raise ModelToolProtocolError("model_tool_terminal_result_type_invalid")
+        if not self.advisory_events:
             raise ModelToolProtocolError("model_tool_terminal_event_missing")
+        final_index = len(self.advisory_events) - 1
+        for index, event in enumerate(self.advisory_events):
+            if type(event) not in _AGENT_TURN_EVENT_TYPES:
+                raise ModelToolProtocolError(f"model_tool_advisory_event_type_invalid:{index}")
+            if type(event) is TerminalEvent and index != final_index:
+                raise ModelToolProtocolError(f"model_tool_terminal_event_not_final:{index}")
         terminal_event = self.advisory_events[-1]
-        assert isinstance(terminal_event, TerminalEvent)
-        if terminal_event.result != self.terminal_result:
-            raise ModelToolProtocolError("model_tool_terminal_event_result_mismatch")
+        if type(terminal_event) is not TerminalEvent:
+            raise ModelToolProtocolError("model_tool_terminal_event_missing")
+        if terminal_event.result is not self.terminal_result:
+            raise ModelToolProtocolError("model_tool_terminal_event_result_identity_mismatch")
 
 
 @dataclass(frozen=True, slots=True)
@@ -1763,7 +1782,7 @@ class ToolCallingSessionBase(abc.ABC):
         messages: Iterable[ModelTurnMessage],
         tools: Iterable[ToolSpec],
     ) -> ToolTurnResult:
-        return self._parse_tool_turn(request, messages, tools).terminal_result
+        return ToolCallingSessionBase._validated_parse_tool_turn(self, request, messages, tools).terminal_result
 
     def stream_tool_turn(
         self,
@@ -1771,7 +1790,18 @@ class ToolCallingSessionBase(abc.ABC):
         messages: Iterable[ModelTurnMessage],
         tools: Iterable[ToolSpec],
     ) -> Iterator[AgentTurnEvent]:
-        yield from self._parse_tool_turn(request, messages, tools).advisory_events
+        yield from ToolCallingSessionBase._validated_parse_tool_turn(self, request, messages, tools).advisory_events
+
+    def _validated_parse_tool_turn(
+        self,
+        request: ToolTurnRequest,
+        messages: Iterable[ModelTurnMessage],
+        tools: Iterable[ToolSpec],
+    ) -> ParsedToolTurn:
+        parsed = self._parse_tool_turn(request, messages, tools)
+        if type(parsed) is not ParsedToolTurn:
+            raise ModelToolProtocolError("model_tool_parsed_turn_type_invalid")
+        return parsed
 
 
 class ScriptedToolTurnSession(ToolCallingSessionBase):
