@@ -176,10 +176,13 @@ v3 追加：流路径消费到的 terminal 事件所载结果与 `run_tool_turn`
   supersession 原子关槽（open→closed，**accepted→superseded**——v6 补 R5#5）；槽状态转移的
   **写者 = turn owner 的域命令**（generic 控制面经 事件→reducer→turn owner 命令收敛，与 D3 §4c
   同构，不跨 owner 直写）。
-- **消费 CAS（v6，R5#5）**：AgentAction 创建 = `accepted→consumed` 的 CAS（同 UoW 持久化 action
-  + journal）；approve 与 dispatch 各自复查槽 generation + canonical operation/turn/command/claim/
-  route/schema/policy pins——cancel 落在「接受后、消费前」窗口时，`accepted→superseded` 抢先，
-  action 创建 CAS 失配即拒。晚到 terminal 结果一律 quarantine 证据。
+- **消费 CAS（v6，R5#5；v7 修 R6#12）**：AgentAction 创建 = `accepted→consumed` 的 CAS（同 UoW
+  持久化 action + journal），谓词含槽 generation + **durable control epoch** + canonical
+  operation/turn/command/claim/route/schema/policy pins；approve 与 dispatch 各自复查同一全集
+  （含 epoch——requeue 后旧 accepted 结果在消费/审批/派发任一点都被 epoch 失配拒）。cancel 落在
+  「接受后、消费前」窗口时 `accepted→superseded` 抢先。晚到 terminal 结果一律 quarantine 证据。
+  **运行时隔离（R6#2 同 D3）**：信封/槽/journal/action 携带不可变 runtime_namespace +
+  provider_mode，scripted/simulate 结果不可流入 live 命名空间的任何授权路径。
 - 部分输出保留为 quarantined 证据（attempt 级 artifact），不进结果。
 
 ### 2.6 OpenAI-compatible chat 流式实现：fail-closed 状态机（v2 全面收紧）

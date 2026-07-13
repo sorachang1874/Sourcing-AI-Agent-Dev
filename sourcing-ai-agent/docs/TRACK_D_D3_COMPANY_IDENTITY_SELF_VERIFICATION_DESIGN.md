@@ -84,11 +84,15 @@ acquisition.plan.build 结果事件（含 plan 期廉价解析的置信度）
   → request owner 创建 review session（id 此刻才存在），发 session-created 结果事件
   → reducer（置信 < high 时）计划 company.identity.verify.evidence（携带 session id + fingerprint + intent）
   → 验证 terminal 结果事件
-  → reducer 计划 company.identity.verification.record（owner = 验证 owner；幂等键 = intent_id）
+  → reducer 计划 company.identity.verification.record（owner = 验证 owner；幂等键 =
+    `record:<workspace_id>:<intent_id>`——v7 修 R6#1：workflow_commands 唯一约束是
+    (workflow_run_id, idempotency_key)，record/apply 必须命令类型命名空间化否则同 workflow 互撞）
   → record owner 单 UoW：§4c 全条件 CAS，只写自己的聚合（verification 行 + intent 迁移 +
     not_applied/applied 证据），发 company_identity_verification_recorded 域事件
   → reducer **仅对 record 结果 = applied** 计划 plan_review.identity_result.apply
-    （owner = plan review owner；幂等键 = intent_id；not_applied 永不触发 gate 更新）
+    （owner = plan review owner；幂等键 = `apply:<workspace_id>:<session_id>:<源域事件 id>`——
+    v7：同一 intent 的过期/supersession/promotion/人工各次转移各有源事件、各自成键，互不去重；
+    not_applied 永不触发 gate 更新）
   → apply owner 单 UoW（v6 补 R5#1 的 gate 侧围栏）：CAS 于 {workspace + session 当前 revision +
     source 事件 id 匹配 + generation 规则}；**watermark 单调、每次成功 apply（含 blocking 方向）
     都推进**（sweep blocker 修正——阻塞若不推进 watermark，晚到的旧 clearing 可在
@@ -165,7 +169,14 @@ fail-closed（身份 reason 未清即仍阻塞，中间态无放行窗口）。�
 
 **PG-only**（migration 0002+ DDL + `store.repos.<domain>` repository owner；无 SQLite 路径）。
 
-`company_identity_verifications`：`(workspace_id, company_fingerprint)` 唯一；`fingerprint_version`；
+**运行时隔离（v7 修 R6#2，对齐 RUNTIME_ENVIRONMENT_ISOLATION 契约）**：operation/command/attempt/
+信封/证据 bundle/本表行身份/幂等 scope/每条接受 CAS 全链携带不可变 `runtime_namespace` +
+`provider_mode`；**非 live（simulate/scripted）证据 diagnostic-only**——结构上不可能产生
+live 命名空间的 `shadow_would_verify`/`verified_accepted` 行（模式不匹配即 CAS 拒），Phase-2
+promotion 只认 live 证据；跨模式污染 preflight 进 contract lane。
+
+`company_identity_verifications`：`(runtime_namespace, workspace_id, company_fingerprint)` 唯一
+（v7 隔离键前置）；`provider_mode` 不可变列；`fingerprint_version`；
 `decision_generation` 单调；`verification_state`；`accepted_policy_version` + `valid_until`；
 `canonical_url/slug` + 推导规则版本；`decision_source ∈ {machine, human, legacy_registry_import}`；
 `result_artifact_ref`（schema 版本化；高基数内容全在 artifact）；物理因果列（source
@@ -235,11 +246,13 @@ decision_generation；`intent_state ∈ {pending, applied, cancelled, timed_out,
 
 ## 5. 「人永远赢」
 
-机器路径走 §4c record 全条件 CAS + §2.2 apply 链。**人工确认（v6 按单写者拆分重述，R5#7）**：
-review owner 在自己 UoW 记录人工决定 + 发决定事件 → reducer 计划验证 owner 的 supersession
-命令（写 human_confirmed + generation+1 + supersede 活跃 intent + superseded delta）→ 域事件 →
-reducer → apply 命令更新 gate——同一编舞、两个单写者 UoW；两步间 gate 保持原状态（人工决定的
-效果不半途可见）。R-019 边界不变（本表自带围栏；全局 fencing 归 R-019）。
+机器路径走 §4c record 全条件 CAS + §2.2 apply 链。**人工确认（v7 修 R6#3 的窗口）**：
+review owner 的人工决定 UoW **同时原子地**：记录决定 + 发决定事件 + 推进 review/gate control
+epoch + 在自己的聚合上装 fail-closed 的 `human_transition_pending` 态（该态本身 blocking——
+窗口期内终审/commit 不可能凭旧 canonical 通过）→ reducer 计划验证 owner supersession 命令
+（写 human_confirmed + generation+1 + supersede intent + superseded delta）→ 域事件 → reducer →
+apply 命令清 pending 态并更新 gate。commit owner 的 canonical 复查（§2.2）同时比对最新人工决定
+事件 id 与验证行 provenance 一致。R-019 边界不变。
 
 ## 6. 裁决 schema 与调用信封（v4 收紧证据 provenance，round-3 #5）
 
