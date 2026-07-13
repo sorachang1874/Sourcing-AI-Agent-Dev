@@ -26,7 +26,6 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import generate_capability_probe_fixtures as capability_fixture_generator  # noqa: E402
 from generate_capability_probe_fixtures import (  # noqa: E402
     OWNED_TEMP_PREFIX,
-    PAIR_LOCK_FILENAME,
     _atomic_write_many,
     _exclusive_pair_lock,
     _write_same_directory_temp,
@@ -39,12 +38,20 @@ from x_first.capability_probe import (  # noqa: E402
     CAPABILITY_OBSERVATION_EXCERPTS,
     DIAGNOSTIC_CODES,
     ERROR_ENVELOPE_BY_VERDICT,
+    MAX_CAPABILITY_OBSERVATIONS,
+    REQUEST_JSON_LOAD_DIAGNOSTIC,
+    REQUEST_VALIDATION_DIAGNOSTIC,
+    RESULT_JSON_LOAD_DIAGNOSTIC,
+    RESULT_VALIDATION_DIAGNOSTIC,
     SYNTHETIC_RAW_RESPONSE_SHA256,
+    _validate_cli_payloads,
     canonical_sha256,
     validate_capability_request,
     validate_capability_result,
 )
 from x_first.contracts import load_json  # noqa: E402
+
+LEGACY_PAIR_LOCK_FILENAME = ".x-first-capability-fixture.pair.lock"
 
 
 def _walk(value: Any) -> Iterable[Any]:
@@ -126,6 +133,7 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
             self.assertEqual(first.read_text(encoding="utf-8"), "new-first")
             self.assertEqual(second.read_text(encoding="utf-8"), "new-second")
             self.assertFalse(list(root.glob(f"{OWNED_TEMP_PREFIX}*.tmp")))
+            self.assertFalse((root / LEGACY_PAIR_LOCK_FILENAME).exists())
 
             stale_owned_temp = _write_same_directory_temp(first, b"hard-crash-orphan")
             unrelated_temp = root / f"{OWNED_TEMP_PREFIX}{first.name}.not-owned.tmp"
@@ -169,19 +177,29 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
             )
             self.assertEqual(unrelated_temp.read_text(encoding="utf-8"), "unrelated")
 
-    def test_generator_pair_lock_rejects_symlink_and_serializes_two_writers(self) -> None:
+    def test_generator_directory_lock_rejects_symlink_parent_and_serializes_two_writers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            target = root / "lock-target"
-            target.write_text("not-a-lock", encoding="utf-8")
-            (root / PAIR_LOCK_FILENAME).symlink_to(target)
-            first = root / "first.json"
-            second = root / "second.json"
-            with self.assertRaisesRegex(ValueError, "pair lock must not be a symlink"):
+            trusted = root / "trusted"
+            trusted.mkdir()
+            linked = root / "linked"
+            linked.symlink_to(trusted, target_is_directory=True)
+            first = linked / "first.json"
+            second = linked / "second.json"
+            with self.assertRaisesRegex(ValueError, "requires a trusted real directory"):
                 _atomic_write_many(((first, "first"), (second, "second")))
-            self.assertEqual(target.read_text(encoding="utf-8"), "not-a-lock")
-            self.assertFalse(first.exists())
-            self.assertFalse(second.exists())
+            self.assertFalse((trusted / "first.json").exists())
+            self.assertFalse((trusted / "second.json").exists())
+
+            untrusted = root / "group-or-other-writable"
+            untrusted.mkdir()
+            untrusted.chmod(0o777)
+            with self.assertRaisesRegex(ValueError, "directory identity changed"):
+                _atomic_write_many(
+                    ((untrusted / "first.json", "first"), (untrusted / "second.json", "second"))
+                )
+            self.assertFalse((untrusted / "first.json").exists())
+            self.assertFalse((untrusted / "second.json").exists())
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -257,14 +275,16 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
             self.assertEqual(second.read_text(encoding="utf-8"), "writer-two-result")
             self.assertFalse(list(root.glob(f"{OWNED_TEMP_PREFIX}*.tmp")))
 
-    def test_generator_pair_lock_serializes_processes_with_bounded_timeout(self) -> None:
+    def test_generator_directory_lock_survives_legacy_lock_inode_swap_and_times_out_contender(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             first = root / "request.json"
             second = root / "result.json"
             first.write_text("initial-request", encoding="utf-8")
             second.write_text("initial-result", encoding="utf-8")
-            _atomic_write_many(((first, "parent-request"), (second, "parent-result")))
+            legacy_lock_path = root / LEGACY_PAIR_LOCK_FILENAME
+            legacy_lock_path.write_text("legacy-inode-one", encoding="utf-8")
+            original_legacy_inode = legacy_lock_path.stat().st_ino
 
             child_program = "\n".join(
                 (
@@ -281,6 +301,10 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
                 )
             )
             with _exclusive_pair_lock(root):
+                replacement = root / "replacement-lock-inode"
+                replacement.write_text("legacy-inode-two", encoding="utf-8")
+                os.replace(replacement, legacy_lock_path)
+                self.assertNotEqual(legacy_lock_path.stat().st_ino, original_legacy_inode)
                 completed = subprocess.run(
                     [sys.executable, "-c", child_program, str(first), str(second)],
                     cwd=ROOT,
@@ -291,8 +315,9 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
                     timeout=3,
                 )
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
-            self.assertEqual(first.read_text(encoding="utf-8"), "parent-request")
-            self.assertEqual(second.read_text(encoding="utf-8"), "parent-result")
+            self.assertEqual(first.read_text(encoding="utf-8"), "initial-request")
+            self.assertEqual(second.read_text(encoding="utf-8"), "initial-result")
+            self.assertEqual(legacy_lock_path.read_text(encoding="utf-8"), "legacy-inode-two")
 
     def test_generator_check_rejects_symlink_even_when_target_bytes_match(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -342,7 +367,14 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
         self.assertEqual(self.request_schema["properties"]["execution_mode"]["const"], "fixture_only")
         self.assertEqual(self.result_schema["properties"]["execution_mode"]["const"], "fixture_only")
         self.assertIs(self.result_schema["$defs"]["capability"]["properties"]["x_native_access_proven"]["const"], False)
-        self.assertEqual(self.result_schema["properties"]["observations"]["maxItems"], 5)
+        self.assertEqual(
+            self.result_schema["properties"]["observations"]["maxItems"],
+            MAX_CAPABILITY_OBSERVATIONS,
+        )
+        self.assertEqual(
+            self.request_schema["properties"]["hard_budgets"]["properties"]["max_observations"]["const"],
+            MAX_CAPABILITY_OBSERVATIONS,
+        )
         self.assertEqual(self.result_schema["$defs"]["error"]["properties"]["message"]["maxLength"], 280)
         self.assertEqual(
             set(self.result_schema["$defs"]["observation"]["properties"]["excerpt"]["enum"]),
@@ -630,6 +662,71 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
         for diagnostic in cli_payload["errors"]:
             self.assertIn(diagnostic.partition(":")[0], DIAGNOSTIC_CODES)
 
+    def test_cli_load_boundary_rejects_non_objects_malformed_json_and_private_paths(self) -> None:
+        cases = (
+            ("request", '["SENTINEL_LIST_VALUE_7D3F"]', REQUEST_JSON_LOAD_DIAGNOSTIC),
+            ("result", '"SENTINEL_PRIMITIVE_VALUE_7D3F"', RESULT_JSON_LOAD_DIAGNOSTIC),
+            ("request", '{"SENTINEL_MALFORMED_VALUE_7D3F":', REQUEST_JSON_LOAD_DIAGNOSTIC),
+            ("result", None, RESULT_JSON_LOAD_DIAGNOSTIC),
+        )
+        for subject, content, expected_diagnostic in cases:
+            with self.subTest(subject=subject, content=content):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    request_path = root / "request.json"
+                    result_path = root / "result.json"
+                    request_path.write_text(json.dumps(self.request), encoding="utf-8")
+                    result_path.write_text(json.dumps(self.result), encoding="utf-8")
+                    hostile_path = root / f"SENTINEL_PRIVATE_{subject.upper()}_PATH_7D3F.json"
+                    if content is not None:
+                        hostile_path.write_text(content, encoding="utf-8")
+                    if subject == "request":
+                        request_path = hostile_path
+                    else:
+                        result_path = hostile_path
+                    completed = subprocess.run(
+                        [
+                            sys.executable,
+                            "-m",
+                            "x_first.capability_probe",
+                            "--request",
+                            str(request_path),
+                            "--result",
+                            str(result_path),
+                        ],
+                        cwd=ROOT,
+                        env={**os.environ, "PYTHONPATH": "src"},
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=60,
+                    )
+                self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+                self.assertEqual(completed.stderr, "")
+                self.assertNotIn("SENTINEL_", completed.stdout)
+                self.assertEqual(
+                    json.loads(completed.stdout),
+                    {"errors": [expected_diagnostic], "status": "invalid"},
+                )
+
+    def test_cli_validation_boundary_collapses_unexpected_exceptions_without_echo(self) -> None:
+        sentinel = "SENTINEL_INTERNAL_EXCEPTION_DETAIL_7D3F"
+        with mock.patch(
+            "x_first.capability_probe.validate_capability_request",
+            side_effect=RuntimeError(sentinel),
+        ):
+            errors = _validate_cli_payloads(copy.deepcopy(self.request), copy.deepcopy(self.result))
+        self.assertEqual(errors, [REQUEST_VALIDATION_DIAGNOSTIC])
+        self.assertNotIn(sentinel, json.dumps(errors))
+
+        with mock.patch(
+            "x_first.capability_probe.validate_capability_result",
+            side_effect=RuntimeError(sentinel),
+        ):
+            errors = _validate_cli_payloads(copy.deepcopy(self.request), copy.deepcopy(self.result))
+        self.assertEqual(errors, [RESULT_VALIDATION_DIAGNOSTIC])
+        self.assertNotIn(sentinel, json.dumps(errors))
+
     def test_run_duration_and_elapsed_ms_reconcile_exactly(self) -> None:
         one_millisecond = copy.deepcopy(self.result)
         one_millisecond["run"]["completed_at"] = "2026-07-14T00:00:00.001Z"
@@ -710,6 +807,24 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
         for name, (mutation, expected) in mutations.items():
             with self.subTest(name=name):
                 self.assert_result_rejected(mutation, contains=expected)
+
+    def test_observation_iteration_is_bounded_before_validating_attacker_sized_arrays(self) -> None:
+        result = copy.deepcopy(self.result)
+        result["observations"] = [copy.deepcopy(self.result["observations"][0]) for _ in range(1000)]
+        result["usage"]["observations"] = 1000
+
+        errors = validate_capability_result(result, request=self.request)
+        overflow_errors = [error for error in errors if "exceeds the fixed maximum of five" in error]
+        self.assertEqual(len(overflow_errors), 1, errors)
+        rendered = json.dumps(errors, ensure_ascii=False)
+        observation_indices = [
+            int(match.group(1)) for match in re.finditer(r"result\.observations\[([0-9]+)\]", rendered)
+        ]
+        self.assertTrue(errors)
+        self.assertLessEqual(len(errors), 12, errors)
+        self.assertLessEqual(len(rendered.encode("utf-8")), 4096, rendered)
+        self.assertTrue(all(index < MAX_CAPABILITY_OBSERVATIONS for index in observation_indices))
+        self.assertNotIn("result.observations[5]", rendered)
 
     def test_observation_identity_url_time_and_minimization_fail_closed(self) -> None:
         mutations: dict[str, tuple[Callable[[dict[str, Any]], None], str]] = {

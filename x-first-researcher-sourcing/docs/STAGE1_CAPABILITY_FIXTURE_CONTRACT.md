@@ -30,7 +30,7 @@ a new reviewed contract version.
 | Target | request fixture | one synthetic official-lab account | Real stable account ID requires owner pin |
 | Retention | request/result fixture | synthetic-only, bounded excerpts, no full body | Live TTL/deletion evidence requires privacy owner |
 | Safety | sibling AGENTS + executable scanners | unsafe fields/values, credentials, live URLs rejected | No bypass or permissive fallback |
-| Fixture pair writer | capability fixture generator | persistent same-directory lock owned by the local OS user; request/result commit as one serialized pair | Replaced only by a reviewed durable artifact writer |
+| Fixture pair writer | capability fixture generator | trusted fixture-directory descriptor lock owned by the local OS user; request/result commit as one serialized pair | Replaced only by a reviewed durable artifact writer |
 | Canonical/product writers | existing product owners | all writer arrays empty | Separate adjudicated adapter gate |
 
 ## State and verdict contract
@@ -57,15 +57,19 @@ normalized or rounded. The fixed
 unbound caller-supplied hash.
 
 Fixture regeneration refuses symlink destinations, and `--check` treats symlink fixtures as stale even when their
-targets contain the expected bytes. The generator owns one persistent
-`.x-first-capability-fixture.pair.lock` file in the fixture directory. It is never unlinked during normal operation;
-the local effective OS user must own it as a single-link regular file with mode `0600`. A symlink, hard link,
-unexpected owner/mode/type, or identity change during acquisition fails closed. An in-process mutex covers threads,
-and a non-blocking advisory file lock covers processes. Both use one five-second monotonic acquisition budget.
+targets contain the expected bytes. The generator opens the existing fixture directory itself with
+`O_DIRECTORY|O_NOFOLLOW`, verifies that its descriptor and pathname still name the same user-owned directory inode,
+rejects group/other-writable POSIX mode bits, and takes a non-blocking advisory `flock` on that descriptor. This
+macOS-supported lock has no persistent lock
+pathname or residue, so replacing the former `.x-first-capability-fixture.pair.lock` inode cannot split holder and
+contender onto independent locks. An in-process mutex covers threads. Both layers share one five-second monotonic
+acquisition budget.
 
-The exclusive pair lock is held across destination preflight, stale-temp reaping, both temporary writes and atomic
-replacements, rollback, temporary cleanup, and final directory fsync. Therefore another writer cannot reap an active
-temporary file, snapshot a half-written pair, or roll an earlier generation back over a later successful generation.
+The exclusive directory lock is held across destination preflight, stale-temp reaping, both temporary writes and
+atomic replacements, rollback, temporary cleanup, and final directory fsync. Directory descriptor/path identity is
+rechecked at acquisition and each mutation boundary. Therefore another cooperating writer in the same trusted
+fixture directory cannot reap an active temporary file, snapshot a half-written pair, or roll an earlier generation
+back over a later successful generation.
 Writes materialize every candidate file in an owned, same-directory temporary file, fsync it, and use atomic
 replacement. A successful repair reaps only temp files in the generator-owned
 `.x-first-capability-fixture.<destination>.<32 lowercase hex>.tmp` namespace; other files remain untouched. A normal
@@ -73,13 +77,20 @@ multi-file replacement failure rolls already replaced files back to their prior 
 the kernel lock; the next writer reaps owned orphan temps and replaces both files, while the request hash, `--check`,
 and validator continue to reject any half-written pair before repair.
 
+The fixture directory is an explicit operator-controlled trust boundary: it and its parent must not be writable by
+an untrusted actor. The descriptor/path checks detect identity changes at the tested acquisition and mutation
+boundaries, but the writer does not claim protection against an attacker that can replace the trusted directory
+itself between system calls. In that environment the offline generator must not be run.
+
 ## Fail-closed rules
 
 Validation rejects:
 
 - any live execution mode, owner approval claim, model/tool/provider request ID, external call, external page, or cost;
 - generic-web provenance, live X/Twitter URL, credential-bearing field, or unbound request hash;
-- a second execution/call/page, a sixth observation, deadline overrun, or totals that do not reconcile;
+- a second execution/call/page, a sixth observation, deadline overrun, or totals that do not reconcile; observation
+  validation and content scanning are sliced to the fixed five-item maximum before iteration, producing one static
+  overflow diagnostic and no submitted array index above four;
 - unknown or inconsistent run/task/verdict values;
 - missing or duplicate stable IDs, target-account mismatch, invalid timestamps, or unbounded excerpt/full-body
   retention;
@@ -97,7 +108,9 @@ All executable validation diagnostics use one of the fixed codes `XCAP_REQUEST_I
 `XCAP_BOUND_REQUEST_INVALID`, or `XCAP_RESULT_INVALID`. Diagnostics may identify only static schema paths and bounded
 array indices. They never interpolate submitted values, unknown field names or paths, status/verdict strings,
 observation IDs, excerpts, terminal-error text, credentials, protected-trait text, or person-like text. This applies
-equally to the Python validation API and CLI JSON output.
+equally to the Python validation API and CLI JSON output. CLI file reads, JSON decoding, top-level object checks, and
+unexpected validation exceptions are caught at the command boundary and collapse to fixed code/message pairs; input
+paths and submitted values are never emitted, and no traceback is returned.
 
 The fixture makes no affiliation, employment, relevance, identity-link, exhaustiveness, or outreach claim.
 

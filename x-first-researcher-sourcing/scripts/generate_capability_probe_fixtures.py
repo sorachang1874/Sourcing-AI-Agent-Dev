@@ -17,6 +17,7 @@ from typing import Any
 
 from x_first.capability_probe import (
     CAPABILITY_OBSERVATION_EXCERPTS,
+    MAX_CAPABILITY_OBSERVATIONS,
     REQUEST_SCHEMA_VERSION,
     RESULT_SCHEMA_VERSION,
     SYNTHETIC_RAW_RESPONSE_SHA256,
@@ -27,10 +28,8 @@ ROOT = Path(__file__).resolve().parents[1]
 TIMESTAMP = "2026-07-14T00:00:00.000Z"
 OWNED_TEMP_PREFIX = ".x-first-capability-fixture."
 _OWNED_TEMP_TOKEN_PATTERN = r"[0-9a-f]{32}"
-PAIR_LOCK_FILENAME = ".x-first-capability-fixture.pair.lock"
 PAIR_LOCK_TIMEOUT_SECONDS = 5.0
 PAIR_LOCK_POLL_SECONDS = 0.01
-_PAIR_LOCK_FILE_MODE = 0o600
 _PAIR_LOCK_REGISTRY_GUARD = threading.Lock()
 _PAIR_LOCK_REGISTRY: dict[Path, threading.Lock] = {}
 
@@ -60,7 +59,7 @@ def build_request_fixture() -> dict[str, Any]:
             "max_executions": 1,
             "max_external_calls": 1,
             "max_pages": 1,
-            "max_observations": 5,
+            "max_observations": MAX_CAPABILITY_OBSERVATIONS,
             "max_cost_usd": 0,
             "deadline_ms": 1000,
         },
@@ -231,14 +230,6 @@ def _write_same_directory_temp(path: Path, content: bytes) -> Path:
     return temp_path
 
 
-def _fsync_directory(path: Path) -> None:
-    directory_fd = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(directory_fd)
-    finally:
-        os.close(directory_fd)
-
-
 def _in_process_pair_lock(parent: Path) -> threading.Lock:
     key = parent.resolve(strict=True)
     with _PAIR_LOCK_REGISTRY_GUARD:
@@ -249,68 +240,75 @@ def _in_process_pair_lock(parent: Path) -> threading.Lock:
         return lock
 
 
-def _lock_file_identity_is_safe(lock_fd: int, lock_path: Path) -> bool:
-    descriptor_stat = os.fstat(lock_fd)
+def _locked_directory_identity_is_safe(directory_fd: int, parent: Path) -> bool:
+    descriptor_stat = os.fstat(directory_fd)
     try:
-        path_stat = lock_path.stat(follow_symlinks=False)
+        path_stat = parent.stat(follow_symlinks=False)
     except OSError:
         return False
     return (
-        stat.S_ISREG(descriptor_stat.st_mode)
-        and stat.S_ISREG(path_stat.st_mode)
+        stat.S_ISDIR(descriptor_stat.st_mode)
+        and stat.S_ISDIR(path_stat.st_mode)
         and descriptor_stat.st_dev == path_stat.st_dev
         and descriptor_stat.st_ino == path_stat.st_ino
         and descriptor_stat.st_uid == os.geteuid()
-        and descriptor_stat.st_nlink == 1
-        and stat.S_IMODE(descriptor_stat.st_mode) == _PAIR_LOCK_FILE_MODE
+        and descriptor_stat.st_mode & (stat.S_IWGRP | stat.S_IWOTH) == 0
     )
 
 
+def _assert_locked_directory_identity(directory_fd: int, parent: Path) -> None:
+    if not _locked_directory_identity_is_safe(directory_fd, parent):
+        raise ValueError("trusted capability fixture directory identity changed")
+
+
 @contextlib.contextmanager
-def _exclusive_pair_lock(parent: Path) -> Iterator[None]:
+def _exclusive_pair_lock(parent: Path) -> Iterator[int]:
     deadline = time.monotonic() + PAIR_LOCK_TIMEOUT_SECONDS
     thread_lock = _in_process_pair_lock(parent)
     if not thread_lock.acquire(timeout=max(0.0, deadline - time.monotonic())):
-        raise TimeoutError("capability fixture pair lock acquisition timed out")
+        raise TimeoutError("capability fixture directory lock acquisition timed out")
 
-    lock_fd: int | None = None
-    file_lock_acquired = False
+    directory_fd: int | None = None
+    directory_lock_acquired = False
     try:
-        lock_path = parent / PAIR_LOCK_FILENAME
-        flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
         try:
-            lock_fd = os.open(lock_path, flags, _PAIR_LOCK_FILE_MODE)
+            directory_fd = os.open(parent, flags)
         except OSError as error:
-            if error.errno in {errno.ELOOP, errno.EMLINK}:
-                raise ValueError("capability fixture pair lock must not be a symlink") from error
+            if error.errno in {errno.ELOOP, errno.ENOTDIR}:
+                raise ValueError("capability fixture directory lock requires a trusted real directory") from error
             raise
-        if not _lock_file_identity_is_safe(lock_fd, lock_path):
-            raise ValueError("capability fixture pair lock ownership or file identity is unsafe")
+        _assert_locked_directory_identity(directory_fd, parent)
 
         while True:
             try:
-                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                file_lock_acquired = True
+                fcntl.flock(directory_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                directory_lock_acquired = True
                 break
             except BlockingIOError as error:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    raise TimeoutError("capability fixture pair lock acquisition timed out") from error
+                    raise TimeoutError("capability fixture directory lock acquisition timed out") from error
                 time.sleep(min(PAIR_LOCK_POLL_SECONDS, remaining))
 
-        if not _lock_file_identity_is_safe(lock_fd, lock_path):
-            raise ValueError("capability fixture pair lock changed during acquisition")
-        os.fsync(lock_fd)
-        _fsync_directory(parent)
-        yield
+        _assert_locked_directory_identity(directory_fd, parent)
+        os.fsync(directory_fd)
+        yield directory_fd
+        _assert_locked_directory_identity(directory_fd, parent)
+        os.fsync(directory_fd)
     finally:
         try:
-            if lock_fd is not None:
+            if directory_fd is not None:
                 try:
-                    if file_lock_acquired:
-                        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                    if directory_lock_acquired:
+                        fcntl.flock(directory_fd, fcntl.LOCK_UN)
                 finally:
-                    os.close(lock_fd)
+                    os.close(directory_fd)
         finally:
             thread_lock.release()
 
@@ -325,9 +323,10 @@ def _atomic_write_many(values: tuple[tuple[Path, str], ...]) -> tuple[Path, ...]
     if any(path.parent != parent for path in paths):
         raise ValueError("capability fixture destinations must share one directory")
 
-    with _exclusive_pair_lock(parent):
+    with _exclusive_pair_lock(parent) as directory_fd:
         pending: dict[Path, Path] = {}
         try:
+            _assert_locked_directory_identity(directory_fd, parent)
             for path in paths:
                 if path.is_symlink():
                     raise ValueError("refusing to replace symlink fixture destination")
@@ -346,14 +345,18 @@ def _atomic_write_many(values: tuple[tuple[Path, str], ...]) -> tuple[Path, ...]
 
             replaced: list[Path] = []
             try:
+                _assert_locked_directory_identity(directory_fd, parent)
                 for path in paths:
+                    _assert_locked_directory_identity(directory_fd, parent)
                     os.replace(pending[path], path)
                     replaced.append(path)
-                _fsync_directory(parent)
+                _assert_locked_directory_identity(directory_fd, parent)
+                os.fsync(directory_fd)
             except BaseException as write_error:
                 rollback_error: BaseException | None = None
                 for path in reversed(replaced):
                     try:
+                        _assert_locked_directory_identity(directory_fd, parent)
                         original = originals[path]
                         if original is None:
                             path.unlink(missing_ok=True)
@@ -366,7 +369,8 @@ def _atomic_write_many(values: tuple[tuple[Path, str], ...]) -> tuple[Path, ...]
                     except BaseException as error:
                         rollback_error = error
                 try:
-                    _fsync_directory(parent)
+                    _assert_locked_directory_identity(directory_fd, parent)
+                    os.fsync(directory_fd)
                 except BaseException as error:
                     rollback_error = error
                 if rollback_error is not None:
@@ -376,7 +380,8 @@ def _atomic_write_many(values: tuple[tuple[Path, str], ...]) -> tuple[Path, ...]
         finally:
             for temp_path in pending.values():
                 temp_path.unlink(missing_ok=True)
-            _fsync_directory(parent)
+            _assert_locked_directory_identity(directory_fd, parent)
+            os.fsync(directory_fd)
 
 
 def main(argv: list[str] | None = None) -> int:

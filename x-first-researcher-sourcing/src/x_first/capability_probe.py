@@ -11,16 +11,21 @@ from types import MappingProxyType
 from typing import Any
 from urllib.parse import urlsplit
 
-from x_first.contracts import _prohibited_content_errors, load_json, project_root
+from x_first.contracts import _prohibited_content_errors, project_root
 
 REQUEST_SCHEMA_VERSION = "x.grok.capability_probe.request.v1"
 RESULT_SCHEMA_VERSION = "x.grok.capability_probe.result.v1"
 EXECUTION_MODE = "fixture_only"
 SAFETY_POLICY_VERSION = "x-first-public-professional-v1"
 MAX_ERROR_MESSAGE_CHARS = 280
+MAX_CAPABILITY_OBSERVATIONS = 5
 REQUEST_DIAGNOSTIC_CODE = "XCAP_REQUEST_INVALID"
 BOUND_REQUEST_DIAGNOSTIC_CODE = "XCAP_BOUND_REQUEST_INVALID"
 RESULT_DIAGNOSTIC_CODE = "XCAP_RESULT_INVALID"
+REQUEST_JSON_LOAD_DIAGNOSTIC = f"{REQUEST_DIAGNOSTIC_CODE}: request JSON object could not be loaded"
+RESULT_JSON_LOAD_DIAGNOSTIC = f"{RESULT_DIAGNOSTIC_CODE}: result JSON object could not be loaded"
+REQUEST_VALIDATION_DIAGNOSTIC = f"{REQUEST_DIAGNOSTIC_CODE}: request validation could not complete"
+RESULT_VALIDATION_DIAGNOSTIC = f"{RESULT_DIAGNOSTIC_CODE}: result validation could not complete"
 DIAGNOSTIC_CODES = frozenset(
     {REQUEST_DIAGNOSTIC_CODE, BOUND_REQUEST_DIAGNOSTIC_CODE, RESULT_DIAGNOSTIC_CODE}
 )
@@ -179,7 +184,7 @@ HARD_BUDGETS = MappingProxyType(
         "max_executions": 1,
         "max_external_calls": 1,
         "max_pages": 1,
-        "max_observations": 5,
+        "max_observations": MAX_CAPABILITY_OBSERVATIONS,
         "max_cost_usd": 0,
         "deadline_ms": 1000,
     }
@@ -486,12 +491,23 @@ def validate_capability_result(
     observations_value = result.get("observations")
     if not isinstance(observations_value, list):
         errors.append("result.observations must be an array")
-    observations = observations_value if isinstance(observations_value, list) else []
-    if usage.get("observations") != len(observations):
+    observation_count = len(observations_value) if isinstance(observations_value, list) else 0
+    observations = (
+        observations_value[:MAX_CAPABILITY_OBSERVATIONS]
+        if isinstance(observations_value, list)
+        else []
+    )
+    if observation_count > MAX_CAPABILITY_OBSERVATIONS:
+        errors.append("result.observations exceeds the fixed maximum of five")
+    if usage.get("observations") != observation_count:
         errors.append("capability observation total does not reconcile")
-    if verdict == "fixture_contract_validated" and not 1 <= len(observations) <= 5:
+    if (
+        verdict == "fixture_contract_validated"
+        and observation_count <= MAX_CAPABILITY_OBSERVATIONS
+        and not 1 <= observation_count <= MAX_CAPABILITY_OBSERVATIONS
+    ):
         errors.append("successful fixture capability result must contain one to five observations")
-    if verdict != "fixture_contract_validated" and observations:
+    if verdict != "fixture_contract_validated" and observation_count:
         errors.append("failed fixture capability result cannot retain observations")
     observation_ids: set[str] = set()
     object_ids: set[str] = set()
@@ -622,8 +638,12 @@ def validate_capability_result(
         if not _is_false(claims.get(field)):
             errors.append(f"result.claims.{field} must be false")
 
-    errors.extend(_prohibited_content_errors(payload, root="result", include_locations=False))
-    errors.extend(_credential_errors(payload, root="result"))
+    content_scan_payload = payload
+    if isinstance(payload, dict) and observation_count > MAX_CAPABILITY_OBSERVATIONS:
+        content_scan_payload = dict(payload)
+        content_scan_payload["observations"] = observations
+    errors.extend(_prohibited_content_errors(content_scan_payload, root="result", include_locations=False))
+    errors.extend(_credential_errors(content_scan_payload, root="result"))
     return sorted(set(bound_request_errors + _encode_diagnostics(RESULT_DIAGNOSTIC_CODE, errors)))
 
 
@@ -635,17 +655,45 @@ def _default_paths() -> tuple[Path, Path]:
     )
 
 
+def _load_cli_json_object(path: Path, *, diagnostic: str) -> tuple[dict[str, Any] | None, list[str]]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None, [diagnostic]
+    if not isinstance(payload, dict):
+        return None, [diagnostic]
+    return payload, []
+
+
+def _validate_cli_payloads(request: dict[str, Any], result: dict[str, Any]) -> list[str]:
+    try:
+        request_errors = validate_capability_request(request)
+    except Exception:
+        return [REQUEST_VALIDATION_DIAGNOSTIC]
+    try:
+        result_errors = validate_capability_result(result, request=request)
+    except Exception:
+        return sorted(set([*request_errors, RESULT_VALIDATION_DIAGNOSTIC]))
+    return sorted(set([*request_errors, *result_errors]))
+
+
 def main() -> int:
     default_request, default_result = _default_paths()
     parser = argparse.ArgumentParser(description="Validate offline X-first capability-probe fixtures")
     parser.add_argument("--request", type=Path, default=default_request)
     parser.add_argument("--result", type=Path, default=default_result)
     args = parser.parse_args()
-    request = load_json(args.request)
-    result = load_json(args.result)
-    errors = validate_capability_request(request)
-    errors.extend(validate_capability_result(result, request=request))
-    errors = sorted(set(errors))
+    request, request_load_errors = _load_cli_json_object(
+        args.request,
+        diagnostic=REQUEST_JSON_LOAD_DIAGNOSTIC,
+    )
+    result, result_load_errors = _load_cli_json_object(
+        args.result,
+        diagnostic=RESULT_JSON_LOAD_DIAGNOSTIC,
+    )
+    errors = sorted(set([*request_load_errors, *result_load_errors]))
+    if not errors and request is not None and result is not None:
+        errors = _validate_cli_payloads(request, result)
     print(json.dumps({"errors": errors, "status": "valid" if not errors else "invalid"}, indent=2))
     return 0 if not errors else 1
 
