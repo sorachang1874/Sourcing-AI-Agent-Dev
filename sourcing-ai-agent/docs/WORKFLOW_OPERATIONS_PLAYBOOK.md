@@ -385,7 +385,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-trace --job-id <job_id>
 - `POST /api/plan/review`
 - `POST /api/workflows`
 - `POST /api/workers/cleanup`
-- `POST /api/workers/daemon/run-once`（兼容名称；`202` signal-only）
+- `POST /api/workers/daemon/run-once`（兼容名称；signal success=`202`、signal unavailable=`503`）
 - `POST /api/workers/interrupt`
 
 ### 3.3 统一入口分工
@@ -397,7 +397,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-trace --job-id <job_id>
 | 计划生成 | `POST /api/plan/submit` / `cli plan` | API 提交异步 hydration；CLI 保留本地 plan/review |
 | 执行前解释 | `POST /api/workflows/explain` / `cli explain-workflow` | dry-run，不写 job，只返回 normalization / dispatch / lane preview |
 | 正式执行 | `POST /api/workflows` | hosted 默认执行入口，由 `serve` 托管 |
-| 唤醒共享 recovery | `POST /api/workers/daemon/run-once` | 兼容路由只发送纯 wake-now 信号并返回 `202`；请求 payload 的 job/stale/limit/phase 控制不会转发 |
+| 唤醒共享 recovery | `POST /api/workers/daemon/run-once` | 兼容路由只发送纯 wake-now 信号；signal success 返回 `202`，signal unavailable 返回 `503`；请求 payload 的 job/stale/limit/phase 控制不会转发 |
 | 恢复排障 | `execute-workflow` / `supervise-workflow` / `run-worker-daemon-once` | 仅 CLI/worker 侧 repair/debug；其中 `run-worker-daemon-once` 才执行一次 tick，不应替代 hosted 常驻 |
 | 云端资产恢复 | `import-cloud-assets` | 恢复 bundle 并统一修复 registry / completeness / profile registry |
 

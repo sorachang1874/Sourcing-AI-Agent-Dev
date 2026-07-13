@@ -265,7 +265,7 @@ make test-env-seed-assets TEST_ENV_SEED_COMPANIES="anthropic"
 2026-05-07 事故复盘规则：
 
 - 不要把 scripted/browser smoke 的 webhook driver 改成会在环境恢复后继续执行的后台线程。
-- HTTP webhook 的 quick ack 入口只能持久化 terminal checkpoint、释放匹配 lease/limiter，并向已经运行的 shared recovery daemon 发送不含 job/stale/limit/phase 控制的纯信号；完整 materialization 由 daemon 继续推进。`POST /api/workers/daemon/run-once` 同样只是 `202` signal-only，测试不得把它伪装成同步 tick。
+- HTTP webhook 的 quick ack 入口只能持久化 terminal checkpoint、释放匹配 lease/limiter，并向已经运行的 shared recovery daemon 发送不含 job/stale/limit/phase 控制的纯信号；完整 materialization 由 daemon 继续推进。`POST /api/workers/daemon/run-once` 同样只是 signal-only：signal success 返回 `202`、signal unavailable 返回 `503`，测试不得把它伪装成同步 tick。
 - smoke 超时或 context 退出时，必须确认没有 provider-webhook / job-recovery / shared-recovery / background materialization thread 遗留。
 - 任何 `runtime/provider_cache/local_dev/live/...` artifact 中出现 `openai-agent-*`、`lovable-roster-*` 等 scripted fixture URL 都是隔离事故，不是可接受的缓存命中。
 - 在重新运行 PG-backed scripted smoke 前，先跑只读污染审计；审计不删除文件、不改 PG、不调用 provider：

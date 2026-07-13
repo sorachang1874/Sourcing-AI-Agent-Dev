@@ -39,7 +39,7 @@ from .plan_submit_contract import (
     authenticated_plan_history_metadata_owned,
     frontend_history_record_is_plan,
 )
-from .remote_provider_events import normalize_remote_provider_event
+from .remote_provider_events import normalize_remote_provider_event, shared_recovery_signal_count
 from .storage import _json_safe_payload
 from .workflow_submission import (
     normalize_workflow_submission_payload,
@@ -1683,6 +1683,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         result = orchestrator.handle_remote_provider_event({**event_payload, "recovery_mode": "shared_recovery_signal"})
         if result.get("status") != "accepted":
             return _json_response(HTTPStatus.BAD_REQUEST, result)
+        shared_recovery_signal = dict(result.get("shared_recovery_signal") or {})
         return _json_response(
             HTTPStatus.ACCEPTED,
             {
@@ -1692,8 +1693,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
                 "reason": str(result.get("reason") or ""),
                 "event": _provider_event_response_payload(event),
                 "targets": dict(result.get("targets") or {}),
-                "shared_recovery_signal_count": int(result.get("shared_recovery_signal_count") or 0),
-                "shared_recovery_signal": dict(result.get("shared_recovery_signal") or {}),
+                "shared_recovery_signal_count": shared_recovery_signal_count(shared_recovery_signal),
+                "shared_recovery_signal": shared_recovery_signal,
                 "released_worker_ids": list(result.get("released_worker_ids") or []),
             },
         )

@@ -394,6 +394,7 @@ from .remote_provider_events import (
     collect_remote_provider_event_targets,
     normalize_remote_provider_event,
     remote_provider_event_matches_worker,
+    shared_recovery_signal_count,
 )
 from .repositories import linkedin_profile_registry_repo
 from .request_matching import (
@@ -39545,7 +39546,7 @@ class SourcingOrchestrator:
                 "recoveries": [],
                 "recovery_dispatch_count": 0,
                 "recovery_dispatches": [],
-                "shared_recovery_signal_count": 1,
+                "shared_recovery_signal_count": shared_recovery_signal_count(shared_recovery_signal),
                 "shared_recovery_signal": shared_recovery_signal,
                 "mode": "shared_recovery_signal",
                 "released_provider_limiter_worker_ids": released_provider_limiter_worker_ids,
@@ -39668,7 +39669,7 @@ class SourcingOrchestrator:
                     "recoveries": [],
                     "recovery_dispatch_count": 0,
                     "recovery_dispatches": [],
-                    "shared_recovery_signal_count": 1,
+                    "shared_recovery_signal_count": shared_recovery_signal_count(shared_recovery_signal),
                     "shared_recovery_signal": shared_recovery_signal,
                     "mode": "shared_recovery_signal",
                     "released_provider_limiter_worker_ids": released_provider_limiter_worker_ids,
@@ -39796,7 +39797,7 @@ class SourcingOrchestrator:
             # request-thread runner/sidecar dispatch.
             "recovery_dispatch_count": 0,
             "recovery_dispatches": [],
-            "shared_recovery_signal_count": 1,
+            "shared_recovery_signal_count": shared_recovery_signal_count(shared_recovery_signal),
             "shared_recovery_signal": shared_recovery_signal,
             "mode": "shared_recovery_signal",
             "released_worker_ids": released_worker_ids,

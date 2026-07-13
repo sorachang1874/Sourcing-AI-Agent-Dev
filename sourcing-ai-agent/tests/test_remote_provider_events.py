@@ -14,6 +14,7 @@ from sourcing_agent.remote_provider_events import (
     collect_remote_provider_event_targets,
     normalize_remote_provider_event,
     remote_provider_event_matches_worker,
+    shared_recovery_signal_count,
 )
 from sourcing_agent.workflow_event_response import remote_event_lane_for_worker
 
@@ -110,6 +111,14 @@ def test_normalize_apify_webhook_event_extracts_run_and_dataset_ids() -> None:
     assert event["run_finished_at"] == "2026-04-27T12:00:01.000Z"
     assert event["event_created_at"] == "2026-04-27T12:00:02.000Z"
     assert event["remote_completed_at"] == "2026-04-27T12:00:01.000Z"
+
+
+def test_shared_recovery_signal_count_requires_exact_signaled_status() -> None:
+    assert shared_recovery_signal_count({"status": "signaled"}) == 1
+    assert shared_recovery_signal_count({"status": "signal_failed"}) == 0
+    assert shared_recovery_signal_count({"status": "signal_skipped"}) == 0
+    assert shared_recovery_signal_count({"status": "SIGNALLED"}) == 0
+    assert shared_recovery_signal_count(None) == 0
 
 
 def test_remote_provider_event_targets_matching_linkedin_stage_1_worker() -> None:
@@ -256,6 +265,32 @@ def test_handle_remote_provider_event_persists_terminal_handoff_then_signals_sha
     assert event_metrics["local_event_seen_at"]
     assert "remote_to_local_event_lag_ms" in event_metrics
     assert fake_store.events[0]["payload"]["released_worker_ids"] == [901]
+
+    fake_orchestrator._signal_shared_recovery_wakeup = lambda **_kwargs: {
+        "status": "signal_failed",
+        "scope": "shared",
+        "mode": "signal_only",
+        "service_name": "worker-recovery-daemon",
+        "error": "wake-file-unavailable",
+    }
+    failed_signal_result = SourcingOrchestrator.handle_remote_provider_event(
+        fake_orchestrator,
+        {
+            "provider": "apify",
+            "eventType": "ACTOR.RUN.SUCCEEDED",
+            "eventData": {
+                "actorRunId": "run-webhook-1",
+                "defaultDatasetId": "dataset-webhook-1",
+            },
+            "owner_id": "provider-webhook-failed-signal-test",
+        },
+    )
+
+    assert failed_signal_result["status"] == "accepted"
+    assert failed_signal_result["shared_recovery_signal_count"] == 0
+    assert failed_signal_result["shared_recovery_signal"]["status"] == "signal_failed"
+    assert failed_signal_result["shared_recovery_signal"]["error"] == "wake-file-unavailable"
+    assert failed_signal_result["released_worker_ids"] == [901]
 
 
 def test_handle_remote_provider_event_wakes_known_running_worker_without_stale_wait(tmp_path: Path) -> None:

@@ -505,6 +505,46 @@ class ApiTransportParityTest(unittest.TestCase):
             self.assertEqual(retired.get("reason"), "provider_webhook_sync_recovery_retired")
             self.assertEqual(len(orchestrator.webhook_events), 1)
 
+    def test_apify_webhook_keeps_202_handoff_but_does_not_count_failed_signal(self) -> None:
+        class _FailedWebhookSignalOrchestrator(_StubOrchestrator):
+            def handle_remote_provider_event(self, event_payload):
+                self.webhook_events.append(dict(event_payload))
+                return {
+                    "status": "accepted",
+                    # Deliberately inconsistent legacy field: the API must derive
+                    # evidence from the complete signal status instead.
+                    "shared_recovery_signal_count": 1,
+                    "shared_recovery_signal": {
+                        "status": "signal_failed",
+                        "scope": "shared",
+                        "mode": "signal_only",
+                        "service_name": "worker-recovery-daemon",
+                        "error": "wake-file-unavailable",
+                    },
+                }
+
+        orchestrator = _FailedWebhookSignalOrchestrator()
+        _server, _thread, base_url, opener, _orchestrator = self._start_server(orchestrator)
+        with patch.dict(os.environ, {"SOURCING_PROVIDER_WEBHOOK_TOKEN": "expected-token"}):
+            status, _headers, response_body = self._request(
+                opener,
+                f"{base_url}/api/providers/apify/webhook",
+                method="POST",
+                data=json.dumps({"run_id": "run-failed-signal"}).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Sourcing-Provider-Webhook-Token": "expected-token",
+                },
+            )
+
+        self.assertEqual(status, 202)
+        payload = json.loads(response_body)
+        self.assertEqual(payload.get("status"), "accepted")
+        self.assertEqual(payload.get("shared_recovery_signal_count"), 0)
+        self.assertEqual(payload.get("shared_recovery_signal", {}).get("status"), "signal_failed")
+        self.assertEqual(payload.get("shared_recovery_signal", {}).get("error"), "wake-file-unavailable")
+        self.assertEqual(len(orchestrator.webhook_events), 1)
+
     def test_worker_daemon_run_once_route_is_signal_only_and_ignores_control_payload(self) -> None:
         _server, _thread, base_url, opener, orchestrator = self._start_server()
         status, _headers, response_body = self._request(

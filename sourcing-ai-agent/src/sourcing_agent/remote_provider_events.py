@@ -10,6 +10,13 @@ TERMINAL_APIFY_EVENT_TYPES = {
 }
 
 
+def shared_recovery_signal_count(signal: dict[str, Any] | None) -> int:
+    """Return one only for an explicitly successful shared-daemon nudge."""
+    if not isinstance(signal, dict):
+        return 0
+    return int(str(signal.get("status") or "").strip() == "signaled")
+
+
 def normalize_remote_provider_event(payload: dict[str, Any] | None, *, provider: str = "apify") -> dict[str, Any]:
     """Normalize provider callback payloads into the runtime event contract."""
     raw_payload = dict(payload or {})

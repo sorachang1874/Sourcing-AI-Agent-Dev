@@ -398,7 +398,7 @@ User Request
   - recoverable workers
   - daemon status
   - worker interrupt
-  - worker daemon signal-only compatibility route（`POST /api/workers/daemon/run-once` 返回 `202`；真正的一次性执行只在 CLI/worker 侧）
+  - worker daemon signal-only compatibility route（`POST /api/workers/daemon/run-once` signal success 返回 `202`、signal unavailable 返回 `503`；真正的一次性执行只在 CLI/worker 侧）
   - worker daemon systemd-unit write
   - criteria feedback / recompile
   - suggestion review

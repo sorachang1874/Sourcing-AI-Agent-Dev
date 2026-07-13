@@ -22,6 +22,7 @@ from .durable_runtime import (
     PROJECTION_PERSON_SEARCH_INDEX_BUILD_COMMAND_TYPE,
     SNAPSHOT_COMPACTION_RUN_COMMAND_TYPE,
 )
+from .remote_provider_events import shared_recovery_signal_count
 from .runtime_tuning import (
     build_materialization_streaming_budget_report,
     build_provider_backpressure_budget_report,
@@ -491,7 +492,7 @@ def _drive_smoke_remote_provider_webhook_recovery_once(
     events: list[dict[str, Any]] = []
     accepted_workers: list[dict[str, Any]] = []
 
-    def _provider_event_accepted_worker(event: dict[str, Any]) -> bool:
+    def _provider_event_durable_handoff_accepted(event: dict[str, Any]) -> bool:
         status = str(event.get("status") or "").strip()
         reason = str(event.get("reason") or "").strip()
         if status != "accepted":
@@ -499,15 +500,20 @@ def _drive_smoke_remote_provider_webhook_recovery_once(
         if (
             _safe_int(event.get("recovery_count")) > 0
             or _safe_int(event.get("recovery_dispatch_count")) > 0
-            or _safe_int(event.get("shared_recovery_signal_count")) > 0
+            or shared_recovery_signal_count(dict(event.get("shared_recovery_signal") or {})) > 0
         ):
             return True
         if reason == "remote_provider_event_recovery_already_in_flight":
             return True
         if reason in {"no_matching_remote_wait_workers", "matching_remote_provider_workers_not_recoverable"}:
             return False
+        # HTTP 202 proves the terminal checkpoint/lease handoff was accepted even
+        # if the best-effort nudge failed; the daemon poll remains the recovery
+        # backstop. This boolean is deliberately not shared-signal evidence.
         mode = str(event.get("mode") or "").strip()
-        return mode in {"", "async_recovery", "job_scoped_recovery", "shared_recovery_signal"} and not reason
+        if mode == "shared_recovery_signal":
+            return True
+        return mode in {"", "async_recovery", "job_scoped_recovery"} and not reason
 
     def _post_event(worker: dict[str, Any], *, source: str, sequence: int) -> dict[str, Any]:
         request_started_at = time.perf_counter()
@@ -522,6 +528,7 @@ def _drive_smoke_remote_provider_webhook_recovery_once(
                 headers=headers,
             )
             elapsed_ms = round((time.perf_counter() - request_started_at) * 1000, 2)
+            shared_recovery_signal = dict(result.get("shared_recovery_signal") or {})
             return {
                 "status": str(result.get("status") or ""),
                 "reason": str(result.get("reason") or ""),
@@ -531,7 +538,8 @@ def _drive_smoke_remote_provider_webhook_recovery_once(
                 "mode": str(result.get("mode") or ""),
                 "recovery_count": _safe_int(result.get("recovery_count")),
                 "recovery_dispatch_count": _safe_int(result.get("recovery_dispatch_count")),
-                "shared_recovery_signal_count": _safe_int(result.get("shared_recovery_signal_count")),
+                "shared_recovery_signal_count": shared_recovery_signal_count(shared_recovery_signal),
+                "shared_recovery_signal": shared_recovery_signal,
                 "webhook_to_response_ms": elapsed_ms,
             }
         except Exception as exc:
@@ -651,7 +659,7 @@ def _drive_smoke_remote_provider_webhook_recovery_once(
     for worker in target_workers[:4]:
         worker_id = _safe_int(worker.get("worker_id") or worker.get("workerId"))
         accepted = any(
-            _provider_event_accepted_worker(dict(event))
+            _provider_event_durable_handoff_accepted(dict(event))
             for event in worker_events
             if _safe_int(event.get("worker_id")) == worker_id
         )
@@ -702,6 +710,7 @@ def _drive_smoke_remote_provider_late_watcher_duplicates(
                 headers=headers,
             )
             elapsed_ms = round((time.perf_counter() - request_started_at) * 1000, 2)
+            shared_recovery_signal = dict(result.get("shared_recovery_signal") or {})
             events.append(
                 {
                     "status": str(result.get("status") or ""),
@@ -712,7 +721,8 @@ def _drive_smoke_remote_provider_late_watcher_duplicates(
                     "mode": str(result.get("mode") or ""),
                     "recovery_count": _safe_int(result.get("recovery_count")),
                     "recovery_dispatch_count": _safe_int(result.get("recovery_dispatch_count")),
-                    "shared_recovery_signal_count": _safe_int(result.get("shared_recovery_signal_count")),
+                    "shared_recovery_signal_count": shared_recovery_signal_count(shared_recovery_signal),
+                    "shared_recovery_signal": shared_recovery_signal,
                     "webhook_to_response_ms": elapsed_ms,
                 }
             )
@@ -757,7 +767,7 @@ def _smoke_shared_recovery_signal_record(
         "signal_status": signal_status,
         "signal_reason": str(signal.get("reason") or ""),
         "signal_service_name": str(signal.get("service_name") or ""),
-        "shared_recovery_signal_count": 1 if signal_status == "signaled" else 0,
+        "shared_recovery_signal_count": shared_recovery_signal_count(signal),
         "progress_observation_source": "worker_and_recovery_service_status",
     }
     normalized_phase = str(phase or "").strip()
@@ -6057,7 +6067,7 @@ def _evaluate_smoke_expectations(
             and (
                 _safe_int(item.get("recovery_count")) > 0
                 or _safe_int(item.get("recovery_dispatch_count")) > 0
-                or _safe_int(item.get("shared_recovery_signal_count")) > 0
+                or shared_recovery_signal_count(dict(item.get("shared_recovery_signal") or {})) > 0
             )
             for item in driver_events
         )
@@ -8708,7 +8718,8 @@ def run_hosted_smoke_case(
                 _safe_int(item.get("recovery_dispatch_count")) for item in remote_provider_event_driver_runs
             ),
             "shared_recovery_signal_count": sum(
-                _safe_int(item.get("shared_recovery_signal_count")) for item in remote_provider_event_driver_runs
+                shared_recovery_signal_count(dict(item.get("shared_recovery_signal") or {}))
+                for item in remote_provider_event_driver_runs
             ),
             "late_duplicate_count": sum(
                 1

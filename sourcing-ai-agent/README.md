@@ -538,7 +538,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
   - `GET /api/workers/recoverable`
   - `GET /api/workers/daemon/status`
   - `POST /api/workers/interrupt`
-  - `POST /api/workers/daemon/run-once`（兼容路由；现在只返回 `202` 并唤醒共享 recovery daemon，不在 API 请求线程执行 recovery）
+  - `POST /api/workers/daemon/run-once`（兼容路由；只发送共享 recovery signal，signal success 返回 `202`、signal unavailable 返回 `503`，不在 API 请求线程执行 recovery）
   - `POST /api/workers/daemon/systemd-unit`
   - CLI: `show-workers / show-scheduler / interrupt-worker`
   - `GET /api/jobs/{job_id}/trace` 现会同时返回 `agent_workers`

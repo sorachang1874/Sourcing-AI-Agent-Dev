@@ -1407,6 +1407,7 @@ class WorkflowSmokeTest(unittest.TestCase):
                     "recovery_count": 0,
                     "recovery_dispatch_count": 0,
                     "shared_recovery_signal_count": 1,
+                    "shared_recovery_signal": {"status": "signaled"},
                 }
 
         client = FakeClient()
@@ -1426,6 +1427,61 @@ class WorkflowSmokeTest(unittest.TestCase):
         self.assertEqual(len(accepted_workers), 1)
         self.assertEqual(len(client.posts), 2)
         self.assertEqual({post["source"] for post in client.posts}, {"provider_webhook", "local_provider_event_watcher"})
+
+    def test_drive_provider_webhook_keeps_failed_signal_distinct_from_durable_handoff(self) -> None:
+        class FakeClient:
+            def get(self, path: str) -> dict:
+                if path.endswith("/workers"):
+                    return {
+                        "agent_workers": [
+                            {
+                                "worker_id": 9,
+                                "status": "running",
+                                "metadata": {"recovery_kind": "harvest_profile_batch"},
+                                "checkpoint": {
+                                    "run_id": "run-9",
+                                    "dataset_id": "dataset-9",
+                                    "scripted_remote_ready_epoch_ms": 0,
+                                },
+                            }
+                        ]
+                    }
+                raise AssertionError(f"unexpected path {path}")
+
+            def post(self, path: str, payload: dict, headers: dict | None = None) -> dict:
+                if path != "/api/providers/apify/webhook":
+                    raise AssertionError(f"unexpected path {path}")
+                return {
+                    "status": "accepted",
+                    "mode": "shared_recovery_signal",
+                    "reason": "remote_provider_terminal_event_already_recorded",
+                    # Deliberately stale/mismatched: smoke evidence must derive
+                    # from the complete signal status and fail closed to zero.
+                    "shared_recovery_signal_count": 1,
+                    "shared_recovery_signal": {
+                        "status": "signal_failed",
+                        "scope": "shared",
+                        "mode": "signal_only",
+                        "service_name": "worker-recovery-daemon",
+                        "error": "wake-file-unavailable",
+                    },
+                }
+
+        events, accepted_workers = _drive_smoke_remote_provider_webhook_recovery_once(
+            FakeClient(),  # type: ignore[arg-type]
+            job_id="job-1",
+            event_sequence=4,
+        )
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["status"], "accepted")
+        self.assertEqual(events[0]["reason"], "remote_provider_terminal_event_already_recorded")
+        self.assertEqual(events[0]["shared_recovery_signal_count"], 0)
+        self.assertEqual(events[0]["shared_recovery_signal"]["status"], "signal_failed")
+        self.assertEqual(events[0]["shared_recovery_signal"]["error"], "wake-file-unavailable")
+        # The webhook's durable handoff remains accepted; the poll backstop can
+        # recover it without pretending that the failed nudge was successful.
+        self.assertEqual([worker["worker_id"] for worker in accepted_workers], [9])
 
     def test_drive_provider_webhook_can_start_from_watcher_then_send_provider_late_duplicate(self) -> None:
         class FakeClient:
@@ -1461,6 +1517,7 @@ class WorkflowSmokeTest(unittest.TestCase):
                         "recovery_count": 0,
                         "recovery_dispatch_count": 0,
                         "shared_recovery_signal_count": 1,
+                        "shared_recovery_signal": {"status": "signaled"},
                     }
                 return {
                     "status": "accepted",
@@ -4495,6 +4552,7 @@ class WorkflowSmokeTest(unittest.TestCase):
                             "recovery_count": 0,
                             "recovery_dispatch_count": 0,
                             "shared_recovery_signal_count": 1,
+                            "shared_recovery_signal": {"status": "signaled"},
                         },
                         {
                             "status": "accepted",
@@ -4546,6 +4604,7 @@ class WorkflowSmokeTest(unittest.TestCase):
                             "recovery_count": 0,
                             "recovery_dispatch_count": 0,
                             "shared_recovery_signal_count": 1,
+                            "shared_recovery_signal": {"status": "signaled"},
                         },
                         {
                             "status": "accepted",
