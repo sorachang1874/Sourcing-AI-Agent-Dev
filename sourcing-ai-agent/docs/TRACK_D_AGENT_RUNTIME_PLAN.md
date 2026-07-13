@@ -1,12 +1,12 @@
 # Track D — 强 Agent 化执行计划（跨模型设计输入）
 
-> Status: Cross-model design input for owner review（v3 2026-07-13，作者 = Claude Fable 5；只规划、不改码）。
-> **修订史**：v1（`23a2b05`）→ gpt-5.6-sol reference review NO-GO（24 findings，提取件
-> `runtime/reviews/20260713T112818Z_*.extracted-reference.md`，artifact 因 runner 协议代差
-> invalid_transport）→ v2（`ffdfa7c`，29 条代码断言 8 路独立核查后逐条修复 + 24 路覆盖度审计 +
-> 一致性审计）→ **有效 runner artifact** `runtime/reviews/20260713T122908Z_*`（gpt-5.6-sol/ultra/
-> priority，reviewer_exit_code=0）复核仍 NO-GO（16 条新 findings + 1 处 v2 事实错误：身份已有
-> 文件级持久化）→ v3 逐条修复（本版）。
+> Status: Cross-model design input for owner review（v4 2026-07-13，作者 = Claude Fable 5；只规划、不改码）。
+> **修订史**：v1（`23a2b05`）→ review NO-GO 24 findings（提取件 `20260713T112818Z_*`，artifact 因
+> runner 协议代差 invalid_transport）→ v2（`ffdfa7c`，29 断言独立核查 + 24 路覆盖审计）→
+> **有效 artifact** `20260713T122908Z_*`（gpt-5.6-sol/ultra/priority）NO-GO 16 findings + 1 处事实
+> 更正 → v3（`656b368`）→ round-3 NO-GO 17 findings（提取件 `20260713T125255Z_*`）→ v4（本版，
+> 采纳 round-3 全部具体修法：事件驱动 join 链、审批解耦、intent 物理绑定、证据 provenance
+> 服务端化、结果槽 CAS、路由快照、pin 生命周期、预算台账）。
 > 定位：为 Track D 提供第二模型家族的独立设计视角，供接手实现的 GPT-5.6(Codex) 部分复用或反驳；
 > 本文**不是任何 scope 的 GO**——实施批次仍逐批走 `INDEPENDENT_REVIEW_GATE.md`。
 > 配套阅读：`SERVING_EXECUTION_NORTH_STAR.md`（已 ratified，支柱 4）、`AGENT_OPERATION_CONTRACT.md`
@@ -124,23 +124,26 @@ serve、会话/事件层、planner loop），用一个垂直切片证明闭环�
 
 ### D3 — 第一垂直切片：公司身份自验证 loop（详设 v2：`TRACK_D_D3_COMPANY_IDENTITY_SELF_VERIFICATION_DESIGN.md`）
 
-- v2 要点（全部为 review findings 的结构性修复）：
-  - **接进 W11 命令图**：`acquisition.plan.build` 在身份置信 < high 时计划子命令
-    `company.identity.verify.evidence`（同 OperationRun 因果组），`acquisition.plan_review.request`
-    消费其 terminal 结果；legacy plan 前门在 plan 期做廉价确定性解析 + 读同一 current-state 读模型。
-  - **身份专属 gate reason**（TD-7 (a) 起步）：`company_identity_unverified` reason 以 OR 语义并入
-    `required_before_execution`，只清自己、不清别人——**这修复了今天低置信直接执行的真空洞**；
-    Phase 1 shadow（人一键确认+证据卡）→ 统计达标 + owner GO 后 Phase 2（verified_auto 自动清 reason）。
-  - **「人永远赢」机制化**：`decision_generation` 单调递增 + 机器结果 CAS 接受 + 人工确认原子
-    supersession；晚到结果记 `superseded_not_applied`。
-  - **provenance 三通道分离**：人工 override（现字段不变）/ 机器验证（新 `agent_self_verified`
-    通道，同样短路执行期付费分支）/ 机器提案（仅证据卡）。「以消费代退役」执行期 search+judge 路径，
-    invocation-count preflight 证明单 owner 单付费路径。
-  - **两档预算拆成两个命令**（静态 ActionSpec 约束下的正解）：`verify.evidence`（fetch+judge，
-    非零成本、显式小信封、免审批）与 `search.expand`（付费检索，TD-5 的 plan 级 3 次预授权信封
-    原子扣减，超出转 approval_required）。
-  - 新版本化裁决 schema（`identity_relation` 含 parent/suborg 枚举 + 证据 refs + provider/model/usage/
-    fallback_status——fallback 非 none 永不 auto-confirm）+ 确定性接受谓词前置于模型置信。
+- v4 要点（与 D3 详设 v4 严格同词汇，历经三轮评审收敛）：
+  - **事件驱动 W11 接入（review-first）**：plan.build 结果事件 → reducer 计划 plan_review.request
+    → session 创建事件 → reducer 计划 `company.identity.verify.evidence`（session id 此刻已存在）
+    → 验证 terminal 事件 → reducer 计划幂等 `plan_review.identity_result.apply`，**由 apply 命令
+    owner**（非 reducer）CAS 更新 review gate；legacy 前门用同一共享 helper 读同一读模型。
+  - **身份专属 gate reason**（TD-7）：`company_identity_unverified` OR 组合、只清自己；Phase 1
+    shadow（`shadow_would_verify` 非授权态 + 人一键确认）→ 统计门 + owner GO + 逐行 revalidation
+    + promotion 命令 → Phase 2（`verified_accepted`）。**修复今天低置信直接执行的真空洞**。
+  - **「人永远赢」**：verification intent 绑定物理执行身份（command claim generation +
+    attempt id）+ 单 UoW 全条件 CAS + 人工原子 supersession；晚到/失配一律 `not_applied` 显式终态。
+  - **provenance**：机器验证 = 服务端引用（公共 ingress 禁携带）；人工 override 现字段不变；
+    执行期付费 search+judge 路径「以消费代退役」+ **既有全局文件注册表收编为 PG canonical**
+    （inventory 全部 4+ 写入方/快照重扫、backfill=needs_human、迁移桥+删除条件、precedence preflight）。
+  - **审批与预算**：Tier-1 小信封免审批；Tier-2 检索预算 = review 卡上的类型化部分决定
+    `identity_search_budget_grant`（TD-5 默认 3 次/次授予，可配置），**与 plan 终审解耦**（终审
+    前置 = 全部 blocking reasons 清除，commit owner 原子复查）；每次物理 provider 调用各记一笔 +
+    worst-case 预留 + 对账。
+  - 裁决 = 模型半（只引用 evidence_ids，owner 服务端 resolve 证据 provenance）+ 服务端调用信封
+    （身份/usage/fallback 模型不可自证）；确定性接受谓词七条前置于模型置信；统计门 = 零误确认 +
+    分母 ≥120。
 - 不依赖 D0 tool-calling、不依赖 D2、不依赖 model_native_search；与 Track C 可完全并行。
 
 ### D4 — 之后（本文只圈定，不展开）
@@ -193,7 +196,8 @@ plan review 对话化；intent→plan 前门流式化（依赖 D0+C4）；`model
   `company_evidence` 若写必经其既有 owner。
 - **TD-7**（新，owner 2026-07-13 批准按推荐执行）auto-confirm 安全边界 = 分阶段：Phase 1 shadow
   （身份低置信即 block + 人一键确认，**比现状更严**）→ 统计门（零误确认 + 分母下限 + 上置信界）
-  达标且 owner GO → Phase 2 verified_auto 自动放行；Phase 2 开关本身是 owner-gated 配置。
+  达标且 owner GO → Phase 2（`shadow_would_verify` 经逐行 revalidation + promotion 命令升
+  `verified_accepted` 后自动放行——旧影子行不随开关生效）；Phase 2 开关本身是 owner-gated 配置。
 
 ## 6. v1 评审 findings 处置总索引
 

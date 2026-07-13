@@ -1,10 +1,11 @@
 # Track D — D0+D1 批级设计：模型工具运行时 + 工具面 serve
 
-> Status: Cross-model design input for owner review（v3 2026-07-13，作者 = Claude Fable 5；只设计、不改码）。
-> **v3 修订**：v2 基础上按有效 runner artifact `runtime/reviews/20260713T122908Z_*`（NO-GO）的
-> new findings #9-15 与 prior partial #5/6/8/11/12/13/22/23 修订。覆盖映射见 §6-§7。
-> v2 History：按 v1 评审 findings #5-14/#22-23 及 D0 子评审 1-16 重写；代码断言独立核查
-> （C10-C19、C23-C27）。
+> Status: Cross-model design input for owner review（v4 2026-07-13，作者 = Claude Fable 5；只设计、不改码）。
+> **v4 修订**：按 round-3 评审（提取件 `runtime/reviews/20260713T125255Z_*.extracted-reference.md`）
+> findings #9-15 修订：typed terminal 事件变体、逻辑结果槽首成功 CAS、有效路由快照、schema pin
+> 物理生命周期、字段所有权归一化、model_safe_result_schema、预算保留台账契约；
+> 术语统一（OpenAIModelUsage / length）。覆盖映射见 §6-§7。
+> 修订史：v1→24 findings→v2（29 断言核查 + 24 路覆盖审计）→v3（round-2 的 16 findings）→v4。
 > 上层计划：`TRACK_D_AGENT_RUNTIME_PLAN.md` §2 D0/D1。TD-1 已裁决（requests + SSE 行解析）。
 > 实施前按 handbook 纪律重新 Scout 全部行号锚点（基准 HEAD `5f14ed8`）。
 
@@ -44,11 +45,12 @@ fail-closed：(a) TD-4 产品路由表 owner 批准；(b) 一个 typed model-tur
 #   | assistant_tool_calls(calls: [ToolCallRecord])          # 模型上一轮的工具调用
 #   | tool_result(tool_call_id, content, is_error)           # 工具执行结果回传
 # 尺寸上限:单条 content 字节上限 + 总 messages 字节上限;超限内容走 artifact ref。
-# v3(#14) model-safe 边界:tool_result.content 必须来自工具 adapter 的有界、字段白名单化的
-# model-safe 结果契约(每个 served tool 的 adapter 声明可上送字段集;CRM 备注/联系方式/非
-# model-safe artifact 默认不在白名单);artifact ref 永不自动解引用进 provider 输入——上送
-# 原文需要 owner 显式白名单裁决。脱敏发生在 adapter 出口(provider 暴露之前),转写录制的
-# 脱敏(§2.8)是第二道,不是第一道。
+# v4(round3#14) model-safe 边界补全:每个 served adapter 在 registry 注册类型化
+# `model_safe_result_schema`(字段白名单 + 尺寸上限 + 分类标签 + 校验器 owner);出站校验覆盖
+# **全部**消息角色(system/user/assistant 同样过出站策略,不只 tool_result);workspace/actor/
+# permission/policy revision 绑入 ToolTurnResult、转写与 accepted-action journal 身份。
+# artifact ref 永不自动解引用进 provider 输入——上送原文需 owner 显式白名单裁决。
+# 脱敏发生在 adapter 出口(provider 暴露之前),转写录制脱敏(§2.8)是第二道。
 # OpenAI chat 序列化器只上送 {type:"function", function:{name,description,parameters}};
 # ToolSpec 的 approval/budget/display 元数据是服务端契约,永不上 provider wire。
 ```
@@ -65,19 +67,24 @@ class ToolSpec:
     approval_policy: str      # 服务端元数据,不上 wire
     budget_required: bool
 
-# AgentTurnEvent(仅为流式传输/进度展示;对执行永远 advisory,见 §2.5):
+# AgentTurnEvent(对执行永远 advisory,见 §2.5)——v4(#9)增加类型化终态变体,流不再有无类型旁道:
 #   text_delta | tool_call_partial | usage | stop(reason) | error(message)
+#   | terminal(result: ToolTurnResult)      # 流的最后一个事件,承载与 run_tool_turn 同一结果对象
 
 @dataclass(frozen=True)
 class ToolTurnResult:         # 唯一可授权后续动作的 canonical 语义结果
     text: str
     tool_calls: tuple[ToolCallRecord, ...]   # 已验证、有序、args 过 schema
-    usage: BoundedUsage                      # 复用既有五字段有界对象(input/output/total/cached/reasoning)
-    usage_status: str                        # reported | unavailable | invalid(v2:不再有裸 "unknown")
+    usage: OpenAIModelUsage                  # 复用既有五字段类型(model_provider.py:36-55)
+    usage_status: str                        # reported | unavailable | invalid
     model_identity: ModelIdentity            # requested / response / effective + provenance
-    terminal_reason: str                     # end_turn | tool_calls | max_tokens | content_filter
+    terminal_reason: str                     # end_turn | tool_calls | length | content_filter
+                                             # (v4 统一词汇:与解析器/授权集合同用 provider 语义 "length")
     provider_call_id: str | None
     route_id: str
+    route_revision: str                      # v4(#11):有效路由快照引用一并携带
+    effective_route_snapshot_ref: str
+    workspace_id: str; actor_id: str         # v4(#14):租户/主体随结果与转写、journal 全链携带
 ```
 
 ### 2.3 执行上下文（v2 新增——live 的准入契约）
@@ -88,13 +95,24 @@ class ModelTurnExecutionContext:
     route_id: str                    # §4 路由表条目;不接受裸 model 字符串
     route_revision: str              # v3(#13):路由条目内容 digest,随 action/command/attempt/请求
                                      # hash/result 全链持久化——部署改路由不影响已排队重试的语义
+    effective_route_snapshot_ref: str  # v4(round3#11):claim 时固化的有效执行配置快照(非密钥的
+                                     # endpoint 身份/base_url digest、timeout、api_style、定价类、
+                                     # circuit policy id——settings.py:22-29 的 base_url/timeout 可变、
+                                     # 熔断键含 base_url :1294-1295,仅 route_revision 不足以钉住)
     workspace_id: str; actor_id: str; permission_scope: str   # v3(#14):租户/主体绑定,owner 铸造
     operation_run_id: str; turn_id: str; step_id: str; attempt: int
     workflow_command_id: str; activity_run_id: str            # v3(prior#8):物理因果 id
     idempotency_key: str
-    budget: ModelTurnBudget          # token/monetary 上限 + deadline_at(墙钟,可持久化;
-                                     # v3(#13):attempt claim 后派生本地单调 deadline 执行)
-    budget_reservation_ref: str      # v3(prior#8):durable 预算保留台账行,扣减与 attempt 同事务
+    budget: ModelTurnBudget          # token/monetary 上限 + deadline_at(UTC 墙钟,持久化;
+                                     # attempt claim 后派生 attempt-local 单调 deadline 执行——
+                                     # v4 统一命名,不再另有 wall_deadline)
+    budget_reservation_ref: str      # 预算保留台账行(v4 round3#15 补全契约):PG-only 表,owner =
+                                     # 发起方 operation owner;行身份 = (reservation_id, workspace,
+                                     # operation_run_id, activity_attempt 物理 id);状态机
+                                     # reserved→consumed/released/orphaned;每次物理 provider 调用
+                                     # 各记实际计费行(与 attempt 创建同事务),终局 reconcile 预留
+                                     # 与实际;orphan 回收 preflight;live 付费路径落地前该台账必须在
+    activity_attempt_id: str         # v4:物理 attempt 身份(替代裸 int attempt 计数)
     approval_ref: str | None         # 审批证据引用(路由的 budget_class 要求时必填)
 ```
 live 路径缺 context 或 budget 任一字段 ⇒ 构造期 raise（不发网络请求、不计熔断——本地配置失败
@@ -127,11 +145,13 @@ v3 追加：流路径消费到的 terminal 事件所载结果与 `run_tool_turn`
   **v3（#11）**：`length` / `content_filter` / 未知 reason 的 terminal 结果 =
   `authorizable=false` 的隔离终态（结果照记、证据照留，**不得授权任何 action**）——看似完整或
   schema-valid 的截断前缀不能逃逸；可授权集合初始只含 {`end_turn`, `tool_calls`}。
-- **v3（#12）工具执行去重键改为 owner 侧稳定键**：provider 产的 `tool_call_id` 在 turn 重生成时
-  会变，只作证据记录；owner 在接受 terminal 结果时铸造 `accepted_result_id`（journal 落库），
-  action 身份 = `(accepted_result_id, tool_ordinal, tool_name, canonical_args_digest)`——断流重试
-  产生的新 terminal 结果要么 journal 幂等命中（同 digest）要么显式新结果，重复 side-effect
-  两种情况都堵死。
+- **v4（round3#10）工具执行去重改为逻辑结果槽 + 首成功 CAS**：provider `tool_call_id` 仅证据；
+  owner 为每个 (turn_id, step_id) 维护 **workspace-scoped 逻辑结果槽**——首个验证通过的 terminal
+  结果以 CAS 占槽（journal 落库得 `accepted_result_id`）；此后同槽的重试结果**join**（同
+  tool_name + canonical_args_digest ⇒ 幂等命中既有 action）或 **quarantine**（不同内容 ⇒ 隔离
+  证据，不产新 action）；**有意重新生成**必须显式推进槽 generation（新 step）。action 身份 =
+  `(result_slot_id, slot_generation, tool_name, canonical_args_digest)`——tool_ordinal 不入身份
+  （重排不稳定）。重复 side-effect 与「重试变新身份」两条路都堵死。
 - 部分输出保留为 quarantined 证据（attempt 级 artifact），不进结果。
 
 ### 2.6 OpenAI-compatible chat 流式实现：fail-closed 状态机（v2 全面收紧）
@@ -193,12 +213,18 @@ v3 追加：流路径消费到的 terminal 事件所载结果与 `run_tool_turn`
   (a) `POST /api/operations/actions` 提交路径按 schema 校验（顺带修复零校验）；
   (b) planner `ToolSpec.input_schema`（serve input 段；**target 段服务端绑定**——模型提供的
   target 字段一律拒绝，target 由 owner 从会话上下文铸造）；(c) dispatch adapter 入参校验。
-- **v3（#15）schema 版本随 durable 对象持久化**：提交时把 `request_schema_version` + schema
-  digest 写入 `AgentAction`/`OperationRun` 行；dispatch 时做兼容性校验（digest 不匹配 ⇒
-  fail-closed 转人工，不得按新 schema 重解释旧排队 action）。
-- 迁移策略 fail-closed：schema 按 action 渐进补齐；**无 schema 的 action 不进 agent 工具面**；
-  既有 API 提交的宽松路径登记为 **report-visible migration bridge**（residual 台账行 + 命中
-  指标 + deletion condition = 全部 served action schema 就绪后关闭宽松路径），不再是无名残留。
+- **v4（round3#12）schema pin 的物理生命周期**：pin（`request_schema_version` + digest）为
+  **AgentAction 行上 owner 写入的不可变列**（提交时写）；`OperationRun` 在其实际创建点复制并
+  校验 pin——审批型 action 的 run 在 approve 时才建（`operation_runtime.py:813-827`）、retry 子
+  run 在 `:1042-1061` 才建，两处都执行 copy+verify；幂等重放时 pin 不匹配 ⇒ fail-closed 拒绝
+  （不静默沿用任一侧）；保留元数据键防碰撞。dispatch 兼容性校验同前（digest 不匹配 ⇒ 转人工）。
+- 迁移策略 fail-closed：schema 按 action 渐进补齐；无 schema 的 action 不进 agent 工具面；
+  宽松提交路径登记 residual 台账行 + 命中指标，**deletion condition 非同义反复**：追踪**全部
+  API 可提交 action**（非 served 子集）的宽松路径命中，连续一个发布窗口零命中方可关闭。
+- **v4（round3#13）字段所有权归一化**：per-action 声明字段 owner——`target_ref` 只含 **owner
+  铸造的资源身份**（模型/客户端提供的 target 字段一律拒绝）、`input_payload` 只含请求选项；
+  两处出现同名字段或 input 别名试图覆盖 owner target ⇒ 提交即拒；dispatch 只消费归一化后的
+  request（消除 pinned 的 input-优先于-target 双源行为）。
 
 ### 3.2 serve 子集：`agent_tool_enabled` 谓词（v2 修正「全集等价」）
 
@@ -296,3 +322,11 @@ provider/model 由 owner 定（CRM 的 `gpt-5.6-sol` 锁不外溢到这里）。
 | new#14（无 model-safe/租户契约） | §2.1 adapter 出口白名单 + artifact ref 不自动解引用；§2.3 workspace/actor/permission 绑定 |
 | new#15（schema 版本未绑 durable 对象/桥无治理） | §3.1 版本+digest 落 AgentAction/OperationRun + dispatch 兼容校验 + 宽松路径登记迁移桥 |
 | prior#5/#6/#8/#22/#23 partial 收口 | §3.1（target/版本/桥）/§3.2（dispatch_adapter 绑定字段）/§2.3（因果 id+预算台账）/§2.4/§2.3+§2.8 |
+
+**round-3（提取件 `20260713T125255Z_*`）覆盖**：#9→§2.2 terminal 事件变体（类型化，无旁道）；
+#10→§2.5 逻辑结果槽 + 首成功 CAS + join/quarantine/显式 generation；#11→§2.3/§2.2 有效路由快照
+（endpoint/timeout/定价/circuit policy）+ UTC deadline_at 命名统一；#12→§3.1 pin 不可变列 +
+approve/retry 创建点 copy+verify + 非同义反复的桥退役条件；#13→§3.1 字段所有权归一化；
+#14→§2.1 model_safe_result_schema + 全角色出站校验 + 租户身份入结果/转写/journal；
+#15→§2.3 预算保留台账契约（owner/身份/状态机/对账/orphan 回收）；命名更正→§2.2
+（OpenAIModelUsage、length）。
