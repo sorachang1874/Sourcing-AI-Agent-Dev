@@ -37,10 +37,20 @@
     - 之后：Option 3 全事件流 driver = Track D 北极星(`agent_events`/SSE 表尚不存在)。
 
 ### Track B — 存储与测试基建（与 A 并行）
+- [ ] R-019：operation/workflow command 原子边界仍未闭合。D-3 已修 pool-max=1 advisory-lock 循环等待并把
+  direct state-sync caller 棘轮降至 26，但 cancel race 仍可留下已计划 command，transaction try-lock helper 也只有
+  capped backoff、没有总 acquisition deadline。下一次触碰 operation retry/dispatch/command completion、
+  `workflow_commands` 或新增该 helper caller 时，必须先落 generation/lease fence、统一 UoW 和 typed lock-busy budget。
 - [ ] R-022：②.4c activity spine / R-020 fixed-forward 已固定 `af50f45..30a703e` 异步 Codex review；有效 GO 前只冻结本 scope 的 live/W6/manual/里程碑签收，commands 与其他非 live 开发继续。
 - [ ] R-023：`runtime_outbox` 在 production claim/consumer、Track C 5d 或 outbox live/W6/manual 签收前补 claim generation/token fence；当前无 production consumer，不阻断非 live 开发。
-- [ ] R-025：②.4d 已固定 `889848e..7048d83` 异步 Codex re-review；首轮 executable discovery 根因已由 runner carrier `a30f600` 修复，但尚未重跑/取得有效 verdict。GO 前只冻结本 scope 的 live/W6/manual/里程碑签收，session/trace 与其他非 live 开发继续。
-- [ ] R-026：②.4e recovery intents 独立评审 pending。implementation=`f09ffbd`，canonical runner carrier/head=`a30f600`，base=`dbb40f3`；`REVIEW_FILES` 只限 f09 的 8 个实现/测试文件，不含 runner 4 文件。尚未发送 reviewer；有效 GO 前只冻结 ②.4e 的 live/W6/manual/里程碑签收，不阻断 ②.4f。
+- [ ] R-025：②.4d `889848e..7048d83` re-review 已重发，但 Codex 0.144 多 thread / non-inline-items transcript 被旧 runner fail-closed 为 `invalid_transport`；提取的 reviewer 内容只作参考，不是 GO/NO-GO。协议适配已由独立 carrier `dc5af51` 修复；operator 顶层 reasoning effort 仍为 `medium`，改为最高支持档后再正式重发。有效 GO 前只冻结本 scope 的 live/W6/manual/里程碑签收。
+- [ ] R-026：②.4e recovery intents 同样已产 `invalid_transport`，不是正式裁决。implementation=`f09ffbd`、base=`dbb40f3`，正式 re-review 仍只限原 8 个实现/测试文件；runner carrier=`dc5af51`。待 operator 顶层 effort 从 `medium` 调到最高支持档后重发；不阻断 ②.4f 或其他非 live 开发。
+- [ ] R-027：D-3 修订 (a) implementation 已固定为 `82d69a1`；results **314/2/4**（两失败均 clean
+  `5f14ed8` 同败）、writer **24+3**、adapter **62+4**、operation **129**、storage **59**、PG projection/CRM
+  **58+4**、frontend Python **50** + build、workflow **187/1 baseline-identical +3**、lint **58 files**、mypy
+  **81/4**，contract lane **349+2+11+1+2** + `dry_run_ready`。正式 Codex review artifact 仍 pending；有效 GO 前只冻结 D-3 的
+  live/W6/manual/product/里程碑签收，不阻断下一批 Track C C1a。
+- [ ] R-028：D-3 已把 projection selection 的 CRM record/engagement/event 收进 revision-fenced fixed PG UoW，但 legacy CRM add/update 没有共享 identity-lock UoW，durable cancel/entity-delta/command terminal CAS 也仍在 domain commit 之外。下一次 CRM Repository 或 workflow command-completion 分子批统一这些入口、清理 person 重复后加唯一约束，并删除临时 `ControlPlaneStore.apply_projection_crm_selection` facade；修复前不宣称 global CRM exactly-once，也不做 D-3 CRM mutation live/manual 签收。
 - [x] 测试环境契约 v2（2026-06-11）：每 run = (PG schema + runtime dir) 配对 + `.ephemeral-test-env.json` 标记；teardown `DROP SCHEMA CASCADE`（仅删自建 schema，`pre_existing` 守卫）；孤儿 janitor `scripts/prune_test_schemas.py`（先快照后扫描、活跃连接守卫、仅限本地 DSN、dry-run 默认）。
 - [x] Mac 本地 PG Docker 方案（2026-06-11）：`local_postgres_docker.py` + `make local-pg-up/down/status`；容器 55432 复用既有 DSN 发现机制零侵入；PG 强制模式下 durable runtime 套件真实执行验证。
 - [x] PG 测试 fixture 试点（2026-06-12）：`tests/pg_store_fixture.py`（`PGControlPlaneStoreTestMixin`：per-class schema + `pg_tables` 截断复用）；8 个文件先行迁移；试点即捕获一个生产缺陷（见下条）。
@@ -52,13 +62,13 @@
 - [ ] 收尾项：6 个已走 `PGDurableRuntimeTestMixin` 的可选统一；`test_pipeline`（42k 行，永不全量跑）单独设计；PG 适配器自测 3 个豁免（保持）。
 - [x] advisory lock key 按 schema 命名空间化（2026-06-12，owner 批准趁 systemd 全量重启部署窗口落地）：7 个锁点统一走 `_advisory_lock_key()`（schema 前缀，空 schema 归一为 `public`）；跨 schema 互不争用 + 同 schema 互斥 + 默认前缀确定性均有实测锁定（`test_control_plane_pool.py`）。**部署约束：锁身份已变，上线必须全停重启，禁止新旧进程共存热部署**（现行 systemd 部署天然满足；Track C 容器化滚动部署前无需再协调）。
 - [x] 之后：按表组把双路径方法重写为 PG-pure 并删 mirror/内存 SQLite 影子 + 引入正式 migration 机制——**已由 Track B 全部完成**（RATIFIED 2026-06-16，追踪见 `docs/TRACK_B_PG_PURE_STORE_DESIGN.md`，本条即该 doc 引用的 §50 roadmap）：`storage.py` 现为 PG-pure（零 sqlite3/mirror；B4.3f 内存影子退役，shadow 访问器只剩 inert 标签）；PG schema 唯一来源 = 版本化 migration runner（`src/sourcing_agent/migrations/0001_baseline.sql` + `src/sourcing_agent/migration_runner.py`，`init_schema` 已删）；`SOURCING_PG_ONLY_SQLITE_BACKEND` 已成 inert no-op。下一步（已批）：B4.2 ② Repository 查询方法 + 按域迁移 caller → ③ jsonb/timestamptz（owner-gated，决策卡 = handbook §7 D-1）。
-- [x] ② 域退役进行中（入口文档 `docs/TRACK_B_REPOSITORY_MIGRATION_HANDBOOK.md`）：②.0 linkedin_profile_registry（2026-07-02）+ ②.1 criteria/confidence（2026-07-06，`d5109f1`）+ ②.2 manual_review（2026-07-10，`d0828e7`）+ ②.3a-d serving_projection + ②.4a operation-control（`93d9f9e`）+ ②.4b acquisition-control（`d6e1e2a`）+ ②.4c activity spine（`30a703e`）+ ②.4d read-model trio（`7048d83`）+ **②.4e recovery intents（`f09ffbd`）** 已完成，`storage.py` 19,187 → **11,829** 行。②.4e 删除 4 public facade + 1 mapper / 1 descriptor key / 3 Store native keys，旧 receiver 38→0，workflow repo 2,195→2,307；latest-wins re-arm、single-winner/expired reclaim 与 claim-identity consume fence 保持，native writer authority 明确化。A/B old@`dbb40f3`/new 均 6,062 bytes、hash `d0359eef...f3f2b3`，consume-fence mutation 5,859 bytes、hash `a187e04a...b429e`/`cmp=1`；targeted 21/38/59 + live-PG 61+4，lane 321+2+11+1+2，mypy 87/4。四个 pipeline 节点 current/base 同为 3 pass/1 R-009 fail。R-026 只 scope-local 阻断签收。**下一批：②.4f session/trace**，之后依次 job leases、workers、commands(last)；R-019/R-023 边界不变，D-1 已选 (a)、D-2 已选 (b)，D-3 仍待 owner 裁决，原截止 **2026-07-31**。
+- [x] ② 域退役已完成至 ②.4e（入口文档 `docs/TRACK_B_REPOSITORY_MIGRATION_HANDBOOK.md`）：②.0 linkedin_profile_registry（2026-07-02）+ ②.1 criteria/confidence（`d5109f1`）+ ②.2 manual_review（`d0828e7`）+ ②.3a-d serving_projection + ②.4a operation-control（`93d9f9e`）+ ②.4b acquisition-control（`d6e1e2a`）+ ②.4c activity spine（`30a703e`）+ ②.4d read-model trio（`7048d83`）+ ②.4e recovery intents（`f09ffbd`）。`storage.py` 19,187 → **11,829** 行；②.4e A/B、mutation、targeted、PG 和 lane 证据保留在 Track B batch record。Repository 迁移暂停于此，②.4f session/trace、job leases、workers、commands(last) 延后；下一执行批为 **Track C C1a**。R-019/R-023 边界不变。D-1 已选 (a)、D-2 已选 (b)；D-3 implementation=`82d69a1` 已完成，formal review 由 R-027 pending 跟踪。
 - [x] provider fail-closed 隔离合入（2026-07-09，`430a369`）：`SOURCING_EXTERNAL_PROVIDER_MODE` 未设/未知一律 `simulate`；非生产环境 live 需双钥确认；detached 子进程注入 access-disabled + 空 token；`tests/conftest.py` 全局隔离 secrets。2026-06-27 计费事故类在主线关闭。落地条件：已验证（58 runtime/model/settings + connector 套件；7 个全套件失败经 worktree 基线证明 pre-existing，台账 R-010）。
 - [x] 合同 lane 加固（2026-07-09，`8b555b6`）：onconflict 守卫入两条 lane；REQUIRE flags 全段 skip→fail（变异自证）。
 
 ### Track C — Serving Runtime（目标 ~20 并发用户）
 - [x] psycopg_pool 连接池（2026-06-11）：per-adapter 懒加载池（`SOURCING_CONTROL_PLANE_PG_POOL_MIN/MAX`，默认 1/8）；25 个调用点事务语义逐一核验不变；实测 200 次顺序操作 1.516s→0.743s、新建连接 200→1；`ControlPlaneStore.close()` 接线。
-- [ ] 重活出请求线程：plan compile / `/api/jobs` / 导出统一为 enqueue + 轮询（后续 SSE）。
+- [ ] 重活出请求线程：plan compile / `/api/jobs` / 导出统一为 enqueue + 轮询（后续 SSE）。C1 durable plan-task 设计见 `docs/TRACK_C_C1_DURABLE_PLAN_TASK_DESIGN.md`；先落不依赖存储裁决的 C1a fast contract lane，consumer table / 202 cutover / publication UoW / TTL 四项 owner 决策未决前不做 migration。
 - [ ] worker 与 API 进程分离（`worker_daemon` 独立进程成为唯一模式）。
 - [ ] 最小鉴权 + 用户身份（token；`requester_id/tenant_id` 列已存在但来自未认证 payload）。
 - [x] FastAPI + uvicorn 传输层等价重写 api.py（2026-06-12）：同路由/同 payload/同状态码/同 headers；CORS allowlist + localhost 自动放行 + header 回显；Apify webhook token 校验保留；双道信号量改 middleware（HarvestAPI 并发约束保留至 M2 provider 预算落地）；`create_server` 兼容垫片包 uvicorn（serve_forever/shutdown/port-0）；`tests/test_api_transport_parity.py` 传输等价测试。

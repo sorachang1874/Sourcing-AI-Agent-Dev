@@ -1009,3 +1009,48 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     `tests/test_storage_surface_guardrails.py`；因此 carrier 的 4 个 runner 文件不混入 ②.4e review scope。
     尚未发送 reviewer、无 verdict/artifact；有效 GO 前只冻结本批 live/W6/manual/里程碑签收，不阻断
     **②.4f session/trace** 与其他非 live 开发。R-025 的 runner 根因虽已由 `a30f600` 修复，②.4d re-review 仍 pending。
+
+- **2026-07-13 D-3 修订 (a) 实现完成、formal review pending —— canonical membership `N/N` 与 card detail `C/N` 拆分**:
+  - **裁决/owner 面**:owner 已批准 handbook §7 D-3 修订 (a)。Exact `serving_projection_members` visible
+    membership 独立拥有主同步、canonical 分页、projection export/CRM source total 的 `N`；exact
+    card readiness 独立拥有 `C/N`。Profile readiness、card readiness 与 explicit capture evidence 三者互不
+    推导，也不存在 `C <= profile_ready`。`projection.membership_revision` 是 member-publication UoW
+    写入的 opaque equality token；summary/page/readiness 只在 token 相等时组合，缺失或 mismatch fail closed，
+    不按 timestamp、sequence、token 字面值或较大 count 选胜者。Authoritative exact publication 可以向上、向下
+    或归零纠正 `N` 与 revision-bound 聚合。
+  - **实现/下游闭环**:`ServingProjectionReader` 向 public projection 暴露 revision；job summary、candidate page、
+    board runtime 与 frontend hydration/polling 绑定同一 token。Exact `N>0,C=0` 仍渲染 row shell；exact `N=0`
+    原子清空旧 projection/lifecycle 总数；non-exact/missing/mismatch 是 unavailable 而非空集合。Public facets
+    只由 revision-fenced `projection_person_search_index` 拥有；initial membership publication 明确
+    `pending/unavailable`，不扫描 members 或 legacy artifact 补数。Frontend 失效不匹配 cache 并强制重读
+    authoritative projection，card readiness 轮询独立于主看板完成态。Dispatch 前发现 revision stale 时，固定 PG
+    transition 在同一事务内 CAS `operation_run`、锁定并失败 linked action、追加唯一
+    `OperationInputRevisionStale` event；exact replay 不重复 event，event 写失败整笔回滚。R-019 direct state-sync
+    ratchet 因此从 27 降到 **26**，但 workflow command/CRM domain completion 仍不在该事务内。
+    为消除真实 pool max=1 循环等待，固定锁序为 `operation_dispatch` 后
+    `serving_projection_publication`；pooled transaction contender 使用 `pg_try_advisory_xact_lock`，busy 时先
+    rollback/归还连接再 capped backoff，成功连接持锁贯穿同一 UoW。publication 的 scope/publication locks 在
+    同一事务获取；cancel 等锁后只对已提交且仍非终态的 status advance 做一次有界重试，terminal winner 或第二次
+    冲突 fail closed。该 liveness 修复不取消已计划 command，R-019 继续跟踪 queued-command/process-crash 边界。
+    `_connect_with_transaction_lock` 目前只有 capped per-attempt backoff、没有总 acquisition deadline；它消除了
+    “等待者占住 pool”死锁，但永久锁持有者仍可让 caller 持续重试。该既有 operational budget 缺口同样保留在 R-019，
+    不把本批有限竞争回归外推成任意锁持有时长下的返回时限。
+  - **回归/验证**:`test_results_api.py` 最终全量 **314 passed / 2 failed / 4 skipped**；修正的三个 stale
+    expectation 精确组 **3 passed**，剩余两个 entity-delta collision 在 clean `5f14ed8` 精确同败。Frontend Python
+    contract/hydration suites **50 passed**；`npm run build` 通过（80 modules，517.22 kB，仅既有 >500 kB warning；
+    repo 无 npm test script）。workflow smoke **187 passed / 1 failed + 3 subtests**，唯一失败在 clean `5f14ed8`
+    同败。Adapter **62 passed + 4 subtests**，serving writer **24+3**，storage surface **59**，operation runtime
+    **129**，PG projection/CRM contracts **58+4**，export async **5**；真实 PG pool max=1 的**有限竞争**
+    dispatch/publication 与 dispatch/cancel 回归均有界退出且只有一个 command/event。`make lint` **58 files** 全绿；`make typecheck`
+    降至 **81 errors / 4 files**（R-011 新棘轮 1/58/1/21）；最终 contract lane
+    **349 passed / 0 skipped + 2/11/1/2 passed**，`dry_run_ready failures=[]`。
+  - **台账/评审/限制**:R-001、R-007 已由批准后的 owner split 与 results 回归关闭；R-024 由 facet index
+    owner + initial pending/final exact 流程关闭。Implementation=`82d69a1`；D-3 formal async review 由 R-027
+    跟踪，artifact 仍 pending。operator 顶层 reasoning effort 当前为 `medium`，须由 operator 改为最高支持档后才用
+    `dc5af51` runner 首次发送该 pinned scope。有效 GO 前
+    只冻结本 scope 的 live/W6/manual/product/里程碑签收，不阻断 Track C 非 live 开发。Apify Token/API Keys 已轮换，
+    当前版本无可用新凭据且 owner 未授权 live，因此本批不运行 live provider 验证。
+  - **review transport 旁路状态**:R-025/R-026 的 Codex 0.144 attempts 均因旧 runner 假设单 thread + inline items
+    而落为 `invalid_transport`；模型 turn 完成或提取出的 substantive 文本都不构成正式 GO/NO-GO。独立 runner
+    carrier `dc5af51` 已适配 0.144 transcript（runner **55**、retention/verifier **50**、pre-agent **60**，独立审计 GO），
+    与本 D-3 实现 commit 分离。
