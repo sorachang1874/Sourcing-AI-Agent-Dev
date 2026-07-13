@@ -1,7 +1,9 @@
 # Track D D0c — Model invocation evidence contract
 
-> Status: Author implementation record (2026-07-14). D0c is additive and non-live. It is not an independent-review
-> `GO`, a durable writer/persistence implementation, a provider transport, live approval, or product activation.
+> Status: Author implementation record (2026-07-14). Commit `bc8d9d8` has scoped pinned advisory review `GO`
+> (P0/P1/P2=0/0/0); formal review remains pending. D0c is additive and non-live. It is not a formal
+> independent-review `GO`, a durable writer/persistence implementation, a provider transport, live approval, or
+> product activation.
 
 ## 1. Engineering outcome
 
@@ -157,4 +159,4 @@ provider tests, and D0b characterization; Ruff format passed for all three D0c P
 both D0c source files; exact scoped `git diff --check` passed. The untouched `tests/test_model_tool_runtime.py` is not
 Ruff-format-clean at current `b9edb00`; the exact format-check failure reproduced in a clean detached `b9edb00`
 worktree, so D0c did not rewrite it merely to hide baseline drift. These are author results and never substitute for the
-required pinned non-author review.
+required formal project review; the scoped pinned advisory review at `bc8d9d8` returned `GO` with no P0/P1/P2 findings.

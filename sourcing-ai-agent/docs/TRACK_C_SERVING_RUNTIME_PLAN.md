@@ -1,6 +1,8 @@
 # Track C — Serving Runtime Plan
 
-> Status: Active implementation. C3a external-recovery default implemented 2026-07-14; C3b/5d and cross-container single-writer remain owner- and residual-gated.
+> Status: Active implementation. C3a external-recovery default implemented 2026-07-14; fixed-forward `6cda749` has
+> scoped pinned advisory review `GO` (P0/P1/P2=0/0/0), while formal review remains pending. C3b/5d and
+> cross-container single-writer remain owner- and residual-gated.
 
 文件路径均相对仓库根；行号锚定 `src/sourcing_agent/`（审计引用为裸文件名，路径已落实到该包）。本文件同时记录原计划和已落地的有界切片；实施状态以本文档、`NEXT_TODO.md` 与当前代码交叉校验。
 

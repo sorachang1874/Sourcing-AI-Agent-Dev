@@ -1,9 +1,10 @@
 # Track D D1a — Action request surface characterize-first freeze
 
 > Status: Author characterization batch with pinned-review fixed-forward (2026-07-14). The review of pinned commit
-> `d88161e` returned `NO-GO` for two false-green oracles; both are addressed here and re-review is pending. This is a
-> zero-product-code, non-live baseline for the later `ActionRequestSpec` implementation. It is not a D1 completion
-> claim, independent-review `GO`, live-provider approval, or Agent tool activation.
+> `d88161e` returned `NO-GO` for two false-green oracles; both are addressed in `bbad0fa`, whose scoped pinned advisory
+> re-review returned `GO` (P0/P1/P2=0/0/0). Formal review remains pending. This is a zero-product-code, non-live
+> baseline for the later `ActionRequestSpec` implementation. It is not a D1 completion claim, formal independent-review
+> `GO`, live-provider approval, or Agent tool activation.
 
 ## 1. Outcome and boundary
 
@@ -119,8 +120,8 @@ D1a does not introduce `ActionRequestSpec` or decide its final schema. The next 
 - remain non-live until the typed model-turn owner, cost/budget/result-slot obligations, and a scope-matched independent
   review permit activation.
 
-Pending review remains scope-local: it freezes D1a live/manual/product/milestone signoff, not unrelated non-live Track C
-or D work. Author tests are evidence, not formal `GO`.
+The pending formal review remains scope-local: it freezes D1a live/manual/product/milestone signoff, not unrelated
+non-live Track C or D work. Author tests and the scoped pinned advisory `GO` are evidence, not formal `GO`.
 
 ## 6. Validation
 

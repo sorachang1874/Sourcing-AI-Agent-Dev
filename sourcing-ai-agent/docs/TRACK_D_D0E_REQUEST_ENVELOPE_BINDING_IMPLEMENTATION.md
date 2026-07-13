@@ -1,6 +1,7 @@
 # Track D D0e — Request-to-invocation-envelope provenance binding
 
-> Status: Author implementation record (2026-07-14). D0e is additive and non-live. It is not an independent-review
+> Status: Author implementation record (2026-07-14). Commit `8a33eca` has scoped pinned advisory review `GO`
+> (P0/P1/P2=0/0/0); formal review remains pending. D0e is additive and non-live. It is not a formal independent-review
 > `GO`, durable envelope issuance/persistence, provider transport, live approval, or product activation.
 
 ## 1. Engineering outcome
@@ -140,4 +141,5 @@ git diff --check -- \
 Author evidence on 2026-07-14: invocation-contract + runtime suites `176 passed`; provider + D0b characterization
 `60 passed + 11 subtests`; scoped Ruff rules passed; both changed Python files are Ruff-format-clean; focused mypy
 passed with no findings; and the exact scoped diff check passed. These author results do not replace the required
-pinned non-author review for this contract-heavy batch.
+formal project review for this contract-heavy batch; the scoped pinned advisory review at `8a33eca` returned `GO`
+with no P0/P1/P2 findings.

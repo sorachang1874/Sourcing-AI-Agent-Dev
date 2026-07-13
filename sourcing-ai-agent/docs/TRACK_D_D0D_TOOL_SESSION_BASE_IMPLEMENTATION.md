@@ -1,9 +1,10 @@
 # Track D D0d — Canonical tool-session projection
 
 > Status: Author fixed-forward record (2026-07-14). The pinned review of D0d commit `0f8d249` returned `NO-GO` on an
-> exact-type/identity boundary and a malformed ownership-table row. Both findings are addressed here on top of
-> `8a33eca`; re-review is pending. D0d remains additive and non-live. It is not an independent-review `GO`, provider
-> transport, complete `ModelTurnExecutionContext`, live approval, or product activation.
+> exact-type/identity boundary and a malformed ownership-table row. Both findings are addressed in `01220dc`, whose
+> scoped pinned advisory re-review returned `GO` (P0/P1/P2=0/0/0); formal review remains pending. D0d remains additive
+> and non-live. It is not a formal independent-review `GO`, provider transport, complete `ModelTurnExecutionContext`,
+> live approval, or product activation.
 
 ## 1. Engineering outcome
 
@@ -130,4 +131,5 @@ the exact scoped diff check passed. The runtime suite includes direct reviewer-e
 ownership-row regression. Ruff format passed for both changed source/contract-test files. The sole format finding in
 `tests/test_model_tool_runtime.py` is the pre-existing multiline generator expression near the split helper; the
 identical finding reproduced from the pinned baseline through stdin, so this fixed-forward did not rewrite unrelated
-baseline formatting. These are author results and do not replace re-review or a valid pinned independent-review `GO`.
+baseline formatting. These author results and the scoped pinned advisory `GO` do not replace the pending formal
+project review.

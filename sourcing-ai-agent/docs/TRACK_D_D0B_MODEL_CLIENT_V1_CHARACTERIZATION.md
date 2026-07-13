@@ -1,8 +1,9 @@
 # Track D D0b — ModelClient v1 characterize-first freeze
 
-> Status: Author characterization batch with third reviewer fixed-forward (2026-07-14). This is a non-live test and
-> documentation slice, not a D0/D1 completion claim, independent-review `GO`, live-provider approval, or product
-> activation.
+> Status: Author characterization batch with third reviewer fixed-forward (2026-07-14). Fixed-forward `763e0aa` has
+> scoped pinned advisory review `GO` (P0/P1/P2=0/0/0); formal review remains pending. This is a non-live test and
+> documentation slice, not a D0/D1 completion claim, formal independent-review `GO`, live-provider approval, or
+> product activation.
 
 ## 1. Outcome and boundary
 
@@ -83,9 +84,9 @@ durable model-turn owner, complete execution context and invocation envelope, ow
 cost reservation/exposure accounting, result-slot acceptance/consumption or adoption recovery, transcript retention
 ownership, low-level live access checks, and a scope-matched independent-review `GO`.
 
-Review is asynchronous and scope-local: once the D0b pinned review request is recorded, later unrelated/non-live work
-may continue. A pending or invalid review still freezes D0b live/manual/product/milestone signoff and must never be
-reported as `GO`.
+Review is asynchronous and scope-local: the scoped pinned advisory re-review is `GO`, but it is not the formal project
+gate. The pending formal review still freezes D0b live/manual/product/milestone signoff and must never be reported as
+formal `GO`.
 
 ## 5. Validation
 
@@ -105,4 +106,5 @@ git diff --check -- \
 
 Author evidence on 2026-07-14: the characterization suite passed 21 tests; the combined characterization, existing
 provider, and D0a runtime suites passed `163 tests + 11 subtests`; Ruff format/check passed for the test file; and the
-exact two-path diff check passed. This is author evidence only and does not replace independent review.
+exact two-path diff check passed. This author evidence is complemented by the scoped pinned advisory `GO`; neither
+replaces the pending formal project review.

@@ -72,7 +72,7 @@
   - [x] C1a author implementation（2026-07-14）：exact export light lane、owner-supplied `artifact.handle` fail-closed、frontend terminal-total status registry、Plan `pending|queued` bridge；无 schema/provider/model。targeted + frontend build 已绿，scope-matched independent review pending；有效 `GO` 前不做本 scope 的 live/manual/product signoff。
   - [x] C1b author implementation + pinned advisory fixed-forward（2026-07-14）：HTTP 200/pending 与唯一 hydration owner 保持；late same-signature consumer 由同锁 retirement barrier 原子 drain/转 successor，history publication 有 generation fence；AST 覆盖 alias/thread/executor；authenticated unlinked Plan submit/read/list/resubmit 以 server provenance fail-closed；空 artifact handle 拒绝。真实 compiler 竞态仍可留下 orphan review/criteria，明确阻断 durable/live/manual/product 签收，须 D-C1-3/C1d compute/publish split；formal review pending，不越过 D-C1-1..4 做 C1c-e migration。
 - [ ] worker 与 API 进程分离（完整 C3b 仍需跨容器唯一 runner + 5d）。
-  - [x] C3a author implementation + pinned-review fixed-forward（2026-07-14）：初版 `7a58684` 的 scoped review 为 `NO-GO`，指出 provider/API 请求路径仍可触发 job-scoped/inline recovery、`?sync=1` 未退役、HTTP `run-once` 仍执行 tick，以及 topology tests 仍受 PG mixin/源码字符串断言污染。fixed-forward 后：`serve` 默认 API-only，创建 server 前要求 fresh external `worker-recovery-daemon`；唯一进程内兼容入口为 dev-only `--enable-runtime-watchdog`；provider webhook 先持久化 terminal checkpoint/释放 lease+limiter，再仅发 pure shared signal；`?sync=1` 返回 `410`；`POST /api/workers/daemon/run-once` 忽略 client controls，signal 成功返回 `202`、不可用返回 `503`；smoke/browser caller 发送空 payload，并把 signal evidence 与 daemon status/worker progress execution evidence 分离；topology tests 已移到无 PG plain `TestCase` 并捕获真实 argv。same-host/systemd only，无 outbox/dispatch/schema/provider/live。验证：core 52 tests + 2 subtests、downstream exact 14 tests、pipeline exact 1 test、frontend build 绿；完整 workflow/signoff 234 tests + 3 subtests 通过，2 个失败已在 clean pinned baseline 同节点复现；contract lane `349+2+11+1+2`，mypy=`81 errors / 4 files`（棘轮持平）。fixed-forward scoped re-review pending；有效 `GO` 前不做本 scope live/W6/manual/product/里程碑签收。
+  - [x] C3a author implementation + pinned-review fixed-forward（2026-07-14）：初版 `7a58684` 的 scoped review 为 `NO-GO`，指出 provider/API 请求路径仍可触发 job-scoped/inline recovery、`?sync=1` 未退役、HTTP `run-once` 仍执行 tick，以及 topology tests 仍受 PG mixin/源码字符串断言污染。fixed-forward 后：`serve` 默认 API-only，创建 server 前要求 fresh external `worker-recovery-daemon`；唯一进程内兼容入口为 dev-only `--enable-runtime-watchdog`；provider webhook 先持久化 terminal checkpoint/释放 lease+limiter，再仅发 pure shared signal；`?sync=1` 返回 `410`；`POST /api/workers/daemon/run-once` 忽略 client controls，signal 成功返回 `202`、不可用返回 `503`；smoke/browser caller 发送空 payload，并把 signal evidence 与 daemon status/worker progress execution evidence 分离；topology tests 已移到无 PG plain `TestCase` 并捕获真实 argv。same-host/systemd only，无 outbox/dispatch/schema/provider/live。验证：core 52 tests + 2 subtests、downstream exact 14 tests、pipeline exact 1 test、frontend build 绿；完整 workflow/signoff 234 tests + 3 subtests 通过，2 个失败已在 clean pinned baseline 同节点复现；contract lane `349+2+11+1+2`，mypy=`81 errors / 4 files`（棘轮持平）。fixed-forward `6cda749` 的 pinned advisory re-review=`GO`（P0/P1/P2=`0/0/0`）；formal review 仍 pending，有效 formal `GO` 前不做本 scope live/W6/manual/product/里程碑签收。
   - [ ] C3b：runtime_outbox fenced claim/consumer、跨容器 durable wakeup 与 PG-native single-writer；R-019/R-023 未满足前禁止实施/签收。
 - [ ] 最小鉴权 + 用户身份（token；`requester_id/tenant_id` 列已存在但来自未认证 payload）。
 - [x] FastAPI + uvicorn 传输层等价重写 api.py（2026-06-12）：同路由/同 payload/同状态码/同 headers；CORS allowlist + localhost 自动放行 + header 回显；Apify webhook token 校验保留；双道信号量改 middleware（HarvestAPI 并发约束保留至 M2 provider 预算落地）；`create_server` 兼容垫片包 uvicorn（serve_forever/shutdown/port-0）；`tests/test_api_transport_parity.py` 传输等价测试。
@@ -96,8 +96,8 @@
 - [x] D0b characterize-first（2026-07-14）：新增语义 AST + synthetic transport 回归，冻结 `ModelClient`
   14+3 签名（含 sync/async + decorator）、自动发现的 5 个 concrete surface/factory return parity、全 17 方法
   runtime spy 下的六方法 scripted-live delegation、25 个消费模块/29 个调用点及 chat / responses / Qwen 三种
-  完整现有 wire shape；零产品码、零网络、零 provider/model。首轮 pinned review `NO-GO` 后 fixed-forward 已完成，
-  复评 pending。
+  完整现有 wire shape；零产品码、零网络、零 provider/model。首轮 pinned review `NO-GO` 后 fixed-forward 已完成；
+  `763e0aa` 的 pinned advisory re-review=`GO`（P0/P1/P2=`0/0/0`），formal review pending。
 - [x] D0 usage type 收敛门（2026-07-14）：`model_usage.py::ModelUsage` 现为无 transport/env/settings 依赖的
   单一五字段 immutable value owner，`model_provider.py` 与 `model_tool_runtime.py` 导入同一 class；
   `OpenAIModelUsage` 仅保留 object-identical compatibility alias，临时 runtime 类型及其 export/生产引用均已
@@ -110,27 +110,32 @@
   route registry preflight 现强制 exact keysets、`route_id+circuit_key` 分别唯一、全 draft、manifest non-live。
   零 transport/settings/env/storage/migration/provider call，D0a 仍只执行 `simulate|scripted`；durable issuer/
   persistence/result-slot CAS、ExecutionContext、cost ledger 与 R8 OB-2.2/4.3/10.3/10.4 仍 deferred。author evidence
-  = `145 passed` + provider/characterization `60 passed + 11 subtests` + Ruff/mypy/diff-check；formal review pending。
+  = `145 passed` + provider/characterization `60 passed + 11 subtests` + Ruff/mypy/diff-check；`bc8d9d8` 的 pinned
+  advisory review=`GO`（P0/P1/P2=`0/0/0`），formal review pending。
 - [x] D0d canonical tool-session projection author implementation（2026-07-14）：新增抽象
   `ToolCallingSessionBase`，两个公开入口只投影同一 `_parse_tool_turn -> ParsedToolTurn`；scripted replay 删除
   buffered/stream 双份解析路径，route fence 仍先于 caller iterable 消费，terminal event/result coherence 由
   `ParsedToolTurn` fail-closed。零 transport/settings/env/storage/provider/model/effect，request/hash/result/envelope
-  schema 与执行权限不变；ExecutionContext、budget/cost/result-slot/live 仍 deferred。scoped author validation 与
-  formal review 状态见 `TRACK_D_D0D_TOOL_SESSION_BASE_IMPLEMENTATION.md`。
+  schema 与执行权限不变；ExecutionContext、budget/cost/result-slot/live 仍 deferred。初版 `0f8d249` 的 pinned
+  review=`NO-GO`；fixed-forward `01220dc` 的 pinned advisory re-review=`GO`（P0/P1/P2=`0/0/0`），formal review
+  pending；scoped evidence 见 `TRACK_D_D0D_TOOL_SESSION_BASE_IMPLEMENTATION.md`。
 - [x] D0e request→invocation-envelope provenance binding author implementation（2026-07-14）：新增
   `validate_tool_turn_request_envelope_mirror`，逐字段对齐 current request 真正拥有的 route/config/tenant/policy
   provenance，并从一次消费的 request/messages/tools 重算 canonical request digest；明确不比较 response/
   terminal/usage/circuit/evidence/artifact/cost/causality/budget authority。schema/version/execution gate 不变，
-  coherent `provider_mode=live` mirror 仍被 D0a 执行门拒绝；durable issuer/ExecutionContext/result-slot/cost/live 与
-  formal review 仍 deferred。scoped 证据见 `TRACK_D_D0E_REQUEST_ENVELOPE_BINDING_IMPLEMENTATION.md`。
+  coherent `provider_mode=live` mirror 仍被 D0a 执行门拒绝；durable issuer/ExecutionContext/result-slot/cost/live
+  仍 deferred。`8a33eca` 的 pinned advisory review=`GO`（P0/P1/P2=`0/0/0`），formal review pending；scoped
+  证据见 `TRACK_D_D0E_REQUEST_ENVELOPE_BINDING_IMPLEMENTATION.md`。
 - [x] D1a Action request surface characterize-first（2026-07-14）：零产品码冻结 ActionSpec/Registry record、
   `submit_action` 当前无 request-schema 校验且不 dispatch 的基线、全注册 action 的真实 dispatch 分组、
   `_agent_callable_workflow_command_types_for_action`、`_build_agent_callable_workflow_command_plan` 的
   input→target→registry-default precedence，以及 command owner/Activity/control fail-closed 关系。数量由代码机械发现；
   当前观测为 15 actions、11 个 command-bearing actions、18 refs/17 unique commands、12 个 dispatch 分支命中；
   `external_intake` 已具 `excel.intake.run` metadata/owner/Activity/control，但 action adapter 仍 unsupported，不能把
-  command readiness 当 dispatch readiness。D1 `ActionRequestSpec`/schema pin/显式 adapter/served predicate 仍未实施；
-  scoped author evidence 与 review 状态见 `TRACK_D_D1A_ACTION_REQUEST_SURFACE_CHARACTERIZATION.md`。
+  command readiness 当 dispatch readiness。初版 `d88161e` 的 pinned review=`NO-GO`；fixed-forward `bbad0fa` 的
+  pinned advisory re-review=`GO`（P0/P1/P2=`0/0/0`）。D1 `ActionRequestSpec`/schema pin/显式 adapter/served
+  predicate 仍未实施；formal review pending，scoped evidence 见
+  `TRACK_D_D1A_ACTION_REQUEST_SURFACE_CHARACTERIZATION.md`。
 - [ ] Agent Session 契约：服务端 agentic loop；工具面 = M1 manifest 导出 + 只读上下文工具 + model_native_search/fetch 转正；效果全部走 typed AgentAction（边界已由 `AGENT_OPERATION_CONTRACT.md` 规定）。
 - [ ] 第一垂直切片：公司身份自验证 loop（搜索→fetch 验证→歧义才升级人工），替代 PlanCard 手动修正 LinkedIn URL。
 - [ ] 之后：plan review 对话化、intent→plan 前门流式化；OpenClaw/Claude 作为可插拔外脑。
