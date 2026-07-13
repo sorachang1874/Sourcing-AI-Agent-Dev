@@ -71,8 +71,9 @@ accepting extra keys is forbidden.
    cannot contain token values.
 5. The six durable causality identifiers are either a complete tuple or an absent tuple. D0c does not synthesize a
    partial durable identity around an in-memory D0a result.
-6. Result artifact ref and digest appear together or not at all. Snapshot, provider-call, evidence-bundle, artifact,
-   and cost evidence can be absent where no physical object/call exists.
+6. Result artifact ref and digest appear together or not at all. Snapshot, evidence-bundle, artifact, and cost refs can
+   be absent where their physical objects do not exist. A response call id may be absent only when an observed terminal
+   provider response lacks a usable id; that absence is never no-call proof.
 7. Exact deserialization rejects any missing or extra top-level field, verifies the digest over the exact incoming
    unsigned record before normalization, constructs the value, and then requires canonical record equality. Explicit
    `null` aliases for omitted usage fields therefore fail even when supplied with a recomputed digest.
