@@ -277,6 +277,9 @@ class FrontendPlanContractTest(unittest.TestCase):
                   "history-other-owner",
                 ),
               ),
+              malformedResponseHistoryIdErrors: [{}, ["history-array"], true, 123].map((value) =>
+                captureError(() => api.__testResolvePlanSubmitHistoryId("", value)),
+              ),
             }));
             """
         )
@@ -325,6 +328,13 @@ class FrontendPlanContractTest(unittest.TestCase):
         self.assertEqual(result["initialResolvedHistoryId"], "history-server-owned-1")
         self.assertIn("missing the server-owned history id", result["missingInitialHistoryIdError"])
         self.assertIn("changed the existing history id", result["mismatchedRevisionHistoryIdError"])
+        self.assertEqual(len(result["malformedResponseHistoryIdErrors"]), 4)
+        self.assertTrue(
+            all(
+                "non-string server-owned history id" in message
+                for message in result["malformedResponseHistoryIdErrors"]
+            )
+        )
 
         source = (REPO_ROOT / "frontend-demo/src/pages/SearchPage.tsx").read_text(encoding="utf-8")
         initial_start = source.index("const submitSearch")

@@ -2739,7 +2739,10 @@ function buildPlanSubmitPayload(queryText: string, historyId = ""): Record<strin
 
 function resolvePlanSubmitHistoryId(requestedHistoryId: string, responseHistoryId: unknown): string {
   const requested = requestedHistoryId.trim();
-  const resolved = String(responseHistoryId || "").trim();
+  if (typeof responseHistoryId !== "string") {
+    throw new Error("Plan submit response has a non-string server-owned history id.");
+  }
+  const resolved = responseHistoryId.trim();
   if (!resolved) {
     throw new Error("Plan submit response is missing the server-owned history id.");
   }
