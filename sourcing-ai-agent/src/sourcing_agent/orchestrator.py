@@ -79,7 +79,6 @@ from .connectors import CompanyIdentity, CompanyRosterSnapshot, resolve_company_
 from .control_plane_postgres import (
     load_control_plane_postgres_sync_state,
 )
-from .control_plane_repository import ControlPlaneAuthoritativeReadError
 from .criteria_evolution import CriteriaEvolutionEngine
 from .crm_migration import CRMTargetCandidateMigrationBackfill
 from .crm_public_web_owner import (
@@ -323,9 +322,6 @@ from .public_candidate_facets import (
 )
 from .public_candidate_facets import (
     normalize_candidate_page_recall_filter_values as _public_normalize_candidate_page_recall_filter_values,
-)
-from .public_candidate_facets import (
-    public_facet_counts_from_records as _public_facet_counts_from_records,
 )
 from .public_candidate_facets import (
     public_facet_summary_from_counts as _public_facet_summary_from_counts,
@@ -6494,14 +6490,38 @@ class SourcingOrchestrator:
             candidate_identity_key = f"candidate:{candidate_id.lower()}"
         if not candidate_identity_key:
             return {}
-        has_profile_detail = bool(
-            public_summary.get("has_profile_detail") or public_summary.get("has_explicit_profile_capture")
+        has_profile_detail = self._candidate_record_has_complete_profile_detail(payload)
+        has_explicit_profile_capture = self._candidate_record_has_explicit_profile_capture(payload)
+        needs_profile_completion = bool(
+            public_summary.get("needs_profile_completion")
+            or payload.get("needs_profile_completion")
+            or metadata.get("needs_profile_completion")
         )
-        needs_profile_completion = bool(public_summary.get("needs_profile_completion"))
         profile_readiness = (
             "ready" if has_profile_detail else "required" if needs_profile_completion else "not_required"
         )
-        card_readiness = "ready" if has_profile_detail and not needs_profile_completion else "row_shell"
+        explicit_card_readiness = (
+            str(payload.get("card_readiness") or metadata.get("card_readiness") or "").strip().lower()
+        )
+        if explicit_card_readiness in {"ready", "complete", "completed", "materialized", "display_ready"}:
+            card_readiness = "ready"
+        elif explicit_card_readiness:
+            card_readiness = "row_shell"
+        elif "card_ready" in payload or "card_ready" in metadata:
+            card_readiness = (
+                "ready" if _coerce_bool(payload.get("card_ready", metadata.get("card_ready")), False) else "row_shell"
+            )
+        elif "display_ready" in payload or "display_ready" in metadata:
+            card_readiness = (
+                "ready"
+                if _coerce_bool(payload.get("display_ready", metadata.get("display_ready")), False)
+                else "row_shell"
+            )
+        else:
+            # Compatibility for legacy candidate artifacts that predate the
+            # explicit card owner field. This is the same record-level rule as
+            # the legacy card-materialization summary, not a profile aggregate.
+            card_readiness = "ready" if has_profile_detail or has_explicit_profile_capture else "row_shell"
         source_shard_key = str(
             metadata.get("seed_query")
             or metadata.get("seed_slug")
@@ -6535,6 +6555,7 @@ class SourcingOrchestrator:
                     snapshot_id or payload.get("snapshot_id") or metadata.get("snapshot_id") or ""
                 ).strip(),
                 "has_profile_detail": has_profile_detail,
+                "has_explicit_profile_capture": has_explicit_profile_capture,
                 "needs_profile_completion": needs_profile_completion,
                 "low_profile_richness": bool(public_summary.get("low_profile_richness")),
             },
@@ -6627,6 +6648,7 @@ class SourcingOrchestrator:
         candidate_source: dict[str, Any],
         result_view: dict[str, Any] | None = None,
         max_records: int = 0,
+        allow_inline: bool = True,
     ) -> list[dict[str, Any]]:
         source_payload = dict(candidate_source or {})
         inline_records = [dict(item) for item in list(source_payload.get("candidates") or []) if isinstance(item, dict)]
@@ -6634,7 +6656,7 @@ class SourcingOrchestrator:
             inline_records = [
                 item.to_record() for item in list(source_payload.get("candidates") or []) if isinstance(item, Candidate)
             ]
-        if inline_records:
+        if allow_inline and inline_records:
             return inline_records[: max_records or None]
         overlay_payload = self._load_candidate_source_asset_population_overlay(source_payload)
         if overlay_payload:
@@ -7730,7 +7752,15 @@ class SourcingOrchestrator:
             candidate_source=source_payload,
             result_view=view_payload,
         )
-        if not records:
+        explicit_candidate_counts = [
+            _coerce_int(payload.get("candidate_count"), -1)
+            for payload in (dict(view_payload.get("summary") or {}), source_payload)
+            if "candidate_count" in payload
+        ]
+        authoritative_empty_membership = bool(
+            replace_members and explicit_candidate_counts and all(count == 0 for count in explicit_candidate_counts)
+        )
+        if not records and not authoritative_empty_membership:
             return {"status": "skipped", "reason": "projection_candidate_records_missing"}
         snapshot_id = str(source_payload.get("snapshot_id") or view_payload.get("snapshot_id") or "").strip()
         members = self._serving_projection_members_from_records(
@@ -7738,60 +7768,103 @@ class SourcingOrchestrator:
             source_run_id=normalized_job_id,
             snapshot_id=snapshot_id,
         )
-        if not members:
+        if records and not members:
             return {"status": "skipped", "reason": "projection_members_empty"}
+        inline_source_present = bool(
+            [item for item in list(source_payload.get("candidates") or []) if isinstance(item, (dict, Candidate))]
+        )
+        if replace_members and inline_source_present and records:
+            visible_member_count = sum(
+                1 for member in members if str(member.get("visibility_state") or "visible").strip() == "visible"
+            )
+            declared_visible_counts: list[int] = []
+            for payload in (dict(view_payload.get("summary") or {}), source_payload):
+                if "visible_member_count" in payload:
+                    declared_visible_counts.append(_coerce_int(payload.get("visible_member_count"), -1))
+                elif "candidate_count" in payload:
+                    declared_visible_counts.append(_coerce_int(payload.get("candidate_count"), -1))
+            source_metadata = dict(source_payload.get("metadata") or {})
+            view_metadata = dict(view_payload.get("metadata") or {})
+            explicit_complete = any(
+                _coerce_bool(value, False)
+                for value in (
+                    source_payload.get("membership_complete"),
+                    source_metadata.get("membership_complete"),
+                    view_metadata.get("membership_complete"),
+                )
+            )
+            inline_exact = bool(
+                (explicit_complete or declared_visible_counts)
+                and all(count == visible_member_count for count in declared_visible_counts)
+            )
+            if not inline_exact:
+                storage_records = self._serving_projection_records_from_candidate_source(
+                    request=request,
+                    candidate_source=source_payload,
+                    result_view=view_payload,
+                    allow_inline=False,
+                )
+                storage_members = self._serving_projection_members_from_records(
+                    storage_records,
+                    source_run_id=normalized_job_id,
+                    snapshot_id=snapshot_id,
+                )
+                if not storage_members:
+                    return {
+                        "status": "skipped",
+                        "reason": "projection_inline_membership_incomplete",
+                        "inline_visible_member_count": visible_member_count,
+                        "declared_visible_counts": declared_visible_counts,
+                    }
+                records = storage_records
+                members = storage_members
         collection_id = self._projection_collection_id_for_request(request, source_payload)
         scope_spec = self._projection_scope_spec_for_request(request, source_payload)
+        visible_members = [
+            member for member in members if str(member.get("visibility_state") or "visible").strip() == "visible"
+        ]
+        visible_member_count = len(visible_members)
         profile_required_count = sum(
-            1 for member in members if str(member.get("profile_readiness") or "") == "required"
+            1 for member in visible_members if str(member.get("profile_readiness") or "") == "required"
         )
-        profile_ready_count = sum(1 for member in members if str(member.get("profile_readiness") or "") == "ready")
+        profile_ready_count = sum(
+            1 for member in visible_members if str(member.get("profile_readiness") or "") == "ready"
+        )
         profile_not_required_count = sum(
-            1 for member in members if str(member.get("profile_readiness") or "") == "not_required"
+            1 for member in visible_members if str(member.get("profile_readiness") or "") == "not_required"
         )
-        card_ready_count = sum(1 for member in members if str(member.get("card_readiness") or "") == "ready")
+        card_ready_count = sum(1 for member in visible_members if str(member.get("card_readiness") or "") == "ready")
         existing_projection = self._load_existing_run_scope_projection(normalized_job_id)
         counts = {
-            "result_count": len(members),
-            "candidate_count": len(members),
-            "visible_member_count": sum(
-                1 for member in members if str(member.get("visibility_state") or "") == "visible"
-            ),
+            "result_count": visible_member_count,
+            "candidate_count": visible_member_count,
+            "visible_member_count": visible_member_count,
             "count_scope": "exact_projection",
+            "facet_count_scope": "unavailable",
+            "facet_build_status": "pending",
+            "index_count_scope": "unavailable",
         }
-        visible_projection_records = [
-            self._candidate_record_from_serving_projection_member(member)
-            for member in members
-            if str(member.get("visibility_state") or "visible").strip() == "visible"
-        ]
-        if visible_projection_records:
-            public_facet_counts = _public_facet_counts_from_records(visible_projection_records)
-            public_facet_counts.update(
-                {
-                    "count_scope": "exact_projection",
-                    "source": "serving_projection_members",
-                    "facet_record_count": len(visible_projection_records),
-                    "truncated": False,
-                }
-            )
-            counts["public_facet_counts"] = public_facet_counts
-            counts["facet_count_scope"] = "exact_projection"
-            counts["facet_build_status"] = "completed"
         readiness = {
             "row": "complete",
-            "profile": "complete" if profile_ready_count + profile_not_required_count >= len(members) else "partial",
-            "card": "complete" if card_ready_count >= len(members) else "partial",
+            "row_count": visible_member_count,
+            "profile": (
+                "complete" if profile_ready_count + profile_not_required_count >= visible_member_count else "partial"
+            ),
+            "card": "complete" if card_ready_count >= visible_member_count else "partial",
             "profile_ready_count": profile_ready_count,
             "profile_required_count": profile_required_count,
             "profile_not_required_count": profile_not_required_count,
             "card_ready_count": card_ready_count,
+            "count_scope": "exact_projection",
+            "index_count_scope": "unavailable",
         }
         metadata = {
             "publication_reason": str(reason or "").strip(),
             "result_view_id": str(view_payload.get("view_id") or "").strip(),
             "source_path": str(source_payload.get("source_path") or view_payload.get("source_path") or "").strip(),
             "asset_population_overlay_path": str(source_payload.get("asset_population_overlay_path") or "").strip(),
-            "public_facet_counts_source": "serving_projection_members" if visible_projection_records else "",
+            "public_facet_counts_source": "projection_person_search_index_pending",
+            "public_facet_counts_build_status": "pending",
         }
         if self._projection_semantic_input_unchanged(
             existing_projection,
@@ -7816,7 +7889,7 @@ class SourcingOrchestrator:
                 "scope_spec": scope_spec,
             },
             next_members=members,
-            member_count=len(members),
+            member_count=visible_member_count,
         ):
             counts, readiness, metadata = self._preserve_projection_derived_products(
                 existing_projection=existing_projection,
@@ -24798,6 +24871,7 @@ class SourcingOrchestrator:
             "display_ready_candidate_count": display_ready_count,
             "profile_detail_candidate_count": profile_detail_count,
             "explicit_profile_capture_candidate_count": explicit_profile_capture_count,
+            "explicit_profile_capture_count_scope": "legacy_summary_bounded_visible",
             "preview_candidate_count": preview_count,
             "needs_profile_completion_candidate_count": needs_profile_completion_count,
             "low_profile_richness_candidate_count": low_profile_richness_count,
@@ -26273,6 +26347,155 @@ class SourcingOrchestrator:
             result_view=result_view,
             candidate_source=candidate_source,
         )
+        serving_projection_resolution = dict(dict(serving_projection_payload or {}).get("projection_resolution") or {})
+        exact_projection_snapshot = self._linked_exact_serving_projection_readiness_snapshot(serving_projection_payload)
+        authoritative_run_projection = bool(
+            str(serving_projection_resolution.get("source") or "").strip() == "run_projection_link"
+            and not bool(serving_projection_resolution.get("fallback_used"))
+            and not bool(serving_projection_resolution.get("migration_fallback_used"))
+        )
+        authoritative_projection_failure = bool(
+            authoritative_run_projection
+            and (
+                str(dict(serving_projection_payload or {}).get("status") or "").strip() != "ready"
+                or exact_projection_snapshot is None
+            )
+        )
+        if authoritative_projection_failure:
+            projection_payload_status = str(dict(serving_projection_payload or {}).get("status") or "").strip()
+            failure_reason = (
+                "run_projection_exact_snapshot_invalid"
+                if projection_payload_status == "ready"
+                else str(
+                    serving_projection_resolution.get("reason")
+                    or dict(serving_projection_payload or {}).get("reason")
+                    or "run_projection_not_ready"
+                ).strip()
+            )
+            failure_read_contract = {
+                **dict(dict(serving_projection_payload or {}).get("read_contract") or {}),
+                "source": str(
+                    dict(dict(serving_projection_payload or {}).get("read_contract") or {}).get("source")
+                    or "run_projection_link"
+                ).strip(),
+                "fallback_used": False,
+                "migration_fallback_used": False,
+                "fail_closed": True,
+                "reason": failure_reason,
+            }
+            failed_lifecycle = self._clear_public_lifecycle_membership_counts(result_view_lifecycle)
+            failed_lifecycle.update(
+                {
+                    "state": "unavailable",
+                    "expected_candidate_count": 0,
+                    "served_candidate_count": 0,
+                }
+            )
+            failed_lifecycle_metadata = dict(failed_lifecycle.get("metadata") or {})
+            failed_lifecycle_metadata["serving_projection_resolution"] = serving_projection_resolution
+            failed_lifecycle["metadata"] = failed_lifecycle_metadata
+            failed_asset_population = dict(asset_population or {})
+            for key in (
+                "artifact_summary",
+                "candidates",
+                "card_materialization_summary",
+                "facet_summary",
+                "profile_fetch_progress",
+            ):
+                failed_asset_population.pop(key, None)
+            failed_asset_population.update(
+                {
+                    "available": False,
+                    "status": "not_ready",
+                    "reason": failure_reason,
+                    "candidate_count": 0,
+                    "facet_summary_scope": "unavailable",
+                    "serving_projection_resolution": serving_projection_resolution,
+                    "read_contract": failure_read_contract,
+                }
+            )
+            failed_board_runtime_state = self._build_board_runtime_state(
+                job_id=job_id,
+                job=job,
+                result_mode="asset_population",
+                result_view_lifecycle=failed_lifecycle,
+                asset_population=failed_asset_population,
+                facet_summary_scope="unavailable",
+                facet_summary={},
+                linkedin_stage_1_progress={},
+            )
+            for key in (
+                "expected_candidate_count",
+                "served_candidate_count",
+                "published_candidate_count",
+                "display_ready_candidate_count",
+                "preview_candidate_count",
+                "profile_detail_candidate_count",
+                "explicit_profile_capture_candidate_count",
+                "needs_profile_completion_candidate_count",
+                "low_profile_richness_candidate_count",
+                "row_hydration_target_count",
+                "candidate_discovery_count",
+                "profile_fetch_required_count",
+                "profile_fetched_count",
+                "baseline_candidate_count",
+                "delta_profile_required_count",
+                "delta_profile_fetched_count",
+                "delta_profile_materialized_count",
+                "delta_profile_board_visible_count",
+                "facet_summary_candidate_count",
+            ):
+                failed_board_runtime_state[key] = 0
+            for key in (
+                "explicit_profile_capture_candidate_count",
+                "needs_profile_completion_candidate_count",
+                "low_profile_richness_candidate_count",
+            ):
+                failed_board_runtime_state[key] = None
+            failed_board_runtime_state.update(
+                {
+                    "phase": "unavailable",
+                    "publication_status": "unavailable",
+                    "card_materialization_quality_fields_available": False,
+                    "facet_summary_status": "unavailable",
+                    "facet_summary_scope": "unavailable",
+                    "layering_status": "",
+                    "sync_status_text": "",
+                    "sync_note_lines": [],
+                    "candidate_discovery_status_text": "",
+                    "profile_fetch_status_text": "",
+                    "card_materialization_status_text": "",
+                    "note_text": "",
+                    "serving_projection_resolution": serving_projection_resolution,
+                    "filter_contract": {
+                        "source": "run_projection_link",
+                        "facet_count_scope": "unavailable",
+                        "row_filter_scope": "projection_membership",
+                        "backend_filtered_paging_supported": False,
+                        "fallback_used": False,
+                        "migration_fallback_used": False,
+                        "fail_closed": True,
+                        "reason": failure_reason,
+                    },
+                }
+            )
+            canonical_linkedin_stage_1_progress = self._canonicalize_public_linkedin_stage1_progress(
+                linkedin_stage_1_progress,
+                result_view_lifecycle=failed_lifecycle,
+                board_runtime_state=failed_board_runtime_state,
+            )
+            return {
+                "result_mode": "asset_population",
+                "asset_population": failed_asset_population,
+                "result_view_lifecycle": failed_lifecycle,
+                "board_runtime_state": failed_board_runtime_state,
+                "linkedin_stage_1_progress": canonical_linkedin_stage_1_progress,
+                "facet_summary": {},
+                "facet_summary_scope": "unavailable",
+                "filter_contract": dict(failed_board_runtime_state["filter_contract"]),
+                "serving_projection_payload": serving_projection_payload,
+                "serving_projection_resolution": serving_projection_resolution,
+            }
         result_view_lifecycle = self._normalize_public_lifecycle_to_serving_projection(
             result_view_lifecycle=result_view_lifecycle,
             serving_projection_payload=serving_projection_payload,
@@ -26283,10 +26506,12 @@ class SourcingOrchestrator:
             request=request,
             expected_candidate_count=_coerce_int(result_view_lifecycle.get("expected_candidate_count"), 0),
         )
-        asset_population = self._apply_canonical_serving_projection_readiness(
+        asset_population = self._apply_linked_canonical_serving_projection_card_summary(
             asset_population=asset_population,
             serving_projection_payload=serving_projection_payload,
         )
+        if exact_projection_snapshot is not None:
+            result_mode = "asset_population"
         if (
             result_mode != "asset_population"
             and (
@@ -26348,6 +26573,26 @@ class SourcingOrchestrator:
             asset_population["facet_summary_scope"] = canonical_facet_scope
         if str(board_runtime_state.get("facet_summary_status") or "").strip() != "complete":
             asset_population.pop("facet_summary", None)
+        if serving_projection_resolution:
+            projection_read_contract = dict(
+                dict(serving_projection_payload or {}).get("read_contract")
+                or dict(dict(dict(serving_projection_payload or {}).get("projection") or {}).get("read_contract") or {})
+            )
+            asset_population["serving_projection_resolution"] = serving_projection_resolution
+            asset_population["read_contract"] = projection_read_contract
+            board_runtime_state["serving_projection_resolution"] = serving_projection_resolution
+            board_filter_contract = dict(board_runtime_state.get("filter_contract") or {})
+            board_filter_contract.update(
+                {
+                    "projection_resolution_source": str(serving_projection_resolution.get("source") or "").strip(),
+                    "fallback_used": bool(serving_projection_resolution.get("fallback_used")),
+                    "migration_fallback_used": bool(serving_projection_resolution.get("migration_fallback_used")),
+                    "fail_closed": bool(serving_projection_resolution.get("fail_closed")),
+                }
+            )
+            board_runtime_state["filter_contract"] = board_filter_contract
+            filter_contract = board_filter_contract
+            asset_population["filter_contract"] = board_filter_contract
         canonical_linkedin_stage_1_progress = self._canonicalize_public_linkedin_stage1_progress(
             linkedin_stage_1_progress,
             result_view_lifecycle=result_view_lifecycle,
@@ -26362,6 +26607,8 @@ class SourcingOrchestrator:
             "facet_summary": dict(asset_population.get("facet_summary") or {}),
             "facet_summary_scope": canonical_facet_scope,
             "filter_contract": filter_contract,
+            "serving_projection_payload": serving_projection_payload,
+            "serving_projection_resolution": serving_projection_resolution,
         }
 
     def _apply_serving_projection_facet_readiness_to_board_runtime_state(
@@ -26378,6 +26625,8 @@ class SourcingOrchestrator:
         projection = dict(dict(serving_projection_payload or {}).get("projection") or {})
         if not projection:
             return payload
+        resolution = dict(dict(serving_projection_payload or {}).get("projection_resolution") or {})
+        fallback_used = bool(resolution.get("fallback_used") or resolution.get("migration_fallback_used"))
 
         readiness_contract = self.serving_projection_reader.projection_facet_readiness_contract(projection)
         facet_summary = dict(readiness_contract.get("facet_summary") or {})
@@ -26389,7 +26638,18 @@ class SourcingOrchestrator:
             row_filter_scope="projection_membership",
         )
         canonical_filter_contract.update(filter_count_contract)
-        canonical_filter_contract["fallback_used"] = False
+        canonical_filter_contract.update(
+            {
+                "fallback_used": fallback_used,
+                "migration_fallback_used": fallback_used,
+                "fail_closed": True,
+                "projection_resolution_source": str(resolution.get("source") or "").strip(),
+            }
+        )
+        if fallback_used:
+            canonical_filter_contract["fallback_reason"] = str(
+                resolution.get("reason") or "run_projection_link_missing"
+            ).strip()
         payload["filter_contract"] = canonical_filter_contract
 
         facet_status = str(facet_summary.get("status") or "").strip()
@@ -26446,78 +26706,121 @@ class SourcingOrchestrator:
         return payload
 
     @staticmethod
-    def _apply_canonical_serving_projection_readiness(
+    def _linked_exact_serving_projection_readiness_snapshot(
+        serving_projection_payload: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        """Return the authoritative run-linked visible/readiness snapshot."""
+
+        resolved = dict(serving_projection_payload or {})
+        if str(resolved.get("status") or "").strip() != "ready":
+            return None
+        resolution = dict(resolved.get("projection_resolution") or {})
+        if (
+            str(resolution.get("source") or "").strip() != "run_projection_link"
+            or bool(resolution.get("fallback_used"))
+            or bool(resolution.get("migration_fallback_used"))
+        ):
+            return None
+        projection = dict(resolved.get("projection") or {})
+        projection_id = str(projection.get("projection_id") or "").strip()
+        membership_revision = str(projection.get("membership_revision") or "").strip()
+        source_run_id = str(projection.get("source_run_id") or "").strip()
+        if (
+            not projection_id
+            or not membership_revision
+            or projection_id != str(resolution.get("projection_id") or "").strip()
+            or str(projection.get("projection_type") or "").strip() != "run_scope_projection"
+            or not source_run_id
+            or source_run_id != str(resolution.get("source_run_id") or "").strip()
+        ):
+            return None
+        read_contract = dict(projection.get("read_contract") or {})
+        if (
+            str(read_contract.get("source") or "").strip() != "serving_projection_members"
+            or bool(read_contract.get("fallback_used"))
+            or not bool(read_contract.get("fail_closed"))
+        ):
+            return None
+        counts = dict(projection.get("counts") or {})
+        readiness = dict(projection.get("readiness") or {})
+        if (
+            str(counts.get("count_scope") or "").strip() != "exact_projection"
+            or str(readiness.get("count_scope") or "").strip() != "exact_projection"
+        ):
+            return None
+        visible_count = _coerce_int(projection.get("visible_member_count"), -1)
+        if visible_count < 0 or any(
+            _coerce_int(counts.get(key), -1) != visible_count
+            for key in ("result_count", "candidate_count", "visible_member_count")
+        ):
+            return None
+        if (
+            str(readiness.get("row") or "").strip().lower() != "complete"
+            or _coerce_int(readiness.get("row_count"), -1) != visible_count
+        ):
+            return None
+        card_ready_count = _coerce_int(readiness.get("card_ready_count"), -1)
+        profile_ready_count = _coerce_int(readiness.get("profile_ready_count"), -1)
+        if not (0 <= card_ready_count <= visible_count and 0 <= profile_ready_count <= visible_count):
+            return None
+        optional_owner_counts: dict[str, int | None] = {}
+        for owner_count_key in (
+            "explicit_profile_capture_candidate_count",
+            "needs_profile_completion_candidate_count",
+            "low_profile_richness_candidate_count",
+        ):
+            if owner_count_key not in readiness:
+                optional_owner_counts[owner_count_key] = None
+                continue
+            owner_count = _coerce_int(readiness.get(owner_count_key), -1)
+            optional_owner_counts[owner_count_key] = owner_count if 0 <= owner_count <= visible_count else None
+        return {
+            "projection_id": projection_id,
+            "membership_revision": membership_revision,
+            "source_run_id": source_run_id,
+            "visible_member_count": visible_count,
+            "card_ready_count": card_ready_count,
+            "profile_ready_count": profile_ready_count,
+            **optional_owner_counts,
+        }
+
+    @staticmethod
+    def _apply_linked_canonical_serving_projection_card_summary(
         *,
         asset_population: dict[str, Any],
         serving_projection_payload: dict[str, Any] | None,
     ) -> dict[str, Any]:
-        """Lift canonical projection readiness into the board card summary.
+        """Apply exact card readiness from the job's linked projection.
 
-        The legacy asset-population overlay can lag after event-time local apply
-        updates canonical ServingProjection members. Public board readiness must
-        prefer the projection membership/readiness owner; otherwise a terminal
-        board can expose stale `display_ready_candidate_count` while profile
-        text is rendered from newer workflow counters.
+        Legacy overlays remain readable during migration, but they do not own
+        public card readiness once the run link resolves to an authoritative
+        visible-membership/readiness snapshot. Exact projection counts replace
+        stale overlay values in either direction; incomplete or fallback reads
+        leave the migration payload unchanged.
         """
 
         payload = dict(asset_population or {})
-        if str(dict(serving_projection_payload or {}).get("status") or "") != "ready":
-            return payload
-        projection = dict(dict(serving_projection_payload or {}).get("projection") or {})
-        if not projection:
-            return payload
-        counts = dict(projection.get("counts") or {})
-        readiness = dict(projection.get("readiness") or {})
-        visible_count = max(
-            0,
-            _coerce_int(projection.get("visible_member_count"), 0),
-            _coerce_int(counts.get("visible_member_count"), 0),
-            _coerce_int(counts.get("candidate_count"), 0),
-            _coerce_int(counts.get("result_count"), 0),
+        exact_snapshot = SourcingOrchestrator._linked_exact_serving_projection_readiness_snapshot(
+            serving_projection_payload
         )
-        if visible_count <= 0:
+        if exact_snapshot is None:
             return payload
-        card_ready_count = min(
-            visible_count,
-            max(
-                0,
-                _coerce_int(counts.get("card_materialized_count"), 0),
-                _coerce_int(readiness.get("card_ready_count"), 0),
-            ),
-        )
-        profile_ready_count = min(
-            visible_count,
-            max(
-                0,
-                _coerce_int(counts.get("profile_fetched_count"), 0),
-                _coerce_int(readiness.get("profile_ready_count"), 0),
-            ),
-        )
-        if card_ready_count <= 0 and profile_ready_count <= 0:
-            return payload
+        projection_id = str(exact_snapshot["projection_id"])
+        membership_revision = str(exact_snapshot["membership_revision"])
+        visible_count = int(exact_snapshot["visible_member_count"])
+        card_ready_count = int(exact_snapshot["card_ready_count"])
+        profile_ready_count = int(exact_snapshot["profile_ready_count"])
         summary = SourcingOrchestrator._normalize_candidate_card_materialization_summary(
             dict(payload.get("card_materialization_summary") or {}),
             fallback_candidate_count=visible_count,
         )
-        candidate_count = max(visible_count, _coerce_int(summary.get("candidate_count"), 0))
-        existing_display_ready = _coerce_int(summary.get("display_ready_candidate_count"), 0)
-        if card_ready_count <= existing_display_ready:
-            return payload
-
-        display_ready_count = min(candidate_count, card_ready_count)
-        profile_detail_count = min(
-            candidate_count,
-            max(_coerce_int(summary.get("profile_detail_candidate_count"), 0), profile_ready_count),
-        )
-        explicit_profile_capture_count = min(
-            candidate_count,
-            _coerce_int(summary.get("explicit_profile_capture_candidate_count"), 0),
-        )
+        candidate_count = visible_count
+        display_ready_count = card_ready_count
+        profile_detail_count = profile_ready_count
+        explicit_profile_capture_count = exact_snapshot.get("explicit_profile_capture_candidate_count")
+        needs_profile_completion_count = exact_snapshot.get("needs_profile_completion_candidate_count")
+        low_profile_richness_count = exact_snapshot.get("low_profile_richness_candidate_count")
         preview_count = max(0, candidate_count - display_ready_count)
-        needs_profile_completion_count = min(
-            preview_count,
-            _coerce_int(summary.get("needs_profile_completion_candidate_count"), 0),
-        )
         lifted_summary = {
             **summary,
             "quality_fields_available": True,
@@ -26525,14 +26828,24 @@ class SourcingOrchestrator:
             "display_ready_candidate_count": display_ready_count,
             "profile_detail_candidate_count": profile_detail_count,
             "explicit_profile_capture_candidate_count": explicit_profile_capture_count,
+            "explicit_profile_capture_count_scope": (
+                "exact_projection" if explicit_profile_capture_count is not None else "unavailable"
+            ),
             "preview_candidate_count": preview_count,
             "needs_profile_completion_candidate_count": needs_profile_completion_count,
-            "summary_source": "serving_projection_readiness",
-            "serving_projection_id": str(projection.get("projection_id") or "").strip(),
+            "low_profile_richness_candidate_count": low_profile_richness_count,
+            "summary_source": "linked_serving_projection_exact_readiness",
+            "count_scope": "exact_projection",
+            "serving_projection_id": projection_id,
+            "membership_revision": membership_revision,
         }
+        payload["candidate_count"] = candidate_count
+        payload["count_scope"] = "exact_projection"
         payload["card_materialization_summary"] = lifted_summary
         artifact_summary = dict(payload.get("artifact_summary") or {})
         if artifact_summary:
+            artifact_summary["candidate_count"] = candidate_count
+            artifact_summary["count_scope"] = "exact_projection"
             artifact_summary["card_materialization_summary"] = lifted_summary
             payload["artifact_summary"] = artifact_summary
         return payload
@@ -26618,19 +26931,102 @@ class SourcingOrchestrator:
         """
 
         normalized_job_id = str(job_id or "").strip()
-        projection_ids: list[str] = []
+        projection_references: list[str] = []
 
         def _add_projection_id(value: Any) -> None:
             normalized = str(value or "").strip()
-            if normalized and normalized not in projection_ids:
-                projection_ids.append(normalized)
+            if normalized and normalized not in projection_references:
+                projection_references.append(normalized)
+
+        def _resolved_payload(
+            projection_payload: dict[str, Any] | None,
+            *,
+            source: str,
+            projection_id: str = "",
+            fallback_used: bool,
+            reason: str = "",
+        ) -> dict[str, Any]:
+            resolved = dict(projection_payload or {})
+            status = str(resolved.get("status") or "not_ready").strip() or "not_ready"
+            resolved_projection = dict(resolved.get("projection") or {})
+            resolved_projection_id = str(
+                projection_id or resolved_projection.get("projection_id") or resolved.get("projection_id") or ""
+            ).strip()
+            read_contract = dict(resolved_projection.get("read_contract") or resolved.get("read_contract") or {})
+            read_contract.update(
+                {
+                    "fallback_used": bool(fallback_used),
+                    "migration_fallback_used": bool(fallback_used),
+                    "fail_closed": True,
+                }
+            )
+            if reason:
+                read_contract["fallback_reason" if fallback_used else "reason"] = reason
+            if resolved_projection:
+                resolved_projection["read_contract"] = read_contract
+                resolved["projection"] = resolved_projection
+            resolved["read_contract"] = read_contract
+            resolved["projection_resolution"] = {
+                "source": source,
+                "source_run_id": normalized_job_id,
+                "projection_id": resolved_projection_id,
+                "status": status,
+                "reason": str(reason or resolved.get("reason") or "").strip(),
+                "fallback_used": bool(fallback_used),
+                "migration_fallback_used": bool(fallback_used),
+                "fail_closed": True,
+            }
+            return resolved
 
         if normalized_job_id:
             try:
                 run_link = self.store.repos.serving_projection.get_run_link(normalized_job_id)
             except Exception:
-                run_link = {}
-            _add_projection_id(dict(run_link or {}).get("projection_id"))
+                return _resolved_payload(
+                    {"status": "not_ready", "reason": "run_projection_link_read_failed"},
+                    source="run_projection_link",
+                    fallback_used=False,
+                    reason="run_projection_link_read_failed",
+                )
+            run_link_payload = dict(run_link or {})
+            run_projection_id = str(run_link_payload.get("projection_id") or "").strip()
+            if run_link_payload and not run_projection_id:
+                return _resolved_payload(
+                    {"status": "not_ready", "reason": "run_projection_link_projection_id_missing"},
+                    source="run_projection_link",
+                    fallback_used=False,
+                    reason="run_projection_link_projection_id_missing",
+                )
+            if run_projection_id:
+                try:
+                    projection_payload = self.serving_projection_reader.get_projection(run_projection_id)
+                except Exception:
+                    projection_payload = {
+                        "status": "not_ready",
+                        "reason": "run_projection_read_failed",
+                        "projection_id": run_projection_id,
+                    }
+                if str(dict(projection_payload or {}).get("status") or "").strip() == "ready":
+                    linked_projection = dict(dict(projection_payload or {}).get("projection") or {})
+                    linked_projection_identity_valid = bool(
+                        str(linked_projection.get("projection_id") or "").strip() == run_projection_id
+                        and str(linked_projection.get("projection_type") or "").strip() == "run_scope_projection"
+                        and str(linked_projection.get("source_run_id") or "").strip() == normalized_job_id
+                    )
+                    if not linked_projection_identity_valid:
+                        projection_payload = {
+                            "status": "not_ready",
+                            "reason": "run_projection_identity_mismatch",
+                            "projection_id": run_projection_id,
+                            "read_contract": dict(linked_projection.get("read_contract") or {}),
+                        }
+                return _resolved_payload(
+                    projection_payload,
+                    source="run_projection_link",
+                    projection_id=run_projection_id,
+                    fallback_used=False,
+                    reason=str(dict(projection_payload or {}).get("reason") or "").strip(),
+                )
 
         lifecycle = dict(result_view_lifecycle or {})
         result_view_payload = dict(result_view or {})
@@ -26647,11 +27043,72 @@ class SourcingOrchestrator:
         ):
             _add_projection_id(value)
 
-        for projection_id in projection_ids:
-            projection_payload = self.serving_projection_reader.get_projection(projection_id)
+        failed_legacy_reads: list[dict[str, str]] = []
+        for projection_id in projection_references:
+            try:
+                projection_payload = self.serving_projection_reader.get_projection(projection_id)
+            except Exception:
+                projection_payload = {
+                    "status": "not_ready",
+                    "reason": "legacy_projection_reference_read_failed",
+                    "projection_id": projection_id,
+                }
             if str(projection_payload.get("status") or "") == "ready":
-                return projection_payload
+                return _resolved_payload(
+                    projection_payload,
+                    source="legacy_projection_reference",
+                    projection_id=projection_id,
+                    fallback_used=True,
+                    reason="run_projection_link_missing",
+                )
+            failed_legacy_reads.append(
+                {
+                    "projection_id": projection_id,
+                    "reason": str(projection_payload.get("reason") or "projection_not_ready").strip(),
+                }
+            )
+        if failed_legacy_reads:
+            return {
+                **_resolved_payload(
+                    {
+                        "status": "not_ready",
+                        "reason": "legacy_projection_references_not_ready",
+                    },
+                    source="legacy_projection_reference",
+                    projection_id=str(failed_legacy_reads[0].get("projection_id") or ""),
+                    fallback_used=True,
+                    reason="legacy_projection_references_not_ready",
+                ),
+                "projection_resolution_attempts": failed_legacy_reads,
+            }
         return {}
+
+    @staticmethod
+    def _clear_public_lifecycle_membership_counts(
+        result_view_lifecycle: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Clear stale public progress when canonical membership is empty/unservable."""
+
+        payload = dict(result_view_lifecycle or {})
+        for key in (
+            "expected_candidate_count",
+            "served_candidate_count",
+            "baseline_candidate_count",
+            "delta_profile_required_count",
+            "delta_profile_fetched_count",
+            "delta_profile_materialized_count",
+            "delta_profile_board_visible_count",
+            "stage1_profile_fetch_required_count",
+            "stage1_profile_fetched_count",
+            "stage1_deduped_candidate_count",
+            "stage1_deduped_profile_url_count",
+            "stage1_current_search_returned_count",
+            "stage1_former_search_returned_count",
+            "stage1_all_search_returned_count",
+        ):
+            if key in payload:
+                payload[key] = 0
+        return payload
 
     @staticmethod
     def _normalize_public_lifecycle_to_serving_projection(
@@ -26669,14 +27126,20 @@ class SourcingOrchestrator:
         """
 
         payload = dict(result_view_lifecycle or {})
-        if str(dict(serving_projection_payload or {}).get("status") or "") != "ready":
+        resolved_payload = dict(serving_projection_payload or {})
+        if str(resolved_payload.get("status") or "") != "ready":
             return payload
-        projection = dict(dict(serving_projection_payload or {}).get("projection") or {})
-        visible_count = _coerce_int(projection.get("visible_member_count"), 0)
-        if visible_count <= 0:
+        projection = dict(resolved_payload.get("projection") or {})
+        exact_snapshot = SourcingOrchestrator._linked_exact_serving_projection_readiness_snapshot(resolved_payload)
+        visible_count = (
+            int(exact_snapshot["visible_member_count"])
+            if exact_snapshot is not None
+            else _coerce_int(projection.get("visible_member_count"), 0)
+        )
+        if exact_snapshot is None and visible_count <= 0:
             return payload
         baseline_count = _coerce_int(payload.get("baseline_candidate_count"), 0)
-        if baseline_count > 0 and visible_count < baseline_count:
+        if exact_snapshot is None and baseline_count > 0 and visible_count < baseline_count:
             metadata = dict(payload.get("metadata") or {})
             metadata["partial_serving_projection_visible_member_count"] = visible_count
             metadata["partial_serving_projection_visible_member_count_reason"] = (
@@ -26684,19 +27147,23 @@ class SourcingOrchestrator:
             )
             payload["metadata"] = metadata
             return payload
-        readiness = dict(projection.get("readiness") or {})
-        row_state = str(readiness.get("row") or "").strip().lower()
-        row_complete = bool(
-            row_state == "complete" or (not row_state and _coerce_int(readiness.get("row_count"), 0) >= visible_count)
-        )
-        if not row_complete:
-            return payload
+        if exact_snapshot is None:
+            readiness = dict(projection.get("readiness") or {})
+            row_state = str(readiness.get("row") or "").strip().lower()
+            row_complete = bool(
+                row_state == "complete"
+                or (not row_state and _coerce_int(readiness.get("row_count"), 0) >= visible_count)
+            )
+            if not row_complete:
+                return payload
         raw_expected = _coerce_int(payload.get("expected_candidate_count"), 0)
         raw_served = _coerce_int(payload.get("served_candidate_count"), 0)
-        if raw_expected == visible_count and raw_served == visible_count:
+        if raw_expected == visible_count and raw_served == visible_count and exact_snapshot is None:
             return payload
         payload["expected_candidate_count"] = visible_count
         payload["served_candidate_count"] = visible_count
+        if exact_snapshot is not None and visible_count == 0:
+            payload = SourcingOrchestrator._clear_public_lifecycle_membership_counts(payload)
         metadata = dict(payload.get("metadata") or {})
         metadata["canonical_projection_public_count_normalization"] = {
             "source": "serving_projection_members",
@@ -26705,6 +27172,7 @@ class SourcingOrchestrator:
             "raw_expected_candidate_count": raw_expected,
             "raw_served_candidate_count": raw_served,
             "reason": "public_projection_counts_visible_members_only",
+            "count_scope": "exact_projection" if exact_snapshot is not None else "projection_visible_membership",
         }
         payload["metadata"] = metadata
         return payload
@@ -26886,13 +27354,16 @@ class SourcingOrchestrator:
     def _compact_public_asset_population_artifact_summary(
         artifact_summary: dict[str, Any],
         *,
-        canonical_candidate_count: int = 0,
+        canonical_candidate_count: int | None = None,
     ) -> dict[str, Any]:
         source = dict(artifact_summary or {})
         if not source:
             return {}
         source_candidate_count = _coerce_int(source.get("candidate_count"), 0)
-        public_candidate_count = canonical_candidate_count or source_candidate_count
+        canonical_count_known = canonical_candidate_count is not None
+        public_candidate_count = (
+            max(0, int(canonical_candidate_count or 0)) if canonical_count_known else source_candidate_count
+        )
         compacted: dict[str, Any] = {}
         for key in (
             "target_company",
@@ -26915,13 +27386,9 @@ class SourcingOrchestrator:
             value = source.get(key)
             if value not in (None, "", [], {}):
                 compacted[key] = _compact_public_workflow_leaf(value)
-        if public_candidate_count > 0:
+        if canonical_count_known or public_candidate_count > 0:
             compacted["candidate_count"] = public_candidate_count
-        if (
-            source_candidate_count > 0
-            and public_candidate_count > 0
-            and source_candidate_count != public_candidate_count
-        ):
+        if source_candidate_count > 0 and source_candidate_count != public_candidate_count:
             compacted["source_candidate_count"] = source_candidate_count
             compacted["count_scope"] = "canonical_public_projection"
         return compacted
@@ -27000,11 +27467,20 @@ class SourcingOrchestrator:
         board_runtime_state: dict[str, Any] | None,
     ) -> dict[str, Any]:
         payload = dict(asset_population or {})
-        canonical_count = cls._canonical_public_projection_candidate_count(
-            result_view_lifecycle=result_view_lifecycle,
-            board_runtime_state=board_runtime_state,
+        card_summary = dict(payload.get("card_materialization_summary") or {})
+        exact_projection_count_known = bool(
+            str(card_summary.get("summary_source") or "").strip() == "linked_serving_projection_exact_readiness"
+            and str(card_summary.get("count_scope") or "").strip() == "exact_projection"
         )
-        if canonical_count > 0:
+        canonical_count = (
+            max(0, _coerce_int(card_summary.get("candidate_count"), 0))
+            if exact_projection_count_known
+            else cls._canonical_public_projection_candidate_count(
+                result_view_lifecycle=result_view_lifecycle,
+                board_runtime_state=board_runtime_state,
+            )
+        )
+        if exact_projection_count_known or canonical_count > 0:
             payload["candidate_count"] = canonical_count
             artifact_summary = cls._compact_public_asset_population_artifact_summary(
                 dict(payload.get("artifact_summary") or {}),
@@ -27017,7 +27493,7 @@ class SourcingOrchestrator:
         elif dict(payload.get("artifact_summary") or {}):
             payload["artifact_summary"] = cls._compact_public_asset_population_artifact_summary(
                 dict(payload.get("artifact_summary") or {}),
-                canonical_candidate_count=0,
+                canonical_candidate_count=None,
             )
 
         facet_summary = cls._normalize_public_layer_zero_facet_summary(dict(payload.get("facet_summary") or {}))
@@ -27080,6 +27556,8 @@ class SourcingOrchestrator:
             "filter_contract",
             "candidate_source",
             "artifact_summary",
+            "serving_projection_resolution",
+            "read_contract",
         ):
             if key in canonical_asset_population:
                 payload[key] = canonical_asset_population.get(key)
@@ -27089,7 +27567,19 @@ class SourcingOrchestrator:
         ):
             payload.pop("facet_summary", None)
         canonical_count = _coerce_int(canonical_asset_population.get("candidate_count"), 0)
-        if canonical_count > 0 and any(key in payload for key in ("offset", "limit", "returned_count")):
+        canonical_card_summary = dict(canonical_asset_population.get("card_materialization_summary") or {})
+        canonical_count_known = bool(
+            str(canonical_card_summary.get("summary_source") or "").strip()
+            == "linked_serving_projection_exact_readiness"
+            and str(canonical_card_summary.get("count_scope") or "").strip() == "exact_projection"
+        )
+        if canonical_count_known and canonical_count == 0:
+            payload["candidates"] = []
+            if "returned_count" in payload:
+                payload["returned_count"] = 0
+        if (canonical_count_known or canonical_count > 0) and any(
+            key in payload for key in ("offset", "limit", "returned_count")
+        ):
             offset = _coerce_int(payload.get("offset"), 0)
             returned_count = _coerce_int(payload.get("returned_count"), len(list(payload.get("candidates") or [])))
             next_offset = offset + returned_count
@@ -27993,33 +28483,27 @@ class SourcingOrchestrator:
         workspace_id: str = "default",
     ) -> dict[str, Any] | None:
         normalized_projection_id = str(projection_id or "").strip()
-        projection = self.store.repos.serving_projection.get(normalized_projection_id)
-        if not projection:
-            return None
         keys = [str(key or "").strip() for key in list(candidate_identity_keys or []) if str(key or "").strip()]
-        members: list[dict[str, Any]] = []
-        try:
-            if keys:
-                for key in keys[:250]:
-                    member = self.store.repos.serving_projection.get_member(normalized_projection_id, key)
-                    if member:
-                        members.append(member)
-            else:
-                members = self.store.repos.serving_projection.list_members(
-                    normalized_projection_id, limit=250, visible_only=True
-                )
-        except ControlPlaneAuthoritativeReadError:
+        snapshot = self.serving_projection_reader.get_projection_member_snapshot(
+            normalized_projection_id,
+            candidate_identity_keys=keys[:250],
+            limit=250,
+            require_all_requested=True,
+        )
+        if str(snapshot.get("status") or "") != "ready":
+            if str(snapshot.get("reason") or "") == "projection_not_found":
+                return None
             return {
-                "status": "not_ready",
-                "reason": "projection_members_unavailable",
-                "projection_id": normalized_projection_id,
+                **snapshot,
                 "read_contract": {
+                    **dict(snapshot.get("read_contract") or {}),
                     "source": "serving_projection_members+crm_records",
                     "fallback_used": False,
                     "fail_closed": True,
                     "auto_create": False,
                 },
             }
+        members = list(snapshot.get("members") or [])
         person_keys = [
             str(member.get("person_identity_key") or "").strip()
             for member in members
@@ -28038,6 +28522,9 @@ class SourcingOrchestrator:
         return {
             "status": "ready",
             "projection_id": normalized_projection_id,
+            "membership_revision": str(snapshot.get("membership_revision") or ""),
+            "source_candidate_count": int(snapshot.get("source_candidate_count") or 0),
+            "selected_candidate_count": len(members),
             "workspace_id": str(workspace_id or "default").strip() or "default",
             "crm_overlay_by_candidate_identity_key": overlays,
             "read_contract": {
@@ -28245,24 +28732,108 @@ class SourcingOrchestrator:
     def add_projection_candidate_to_crm(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
         projection_id = str(normalized.get("projection_id") or "").strip()
-        candidate_identity_key = str(normalized.get("candidate_identity_key") or "").strip()
-        if not projection_id or not candidate_identity_key:
+        candidate_keys = _dedupe_texts(
+            [
+                str(normalized.get("candidate_identity_key") or "").strip(),
+                *[
+                    str(item or "").strip()
+                    for item in list(
+                        normalized.get("candidate_identity_keys") or normalized.get("candidateIdentityKeys") or []
+                    )
+                ],
+            ]
+        )
+        if not projection_id or not candidate_keys:
             return {"status": "invalid", "reason": "projection_id_and_candidate_identity_key_required"}
-        result = self.crm_writer.add_projection_member_to_crm(
+        if len(candidate_keys) > 100_000:
+            return {"status": "invalid", "reason": "projection_crm_selection_limit_exceeded", "limit": 100_000}
+        expected_revision = str(
+            normalized.get("expected_membership_revision")
+            or normalized.get("expectedMembershipRevision")
+            or normalized.get("membership_revision")
+            or ""
+        ).strip()
+        if not expected_revision:
+            return {
+                "status": "invalid",
+                "reason": "expected_membership_revision_required",
+                "projection_id": projection_id,
+            }
+        snapshot = self.serving_projection_reader.get_projection_member_snapshot(
+            projection_id,
+            candidate_identity_keys=candidate_keys,
+            limit=min(len(candidate_keys), 100_000),
+            require_all_requested=True,
+        )
+        if str(snapshot.get("status") or "") != "ready":
+            return snapshot
+        membership_revision = str(snapshot.get("membership_revision") or "").strip()
+        if expected_revision and expected_revision != membership_revision:
+            return {
+                "status": "not_ready",
+                "reason": "projection_membership_revision_stale",
+                "projection_id": projection_id,
+                "expected_membership_revision": expected_revision,
+                "membership_revision": membership_revision,
+                "read_contract": {
+                    "source": "serving_projection_members",
+                    "fallback_used": False,
+                    "fail_closed": True,
+                },
+            }
+        workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
+        actor_type = str(normalized.get("actor_type") or "user").strip() or "user"
+        actor_id = str(normalized.get("actor_id") or "").strip()
+        base_idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+        batch_result = self.crm_writer.add_projection_members_to_crm(
             projection_id=projection_id,
-            candidate_identity_key=candidate_identity_key,
-            workspace_id=str(normalized.get("workspace_id") or "default").strip() or "default",
-            actor_type=str(normalized.get("actor_type") or "user").strip() or "user",
-            actor_id=str(normalized.get("actor_id") or "").strip(),
-            idempotency_key=str(normalized.get("idempotency_key") or "").strip(),
+            candidate_identity_keys=candidate_keys,
+            workspace_id=workspace_id,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            idempotency_key=base_idempotency_key,
             pipeline_id=str(normalized.get("pipeline_id") or "default_sourcing").strip() or "default_sourcing",
             stage=str(normalized.get("stage") or "new").strip() or "new",
             source_reason=str(normalized.get("source_reason") or "selected_from_projection").strip()
             or "selected_from_projection",
+            expected_membership_revision=membership_revision,
+            projection_member_snapshot=snapshot,
         )
-        if result.get("crm_record"):
-            result["crm_record"] = self._public_crm_record_payload(dict(result.get("crm_record") or {}))
-        return result
+        if str(batch_result.get("status") or "") != "applied":
+            return batch_result
+        results = [dict(result) for result in list(batch_result.get("results") or [])]
+        public_records = [
+            self._public_crm_record_payload(dict(result.get("crm_record") or {}))
+            for result in results
+            if result.get("crm_record")
+        ]
+        if len(candidate_keys) == 1:
+            result = dict(results[0])
+            result["membership_revision"] = membership_revision
+            result["source_candidate_count"] = int(snapshot.get("source_candidate_count") or 0)
+            if public_records:
+                result["crm_record"] = public_records[0]
+            return result
+        return {
+            "status": "upserted",
+            "reason": "projection_crm_bulk_selection",
+            "projection_id": projection_id,
+            "membership_revision": membership_revision,
+            "source_candidate_count": int(snapshot.get("source_candidate_count") or 0),
+            "requested_candidate_count": len(candidate_keys),
+            "successful_write_count": len(results),
+            "failed_write_count": 0,
+            "crm_records": public_records,
+            "results": results,
+            "write_contract": {
+                "owner": "CRMWriter",
+                "source": "serving_projection_members+crm_records+crm_engagements+crm_events",
+                "fallback_used": False,
+                "fail_closed": True,
+                "selection_prevalidated": True,
+                "batch_atomic": True,
+            },
+        }
 
     def update_crm_record_api(self, crm_record_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
@@ -28315,7 +28886,19 @@ class SourcingOrchestrator:
         export drain builds the archive off the request thread). An idempotent hit
         on an already-succeeded command replays its artifact handle immediately.
         Conforms to the unified async-task contract (async_task_contract)."""
-        command = self._plan_projection_export_generate_command(payload)
+        normalized_payload = dict(payload or {})
+        expected_revision = str(
+            normalized_payload.get("expected_membership_revision")
+            or normalized_payload.get("expectedMembershipRevision")
+            or ""
+        ).strip()
+        if not expected_revision:
+            return {
+                "status": "invalid",
+                "reason": "expected_membership_revision_required",
+                "command_type": EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
+            }
+        command = self._plan_projection_export_generate_command(normalized_payload)
         if not command:
             return {
                 "status": "failed",
@@ -28329,6 +28912,8 @@ class SourcingOrchestrator:
                 },
             }
         command_id = str(command.get("command_id") or "")
+        if not command_id:
+            return command
         domain_status = str(command.get("status") or "").strip()
         if domain_status == "succeeded":
             # Idempotent replay: the identical export already finished.
@@ -28351,6 +28936,8 @@ class SourcingOrchestrator:
         byte-for-byte the set the old synchronous /api/projections/export emitted."""
         return {
             "X-Sourcing-Projection-Id": str(result.get("projection_id") or ""),
+            "X-Sourcing-Membership-Revision": str(result.get("membership_revision") or ""),
+            "X-Sourcing-Source-Candidate-Count": str(int(result.get("source_candidate_count") or 0)),
             "X-Sourcing-Export-Record-Count": str(int(result.get("record_count") or 0)),
             "X-Sourcing-Exported-Record-Count": str(int(result.get("exported_record_count") or 0)),
             "X-Sourcing-Skipped-Assertion-Count": str(int(result.get("skipped_assertion_count") or 0)),
@@ -28370,10 +28957,20 @@ class SourcingOrchestrator:
         owner-computed watermark (DURABLE_EXECUTION_RUNTIME_CONTRACT); this is a
         lightweight contract recheck (no artifact read) so the poll does not advertise
         a handle for a stale artifact the download would then fail-close. Projection
-        replay is unconditional (idempotent by immutable projection snapshot id)."""
+        replay requires the stored result to match the command's pinned membership
+        revision and canonical source count."""
         if str(command_type or "").strip() == EXPORT_CRM_PUBLIC_WEB_GENERATE_COMMAND_TYPE:
             return not self._crm_public_web_owner._crm_public_web_export_command_contract_failure(dict(command))
-        return True
+        if str(command_type or "").strip() != EXPORT_PROJECTION_GENERATE_COMMAND_TYPE:
+            return False
+        payload = dict(command.get("payload") or {})
+        result = dict(command.get("result") or {})
+        pinned_revision = str(payload.get("membership_revision") or "").strip()
+        return bool(
+            pinned_revision
+            and str(result.get("membership_revision") or "").strip() == pinned_revision
+            and int(result.get("source_candidate_count") or 0) == int(payload.get("source_candidate_count") or 0)
+        )
 
     def _export_task_status_envelope(self, command: dict[str, Any]) -> dict[str, Any]:
         """Project a durable export command into the unified async-task poll body."""
@@ -28454,20 +29051,24 @@ class SourcingOrchestrator:
             payload["headers"] = self._export_command_artifact_headers(command_type, payload)
         return payload
 
-    def _projection_export_workflow_run_id(self, projection_id: str) -> str:
+    def _projection_export_workflow_run_id(self, projection_id: str, membership_revision: str = "") -> str:
         normalized_projection_id = str(projection_id or "").strip()
-        if not normalized_projection_id:
+        normalized_revision = str(membership_revision or "").strip()
+        if not normalized_projection_id or not normalized_revision:
             return ""
-        digest = hashlib.sha1(f"projection_export:{normalized_projection_id}".encode("utf-8")).hexdigest()[:24]
+        digest = hashlib.sha1(
+            f"projection_export:{normalized_projection_id}:{normalized_revision}".encode("utf-8")
+        ).hexdigest()[:24]
         return f"wf_projection_export_{digest}"
 
-    def _projection_export_operation_id(self, projection_id: str) -> str:
+    def _projection_export_operation_id(self, projection_id: str, membership_revision: str = "") -> str:
         normalized_projection_id = str(projection_id or "").strip()
-        if not normalized_projection_id:
+        normalized_revision = str(membership_revision or "").strip()
+        if not normalized_projection_id or not normalized_revision:
             return ""
-        digest = hashlib.sha1(f"projection_export_operation:{normalized_projection_id}".encode("utf-8")).hexdigest()[
-            :24
-        ]
+        digest = hashlib.sha1(
+            f"projection_export_operation:{normalized_projection_id}:{normalized_revision}".encode("utf-8")
+        ).hexdigest()[:24]
         return f"op_projection_export_{digest}"
 
     def _normalize_projection_export_command_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -28488,6 +29089,12 @@ class SourcingOrchestrator:
             page_size = 500
         return {
             "projection_id": str(normalized.get("projection_id") or "").strip(),
+            "expected_membership_revision": str(
+                normalized.get("expected_membership_revision")
+                or normalized.get("expectedMembershipRevision")
+                or normalized.get("membership_revision")
+                or ""
+            ).strip(),
             "operation_id": str(normalized.get("operation_id") or normalized.get("operation_run_id") or "").strip(),
             "candidate_identity_keys": candidate_keys,
             "include_llm_reviewed_unconfirmed_assertions": bool(
@@ -28506,12 +29113,37 @@ class SourcingOrchestrator:
         projection_id = str(command_payload.get("projection_id") or "").strip()
         if not projection_id:
             return {}
-        workflow_run_id = self._projection_export_workflow_run_id(projection_id)
+        projection_payload = self.serving_projection_reader.get_projection(projection_id)
+        if str(projection_payload.get("status") or "") != "ready":
+            return projection_payload
+        projection = dict(projection_payload.get("projection") or {})
+        membership_revision = str(projection.get("membership_revision") or "").strip()
+        source_candidate_count = int(projection.get("visible_member_count") or 0)
+        expected_revision = str(command_payload.pop("expected_membership_revision", "") or "").strip()
+        if expected_revision and expected_revision != membership_revision:
+            return {
+                "status": "not_ready",
+                "reason": "projection_membership_revision_stale",
+                "projection_id": projection_id,
+                "expected_membership_revision": expected_revision,
+                "membership_revision": membership_revision,
+                "read_contract": {
+                    "source": "serving_projection_members",
+                    "fallback_used": False,
+                    "fail_closed": True,
+                },
+            }
+        command_payload["membership_revision"] = membership_revision
+        command_payload["source_candidate_count"] = source_candidate_count
+        workflow_run_id = self._projection_export_workflow_run_id(projection_id, membership_revision)
         operation_id = str(command_payload.get("operation_id") or "").strip() or self._projection_export_operation_id(
-            projection_id
+            projection_id,
+            membership_revision,
         )
         idempotency_key = export_projection_generate_idempotency_key(
             projection_id=projection_id,
+            membership_revision=membership_revision,
+            source_candidate_count=source_candidate_count,
             candidate_identity_keys=list(command_payload.get("candidate_identity_keys") or []),
             include_llm_reviewed_unconfirmed_assertions=bool(
                 command_payload.get("include_llm_reviewed_unconfirmed_assertions")
@@ -28544,6 +29176,8 @@ class SourcingOrchestrator:
                     "workflow_type": "projection_export",
                     "stage_key": "projection_export",
                     "projection_id": projection_id,
+                    "membership_revision": membership_revision,
+                    "source_candidate_count": source_candidate_count,
                     "migration_phase": "W7_projection_export_command_owner",
                 },
             )
@@ -28602,6 +29236,22 @@ class SourcingOrchestrator:
                 ),
             }
         result = dict(command.get("result") or {})
+        command_payload = dict(command.get("payload") or {})
+        membership_revision = str(result.get("membership_revision") or "").strip()
+        source_candidate_count = int(result.get("source_candidate_count") or 0)
+        if (
+            not membership_revision
+            or membership_revision != str(command_payload.get("membership_revision") or "").strip()
+            or source_candidate_count != int(command_payload.get("source_candidate_count") or 0)
+        ):
+            return {
+                "status": "failed",
+                "reason": "projection_export_artifact_contract_invalid",
+                "workflow_command": self._workflow_command_observation(
+                    command,
+                    migration_phase="W7_projection_export_command_owner",
+                ),
+            }
         return {
             "status": "ok",
             "filename": str(filename or result.get("filename") or path.name),
@@ -28610,6 +29260,8 @@ class SourcingOrchestrator:
             "projection_id": str(
                 result.get("projection_id") or dict(command.get("payload") or {}).get("projection_id") or ""
             ),
+            "membership_revision": membership_revision,
+            "source_candidate_count": source_candidate_count,
             "record_count": int(result.get("record_count") or 0),
             "exported_record_count": int(result.get("exported_record_count") or 0),
             "skipped_assertion_count": int(result.get("skipped_assertion_count") or 0),
@@ -28633,10 +29285,10 @@ class SourcingOrchestrator:
         command_status = str(command_payload.get("status") or "").strip()
         if command_status == "succeeded":
             result_payload = dict(command_payload.get("result") or {})
-            artifact_path = str(result_payload.get("artifact_path") or "").strip()
+            existing_artifact_path = str(result_payload.get("artifact_path") or "").strip()
             return self._projection_export_payload_from_artifact(
                 command=command_payload,
-                artifact_path=artifact_path,
+                artifact_path=existing_artifact_path,
                 filename=str(result_payload.get("filename") or ""),
             )
         lease_owner = f"{EXPORT_PROJECTION_GENERATE_OWNER}-{uuid.uuid4().hex[:8]}"
@@ -28797,6 +29449,8 @@ class SourcingOrchestrator:
             phase="projection_export_generated",
             output={
                 "projection_id": str(result.get("projection_id") or projection_id),
+                "membership_revision": str(result.get("membership_revision") or ""),
+                "source_candidate_count": int(result.get("source_candidate_count") or 0),
                 "filename": str(result.get("filename") or artifact_path.name),
                 "artifact_path": str(artifact_path),
                 "record_count": int(result.get("record_count") or 0),
@@ -28824,9 +29478,12 @@ class SourcingOrchestrator:
             reason="projection_export_generated",
             source_ref={
                 "projection_id": str(result.get("projection_id") or projection_id),
+                "membership_revision": str(result.get("membership_revision") or ""),
                 "command_type": EXPORT_PROJECTION_GENERATE_COMMAND_TYPE,
             },
             entity_payload={
+                "membership_revision": str(result.get("membership_revision") or ""),
+                "source_candidate_count": int(result.get("source_candidate_count") or 0),
                 "filename": str(result.get("filename") or artifact_path.name),
                 "artifact_path": str(artifact_path),
                 "record_count": int(result.get("record_count") or 0),
@@ -28841,6 +29498,8 @@ class SourcingOrchestrator:
             command_id,
             result={
                 "projection_id": str(result.get("projection_id") or ""),
+                "membership_revision": str(result.get("membership_revision") or ""),
+                "source_candidate_count": int(result.get("source_candidate_count") or 0),
                 "filename": str(result.get("filename") or artifact_path.name),
                 "artifact_path": str(artifact_path),
                 "activity_run_id": str((final_activity or activity).get("activity_run_id") or "").strip(),
@@ -28884,11 +29543,14 @@ class SourcingOrchestrator:
         projection_id = str(normalized.get("projection_id") or "").strip()
         if not projection_id:
             return {"status": "invalid", "reason": "projection_id_required"}
-        projection_payload = self.serving_projection_reader.get_projection(projection_id)
-        if str(projection_payload.get("status") or "") != "ready":
-            if str(projection_payload.get("reason") or "") == "projection_not_found":
-                return {"status": "not_found", "reason": "projection_not_found", "projection_id": projection_id}
-            return projection_payload
+        expected_membership_revision = str(normalized.get("membership_revision") or "").strip()
+        if not expected_membership_revision:
+            return {
+                "status": "not_ready",
+                "reason": "projection_membership_revision_required",
+                "projection_id": projection_id,
+            }
+        expected_source_candidate_count = int(normalized.get("source_candidate_count") or 0)
         include_unconfirmed = bool(normalized.get("include_llm_reviewed_unconfirmed_assertions"))
         include_crm_notes = bool(normalized.get("include_crm_notes"))
         if include_crm_notes and not bool(normalized.get("approval_confirmed")):
@@ -28905,28 +29567,37 @@ class SourcingOrchestrator:
         requested_candidate_keys = list(dict.fromkeys(requested_candidate_keys))
         limit = min(max(int(normalized.get("limit") or 50_000), 1), 100_000)
         page_size = min(max(int(normalized.get("page_size") or 500), 1), 1000)
-        members: list[dict[str, Any]] = []
-        if requested_candidate_keys:
-            for candidate_key in requested_candidate_keys[:limit]:
-                member = self.store.repos.serving_projection.get_member(projection_id, candidate_key)
-                if member and str(member.get("visibility_state") or "visible") == "visible":
-                    members.append(member)
-        else:
-            offset = 0
-            while len(members) < limit:
-                page = self.store.repos.serving_projection.list_members(
-                    projection_id,
-                    offset=offset,
-                    limit=min(page_size, limit - len(members)),
-                    visible_only=True,
-                )
-                if not page:
-                    break
-                members.extend(page)
-                if len(page) < page_size:
-                    break
-                offset += len(page)
-        projection = dict(projection_payload.get("projection") or {})
+        snapshot = self.serving_projection_reader.get_projection_member_snapshot(
+            projection_id,
+            candidate_identity_keys=requested_candidate_keys[:limit],
+            limit=limit,
+            page_size=page_size,
+            require_all_requested=True,
+        )
+        if str(snapshot.get("status") or "") != "ready":
+            if str(snapshot.get("reason") or "") == "projection_not_found":
+                return {"status": "not_found", "reason": "projection_not_found", "projection_id": projection_id}
+            return snapshot
+        membership_revision = str(snapshot.get("membership_revision") or "").strip()
+        source_candidate_count = int(snapshot.get("source_candidate_count") or 0)
+        if (
+            membership_revision != expected_membership_revision
+            or source_candidate_count != expected_source_candidate_count
+        ):
+            return {
+                "status": "not_ready",
+                "reason": "projection_membership_revision_stale",
+                "projection_id": projection_id,
+                "expected_membership_revision": expected_membership_revision,
+                "membership_revision": membership_revision,
+                "read_contract": {
+                    "source": "serving_projection_members",
+                    "fallback_used": False,
+                    "fail_closed": True,
+                },
+            }
+        members = list(snapshot.get("members") or [])
+        projection = dict(snapshot.get("projection") or {})
         base_name = f"projection-{_target_candidate_archive_name_component(projection_id, fallback='projection')}-{_china_local_filename_timestamp()}"
         csv_rows: list[dict[str, str]] = []
         manifest_records: list[dict[str, Any]] = []
@@ -28981,6 +29652,8 @@ class SourcingOrchestrator:
                     {
                         "generated_at": _china_now_iso(),
                         "projection_id": projection_id,
+                        "membership_revision": membership_revision,
+                        "source_candidate_count": source_candidate_count,
                         "projection_type": str(projection.get("projection_type") or ""),
                         "collection_id": str(projection.get("collection_id") or ""),
                         "source_run_id": str(projection.get("source_run_id") or ""),
@@ -29003,6 +29676,8 @@ class SourcingOrchestrator:
             "content_type": "application/zip",
             "body": archive_buffer.getvalue(),
             "projection_id": projection_id,
+            "membership_revision": membership_revision,
+            "source_candidate_count": source_candidate_count,
             "record_count": len(members),
             "exported_record_count": len(csv_rows),
             "skipped_assertion_count": len(skipped),
@@ -30835,6 +31510,9 @@ class SourcingOrchestrator:
                     "applied_filter": dict(asset_population_page.get("applied_filter") or normalized_candidate_filter),
                     "filter_contract": dict(asset_population_page.get("filter_contract") or {}),
                     "read_contract": dict(asset_population_page.get("read_contract") or {}),
+                    "serving_projection_resolution": dict(
+                        asset_population_page.get("serving_projection_resolution") or {}
+                    ),
                     "candidates": page_candidates,
                 }
             if asset_population_page:
@@ -31034,6 +31712,8 @@ class SourcingOrchestrator:
                 "filter_signature": str(asset_population_page.get("filter_signature") or filter_signature),
                 "applied_filter": dict(asset_population_page.get("applied_filter") or normalized_candidate_filter),
                 "filter_contract": canonical_filter_contract,
+                "read_contract": dict(asset_population_page.get("read_contract") or {}),
+                "serving_projection_resolution": dict(asset_population_page.get("serving_projection_resolution") or {}),
                 "candidates": candidates,
             }
 
@@ -31114,16 +31794,84 @@ class SourcingOrchestrator:
         offset: int,
         limit: int,
     ) -> dict[str, Any]:
-        serving_projection_payload = self._load_job_canonical_serving_projection_payload(
-            job_id=job_id,
-            result_view_lifecycle=result_view_lifecycle,
-            result_view=result_view,
-            candidate_source=candidate_source,
+        serving_projection_payload = dict(public_projection.get("serving_projection_payload") or {})
+        resolution = dict(
+            public_projection.get("serving_projection_resolution")
+            or serving_projection_payload.get("projection_resolution")
+            or {}
         )
+        if str(serving_projection_payload.get("status") or "").strip() != "ready":
+            if str(resolution.get("source") or "").strip() == "run_projection_link":
+                reason = str(
+                    resolution.get("reason") or serving_projection_payload.get("reason") or "run_projection_not_ready"
+                ).strip()
+                return {
+                    "available": False,
+                    "source_kind": "serving_projection_members",
+                    "source_path": str(resolution.get("projection_id") or "").strip(),
+                    "candidate_count": 0,
+                    "total_candidates": 0,
+                    "offset": offset,
+                    "limit": 0,
+                    "returned_count": 0,
+                    "filtered_candidate_count": 0,
+                    "has_more": False,
+                    "next_offset": None,
+                    "facet_summary_scope": "unavailable",
+                    "serving_projection_resolution": resolution,
+                    "read_contract": {
+                        **dict(serving_projection_payload.get("read_contract") or {}),
+                        "source": "run_projection_link",
+                        "fallback_used": False,
+                        "migration_fallback_used": False,
+                        "fail_closed": True,
+                        "reason": reason,
+                    },
+                    "status": "not_ready",
+                    "reason": reason,
+                    "candidates": [],
+                }
+            return {}
         projection = dict(dict(serving_projection_payload or {}).get("projection") or {})
         projection_id = str(projection.get("projection_id") or "").strip()
         if not projection_id:
             return {}
+        membership_revision = str(projection.get("membership_revision") or "").strip()
+        authoritative_run_link = (
+            str(resolution.get("source") or "").strip() == "run_projection_link"
+            and not bool(resolution.get("fallback_used"))
+            and not bool(resolution.get("migration_fallback_used"))
+        )
+
+        def _projection_page_not_ready(reason: str) -> dict[str, Any]:
+            return {
+                "available": False,
+                "source_kind": "serving_projection_members",
+                "source_path": projection_id,
+                "candidate_count": 0,
+                "total_candidates": 0,
+                "offset": offset,
+                "limit": 0,
+                "returned_count": 0,
+                "filtered_candidate_count": 0,
+                "has_more": False,
+                "next_offset": None,
+                "facet_summary_scope": "unavailable",
+                "serving_projection_resolution": resolution,
+                "read_contract": {
+                    "source": "serving_projection_members",
+                    "fallback_used": bool(resolution.get("fallback_used")),
+                    "migration_fallback_used": bool(resolution.get("migration_fallback_used")),
+                    "fail_closed": True,
+                    "reason": reason,
+                },
+                "status": "not_ready",
+                "reason": reason,
+                "candidates": [],
+            }
+
+        if authoritative_run_link and not membership_revision:
+            return _projection_page_not_ready("projection_membership_revision_missing")
         projection_page = self.serving_projection_reader.get_projection_candidates(
             projection_id,
             offset=offset,
@@ -31132,6 +31880,7 @@ class SourcingOrchestrator:
         )
         status = str(projection_page.get("status") or "").strip()
         if status == "not_ready":
+            projection_page_read_contract = dict(projection_page.get("read_contract") or {})
             return {
                 "available": True,
                 "source_kind": "serving_projection_members",
@@ -31150,13 +31899,29 @@ class SourcingOrchestrator:
                 "filter_signature": str(projection_page.get("filter_signature") or ""),
                 "applied_filter": dict(projection_page.get("applied_filter") or candidate_filter),
                 "filter_contract": dict(projection_page.get("filter_contract") or {}),
-                "read_contract": dict(projection_page.get("read_contract") or {}),
+                "read_contract": {
+                    **projection_page_read_contract,
+                    "source": str(projection_page_read_contract.get("source") or "serving_projection_members").strip(),
+                    "fallback_used": bool(
+                        resolution.get("fallback_used") or projection_page_read_contract.get("fallback_used")
+                    ),
+                    "migration_fallback_used": bool(resolution.get("migration_fallback_used")),
+                    "fail_closed": True,
+                },
+                "serving_projection_resolution": resolution,
                 "status": "not_ready",
                 "reason": str(projection_page.get("reason") or "projection_person_search_index_unavailable"),
                 "candidates": [],
             }
         if status != "ready":
             return {}
+        page_projection = dict(projection_page.get("projection") or {})
+        page_projection_id = str(page_projection.get("projection_id") or "").strip()
+        if page_projection_id != projection_id:
+            return _projection_page_not_ready("projection_page_identity_mismatch")
+        page_membership_revision = str(page_projection.get("membership_revision") or "").strip()
+        if authoritative_run_link and page_membership_revision != membership_revision:
+            return _projection_page_not_ready("projection_page_membership_revision_mismatch")
         canonical_asset_population = dict(public_projection.get("asset_population") or {})
         rows = [
             self._projection_candidate_page_row_to_legacy_candidate(row)
@@ -31215,9 +31980,14 @@ class SourcingOrchestrator:
                 "source": str(
                     dict(projection_page.get("read_contract") or {}).get("source") or "serving_projection_members"
                 ),
-                "fallback_used": bool(dict(projection_page.get("read_contract") or {}).get("fallback_used")),
+                "fallback_used": bool(
+                    resolution.get("fallback_used")
+                    or dict(projection_page.get("read_contract") or {}).get("fallback_used")
+                ),
+                "migration_fallback_used": bool(resolution.get("migration_fallback_used")),
                 "fail_closed": True,
             },
+            "serving_projection_resolution": resolution,
             "candidates": rows,
         }
 
@@ -35371,14 +36141,35 @@ class SourcingOrchestrator:
         facet_summary = dict(facet_summary or asset_population.get("facet_summary") or {})
         linkedin_stage_1_progress = dict(linkedin_stage_1_progress or {})
         card_materialization_summary = dict(asset_population.get("card_materialization_summary") or {})
+        exact_projection_card_summary = bool(
+            str(card_materialization_summary.get("summary_source") or "").strip()
+            == "linked_serving_projection_exact_readiness"
+            and str(card_materialization_summary.get("count_scope") or "").strip() == "exact_projection"
+            and str(card_materialization_summary.get("membership_revision") or "").strip()
+        )
+        exact_projection_membership_revision = (
+            str(card_materialization_summary.get("membership_revision") or "").strip()
+            if exact_projection_card_summary
+            else ""
+        )
+        exact_projection_visible_count = max(
+            0,
+            _coerce_int(card_materialization_summary.get("candidate_count"), 0),
+        )
         normalized_result_mode = str(result_mode or "").strip() or "ranked_results"
         lifecycle_expected_count = int(lifecycle.get("expected_candidate_count") or 0)
         expected_count = (
-            lifecycle_expected_count
+            exact_projection_visible_count
+            if exact_projection_card_summary
+            else lifecycle_expected_count
             if lifecycle_expected_count > 0
             else int(asset_population.get("candidate_count") or 0)
         )
-        served_count = max(0, int(lifecycle.get("served_candidate_count") or 0))
+        served_count = (
+            exact_projection_visible_count
+            if exact_projection_card_summary
+            else max(0, int(lifecycle.get("served_candidate_count") or 0))
+        )
         baseline_count = max(0, int(lifecycle.get("baseline_candidate_count") or 0))
         delta_required_count = max(0, int(lifecycle.get("delta_profile_required_count") or 0))
         delta_fetched_count = max(0, int(lifecycle.get("delta_profile_fetched_count") or 0))
@@ -35484,6 +36275,15 @@ class SourcingOrchestrator:
             stage_profile_required_count = max(progress_stage_required_count, delta_required_count)
             stage_profile_fetched_count = progress_stage_fetched_count
             stage_discovered_count = progress_stage_discovered_count
+        if exact_projection_card_summary and exact_projection_visible_count == 0:
+            baseline_count = 0
+            delta_required_count = 0
+            delta_fetched_count = 0
+            delta_materialized_count = 0
+            delta_board_visible_count = 0
+            stage_profile_required_count = 0
+            stage_profile_fetched_count = 0
+            stage_discovered_count = 0
         # The lifecycle row is now the canonical denominator. Do NOT lift
         # expected_count from dynamic Stage 1 progress (stage_profile_required_count
         # or stage_discovered_count) — that would reintroduce the 300/351 → 300/525
@@ -35492,7 +36292,9 @@ class SourcingOrchestrator:
             lifecycle_state in {"current_snapshot_serving", "post_result_layering", "current_serving"}
             or serving_projection_phase == "current_snapshot_serving"
         )
-        if terminal_serving and expected_count > 0 and served_count >= expected_count:
+        if exact_projection_card_summary:
+            published_count = exact_projection_visible_count
+        elif terminal_serving and expected_count > 0 and served_count >= expected_count:
             published_count = served_count
         elif latest_patch_served_count > 0:
             published_count = latest_patch_served_count
@@ -35530,8 +36332,10 @@ class SourcingOrchestrator:
                 >= expected_count
             )
         )
-        if patch_card_materialization_summary and (
-            final_card_summary_regresses_patch or not final_card_summary_complete
+        if (
+            not exact_projection_card_summary
+            and patch_card_materialization_summary
+            and (final_card_summary_regresses_patch or not final_card_summary_complete)
         ):
             # Board-visible patches are the event-time publication contract.
             # Prefer their frozen card-quality counters over mutable serving
@@ -35565,7 +36369,7 @@ class SourcingOrchestrator:
             display_ready_candidate_count = min(display_ready_candidate_count, expected_count)
         if published_count > 0:
             display_ready_candidate_count = min(display_ready_candidate_count, published_count)
-        if baseline_count > 0 and published_count >= baseline_count:
+        if not exact_projection_card_summary and baseline_count > 0 and published_count >= baseline_count:
             # A baseline result view was already serviceable before this run's delta.
             # Missing card-quality fields on a legacy overlay must not make the UI
             # report the baseline board as newly un-materialized.
@@ -35592,8 +36396,20 @@ class SourcingOrchestrator:
             0,
             int(card_materialization_summary.get("explicit_profile_capture_candidate_count") or 0),
         )
+        exact_explicit_profile_capture_available = bool(
+            not exact_projection_card_summary
+            or card_materialization_summary.get("explicit_profile_capture_candidate_count") is not None
+        )
+        exact_needs_profile_completion_available = bool(
+            not exact_projection_card_summary
+            or card_materialization_summary.get("needs_profile_completion_candidate_count") is not None
+        )
+        exact_low_profile_richness_available = bool(
+            not exact_projection_card_summary
+            or card_materialization_summary.get("low_profile_richness_candidate_count") is not None
+        )
         delta_profile_progress_applicable = bool(lifecycle.get("delta_profile_progress_applicable") is not False)
-        if delta_profile_progress_applicable and delta_required_count > 0:
+        if delta_profile_progress_applicable and delta_required_count > 0 and not exact_projection_card_summary:
             delta_display_ready_projection_count = max(0, display_ready_candidate_count - baseline_count)
             delta_explicit_profile_capture_count = (
                 max(0, explicit_profile_capture_candidate_count - baseline_count)
@@ -35632,7 +36448,7 @@ class SourcingOrchestrator:
                     stage_profile_required_count,
                     max(stage_profile_fetched_count, delta_fetched_count),
                 )
-        elif stage_profile_required_count > 0:
+        elif stage_profile_required_count > 0 and not exact_projection_card_summary:
             # Live/no-baseline row-shell publication can expose roster rows before
             # the profile worker has fetched full details. Public projection must
             # not infer profile fetch progress from card-like roster fields.
@@ -35651,7 +36467,9 @@ class SourcingOrchestrator:
         if published_count > display_ready_candidate_count:
             preview_candidate_count = max(preview_candidate_count, published_count - display_ready_candidate_count)
         publication_status = "unavailable"
-        if expected_count > 0 and published_count >= expected_count:
+        if exact_projection_card_summary and exact_projection_visible_count == 0:
+            publication_status = "complete"
+        elif expected_count > 0 and published_count >= expected_count:
             publication_status = "complete"
         elif published_count > 0:
             publication_status = "partial"
@@ -35670,7 +36488,8 @@ class SourcingOrchestrator:
         if current_snapshot_publication_complete:
             served_count = max(served_count, published_count)
         if (
-            terminal_serving
+            not exact_projection_card_summary
+            and terminal_serving
             and current_snapshot_publication_complete
             and final_card_summary_complete
             and not delta_profile_progress_applicable
@@ -35745,6 +36564,8 @@ class SourcingOrchestrator:
         effective_terminal_serving = bool(terminal_serving or public_current_snapshot_rows_serving)
         if str(job.get("status") or "").strip().lower() == "failed" or lifecycle_state == "failed":
             board_phase = "failed"
+        elif exact_projection_card_summary and exact_projection_visible_count == 0:
+            board_phase = "canonical_projection_serving"
         elif publication_status == "complete" and effective_terminal_serving:
             board_phase = "current_snapshot_serving"
         elif publication_status in {"partial", "complete"}:
@@ -35793,7 +36614,9 @@ class SourcingOrchestrator:
             ]
         )
         row_publication_tier = (
-            "current_snapshot_serving"
+            "serving_projection_members"
+            if exact_projection_card_summary
+            else "current_snapshot_serving"
             if effective_terminal_serving and current_snapshot_publication_complete
             else "partial_patch"
             if latest_sequence > 0
@@ -35832,7 +36655,10 @@ class SourcingOrchestrator:
             if public_denominator_promoted:
                 # Stage 1 lanes are terminal; show the stable denominator.
                 profile_fetch_status_text = f"新增 LinkedIn Profile 已取回 {min(delta_fetched_count, delta_required_count)}/{delta_required_count}"
-                card_materialization_status_text = f"卡片详情已合入看板 {delta_card_ready_count}/{delta_required_count}"
+                if not exact_projection_card_summary:
+                    card_materialization_status_text = (
+                        f"卡片详情已合入看板 {delta_card_ready_count}/{delta_required_count}"
+                    )
             else:
                 # Before Stage 1 has promoted the canonical denominator, do not
                 # publish a user-facing profile/card fraction from a partial lane
@@ -35853,9 +36679,10 @@ class SourcingOrchestrator:
                 )
             if public_denominator_promoted:
                 profile_fetch_status_text = f"本次 LinkedIn Profile 已取回 {min(stage_profile_fetched_count, stage_profile_required_count)}/{stage_profile_required_count}"
-                card_materialization_status_text = (
-                    f"卡片详情已合入看板 {stage_card_materialized_count}/{stage_profile_required_count}"
-                )
+                if not exact_projection_card_summary:
+                    card_materialization_status_text = (
+                        f"卡片详情已合入看板 {stage_card_materialized_count}/{stage_profile_required_count}"
+                    )
             else:
                 # Same rule for no-baseline scoped search/live roster: avoid
                 # exposing partial-lane denominators as if they were stable totals.
@@ -35863,6 +36690,8 @@ class SourcingOrchestrator:
                 card_materialization_status_detail = "Stage 1 仍在发现候选人"
         elif expected_count > 0 and published_count > 0 and published_count < expected_count:
             profile_fetch_status_text = f"已发布可浏览候选人 {published_count}/{expected_count}"
+        if exact_projection_card_summary and expected_count > 0:
+            card_materialization_status_text = f"卡片详情已合入看板 {display_ready_candidate_count}/{expected_count}"
         # Candidate sync is row-publication/hydration progress. Card richness
         # and profile detail readiness are reported by the dedicated note lines
         # below; using display_ready here makes a complete board look stuck
@@ -35907,10 +36736,20 @@ class SourcingOrchestrator:
             "display_ready_candidate_count": display_ready_candidate_count,
             "preview_candidate_count": preview_candidate_count,
             "profile_detail_candidate_count": profile_detail_candidate_count,
-            "explicit_profile_capture_candidate_count": explicit_profile_capture_candidate_count,
-            "needs_profile_completion_candidate_count": needs_profile_completion_candidate_count,
-            "low_profile_richness_candidate_count": low_profile_richness_candidate_count,
+            "explicit_profile_capture_candidate_count": (
+                explicit_profile_capture_candidate_count if exact_explicit_profile_capture_available else None
+            ),
+            "needs_profile_completion_candidate_count": (
+                needs_profile_completion_candidate_count if exact_needs_profile_completion_available else None
+            ),
+            "low_profile_richness_candidate_count": (
+                low_profile_richness_candidate_count if exact_low_profile_richness_available else None
+            ),
             "card_materialization_quality_fields_available": quality_fields_available,
+            "candidate_count_scope": ("exact_projection" if exact_projection_card_summary else ""),
+            "card_materialization_summary_source": str(
+                card_materialization_summary.get("summary_source") or ""
+            ).strip(),
             "row_hydration_target_count": published_count,
             "candidate_discovery_count": min(stage_discovered_count, expected_count)
             if expected_count > 0
@@ -35924,6 +36763,7 @@ class SourcingOrchestrator:
             "delta_profile_board_visible_count": delta_board_visible_count,
             "row_publication_sequence": row_publication_sequence,
             "row_publication_tier": row_publication_tier,
+            "row_publication_revision": exact_projection_membership_revision,
             "row_publication_watermark": row_publication_watermark,
             "row_publication_started_at": row_publication_started_at,
             "row_publication_updated_at": row_publication_published_at or row_shell_published_at,
@@ -36901,6 +37741,19 @@ class SourcingOrchestrator:
 
         request_payload = dict(job.get("request") or {})
         full_company_scope = str(request_payload.get("target_scope") or "").strip().lower() == "full_company_asset"
+        public_board_state = dict(board_runtime_state or {})
+        serving_projection_resolution = dict(public_board_state.get("serving_projection_resolution") or {})
+        if (
+            str(serving_projection_resolution.get("source") or "").strip() == "run_projection_link"
+            and str(serving_projection_resolution.get("status") or "").strip() != "ready"
+        ):
+            return 0
+        if (
+            str(public_board_state.get("candidate_count_scope") or "").strip() == "exact_projection"
+            and str(public_board_state.get("card_materialization_summary_source") or "").strip()
+            == "linked_serving_projection_exact_readiness"
+        ):
+            return _count(public_board_state.get("expected_candidate_count"))
         stage1_deduped_count = _stage1_deduped_public_count(
             dict(board_runtime_state or {}),
             dict(result_view_lifecycle or {}),
@@ -36946,7 +37799,6 @@ class SourcingOrchestrator:
                 return result_view_count
 
         canonical_projection_counts: list[int] = []
-        public_board_state = dict(board_runtime_state or {})
         for key in (
             "expected_candidate_count",
             "served_candidate_count",
@@ -46655,23 +47507,43 @@ class SourcingOrchestrator:
         action_type = str(payload.get("action_type") or "").strip()
         if not action_type:
             return {"status": "invalid", "reason": "action_type is required"}
+        target_ref = dict(payload.get("target_ref") or {})
+        input_payload = dict(payload.get("input") or payload.get("input_payload") or {})
+        binding = self._bind_operation_projection_membership(
+            action_type=action_type,
+            target_ref=target_ref,
+            input_payload=input_payload,
+        )
+        if str(binding.get("status") or "") != "ready":
+            return binding
+        target_ref = dict(binding.get("target_ref") or target_ref)
+        input_payload = dict(binding.get("input_payload") or input_payload)
         try:
             result = self.operation_runtime_writer.submit_action(
                 action_type=action_type,
                 workspace_id=str(payload.get("workspace_id") or "default").strip() or "default",
                 conversation_id=str(payload.get("conversation_id") or "").strip(),
-                target_ref=dict(payload.get("target_ref") or {}),
-                input_payload=dict(payload.get("input") or payload.get("input_payload") or {}),
+                target_ref=target_ref,
+                input_payload=input_payload,
                 budget=dict(payload.get("budget") or {}),
                 idempotency_key=str(payload.get("idempotency_key") or "").strip(),
                 actor=str(payload.get("actor") or "api").strip() or "api",
                 source="api.operation_action_submit",
-                metadata=dict(payload.get("metadata") or {}),
+                metadata={
+                    **dict(payload.get("metadata") or {}),
+                    **dict(binding.get("metadata") or {}),
+                },
             )
         except KeyError as exc:
             return {"status": "invalid", "reason": str(exc)}
         except ValueError as exc:
             return {"status": "invalid", "reason": str(exc)}
+        except OperationRuntimeStateConflict as exc:
+            return {
+                "status": "conflict",
+                "reason": exc.reason,
+                "action": self._operation_action_api_record(exc.record),
+            }
         return {
             "status": "approval_required" if result.action.get("status") == "approval_required" else "queued",
             "action": self._operation_action_api_record(result.action),
@@ -46681,6 +47553,204 @@ class SourcingOrchestrator:
             "events": list(result.events),
             "module_state_mutated": False,
             "contract": "w9_operation_action_submit_v1",
+        }
+
+    def _bind_operation_projection_membership(
+        self,
+        *,
+        action_type: str,
+        target_ref: dict[str, Any],
+        input_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if action_type not in {ACTION_EXPORT_CANDIDATES, ACTION_ADD_TO_CRM}:
+            return {"status": "ready", "target_ref": target_ref, "input_payload": input_payload}
+        projection_id = str(
+            input_payload.get("projection_id")
+            or target_ref.get("projection_id")
+            or target_ref.get("serving_projection_id")
+            or ""
+        ).strip()
+        if not projection_id:
+            return {
+                "status": "invalid",
+                "reason": "projection_id_required_for_revision_bound_action",
+            }
+        requested_revision = str(
+            input_payload.get("expected_membership_revision")
+            or target_ref.get("expected_membership_revision")
+            or input_payload.get("membership_revision")
+            or target_ref.get("membership_revision")
+            or ""
+        ).strip()
+        if not requested_revision:
+            return {
+                "status": "invalid",
+                "reason": "expected_membership_revision_required_for_revision_bound_action",
+                "projection_id": projection_id,
+            }
+        candidate_keys = self._operation_candidate_identity_keys(input_payload, target_ref)
+        if action_type == ACTION_ADD_TO_CRM and not candidate_keys:
+            return {
+                "status": "invalid",
+                "reason": "candidate_identity_key_required_for_revision_bound_action",
+            }
+        if len(candidate_keys) > 100_000:
+            return {"status": "invalid", "reason": "projection_selection_limit_exceeded", "limit": 100_000}
+        if candidate_keys:
+            snapshot = self.serving_projection_reader.get_projection_member_snapshot(
+                projection_id,
+                candidate_identity_keys=candidate_keys,
+                limit=len(candidate_keys),
+                require_all_requested=True,
+            )
+            projection = dict(snapshot.get("projection") or {})
+            membership_revision = str(snapshot.get("membership_revision") or "").strip()
+            source_candidate_count = int(snapshot.get("source_candidate_count") or 0)
+        else:
+            snapshot = self.serving_projection_reader.get_projection(projection_id)
+            projection = dict(snapshot.get("projection") or {})
+            membership_revision = str(projection.get("membership_revision") or "").strip()
+            source_candidate_count = int(projection.get("visible_member_count") or 0)
+        if str(snapshot.get("status") or "") != "ready":
+            return snapshot
+        if requested_revision and requested_revision != membership_revision:
+            return {
+                "status": "not_ready",
+                "reason": "projection_membership_revision_stale",
+                "projection_id": projection_id,
+                "expected_membership_revision": requested_revision,
+                "membership_revision": membership_revision,
+            }
+        binding_fields = {
+            "projection_id": projection_id,
+            "expected_membership_revision": membership_revision,
+            "source_candidate_count": source_candidate_count,
+        }
+        return {
+            "status": "ready",
+            "target_ref": {**target_ref, **binding_fields},
+            "input_payload": {**input_payload, **binding_fields},
+            "metadata": {
+                "projection_membership_binding": {
+                    **binding_fields,
+                    "candidate_selection_count": len(candidate_keys),
+                    "source": "serving_projection_members",
+                    "fallback_used": False,
+                    "fail_closed": True,
+                }
+            },
+        }
+
+    def _fail_projection_bound_operation_reselection(
+        self,
+        *,
+        operation_run: dict[str, Any],
+        action: dict[str, Any],
+        failure: dict[str, Any],
+        actor: str,
+    ) -> dict[str, Any]:
+        reason = str(failure.get("reason") or "projection_membership_revision_stale").strip()
+        expected_revision = str(failure.get("expected_membership_revision") or "").strip()
+        membership_revision = str(failure.get("membership_revision") or "").strip()
+        projection_id = str(
+            failure.get("projection_id")
+            or dict(action.get("input") or {}).get("projection_id")
+            or dict(action.get("target_ref") or {}).get("projection_id")
+            or ""
+        ).strip()
+        conflict_payload = {
+            "phase": "reselection_required",
+            "reason": reason,
+            "projection_id": projection_id,
+            "expected_membership_revision": expected_revision,
+            "membership_revision": membership_revision,
+            "module_state_mutated": False,
+        }
+        operation_run_id = str(operation_run.get("operation_run_id") or "").strip()
+        action_id = str(action.get("action_id") or "").strip()
+        transition = self.store.repos.workflow_runtime.fail_operation_for_stale_input_with_event(
+            operation_run_id,
+            expected_status=str(operation_run.get("status") or "").strip(),
+            action_id=action_id,
+            workspace_id=str(operation_run.get("workspace_id") or "default").strip() or "default",
+            progress_patch=conflict_payload,
+            result_ref_patch=conflict_payload,
+            metadata_patch={"reselection_required": True, **conflict_payload},
+            linked_action_metadata_patch={"reselection_required": True, **conflict_payload},
+            event_idempotency_key=(
+                f"{operation_run.get('idempotency_key')}:OperationInputRevisionStale:"
+                f"{expected_revision}:{membership_revision}"
+            ),
+            actor=actor,
+            source="api.operation_run_dispatch",
+            event_payload=conflict_payload,
+        )
+        transition_outcome = str(transition.get("outcome") or "").strip()
+        next_operation = dict(transition.get("operation") or {})
+        next_action = dict(transition.get("linked_action") or {})
+        event = dict(transition.get("event") or {})
+        if transition_outcome not in {"applied", "already_applied", "repaired"}:
+            return {
+                **failure,
+                "status": "conflict",
+                "reason": "operation_state_conflict",
+                "stale_input_reason": reason,
+                "expected_operation_status": str(operation_run.get("status") or "").strip(),
+                "actual_operation_status": str(next_operation.get("status") or "").strip(),
+                "action": next_action or action,
+                "operation_run": next_operation or operation_run,
+                "events": [event] if event else [],
+                "reselection_required": True,
+                "module_state_mutated": False,
+                "contract": "w9_operation_run_dispatch_v1",
+            }
+        return {
+            **failure,
+            "status": "not_ready",
+            "reason": reason,
+            "action": next_action or action,
+            "operation_run": next_operation or operation_run,
+            "events": [event] if event else [],
+            "reselection_required": True,
+            "module_state_mutated": False,
+            "contract": "w9_operation_run_dispatch_v1",
+        }
+
+    def _existing_planned_operation_command_response(
+        self,
+        *,
+        operation_run: dict[str, Any],
+        action: dict[str, Any],
+        contract: str,
+    ) -> dict[str, Any]:
+        if str(operation_run.get("status") or "").strip() != "planned":
+            return {}
+        workflow_ref = dict(operation_run.get("workflow_ref") or {})
+        command_id = str(workflow_ref.get("command_id") or "").strip()
+        if not command_id:
+            return {}
+        command = self.store.get_workflow_command(command_id)
+        if not command:
+            return {}
+        operation_run_id = str(operation_run.get("operation_run_id") or "").strip()
+        events = self.store.repos.workflow_runtime.list_operation_events(operation_run_id)
+        planned_event: dict[str, Any] = next(
+            (
+                event
+                for event in reversed(events)
+                if str(event.get("event_type") or "").strip() == "OperationCommandPlanned"
+                and str(dict(event.get("payload") or {}).get("command_id") or "").strip() == command_id
+            ),
+            {},
+        )
+        return {
+            "status": "planned",
+            "action": self.store.repos.workflow_runtime.get_action(str(action.get("action_id") or "")) or action,
+            "operation_run": operation_run,
+            "workflow_command": self._workflow_command_api_record(command),
+            "events": [planned_event] if planned_event else [],
+            "module_state_mutated": False,
+            "contract": contract,
         }
 
     def get_operation_action_api(self, action_id: str) -> dict[str, Any]:
@@ -47053,6 +48123,7 @@ class SourcingOrchestrator:
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload = dict(payload or {})
+        actor = str(payload.get("actor") or "api").strip() or "api"
         operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
         if not operation_run:
             return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
@@ -47064,12 +48135,58 @@ class SourcingOrchestrator:
                 "operation_run_id": str(operation_run_id or "").strip(),
             }
         action_type = str(action.get("action_type") or "").strip()
+        if action_type in {ACTION_EXPORT_CANDIDATES, ACTION_ADD_TO_CRM}:
+            with self.store.repos.workflow_runtime.hold_operation_dispatch_lock(operation_run_id):
+                operation_run = self.store.repos.workflow_runtime.get_operation(operation_run_id)
+                if not operation_run:
+                    return {"status": "not_found", "operation_run_id": str(operation_run_id or "").strip()}
+                action = self.store.repos.workflow_runtime.get_action(str(operation_run.get("action_id") or ""))
+                if not action:
+                    return {
+                        "status": "invalid",
+                        "reason": "operation action not found",
+                        "operation_run_id": str(operation_run_id or "").strip(),
+                    }
+                action_input = dict(action.get("input") or {})
+                action_target = dict(action.get("target_ref") or {})
+                projection_id = str(
+                    action_input.get("projection_id")
+                    or action_target.get("projection_id")
+                    or action_target.get("serving_projection_id")
+                    or ""
+                ).strip()
+                if projection_id:
+                    with self.store.repos.serving_projection.hold_publication_lock(projection_id):
+                        return self._dispatch_operation_run_from_records(
+                            operation_run=operation_run,
+                            action=action,
+                            actor=actor,
+                        )
+                return self._dispatch_operation_run_from_records(
+                    operation_run=operation_run,
+                    action=action,
+                    actor=actor,
+                )
+        return self._dispatch_operation_run_from_records(
+            operation_run=operation_run,
+            action=action,
+            actor=actor,
+        )
+
+    def _dispatch_operation_run_from_records(
+        self,
+        *,
+        operation_run: dict[str, Any],
+        action: dict[str, Any],
+        actor: str,
+    ) -> dict[str, Any]:
+        action_type = str(action.get("action_type") or "").strip()
         if action_type in {ACTION_FILTER_PROJECTION, ACTION_SEARCH_PROJECTION}:
             return self._operation_run_control_response_record(
                 self._dispatch_projection_read_operation(
                     operation_run=operation_run,
                     action=action,
-                    actor=str(payload.get("actor") or "api").strip() or "api",
+                    actor=actor,
                 )
             )
         if action_type == ACTION_ENRICH_PERSON_PUBLIC_WEB:
@@ -47077,7 +48194,7 @@ class SourcingOrchestrator:
                 self._dispatch_person_public_web_enrichment_operation(
                     operation_run=operation_run,
                     action=action,
-                    actor=str(payload.get("actor") or "api").strip() or "api",
+                    actor=actor,
                 )
             )
         if action_type == ACTION_EXPORT_CANDIDATES:
@@ -47085,7 +48202,7 @@ class SourcingOrchestrator:
                 self._dispatch_export_candidates_operation(
                     operation_run=operation_run,
                     action=action,
-                    actor=str(payload.get("actor") or "api").strip() or "api",
+                    actor=actor,
                 )
             )
         if action_type in {
@@ -47098,7 +48215,7 @@ class SourcingOrchestrator:
                 self._dispatch_agent_callable_workflow_command_operation(
                     operation_run=operation_run,
                     action=action,
-                    actor=str(payload.get("actor") or "api").strip() or "api",
+                    actor=actor,
                 )
             )
         if action_type in {ACTION_ADD_TO_CRM, ACTION_SET_CRM_STAGE, ACTION_ADD_CRM_NOTE, ACTION_CREATE_CRM_TASK}:
@@ -47106,7 +48223,7 @@ class SourcingOrchestrator:
                 self._dispatch_crm_writer_operation(
                     operation_run=operation_run,
                     action=action,
-                    actor=str(payload.get("actor") or "api").strip() or "api",
+                    actor=actor,
                 )
             )
         return self._operation_run_control_response_record(
@@ -48532,6 +49649,13 @@ class SourcingOrchestrator:
                 "module_state_mutated": False,
                 "contract": "w9_operation_run_dispatch_v1",
             }
+        existing_plan = self._existing_planned_operation_command_response(
+            operation_run=operation_run,
+            action=action,
+            contract="w9_operation_run_dispatch_v1",
+        )
+        if existing_plan:
+            return existing_plan
         approval_reason = self._crm_writer_operation_approval_reason(action)
         if approval_reason and str(action.get("approval_status") or "").strip() != "approved":
             next_action = self.store.repos.workflow_runtime.update_action_state(
@@ -48573,6 +49697,13 @@ class SourcingOrchestrator:
             actor=actor,
         )
         if str(plan.get("status") or "") != "ok":
+            if str(plan.get("reason") or "") == "projection_membership_revision_stale":
+                return self._fail_projection_bound_operation_reselection(
+                    operation_run=operation_run,
+                    action=action,
+                    failure=plan,
+                    actor=actor,
+                )
             return {
                 "status": str(plan.get("status") or "invalid"),
                 "reason": str(plan.get("reason") or "crm_writer_operation_invalid"),
@@ -48693,12 +49824,44 @@ class SourcingOrchestrator:
                     "status": "invalid",
                     "reason": "add_to_crm requires projection_id and candidate_identity_key",
                 }
+            if len(candidate_keys) > 100_000:
+                return {
+                    "status": "invalid",
+                    "reason": "projection_crm_selection_limit_exceeded",
+                    "limit": 100_000,
+                }
+            snapshot = self.serving_projection_reader.get_projection_member_snapshot(
+                projection_id,
+                candidate_identity_keys=candidate_keys,
+                limit=min(len(candidate_keys), 100_000),
+                require_all_requested=True,
+            )
+            if str(snapshot.get("status") or "") != "ready":
+                return snapshot
+            membership_revision = str(snapshot.get("membership_revision") or "").strip()
+            requested_revision = str(
+                input_payload.get("expected_membership_revision")
+                or target_ref.get("expected_membership_revision")
+                or input_payload.get("membership_revision")
+                or target_ref.get("membership_revision")
+                or ""
+            ).strip()
+            if requested_revision and requested_revision != membership_revision:
+                return {
+                    "status": "not_ready",
+                    "reason": "projection_membership_revision_stale",
+                    "projection_id": projection_id,
+                    "expected_membership_revision": requested_revision,
+                    "membership_revision": membership_revision,
+                }
             return {
                 "status": "ok",
                 "command_type": CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE,
                 "command_payload": {
                     **base_payload,
                     "projection_id": projection_id,
+                    "membership_revision": membership_revision,
+                    "source_candidate_count": int(snapshot.get("source_candidate_count") or 0),
                     "candidate_identity_keys": candidate_keys,
                     "candidate_count": len(candidate_keys),
                     "pipeline_id": str(input_payload.get("pipeline_id") or "default_sourcing").strip()
@@ -49046,6 +50209,13 @@ class SourcingOrchestrator:
                 "module_state_mutated": False,
                 "contract": "w9_operation_run_dispatch_v1",
             }
+        existing_plan = self._existing_planned_operation_command_response(
+            operation_run=operation_run,
+            action=action,
+            contract="w9_operation_run_dispatch_v1",
+        )
+        if existing_plan:
+            return existing_plan
         target_ref = dict(action.get("target_ref") or {})
         input_payload = dict(action.get("input") or {})
         projection_id = str(
@@ -49077,6 +50247,21 @@ class SourcingOrchestrator:
             return {
                 "status": "failed",
                 "reason": "projection_export_command_enqueue_failed",
+                "operation_run": operation_run,
+                "action": action,
+                "module_state_mutated": False,
+                "contract": "w9_operation_run_dispatch_v1",
+            }
+        if not str(command.get("command_id") or "").strip():
+            if str(command.get("reason") or "") == "projection_membership_revision_stale":
+                return self._fail_projection_bound_operation_reselection(
+                    operation_run=operation_run,
+                    action=action,
+                    failure=command,
+                    actor=actor,
+                )
+            return {
+                **command,
                 "operation_run": operation_run,
                 "action": action,
                 "module_state_mutated": False,
@@ -49398,6 +50583,10 @@ class SourcingOrchestrator:
                 "crm_event_ids": list(result.get("crm_event_ids") or []),
                 "crm_task_ids": list(result.get("crm_task_ids") or []),
                 "entity_delta_ids": crm_writer_entity_delta_ids,
+                "projection_id": str(result.get("projection_id") or ""),
+                "membership_revision": str(result.get("membership_revision") or ""),
+                "source_candidate_count": int(result.get("source_candidate_count") or 0),
+                "requested_candidate_count": int(result.get("requested_candidate_count") or 0),
             },
             entity_counts=self._crm_writer_activity_entity_counts(result),
             metadata={"crm_writer_owner": CRM_WRITER_OWNER},
@@ -49441,21 +50630,55 @@ class SourcingOrchestrator:
                 for item in list(payload.get("candidate_identity_keys") or [])
                 if str(item or "").strip()
             )
-            for candidate_key in candidate_keys:
-                results.append(
-                    self.crm_writer.add_projection_member_to_crm(
-                        projection_id=projection_id,
-                        candidate_identity_key=candidate_key,
-                        workspace_id=workspace_id,
-                        actor_type=actor_type,
-                        actor_id=actor_id,
-                        idempotency_key=f"{command_key}:candidate:{candidate_key}",
-                        pipeline_id=str(payload.get("pipeline_id") or "default_sourcing").strip() or "default_sourcing",
-                        stage=str(payload.get("stage") or "new").strip() or "new",
-                        source_reason=str(payload.get("source_reason") or "selected_from_projection").strip()
-                        or "selected_from_projection",
-                    )
-                )
+            membership_revision = str(payload.get("membership_revision") or "").strip()
+            if not membership_revision:
+                return {
+                    "status": "invalid",
+                    "reason": "projection_membership_revision_required",
+                    "crm_writer_owner": CRM_WRITER_OWNER,
+                }
+            if not candidate_keys or len(candidate_keys) > 100_000:
+                return {
+                    "status": "invalid",
+                    "reason": "projection_crm_selection_invalid",
+                    "crm_writer_owner": CRM_WRITER_OWNER,
+                }
+            snapshot = self.serving_projection_reader.get_projection_member_snapshot(
+                projection_id,
+                candidate_identity_keys=candidate_keys,
+                limit=len(candidate_keys),
+                require_all_requested=True,
+            )
+            if str(snapshot.get("status") or "") != "ready":
+                return {**snapshot, "crm_writer_owner": CRM_WRITER_OWNER}
+            if str(snapshot.get("membership_revision") or "").strip() != membership_revision or int(
+                snapshot.get("source_candidate_count") or 0
+            ) != int(payload.get("source_candidate_count") or 0):
+                return {
+                    "status": "not_ready",
+                    "reason": "projection_membership_revision_stale",
+                    "projection_id": projection_id,
+                    "expected_membership_revision": membership_revision,
+                    "membership_revision": str(snapshot.get("membership_revision") or ""),
+                    "crm_writer_owner": CRM_WRITER_OWNER,
+                }
+            batch_result = self.crm_writer.add_projection_members_to_crm(
+                projection_id=projection_id,
+                candidate_identity_keys=candidate_keys,
+                workspace_id=workspace_id,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                idempotency_key=command_key,
+                pipeline_id=str(payload.get("pipeline_id") or "default_sourcing").strip() or "default_sourcing",
+                stage=str(payload.get("stage") or "new").strip() or "new",
+                source_reason=str(payload.get("source_reason") or "selected_from_projection").strip()
+                or "selected_from_projection",
+                expected_membership_revision=membership_revision,
+                projection_member_snapshot=snapshot,
+            )
+            if str(batch_result.get("status") or "") != "applied":
+                return {**batch_result, "crm_writer_owner": CRM_WRITER_OWNER}
+            results = [dict(result) for result in list(batch_result.get("results") or [])]
         elif command_type == CRM_RECORD_UPDATE_COMMAND_TYPE:
             record_ids = _dedupe_texts(_coerce_public_web_record_ids(payload.get("crm_record_ids")))
             for record_id in record_ids:
@@ -49508,7 +50731,7 @@ class SourcingOrchestrator:
         successful = [
             result
             for result in results
-            if str(result.get("status") or "").strip() in {"upserted", "updated", "created", "idempotent"}
+            if str(result.get("status") or "").strip() in {"upserted", "updated", "created", "reselected", "idempotent"}
         ]
         if not successful:
             return {
@@ -49533,7 +50756,7 @@ class SourcingOrchestrator:
             for result in successful
             if dict(result.get("crm_task") or {}).get("task_id")
         )
-        return {
+        completed_result = {
             "status": "completed",
             "reason": "crm_writer_command_owner",
             "command_type": command_type,
@@ -49546,6 +50769,16 @@ class SourcingOrchestrator:
             "crm_writer_owner": CRM_WRITER_OWNER,
             "legacy_target_candidates_written": False,
         }
+        if command_type == CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE:
+            completed_result.update(
+                {
+                    "projection_id": str(payload.get("projection_id") or ""),
+                    "membership_revision": str(payload.get("membership_revision") or ""),
+                    "source_candidate_count": int(payload.get("source_candidate_count") or 0),
+                    "requested_candidate_count": len(candidate_keys),
+                }
+            )
+        return completed_result
 
     def _crm_writer_activity_entity_counts(self, result: dict[str, Any]) -> dict[str, Any]:
         payload = dict(result or {})
@@ -49582,7 +50815,83 @@ class SourcingOrchestrator:
         crm_record_ids = _dedupe_texts(result_payload.get("crm_record_ids") or [])
         crm_event_ids = _dedupe_texts(result_payload.get("crm_event_ids") or [])
         crm_task_ids = _dedupe_texts(result_payload.get("crm_task_ids") or [])
+        projection_provenance: dict[str, Any] = {}
+        if command_type == CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE:
+            projection_provenance = {
+                "projection_id": str(result_payload.get("projection_id") or "").strip(),
+                "membership_revision": str(result_payload.get("membership_revision") or "").strip(),
+                "source_candidate_count": _coerce_int(result_payload.get("source_candidate_count"), 0),
+            }
         deltas: list[dict[str, Any]] = []
+        if command_type == CRM_RECORD_ADD_FROM_PROJECTION_COMMAND_TYPE:
+            for item in [dict(value) for value in list(result_payload.get("results") or [])]:
+                record_id = str(item.get("crm_record_id") or "").strip()
+                event_id = str(item.get("event_id") or "").strip()
+                event_type = str(item.get("event_type") or "").strip()
+                candidate_identity_key = str(item.get("candidate_identity_key") or "").strip()
+                person_identity_key = str(item.get("person_identity_key") or "").strip()
+                item_provenance = {
+                    **projection_provenance,
+                    "candidate_identity_key": candidate_identity_key,
+                    "person_identity_key": person_identity_key,
+                    "crm_event_id": event_id,
+                    "crm_event_type": event_type,
+                }
+                item_delta_kind = (
+                    "crm_projection_member_reselected"
+                    if event_type == "projection_member_reselected"
+                    else "crm_record_added_from_projection"
+                )
+                if record_id:
+                    deltas.append(
+                        self._record_command_activity_entity_delta(
+                            command=command_payload,
+                            activity=activity,
+                            attempt=attempt,
+                            entity_type="crm_record",
+                            entity_key=record_id,
+                            delta_kind=item_delta_kind,
+                            status="recorded",
+                            reason=event_type or "crm_writer_command_completed",
+                            source_ref={
+                                "command_type": command_type,
+                                "crm_record_id": record_id,
+                                "crm_writer_owner": CRM_WRITER_OWNER,
+                                **item_provenance,
+                            },
+                            entity_payload={"crm_record_id": record_id, **item_provenance},
+                            projection_effect={"entered_projection": False},
+                            metadata={"crm_writer_owner": CRM_WRITER_OWNER, **projection_provenance},
+                            idempotency_scope="crm_writer_projection_record",
+                        )
+                    )
+                if event_id:
+                    deltas.append(
+                        self._record_command_activity_entity_delta(
+                            command=command_payload,
+                            activity=activity,
+                            attempt=attempt,
+                            entity_type="crm_event",
+                            entity_key=event_id,
+                            delta_kind=item_delta_kind,
+                            status="recorded",
+                            reason=event_type or "crm_writer_event_recorded",
+                            source_ref={
+                                "command_type": command_type,
+                                "crm_record_id": record_id,
+                                "crm_event_id": event_id,
+                                "crm_writer_owner": CRM_WRITER_OWNER,
+                                **item_provenance,
+                            },
+                            entity_payload={"crm_event_id": event_id, **item_provenance},
+                            projection_effect={"entered_projection": False},
+                            metadata={"crm_writer_owner": CRM_WRITER_OWNER, **projection_provenance},
+                            idempotency_scope="crm_writer_projection_event",
+                        )
+                    )
+            return [
+                str(delta.get("delta_id") or "").strip() for delta in deltas if str(delta.get("delta_id") or "").strip()
+            ]
         for record_id in crm_record_ids:
             deltas.append(
                 self._record_command_activity_entity_delta(
@@ -49598,8 +50907,9 @@ class SourcingOrchestrator:
                         "command_type": command_type,
                         "crm_record_id": record_id,
                         "crm_writer_owner": CRM_WRITER_OWNER,
+                        **projection_provenance,
                     },
-                    entity_payload={"crm_record_id": record_id},
+                    entity_payload={"crm_record_id": record_id, **projection_provenance},
                     projection_effect={"entered_projection": False},
                     metadata={"crm_writer_owner": CRM_WRITER_OWNER},
                     idempotency_scope="crm_writer_record",
@@ -49621,8 +50931,9 @@ class SourcingOrchestrator:
                         "command_type": command_type,
                         "crm_event_id": event_id,
                         "crm_writer_owner": CRM_WRITER_OWNER,
+                        **projection_provenance,
                     },
-                    entity_payload={"crm_event_id": event_id},
+                    entity_payload={"crm_event_id": event_id, **projection_provenance},
                     projection_effect={"entered_projection": False},
                     metadata={"crm_writer_owner": CRM_WRITER_OWNER},
                     idempotency_scope="crm_writer_event",

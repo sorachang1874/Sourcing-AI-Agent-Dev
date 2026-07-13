@@ -8,6 +8,7 @@ from unittest import mock
 
 from sourcing_agent.control_plane_repository import ControlPlaneAuthoritativeReadError
 from sourcing_agent.person_asset_writer import PersonAssetWriter
+from sourcing_agent.projection_search_index_contract import PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY
 from sourcing_agent.repositories.serving_projection import _build_projection_id
 from sourcing_agent.serving_projection_reader import ServingProjectionReader
 from sourcing_agent.serving_projection_writer import ServingProjectionWriter
@@ -64,6 +65,324 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
             projection["projection_id"],
         )
         self.assertEqual([member["candidate_identity_key"] for member in members], ["linkedin:ada", "linkedin:grace"])
+
+    def test_projection_reader_aggregates_only_explicit_member_quality_evidence(self) -> None:
+        exact = self.writer.publish_run_scope_projection(
+            run_id="job-owned-quality-counts",
+            collection_id="company:lovable",
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:owned-ready",
+                    "profile_readiness": "ready",
+                    "card_readiness": "ready",
+                    "projection_metrics": {
+                        "has_explicit_profile_capture": True,
+                        "needs_profile_completion": False,
+                        "low_profile_richness": True,
+                    },
+                },
+                {
+                    "candidate_identity_key": "linkedin:owned-shell",
+                    "profile_readiness": "required",
+                    "card_readiness": "row_shell",
+                    "projection_metrics": {
+                        "has_explicit_profile_capture": False,
+                        "needs_profile_completion": True,
+                        "low_profile_richness": False,
+                    },
+                },
+            ],
+            replace_members=True,
+        )
+
+        exact_payload = self.reader.get_projection(exact["projection"]["projection_id"])
+        exact_readiness = exact_payload["projection"]["readiness"]
+        self.assertEqual(exact_readiness["explicit_profile_capture_candidate_count"], 1)
+        self.assertEqual(exact_readiness["needs_profile_completion_candidate_count"], 1)
+        self.assertEqual(exact_readiness["low_profile_richness_candidate_count"], 1)
+
+        legacy_integer = self.writer.publish_run_scope_projection(
+            run_id="job-owned-quality-integer-compatibility",
+            collection_id="company:lovable",
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:legacy-integer-true",
+                    "profile_readiness": "not_required",
+                    "projection_metrics": {
+                        "profile_required": 0,
+                        "has_explicit_profile_capture": 1,
+                        "needs_profile_completion": 0,
+                        "low_profile_richness": 1,
+                    },
+                    "public_summary": {"needs_profile_completion": 0},
+                },
+                {
+                    "candidate_identity_key": "linkedin:legacy-integer-false",
+                    "profile_readiness": "skipped",
+                    "projection_metrics": {
+                        "profile_required": 0,
+                        "has_explicit_profile_capture": 0,
+                        "needs_profile_completion": 1,
+                        "low_profile_richness": 0,
+                    },
+                    "public_summary": {"needs_profile_completion": 0},
+                },
+                {
+                    "candidate_identity_key": "linkedin:hidden-poison",
+                    "visibility_state": "hidden",
+                    "projection_metrics": {
+                        "has_explicit_profile_capture": "garbage",
+                        "needs_profile_completion": None,
+                        "low_profile_richness": 2,
+                    },
+                },
+            ],
+            replace_members=True,
+        )
+        legacy_integer_payload = self.reader.get_projection(legacy_integer["projection"]["projection_id"])
+        legacy_integer_readiness = legacy_integer_payload["projection"]["readiness"]
+        self.assertEqual(legacy_integer_readiness["profile_required_count"], 1)
+        self.assertEqual(legacy_integer_readiness["explicit_profile_capture_candidate_count"], 1)
+        self.assertEqual(legacy_integer_readiness["needs_profile_completion_candidate_count"], 1)
+        self.assertEqual(legacy_integer_readiness["low_profile_richness_candidate_count"], 1)
+
+        poisoned = self.writer.publish_run_scope_projection(
+            run_id="job-owned-quality-poisoned-booleans",
+            collection_id="company:lovable",
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:poison-none-number-string",
+                    "profile_readiness": "not_required",
+                    "projection_metrics": {
+                        "profile_required": "false",
+                        "has_explicit_profile_capture": None,
+                        "needs_profile_completion": 2,
+                        "low_profile_richness": "garbage",
+                    },
+                    "public_summary": {"needs_profile_completion": "garbage"},
+                },
+                {
+                    "candidate_identity_key": "linkedin:poison-string-number-float",
+                    "profile_readiness": "skipped",
+                    "projection_metrics": {
+                        "profile_required": "garbage",
+                        "has_explicit_profile_capture": "false",
+                        "needs_profile_completion": -1,
+                        "low_profile_richness": 1.0,
+                    },
+                    "public_summary": {"needs_profile_completion": "false"},
+                },
+                {
+                    "candidate_identity_key": "linkedin:readiness-still-required",
+                    "profile_readiness": "required",
+                    "projection_metrics": {
+                        "profile_required": False,
+                        "has_explicit_profile_capture": False,
+                        "needs_profile_completion": 0,
+                        "low_profile_richness": False,
+                    },
+                    "public_summary": {"needs_profile_completion": False},
+                },
+            ],
+            replace_members=True,
+        )
+        poisoned_payload = self.reader.get_projection(poisoned["projection"]["projection_id"])
+        poisoned_readiness = poisoned_payload["projection"]["readiness"]
+        self.assertEqual(poisoned_readiness["profile_required_count"], 1)
+        self.assertNotIn("explicit_profile_capture_candidate_count", poisoned_readiness)
+        self.assertNotIn("needs_profile_completion_candidate_count", poisoned_readiness)
+        self.assertNotIn("low_profile_richness_candidate_count", poisoned_readiness)
+
+        stored_projection = self.store.repos.serving_projection.get(exact["projection"]["projection_id"])
+        missing_revision_projection = {
+            **stored_projection,
+            "metadata": {
+                key: value
+                for key, value in dict(stored_projection.get("metadata") or {}).items()
+                if key != PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY
+            },
+        }
+        with mock.patch.object(
+            self.store.repos.serving_projection,
+            "get",
+            side_effect=[missing_revision_projection],
+        ):
+            missing_revision = self.reader.get_projection(exact["projection"]["projection_id"])
+        self.assertEqual(missing_revision["status"], "not_ready")
+        self.assertEqual(missing_revision["reason"], "projection_membership_revision_missing")
+
+        changed_revision_projection = {
+            **stored_projection,
+            "metadata": {
+                **dict(stored_projection.get("metadata") or {}),
+                PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY: "projidxinput_changed_during_read",
+            },
+        }
+        with mock.patch.object(
+            self.store.repos.serving_projection,
+            "get",
+            side_effect=[stored_projection, changed_revision_projection],
+        ):
+            changed_revision = self.reader.get_projection(exact["projection"]["projection_id"])
+        self.assertEqual(changed_revision["status"], "not_ready")
+        self.assertEqual(changed_revision["reason"], "projection_membership_revision_changed_during_read")
+
+        legacy = self.writer.publish_run_scope_projection(
+            run_id="job-missing-quality-evidence",
+            collection_id="company:legacy",
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:legacy",
+                    "profile_readiness": "ready",
+                    "card_readiness": "ready",
+                }
+            ],
+            readiness={
+                "explicit_profile_capture_candidate_count": 1,
+                "needs_profile_completion_candidate_count": 1,
+                "low_profile_richness_candidate_count": 1,
+            },
+            replace_members=True,
+        )
+        legacy_payload = self.reader.get_projection(legacy["projection"]["projection_id"])
+        legacy_readiness = legacy_payload["projection"]["readiness"]
+        self.assertNotIn("explicit_profile_capture_candidate_count", legacy_readiness)
+        self.assertNotIn("needs_profile_completion_candidate_count", legacy_readiness)
+        self.assertNotIn("low_profile_richness_candidate_count", legacy_readiness)
+
+    def test_candidate_page_fails_closed_when_membership_changes_during_read(self) -> None:
+        first = self.writer.publish_run_scope_projection(
+            run_id="job-page-revision-fence",
+            collection_id="company:lovable",
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:old-member",
+                    "projection_metrics": {
+                        "has_explicit_profile_capture": False,
+                        "needs_profile_completion": False,
+                        "low_profile_richness": False,
+                    },
+                }
+            ],
+            replace_members=True,
+        )
+        projection_id = first["projection"]["projection_id"]
+        repository = self.store.repos.serving_projection
+        original_list_members = repository.list_members
+        replacement_published = False
+
+        def list_then_replace(*args, **kwargs):  # type: ignore[no-untyped-def]
+            nonlocal replacement_published
+            rows = original_list_members(*args, **kwargs)
+            if not replacement_published:
+                replacement_published = True
+                self.writer.publish_run_scope_projection(
+                    run_id="job-page-revision-fence",
+                    collection_id="company:lovable",
+                    members=[
+                        {
+                            "candidate_identity_key": "linkedin:new-member",
+                            "projection_metrics": {
+                                "has_explicit_profile_capture": True,
+                                "needs_profile_completion": False,
+                                "low_profile_richness": False,
+                            },
+                        }
+                    ],
+                    replace_members=True,
+                )
+            return rows
+
+        with mock.patch.object(repository, "list_members", side_effect=list_then_replace):
+            page = self.reader.get_projection_candidates(projection_id, offset=0, limit=10)
+
+        self.assertEqual(page["status"], "not_ready")
+        self.assertEqual(page["reason"], "projection_membership_revision_changed_during_page_read")
+
+    def test_person_detail_fails_closed_when_membership_changes_during_read(self) -> None:
+        first = self.writer.publish_run_scope_projection(
+            run_id="job-detail-revision-fence",
+            projection_id="proj_detail_revision_fence",
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:detail-old",
+                    "person_identity_key": "linkedin:detail-old",
+                }
+            ],
+            replace_members=True,
+        )
+        projection_id = first["projection"]["projection_id"]
+        repository = self.store.repos.serving_projection
+        original_list = repository.list_members_by_identity_keys
+
+        def list_then_replace(*args, **kwargs):  # type: ignore[no-untyped-def]
+            rows = original_list(*args, **kwargs)
+            self.writer.publish_run_scope_projection(
+                run_id="job-detail-revision-fence",
+                projection_id=projection_id,
+                members=[
+                    {
+                        "candidate_identity_key": "linkedin:detail-new",
+                        "person_identity_key": "linkedin:detail-new",
+                    }
+                ],
+                replace_members=True,
+            )
+            return rows
+
+        with mock.patch.object(repository, "list_members_by_identity_keys", side_effect=list_then_replace):
+            detail = self.reader.get_projection_person_detail(projection_id, "linkedin:detail-old")
+
+        self.assertEqual(detail["status"], "not_ready")
+        self.assertEqual(
+            detail["reason"],
+            "projection_membership_revision_changed_during_member_snapshot",
+        )
+
+    def test_search_fails_closed_when_membership_changes_after_index_hydration(self) -> None:
+        projection_id = "proj_search_revision_fence"
+        self.writer.publish_run_scope_projection(
+            run_id="job-search-revision-fence",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:search-old",
+                    "person_identity_key": "linkedin:search-old",
+                    "public_summary": {"display_name": "Old Search Engineer"},
+                }
+            ],
+            replace_members=True,
+        )
+        self.person_asset_writer.rebuild_projection_person_search_index(
+            projection_id=projection_id,
+            count_scope="exact_projection",
+        )
+        original_hydrate = self.reader._hydrate_index_page_members  # noqa: SLF001
+
+        def hydrate_then_replace(*args, **kwargs):  # type: ignore[no-untyped-def]
+            members = original_hydrate(*args, **kwargs)
+            self.writer.publish_run_scope_projection(
+                run_id="job-search-revision-fence",
+                projection_id=projection_id,
+                members=[
+                    {
+                        "candidate_identity_key": "linkedin:search-new",
+                        "person_identity_key": "linkedin:search-new",
+                        "public_summary": {"display_name": "New Search Engineer"},
+                    }
+                ],
+                replace_members=True,
+            )
+            return members
+
+        with mock.patch.object(self.reader, "_hydrate_index_page_members", side_effect=hydrate_then_replace):
+            search = self.reader.search_projection_person_index(
+                projection_id,
+                search_keyword="Old Search",
+            )
+
+        self.assertEqual(search["status"], "not_ready")
+        self.assertEqual(search["reason"], "projection_membership_revision_changed_during_search_read")
 
     def test_publish_collection_authoritative_projection_switches_pointer_with_previous_projection(self) -> None:
         first = self.writer.publish_collection_authoritative_projection(
@@ -579,9 +898,15 @@ class ServingProjectionWriterTest(PGControlPlaneStoreTestMixin, unittest.TestCas
             replace_members=True,
         )
 
+        projection_payload = self.reader.get_projection("proj_reader")
         page = self.reader.get_projection_candidates("proj_reader", offset=0, limit=10)
         row = page["candidates"][0]
 
+        self.assertEqual(projection_payload["status"], "ready")
+        membership_revision = projection_payload["projection"]["membership_revision"]
+        self.assertTrue(membership_revision.startswith("projidxinput_"))
+        self.assertEqual(page["projection"]["membership_revision"], membership_revision)
+        self.assertNotIn("metadata", projection_payload["projection"])
         self.assertEqual(page["status"], "ready")
         self.assertEqual(page["read_contract"]["source"], "serving_projection_members")
         self.assertFalse(page["read_contract"]["fallback_used"])

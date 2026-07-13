@@ -2810,7 +2810,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             workspace_id="default",
             conversation_id="conv-a",
             target_ref={"projection_id": "proj-a"},
-            input_payload={"filters": {"location": ["NYC"]}},
+            input_payload={"filters": {"location": ["SF"]}},
             idempotency_key="filter:proj-a:sf",
             actor="unit-test",
         )
@@ -2821,6 +2821,19 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(first.action["input"]["filters"], {"location": ["SF"]})
         self.assertEqual(first.operation_run["owner_module"], "projection_search_service")
         self.assertEqual(first.operation_run["status"], "queued")
+        with self.assertRaisesRegex(
+            OperationRuntimeStateConflict,
+            "operation_action_idempotency_payload_conflict",
+        ):
+            self.writer.submit_action(
+                action_type=ACTION_FILTER_PROJECTION,
+                workspace_id="default",
+                conversation_id="conv-a",
+                target_ref={"projection_id": "proj-a"},
+                input_payload={"filters": {"location": ["NYC"]}},
+                idempotency_key="filter:proj-a:sf",
+                actor="unit-test",
+            )
         self.assertEqual(
             [
                 event["event_type"]
@@ -3188,6 +3201,30 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 event_row=event_row,
             )
 
+        empty_status_submission = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-empty-cancel-status"},
+            idempotency_key="filter:proj-empty-cancel-status",
+        )
+        empty_status_event = repository._operation_event_row_payload(
+            event_stream_id=empty_status_submission.operation_run["operation_run_id"],
+            event_family="operation_event",
+            event_type="OperationCancelled",
+            idempotency_key="empty-cancel-status",
+            operation_run_id=empty_status_submission.operation_run["operation_run_id"],
+            action_id=empty_status_submission.action["action_id"],
+        )
+        empty_status_result = self.store._control_plane_postgres.cancel_operation_run_with_event(
+            table_name="operation_runs",
+            operation_run_id=empty_status_submission.operation_run["operation_run_id"],
+            expected_status=empty_status_submission.operation_run["status"],
+            status=" ",
+            event_row=empty_status_event,
+        )
+        self.assertEqual(empty_status_result["outcome"], "applied")
+        self.assertEqual(empty_status_result["operation"]["status"], "cancelled")
+
     def test_operation_control_cas_conflicts_do_not_report_success_or_append_events(self) -> None:
         repository = self.store.repos.workflow_runtime
         orchestrator = object.__new__(SourcingOrchestrator)
@@ -3247,6 +3284,176 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 event["event_type"]
                 for event in repository.list_operation_events(cancel_submission.operation_run["operation_run_id"])
             ],
+        )
+
+    def test_stale_input_failure_uow_replays_and_rolls_back_as_one_transition(self) -> None:
+        repository = self.store.repos.workflow_runtime
+        submitted = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-stale-uow"},
+            idempotency_key="filter:proj-stale-uow",
+        )
+        operation = submitted.operation_run
+        action = submitted.action
+        conflict_payload = {
+            "phase": "reselection_required",
+            "reason": "projection_membership_revision_stale",
+            "projection_id": "proj-stale-uow",
+            "expected_membership_revision": "revision-a",
+            "membership_revision": "revision-b",
+            "module_state_mutated": False,
+        }
+        transition_kwargs = {
+            "expected_status": operation["status"],
+            "action_id": action["action_id"],
+            "workspace_id": "default",
+            "progress_patch": conflict_payload,
+            "result_ref_patch": conflict_payload,
+            "metadata_patch": {"reselection_required": True, **conflict_payload},
+            "linked_action_metadata_patch": {"reselection_required": True, **conflict_payload},
+            "event_idempotency_key": (
+                f"{operation['idempotency_key']}:OperationInputRevisionStale:revision-a:revision-b"
+            ),
+            "actor": "unit-test",
+            "source": "test.operation_runtime",
+            "event_payload": conflict_payload,
+        }
+
+        first = repository.fail_operation_for_stale_input_with_event(
+            operation["operation_run_id"],
+            **transition_kwargs,
+        )
+        replay = repository.fail_operation_for_stale_input_with_event(
+            operation["operation_run_id"],
+            **transition_kwargs,
+        )
+
+        self.assertEqual(first["outcome"], "applied")
+        self.assertEqual(first["operation"]["status"], "failed")
+        self.assertEqual(first["linked_action"]["status"], "failed")
+        self.assertEqual(first["event"]["event_type"], "OperationInputRevisionStale")
+        self.assertEqual(replay["outcome"], "already_applied")
+        self.assertEqual(replay["event"]["event_id"], first["event"]["event_id"])
+        self.assertEqual(
+            [event["event_type"] for event in repository.list_operation_events(operation["operation_run_id"])].count(
+                "OperationInputRevisionStale"
+            ),
+            1,
+        )
+
+        rollback_submission = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-stale-uow-rollback"},
+            idempotency_key="filter:proj-stale-uow-rollback",
+        )
+        rollback_operation = rollback_submission.operation_run
+        rollback_action = rollback_submission.action
+        rollback_kwargs = {
+            **transition_kwargs,
+            "expected_status": rollback_operation["status"],
+            "action_id": rollback_action["action_id"],
+            "event_idempotency_key": (
+                f"{rollback_operation['idempotency_key']}:OperationInputRevisionStale:revision-a:revision-b"
+            ),
+        }
+        with mock.patch.object(
+            self.store._control_plane_postgres,
+            "_append_operation_event_with_cursor",
+            side_effect=RuntimeError("forced-stale-event-failure"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "forced-stale-event-failure"):
+                repository.fail_operation_for_stale_input_with_event(
+                    rollback_operation["operation_run_id"],
+                    **rollback_kwargs,
+                )
+        self.assertEqual(
+            repository.get_operation(rollback_operation["operation_run_id"])["status"],
+            rollback_operation["status"],
+        )
+        self.assertEqual(
+            repository.get_action(rollback_action["action_id"])["status"],
+            rollback_action["status"],
+        )
+        self.assertNotIn(
+            "OperationInputRevisionStale",
+            [event["event_type"] for event in repository.list_operation_events(rollback_operation["operation_run_id"])],
+        )
+
+        action_conflict_submission = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-stale-action-conflict"},
+            idempotency_key="filter:proj-stale-action-conflict",
+        )
+        action_conflict_operation = action_conflict_submission.operation_run
+        action_conflict_action = action_conflict_submission.action
+        repository.update_operation_state(
+            action_conflict_operation["operation_run_id"],
+            status="failed",
+            progress_patch=conflict_payload,
+            result_ref_patch=conflict_payload,
+            metadata_patch={"reselection_required": True, **conflict_payload},
+        )
+        repository.update_action_state(action_conflict_action["action_id"], status="failed")
+        action_conflict = repository.fail_operation_for_stale_input_with_event(
+            action_conflict_operation["operation_run_id"],
+            **{
+                **transition_kwargs,
+                "expected_status": action_conflict_operation["status"],
+                "action_id": action_conflict_action["action_id"],
+                "event_idempotency_key": "stale-action-metadata-conflict",
+            },
+        )
+        self.assertEqual(action_conflict["outcome"], "conflict")
+        self.assertEqual(action_conflict["operation"]["status"], "failed")
+        self.assertEqual(action_conflict["linked_action"]["status"], "failed")
+        self.assertEqual(action_conflict["linked_action"]["metadata"], action_conflict_action["metadata"])
+        self.assertNotIn(
+            "OperationInputRevisionStale",
+            [
+                event["event_type"]
+                for event in repository.list_operation_events(action_conflict_operation["operation_run_id"])
+            ],
+        )
+
+        event_conflict_submission = self.writer.submit_action(
+            action_type=ACTION_FILTER_PROJECTION,
+            workspace_id="default",
+            target_ref={"projection_id": "proj-stale-event-conflict"},
+            idempotency_key="filter:proj-stale-event-conflict",
+        )
+        event_conflict_operation = event_conflict_submission.operation_run
+        event_conflict_action = event_conflict_submission.action
+        event_conflict_key = "stale-event-payload-conflict"
+        repository.append_operation_event(
+            workspace_id="default",
+            event_stream_id=event_conflict_operation["operation_run_id"],
+            operation_run_id=event_conflict_operation["operation_run_id"],
+            action_id=event_conflict_action["action_id"],
+            event_family="operation_event",
+            event_type="OperationInputRevisionStale",
+            idempotency_key=event_conflict_key,
+            payload={**conflict_payload, "membership_revision": "different-revision"},
+        )
+        event_conflict = repository.fail_operation_for_stale_input_with_event(
+            event_conflict_operation["operation_run_id"],
+            **{
+                **transition_kwargs,
+                "expected_status": event_conflict_operation["status"],
+                "action_id": event_conflict_action["action_id"],
+                "event_idempotency_key": event_conflict_key,
+            },
+        )
+        self.assertEqual(event_conflict["outcome"], "conflict")
+        self.assertEqual(
+            repository.get_operation(event_conflict_operation["operation_run_id"])["status"],
+            event_conflict_operation["status"],
+        )
+        self.assertEqual(
+            repository.get_action(event_conflict_action["action_id"])["status"],
+            event_conflict_action["status"],
         )
 
     def test_approve_and_resume_cas_conflicts_stop_downstream_writes(self) -> None:
@@ -3951,11 +4158,32 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             ),
         )
         try:
+            orchestrator.serving_projection_writer.publish_run_scope_projection(
+                run_id="job-proj-dispatch",
+                projection_id="proj-dispatch",
+                members=[
+                    {
+                        "candidate_identity_key": "person-a",
+                        "person_identity_key": "person-a",
+                    }
+                ],
+                replace_members=True,
+            )
+            membership_revision = str(
+                dict(
+                    orchestrator.serving_projection_reader.get_projection("proj-dispatch").get("projection") or {}
+                ).get("membership_revision")
+                or ""
+            )
             submitted = orchestrator.submit_operation_action(
                 {
                     "action_type": ACTION_EXPORT_CANDIDATES,
                     "target_ref": {"projection_id": "proj-dispatch"},
-                    "input": {"candidate_identity_keys": ["person-a"], "limit": 10},
+                    "input": {
+                        "candidate_identity_keys": ["person-a"],
+                        "expected_membership_revision": membership_revision,
+                        "limit": 10,
+                    },
                     "idempotency_key": "export:proj-dispatch",
                 }
             )
@@ -4050,6 +4278,337 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(run_list["operation_runs"][0]["status_summary"]["workflow_command_count"], 1)
             self.assertEqual(run_list["operation_runs"][0]["display_contract"]["display_category"], "export")
             self.assertFalse(dispatched["module_state_mutated"])
+        finally:
+            api_store.close()
+
+    def test_projection_bound_operations_fail_closed_when_membership_changes_before_dispatch(self) -> None:
+        settings = AppSettings(
+            project_root=self.runtime_dir,
+            runtime_dir=self.runtime_dir,
+            secrets_file=self.runtime_dir / "secrets.toml",
+            db_path=self.runtime_dir / "projection-bound-operation-stale.db",
+            jobs_dir=self.runtime_dir / "jobs",
+            company_assets_dir=self.runtime_dir / "company_assets",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        api_store = ControlPlaneStore(settings.db_path)
+        catalog = AssetCatalog.discover()
+        model_client = DeterministicModelClient()
+        orchestrator = SourcingOrchestrator(
+            catalog=catalog,
+            store=api_store,
+            jobs_dir=settings.jobs_dir,
+            model_client=model_client,
+            semantic_provider=LocalSemanticProvider(),
+            acquisition_engine=AcquisitionEngine(catalog, settings, api_store, model_client),
+        )
+        try:
+
+            def publish(projection_id: str, candidate_key: str, display_name: str) -> str:
+                orchestrator.serving_projection_writer.publish_run_scope_projection(
+                    run_id=f"job-{projection_id}",
+                    projection_id=projection_id,
+                    members=[
+                        {
+                            "candidate_identity_key": candidate_key,
+                            "person_identity_key": candidate_key,
+                            "public_summary": {"display_name": display_name},
+                        }
+                    ],
+                    replace_members=True,
+                )
+                payload = orchestrator.serving_projection_reader.get_projection(projection_id)
+                return str(dict(payload.get("projection") or {}).get("membership_revision") or "")
+
+            export_revision_a = publish("proj-export-stale-op", "person-export", "Export A")
+            export_submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_EXPORT_CANDIDATES,
+                    "target_ref": {"projection_id": "proj-export-stale-op"},
+                    "input": {
+                        "candidate_identity_keys": ["person-export"],
+                        "expected_membership_revision": export_revision_a,
+                    },
+                    "idempotency_key": "export:stale-membership",
+                }
+            )
+            self.assertEqual(
+                export_submitted["action"]["input"]["expected_membership_revision"],
+                export_revision_a,
+            )
+            export_revision_b = publish("proj-export-stale-op", "person-export", "Export B")
+            self.assertNotEqual(export_revision_a, export_revision_b)
+            export_approved = orchestrator.approve_operation_action_api(
+                export_submitted["action"]["action_id"],
+                {"actor": "unit-test"},
+            )
+            export_operation_id = export_approved["operation_run"]["operation_run_id"]
+
+            stale_export = orchestrator.dispatch_operation_run_api(export_operation_id, {"actor": "unit-test"})
+
+            self.assertEqual(stale_export["status"], "not_ready")
+            self.assertEqual(stale_export["reason"], "projection_membership_revision_stale")
+            self.assertTrue(stale_export["reselection_required"])
+            self.assertEqual(stale_export["operation_run"]["status"], "failed")
+            self.assertEqual(stale_export["action"]["status"], "failed")
+            self.assertEqual(stale_export["events"][0]["event_type"], "OperationInputRevisionStale")
+            self.assertEqual(api_store.list_workflow_commands(operation_id=export_operation_id, limit=0), [])
+
+            crm_revision_a = publish("proj-crm-stale-op", "person-crm", "CRM A")
+            crm_submitted = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_ADD_TO_CRM,
+                    "target_ref": {
+                        "projection_id": "proj-crm-stale-op",
+                        "candidate_identity_key": "person-crm",
+                    },
+                    "input": {"expected_membership_revision": crm_revision_a},
+                    "idempotency_key": "crm:stale-membership",
+                }
+            )
+            self.assertEqual(
+                crm_submitted["action"]["input"]["expected_membership_revision"],
+                crm_revision_a,
+            )
+            crm_revision_b = publish("proj-crm-stale-op", "person-crm", "CRM B")
+            self.assertNotEqual(crm_revision_a, crm_revision_b)
+            crm_operation_id = crm_submitted["operation_run"]["operation_run_id"]
+
+            stale_crm = orchestrator.dispatch_operation_run_api(crm_operation_id, {"actor": "unit-test"})
+
+            self.assertEqual(stale_crm["status"], "not_ready")
+            self.assertEqual(stale_crm["reason"], "projection_membership_revision_stale")
+            self.assertTrue(stale_crm["reselection_required"])
+            self.assertEqual(stale_crm["operation_run"]["status"], "failed")
+            self.assertEqual(stale_crm["action"]["status"], "failed")
+            duplicate_stale_crm = orchestrator.dispatch_operation_run_api(crm_operation_id, {"actor": "unit-test"})
+            self.assertEqual(duplicate_stale_crm["status"], "invalid")
+            self.assertEqual(
+                [
+                    event["event_type"]
+                    for event in api_store.repos.workflow_runtime.list_operation_events(crm_operation_id)
+                ].count("OperationInputRevisionStale"),
+                1,
+            )
+            self.assertEqual(api_store.list_workflow_commands(operation_id=crm_operation_id, limit=0), [])
+            self.assertEqual(api_store.get_crm_record_by_person_identity("person-crm", workspace_id="default"), {})
+
+            adapter = api_store._control_plane_postgres  # noqa: SLF001
+            adapter.close()
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "SOURCING_CONTROL_PLANE_PG_POOL_MIN": "1",
+                    "SOURCING_CONTROL_PLANE_PG_POOL_MAX": "1",
+                },
+            ):
+                pool = adapter._ensure_pool()  # noqa: SLF001
+            self.assertEqual(pool.max_size, 1)
+
+            serialized_revision_a = publish("proj-export-serialized", "person-serialized", "Serialized A")
+            serialized_submission = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_EXPORT_CANDIDATES,
+                    "target_ref": {"projection_id": "proj-export-serialized"},
+                    "input": {
+                        "candidate_identity_keys": ["person-serialized"],
+                        "expected_membership_revision": serialized_revision_a,
+                    },
+                    "idempotency_key": "export:serialized-membership",
+                }
+            )
+            serialized_approval = orchestrator.approve_operation_action_api(
+                serialized_submission["action"]["action_id"],
+                {"actor": "unit-test"},
+            )
+            serialized_operation_id = serialized_approval["operation_run"]["operation_run_id"]
+            planner_entered = threading.Event()
+            release_planner = threading.Event()
+            publication_waiting = threading.Event()
+            dispatch_results: list[dict[str, Any]] = []
+            dispatch_errors: list[BaseException] = []
+            publication_results: list[str] = []
+            publication_errors: list[BaseException] = []
+            original_plan = orchestrator._plan_projection_export_generate_command  # noqa: SLF001
+            original_try_lock = adapter._try_acquire_transaction_lock  # noqa: SLF001
+
+            def paused_plan(command_payload: dict[str, Any]) -> dict[str, Any]:
+                planner_entered.set()
+                if not release_planner.wait(timeout=10):
+                    raise TimeoutError("serialized dispatch planner release timed out")
+                return original_plan(command_payload)
+
+            def run_serialized_dispatch() -> None:
+                try:
+                    dispatch_results.append(
+                        orchestrator.dispatch_operation_run_api(serialized_operation_id, {"actor": "unit-test"})
+                    )
+                except BaseException as exc:  # pragma: no cover - asserted through the parent thread
+                    dispatch_errors.append(exc)
+
+            def run_serialized_publication() -> None:
+                try:
+                    publication_results.append(publish("proj-export-serialized", "person-serialized", "Serialized B"))
+                except BaseException as exc:  # pragma: no cover - asserted through the parent thread
+                    publication_errors.append(exc)
+
+            def observe_publication_wait(cursor: object, lock_key: str) -> bool:
+                acquired = original_try_lock(cursor, lock_key)
+                if not acquired and lock_key == "serving_projection_publication:proj-export-serialized":
+                    publication_waiting.set()
+                return acquired
+
+            with (
+                mock.patch.object(
+                    orchestrator,
+                    "_plan_projection_export_generate_command",
+                    side_effect=paused_plan,
+                ),
+                mock.patch.object(
+                    adapter,
+                    "_try_acquire_transaction_lock",
+                    side_effect=observe_publication_wait,
+                ),
+            ):
+                dispatch_thread = threading.Thread(target=run_serialized_dispatch, daemon=True)
+                dispatch_thread.start()
+                self.assertTrue(planner_entered.wait(timeout=10))
+                publication_thread = threading.Thread(target=run_serialized_publication, daemon=True)
+                publication_thread.start()
+                self.assertTrue(publication_waiting.wait(timeout=10))
+                release_planner.set()
+                dispatch_thread.join(timeout=20)
+                publication_thread.join(timeout=20)
+            self.assertFalse(dispatch_thread.is_alive())
+            self.assertFalse(publication_thread.is_alive())
+            self.assertEqual(dispatch_errors, [])
+            self.assertEqual(publication_errors, [])
+            self.assertEqual(len(dispatch_results), 1)
+            self.assertEqual(len(publication_results), 1)
+            first_dispatch = dispatch_results[0]
+            self.assertEqual(first_dispatch["status"], "planned")
+
+            serialized_revision_b = publication_results[0]
+            self.assertNotEqual(serialized_revision_a, serialized_revision_b)
+            replay_dispatch = orchestrator.dispatch_operation_run_api(
+                serialized_operation_id,
+                {"actor": "unit-test"},
+            )
+            self.assertEqual(replay_dispatch["status"], "planned")
+            self.assertEqual(
+                replay_dispatch["workflow_command"]["command_id"],
+                first_dispatch["workflow_command"]["command_id"],
+            )
+            self.assertEqual(replay_dispatch["events"][0]["event_id"], first_dispatch["events"][0]["event_id"])
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(serialized_operation_id)["status"],
+                "planned",
+            )
+            self.assertEqual(len(api_store.list_workflow_commands(operation_id=serialized_operation_id, limit=0)), 1)
+            self.assertNotIn(
+                "OperationInputRevisionStale",
+                [
+                    event["event_type"]
+                    for event in api_store.repos.workflow_runtime.list_operation_events(serialized_operation_id)
+                ],
+            )
+
+            cancel_revision = publish("proj-export-cancel-serialized", "person-cancel", "Cancel A")
+            cancel_submission = orchestrator.submit_operation_action(
+                {
+                    "action_type": ACTION_EXPORT_CANDIDATES,
+                    "target_ref": {"projection_id": "proj-export-cancel-serialized"},
+                    "input": {
+                        "candidate_identity_keys": ["person-cancel"],
+                        "expected_membership_revision": cancel_revision,
+                    },
+                    "idempotency_key": "export:serialized-cancel",
+                }
+            )
+            cancel_approval = orchestrator.approve_operation_action_api(
+                cancel_submission["action"]["action_id"],
+                {"actor": "unit-test"},
+            )
+            cancel_operation_id = cancel_approval["operation_run"]["operation_run_id"]
+            cancel_planner_entered = threading.Event()
+            cancel_release_planner = threading.Event()
+            cancel_waiting = threading.Event()
+            cancel_dispatch_results: list[dict[str, Any]] = []
+            cancel_dispatch_errors: list[BaseException] = []
+            cancel_results: list[dict[str, Any]] = []
+            cancel_errors: list[BaseException] = []
+
+            def paused_cancel_plan(command_payload: dict[str, Any]) -> dict[str, Any]:
+                cancel_planner_entered.set()
+                if not cancel_release_planner.wait(timeout=10):
+                    raise TimeoutError("serialized cancel dispatch planner release timed out")
+                return original_plan(command_payload)
+
+            def run_cancel_dispatch() -> None:
+                try:
+                    cancel_dispatch_results.append(
+                        orchestrator.dispatch_operation_run_api(cancel_operation_id, {"actor": "unit-test"})
+                    )
+                except BaseException as exc:  # pragma: no cover - asserted through the parent thread
+                    cancel_dispatch_errors.append(exc)
+
+            def run_concurrent_cancel() -> None:
+                try:
+                    cancel_results.append(
+                        orchestrator.cancel_operation_run_api(
+                            cancel_operation_id,
+                            {"actor": "unit-test", "reason": "concurrent-dispatch-cancel"},
+                        )
+                    )
+                except BaseException as exc:  # pragma: no cover - asserted through the parent thread
+                    cancel_errors.append(exc)
+
+            def observe_cancel_wait(cursor: object, lock_key: str) -> bool:
+                acquired = original_try_lock(cursor, lock_key)
+                if not acquired and lock_key == f"operation_dispatch:{cancel_operation_id}":
+                    cancel_waiting.set()
+                return acquired
+
+            with (
+                mock.patch.object(
+                    orchestrator,
+                    "_plan_projection_export_generate_command",
+                    side_effect=paused_cancel_plan,
+                ),
+                mock.patch.object(
+                    adapter,
+                    "_try_acquire_transaction_lock",
+                    side_effect=observe_cancel_wait,
+                ),
+            ):
+                cancel_dispatch_thread = threading.Thread(target=run_cancel_dispatch, daemon=True)
+                cancel_dispatch_thread.start()
+                self.assertTrue(cancel_planner_entered.wait(timeout=10))
+                cancel_thread = threading.Thread(target=run_concurrent_cancel, daemon=True)
+                cancel_thread.start()
+                self.assertTrue(cancel_waiting.wait(timeout=10))
+                cancel_release_planner.set()
+                cancel_dispatch_thread.join(timeout=20)
+                cancel_thread.join(timeout=20)
+            self.assertFalse(cancel_dispatch_thread.is_alive())
+            self.assertFalse(cancel_thread.is_alive())
+            self.assertEqual(cancel_dispatch_errors, [])
+            self.assertEqual(cancel_errors, [])
+            self.assertEqual(cancel_dispatch_results[0]["status"], "planned")
+            self.assertEqual(cancel_results[0]["status"], "cancelled")
+            self.assertEqual(
+                api_store.repos.workflow_runtime.get_operation(cancel_operation_id)["status"],
+                "cancelled",
+            )
+            self.assertEqual(len(api_store.list_workflow_commands(operation_id=cancel_operation_id, limit=0)), 1)
+            cancel_event_types = [
+                event["event_type"]
+                for event in api_store.repos.workflow_runtime.list_operation_events(cancel_operation_id)
+            ]
+            self.assertEqual(cancel_event_types.count("OperationCommandPlanned"), 1)
+            self.assertEqual(cancel_event_types.count("OperationCancelled"), 1)
         finally:
             api_store.close()
 
@@ -9318,6 +9877,12 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                     }
                 ],
             )
+            membership_revision = str(
+                dict(orchestrator.serving_projection_reader.get_projection("proj-crm-op").get("projection") or {}).get(
+                    "membership_revision"
+                )
+                or ""
+            )
             submitted = orchestrator.submit_operation_action(
                 {
                     "action_type": ACTION_ADD_TO_CRM,
@@ -9325,6 +9890,7 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                         "projection_id": "proj-crm-op",
                         "candidate_identity_key": "linkedin:crm-op",
                     },
+                    "input": {"expected_membership_revision": membership_revision},
                     "idempotency_key": "add-to-crm:proj-crm-op",
                 }
             )
@@ -9383,6 +9949,16 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(len(crm_record_deltas), 1)
             self.assertEqual(crm_record_deltas[0]["delta_kind"], "crm_record_added_from_projection")
             self.assertEqual(crm_record_deltas[0]["entity_key"], record["crm_record_id"])
+            command_payload = dict(command_after_owner.get("payload") or {})
+            self.assertEqual(crm_record_deltas[0]["source_ref"]["projection_id"], "proj-crm-op")
+            self.assertEqual(
+                crm_record_deltas[0]["source_ref"]["membership_revision"],
+                command_payload["membership_revision"],
+            )
+            self.assertEqual(
+                crm_record_deltas[0]["entity_payload"]["source_candidate_count"],
+                command_payload["source_candidate_count"],
+            )
         finally:
             api_store.close()
 
@@ -11633,11 +12209,31 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             self.assertEqual(command_retried["status"], "queued")
             self.assertEqual(command_retried["workflow_command"]["status"], "queued")
 
+            orchestrator.serving_projection_writer.publish_run_scope_projection(
+                run_id="job-api-export",
+                projection_id="proj-api",
+                members=[
+                    {
+                        "candidate_identity_key": "linkedin:api-export",
+                        "person_identity_key": "linkedin:api-export",
+                    }
+                ],
+                replace_members=True,
+            )
+            api_export_revision = str(
+                dict(orchestrator.serving_projection_reader.get_projection("proj-api").get("projection") or {}).get(
+                    "membership_revision"
+                )
+                or ""
+            )
             submit_payload = json.dumps(
                 {
                     "action_type": ACTION_EXPORT_CANDIDATES,
                     "target_ref": {"projection_id": "proj-api"},
-                    "input": {"include_crm_notes": True},
+                    "input": {
+                        "include_crm_notes": True,
+                        "expected_membership_revision": api_export_revision,
+                    },
                     "idempotency_key": "api-export:proj-api",
                 },
                 ensure_ascii=False,

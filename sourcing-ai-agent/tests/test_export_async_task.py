@@ -64,13 +64,36 @@ class ExportAsyncTaskTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self._stop_pg_durable_runtime()
         self.tempdir.cleanup()
 
+    def _publish_projection(self, projection_id: str, *, member_count: int = 1) -> str:
+        self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+            run_id=f"job-{projection_id}",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": f"linkedin:{projection_id}:{index}",
+                    "person_identity_key": f"linkedin:{projection_id}:{index}",
+                }
+                for index in range(member_count)
+            ],
+            replace_members=True,
+        )
+        return str(
+            dict(
+                self.orchestrator.serving_projection_reader.get_projection(projection_id).get("projection") or {}
+            ).get("membership_revision")
+            or ""
+        )
+
     def test_projection_export_submit_drain_poll_download(self) -> None:
+        membership_revision = self._publish_projection("proj-async-1", member_count=5)
         canned_archive = {
             "status": "ok",
             "filename": "projection-export.zip",
             "content_type": "application/zip",
             "body": b"REAL-ZIP-BYTES-xyz",
             "projection_id": "proj-async-1",
+            "membership_revision": membership_revision,
+            "source_candidate_count": 5,
             "record_count": 5,
             "exported_record_count": 4,
             "skipped_assertion_count": 1,
@@ -82,7 +105,10 @@ class ExportAsyncTaskTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         ):
             # 1) submit -> 202-shaped queued envelope; the request thread does NOT build.
             submitted = self.orchestrator.export_projection_candidates_archive(
-                {"projection_id": "proj-async-1"}
+                {
+                    "projection_id": "proj-async-1",
+                    "expected_membership_revision": membership_revision,
+                }
             )
             self.assertEqual(submitted.get("status"), "queued")
             self.assertEqual(submitted.get("task_type"), "export.projection.generate")
@@ -105,6 +131,8 @@ class ExportAsyncTaskTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(artifact.get("content_type"), "application/zip")
         self.assertEqual(artifact.get("headers", {}).get("X-Sourcing-Export-Record-Count"), "5")
         self.assertEqual(artifact.get("headers", {}).get("X-Sourcing-Projection-Id"), "proj-async-1")
+        self.assertEqual(artifact.get("headers", {}).get("X-Sourcing-Membership-Revision"), membership_revision)
+        self.assertEqual(artifact.get("headers", {}).get("X-Sourcing-Source-Candidate-Count"), "5")
 
         # 4) download -> the artifact bytes (read back from disk) + count fields.
         downloaded = self.orchestrator.get_export_command_artifact(task_id)
@@ -118,19 +146,26 @@ class ExportAsyncTaskTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         # 5) idempotent replay: a second identical submit short-circuits to the same
         # succeeded task + artifact handle (no rebuild needed).
         replay = self.orchestrator.export_projection_candidates_archive(
-            {"projection_id": "proj-async-1"}
+            {
+                "projection_id": "proj-async-1",
+                "expected_membership_revision": membership_revision,
+            }
         )
         self.assertEqual(replay.get("status"), "succeeded")
         self.assertEqual((replay.get("artifact") or {}).get("handle"), f"/api/exports/{task_id}/artifact")
 
     def test_export_artifact_not_ready_before_drain(self) -> None:
+        membership_revision = self._publish_projection("proj-not-ready")
         with mock.patch.object(
             self.orchestrator,
             "_build_projection_candidates_archive_payload",
             return_value={"status": "ok", "body": b"x", "filename": "f.zip", "projection_id": "p"},
         ):
             submitted = self.orchestrator.export_projection_candidates_archive(
-                {"projection_id": "proj-not-ready"}
+                {
+                    "projection_id": "proj-not-ready",
+                    "expected_membership_revision": membership_revision,
+                }
             )
             task_id = str(submitted.get("task_id") or "")
         # Downloading before the worker has run -> not_ready (the API maps this to 409).

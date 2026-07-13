@@ -81,6 +81,16 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
         self._stop_pg_durable_runtime()
         self.tempdir.cleanup()
 
+    def _add_projection_candidate_to_crm(self, payload: dict) -> dict:
+        normalized = dict(payload or {})
+        if not str(normalized.get("expected_membership_revision") or "").strip():
+            projection_id = str(normalized.get("projection_id") or "").strip()
+            projection = self.orchestrator.serving_projection_reader.get_projection(projection_id)
+            normalized["expected_membership_revision"] = str(
+                dict(projection.get("projection") or {}).get("membership_revision") or ""
+            )
+        return self.orchestrator.add_projection_candidate_to_crm(normalized)
+
     def test_collection_projection_crm_and_export_policy_api_fail_closed(self) -> None:
         self.projection_writer.publish_collection_authoritative_projection(
             collection_id="company:google",
@@ -95,6 +105,15 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
                 }
             ],
             replace_members=True,
+        )
+        google_revision = str(
+            dict(
+                self.orchestrator.serving_projection_reader.get_projection(
+                    "proj_google_authoritative"
+                ).get("projection")
+                or {}
+            ).get("membership_revision")
+            or ""
         )
         server = create_server(self.orchestrator, host="127.0.0.1", port=0)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -150,6 +169,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
                 {
                     "projection_id": "proj_google_authoritative",
                     "candidate_identity_key": "linkedin:google-ada",
+                    "expected_membership_revision": google_revision,
                     "idempotency_key": "api-add-google-ada",
                     "stage": "researching",
                 },
@@ -170,11 +190,21 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
                 ],
                 replace_members=True,
             )
+            openai_revision = str(
+                dict(
+                    self.orchestrator.serving_projection_reader.get_projection(
+                        "proj_openai_authoritative"
+                    ).get("projection")
+                    or {}
+                ).get("membership_revision")
+                or ""
+            )
             openai_crm_payload = _post_json(
                 f"{base_url}/api/crm/records",
                 {
                     "projection_id": "proj_openai_authoritative",
                     "candidate_identity_key": "linkedin:openai-grace",
+                    "expected_membership_revision": openai_revision,
                     "idempotency_key": "api-add-openai-grace",
                     "stage": "researching",
                 },
@@ -796,6 +826,14 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
                 "verification_status": "needs_review",
             }
         )
+        membership_revision = str(
+            dict(
+                self.orchestrator.serving_projection_reader.get_projection("proj_openai_delta").get("projection")
+                or {}
+            ).get("membership_revision")
+            or ""
+        )
+        self.assertTrue(membership_revision)
         server = create_server(self.orchestrator, host="127.0.0.1", port=0)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -818,7 +856,10 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
             # export drain builds the artifact; then poll + download the handle.
             submit_payload, submit_status = _post_json_with_status(
                 f"{base_url}/api/projections/export",
-                {"projection_id": "proj_openai_delta"},
+                {
+                    "projection_id": "proj_openai_delta",
+                    "expected_membership_revision": membership_revision,
+                },
             )
             self.assertEqual(submit_status, 202)
             self.assertEqual(submit_payload["status"], "queued")
@@ -916,7 +957,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
             ],
             replace_members=True,
         )
-        add_result = self.orchestrator.add_projection_candidate_to_crm(
+        add_result = self._add_projection_candidate_to_crm(
             {
                 "projection_id": "proj_openai_public_web",
                 "candidate_identity_key": "linkedin:openai-public-web",
@@ -1002,7 +1043,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
             ],
             replace_members=True,
         )
-        add_result = self.orchestrator.add_projection_candidate_to_crm(
+        add_result = self._add_projection_candidate_to_crm(
             {
                 "projection_id": "proj_openai_disabled_public_web",
                 "candidate_identity_key": "linkedin:openai-disabled-public-web",
@@ -1049,6 +1090,16 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
             ],
             replace_members=True,
         )
+        membership_revision = str(
+            dict(
+                self.orchestrator.serving_projection_reader.get_projection("proj_openai_public_web_api").get(
+                    "projection"
+                )
+                or {}
+            ).get("membership_revision")
+            or ""
+        )
+        self.assertTrue(membership_revision)
         server = create_server(self.orchestrator, host="127.0.0.1", port=0)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -1060,6 +1111,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
                 {
                     "projection_id": "proj_openai_public_web_api",
                     "candidate_identity_key": "linkedin:openai-public-web-api",
+                    "expected_membership_revision": membership_revision,
                     "idempotency_key": "api-add-openai-public-web-api",
                 },
             )
@@ -1179,7 +1231,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
             ],
             replace_members=True,
         )
-        add_result = self.orchestrator.add_projection_candidate_to_crm(
+        add_result = self._add_projection_candidate_to_crm(
             {
                 "projection_id": "proj_openai_crm_public_web_promotion",
                 "candidate_identity_key": "linkedin:openai-crm-public-web-promotion",
@@ -1275,7 +1327,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
             ],
             replace_members=True,
         )
-        add_result = self.orchestrator.add_projection_candidate_to_crm(
+        add_result = self._add_projection_candidate_to_crm(
             {
                 "projection_id": "proj_openai_crm_public_web_stale_promotion",
                 "candidate_identity_key": "linkedin:openai-crm-public-web-stale-promotion",
@@ -1381,7 +1433,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
             ],
             replace_members=True,
         )
-        add_result = self.orchestrator.add_projection_candidate_to_crm(
+        add_result = self._add_projection_candidate_to_crm(
             {
                 "projection_id": "proj_openai_crm_public_web_cross_workspace_promotion",
                 "candidate_identity_key": "linkedin:openai-crm-public-web-cross-workspace-promotion",
@@ -1479,7 +1531,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
             ],
             replace_members=True,
         )
-        add_result = self.orchestrator.add_projection_candidate_to_crm(
+        add_result = self._add_projection_candidate_to_crm(
             {
                 "projection_id": "proj_openai_crm_public_web_export",
                 "candidate_identity_key": "linkedin:openai-crm-public-web-export",
@@ -2166,7 +2218,7 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
             ],
             replace_members=True,
         )
-        add_result = self.orchestrator.add_projection_candidate_to_crm(
+        add_result = self._add_projection_candidate_to_crm(
             {
                 "projection_id": "proj_openai_crm_public_web_fail_closed",
                 "candidate_identity_key": "linkedin:openai-crm-public-web-fail-closed",
@@ -2340,6 +2392,327 @@ class ProjectionCrmApiContractsTest(PGDurableRuntimeTestMixin, unittest.TestCase
         finally:
             server.shutdown()
             thread.join(timeout=2)
+
+    def test_projection_crm_bulk_prevalidates_visibility_and_revision_before_writes(self) -> None:
+        projection_id = "proj_crm_bulk_prevalidation"
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-crm-bulk-prevalidation",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:crm-visible",
+                    "person_identity_key": "linkedin:crm-visible",
+                    "public_summary": {"display_name": "Visible A"},
+                },
+                {
+                    "candidate_identity_key": "linkedin:crm-hidden",
+                    "person_identity_key": "linkedin:crm-hidden",
+                    "visibility_state": "hidden",
+                    "public_summary": {"display_name": "Hidden"},
+                },
+            ],
+            replace_members=True,
+        )
+        revision_a = str(
+            dict(
+                self.orchestrator.serving_projection_reader.get_projection(projection_id).get("projection") or {}
+            ).get("membership_revision")
+            or ""
+        )
+
+        hidden = self._add_projection_candidate_to_crm(
+            {
+                "projection_id": projection_id,
+                "candidate_identity_keys": ["linkedin:crm-visible", "linkedin:crm-hidden"],
+                "expected_membership_revision": revision_a,
+                "idempotency_key": "crm-bulk:hidden",
+            }
+        )
+
+        self.assertEqual(hidden["status"], "not_ready")
+        self.assertEqual(
+            self.store.get_crm_record_by_person_identity("linkedin:crm-visible", workspace_id="default"),
+            {},
+        )
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-crm-bulk-prevalidation",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:crm-visible",
+                    "person_identity_key": "linkedin:crm-visible",
+                    "public_summary": {"display_name": "Visible B"},
+                }
+            ],
+            replace_members=True,
+        )
+
+        stale = self._add_projection_candidate_to_crm(
+            {
+                "projection_id": projection_id,
+                "candidate_identity_keys": ["linkedin:crm-visible"],
+                "expected_membership_revision": revision_a,
+                "idempotency_key": "crm-bulk:stale",
+            }
+        )
+
+        self.assertEqual(stale["status"], "not_ready")
+        self.assertEqual(stale["reason"], "projection_membership_revision_stale")
+        self.assertEqual(
+            self.store.get_crm_record_by_person_identity("linkedin:crm-visible", workspace_id="default"),
+            {},
+        )
+
+    def test_projection_crm_bulk_rolls_back_all_rows_when_owner_uow_fails(self) -> None:
+        projection_id = "proj_crm_bulk_partial"
+        keys = ["linkedin:crm-partial-a", "linkedin:crm-partial-b"]
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-crm-bulk-partial",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": candidate_key,
+                    "person_identity_key": candidate_key,
+                    "public_summary": {"display_name": candidate_key},
+                }
+                for candidate_key in keys
+            ],
+            replace_members=True,
+        )
+        revision = str(
+            dict(
+                self.orchestrator.serving_projection_reader.get_projection(projection_id).get("projection") or {}
+            ).get("membership_revision")
+            or ""
+        )
+        adapter = self.store._control_plane_postgres  # noqa: SLF001
+        real_bulk_upsert = adapter._bulk_upsert_rows_with_cursor  # noqa: SLF001
+
+        def fail_event_write(cursor, *, table_name, payload_rows, plan, **kwargs):
+            if table_name == "crm_events":
+                raise RuntimeError("injected_projection_crm_event_write_failure")
+            return real_bulk_upsert(
+                cursor,
+                table_name=table_name,
+                payload_rows=payload_rows,
+                plan=plan,
+                **kwargs,
+            )
+
+        with mock.patch.object(
+            adapter,
+            "_bulk_upsert_rows_with_cursor",
+            side_effect=fail_event_write,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected_projection_crm_event_write_failure"):
+                self._add_projection_candidate_to_crm(
+                    {
+                        "projection_id": projection_id,
+                        "candidate_identity_keys": keys,
+                        "expected_membership_revision": revision,
+                        "idempotency_key": "crm-bulk:atomic",
+                    }
+                )
+
+        for key in keys:
+            self.assertEqual(self.store.get_crm_record_by_person_identity(key, workspace_id="default"), {})
+        self.assertEqual(adapter.select_many("crm_engagements", limit=0), [])
+        self.assertEqual(adapter.select_many("crm_events", limit=0), [])
+
+    def test_projection_crm_bulk_rejects_duplicate_person_identity_without_writes(self) -> None:
+        projection_id = "proj_crm_duplicate_person"
+        candidate_keys = ["candidate:duplicate-person:a", "candidate:duplicate-person:b"]
+        person_key = "linkedin:duplicate-person"
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-crm-duplicate-person",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": candidate_key,
+                    "person_identity_key": person_key,
+                    "public_summary": {"display_name": candidate_key},
+                }
+                for candidate_key in candidate_keys
+            ],
+            replace_members=True,
+        )
+        revision = str(
+            dict(
+                self.orchestrator.serving_projection_reader.get_projection(projection_id).get("projection") or {}
+            ).get("membership_revision")
+            or ""
+        )
+
+        result = self._add_projection_candidate_to_crm(
+            {
+                "projection_id": projection_id,
+                "candidate_identity_keys": candidate_keys,
+                "expected_membership_revision": revision,
+                "idempotency_key": "crm-bulk:duplicate-person",
+            }
+        )
+
+        self.assertEqual(result["status"], "not_ready")
+        self.assertEqual(result["reason"], "projection_member_person_identity_conflict")
+        self.assertEqual(result["conflicting_person_identity_keys"], {person_key: candidate_keys})
+        self.assertEqual(self.store.get_crm_record_by_person_identity(person_key, workspace_id="default"), {})
+        adapter = self.store._control_plane_postgres  # noqa: SLF001
+        self.assertEqual(adapter.select_many("crm_engagements", limit=0), [])
+        self.assertEqual(adapter.select_many("crm_events", limit=0), [])
+
+    def test_projection_crm_uow_rechecks_revision_after_caller_snapshot(self) -> None:
+        projection_id = "proj_crm_uow_recheck"
+        candidate_key = "linkedin:crm-uow-recheck"
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-crm-uow-recheck",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": candidate_key,
+                    "person_identity_key": candidate_key,
+                    "public_summary": {"display_name": "Revision A"},
+                }
+            ],
+            replace_members=True,
+        )
+        revision_a = str(
+            dict(
+                self.orchestrator.serving_projection_reader.get_projection(projection_id).get("projection") or {}
+            ).get("membership_revision")
+            or ""
+        )
+        real_apply = self.store.apply_projection_crm_selection
+        publication_injected = False
+
+        def publish_b_then_apply(**kwargs):
+            nonlocal publication_injected
+            if not publication_injected:
+                publication_injected = True
+                self.projection_writer.publish_run_scope_projection(
+                    run_id="job-crm-uow-recheck",
+                    projection_id=projection_id,
+                    members=[
+                        {
+                            "candidate_identity_key": candidate_key,
+                            "person_identity_key": candidate_key,
+                            "public_summary": {"display_name": "Revision B"},
+                        }
+                    ],
+                    replace_members=True,
+                )
+            return real_apply(**kwargs)
+
+        with mock.patch.object(
+            self.store,
+            "apply_projection_crm_selection",
+            side_effect=publish_b_then_apply,
+        ):
+            result = self._add_projection_candidate_to_crm(
+                {
+                    "projection_id": projection_id,
+                    "candidate_identity_keys": [candidate_key],
+                    "expected_membership_revision": revision_a,
+                    "idempotency_key": "crm-uow:recheck",
+                }
+            )
+
+        self.assertEqual(result["status"], "not_ready")
+        self.assertEqual(result["reason"], "projection_membership_revision_stale")
+        self.assertEqual(self.store.get_crm_record_by_person_identity(candidate_key, workspace_id="default"), {})
+
+    def test_projection_export_is_revision_bound_and_old_artifact_remains_replayable(self) -> None:
+        projection_id = "proj_export_revision_bound"
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-export-revision-bound",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:export-revision-a",
+                    "person_identity_key": "linkedin:export-revision-a",
+                }
+            ],
+            replace_members=True,
+        )
+        command_a = self.orchestrator._plan_projection_export_generate_command(  # noqa: SLF001
+            {"projection_id": projection_id}
+        )
+        revision_a = str(dict(command_a.get("payload") or {}).get("membership_revision") or "")
+        result_a = self.orchestrator._run_projection_export_generate_command(command_a)  # noqa: SLF001
+        self.assertEqual(result_a["status"], "ok")
+        self.assertEqual(result_a["membership_revision"], revision_a)
+        self.assertEqual(result_a["source_candidate_count"], 1)
+        with zipfile.ZipFile(BytesIO(result_a["body"])) as archive:
+            manifest_name = next(name for name in archive.namelist() if name.endswith("projection_export_manifest.json"))
+            manifest_a = json.loads(archive.read(manifest_name).decode("utf-8"))
+        self.assertEqual(manifest_a["membership_revision"], revision_a)
+        self.assertEqual(manifest_a["source_candidate_count"], 1)
+
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-export-revision-bound",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:export-revision-b",
+                    "person_identity_key": "linkedin:export-revision-b",
+                }
+            ],
+            replace_members=True,
+        )
+        command_b = self.orchestrator._plan_projection_export_generate_command(  # noqa: SLF001
+            {"projection_id": projection_id}
+        )
+        revision_b = str(dict(command_b.get("payload") or {}).get("membership_revision") or "")
+        self.assertNotEqual(revision_a, revision_b)
+        self.assertNotEqual(command_a["command_id"], command_b["command_id"])
+        self.assertNotEqual(command_a["idempotency_key"], command_b["idempotency_key"])
+
+        replay_a = self.orchestrator.get_export_command_artifact(str(command_a["command_id"]))
+        self.assertEqual(replay_a["status"], "ok")
+        self.assertEqual(replay_a["membership_revision"], revision_a)
+        headers_a = self.orchestrator._projection_export_artifact_headers(replay_a)  # noqa: SLF001
+        self.assertEqual(headers_a["X-Sourcing-Membership-Revision"], revision_a)
+        self.assertEqual(headers_a["X-Sourcing-Source-Candidate-Count"], "1")
+
+        result_b = self.orchestrator._run_projection_export_generate_command(command_b)  # noqa: SLF001
+        self.assertEqual(result_b["status"], "ok")
+        self.assertEqual(result_b["membership_revision"], revision_b)
+
+    def test_projection_export_worker_fails_closed_when_membership_changes_after_submit(self) -> None:
+        projection_id = "proj_export_revision_stale"
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-export-revision-stale",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:export-stale-a",
+                    "person_identity_key": "linkedin:export-stale-a",
+                }
+            ],
+            replace_members=True,
+        )
+        command = self.orchestrator._plan_projection_export_generate_command(  # noqa: SLF001
+            {"projection_id": projection_id}
+        )
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-export-revision-stale",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:export-stale-b",
+                    "person_identity_key": "linkedin:export-stale-b",
+                }
+            ],
+            replace_members=True,
+        )
+
+        result = self.orchestrator._run_projection_export_generate_command(command)  # noqa: SLF001
+
+        self.assertEqual(result["status"], "not_ready")
+        self.assertEqual(result["reason"], "projection_membership_revision_stale")
+        self.assertEqual(
+            str(self.store.get_workflow_command(str(command["command_id"])).get("status") or ""),
+            "failed_terminal",
+        )
 
 
 _LOCAL_API_OPENER = urllib_request.build_opener(urllib_request.ProxyHandler({}))

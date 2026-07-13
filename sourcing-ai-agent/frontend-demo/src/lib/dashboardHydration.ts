@@ -74,11 +74,10 @@ export function dashboardBoardRuntimePublicationComplete(dashboard: DashboardDat
     const board = dashboard.boardRuntimeState;
     const expectedCount = boardExpectedCandidateCount(dashboard);
     const servedCount = positiveInteger(board.servedCandidateCount);
-    const displayReadyCount = positiveInteger(board.displayReadyCandidateCount);
     return (
       board.publicationStatus === "complete" &&
-      board.phase === "current_snapshot_serving" &&
-      (expectedCount <= 0 || (servedCount >= expectedCount && displayReadyCount >= expectedCount))
+      ["current_snapshot_serving", "canonical_projection_serving"].includes(board.phase) &&
+      (expectedCount <= 0 || servedCount >= expectedCount)
     );
   }
   const lifecycle = dashboard?.resultViewLifecycle;

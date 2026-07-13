@@ -236,7 +236,7 @@ rg -n '^    def .*workflow_(current_state|event)|^    def .*runtime_outbox' src/
   并对 consume fence 做受控变异；(d) `test_pipeline` 精确节点仍须 current/pinned 成对跑，已删 `_lock/_connection`
   的同基线失败归 R-009，不能为迁移恢复 SQLite-era 白盒缝隙。
 
-## 7. Owner 决策卡(决策卡格式,2026-07-09 升级;D-1/D-2 已决，D-3 待决)
+## 7. Owner 决策卡(决策卡格式,2026-07-09 升级;D-1/D-2/D-3/D-4 已决)
 
 ### D-1 ③ jsonb/timestamptz 迁移窗口
 
@@ -271,11 +271,35 @@ rg -n '^    def .*workflow_(current_state|event)|^    def .*runtime_outbox' src/
 
 ### D-3 lovable_board 分子契约
 
-- **单一问题**:看板卡片计数分子取"已合入看板的可见 patch 数"还是"全部投影成员数"(112/297 vs 186/297 族)?
-- **选项**:(a) 可见 patch 分子 —— 与前端当前渲染一致;(b) 投影成员分子 —— 与导出/CRM 计数一致。
-- **推荐**:无强推荐 —— 这是产品语义,需 owner 从用户视角裁决(证据:`RESIDUAL_LEDGER.md` R-001/R-007 的三组失败数字)。
-- **截止**:2026-07-31(投影计数契约化是 Track C serving 的前置);**决策人**:owner。
-- **超时默认**:维持现状,R-001/R-007 继续 accepted 并在台账顺延一次(顺延即在该行追加日期)。
+> **状态:owner 已于 2026-07-13 批准修订 (a)。** 主候选人同步、canonical 分页、projection-sourced
+> export/CRM 总数由 exact canonical visible membership 独立拥有；卡片详情进度由 exact
+> `card_ready` / `display_ready` 独立拥有。历史 `112/297` 与 `186/297` 分歧只作为旧 owner 漂移证据，
+> 不再作为两个可选产品语义。
+
+- **单一问题**:主候选人同步与卡片详情是否继续共用一个 `display_ready` 分子，还是拆成 canonical
+  membership `N/N` 与 card detail `C/N` 两个独立合同?
+- **选项**:(a) 拆分 owner —— exact `serving_projection_members` visible membership 独立拥有 `N`，
+  主同步/分页/projection export/CRM source totals 均使用 `N/N`；exact card-readiness 独立拥有 `C/N`；
+  `profile_ready`、`card_ready` 与 explicit profile capture 分别按自己的证据投影，不要求
+  `card_ready <= profile_ready`，也不得互相推导。(b) 继续由 `display_ready` 同时决定主同步、分页总数和
+  页面可渲染性 —— 卡片 enrichment 尾部会继续阻塞已发布的 canonical roster。(c) 允许 legacy summary、
+  patch 或 frontend loaded rows 在 canonical read 不 exact 时补数 —— 保留多真源和静默 fallback。
+- **裁决**:选择 (a)。同一 canonical membership revision 内 `0 <= C <= N`，但不存在
+  `C <= profile_ready` 的跨维度不变量；explicit profile capture 必须来自显式 capture evidence，不能由
+  profile/card readiness 代填。新的 authoritative exact publication 可把 `N`、`C` 及各自 exact 聚合向上、
+  向下或归零纠正；stale/partial evidence 不能覆盖当前 pinned exact publication。
+- **Revision owner**:`projection.membership_revision` 由 serving-projection member-publication UoW 独占写入，
+  source 是现有 member semantic-input revision 的 opaque equality token。Summary/page/readiness/export/CRM input
+  只在 token 相等时组合；token 缺失或 mismatch 的 direct merge fail closed、失效 cache 并重新 resolve/read。
+  Token 只比较相等/不等，不可排序；`updated_at`、published timestamp、patch sequence 和 count 大小都不能替代，
+  尤其不能解决同秒 publication 冲突。
+- **公共读约束**:canonical membership count 只有在 `count_scope=exact_projection`、
+  `read_contract.source=serving_projection_members`、`fallback_used=false` 且 revision 一致时可用。否则公共读
+  fail closed，不能把 `0` 当作真实空集合。Public facet 仍由 `projection_person_search_index` owner；初始
+  membership publication 的 facet 状态必须是 `pending` / `unavailable`，不能同步扫描 members 冒充 exact facet。
+- **实施约束**:基础 roster 行在 exact membership 可分页后即可渲染，即使 `C=0`；卡片详情以独立
+  `C/N` 追尾。后续实现、fast contract preflight、A/B 与 mutation gate 必须覆盖 exact revision 的上调、
+  下调、归零、non-exact fail-closed 和 explicit-capture 非推导。本文裁决不等于任何 migration 或 live/W6 GO。
 
 ### D-4 positional `bulk_upsert_rows` 的 fail-closed 修复范围
 

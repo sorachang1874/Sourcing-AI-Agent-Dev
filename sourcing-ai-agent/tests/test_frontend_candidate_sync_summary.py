@@ -11,6 +11,230 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class FrontendCandidateSyncSummaryTest(unittest.TestCase):
+    def test_direct_projection_adapter_separates_membership_sync_from_exact_card_readiness(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("node is required for frontend TypeScript helper checks")
+        api_source = (REPO_ROOT / "frontend-demo/src/lib/api.ts").read_text(encoding="utf-8")
+        helper_start = api_source.index("function nonNegativeInteger(")
+        helper_end = api_source.index("function projectionPayloadToDashboard(", helper_start)
+        helper_source = api_source[helper_start:helper_end]
+        script = textwrap.dedent(
+            f"""
+            const vm = require("vm");
+            const ts = require("./frontend-demo/node_modules/typescript");
+            const source = {json.dumps(helper_source)} + "\\nmodule.exports = {{ projectionVisibleMemberCount, projectionMembershipRevision, projectionCardReadinessSummary }};";
+            const compiled = ts.transpileModule(source, {{
+              compilerOptions: {{ module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }},
+            }}).outputText;
+            const module = {{ exports: {{}} }};
+            vm.runInNewContext(compiled, {{ module, exports: module.exports, require, console }}, {{
+              filename: "projectionCardReadinessSummary.js",
+            }});
+            console.log(JSON.stringify({{
+              lovable: module.exports.projectionCardReadinessSummary(140, {{
+                row: "complete",
+                row_count: 140,
+                profile_ready_count: 100,
+                card_ready_count: 115,
+                explicit_profile_capture_candidate_count: 37,
+                needs_profile_completion_candidate_count: 25,
+                low_profile_richness_candidate_count: 5,
+                count_scope: "exact_projection",
+              }}),
+              cardOutOfBounds: module.exports.projectionCardReadinessSummary(140, {{
+                row: "complete",
+                row_count: 140,
+                profile_ready_count: 100,
+                card_ready_count: 141,
+                count_scope: "exact_projection",
+              }}),
+              profileOutOfBounds: module.exports.projectionCardReadinessSummary(140, {{
+                row: "complete",
+                row_count: 140,
+                profile_ready_count: 141,
+                card_ready_count: 115,
+                count_scope: "exact_projection",
+              }}),
+              unavailable: module.exports.projectionCardReadinessSummary(140, {{
+                row: "complete",
+                row_count: 140,
+                profile_ready_count: 0,
+                card_ready_count: 0,
+                count_scope: "unavailable",
+              }}),
+              partial: module.exports.projectionCardReadinessSummary(140, {{
+                row: "partial",
+                row_count: 140,
+                profile_ready_count: 115,
+                card_ready_count: 115,
+                count_scope: "exact_projection",
+              }}),
+              zeroReadiness: module.exports.projectionCardReadinessSummary(0, {{
+                row: "complete",
+                row_count: 0,
+                profile_ready_count: 0,
+                card_ready_count: 0,
+                count_scope: "exact_projection",
+              }}),
+              zeroMembership: module.exports.projectionVisibleMemberCount({{
+                visible_member_count: 0,
+                read_contract: {{
+                  source: "serving_projection_members",
+                  fallback_used: false,
+                  fail_closed: true,
+                }},
+              }}, {{
+                result_count: 0,
+                candidate_count: 0,
+                visible_member_count: 0,
+                count_scope: "exact_projection",
+              }}),
+              fallbackMembership: module.exports.projectionVisibleMemberCount({{
+                visible_member_count: 140,
+                read_contract: {{
+                  source: "legacy_overlay",
+                  fallback_used: true,
+                  fail_closed: true,
+                }},
+              }}, {{
+                result_count: 140,
+                candidate_count: 140,
+                visible_member_count: 140,
+                count_scope: "exact_projection",
+              }}),
+              membershipRevision: module.exports.projectionMembershipRevision({{
+                membership_revision: "projection-input-revision-1",
+              }}),
+              missingMembershipRevision: module.exports.projectionMembershipRevision({{}}),
+            }}));
+            """
+        )
+        completed = subprocess.run(
+            ["node", "-e", script],
+            cwd=REPO_ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        payload = json.loads(completed.stdout)
+        lovable = payload["lovable"]
+        self.assertEqual(lovable["cardReadyCount"], 115)
+        self.assertEqual(lovable["profileReadyCount"], 100)
+        self.assertEqual(lovable["explicitProfileCaptureCount"], 37)
+        self.assertEqual(lovable["needsProfileCompletionCount"], 25)
+        self.assertEqual(lovable["lowProfileRichnessCount"], 5)
+        self.assertEqual(lovable["previewCount"], 25)
+        self.assertTrue(lovable["qualityFieldsAvailable"])
+        self.assertEqual(lovable["statusText"], "卡片详情已合入看板 115/140")
+        for invalid_key in ("cardOutOfBounds", "profileOutOfBounds"):
+            self.assertFalse(payload[invalid_key]["qualityFieldsAvailable"])
+            self.assertEqual(payload[invalid_key]["cardReadyCount"], 0)
+            self.assertEqual(payload[invalid_key]["profileReadyCount"], 0)
+            self.assertEqual(payload[invalid_key]["previewCount"], 140)
+        self.assertFalse(payload["unavailable"]["qualityFieldsAvailable"])
+        self.assertEqual(payload["unavailable"]["statusText"], "")
+        self.assertFalse(payload["partial"]["qualityFieldsAvailable"])
+        self.assertEqual(payload["partial"]["statusText"], "")
+        self.assertTrue(payload["zeroReadiness"]["qualityFieldsAvailable"])
+        self.assertEqual(payload["zeroReadiness"]["cardReadyCount"], 0)
+        self.assertEqual(payload["zeroReadiness"]["profileReadyCount"], 0)
+        self.assertEqual(payload["zeroReadiness"]["previewCount"], 0)
+        self.assertEqual(payload["zeroReadiness"]["statusText"], "")
+        self.assertEqual(payload["zeroMembership"], 0)
+        self.assertIsNone(payload["fallbackMembership"])
+        self.assertEqual(payload["membershipRevision"], "projection-input-revision-1")
+        self.assertEqual(payload["missingMembershipRevision"], "")
+
+        adapter_source = api_source[
+            helper_end : api_source.index("export async function getProjectionDashboard", helper_end)
+        ]
+        self.assertIn('throw new Error("Canonical projection revision is unavailable.")', adapter_source)
+        self.assertIn(
+            'throw new Error("Canonical projection membership is unavailable or inconsistent.")', adapter_source
+        )
+        self.assertIn("const cardReadiness = projectionCardReadinessSummary(resultCount, readiness);", adapter_source)
+        self.assertIn("displayReadyCandidateCount: cardReadiness.cardReadyCount", adapter_source)
+        self.assertIn("profileDetailCandidateCount: cardReadiness.profileReadyCount", adapter_source)
+        self.assertIn(
+            "explicitProfileCaptureCandidateCount: cardReadiness.explicitProfileCaptureCount", adapter_source
+        )
+        self.assertIn("needsProfileCompletionCandidateCount: cardReadiness.needsProfileCompletionCount", adapter_source)
+        self.assertIn("lowProfileRichnessCandidateCount: cardReadiness.lowProfileRichnessCount", adapter_source)
+        self.assertIn("previewCandidateCount: cardReadiness.previewCount", adapter_source)
+        self.assertIn("rowPublicationRevision: membershipRevision", adapter_source)
+        self.assertIn("cardMaterializationStatusText: cardReadiness.statusText", adapter_source)
+        self.assertIn("syncStatusText: `${resultCount}/${resultCount}`", adapter_source)
+
+    def test_complete_projection_summary_keeps_backend_card_text_separate_from_membership_sync(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("node is required for frontend TypeScript helper checks")
+        script = textwrap.dedent(
+            """
+            const fs = require("fs");
+            const path = require("path");
+            const vm = require("vm");
+            const ts = require("./frontend-demo/node_modules/typescript");
+            const source = fs.readFileSync(
+              path.join(process.cwd(), "frontend-demo/src/lib/candidateSyncSummary.ts"),
+              "utf8",
+            );
+            const lifecycleSource = fs.readFileSync(
+              path.join(process.cwd(), "frontend-demo/src/lib/resultViewLifecycle.ts"),
+              "utf8",
+            );
+            const lifecycleCompiled = ts.transpileModule(lifecycleSource, {
+              compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+            }).outputText;
+            const lifecycleModule = { exports: {} };
+            vm.runInNewContext(
+              lifecycleCompiled,
+              { module: lifecycleModule, exports: lifecycleModule.exports, require, console },
+              { filename: "resultViewLifecycle.js" },
+            );
+            const compiled = ts.transpileModule(source, {
+              compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+            }).outputText;
+            const module = { exports: {} };
+            const localRequire = (specifier) =>
+              specifier === "./resultViewLifecycle" ? lifecycleModule.exports : require(specifier);
+            vm.runInNewContext(compiled, { module, exports: module.exports, require: localRequire, console }, {
+              filename: "candidateSyncSummary.js",
+            });
+            const summary = module.exports.buildCandidateSyncSummary({
+              loadedCandidateCount: 24,
+              expectedCandidateCount: 140,
+              boardRuntimeState: {
+                publicationStatus: "complete",
+                expectedCandidateCount: 140,
+                servedCandidateCount: 140,
+                publishedCandidateCount: 140,
+                displayReadyCandidateCount: 115,
+                previewCandidateCount: 25,
+                rowHydrationTargetCount: 140,
+                syncStatusText: "140/140",
+                cardMaterializationStatusText: "卡片详情已合入看板 115/140",
+                syncNoteLines: [
+                  { id: "card_materialization", text: "卡片详情已合入看板 115/140" },
+                ],
+              },
+            });
+            console.log(JSON.stringify(summary));
+            """
+        )
+        completed = subprocess.run(
+            ["node", "-e", script],
+            cwd=REPO_ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["syncedCandidateCount"], 140)
+        self.assertEqual(payload["expectedCandidateCount"], 140)
+        self.assertEqual(payload["hydratedCandidateCount"], 24)
+        self.assertEqual(payload["cardMaterializationStatusText"], "卡片详情已合入看板 115/140")
+        self.assertEqual(payload["noteText"], "卡片详情已合入看板 115/140")
+
     def _run_summary_cases(self) -> list[dict]:
         if shutil.which("node") is None:
             self.skipTest("node is required for frontend TypeScript helper checks")

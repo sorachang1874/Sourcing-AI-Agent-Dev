@@ -246,7 +246,10 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
         self.assertIn("resultsBoardFacetSessionState", source)
         self.assertIn("readResultsBoardFacetSessionState(resultsContextKey)", source)
         self.assertIn("showCounts={hasGlobalFacetSummary}", source)
-        self.assertIn('[historyId || "no-history", jobId || "no-job", projectionId || "no-projection"].join(":")', source)
+        self.assertIn(
+            '[historyId || "no-history", jobId || "no-job", resolvedProjectionId || "no-projection"].join(":")',
+            source,
+        )
         self.assertIn("getCandidateDetailsBatch(missingCandidateIds, jobId)", source)
         self.assertIn("pagedDisplayCandidates", source)
         self.assertIn("groupCandidatesByAuditStatus(pagedDisplayCandidates, reviewStatusMap)", source)
@@ -576,7 +579,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
               },
               { filename: "api.js" },
             );
-            const { mergeDashboardRuntimeProgress } = module.exports;
+            const { mergeDashboardCandidatePage, mergeDashboardRuntimeProgress } = module.exports;
             const completeBoard = {
               schemaVersion: 1,
               jobId: "job-openai-agent",
@@ -696,59 +699,62 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
               { module, exports: module.exports, require: localRequire, console, crypto: { randomUUID: () => "test-id" } },
               { filename: "api.js" },
             );
-            const { mergeDashboardRuntimeProgress } = module.exports;
+            const { mergeDashboardCandidatePage, mergeDashboardRuntimeProgress } = module.exports;
             const cachedBoard = {
               schemaVersion: 1,
-              jobId: "job-openai",
+              jobId: "job-lovable",
               resultMode: "asset_population",
-              phase: "current_snapshot_serving",
+              phase: "canonical_projection_serving",
               publicationStatus: "complete",
-              expectedCandidateCount: 597,
-              servedCandidateCount: 597,
-              publishedCandidateCount: 597,
-              displayReadyCandidateCount: 597,
-              previewCandidateCount: 0,
-              profileDetailCandidateCount: 597,
-              explicitProfileCaptureCandidateCount: 297,
+              expectedCandidateCount: 140,
+              servedCandidateCount: 140,
+              publishedCandidateCount: 140,
+              displayReadyCandidateCount: 115,
+              previewCandidateCount: 25,
+              profileDetailCandidateCount: 115,
+              explicitProfileCaptureCandidateCount: 115,
               needsProfileCompletionCandidateCount: 0,
               lowProfileRichnessCandidateCount: 0,
               cardMaterializationQualityFieldsAvailable: true,
-              rowHydrationTargetCount: 597,
-              baselineCandidateCount: 300,
+              rowHydrationTargetCount: 140,
+              baselineCandidateCount: 0,
               rowPublicationSequence: 10,
-              rowPublicationTier: "current_snapshot_serving",
-              rowPublicationWatermark: "snapshot|10|597|completed",
+              rowPublicationTier: "serving_projection_members",
+              rowPublicationRevision: "projection-revision-current",
+              rowPublicationWatermark: "2026-07-13T12:00:00Z",
+              rowPublicationUpdatedAt: "2026-07-13T12:00:00Z",
               facetSummaryStatus: "complete",
-              facetSummaryScope: "global_full_population",
-              facetSummaryCandidateCount: 597,
+              facetSummaryScope: "exact_projection",
+              facetSummaryCandidateCount: 140,
               layeringStatus: "completed",
             };
             const correctedBoard = {
               ...cachedBoard,
               phase: "partial_serving",
               publicationStatus: "partial",
-              expectedCandidateCount: 300,
-              servedCandidateCount: 300,
-              publishedCandidateCount: 300,
+              expectedCandidateCount: 120,
+              servedCandidateCount: 120,
+              publishedCandidateCount: 120,
               displayReadyCandidateCount: 120,
-              rowHydrationTargetCount: 300,
+              previewCandidateCount: 0,
+              rowHydrationTargetCount: 120,
               rowPublicationSequence: 11,
               rowPublicationTier: "partial_patch",
-              rowPublicationWatermark: "snapshot|11|300|running",
+              rowPublicationWatermark: "snapshot|11|120|running",
               facetSummaryStatus: "pending",
-              facetSummaryCandidateCount: 300,
+              facetSummaryCandidateCount: 120,
               layeringStatus: "running",
             };
             const dashboard = {
               title: "OpenAI Agent",
               snapshotId: "snapshot",
               queryLabel: "OpenAI Agent",
-              targetCompany: "OpenAI",
+              targetCompany: "Lovable",
               resultMode: "asset_population",
               resultModeLabel: "company assets",
               rankedCandidateCount: 0,
-              assetPopulationCount: 597,
-              totalCandidates: 597,
+              assetPopulationCount: 140,
+              totalCandidates: 140,
               totalEvidence: 0,
               manualReviewCount: 0,
               layers: [],
@@ -757,10 +763,161 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
               boardRuntimeState: cachedBoard,
             };
             const merged = mergeDashboardRuntimeProgress(dashboard, { boardRuntimeState: correctedBoard });
+            const staleCompleteBoard = {
+              ...cachedBoard,
+              phase: "current_snapshot_serving",
+              displayReadyCandidateCount: 140,
+              previewCandidateCount: 0,
+              profileDetailCandidateCount: 140,
+              rowPublicationSequence: 99,
+              rowPublicationTier: "current_snapshot_serving",
+              rowPublicationWatermark: "2026-07-13T13:00:00Z",
+              rowPublicationUpdatedAt: "2026-07-13T13:00:00Z",
+            };
+            const correctedFromStaleComplete = mergeDashboardRuntimeProgress(
+              { ...dashboard, boardRuntimeState: staleCompleteBoard },
+              { boardRuntimeState: cachedBoard },
+            );
+            const differentRevisionEarlierTimestampBoard = {
+              ...cachedBoard,
+              rowPublicationRevision: "projection-revision-older",
+              displayReadyCandidateCount: 140,
+              previewCandidateCount: 0,
+              profileDetailCandidateCount: 140,
+              rowPublicationWatermark: "2026-07-13T11:00:00Z",
+              rowPublicationUpdatedAt: "2026-07-13T11:00:00Z",
+            };
+            const unresolvedAcrossDifferentRevision = mergeDashboardRuntimeProgress(
+              { ...dashboard, boardRuntimeState: differentRevisionEarlierTimestampBoard },
+              { boardRuntimeState: cachedBoard },
+            );
+            const sameSecondStaleBoard = {
+              ...cachedBoard,
+              rowPublicationRevision: "projection-revision-stale",
+              displayReadyCandidateCount: 140,
+              previewCandidateCount: 0,
+              profileDetailCandidateCount: 140,
+            };
+            const protectedFromSameSecondStale = mergeDashboardRuntimeProgress(
+              dashboard,
+              { boardRuntimeState: sameSecondStaleBoard },
+            );
+            const sameRevisionPendingBoard = {
+              ...cachedBoard,
+              rowPublicationSequence: 99,
+              facetSummaryStatus: "pending",
+              facetSummaryCandidateCount: 0,
+              layeringStatus: "completed",
+            };
+            const protectedFromSameRevisionPending = mergeDashboardRuntimeProgress(
+              dashboard,
+              { boardRuntimeState: sameRevisionPendingBoard },
+            );
+            const cachedRows = Array.from({ length: 140 }, (_, index) => ({
+              id: `candidate-${index}`,
+              team: "Unknown",
+              outreachLayer: null,
+            }));
+            const rowDashboard = { ...dashboard, candidates: cachedRows };
+            const smallerCanonicalBoard = {
+              ...cachedBoard,
+              expectedCandidateCount: 115,
+              servedCandidateCount: 115,
+              publishedCandidateCount: 115,
+              displayReadyCandidateCount: 100,
+              previewCandidateCount: 15,
+              rowHydrationTargetCount: 115,
+              rowPublicationRevision: "projection-revision-smaller",
+              rowPublicationWatermark: "2026-07-13T13:00:00Z",
+              rowPublicationUpdatedAt: "2026-07-13T13:00:00Z",
+            };
+            const mismatchedRevisionPage = mergeDashboardCandidatePage(rowDashboard, {
+              jobId: "job-lovable",
+              resultMode: "asset_population",
+              offset: 0,
+              limit: 24,
+              returnedCount: 24,
+              totalCandidates: 115,
+              filteredCandidateCount: 115,
+              hasMore: true,
+              nextOffset: 24,
+              candidates: cachedRows.slice(0, 24),
+              boardRuntimeState: smallerCanonicalBoard,
+            });
+            const freshSmallerBase = {
+              ...dashboard,
+              totalCandidates: 115,
+              assetPopulationCount: 115,
+              candidates: [],
+              boardRuntimeState: smallerCanonicalBoard,
+            };
+            const freshSmaller = mergeDashboardCandidatePage(freshSmallerBase, {
+              jobId: "job-lovable",
+              resultMode: "asset_population",
+              offset: 0,
+              limit: 24,
+              returnedCount: 24,
+              totalCandidates: 115,
+              filteredCandidateCount: 115,
+              hasMore: true,
+              nextOffset: 24,
+              candidates: cachedRows.slice(0, 24),
+              boardRuntimeState: smallerCanonicalBoard,
+            });
+            const emptyCanonicalBoard = {
+              ...smallerCanonicalBoard,
+              expectedCandidateCount: 0,
+              servedCandidateCount: 0,
+              publishedCandidateCount: 0,
+              displayReadyCandidateCount: 0,
+              previewCandidateCount: 0,
+              rowHydrationTargetCount: 0,
+              rowPublicationRevision: "projection-revision-empty",
+            };
+            const freshEmpty = mergeDashboardCandidatePage(
+              {
+                ...dashboard,
+                totalCandidates: 0,
+                assetPopulationCount: 0,
+                candidates: [],
+                boardRuntimeState: emptyCanonicalBoard,
+              },
+              {
+                jobId: "job-lovable",
+                resultMode: "asset_population",
+                offset: 0,
+                limit: 24,
+                returnedCount: 0,
+                totalCandidates: 0,
+                filteredCandidateCount: 0,
+                hasMore: false,
+                nextOffset: null,
+                candidates: [],
+                boardRuntimeState: emptyCanonicalBoard,
+              },
+            );
             console.log(JSON.stringify({
               expected: merged.boardRuntimeState.expectedCandidateCount,
               phase: merged.boardRuntimeState.phase,
+              displayReady: merged.boardRuntimeState.displayReadyCandidateCount,
+              preview: merged.boardRuntimeState.previewCandidateCount,
               total: merged.totalCandidates,
+              staleCompleteDisplayReady:
+                correctedFromStaleComplete.boardRuntimeState.displayReadyCandidateCount,
+              differentRevisionDisplayReady:
+                unresolvedAcrossDifferentRevision.boardRuntimeState.displayReadyCandidateCount,
+              sameSecondStaleDisplayReady:
+                protectedFromSameSecondStale.boardRuntimeState.displayReadyCandidateCount,
+              sameRevisionFacetStatus:
+                protectedFromSameRevisionPending.boardRuntimeState.facetSummaryStatus,
+              sameRevisionLayeringStatus:
+                protectedFromSameRevisionPending.boardRuntimeState.layeringStatus,
+              mismatchedRevisionTotal: mismatchedRevisionPage.totalCandidates,
+              mismatchedRevisionRows: mismatchedRevisionPage.candidates.length,
+              freshSmallerTotal: freshSmaller.totalCandidates,
+              freshSmallerRows: freshSmaller.candidates.length,
+              freshEmptyTotal: freshEmpty.totalCandidates,
+              freshEmptyRows: freshEmpty.candidates.length,
             }));
             """
         )
@@ -772,9 +929,22 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
             check=True,
         )
         payload = json.loads(completed.stdout)
-        self.assertEqual(payload["expected"], 597)
-        self.assertEqual(payload["phase"], "current_snapshot_serving")
-        self.assertEqual(payload["total"], 597)
+        self.assertEqual(payload["expected"], 140)
+        self.assertEqual(payload["phase"], "canonical_projection_serving")
+        self.assertEqual(payload["displayReady"], 115)
+        self.assertEqual(payload["preview"], 25)
+        self.assertEqual(payload["total"], 140)
+        self.assertEqual(payload["staleCompleteDisplayReady"], 115)
+        self.assertEqual(payload["differentRevisionDisplayReady"], 140)
+        self.assertEqual(payload["sameSecondStaleDisplayReady"], 115)
+        self.assertEqual(payload["sameRevisionFacetStatus"], "complete")
+        self.assertEqual(payload["sameRevisionLayeringStatus"], "completed")
+        self.assertEqual(payload["mismatchedRevisionTotal"], 140)
+        self.assertEqual(payload["mismatchedRevisionRows"], 140)
+        self.assertEqual(payload["freshSmallerTotal"], 115)
+        self.assertEqual(payload["freshSmallerRows"], 24)
+        self.assertEqual(payload["freshEmptyTotal"], 0)
+        self.assertEqual(payload["freshEmptyRows"], 0)
 
     def test_board_runtime_total_candidates_stays_canonical_when_published_is_higher(self) -> None:
         if shutil.which("node") is None:
@@ -1174,8 +1344,25 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
         self.assertIn("canonicalExportScope.complete", panel_source)
         self.assertNotIn("exportTargetCandidatesArchive", panel_source)
         self.assertIn("getRunProjectionId(jobId)", backend_source)
+        self.assertIn("getDashboard(jobId, { forceRefresh: true })", backend_source)
+        self.assertIn("expectedMembershipRevision", backend_source)
         self.assertIn("exportProjectionCandidatesArchive", backend_source)
         self.assertNotIn("exportTargetCandidatesArchive", backend_source)
+
+    def test_results_actions_and_filtered_pages_are_bound_to_canonical_projection_revision(self) -> None:
+        api_source = (REPO_ROOT / "frontend-demo/src/lib/api.ts").read_text(encoding="utf-8")
+        flow_source = (REPO_ROOT / "frontend-demo/src/components/SearchFlow.tsx").read_text(encoding="utf-8")
+        panel_source = (REPO_ROOT / "frontend-demo/src/components/ResultsBoardPanel.tsx").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("projectionId={dashboard.projectionId || dashboard.resultViewLifecycle?.servingProjectionId", flow_source)
+        self.assertIn("const projectionMutationReady = Boolean(resolvedProjectionId && membershipRevision)", panel_source)
+        self.assertIn("dashboardCandidatePageRevisionMatches(dashboard, backendCandidatePage)", panel_source)
+        self.assertIn("dashboardCandidatePageRevisionMatches(dashboard, page)", panel_source)
+        self.assertIn("dashboard.boardRuntimeState?.rowPublicationRevision", panel_source)
+        self.assertIn('pickFirstString(assetPopulationPayload, ["projection_id", "serving_projection_id"])', api_source)
+        self.assertIn("expectedMembershipRevision: membershipRevision", panel_source)
 
     def test_target_candidate_store_uses_crm_normal_path_not_legacy_target_write(self) -> None:
         store_source = (REPO_ROOT / "frontend-demo/src/lib/targetCandidatesStore.ts").read_text(encoding="utf-8")
@@ -1509,7 +1696,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
         self.assertIn("low_profile_richness_candidate_count", api_source)
         self.assertIn("quality_fields_available", api_source)
 
-    def test_get_dashboard_candidate_page_reuses_inflight_force_refresh_request(self) -> None:
+    def test_get_dashboard_candidate_page_force_refresh_supersedes_inflight_request(self) -> None:
         if shutil.which("node") is None:
             self.skipTest("node is required for frontend TypeScript helper checks")
         script = textwrap.dedent(
@@ -1651,6 +1838,36 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                 note_text: "",
               },
             };
+            const projectionCandidatePagePayload = {
+              ...candidatePagePayload,
+              projection: {
+                projection_id: "projection-1",
+                projection_type: "run_scope_projection",
+                source_run_id: "job-1",
+                visible_member_count: 25,
+                updated_at: "2026-07-13T12:00:00Z",
+                membership_revision: "projection-input-revision-1",
+                read_contract: {
+                  source: "serving_projection_members",
+                  fallback_used: false,
+                  fail_closed: true,
+                },
+                counts: {
+                  result_count: 25,
+                  candidate_count: 25,
+                  visible_member_count: 25,
+                  count_scope: "exact_projection",
+                },
+                readiness: {
+                  row: "complete",
+                  row_count: 25,
+                  profile_required_count: 25,
+                  profile_ready_count: 12,
+                  card_ready_count: 12,
+                  count_scope: "exact_projection",
+                },
+              },
+            };
 
             async function runCase() {
               let fetchCalls = 0;
@@ -1658,10 +1875,14 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
               const fetchGate = new Promise((resolve) => {
                 releaseFetch = resolve;
               });
-              const fetchStub = async () => {
+              const fetchStub = async (url) => {
                 fetchCalls += 1;
                 await fetchGate;
-                return makeResponse(candidatePagePayload);
+                return makeResponse(
+                  String(url).includes("/api/projections/")
+                    ? projectionCandidatePagePayload
+                    : candidatePagePayload,
+                );
               };
               const api = loadApiModule(fetchStub);
               const first = api.getDashboardCandidatePage("job-1", {
@@ -1686,6 +1907,56 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                 forceRefresh: true,
                 filter: { searchKeyword: "candidate" },
               });
+              const mismatchedSummaryPayload = {
+                ...projectionCandidatePagePayload,
+                projection: {
+                  ...projectionCandidatePagePayload.projection,
+                  membership_revision: "projection-summary-revision",
+                },
+              };
+              const mismatchedPagePayload = {
+                ...projectionCandidatePagePayload,
+                projection: {
+                  ...projectionCandidatePagePayload.projection,
+                  membership_revision: "projection-page-revision",
+                },
+              };
+              const mismatchedApi = loadApiModule(async (url) =>
+                makeResponse(
+                  String(url).includes("/candidates")
+                    ? mismatchedPagePayload
+                    : mismatchedSummaryPayload,
+                ),
+              );
+              let mismatchedDashboardError = "";
+              try {
+                await mismatchedApi.getProjectionDashboard("projection-mismatch", {
+                  forceRefresh: true,
+                });
+              } catch (error) {
+                mismatchedDashboardError = String(error?.message || error);
+              }
+              const missingRevisionApi = loadApiModule(async (url) =>
+                makeResponse(
+                  String(url).includes("/candidates")
+                    ? {
+                        ...projectionCandidatePagePayload,
+                        projection: {
+                          ...projectionCandidatePagePayload.projection,
+                          membership_revision: "",
+                        },
+                      }
+                    : projectionCandidatePagePayload,
+                ),
+              );
+              let missingRevisionError = "";
+              try {
+                await missingRevisionApi.getProjectionDashboard("projection-missing-revision", {
+                  forceRefresh: true,
+                });
+              } catch (error) {
+                missingRevisionError = String(error?.message || error);
+              }
               return {
                 fetchCalls,
                 firstPromoted: Boolean(firstResult.boardRuntimeState?.deltaProfileDenominatorPromoted),
@@ -1695,6 +1966,14 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                 firstFilteredCandidateCount: Number(firstResult.filteredCandidateCount),
                 secondFilteredCandidateCount: Number(secondResult.filteredCandidateCount),
                 projectionFilteredCandidateCount: Number(projectionResult.filteredCandidateCount),
+                projectionQualityClassificationsUnavailable:
+                  projectionResult.boardRuntimeState?.explicitProfileCaptureCandidateCount === null &&
+                  projectionResult.boardRuntimeState?.needsProfileCompletionCandidateCount === null &&
+                  projectionResult.boardRuntimeState?.lowProfileRichnessCandidateCount === null,
+                mismatchedDashboardError,
+                mismatchedDashboardCached:
+                  Boolean(mismatchedApi.peekProjectionDashboardCache("projection-mismatch")),
+                missingRevisionError,
               };
             }
 
@@ -1716,7 +1995,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
             check=True,
         )
         payload = json.loads(completed.stdout)
-        self.assertEqual(payload["fetchCalls"], 2, payload)
+        self.assertEqual(payload["fetchCalls"], 3, payload)
         self.assertTrue(payload["firstPromoted"], payload)
         self.assertTrue(payload["secondPromoted"], payload)
         self.assertEqual(payload["firstJobId"], "job-1", payload)
@@ -1724,3 +2003,11 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
         self.assertEqual(payload["firstFilteredCandidateCount"], 0, payload)
         self.assertEqual(payload["secondFilteredCandidateCount"], 0, payload)
         self.assertEqual(payload["projectionFilteredCandidateCount"], 0, payload)
+        self.assertTrue(payload["projectionQualityClassificationsUnavailable"], payload)
+        self.assertEqual(
+            payload["mismatchedDashboardError"],
+            "Canonical projection summary and page revisions do not match.",
+            payload,
+        )
+        self.assertFalse(payload["mismatchedDashboardCached"], payload)
+        self.assertEqual(payload["missingRevisionError"], "Canonical projection revision is unavailable.", payload)

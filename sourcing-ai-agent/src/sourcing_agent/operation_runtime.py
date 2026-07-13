@@ -702,6 +702,26 @@ class OperationRuntimeWriter:
                 **dict(metadata or {}),
             },
         )
+        requested_identity = {
+            "conversation_id": str(conversation_id or "").strip(),
+            "action_type": spec.action_type,
+            "owner_module": spec.owner_module,
+            "operation_type": spec.operation_type,
+            "target_ref": dict(target_ref or {}),
+            "input": dict(input_payload or {}),
+            "budget": budget_payload,
+        }
+        persisted_identity = {
+            "conversation_id": str(action.get("conversation_id") or "").strip(),
+            "action_type": str(action.get("action_type") or "").strip(),
+            "owner_module": str(action.get("owner_module") or "").strip(),
+            "operation_type": str(action.get("operation_type") or "").strip(),
+            "target_ref": dict(action.get("target_ref") or {}),
+            "input": dict(action.get("input") or action.get("input_payload") or {}),
+            "budget": dict(action.get("budget") or {}),
+        }
+        if persisted_identity != requested_identity:
+            raise OperationRuntimeStateConflict("operation_action_idempotency_payload_conflict", action)
         event_type = "ActionApprovalRequired" if spec.requires_approval else "AgentActionQueued"
         action_event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=normalized_workspace_id,
@@ -897,22 +917,33 @@ class OperationRuntimeWriter:
         if operation_status in OPERATION_RUN_TERMINAL_STATUSES and operation_status != "cancelled":
             return operation
         action_id = str(operation.get("action_id") or "")
-        control_result = self.store.repos.workflow_runtime.cancel_operation_with_event(
-            str(operation.get("operation_run_id") or ""),
-            expected_status=operation_status,
-            action_id=action_id,
-            workspace_id=str(operation.get("workspace_id") or "default").strip() or "default",
-            progress_patch={"phase": "cancelled", "reason": str(reason or "").strip()},
-            result_ref_patch={},
-            metadata_patch={"cancelled_by": actor},
-            linked_action_metadata_patch={
-                "cancelled_operation_run_id": operation.get("operation_run_id"),
-            },
-            event_idempotency_key=f"{operation.get('idempotency_key')}:OperationCancelled",
-            actor=actor,
-            source=source,
-            event_payload={"reason": str(reason or "").strip(), "module_state_mutated": False},
-        )
+        expected_status = operation_status
+        for _ in range(2):
+            control_result = self.store.repos.workflow_runtime.cancel_operation_with_event(
+                str(operation.get("operation_run_id") or ""),
+                expected_status=expected_status,
+                action_id=action_id,
+                workspace_id=str(operation.get("workspace_id") or "default").strip() or "default",
+                progress_patch={"phase": "cancelled", "reason": str(reason or "").strip()},
+                result_ref_patch={},
+                metadata_patch={"cancelled_by": actor},
+                linked_action_metadata_patch={
+                    "cancelled_operation_run_id": operation.get("operation_run_id"),
+                },
+                event_idempotency_key=f"{operation.get('idempotency_key')}:OperationCancelled",
+                actor=actor,
+                source=source,
+                event_payload={"reason": str(reason or "").strip(), "module_state_mutated": False},
+            )
+            next_operation = dict(control_result.get("operation") or {})
+            next_status = str(next_operation.get("status") or "").strip()
+            if (
+                str(control_result.get("outcome") or "").strip() != "conflict"
+                or next_status == expected_status
+                or next_status in OPERATION_RUN_TERMINAL_STATUSES
+            ):
+                break
+            expected_status = next_status
         next_operation = dict(control_result.get("operation") or {})
         if str(control_result.get("outcome") or "").strip() == "not_found" or not next_operation:
             raise KeyError(f"operation run not found: {operation_run_id}")

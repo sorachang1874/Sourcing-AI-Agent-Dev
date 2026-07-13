@@ -84,6 +84,8 @@ const dashboardCache = new Map<string, { value: DashboardData; cachedAt: number 
 const dashboardCandidatePagePromiseCache = new Map<string, Promise<DashboardCandidatePage>>();
 const projectionDashboardPromiseCache = new Map<string, Promise<DashboardData>>();
 const projectionDashboardCache = new Map<string, { value: DashboardData; cachedAt: number }>();
+const dashboardRequestGeneration = new Map<string, number>();
+const projectionDashboardRequestGeneration = new Map<string, number>();
 const projectionCandidatePagePromiseCache = new Map<string, Promise<DashboardCandidatePage>>();
 const runProjectionLinkPromiseCache = new Map<string, Promise<string>>();
 const collectionProjectionLinkPromiseCache = new Map<string, Promise<string>>();
@@ -3487,6 +3489,11 @@ function mapJobResultsToDashboard(payload: any): DashboardData {
       (assetPopulationPayload.result_view_lifecycle as Record<string, unknown>) ||
       {}) as Record<string, unknown>,
   );
+  const projectionId = firstNonEmptyString([
+    pickFirstString(payload, ["projection_id", "serving_projection_id"]),
+    pickFirstString(assetPopulationPayload, ["projection_id", "serving_projection_id"]),
+    resultViewLifecycle?.servingProjectionId || "",
+  ]);
   const boardRuntimeState = mapBoardRuntimeState(
     ((payload.board_runtime_state as Record<string, unknown>) ||
       (assetPopulationPayload.board_runtime_state as Record<string, unknown>) ||
@@ -3535,6 +3542,7 @@ function mapJobResultsToDashboard(payload: any): DashboardData {
     ? canonicalAssetPopulationCount
     : rankedResultCount;
   return {
+    projectionId,
     title: payload.job?.request?.raw_user_request || payload.job?.request?.query || "Sourcing results",
     snapshotId:
       pickFirstString(assetPopulationPayload, ["snapshot_id"]) ||
@@ -3665,9 +3673,9 @@ function mapBoardRuntimeState(source: Record<string, unknown>): BoardRuntimeStat
     displayReadyCandidateCount: Number(source.display_ready_candidate_count || 0) || 0,
     previewCandidateCount: Number(source.preview_candidate_count || 0) || 0,
     profileDetailCandidateCount: Number(source.profile_detail_candidate_count || 0) || 0,
-    explicitProfileCaptureCandidateCount: Number(source.explicit_profile_capture_candidate_count || 0) || 0,
-    needsProfileCompletionCandidateCount: Number(source.needs_profile_completion_candidate_count || 0) || 0,
-    lowProfileRichnessCandidateCount: Number(source.low_profile_richness_candidate_count || 0) || 0,
+    explicitProfileCaptureCandidateCount: nonNegativeInteger(source.explicit_profile_capture_candidate_count),
+    needsProfileCompletionCandidateCount: nonNegativeInteger(source.needs_profile_completion_candidate_count),
+    lowProfileRichnessCandidateCount: nonNegativeInteger(source.low_profile_richness_candidate_count),
     cardMaterializationQualityFieldsAvailable: Boolean(source.card_materialization_quality_fields_available),
     rowHydrationTargetCount: Number(source.row_hydration_target_count || 0) || 0,
     candidateDiscoveryCount: Number(source.candidate_discovery_count || 0) || 0,
@@ -3681,6 +3689,7 @@ function mapBoardRuntimeState(source: Record<string, unknown>): BoardRuntimeStat
     deltaProfileDenominatorPromoted: Boolean(source.delta_profile_denominator_promoted),
     rowPublicationSequence: Number(source.row_publication_sequence || 0) || 0,
     rowPublicationTier: pickFirstString(source, ["row_publication_tier"]),
+    rowPublicationRevision: pickFirstString(source, ["row_publication_revision"]),
     rowPublicationWatermark: pickFirstString(source, ["row_publication_watermark"]),
     rowPublicationUpdatedAt: pickFirstString(source, ["row_publication_updated_at"]),
     facetSummaryStatus: pickFirstString(source, ["facet_summary_status"]),
@@ -3967,11 +3976,12 @@ function boardRuntimeStateFreshnessScore(state: BoardRuntimeState | undefined): 
     partial_serving: 2,
     post_result_layering: 3,
     current_snapshot_serving: 4,
+    canonical_projection_serving: 5,
   };
   const expectedCount = Math.max(0, state.expectedCandidateCount || 0);
   const completeFacetContract = Boolean(
     state.facetSummaryStatus === "complete" &&
-      state.facetSummaryScope === "global_full_population" &&
+      ["global_full_population", "exact_projection"].includes(state.facetSummaryScope) &&
       (expectedCount <= 0 || Math.max(0, state.facetSummaryCandidateCount || 0) >= expectedCount),
   );
   const completeLayeringContract = state.layeringStatus === "completed";
@@ -3983,9 +3993,15 @@ function boardRuntimeStateFreshnessScore(state: BoardRuntimeState | undefined): 
     Math.max(0, state.rowHydrationTargetCount || 0) * 10_000 +
     Math.max(0, state.displayReadyCandidateCount || 0) * 1_000 +
     Math.max(0, state.profileDetailCandidateCount || 0) * 100 +
-    Math.max(0, state.explicitProfileCaptureCandidateCount || 0) * 100 +
     Math.max(0, state.rowPublicationSequence || 0) * 100
   );
+}
+
+function canonicalProjectionRevision(state: BoardRuntimeState | undefined): string {
+  if (String(state?.rowPublicationTier || "").trim() !== "serving_projection_members") {
+    return "";
+  }
+  return String(state?.rowPublicationRevision || "").trim();
 }
 
 function boardRuntimeStatePublicationTierRank(state: BoardRuntimeState | undefined): number {
@@ -3993,15 +4009,17 @@ function boardRuntimeStatePublicationTierRank(state: BoardRuntimeState | undefin
     return 0;
   }
   const tier = String(state.rowPublicationTier || "").trim();
+  if (tier === "serving_projection_members" && canonicalProjectionRevision(state)) {
+    return 4;
+  }
   if (tier === "current_snapshot_serving") {
     return 3;
   }
   if (
-    state.phase === "current_snapshot_serving" &&
+    ["current_snapshot_serving", "canonical_projection_serving"].includes(state.phase) &&
     state.publicationStatus === "complete" &&
     Math.max(0, state.expectedCandidateCount || 0) > 0 &&
-    Math.max(0, state.servedCandidateCount || 0) >= Math.max(0, state.expectedCandidateCount || 0) &&
-    Math.max(0, state.displayReadyCandidateCount || 0) >= Math.max(0, state.expectedCandidateCount || 0)
+    Math.max(0, state.servedCandidateCount || 0) >= Math.max(0, state.expectedCandidateCount || 0)
   ) {
     return 3;
   }
@@ -4029,6 +4047,29 @@ function pickFresherBoardRuntimeState(
   if (incomingTier !== currentTier) {
     return incomingTier > currentTier ? incoming : current;
   }
+  if (incomingTier === 4) {
+    const incomingEqualityRevision = canonicalProjectionRevision(incoming);
+    const currentEqualityRevision = canonicalProjectionRevision(current);
+    if (!incomingEqualityRevision) {
+      return current;
+    }
+    if (!currentEqualityRevision) {
+      return incoming;
+    }
+    if (incomingEqualityRevision !== currentEqualityRevision) {
+      // The storage-owned revision is an equality token, not an ordered
+      // sequence. Conflicting snapshots require an authoritative dashboard
+      // refresh; timestamp and arrival order are not freshness proofs.
+      return current;
+    }
+    // Equal revisions describe the same semantic member input, but they do not
+    // order independently built facet/index metadata. Preserve the fresher
+    // complete state instead of allowing a later-arriving pending snapshot to
+    // regress the UI.
+    return boardRuntimeStateFreshnessScore(incoming) >= boardRuntimeStateFreshnessScore(current)
+      ? incoming
+      : current;
+  }
   const incomingSequence = Math.max(0, incoming.rowPublicationSequence || 0);
   const currentSequence = Math.max(0, current.rowPublicationSequence || 0);
   if (incomingSequence !== currentSequence) {
@@ -4037,10 +4078,34 @@ function pickFresherBoardRuntimeState(
   return boardRuntimeStateFreshnessScore(incoming) >= boardRuntimeStateFreshnessScore(current) ? incoming : current;
 }
 
+export function dashboardCandidatePageRevisionMatches(
+  dashboard: DashboardData,
+  page: DashboardCandidatePage,
+): boolean {
+  const currentProjectionRevision = canonicalProjectionRevision(dashboard.boardRuntimeState);
+  const pageProjectionRevision = canonicalProjectionRevision(page.boardRuntimeState);
+  if (!currentProjectionRevision && !pageProjectionRevision) {
+    return true;
+  }
+  const currentCount = Math.max(0, dashboard.boardRuntimeState?.expectedCandidateCount || 0);
+  const pageCount = Math.max(0, page.boardRuntimeState?.expectedCandidateCount || 0);
+  return Boolean(
+    currentProjectionRevision &&
+    pageProjectionRevision &&
+    currentProjectionRevision === pageProjectionRevision &&
+    currentCount === pageCount
+  );
+}
+
 export function mergeDashboardCandidatePage(
   dashboard: DashboardData,
   page: DashboardCandidatePage,
 ): DashboardData {
+  if (!dashboardCandidatePageRevisionMatches(dashboard, page)) {
+    // Candidate identity membership cannot be reconciled by retaining or
+    // truncating an older row window. A fresh dashboard owns replacement.
+    return dashboard;
+  }
   const mergedCandidates = mergeDashboardCandidatesInPageOrder(dashboard.candidates, page.candidates, {
     offset: page.offset,
   });
@@ -4115,12 +4180,17 @@ export async function getDashboard(
   }
   const cacheKey = jobId;
   const forceRefresh = options?.forceRefresh === true;
+  if (forceRefresh) {
+    dashboardCache.delete(cacheKey);
+  }
   const cached = forceRefresh ? null : readFreshCacheValue(dashboardCache, cacheKey, DASHBOARD_CACHE_TTL_MS);
   if (cached) {
     return cached;
   }
-  let fetchPromise = dashboardPromiseCache.get(cacheKey);
+  let fetchPromise = forceRefresh ? undefined : dashboardPromiseCache.get(cacheKey);
   if (!fetchPromise) {
+    const requestGeneration = (dashboardRequestGeneration.get(cacheKey) || 0) + 1;
+    dashboardRequestGeneration.set(cacheKey, requestGeneration);
     fetchPromise = fetchJson<any>(`/api/jobs/${jobId}/dashboard?include_candidates=0`, undefined, RESULTS_API_TIMEOUT_MS)
       .catch(async (error) => {
         const message = error instanceof Error ? error.message : "";
@@ -4160,13 +4230,17 @@ export async function getDashboard(
           }).catch(() => null);
           if (firstPage) {
             const mergedDashboard = mergeDashboardCandidatePage(summaryDashboard, firstPage);
-            return shouldCacheDashboard(mergedDashboard) ? storeDashboardCache(cacheKey, mergedDashboard) : mergedDashboard;
+            return shouldCacheDashboard(mergedDashboard) && dashboardRequestGeneration.get(cacheKey) === requestGeneration
+              ? storeDashboardCache(cacheKey, mergedDashboard)
+              : mergedDashboard;
           }
         }
         if (!shouldCacheDashboard(summaryDashboard)) {
           return summaryDashboard;
         }
-        return storeDashboardCache(cacheKey, summaryDashboard);
+        return dashboardRequestGeneration.get(cacheKey) === requestGeneration
+          ? storeDashboardCache(cacheKey, summaryDashboard)
+          : summaryDashboard;
       })
       .finally(() => {
         evictPromiseCacheEntry(dashboardPromiseCache, cacheKey, fetchPromise as Promise<DashboardData>);
@@ -4613,6 +4687,91 @@ function publicProjectionMemberToCandidateRecord(member: Record<string, unknown>
   };
 }
 
+function nonNegativeInteger(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  const count = Number(value);
+  return Number.isInteger(count) && count >= 0 ? count : null;
+}
+
+function projectionVisibleMemberCount(
+  projection: Record<string, unknown>,
+  counts: Record<string, unknown>,
+): number | null {
+  const readContract = (projection.read_contract as Record<string, unknown>) || {};
+  if (
+    String(readContract.source || "").trim() !== "serving_projection_members" ||
+    readContract.fallback_used !== false ||
+    readContract.fail_closed !== true ||
+    String(counts.count_scope || "").trim() !== "exact_projection"
+  ) {
+    return null;
+  }
+  const visibleCount = nonNegativeInteger(projection.visible_member_count);
+  if (visibleCount === null) {
+    return null;
+  }
+  return [counts.result_count, counts.candidate_count, counts.visible_member_count].every(
+    (value) => nonNegativeInteger(value) === visibleCount,
+  )
+    ? visibleCount
+    : null;
+}
+
+function projectionMembershipRevision(projection: Record<string, unknown>): string {
+  return String(projection.membership_revision || "").trim();
+}
+
+function projectionCardReadinessSummary(
+  totalCandidateCount: number,
+  readiness: Record<string, unknown>,
+): {
+  cardReadyCount: number;
+  profileReadyCount: number;
+  explicitProfileCaptureCount: number | null;
+  needsProfileCompletionCount: number | null;
+  lowProfileRichnessCount: number | null;
+  previewCount: number;
+  qualityFieldsAvailable: boolean;
+  statusText: string;
+} {
+  const totalCount = Math.max(0, Math.floor(Number(totalCandidateCount) || 0));
+  const rowCount = nonNegativeInteger(readiness.row_count);
+  const profileReadyCount = nonNegativeInteger(readiness.profile_ready_count);
+  const cardReadyCount = nonNegativeInteger(readiness.card_ready_count);
+  const qualityFieldsAvailable = Boolean(
+    String(readiness.count_scope || "").trim() === "exact_projection" &&
+      String(readiness.row || "").trim().toLowerCase() === "complete" &&
+      rowCount === totalCount &&
+      profileReadyCount !== null &&
+      cardReadyCount !== null &&
+      profileReadyCount <= totalCount &&
+      cardReadyCount <= totalCount,
+  );
+  const exactCardReadyCount = qualityFieldsAvailable ? cardReadyCount || 0 : 0;
+  const exactProfileReadyCount = qualityFieldsAvailable ? profileReadyCount || 0 : 0;
+  const optionalOwnedCount = (key: string): number | null => {
+    if (!qualityFieldsAvailable || !(key in readiness)) {
+      return null;
+    }
+    const count = nonNegativeInteger(readiness[key]);
+    return count !== null && count <= totalCount ? count : null;
+  };
+  return {
+    cardReadyCount: exactCardReadyCount,
+    profileReadyCount: exactProfileReadyCount,
+    explicitProfileCaptureCount: optionalOwnedCount("explicit_profile_capture_candidate_count"),
+    needsProfileCompletionCount: optionalOwnedCount("needs_profile_completion_candidate_count"),
+    lowProfileRichnessCount: optionalOwnedCount("low_profile_richness_candidate_count"),
+    previewCount: Math.max(0, totalCount - exactCardReadyCount),
+    qualityFieldsAvailable,
+    statusText: qualityFieldsAvailable && totalCount > 0
+      ? `卡片详情已合入看板 ${exactCardReadyCount}/${totalCount}`
+      : "",
+  };
+}
+
 function projectionPayloadToDashboard(
   payload: any,
   candidates: Candidate[] = [],
@@ -4624,14 +4783,19 @@ function projectionPayloadToDashboard(
   const scopeSpec = (projection.scope_spec as Record<string, unknown>) || {};
   const projectionId = pickFirstString(projection, ["projection_id"]);
   const sourceRunId = pickFirstString(projection, ["source_run_id"]) || runId;
-  const resultCount = Number(
-    projection.visible_member_count ||
-      counts.result_count ||
-      counts.candidate_count ||
-      payload.total_candidates ||
-      candidates.length ||
-      0,
-  ) || 0;
+  const membershipRevision = projectionMembershipRevision(projection);
+  if (!membershipRevision) {
+    throw new Error("Canonical projection revision is unavailable.");
+  }
+  const resultCount = projectionVisibleMemberCount(projection, counts);
+  if (resultCount === null) {
+    throw new Error("Canonical projection membership is unavailable or inconsistent.");
+  }
+  const payloadCandidateCount = nonNegativeInteger(payload.total_candidates);
+  if ((payloadCandidateCount !== null && payloadCandidateCount !== resultCount) || candidates.length > resultCount) {
+    throw new Error("Canonical projection rows do not match the membership contract.");
+  }
+  const cardReadiness = projectionCardReadinessSummary(resultCount, readiness);
   const targetCompany =
     pickFirstString(scopeSpec, ["target_company"]) ||
     pickFirstString(projection, ["collection_id"]).replace(/^company:/, "");
@@ -4672,9 +4836,9 @@ function projectionPayloadToDashboard(
       deltaProfileProgressApplicable: false,
       deltaProfileProgressReason: "projection_reader",
       deltaProfileRequiredCount: Number(readiness.profile_required_count || 0) || 0,
-      deltaProfileFetchedCount: Number(readiness.profile_ready_count || 0) || 0,
-      deltaProfileMaterializedCount: Number(readiness.card_ready_count || 0) || 0,
-      deltaProfileBoardVisibleCount: Number(readiness.card_ready_count || 0) || 0,
+      deltaProfileFetchedCount: cardReadiness.profileReadyCount,
+      deltaProfileMaterializedCount: cardReadiness.cardReadyCount,
+      deltaProfileBoardVisibleCount: cardReadiness.cardReadyCount,
       deltaProfilePendingCount: 0,
       deltaProfileQueuedCount: 0,
       deltaProfileRetryableCount: 0,
@@ -4692,25 +4856,26 @@ function projectionPayloadToDashboard(
       expectedCandidateCount: resultCount,
       servedCandidateCount: resultCount,
       publishedCandidateCount: resultCount,
-      displayReadyCandidateCount: Number(readiness.card_ready_count || 0) || 0,
-      previewCandidateCount: resultCount,
-      profileDetailCandidateCount: Number(readiness.profile_ready_count || 0) || 0,
-      explicitProfileCaptureCandidateCount: Number(readiness.profile_ready_count || 0) || 0,
-      needsProfileCompletionCandidateCount: 0,
-      lowProfileRichnessCandidateCount: 0,
-      cardMaterializationQualityFieldsAvailable: false,
+      displayReadyCandidateCount: cardReadiness.cardReadyCount,
+      previewCandidateCount: cardReadiness.previewCount,
+      profileDetailCandidateCount: cardReadiness.profileReadyCount,
+      explicitProfileCaptureCandidateCount: cardReadiness.explicitProfileCaptureCount,
+      needsProfileCompletionCandidateCount: cardReadiness.needsProfileCompletionCount,
+      lowProfileRichnessCandidateCount: cardReadiness.lowProfileRichnessCount,
+      cardMaterializationQualityFieldsAvailable: cardReadiness.qualityFieldsAvailable,
       rowHydrationTargetCount: resultCount,
       candidateDiscoveryCount: resultCount,
       profileFetchRequiredCount: Number(readiness.profile_required_count || 0) || 0,
-      profileFetchedCount: Number(readiness.profile_ready_count || 0) || 0,
+      profileFetchedCount: cardReadiness.profileReadyCount,
       baselineCandidateCount: 0,
       deltaProfileRequiredCount: Number(readiness.profile_required_count || 0) || 0,
-      deltaProfileFetchedCount: Number(readiness.profile_ready_count || 0) || 0,
-      deltaProfileMaterializedCount: Number(readiness.card_ready_count || 0) || 0,
-      deltaProfileBoardVisibleCount: Number(readiness.card_ready_count || 0) || 0,
+      deltaProfileFetchedCount: cardReadiness.profileReadyCount,
+      deltaProfileMaterializedCount: cardReadiness.cardReadyCount,
+      deltaProfileBoardVisibleCount: cardReadiness.cardReadyCount,
       deltaProfileDenominatorPromoted: true,
       rowPublicationSequence: 0,
       rowPublicationTier: "serving_projection_members",
+      rowPublicationRevision: membershipRevision,
       rowPublicationWatermark: pickFirstString(projection, ["updated_at", "published_at"]),
       rowPublicationUpdatedAt: pickFirstString(projection, ["updated_at", "published_at"]),
       facetSummaryStatus: candidateFacetSummary ? "complete" : "unavailable",
@@ -4726,11 +4891,17 @@ function projectionPayloadToDashboard(
       syncStatusText: `${resultCount}/${resultCount}`,
       syncNoteLines: [
         { id: "candidate_discovery", text: `候选人发现 ${resultCount}/${resultCount}` },
+        ...(cardReadiness.statusText
+          ? [{ id: "card_materialization", text: cardReadiness.statusText }]
+          : []),
       ],
       candidateDiscoveryStatusText: `候选人发现 ${resultCount}/${resultCount}`,
       profileFetchStatusText: "",
-      cardMaterializationStatusText: "",
-      noteText: `候选人发现 ${resultCount}/${resultCount}`,
+      cardMaterializationStatusText: cardReadiness.statusText,
+      noteText: [
+        `候选人发现 ${resultCount}/${resultCount}`,
+        cardReadiness.statusText,
+      ].filter(Boolean).join("；"),
     },
     effectiveExecutionSemantics: {
       effectiveAcquisitionMode: "projection_serving",
@@ -4756,27 +4927,39 @@ export async function getProjectionDashboard(
     throw new Error("Missing projection_id. Result pages require a canonical projection.");
   }
   const forceRefresh = options?.forceRefresh === true;
+  if (forceRefresh) {
+    projectionDashboardCache.delete(projectionId);
+  }
   const cached = forceRefresh ? null : readFreshCacheValue(projectionDashboardCache, projectionId, DASHBOARD_CACHE_TTL_MS);
   if (cached) {
     return cached;
   }
-  let fetchPromise = projectionDashboardPromiseCache.get(projectionId);
+  let fetchPromise = forceRefresh ? undefined : projectionDashboardPromiseCache.get(projectionId);
   if (!fetchPromise) {
+    const requestGeneration = (projectionDashboardRequestGeneration.get(projectionId) || 0) + 1;
+    projectionDashboardRequestGeneration.set(projectionId, requestGeneration);
     fetchPromise = Promise.all([
       fetchJson<any>(`/api/projections/${encodeURIComponent(projectionId)}`, undefined, RESULTS_API_TIMEOUT_MS),
       getProjectionCandidatePage(projectionId, {
         offset: 0,
         limit: DASHBOARD_INITIAL_CANDIDATE_CHUNK_SIZE,
         forceRefresh,
-      }).catch(() => null),
+      }),
     ])
       .then(([projectionPayload, page]) => {
         const dashboard = projectionPayloadToDashboard(
           projectionPayload,
-          page?.candidates || [],
+          [],
           options?.runId || "",
         );
-        return storeProjectionDashboardCache(projectionId, page ? mergeDashboardCandidatePage(dashboard, page) : dashboard);
+        if (page && !dashboardCandidatePageRevisionMatches(dashboard, page)) {
+          projectionDashboardCache.delete(projectionId);
+          throw new Error("Canonical projection summary and page revisions do not match.");
+        }
+        const mergedDashboard = page ? mergeDashboardCandidatePage(dashboard, page) : dashboard;
+        return projectionDashboardRequestGeneration.get(projectionId) === requestGeneration
+          ? storeProjectionDashboardCache(projectionId, mergedDashboard)
+          : mergedDashboard;
       })
       .finally(() => {
         evictPromiseCacheEntry(projectionDashboardPromiseCache, projectionId, fetchPromise as Promise<DashboardData>);
@@ -4884,7 +5067,9 @@ export async function getDashboardCandidatePage(
   const filterSignature = dashboardCandidatePageFilterSignature(options?.filter);
   const filterQueryParams = candidatePageFilterQueryParams(options?.filter);
   const cacheKey = dashboardCandidatePageCacheKey(jobId, offset, limit, lightweight, filterSignature);
-  let fetchPromise: Promise<DashboardCandidatePage> | undefined = dashboardCandidatePagePromiseCache.get(cacheKey);
+  let fetchPromise: Promise<DashboardCandidatePage> | undefined = forceRefresh
+    ? undefined
+    : dashboardCandidatePagePromiseCache.get(cacheKey);
   if (!fetchPromise) {
     if (useMock) {
       const mockCandidates = mockDashboard.candidates.slice(offset, offset + limit);
@@ -5540,25 +5725,82 @@ export function peekTargetCandidatesCache(options?: {
 export async function addProjectionCandidateToCrm(payload: {
   projectionId: string;
   candidateIdentityKey: string;
+  expectedMembershipRevision: string;
   workspaceId?: string;
   stage?: string;
   sourceReason?: string;
   idempotencyKey?: string;
 }): Promise<TargetCandidateRecord> {
+  if (!payload.expectedMembershipRevision.trim()) {
+    throw new Error("Canonical projection revision is required for CRM selection.");
+  }
   const response = await fetchJson<any>("/api/crm/records", {
     method: "POST",
     body: JSON.stringify({
       projection_id: payload.projectionId,
       workspace_id: payload.workspaceId || "default",
       candidate_identity_key: payload.candidateIdentityKey,
+      expected_membership_revision: payload.expectedMembershipRevision,
       stage: payload.stage || "outreach_ready",
       source_reason: payload.sourceReason || "operator_selected_from_projection",
       idempotency_key: payload.idempotencyKey || "",
     }),
   });
+  const responseRevision = String(response.membership_revision || "").trim();
+  if (responseRevision !== payload.expectedMembershipRevision.trim()) {
+    throw new Error("CRM selection revision does not match the requested projection.");
+  }
   targetCandidatesCache.clear();
   targetCandidatesPromiseCache.clear();
   return deriveTargetCandidateRecord((response.crm_record || {}) as Record<string, unknown>);
+}
+
+export async function addProjectionCandidatesToCrm(payload: {
+  projectionId: string;
+  candidateIdentityKeys: string[];
+  expectedMembershipRevision: string;
+  workspaceId?: string;
+  stage?: string;
+  sourceReason?: string;
+  idempotencyKey?: string;
+}): Promise<{
+  records: TargetCandidateRecord[];
+  requestedCandidateCount: number;
+  successfulWriteCount: number;
+  failedWriteCount: number;
+  membershipRevision: string;
+}> {
+  const candidateIdentityKeys = Array.from(
+    new Set(payload.candidateIdentityKeys.map((value) => value.trim()).filter(Boolean)),
+  );
+  if (!payload.expectedMembershipRevision.trim()) {
+    throw new Error("Canonical projection revision is required for CRM selection.");
+  }
+  const response = await fetchJson<any>("/api/crm/records", {
+    method: "POST",
+    body: JSON.stringify({
+      projection_id: payload.projectionId,
+      workspace_id: payload.workspaceId || "default",
+      candidate_identity_keys: candidateIdentityKeys,
+      expected_membership_revision: payload.expectedMembershipRevision,
+      stage: payload.stage || "outreach_ready",
+      source_reason: payload.sourceReason || "operator_selected_from_projection",
+      idempotency_key: payload.idempotencyKey || "",
+    }),
+  });
+  const responseRevision = String(response.membership_revision || "").trim();
+  if (responseRevision !== payload.expectedMembershipRevision.trim()) {
+    throw new Error("CRM bulk selection revision does not match the requested projection.");
+  }
+  targetCandidatesCache.clear();
+  targetCandidatesPromiseCache.clear();
+  return {
+    records: ((response.crm_records || []) as Record<string, unknown>[]).map(deriveTargetCandidateRecord),
+    requestedCandidateCount: Number(response.requested_candidate_count || candidateIdentityKeys.length),
+    successfulWriteCount: Number(response.successful_write_count || 0),
+    failedWriteCount: Number(response.failed_write_count || 0),
+    membershipRevision: responseRevision,
+  };
 }
 
 export async function upsertTargetCandidate(payload: {
@@ -5750,6 +5992,7 @@ export async function exportTargetCandidatePublicWebArchive(payload?: {
 
 export async function exportProjectionCandidatesArchive(payload: {
   projectionId: string;
+  expectedMembershipRevision: string;
   candidateIdentityKeys?: string[];
   includeLlmReviewedUnconfirmedAssertions?: boolean;
 }): Promise<{
@@ -5758,13 +6001,19 @@ export async function exportProjectionCandidatesArchive(payload: {
   contentType: string;
   exportStats: {
     projectionId: string;
+    membershipRevision: string;
+    sourceCandidateCount: number;
     recordCount: number;
     exportedRecordCount: number;
     skippedAssertionCount: number;
   };
 }> {
+  if (!payload.expectedMembershipRevision.trim()) {
+    throw new Error("Canonical projection revision is required for export.");
+  }
   const result = await submitAndDownloadExport("/api/projections/export", {
     projection_id: payload.projectionId,
+    expected_membership_revision: payload.expectedMembershipRevision,
     candidate_identity_keys: Array.from(
       new Set((payload.candidateIdentityKeys || []).map((value) => value.trim()).filter(Boolean)),
     ),
@@ -5774,13 +6023,27 @@ export async function exportProjectionCandidatesArchive(payload: {
     const value = Number.parseInt(result.headers.get(name) || "0", 10);
     return Number.isFinite(value) ? value : 0;
   };
+  const membershipRevision = (result.headers.get("X-Sourcing-Membership-Revision") || "").trim();
+  const sourceCandidateCount = headerNumber("X-Sourcing-Source-Candidate-Count");
+  if (!membershipRevision) {
+    throw new Error("Projection export artifact is missing its membership revision.");
+  }
+  if (membershipRevision !== payload.expectedMembershipRevision.trim()) {
+    throw new Error("Projection export artifact revision does not match the requested projection.");
+  }
+  const recordCount = headerNumber("X-Sourcing-Export-Record-Count");
+  if (recordCount > sourceCandidateCount) {
+    throw new Error("Projection export record count exceeds its canonical source membership.");
+  }
   return {
     blob: result.blob,
     filename: result.filename,
     contentType: result.contentType,
     exportStats: {
       projectionId: result.headers.get("X-Sourcing-Projection-Id") || payload.projectionId,
-      recordCount: headerNumber("X-Sourcing-Export-Record-Count"),
+      membershipRevision,
+      sourceCandidateCount,
+      recordCount,
       exportedRecordCount: headerNumber("X-Sourcing-Exported-Record-Count"),
       skippedAssertionCount: headerNumber("X-Sourcing-Skipped-Assertion-Count"),
     },
@@ -7131,6 +7394,12 @@ function deriveTargetCandidateRecord(record: Record<string, unknown>): TargetCan
     record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
       ? (record.metadata as Record<string, unknown>)
       : {};
+  const lastSourceSelection =
+    metadata.last_source_selection &&
+    typeof metadata.last_source_selection === "object" &&
+    !Array.isArray(metadata.last_source_selection)
+      ? (metadata.last_source_selection as Record<string, unknown>)
+      : {};
   const rawStatus = pickFirstString(record, ["follow_up_status"]) || "pending_outreach";
   const followUpStatus: TargetCandidateFollowUpStatus =
     rawStatus === "contacted_waiting" ||
@@ -7154,9 +7423,16 @@ function deriveTargetCandidateRecord(record: Record<string, unknown>): TargetCan
     id: pickFirstString(record, ["id", "record_id"]) || crypto.randomUUID(),
     workspaceId: pickFirstString(record, ["workspace_id", "workspaceId"]),
     candidateId: pickFirstString(record, ["candidate_id"]),
-    candidateIdentityKey: pickFirstString(record, ["candidate_identity_key"]),
+    candidateIdentityKey:
+      pickFirstString(lastSourceSelection, ["candidate_identity_key"]) ||
+      pickFirstString(record, ["candidate_identity_key"]),
     personIdentityKey: pickFirstString(record, ["person_identity_key"]),
-    sourceProjectionId: pickFirstString(record, ["source_projection_id"]),
+    sourceProjectionId:
+      pickFirstString(lastSourceSelection, ["projection_id"]) ||
+      pickFirstString(record, ["source_projection_id"]),
+    sourceMembershipRevision:
+      pickFirstString(lastSourceSelection, ["membership_revision"]) ||
+      pickFirstString(metadata, ["last_source_membership_revision", "source_membership_revision"]),
     sourceRunId: pickFirstString(record, ["source_run_id"]),
     sourceCollectionId: pickFirstString(record, ["source_collection_id"]),
     historyId: pickFirstString(record, ["history_id"]),

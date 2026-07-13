@@ -9,6 +9,7 @@ to jsonb by changing only the column Kind here.
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from hashlib import sha1
 from typing import Any
 
@@ -540,6 +541,25 @@ class WorkflowRuntimeRepository(Repository):
             table_name="workflow_recovery_intents",
             method_name="upsert_recovery_intent",
         )
+
+    @contextmanager
+    def hold_operation_dispatch_lock(self, operation_run_id: str) -> Any:
+        self._require_postgres_for_durable_runtime("operation_runs")
+        normalized_operation_id = str(operation_run_id or "").strip()
+        if not normalized_operation_id:
+            raise ValueError("operation_run_id is required")
+        method = getattr(self._adapter, "hold_operation_dispatch_lock", None)
+        if method is None:
+            self._raise_write_failure(
+                table_name="operation_runs",
+                method_name="hold_operation_dispatch_lock",
+                reason="native lock is unavailable",
+            )
+        with method(
+            table_name="operation_runs",
+            operation_run_id=normalized_operation_id,
+        ):
+            yield
 
     def claim_recovery_intents(
         self,
@@ -2234,6 +2254,74 @@ class WorkflowRuntimeRepository(Repository):
         raise RuntimeError(
             "postgres-only invariant violated for operation_runs in cancel_operation_with_event: should_prefer_read "
             "returned False; legacy SQLite tail retired (B4)"
+        )
+
+    def fail_operation_for_stale_input_with_event(
+        self,
+        operation_run_id: str,
+        *,
+        expected_status: str,
+        action_id: str,
+        workspace_id: str = "default",
+        progress_patch: dict[str, Any] | None = None,
+        workflow_ref_patch: dict[str, Any] | None = None,
+        result_ref_patch: dict[str, Any] | None = None,
+        metadata_patch: dict[str, Any] | None = None,
+        linked_action_metadata_patch: dict[str, Any] | None = None,
+        event_idempotency_key: str,
+        actor: str = "",
+        source: str = "",
+        event_payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("operation_runs")
+        self._require_postgres_for_durable_runtime("agent_actions")
+        self._require_postgres_for_durable_runtime("operation_events")
+        normalized_operation_id = str(operation_run_id or "").strip()
+        normalized_action_id = str(action_id or "").strip()
+        normalized_expected_status = str(expected_status or "").strip()
+        if not normalized_operation_id or not normalized_action_id or not normalized_expected_status:
+            return {}
+        event_row = self._operation_event_row_payload(
+            event_stream_id=normalized_operation_id,
+            event_family="operation_event",
+            event_type="OperationInputRevisionStale",
+            idempotency_key=event_idempotency_key,
+            workspace_id=workspace_id,
+            operation_run_id=normalized_operation_id,
+            action_id=normalized_action_id,
+            actor=actor,
+            source=source,
+            payload=event_payload,
+        )
+        if not event_row:
+            return {}
+        if self._should_prefer_read("operation_runs"):
+            result = self._call_native_write(
+                "fail_operation_run_for_stale_input_with_event",
+                table_name="operation_runs",
+                operation_run_id=normalized_operation_id,
+                expected_status=normalized_expected_status,
+                progress_patch=dict(progress_patch or {}),
+                workflow_ref_patch=dict(workflow_ref_patch or {}),
+                result_ref_patch=dict(result_ref_patch or {}),
+                metadata_patch=dict(metadata_patch or {}),
+                linked_action_metadata_patch=dict(linked_action_metadata_patch or {}),
+                event_row=event_row,
+            )
+            if result is not None:
+                payload = dict(result)
+                return {
+                    "outcome": str(payload.get("outcome") or "conflict").strip() or "conflict",
+                    "applied": bool(payload.get("applied")),
+                    "operation": self._operation_from_row(payload.get("operation")),
+                    "linked_action": self._action_from_row(payload.get("linked_action")),
+                    "event": self._operation_event_from_row(payload.get("event")),
+                }
+            if self._strict_authoritative("operation_runs"):
+                return {}
+        raise RuntimeError(
+            "postgres-only invariant violated for operation_runs in fail_operation_for_stale_input_with_event: "
+            "should_prefer_read returned False; legacy SQLite tail retired (B4)"
         )
 
     def list_operation_events(self, event_stream_id: str, *, limit: int = 1000) -> list[dict[str, Any]]:

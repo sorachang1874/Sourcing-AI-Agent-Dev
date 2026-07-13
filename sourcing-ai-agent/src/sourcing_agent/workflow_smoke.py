@@ -5122,45 +5122,32 @@ def _build_progress_observability_report(progress_samples: list[dict[str, Any]])
         if board_runtime_state:
             denominator_promoted = bool(board_runtime_state.get("delta_profile_denominator_promoted"))
             expected_candidate_count = _safe_int(board_runtime_state.get("expected_candidate_count"))
-            baseline_count = _safe_int(board_runtime_state.get("baseline_candidate_count"))
             display_ready_count = _safe_int(board_runtime_state.get("display_ready_candidate_count"))
-            explicit_capture_count = _safe_int(board_runtime_state.get("explicit_profile_capture_candidate_count"))
             delta_required_count = _safe_int(board_runtime_state.get("delta_profile_required_count"))
-            if delta_required_count > 0:
-                card_required_count = delta_required_count
-                card_ready_count = min(
-                    card_required_count,
-                    max(
-                        _safe_int(board_runtime_state.get("delta_profile_board_visible_count")),
-                        _safe_int(board_runtime_state.get("delta_profile_materialized_count")),
-                        max(0, display_ready_count - baseline_count),
-                        max(0, explicit_capture_count - baseline_count),
-                    ),
-                )
-            else:
-                card_required_count = _safe_int(board_runtime_state.get("profile_fetch_required_count"))
-                profile_detail_count = _safe_int(board_runtime_state.get("profile_detail_candidate_count"))
-                card_ready_count = (
-                    min(card_required_count, max(display_ready_count, explicit_capture_count, profile_detail_count))
-                    if card_required_count > 0
-                    else 0
-                )
+            profile_required_count = _safe_int(board_runtime_state.get("profile_fetch_required_count"))
             card_status_fraction = _first_count_fraction(board_runtime_state.get("card_materialization_status_text"))
-            if (
-                card_status_fraction
-                and delta_required_count <= 0
-                and card_required_count <= 0
-                and display_ready_count > 0
-            ):
-                # Full-roster/current-snapshot serving has no delta profile
-                # denominator. Its card text is scoped to the visible served
-                # population, not to a zero profile-fetch requirement.
+            if card_status_fraction:
                 text_ready_count, text_required_count = card_status_fraction
-                card_required_count = max(text_required_count, display_ready_count, expected_candidate_count)
-                card_ready_count = min(card_required_count, max(display_ready_count, text_ready_count))
-            if card_status_fraction and card_required_count > 0:
-                text_ready_count, text_required_count = card_status_fraction
-                if text_ready_count > card_ready_count or text_required_count > card_required_count:
+                allowed_required_counts = {
+                    expected_candidate_count,
+                    *(
+                        count
+                        for count in (delta_required_count, profile_required_count)
+                        if 0 < count < expected_candidate_count
+                    ),
+                }
+                allowed_required_counts = {count for count in allowed_required_counts if count > 0}
+                card_ready_count = display_ready_count
+                card_required_count = (
+                    text_required_count if text_required_count in allowed_required_counts else expected_candidate_count
+                )
+                if (
+                    text_ready_count > card_ready_count
+                    or expected_candidate_count <= 0
+                    or text_required_count not in allowed_required_counts
+                    or text_ready_count > text_required_count
+                    or text_required_count > expected_candidate_count
+                ):
                     contract_violations.append(
                         {
                             "kind": "board_runtime_card_text_exceeds_card_readiness",

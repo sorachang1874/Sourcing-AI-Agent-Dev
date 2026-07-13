@@ -305,6 +305,12 @@ class RecoveryTickDrainCharacterizationTest(PGDurableRuntimeTestMixin, unittest.
         semantics are unchanged (default excludes 'claimed'); an active claim stays
         single-winner protected. See docs/DURABLE_COMMAND_OWNERSHIP_FENCING.md.
         """
+        self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+            run_id="job-reclaim-test",
+            projection_id="proj_reclaim_test",
+            members=[],
+            replace_members=True,
+        )
         planned = self.orchestrator._plan_projection_export_generate_command(
             {"projection_id": "proj_reclaim_test"}
         )
@@ -333,6 +339,12 @@ class RecoveryTickDrainCharacterizationTest(PGDurableRuntimeTestMixin, unittest.
         )
         # Active-claim protection: a freshly-claimed (non-expired) command is NOT
         # reclaimable even with the opt-in (single-winner during the lease).
+        self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+            run_id="job-active-claim",
+            projection_id="proj_active_claim",
+            members=[],
+            replace_members=True,
+        )
         planned2 = self.orchestrator._plan_projection_export_generate_command(
             {"projection_id": "proj_active_claim"}
         )

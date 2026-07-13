@@ -70,6 +70,8 @@ _OPERATION_CONTROL_REPOSITORY_METHODS = {
     "append_operation_event",
     "reject_action_with_event",
     "cancel_operation_with_event",
+    "fail_operation_for_stale_input_with_event",
+    "hold_operation_dispatch_lock",
     "list_operation_events",
     "list_operation_events_for_action",
     "_action_from_row",
@@ -276,6 +278,7 @@ _SERVING_PROJECTION_REPOSITORY_METHODS = {
     "_list_person_search_index_rows",
     "_person_search_index_from_row",
     "_person_search_index_row_payload",
+    "hold_publication_lock",
 }
 
 
@@ -944,6 +947,9 @@ def test_operation_control_native_writers_require_explicit_authority_table() -> 
         "append_operation_event": "operation_events",
         "reject_agent_action_with_event": "agent_actions",
         "cancel_operation_run_with_event": "operation_runs",
+        "fail_operation_run_for_stale_input_with_event": "operation_runs",
+        "hold_operation_dispatch_lock": "operation_runs",
+        "hold_serving_projection_publication_lock": "serving_projections",
     }
     for method_name, table_name in expected_tables.items():
         parameter = inspect.signature(getattr(LiveControlPlanePostgresAdapter, method_name)).parameters["table_name"]
@@ -1577,7 +1583,7 @@ def test_operation_state_sync_residual_callers_are_ratcheted() -> None:
         "src/sourcing_agent/operation_runtime.py",
         "src/sourcing_agent/orchestrator.py",
     }
-    assert sum(counts.values()) <= 27
+    assert sum(counts.values()) <= 26
 
 
 def test_serving_projection_catalog_storage_facade_is_retired_to_repository() -> None:

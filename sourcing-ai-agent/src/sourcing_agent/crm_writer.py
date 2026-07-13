@@ -4,6 +4,7 @@ from hashlib import sha1
 from typing import Any
 
 from .person_identity import build_person_summary_view, resolve_person_identity_key
+from .serving_projection_reader import ServingProjectionReader
 from .storage import ControlPlaneStore
 
 _CRM_STAGE_CATEGORIES = {
@@ -33,6 +34,7 @@ class CRMWriter:
 
     def __init__(self, store: ControlPlaneStore, *, writer_id: str = "crm_writer_v1") -> None:
         self.store = store
+        self.projection_reader = ServingProjectionReader(store)
         self.writer_id = str(writer_id or "crm_writer_v1").strip() or "crm_writer_v1"
 
     def add_projection_member_to_crm(
@@ -47,41 +49,337 @@ class CRMWriter:
         pipeline_id: str = "default_sourcing",
         stage: str = "new",
         source_reason: str = "selected_from_projection",
+        expected_membership_revision: str = "",
+        projection_member_snapshot: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         normalized_projection_id = _require_non_empty(projection_id, "projection_id")
         normalized_candidate_key = _require_non_empty(candidate_identity_key, "candidate_identity_key")
-        projection = self.store.repos.serving_projection.get(normalized_projection_id)
-        if not projection:
-            return {
-                "status": "not_found",
-                "reason": "projection_not_found",
-                "projection_id": normalized_projection_id,
-            }
-        member = self.store.repos.serving_projection.get_member(normalized_projection_id, normalized_candidate_key)
-        if not member:
-            return {
-                "status": "not_found",
-                "reason": "projection_member_not_found",
-                "projection_id": normalized_projection_id,
-                "candidate_identity_key": normalized_candidate_key,
-            }
-        return self.add_person_to_crm(
-            person_identity_key=str(member.get("person_identity_key") or ""),
-            candidate_identity_key=str(member.get("candidate_identity_key") or normalized_candidate_key),
-            collection_id=str(projection.get("collection_id") or ""),
-            source_projection_id=normalized_projection_id,
-            source_run_id=str(member.get("source_run_id") or projection.get("source_run_id") or ""),
-            source_collection_id=str(projection.get("collection_id") or ""),
-            public_summary=dict(member.get("public_summary") or {}),
+        result = self.add_projection_members_to_crm(
+            projection_id=normalized_projection_id,
+            candidate_identity_keys=[normalized_candidate_key],
             workspace_id=workspace_id,
             actor_type=actor_type,
             actor_id=actor_id,
-            idempotency_key=idempotency_key
-            or f"crm:add:{workspace_id}:{normalized_projection_id}:{normalized_candidate_key}",
+            idempotency_key=idempotency_key,
             pipeline_id=pipeline_id,
             stage=stage,
             source_reason=source_reason,
+            expected_membership_revision=expected_membership_revision,
+            projection_member_snapshot=projection_member_snapshot,
         )
+        if str(result.get("status") or "") != "applied":
+            return result
+        items = [dict(item) for item in list(result.get("results") or [])]
+        if len(items) != 1:
+            raise RuntimeError("single projection CRM selection returned an invalid item cardinality")
+        return {
+            **items[0],
+            "membership_revision": str(result.get("membership_revision") or ""),
+            "source_candidate_count": int(result.get("source_candidate_count") or 0),
+            "write_contract": dict(result.get("write_contract") or {}),
+        }
+
+    def add_projection_members_to_crm(
+        self,
+        *,
+        projection_id: str,
+        candidate_identity_keys: list[str] | tuple[str, ...],
+        workspace_id: str = "default",
+        actor_type: str = "user",
+        actor_id: str = "",
+        idempotency_key: str = "",
+        pipeline_id: str = "default_sourcing",
+        stage: str = "new",
+        source_reason: str = "selected_from_projection",
+        expected_membership_revision: str = "",
+        projection_member_snapshot: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        normalized_projection_id = _require_non_empty(projection_id, "projection_id")
+        normalized_candidate_keys = [
+            str(item or "").strip()
+            for item in dict.fromkeys(candidate_identity_keys or ())
+            if str(item or "").strip()
+        ]
+        if not normalized_candidate_keys:
+            raise ValueError("candidate_identity_keys is required")
+        normalized_expected_revision = str(expected_membership_revision or "").strip()
+        if not normalized_expected_revision:
+            return {
+                "status": "invalid",
+                "reason": "expected_membership_revision_required",
+                "projection_id": normalized_projection_id,
+            }
+        snapshot = dict(projection_member_snapshot or {})
+        if not snapshot:
+            snapshot = self.projection_reader.get_projection_member_snapshot(
+                normalized_projection_id,
+                candidate_identity_keys=normalized_candidate_keys,
+                limit=len(normalized_candidate_keys),
+                require_all_requested=True,
+            )
+        if str(snapshot.get("status") or "") != "ready":
+            return snapshot
+        membership_revision = str(snapshot.get("membership_revision") or "").strip()
+        if not membership_revision or str(dict(snapshot.get("projection") or {}).get("projection_id") or "").strip() != normalized_projection_id:
+            return {
+                "status": "not_ready",
+                "reason": "projection_member_snapshot_invalid",
+                "projection_id": normalized_projection_id,
+            }
+        if normalized_expected_revision != membership_revision:
+            return {
+                "status": "not_ready",
+                "reason": "projection_membership_revision_stale",
+                "projection_id": normalized_projection_id,
+                "expected_membership_revision": normalized_expected_revision,
+                "membership_revision": membership_revision,
+            }
+        source_candidate_count = int(snapshot.get("source_candidate_count") or 0)
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        requested_idempotency_key = str(idempotency_key or "").strip()
+        selection_idempotency_keys = {
+            candidate_key: (
+                f"{requested_idempotency_key}:projection:{normalized_projection_id}:"
+                f"membership:{membership_revision}:candidate:{candidate_key}"
+                if requested_idempotency_key
+                else f"crm:add:{normalized_workspace_id}:{normalized_projection_id}:"
+                f"{membership_revision}:{candidate_key}"
+            )
+            for candidate_key in normalized_candidate_keys
+        }
+
+        def stable_id(prefix: str, seed: str) -> str:
+            return f"{prefix}_{sha1(seed.encode('utf-8')).hexdigest()[:24]}"
+
+        def build_payload(
+            *,
+            projection: dict[str, Any],
+            members_by_candidate_key: dict[str, dict[str, Any]],
+            existing_records_by_person: dict[str, dict[str, Any]],
+            existing_engagements_by_id: dict[str, dict[str, Any]],
+            existing_events_by_idempotency: dict[str, dict[str, Any]],
+            selection_now: str,
+            source_candidate_count: int,
+        ) -> dict[str, Any]:
+            record_rows: list[dict[str, Any]] = []
+            engagement_rows: list[dict[str, Any]] = []
+            event_rows: list[dict[str, Any]] = []
+            item_results: list[dict[str, Any]] = []
+            for candidate_key in normalized_candidate_keys:
+                member = dict(members_by_candidate_key.get(candidate_key) or {})
+                person_identity_key = _require_non_empty(
+                    str(member.get("person_identity_key") or "").strip(),
+                    "person_identity_key",
+                )
+                event_idempotency_key = selection_idempotency_keys[candidate_key]
+                existing_record = dict(existing_records_by_person.get(person_identity_key) or {})
+                existing_event = dict(existing_events_by_idempotency.get(event_idempotency_key) or {})
+                if existing_event:
+                    if not existing_record or str(existing_event.get("crm_record_id") or "") != str(
+                        existing_record.get("crm_record_id") or ""
+                    ):
+                        raise RuntimeError("CRM selection idempotency event is detached from its record")
+                    item_results.append(
+                        {
+                            "status": "idempotent",
+                            "candidate_identity_key": candidate_key,
+                            "person_identity_key": person_identity_key,
+                            "crm_record_id": str(existing_record.get("crm_record_id") or ""),
+                            "engagement_id": str(existing_record.get("current_engagement_id") or ""),
+                            "event_id": str(existing_event.get("event_id") or ""),
+                            "event_type": str(existing_event.get("event_type") or ""),
+                        }
+                    )
+                    continue
+                source_selection = {
+                    "projection_id": normalized_projection_id,
+                    "membership_revision": membership_revision,
+                    "source_candidate_count": source_candidate_count,
+                    "candidate_identity_key": candidate_key,
+                    "person_identity_key": person_identity_key,
+                }
+                crm_record_id = str(existing_record.get("crm_record_id") or "").strip() or stable_id(
+                    "crmrec", f"{normalized_workspace_id}:{person_identity_key}"
+                )
+                engagement_id = str(existing_record.get("current_engagement_id") or "").strip()
+                event_type = "projection_member_reselected" if existing_record else "crm_record_created"
+                if not engagement_id:
+                    engagement_id = stable_id("crmeng", f"{crm_record_id}:default")
+                event_id = stable_id("crmevt", f"{normalized_workspace_id}:{event_idempotency_key}")
+                if existing_record:
+                    record_rows.append(
+                        {
+                            **existing_record,
+                            "crm_version": int(existing_record.get("crm_version") or 0) + 1,
+                            "metadata": {
+                                **dict(existing_record.get("metadata") or {}),
+                                "last_source_projection_id": normalized_projection_id,
+                                "last_source_membership_revision": membership_revision,
+                                "last_source_selection": source_selection,
+                                "last_projection_selection_event_id": event_id,
+                            },
+                            "updated_at": selection_now,
+                        }
+                    )
+                else:
+                    summary = build_person_summary_view(
+                        dict(member.get("public_summary") or {}),
+                        person_identity_key=person_identity_key,
+                        source_projection_id=normalized_projection_id,
+                        source_run_id=str(member.get("source_run_id") or projection.get("source_run_id") or ""),
+                    )
+                    record_rows.append(
+                        {
+                            "crm_record_id": crm_record_id,
+                            "workspace_id": normalized_workspace_id,
+                            "person_identity_key": person_identity_key,
+                            "candidate_identity_key": candidate_key,
+                            "collection_id": str(projection.get("collection_id") or ""),
+                            "display_name_cache": str(summary.get("display_name") or summary.get("name") or ""),
+                            "headline_cache": str(summary.get("headline") or ""),
+                            "primary_company_cache": str(summary.get("current_company") or ""),
+                            "avatar_asset_id": str(summary.get("avatar_asset_id") or ""),
+                            "lifecycle_status": "active",
+                            "visibility_status": "normal",
+                            "source_projection_id": normalized_projection_id,
+                            "source_run_id": str(
+                                member.get("source_run_id") or projection.get("source_run_id") or ""
+                            ),
+                            "source_collection_id": str(projection.get("collection_id") or ""),
+                            "source_reason": source_reason,
+                            "current_engagement_id": engagement_id,
+                            "crm_version": 1,
+                            "metadata": {
+                                "writer_id": self.writer_id,
+                                "current_stage": stage,
+                                "candidate_id": str(summary.get("candidate_id") or ""),
+                                "avatar_url_cache": str(summary.get("avatar_url") or ""),
+                                "linkedin_url_cache": str(summary.get("linkedin_url") or ""),
+                                "source_membership_revision": membership_revision,
+                                "last_source_selection": source_selection,
+                                "last_projection_selection_event_id": event_id,
+                            },
+                            "created_at": selection_now,
+                            "updated_at": selection_now,
+                        }
+                    )
+                    engagement_rows.append(
+                        {
+                            "engagement_id": engagement_id,
+                            "crm_record_id": crm_record_id,
+                            "pipeline_id": pipeline_id,
+                            "stage": stage,
+                            "stage_category": _crm_stage_category(stage),
+                            "priority": "normal",
+                            "quality_score": None,
+                            "source_projection_id": normalized_projection_id,
+                            "source_run_id": str(
+                                member.get("source_run_id") or projection.get("source_run_id") or ""
+                            ),
+                            "source_selection_reason": source_reason,
+                            "created_by_actor": str(actor_type or "user").strip() or "user",
+                            "metadata": {
+                                "writer_id": self.writer_id,
+                                "source_membership_revision": membership_revision,
+                            },
+                            "created_at": selection_now,
+                            "updated_at": selection_now,
+                        }
+                    )
+                event_rows.append(
+                    {
+                        "event_id": event_id,
+                        "workspace_id": normalized_workspace_id,
+                        "crm_record_id": crm_record_id,
+                        "engagement_id": engagement_id,
+                        "person_identity_key": person_identity_key,
+                        "event_type": event_type,
+                        "actor_type": str(actor_type or "user").strip() or "user",
+                        "actor_id": str(actor_id or "").strip(),
+                        "idempotency_key": event_idempotency_key,
+                        "payload": {
+                            "writer_id": self.writer_id,
+                            "source_projection_id": normalized_projection_id,
+                            "source_membership_revision": membership_revision,
+                            "source_candidate_count": source_candidate_count,
+                            "candidate_identity_key": candidate_key,
+                            "source_reason": source_reason,
+                        },
+                        "metadata": {
+                            "writer_id": self.writer_id,
+                            "source_membership_revision": membership_revision,
+                        },
+                        "occurred_at": selection_now,
+                        "created_at": selection_now,
+                    }
+                )
+                item_results.append(
+                    {
+                        "status": "reselected" if existing_record else "upserted",
+                        "candidate_identity_key": candidate_key,
+                        "person_identity_key": person_identity_key,
+                        "crm_record_id": crm_record_id,
+                        "engagement_id": engagement_id,
+                        "event_id": event_id,
+                        "event_type": event_type,
+                    }
+                )
+            return {
+                "record_rows": record_rows,
+                "engagement_rows": engagement_rows,
+                "event_rows": event_rows,
+                "item_results": item_results,
+            }
+
+        applied = self.store.apply_projection_crm_selection(
+            projection_id=normalized_projection_id,
+            expected_membership_revision=membership_revision,
+            expected_source_candidate_count=source_candidate_count,
+            candidate_identity_keys=normalized_candidate_keys,
+            workspace_id=normalized_workspace_id,
+            selection_idempotency_keys=selection_idempotency_keys,
+            payload_builder=build_payload,
+        )
+        if str(applied.get("status") or "") != "applied":
+            return applied
+        records_by_id = {
+            str(record.get("crm_record_id") or ""): record for record in list(applied.get("crm_records") or [])
+        }
+        engagements_by_id = {
+            str(engagement.get("engagement_id") or ""): engagement
+            for engagement in list(applied.get("crm_engagements") or [])
+        }
+        events_by_id = {
+            str(event.get("event_id") or ""): event for event in list(applied.get("crm_events") or [])
+        }
+        results = [
+            {
+                **dict(item),
+                "crm_record": records_by_id.get(str(dict(item).get("crm_record_id") or ""), {}),
+                "crm_engagement": engagements_by_id.get(str(dict(item).get("engagement_id") or ""), {}),
+                "crm_event": events_by_id.get(str(dict(item).get("event_id") or ""), {}),
+            }
+            for item in list(applied.get("item_results") or [])
+        ]
+        return {
+            "status": "applied",
+            "projection_id": normalized_projection_id,
+            "membership_revision": str(applied.get("membership_revision") or membership_revision),
+            "source_candidate_count": int(applied.get("source_candidate_count") or 0),
+            "requested_candidate_count": len(normalized_candidate_keys),
+            "successful_write_count": len(results),
+            "failed_write_count": 0,
+            "results": results,
+            "write_contract": {
+                "owner": "CRMWriter",
+                "source": "serving_projection_members+crm_records+crm_engagements+crm_events",
+                "transaction": "projection_crm_selection_uow",
+                "selection_prevalidated": True,
+                "batch_atomic": True,
+                "fallback_used": False,
+                "fail_closed": True,
+            },
+        }
 
     def add_person_to_crm(
         self,
@@ -100,6 +398,8 @@ class CRMWriter:
         pipeline_id: str = "default_sourcing",
         stage: str = "new",
         source_reason: str = "selected",
+        source_membership_revision: str = "",
+        source_candidate_count: int = 0,
     ) -> dict[str, Any]:
         normalized_workspace_id = str(workspace_id or "default").strip() or "default"
         summary = build_person_summary_view(
@@ -130,9 +430,7 @@ class CRMWriter:
                 normalized_person_key,
                 workspace_id=normalized_workspace_id,
             )
-            current_engagement = self.store.get_crm_engagement(
-                str(existing_record.get("current_engagement_id") or "")
-            )
+            current_engagement = self.store.get_crm_engagement(str(existing_record.get("current_engagement_id") or ""))
             return {
                 "status": "idempotent",
                 "crm_record": existing_record,
@@ -167,6 +465,14 @@ class CRMWriter:
                     "candidate_id": str(summary.get("candidate_id") or ""),
                     "avatar_url_cache": str(summary.get("avatar_url") or ""),
                     "linkedin_url_cache": str(summary.get("linkedin_url") or ""),
+                    "source_membership_revision": str(source_membership_revision or "").strip(),
+                    "last_source_selection": {
+                        "projection_id": str(source_projection_id or "").strip(),
+                        "membership_revision": str(source_membership_revision or "").strip(),
+                        "source_candidate_count": max(0, int(source_candidate_count or 0)),
+                        "candidate_identity_key": str(candidate_identity_key or "").strip(),
+                        "person_identity_key": normalized_person_key,
+                    },
                 },
             }
         )
@@ -181,6 +487,7 @@ class CRMWriter:
                 "created_by_actor": str(actor_type or "user").strip() or "user",
                 "metadata": {
                     "writer_id": self.writer_id,
+                    "source_membership_revision": str(source_membership_revision or "").strip(),
                 },
             }
         )
@@ -200,8 +507,12 @@ class CRMWriter:
                     "source_run_id": source_run_id,
                     "source_reason": source_reason,
                     "candidate_identity_key": candidate_identity_key,
+                    "source_membership_revision": str(source_membership_revision or "").strip(),
                 },
-                "metadata": {"writer_id": self.writer_id},
+                "metadata": {
+                    "writer_id": self.writer_id,
+                    "source_membership_revision": str(source_membership_revision or "").strip(),
+                },
             }
         )
         if engagement.get("engagement_id") and record.get("current_engagement_id") != engagement.get("engagement_id"):
@@ -256,14 +567,17 @@ class CRMWriter:
         current_record_metadata = dict(record.get("metadata") or {})
         current_engagement_metadata = dict(current_engagement.get("metadata") or {})
         next_stage = _normalize_crm_stage(
-            stage or _crm_stage_from_target_follow_up(follow_up_status) or current_engagement.get("stage") or current_record_metadata.get("current_stage")
+            stage
+            or _crm_stage_from_target_follow_up(follow_up_status)
+            or current_engagement.get("stage")
+            or current_record_metadata.get("current_stage")
         )
         parsed_quality_score = (
-            _coerce_quality_score(quality_score)
-            if quality_score_present
-            else current_engagement.get("quality_score")
+            _coerce_quality_score(quality_score) if quality_score_present else current_engagement.get("quality_score")
         )
-        next_comment = str(comment or "").strip() if comment_present else str(current_engagement_metadata.get("comment") or "")
+        next_comment = (
+            str(comment or "").strip() if comment_present else str(current_engagement_metadata.get("comment") or "")
+        )
         patch = dict(display_patch or {})
         next_record_metadata = {
             **current_record_metadata,
@@ -300,9 +614,7 @@ class CRMWriter:
                     record.get("primary_company_cache"),
                 ),
                 "current_engagement_id": str(
-                    current_engagement.get("engagement_id")
-                    or record.get("current_engagement_id")
-                    or ""
+                    current_engagement.get("engagement_id") or record.get("current_engagement_id") or ""
                 ),
                 "metadata": next_record_metadata,
             }
@@ -317,30 +629,22 @@ class CRMWriter:
                 "stage_category": _crm_stage_category(next_stage),
                 "quality_score": parsed_quality_score,
                 "source_projection_id": str(
-                    current_engagement.get("source_projection_id")
-                    or updated_record.get("source_projection_id")
-                    or ""
+                    current_engagement.get("source_projection_id") or updated_record.get("source_projection_id") or ""
                 ),
                 "source_run_id": str(
-                    current_engagement.get("source_run_id")
-                    or updated_record.get("source_run_id")
-                    or ""
+                    current_engagement.get("source_run_id") or updated_record.get("source_run_id") or ""
                 ),
                 "source_selection_reason": str(
-                    current_engagement.get("source_selection_reason")
-                    or updated_record.get("source_reason")
-                    or ""
+                    current_engagement.get("source_selection_reason") or updated_record.get("source_reason") or ""
                 ),
-                "created_by_actor": str(
-                    current_engagement.get("created_by_actor")
-                    or actor_type
-                    or "user"
-                ).strip()
+                "created_by_actor": str(current_engagement.get("created_by_actor") or actor_type or "user").strip()
                 or "user",
                 "metadata": next_engagement_metadata,
             }
         )
-        if not str(updated_record.get("current_engagement_id") or "").strip() and updated_engagement.get("engagement_id"):
+        if not str(updated_record.get("current_engagement_id") or "").strip() and updated_engagement.get(
+            "engagement_id"
+        ):
             updated_record = self.store.upsert_crm_record(
                 {
                     **updated_record,

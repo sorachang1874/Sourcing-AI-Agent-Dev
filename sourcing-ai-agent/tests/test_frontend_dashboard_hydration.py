@@ -27,6 +27,88 @@ class FrontendDashboardHydrationContractTest(unittest.TestCase):
         self.assertIn("filterContract?.backendFilteredPagingSupported", source)
         self.assertIn("!backendCanonicalPagingAvailable && finalTotalCandidates > 0", source)
 
+    def test_projection_refresh_uses_revision_replacement_and_polls_exact_card_readiness(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("node is required for frontend TypeScript helper checks")
+        hook_source = (REPO_ROOT / "frontend-demo/src/hooks/useDashboardCandidateHydration.ts").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("? await getProjectionDashboard(projectionId", hook_source)
+        self.assertIn("forceRefresh: true", hook_source)
+        self.assertIn("storeProjectionDashboardCache(projectionId, mergedDashboard)", hook_source)
+        self.assertIn("canonicalProjectionCardReadinessPending(dashboardValue)", hook_source)
+        self.assertIn("const requestBaseDashboard = dashboardRef.current", hook_source)
+        self.assertIn("dashboardPopulationShapeChanged(requestBaseDashboard, dashboardRef.current)", hook_source)
+        self.assertIn("dashboardPopulationShapeChanged(currentDashboard, latestDashboard)", hook_source)
+        self.assertIn("pages.some((page) => !dashboardCandidatePageRevisionMatches(latestDashboard, page))", hook_source)
+        self.assertIn("storeProjectionDashboardCache(projectionId, refreshedDashboard)", hook_source)
+
+        helper_start = hook_source.index("function dashboardPopulationShapeChanged(")
+        helper_end = hook_source.index("function profileFetchProgressHasPendingWork(", helper_start)
+        helper_source = hook_source[helper_start:helper_end]
+        script = textwrap.dedent(
+            f"""
+            const vm = require("vm");
+            const ts = require("./frontend-demo/node_modules/typescript");
+            const source = `
+              function dashboardExpectedCandidateCount(dashboard) {{
+                return Number(dashboard?.boardRuntimeState?.expectedCandidateCount || 0);
+              }}
+            ` + {json.dumps(helper_source)} + `
+              module.exports = {{ dashboardPopulationShapeChanged, dashboardHasActiveAssetLifecycle }};
+            `;
+            const compiled = ts.transpileModule(source, {{
+              compilerOptions: {{ module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }},
+            }}).outputText;
+            const module = {{ exports: {{}} }};
+            vm.runInNewContext(compiled, {{ module, exports: module.exports, require, console }});
+            const board = (revision, cardReady, expected = 140) => ({{
+              resultMode: "asset_population",
+              snapshotId: "projection-1",
+              candidates: [],
+              boardRuntimeState: {{
+                phase: "canonical_projection_serving",
+                rowPublicationTier: "serving_projection_members",
+                rowPublicationRevision: revision,
+                expectedCandidateCount: expected,
+                displayReadyCandidateCount: cardReady,
+                cardMaterializationQualityFieldsAvailable: true,
+              }},
+            }});
+            console.log(JSON.stringify({{
+              revisionChangesShape: module.exports.dashboardPopulationShapeChanged(
+                board("revision-1", 115),
+                board("revision-2", 115),
+              ),
+              readinessPendingIsActive: module.exports.dashboardHasActiveAssetLifecycle(
+                board("revision-1", 115),
+              ),
+              readinessCompleteIsInactive: module.exports.dashboardHasActiveAssetLifecycle(
+                board("revision-2", 140),
+              ),
+              missingRevisionIsInactive: module.exports.dashboardHasActiveAssetLifecycle(
+                board("", 115),
+              ),
+              exactZeroIsInactive: module.exports.dashboardHasActiveAssetLifecycle(
+                board("revision-zero", 0, 0),
+              ),
+            }}));
+            """
+        )
+        completed = subprocess.run(
+            ["node", "-e", script],
+            cwd=REPO_ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        payload = json.loads(completed.stdout)
+        self.assertTrue(payload["revisionChangesShape"])
+        self.assertTrue(payload["readinessPendingIsActive"])
+        self.assertFalse(payload["readinessCompleteIsInactive"])
+        self.assertFalse(payload["missingRevisionIsInactive"])
+        self.assertFalse(payload["exactZeroIsInactive"])
+
     def test_projection_pages_use_backend_projection_filtering_not_full_board_hydration(self) -> None:
         api_source = (REPO_ROOT / "frontend-demo/src/lib/api.ts").read_text(encoding="utf-8")
         panel_source = (REPO_ROOT / "frontend-demo/src/components/ResultsBoardPanel.tsx").read_text(encoding="utf-8")
@@ -38,7 +120,8 @@ class FrontendDashboardHydrationContractTest(unittest.TestCase):
         self.assertIn("mapCandidatePageFilterContract(payload.filter_contract)", api_source)
         self.assertIn("filter: backendPageFilter", panel_source)
         self.assertIn("projectionOnlyReadOnly", panel_source)
-        self.assertIn("CRM source-projection writer", panel_source)
+        self.assertIn("人工审核和资料补全需要从具体任务进入", panel_source)
+        self.assertIn("disabled={projectionOnlyReadOnly", panel_source)
 
     def _run_hydration_cases(self) -> list[dict]:
         if shutil.which("node") is None:
@@ -543,6 +626,64 @@ class FrontendDashboardHydrationContractTest(unittest.TestCase):
         payload = json.loads(completed.stdout)
         self.assertEqual(payload["expected"], 300)
         self.assertEqual(payload["rowHydrationTarget"], 322)
+
+    def test_board_publication_completion_is_independent_of_card_readiness(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("node is required for frontend TypeScript helper checks")
+        script = textwrap.dedent(
+            """
+            const fs = require("fs");
+            const path = require("path");
+            const vm = require("vm");
+            const ts = require("./frontend-demo/node_modules/typescript");
+            const source = fs.readFileSync(
+              path.join(process.cwd(), "frontend-demo/src/lib/dashboardHydration.ts"),
+              "utf8",
+            );
+            const compiled = ts.transpileModule(source, {
+              compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+            }).outputText;
+            const module = { exports: {} };
+            vm.runInNewContext(compiled, { module, exports: module.exports, require, console }, {
+              filename: "dashboardHydration.js",
+            });
+            const { dashboardBoardRuntimePublicationComplete } = module.exports;
+            const dashboard = (overrides = {}) => ({
+              totalCandidates: 140,
+              assetPopulationCount: 140,
+              candidates: Array.from({ length: 24 }, (_, index) => ({ id: `candidate-${index}` })),
+              boardRuntimeState: {
+                phase: "current_snapshot_serving",
+                publicationStatus: "complete",
+                expectedCandidateCount: 140,
+                servedCandidateCount: 140,
+                publishedCandidateCount: 140,
+                displayReadyCandidateCount: 115,
+                previewCandidateCount: 25,
+                rowHydrationTargetCount: 140,
+                ...overrides,
+              },
+            });
+            console.log(JSON.stringify({
+              cardDetailsPending: dashboardBoardRuntimePublicationComplete(dashboard()),
+              membershipPending: dashboardBoardRuntimePublicationComplete(dashboard({ servedCandidateCount: 139 })),
+              projectionServing: dashboardBoardRuntimePublicationComplete(dashboard({ phase: "canonical_projection_serving" })),
+              nonServingPhase: dashboardBoardRuntimePublicationComplete(dashboard({ phase: "partial_serving" })),
+            }));
+            """
+        )
+        completed = subprocess.run(
+            ["node", "-e", script],
+            cwd=REPO_ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        payload = json.loads(completed.stdout)
+        self.assertTrue(payload["cardDetailsPending"])
+        self.assertFalse(payload["membershipPending"])
+        self.assertTrue(payload["projectionServing"])
+        self.assertFalse(payload["nonServingPhase"])
 
 
 if __name__ == "__main__":

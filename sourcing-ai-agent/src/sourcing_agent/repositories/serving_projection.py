@@ -16,6 +16,7 @@ from __future__ import annotations
 import builtins
 import json
 import re
+from contextlib import contextmanager
 from typing import Any
 from uuid import uuid4
 
@@ -179,6 +180,14 @@ def _normalize_non_negative_int(value: Any) -> int:
         return 0
 
 
+def _normalize_owned_boolean(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in {0, 1}:
+        return bool(value)
+    return None
+
+
 def _normalize_employment_scope(value: Any) -> str:
     normalized = str(value or "").strip().lower()
     if normalized in {"current", "former", "all"}:
@@ -195,6 +204,12 @@ def _member_readiness_counts(members: builtins.list[dict[str, Any]]) -> dict[str
     profile_ready_count = 0
     card_ready_count = 0
     profile_required_count = 0
+    explicit_profile_capture_count = 0
+    needs_profile_completion_count = 0
+    low_profile_richness_count = 0
+    explicit_profile_capture_available = True
+    needs_profile_completion_available = True
+    low_profile_richness_available = True
     for member in members:
         if not isinstance(member, dict):
             continue
@@ -203,10 +218,10 @@ def _member_readiness_counts(members: builtins.list[dict[str, Any]]) -> dict[str
         card_readiness = str(member.get("card_readiness") or "").strip().lower()
         projection_metrics = dict(member.get("projection_metrics") or {})
         public_summary = dict(member.get("public_summary") or {})
-        profile_required = bool(
-            projection_metrics.get("profile_required")
-            or projection_metrics.get("needs_profile_completion")
-            or public_summary.get("needs_profile_completion")
+        profile_required = (
+            _normalize_owned_boolean(projection_metrics.get("profile_required")) is True
+            or _normalize_owned_boolean(projection_metrics.get("needs_profile_completion")) is True
+            or _normalize_owned_boolean(public_summary.get("needs_profile_completion")) is True
             or profile_readiness not in {"", "not_required", "skipped"}
         )
         if profile_required:
@@ -215,12 +230,34 @@ def _member_readiness_counts(members: builtins.list[dict[str, Any]]) -> dict[str
             profile_ready_count += 1
         if card_readiness in {"ready", "complete", "completed", "materialized", "display_ready"}:
             card_ready_count += 1
-    return {
+        has_explicit_profile_capture = _normalize_owned_boolean(projection_metrics.get("has_explicit_profile_capture"))
+        if has_explicit_profile_capture is None:
+            explicit_profile_capture_available = False
+        elif has_explicit_profile_capture:
+            explicit_profile_capture_count += 1
+        needs_profile_completion = _normalize_owned_boolean(projection_metrics.get("needs_profile_completion"))
+        if needs_profile_completion is None:
+            needs_profile_completion_available = False
+        elif needs_profile_completion:
+            needs_profile_completion_count += 1
+        low_profile_richness = _normalize_owned_boolean(projection_metrics.get("low_profile_richness"))
+        if low_profile_richness is None:
+            low_profile_richness_available = False
+        elif low_profile_richness:
+            low_profile_richness_count += 1
+    counts = {
         "row_count": row_count,
         "profile_required_count": profile_required_count,
         "profile_ready_count": profile_ready_count,
         "card_ready_count": card_ready_count,
     }
+    if explicit_profile_capture_available:
+        counts["explicit_profile_capture_candidate_count"] = explicit_profile_capture_count
+    if needs_profile_completion_available:
+        counts["needs_profile_completion_candidate_count"] = needs_profile_completion_count
+    if low_profile_richness_available:
+        counts["low_profile_richness_candidate_count"] = low_profile_richness_count
+    return counts
 
 
 def _build_projection_id(value: Any = "") -> str:
@@ -304,6 +341,29 @@ def _latest_text_value(values: Any) -> str:
 
 class ServingProjectionRepository(Repository):
     """PG-only repository for projection catalog, members, links, pointers, and manifest shards."""
+
+    @contextmanager
+    def hold_publication_lock(self, projection_id: str) -> Any:
+        normalized_projection_id = str(projection_id or "").strip()
+        if not normalized_projection_id:
+            raise ValueError("projection_id is required")
+        if not self._should_prefer_read("serving_projections"):
+            raise RuntimeError(
+                "postgres-only invariant violated for serving_projections in hold_publication_lock: "
+                "should_prefer_read returned False; legacy SQLite tail retired (B4)"
+            )
+        method = getattr(self._adapter, "hold_serving_projection_publication_lock", None)
+        if method is None:
+            self._raise_write_failure(
+                table_name="serving_projections",
+                method_name="hold_serving_projection_publication_lock",
+                reason="native lock is unavailable",
+            )
+        with method(
+            table_name="serving_projections",
+            projection_id=normalized_projection_id,
+        ):
+            yield
 
     def _projection_from_row(self, row: Any) -> dict[str, Any]:
         return SERVING_PROJECTIONS.from_row(row)

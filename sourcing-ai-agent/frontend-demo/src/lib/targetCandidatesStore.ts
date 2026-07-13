@@ -1,6 +1,7 @@
 import type { Candidate, TargetCandidateFollowUpStatus, TargetCandidateRecord } from "../types";
 import {
   addProjectionCandidateToCrm,
+  addProjectionCandidatesToCrm,
   getTargetCandidates,
   upsertTargetCandidate as upsertTargetCandidateApi,
 } from "./api";
@@ -63,22 +64,58 @@ export async function addTargetCandidate(
     jobId?: string;
     historyId?: string;
     projectionId?: string;
+    membershipRevision?: string;
   },
 ): Promise<TargetCandidateRecord> {
   const projectionId = (options?.projectionId || "").trim();
+  const membershipRevision = (options?.membershipRevision || "").trim();
   const candidateIdentityKey = (candidate.candidateIdentityKey || candidate.personIdentityKey || "").trim();
-  if (!projectionId || !candidateIdentityKey) {
-    throw new Error("加入目标候选人需要 canonical projection_id 和 candidate_identity_key。");
+  if (!projectionId || !membershipRevision || !candidateIdentityKey) {
+    throw new Error("加入目标候选人需要 canonical projection revision 和 candidate_identity_key。");
   }
   const record = await addProjectionCandidateToCrm({
     projectionId,
     candidateIdentityKey,
+    expectedMembershipRevision: membershipRevision,
     stage: "outreach_ready",
     sourceReason: "operator_selected_from_projection",
-    idempotencyKey: `crm:add-target:${projectionId}:${candidateIdentityKey}`,
+    idempotencyKey: `crm:add-target:${projectionId}:${membershipRevision}:${candidateIdentityKey}`,
   });
   emitUpdated();
   return record;
+}
+
+export async function addTargetCandidates(
+  candidates: Candidate[],
+  options: {
+    projectionId: string;
+    membershipRevision: string;
+  },
+): Promise<{
+  records: TargetCandidateRecord[];
+  requestedCandidateCount: number;
+  successfulWriteCount: number;
+  failedWriteCount: number;
+}> {
+  const projectionId = String(options.projectionId || "").trim();
+  const membershipRevision = String(options.membershipRevision || "").trim();
+  const candidateIdentityKeys = candidates
+    .map((candidate) => candidate.candidateIdentityKey || candidate.personIdentityKey || "")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!projectionId || !membershipRevision || candidateIdentityKeys.length === 0) {
+    throw new Error("批量加入目标候选人需要 canonical projection revision 和候选人标识。");
+  }
+  const result = await addProjectionCandidatesToCrm({
+    projectionId,
+    candidateIdentityKeys,
+    expectedMembershipRevision: membershipRevision,
+    stage: "outreach_ready",
+    sourceReason: "operator_selected_from_projection",
+    idempotencyKey: `crm:add-target-bulk:${projectionId}:${membershipRevision}`,
+  });
+  emitUpdated();
+  return result;
 }
 
 export async function updateTargetCandidate(

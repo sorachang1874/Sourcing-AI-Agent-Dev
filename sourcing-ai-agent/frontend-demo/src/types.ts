@@ -325,9 +325,9 @@ export interface BoardRuntimeState {
   displayReadyCandidateCount: number;
   previewCandidateCount: number;
   profileDetailCandidateCount: number;
-  explicitProfileCaptureCandidateCount: number;
-  needsProfileCompletionCandidateCount: number;
-  lowProfileRichnessCandidateCount: number;
+  explicitProfileCaptureCandidateCount: number | null;
+  needsProfileCompletionCandidateCount: number | null;
+  lowProfileRichnessCandidateCount: number | null;
   cardMaterializationQualityFieldsAvailable: boolean;
   rowHydrationTargetCount: number;
   candidateDiscoveryCount?: number;
@@ -341,6 +341,7 @@ export interface BoardRuntimeState {
   deltaProfileDenominatorPromoted?: boolean;
   rowPublicationSequence: number;
   rowPublicationTier?: string;
+  rowPublicationRevision?: string;
   rowPublicationWatermark: string;
   rowPublicationUpdatedAt: string;
   facetSummaryStatus: string;
@@ -564,6 +565,7 @@ export interface TargetCandidateRecord {
   candidateIdentityKey?: string;
   personIdentityKey?: string;
   sourceProjectionId?: string;
+  sourceMembershipRevision?: string;
   sourceRunId?: string;
   sourceCollectionId?: string;
   historyId?: string;

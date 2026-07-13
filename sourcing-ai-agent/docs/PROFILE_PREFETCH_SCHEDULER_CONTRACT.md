@@ -80,12 +80,22 @@ scheduler 把一组 ready/refill 的 LinkedIn profile URL 切成 **provider enve
 
 分类锚：旧"全切 50-slot" = stale(a)；coalescing/更大信封/no-fragmentation/durable-wave-preservation = 新契约仍回归的 regression(b)；stub 面缺失与纯投影计数另列。
 
-**test_results_api.py（3）— 不属本契约，移交 Phase 4 B 带（projection 计数族）：** 实跑确认（2026-06-12，全量 487s）失败为：
+**test_results_api.py（3）— 不属本契约；D-3 语义已由 owner 于 2026-07-13 批准修订 (a)：**
+以下三条保留为 Step 0 当时的历史失败/移交记录，不是仍待 owner 裁决的 scheduler regression，也不代表本次
+D-3 实现或验证已经完成。新语义为：exact canonical visible membership 独立拥有主同步/分页/export/CRM
+source total `N/N`；exact card-ready 独立拥有 `C/N`；profile-ready、card-ready、explicit profile capture
+分别按 owner evidence 投影，不能互推；non-exact/fallback read fail closed；public facet 仍由
+`projection_person_search_index` owner，初始 membership publication 的 facet 状态为 pending/unavailable。
+Public summary/page 以 member-publication UoW 拥有、来自现有 member input revision 的
+`projection.membership_revision` opaque token 绑定；只比较相等/不等，缺失/mismatch fail closed，不能用
+`updated_at` 或 token 排序。
+
+历史记录（2026-06-12，当时全量 487s）：
 - `test_board_runtime_state_current_snapshot_serving_does_not_infer_profiles_from_row_shell`：断言 `卡片详情已合入看板 112/297`，实测 `186/297` — board-merge 投影计数。
 - `test_lovable_board_visible_patches_extend_canonical_projection_membership` — canonical projection membership 扩展计数。
 - `test_partial_current_snapshot_overlay_uses_current_snapshot_population_as_expected_floor` — current-snapshot overlay population floor。
 
-三者均为 board-visible / projection membership **投影计数**，下游于调度器，不含 envelope/packing/coalescing 断言（按 `_resolve_board_visible_delta_apply_chunk_size`、`background_reconcile.harvest_prefetch.status` 等投影面，非 scheduler `batch_size_reason`/envelope shape）。**移交设计 §2(b) B2 ProjectionCommandOwner / ServingReadModel 族**（设计 §3 Step 4 边界冻结、§4 #5）；Step 0 不动这 3 个。供 owner 复核此移交。
+三者均为 board-visible / projection membership **投影计数**，下游于调度器，不含 envelope/packing/coalescing 断言（按 `_resolve_board_visible_delta_apply_chunk_size`、`background_reconcile.harvest_prefetch.status` 等投影面，非 scheduler `batch_size_reason`/envelope shape）。原移交边界保持：由 ProjectionCommandOwner / ServingReadModel 族按已批准 D-3 修订收口；Step 0 scheduler 不动这 3 个。本段只关闭语义裁决，不提前记录新的测试数字、implementation commit 或 signoff 结论。
 
 ## 5. 实施清单（主会话 Step 0 执行）
 
@@ -109,4 +119,4 @@ scheduler 把一组 ready/refill 的 LinkedIn profile URL 切成 **provider enve
 
 - **D1（(c) 类）** `test_queue_background_profile_prefetch_records_refill_item_state_for_active_and_deferred_urls`：mocked tiny window 下 actor-slot repack 未派发任何项，确认是 plan/window reconciliation 回归（改代码）后，**50/55 active/deferred 切分是否为意图 floor** 须 owner 确认（影响是改代码修回归还是同时改测试期望）。
 - **D2（stub gap）** `test_..._reports_profile_queue_snapshot`：确认归 test-infra（补手写 `_Store` stub 的 durable typed-command 面），不计入产品码 regression 预算。
-- **D3（移交）** results_api 3 个投影计数失败移交 Phase 4 B 带（§4 #5 边界冻结期处理）是否批准；若 owner 要求随 Step 0 一并清账，需把 B2 ProjectionCommandOwner 计数语义提前定义（超出本契约范围）。
+- **D3（已解决语义，仍按原边界移交）** owner 已批准修订 (a)：ProjectionCommandOwner / ServingReadModel 以 exact canonical visible membership `N/N` 和独立 card-ready `C/N` 收口；profile/card 无跨维度顺序，explicit capture 不推导，facet index owner 不变。实际实现、测试与签收仍由该投影批完成，不属于 Step 0 scheduler，也未在本文预记数字或 commit。

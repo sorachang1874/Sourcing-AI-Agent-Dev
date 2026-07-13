@@ -2252,6 +2252,124 @@ class WorkflowSmokeTest(unittest.TestCase):
             1,
         )
 
+    def test_build_progress_observability_report_rejects_legacy_counters_lifting_exact_card_text(self) -> None:
+        report = _build_progress_observability_report(
+            [
+                {
+                    "tick": 0,
+                    "board_runtime_state": {
+                        "publication_status": "complete",
+                        "expected_candidate_count": 140,
+                        "served_candidate_count": 140,
+                        "published_candidate_count": 140,
+                        "display_ready_candidate_count": 115,
+                        "profile_detail_candidate_count": 140,
+                        "explicit_profile_capture_candidate_count": 140,
+                        "profile_fetch_required_count": 140,
+                        "profile_fetched_count": 140,
+                        "delta_profile_required_count": 140,
+                        "delta_profile_materialized_count": 140,
+                        "delta_profile_board_visible_count": 140,
+                        "card_materialization_status_text": "卡片详情已合入看板 140/140",
+                        "delta_profile_denominator_promoted": True,
+                    },
+                }
+            ]
+        )
+
+        self.assertTrue(report["contract_violation_detected"])
+        self.assertEqual(
+            report["contract_violation_counts"]["board_runtime_card_text_exceeds_card_readiness"],
+            1,
+        )
+        violation = report["contract_violations"][0]
+        self.assertEqual(violation["card_ready_count"], 115)
+        self.assertEqual(violation["card_required_count"], 140)
+
+    def test_build_progress_observability_report_rejects_card_denominator_above_canonical_population(self) -> None:
+        report = _build_progress_observability_report(
+            [
+                {
+                    "tick": 0,
+                    "board_runtime_state": {
+                        "publication_status": "complete",
+                        "expected_candidate_count": 140,
+                        "served_candidate_count": 140,
+                        "published_candidate_count": 140,
+                        "display_ready_candidate_count": 115,
+                        "profile_fetch_required_count": 160,
+                        "delta_profile_required_count": 160,
+                        "card_materialization_status_text": "卡片详情已合入看板 115/160",
+                        "delta_profile_denominator_promoted": True,
+                    },
+                }
+            ]
+        )
+
+        self.assertTrue(report["contract_violation_detected"])
+        violation = report["contract_violations"][0]
+        self.assertEqual(violation["text_ready_count"], 115)
+        self.assertEqual(violation["text_required_count"], 160)
+        self.assertEqual(violation["card_required_count"], 140)
+
+    def test_build_progress_observability_report_rejects_invalid_card_fraction_scope_and_bounds(self) -> None:
+        invalid_status_texts = (
+            "卡片详情已合入看板 115/100",
+            "卡片详情已合入看板 90/90",
+            "卡片详情已合入看板 115/99",
+        )
+        for status_text in invalid_status_texts:
+            with self.subTest(status_text=status_text):
+                report = _build_progress_observability_report(
+                    [
+                        {
+                            "tick": 0,
+                            "board_runtime_state": {
+                                "publication_status": "complete",
+                                "expected_candidate_count": 140,
+                                "served_candidate_count": 140,
+                                "published_candidate_count": 140,
+                                "display_ready_candidate_count": 115,
+                                "profile_fetch_required_count": 100,
+                                "delta_profile_required_count": 100,
+                                "card_materialization_status_text": status_text,
+                                "delta_profile_denominator_promoted": True,
+                            },
+                        }
+                    ]
+                )
+
+                self.assertTrue(report["contract_violation_detected"])
+                self.assertEqual(
+                    report["contract_violation_counts"]["board_runtime_card_text_exceeds_card_readiness"],
+                    1,
+                )
+
+    def test_build_progress_observability_report_accepts_smaller_delta_scoped_card_text(self) -> None:
+        report = _build_progress_observability_report(
+            [
+                {
+                    "tick": 0,
+                    "board_runtime_state": {
+                        "publication_status": "complete",
+                        "expected_candidate_count": 597,
+                        "served_candidate_count": 597,
+                        "published_candidate_count": 597,
+                        "display_ready_candidate_count": 397,
+                        "baseline_candidate_count": 300,
+                        "profile_fetch_required_count": 297,
+                        "delta_profile_required_count": 297,
+                        "delta_profile_materialized_count": 297,
+                        "delta_profile_board_visible_count": 297,
+                        "card_materialization_status_text": "卡片详情已合入看板 97/297",
+                        "delta_profile_denominator_promoted": True,
+                    },
+                }
+            ]
+        )
+
+        self.assertFalse(report["contract_violation_detected"])
+
     def test_build_progress_observability_report_accepts_full_roster_card_text_without_delta_denominator(self) -> None:
         report = _build_progress_observability_report(
             [

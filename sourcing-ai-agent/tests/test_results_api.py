@@ -297,7 +297,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
         with mock.patch.object(
             self.store.repos.serving_projection,
-            "get_member",
+            "list_members_by_identity_keys",
             side_effect=ControlPlaneAuthoritativeReadError("postgres unavailable"),
         ):
             payload = self.orchestrator.get_projection_crm_state_api(
@@ -309,6 +309,69 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(payload["reason"], "projection_members_unavailable")
         self.assertTrue(payload["read_contract"]["fail_closed"])
         self.assertFalse(payload["read_contract"]["fallback_used"])
+
+    def test_projection_crm_state_is_visible_only_and_revision_fenced(self) -> None:
+        projection_id = "proj_crm_state_revision_fence"
+        visible_key = "linkedin:crm-state-visible"
+        hidden_key = "linkedin:crm-state-hidden"
+        self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+            run_id="job-crm-state-revision-fence",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": visible_key,
+                    "person_identity_key": visible_key,
+                    "visibility_state": "visible",
+                },
+                {
+                    "candidate_identity_key": hidden_key,
+                    "person_identity_key": hidden_key,
+                    "visibility_state": "hidden",
+                },
+            ],
+            replace_members=True,
+        )
+
+        hidden = self.orchestrator.get_projection_crm_state_api(
+            projection_id,
+            candidate_identity_keys=[hidden_key],
+        )
+        self.assertEqual(hidden["status"], "not_ready")
+        self.assertEqual(hidden["reason"], "projection_member_selection_not_visible")
+
+        repository = self.store.repos.serving_projection
+        original_list = repository.list_members_by_identity_keys
+
+        def replace_after_member_read(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+            members = original_list(*args, **kwargs)
+            self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+                run_id="job-crm-state-revision-fence",
+                projection_id=projection_id,
+                members=[
+                    {
+                        "candidate_identity_key": "linkedin:crm-state-replacement",
+                        "person_identity_key": "linkedin:crm-state-replacement",
+                    }
+                ],
+                replace_members=True,
+            )
+            return members
+
+        with mock.patch.object(
+            repository,
+            "list_members_by_identity_keys",
+            side_effect=replace_after_member_read,
+        ):
+            changed = self.orchestrator.get_projection_crm_state_api(
+                projection_id,
+                candidate_identity_keys=[visible_key],
+            )
+
+        self.assertEqual(changed["status"], "not_ready")
+        self.assertEqual(
+            changed["reason"],
+            "projection_membership_revision_changed_during_member_snapshot",
+        )
 
     def test_authoritative_read_not_ready_routes_return_conflict(self) -> None:
         not_ready = {
@@ -3227,6 +3290,10 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "count_scope": "exact_projection",
                 "public_facet_counts": facet_counts,
             },
+            readiness={
+                "row": "complete",
+                "row_count": len(candidates),
+            },
         )
         self.orchestrator.person_asset_writer.rebuild_projection_person_search_index(
             projection_id="proj_job_public_reader_projection_facets",
@@ -3372,15 +3439,42 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             owner=COLLECTION_AUTHORITATIVE_MERGE_OWNER,
             limit=0,
         )
+        index_commands = self.store.list_workflow_commands(
+            workflow_run_id=legacy_job_workflow_run_id("job-projection-event-time"),
+            owner=PROJECTION_PERSON_SEARCH_INDEX_BUILD_OWNER,
+            limit=0,
+        )
 
         self.assertEqual(persisted["metadata"]["run_scope_projection"]["status"], "published")
         self.assertTrue(projection_id.startswith("proj_"))
         self.assertEqual(self.store.repos.serving_projection.count_members(projection_id), 1)
         projection = self.store.repos.serving_projection.get(projection_id)
-        public_facet_counts = dict(dict(projection.get("counts") or {}).get("public_facet_counts") or {})
-        self.assertEqual(public_facet_counts["candidate_count"], 1)
-        self.assertEqual(public_facet_counts["source"], "serving_projection_members")
-        self.assertEqual(public_facet_counts["count_scope"], "exact_projection")
+        projection_counts = dict(projection.get("counts") or {})
+        self.assertNotIn("public_facet_counts", projection_counts)
+        self.assertEqual(projection_counts["candidate_count"], 1)
+        self.assertEqual(projection_counts["count_scope"], "exact_projection")
+        self.assertEqual(projection_counts["facet_count_scope"], "unavailable")
+        self.assertEqual(projection_counts["facet_build_status"], "pending")
+        self.assertEqual(projection_counts["index_count_scope"], "unavailable")
+        self.assertEqual(
+            dict(projection.get("metadata") or {}).get("public_facet_counts_source"),
+            "projection_person_search_index_pending",
+        )
+        self.assertEqual(len(index_commands), 1)
+        self.assertEqual(index_commands[0]["command_type"], PROJECTION_PERSON_SEARCH_INDEX_BUILD_COMMAND_TYPE)
+        self.assertEqual(index_commands[0]["status"], "queued")
+        index_queue_result = self.orchestrator._run_projection_person_search_index_queue_once(  # noqa: SLF001
+            {"job_id": "job-projection-event-time", "projection_person_search_index_item_limit": 1}
+        )
+        indexed_projection = self.store.repos.serving_projection.get(projection_id)
+        indexed_counts = dict(indexed_projection.get("counts") or {})
+        self.assertEqual(index_queue_result["completed_count"], 1)
+        self.assertEqual(indexed_counts["facet_build_status"], "completed")
+        self.assertEqual(indexed_counts["facet_count_scope"], "exact_projection")
+        self.assertEqual(
+            dict(indexed_counts.get("public_facet_counts") or {}).get("source"),
+            "projection_person_search_index",
+        )
         stored_view = self.store.get_job_result_view(job_id="job-projection-event-time") or {}
         stored_projection = dict(dict(stored_view.get("metadata") or {}).get("run_scope_projection") or {})
         self.assertEqual(stored_projection["status"], "published")
@@ -4715,44 +4809,45 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
     def test_job_dashboard_is_summary_only_and_candidate_page_paginates_asset_population(self) -> None:
         snapshot_id = "20260417T100000"
+        candidates = [
+            {
+                "candidate_id": "cand_1",
+                "display_name": "Alice Example",
+                "name_en": "Alice Example",
+                "target_company": "Anthropic",
+                "organization": "Anthropic",
+                "employment_status": "current",
+                "role": "Research Scientist",
+                "linkedin_url": "https://www.linkedin.com/in/alice-example/",
+                "function_ids": ["24"],
+            },
+            {
+                "candidate_id": "cand_2",
+                "display_name": "Bob Example",
+                "name_en": "Bob Example",
+                "target_company": "Anthropic",
+                "organization": "Anthropic",
+                "employment_status": "current",
+                "role": "Research Engineer",
+                "linkedin_url": "https://www.linkedin.com/in/bob-example/",
+                "function_ids": ["8"],
+            },
+            {
+                "candidate_id": "cand_3",
+                "display_name": "Carol Example",
+                "name_en": "Carol Example",
+                "target_company": "Anthropic",
+                "organization": "Anthropic",
+                "employment_status": "former",
+                "role": "Member of Technical Staff",
+                "linkedin_url": "https://www.linkedin.com/in/carol-example/",
+                "function_ids": ["24"],
+            },
+        ]
         self._write_materialized_snapshot_view(
             target_company="Anthropic",
             snapshot_id=snapshot_id,
-            candidates=[
-                {
-                    "candidate_id": "cand_1",
-                    "display_name": "Alice Example",
-                    "name_en": "Alice Example",
-                    "target_company": "Anthropic",
-                    "organization": "Anthropic",
-                    "employment_status": "current",
-                    "role": "Research Scientist",
-                    "linkedin_url": "https://www.linkedin.com/in/alice-example/",
-                    "function_ids": ["24"],
-                },
-                {
-                    "candidate_id": "cand_2",
-                    "display_name": "Bob Example",
-                    "name_en": "Bob Example",
-                    "target_company": "Anthropic",
-                    "organization": "Anthropic",
-                    "employment_status": "current",
-                    "role": "Research Engineer",
-                    "linkedin_url": "https://www.linkedin.com/in/bob-example/",
-                    "function_ids": ["8"],
-                },
-                {
-                    "candidate_id": "cand_3",
-                    "display_name": "Carol Example",
-                    "name_en": "Carol Example",
-                    "target_company": "Anthropic",
-                    "organization": "Anthropic",
-                    "employment_status": "former",
-                    "role": "Member of Technical Staff",
-                    "linkedin_url": "https://www.linkedin.com/in/carol-example/",
-                    "function_ids": ["24"],
-                },
-            ],
+            candidates=candidates,
         )
         job_id = "job_dashboard_summary_only"
         self.store.save_job(
@@ -4863,6 +4958,29 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             raw_path="/tmp/alice-example.json",
         )
         self.store.repos.linkedin_profile_registry.mark_queued("https://www.linkedin.com/in/bob-example/")
+        projection_publication = self.orchestrator._publish_run_scope_projection_from_result_view_owner(  # noqa: SLF001
+            job_id=job_id,
+            request=JobRequest.from_payload((self.store.get_job(job_id) or {}).get("request") or {}),
+            candidate_source={
+                "target_company": "Anthropic",
+                "snapshot_id": snapshot_id,
+                "candidate_count": 3,
+                "candidates": candidates,
+            },
+            result_view={
+                "view_id": "view_dashboard_summary_only",
+                "view_kind": "asset_population",
+                "snapshot_id": snapshot_id,
+                "summary": {"candidate_count": 3},
+            },
+            reason="dashboard_summary_contract_fixture",
+            replace_members=True,
+        )
+        self.orchestrator.person_asset_writer.rebuild_projection_person_search_index(
+            projection_id=projection_publication["projection_id"],
+            count_scope="exact_projection",
+            rebuild_person_indexes=False,
+        )
 
         dashboard_payload = self.orchestrator.get_job_dashboard(job_id)
         assert dashboard_payload is not None
@@ -5125,6 +5243,11 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         assert dashboard_payload is not None
         assert candidate_page_payload is not None
         assert board_patches_payload is not None
+        membership_revision = str(
+            self.orchestrator.serving_projection_reader.get_projection(projection_id)["projection"][
+                "membership_revision"
+            ]
+        )
 
         states = [
             progress_payload["board_runtime_state"],
@@ -5140,6 +5263,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             self.assertEqual(state["facet_summary_candidate_count"], 1)
             self.assertEqual(state["filter_contract"]["source"], "serving_projection_members")
             self.assertEqual(state["filter_contract"]["row_filter_scope"], "projection_membership")
+            self.assertEqual(state["row_publication_tier"], "serving_projection_members")
+            self.assertEqual(state["row_publication_revision"], membership_revision)
         self.assertEqual(candidate_page_payload["total_candidates"], 1)
         self.assertEqual(candidate_page_payload["facet_summary"]["candidate_count"], 1)
         self.assertEqual(candidate_page_payload["candidates"][0]["candidate_id"], "visible_google_gemini")
@@ -5298,10 +5423,1058 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             assert payload is not None
             board_state = dict(payload.get("board_runtime_state") or {})
             self.assertEqual(board_state["display_ready_candidate_count"], 3)
+            self.assertEqual(board_state["preview_candidate_count"], 0)
             self.assertEqual(board_state["card_materialization_status_text"], "卡片详情已合入看板 3/3")
             self.assertEqual(dict(board_state["filter_contract"])["source"], "serving_projection_members")
 
-    def test_public_endpoints_fail_closed_when_projection_facets_lag_board_denominator(self) -> None:
+    def test_result_view_projection_owner_atomically_publishes_explicit_zero_membership(self) -> None:
+        job_id = "job_projection_owner_explicit_zero"
+        initial = self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+            run_id=job_id,
+            collection_id="company:lovable",
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:stale-member",
+                    "person_identity_key": "linkedin:stale-member",
+                    "visibility_state": "visible",
+                }
+            ],
+            replace_members=True,
+        )
+        projection_id = str(dict(initial.get("projection") or {}).get("projection_id") or "")
+
+        publication = self.orchestrator._publish_run_scope_projection_from_result_view_owner(  # noqa: SLF001
+            job_id=job_id,
+            request=JobRequest.from_payload({"target_company": "Lovable"}),
+            candidate_source={
+                "target_company": "Lovable",
+                "snapshot_id": "snapshot_explicit_zero",
+                "candidate_count": 0,
+                "candidates": [],
+            },
+            result_view={
+                "view_id": "view_explicit_zero",
+                "view_kind": "asset_population",
+                "snapshot_id": "snapshot_explicit_zero",
+                "summary": {"candidate_count": 0},
+            },
+            reason="canonical_membership_replaced_with_empty_set",
+            replace_members=True,
+        )
+
+        self.assertEqual(publication["status"], "published")
+        self.assertEqual(publication["projection_id"], projection_id)
+        self.assertEqual(publication["member_count"], 0)
+        self.assertEqual(self.store.repos.serving_projection.count_members(projection_id), 0)
+        public_projection = self.orchestrator.serving_projection_reader.get_projection(projection_id)
+        self.assertEqual(public_projection["status"], "ready")
+        self.assertEqual(public_projection["projection"]["visible_member_count"], 0)
+        self.assertTrue(public_projection["projection"]["membership_revision"])
+
+    def test_result_view_projection_owner_does_not_clear_on_missing_nonempty_artifact(self) -> None:
+        job_id = "job_projection_owner_missing_nonempty_artifact"
+        initial = self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+            run_id=job_id,
+            collection_id="company:lovable",
+            members=[
+                {
+                    "candidate_identity_key": "linkedin:preserved-member",
+                    "person_identity_key": "linkedin:preserved-member",
+                    "visibility_state": "visible",
+                }
+            ],
+            replace_members=True,
+        )
+        projection_id = str(dict(initial.get("projection") or {}).get("projection_id") or "")
+
+        with mock.patch.object(
+            self.orchestrator,
+            "_serving_projection_records_from_candidate_source",
+            return_value=[],
+        ):
+            publication = self.orchestrator._publish_run_scope_projection_from_result_view_owner(  # noqa: SLF001
+                job_id=job_id,
+                request=JobRequest.from_payload({"target_company": "Lovable"}),
+                candidate_source={"target_company": "Lovable", "candidate_count": 1},
+                result_view={
+                    "view_id": "view_missing_nonempty_artifact",
+                    "view_kind": "asset_population",
+                    "summary": {"candidate_count": 1},
+                },
+                reason="artifact_read_failed",
+                replace_members=True,
+            )
+
+        self.assertEqual(publication["status"], "skipped")
+        self.assertEqual(publication["reason"], "projection_candidate_records_missing")
+        self.assertEqual(self.store.repos.serving_projection.count_members(projection_id), 1)
+
+    def test_result_view_projection_owner_rejects_partial_inline_membership(self) -> None:
+        job_id = "job_projection_owner_partial_inline"
+        initial = self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+            run_id=job_id,
+            collection_id="company:lovable",
+            members=[
+                {
+                    "candidate_identity_key": f"linkedin:preserved-{index}",
+                    "person_identity_key": f"linkedin:preserved-{index}",
+                    "visibility_state": "visible",
+                }
+                for index in range(3)
+            ],
+            replace_members=True,
+        )
+        projection_id = str(dict(initial.get("projection") or {}).get("projection_id") or "")
+
+        publication = self.orchestrator._publish_run_scope_projection_from_result_view_owner(  # noqa: SLF001
+            job_id=job_id,
+            request=JobRequest.from_payload({"target_company": "Lovable"}),
+            candidate_source={
+                "target_company": "Lovable",
+                "snapshot_id": "snapshot_partial_inline",
+                "candidate_count": 3,
+                "candidates": [
+                    {
+                        "candidate_id": "preview-only",
+                        "linkedin_url": "https://www.linkedin.com/in/preview-only/",
+                    }
+                ],
+            },
+            result_view={
+                "view_id": "view_partial_inline",
+                "view_kind": "asset_population",
+                "snapshot_id": "snapshot_partial_inline",
+                "summary": {"candidate_count": 3},
+            },
+            reason="partial_inline_preview_must_not_replace_exact_membership",
+            replace_members=True,
+        )
+
+        self.assertEqual(publication["status"], "skipped")
+        self.assertEqual(publication["reason"], "projection_inline_membership_incomplete")
+        self.assertEqual(self.store.repos.serving_projection.count_members(projection_id), 3)
+
+    def test_result_view_projection_owner_preserves_independent_profile_and_card_facts(self) -> None:
+        job_id = "job_projection_owner_independent_readiness"
+        publication = self.orchestrator._publish_run_scope_projection_from_result_view_owner(  # noqa: SLF001
+            job_id=job_id,
+            request=JobRequest.from_payload({"target_company": "Lovable"}),
+            candidate_source={
+                "target_company": "Lovable",
+                "snapshot_id": "snapshot_independent_readiness",
+                "candidate_count": 2,
+                "candidates": [
+                    {
+                        "candidate_id": "card-ahead-of-profile",
+                        "linkedin_url": "https://www.linkedin.com/in/card-ahead-of-profile/",
+                        "has_profile_detail": False,
+                        "needs_profile_completion": True,
+                        "card_readiness": "ready",
+                    },
+                    {
+                        "candidate_id": "profile-ahead-of-card",
+                        "linkedin_url": "https://www.linkedin.com/in/profile-ahead-of-card/",
+                        "has_profile_detail": True,
+                        "needs_profile_completion": False,
+                        "card_readiness": "row_shell",
+                    },
+                ],
+            },
+            result_view={
+                "view_id": "view_independent_readiness",
+                "view_kind": "asset_population",
+                "snapshot_id": "snapshot_independent_readiness",
+                "summary": {"candidate_count": 2},
+            },
+            reason="independent_profile_card_owner_facts",
+            replace_members=True,
+        )
+
+        self.assertEqual(publication["status"], "published")
+        members = self.store.repos.serving_projection.list_members(
+            publication["projection_id"],
+            visible_only=True,
+        )
+        members_by_id = {str(member.get("candidate_id") or ""): member for member in members}
+        self.assertEqual(members_by_id["card-ahead-of-profile"]["profile_readiness"], "required")
+        self.assertEqual(members_by_id["card-ahead-of-profile"]["card_readiness"], "ready")
+        self.assertEqual(members_by_id["profile-ahead-of-card"]["profile_readiness"], "ready")
+        self.assertEqual(members_by_id["profile-ahead-of-card"]["card_readiness"], "row_shell")
+        projection = self.orchestrator.serving_projection_reader.get_projection(publication["projection_id"])
+        self.assertEqual(projection["projection"]["readiness"]["profile_ready_count"], 1)
+        self.assertEqual(projection["projection"]["readiness"]["card_ready_count"], 1)
+
+    def test_public_board_fails_closed_when_authoritative_exact_snapshot_has_no_revision(self) -> None:
+        job_id = "job_projection_missing_membership_revision"
+        resolution = {
+            "source": "run_projection_link",
+            "source_run_id": job_id,
+            "projection_id": "proj_missing_membership_revision",
+            "status": "ready",
+            "fallback_used": False,
+            "migration_fallback_used": False,
+            "fail_closed": True,
+        }
+        projection_payload = {
+            "status": "ready",
+            "projection": {
+                "projection_id": "proj_missing_membership_revision",
+                "projection_type": "run_scope_projection",
+                "source_run_id": job_id,
+                "visible_member_count": 1,
+                "counts": {
+                    "result_count": 1,
+                    "candidate_count": 1,
+                    "visible_member_count": 1,
+                    "count_scope": "exact_projection",
+                },
+                "readiness": {
+                    "row": "complete",
+                    "row_count": 1,
+                    "profile_ready_count": 1,
+                    "card_ready_count": 1,
+                    "count_scope": "exact_projection",
+                },
+                "read_contract": {
+                    "source": "serving_projection_members",
+                    "fallback_used": False,
+                    "fail_closed": True,
+                },
+            },
+            "projection_resolution": resolution,
+            "read_contract": {
+                "source": "serving_projection_members",
+                "fallback_used": False,
+                "fail_closed": True,
+            },
+        }
+        request = JobRequest.from_payload({"target_company": "Lovable"})
+        context = {
+            "job": {"job_id": job_id, "status": "completed", "request": request.to_record()},
+            "request": request,
+            "candidate_source": {"target_company": "Lovable", "candidate_count": 1},
+            "result_view": {},
+            "effective_execution_semantics": {},
+            "linkedin_stage_1_progress": {},
+            "job_summary": {"candidate_count": 1},
+        }
+
+        with mock.patch.object(
+            self.orchestrator,
+            "_load_job_canonical_serving_projection_payload",
+            return_value=projection_payload,
+        ):
+            public = self.orchestrator._build_public_board_runtime_projection(  # noqa: SLF001
+                job_id=job_id,
+                context=context,
+                ranked_result_count=0,
+            )
+
+        self.assertEqual(public["asset_population"]["status"], "not_ready")
+        self.assertEqual(public["asset_population"]["reason"], "run_projection_exact_snapshot_invalid")
+        self.assertEqual(public["board_runtime_state"]["expected_candidate_count"], 0)
+        self.assertEqual(public["board_runtime_state"]["publication_status"], "unavailable")
+        self.assertEqual(public["board_runtime_state"]["sync_status_text"], "")
+        self.assertIsNone(public["board_runtime_state"]["explicit_profile_capture_candidate_count"])
+        self.assertTrue(public["board_runtime_state"]["filter_contract"]["fail_closed"])
+
+    def test_linked_canonical_projection_exact_readiness_overrides_stale_legacy_summary_downward(self) -> None:
+        legacy_summary = {
+            "quality_fields_available": True,
+            "candidate_count": 140,
+            "display_ready_candidate_count": 140,
+            "profile_detail_candidate_count": 140,
+            "explicit_profile_capture_candidate_count": 140,
+            "preview_candidate_count": 0,
+            "needs_profile_completion_candidate_count": 0,
+        }
+        asset_population = {
+            "candidate_count": 140,
+            "card_materialization_summary": legacy_summary,
+            "artifact_summary": {"candidate_count": 140, "card_materialization_summary": legacy_summary},
+        }
+        projection = {
+            "projection_id": "proj_lovable_exact_readiness",
+            "membership_revision": "projidxinput_lovable_exact_readiness",
+            "projection_type": "run_scope_projection",
+            "source_run_id": "job_lovable_exact_readiness",
+            "visible_member_count": 140,
+            "read_contract": {
+                "source": "serving_projection_members",
+                "fallback_used": False,
+                "fail_closed": True,
+            },
+            "counts": {
+                "result_count": 140,
+                "candidate_count": 140,
+                "visible_member_count": 140,
+                "count_scope": "exact_projection",
+            },
+            "readiness": {
+                "row": "complete",
+                "row_count": 140,
+                "profile_ready_count": 140,
+                "card_ready_count": 115,
+                "count_scope": "exact_projection",
+            },
+        }
+        linked_payload = {
+            "status": "ready",
+            "projection": projection,
+            "projection_resolution": {
+                "source": "run_projection_link",
+                "source_run_id": "job_lovable_exact_readiness",
+                "projection_id": "proj_lovable_exact_readiness",
+                "migration_fallback_used": False,
+            },
+        }
+
+        normalized = self.orchestrator._apply_linked_canonical_serving_projection_card_summary(  # noqa: SLF001
+            asset_population=asset_population,
+            serving_projection_payload=linked_payload,
+        )
+
+        summary = dict(normalized["card_materialization_summary"])
+        self.assertEqual(summary["candidate_count"], 140)
+        self.assertEqual(summary["display_ready_candidate_count"], 115)
+        self.assertEqual(summary["profile_detail_candidate_count"], 140)
+        self.assertIsNone(summary["explicit_profile_capture_candidate_count"])
+        self.assertEqual(summary["explicit_profile_capture_count_scope"], "unavailable")
+        self.assertIsNone(summary["needs_profile_completion_candidate_count"])
+        self.assertIsNone(summary["low_profile_richness_candidate_count"])
+        self.assertEqual(summary["preview_candidate_count"], 25)
+        self.assertEqual(summary["summary_source"], "linked_serving_projection_exact_readiness")
+        self.assertEqual(summary["count_scope"], "exact_projection")
+        self.assertEqual(
+            normalized["artifact_summary"]["card_materialization_summary"],
+            summary,
+        )
+
+        migration_fallback = {
+            **linked_payload,
+            "projection_resolution": {
+                **dict(linked_payload["projection_resolution"]),
+                "source": "legacy_projection_reference",
+                "migration_fallback_used": True,
+            },
+        }
+        self.assertEqual(
+            self.orchestrator._apply_linked_canonical_serving_projection_card_summary(  # noqa: SLF001
+                asset_population=asset_population,
+                serving_projection_payload=migration_fallback,
+            ),
+            asset_population,
+        )
+        inexact_readiness = {
+            **linked_payload,
+            "projection": {
+                **projection,
+                "readiness": {**dict(projection["readiness"]), "count_scope": "unavailable"},
+            },
+        }
+        self.assertEqual(
+            self.orchestrator._apply_linked_canonical_serving_projection_card_summary(  # noqa: SLF001
+                asset_population=asset_population,
+                serving_projection_payload=inexact_readiness,
+            ),
+            asset_population,
+        )
+        partial_membership = {
+            **linked_payload,
+            "projection": {
+                **projection,
+                "readiness": {**dict(projection["readiness"]), "row": "partial"},
+            },
+        }
+        self.assertEqual(
+            self.orchestrator._apply_linked_canonical_serving_projection_card_summary(  # noqa: SLF001
+                asset_population=asset_population,
+                serving_projection_payload=partial_membership,
+            ),
+            asset_population,
+        )
+        missing_revision = {
+            **linked_payload,
+            "projection": {key: value for key, value in projection.items() if key != "membership_revision"},
+        }
+        self.assertEqual(
+            self.orchestrator._apply_linked_canonical_serving_projection_card_summary(  # noqa: SLF001
+                asset_population=asset_population,
+                serving_projection_payload=missing_revision,
+            ),
+            asset_population,
+        )
+
+    def test_linked_exact_projection_card_and_profile_readiness_are_independent(self) -> None:
+        asset_population = {
+            "candidate_count": 140,
+            "card_materialization_summary": {
+                "quality_fields_available": True,
+                "candidate_count": 140,
+                "display_ready_candidate_count": 1,
+                "profile_detail_candidate_count": 140,
+                "explicit_profile_capture_candidate_count": 140,
+                "preview_candidate_count": 139,
+            },
+        }
+        projection = {
+            "projection_id": "proj_card_profile_independent",
+            "membership_revision": "projidxinput_card_profile_independent",
+            "projection_type": "run_scope_projection",
+            "source_run_id": "job_card_profile_independent",
+            "visible_member_count": 140,
+            "read_contract": {
+                "source": "serving_projection_members",
+                "fallback_used": False,
+                "fail_closed": True,
+            },
+            "counts": {
+                "result_count": 140,
+                "candidate_count": 140,
+                "visible_member_count": 140,
+                "count_scope": "exact_projection",
+            },
+            "readiness": {
+                "row": "complete",
+                "row_count": 140,
+                "profile_ready_count": 80,
+                "card_ready_count": 120,
+                "explicit_profile_capture_candidate_count": 17,
+                "needs_profile_completion_candidate_count": 20,
+                "low_profile_richness_candidate_count": 4,
+                "count_scope": "exact_projection",
+            },
+        }
+        resolved = {
+            "status": "ready",
+            "projection": projection,
+            "projection_resolution": {
+                "source": "run_projection_link",
+                "source_run_id": "job_card_profile_independent",
+                "projection_id": "proj_card_profile_independent",
+                "fallback_used": False,
+                "migration_fallback_used": False,
+                "fail_closed": True,
+            },
+        }
+
+        normalized = self.orchestrator._apply_linked_canonical_serving_projection_card_summary(  # noqa: SLF001
+            asset_population=asset_population,
+            serving_projection_payload=resolved,
+        )
+
+        summary = dict(normalized["card_materialization_summary"])
+        self.assertEqual(summary["display_ready_candidate_count"], 120)
+        self.assertEqual(summary["profile_detail_candidate_count"], 80)
+        self.assertEqual(summary["explicit_profile_capture_candidate_count"], 17)
+        self.assertEqual(summary["explicit_profile_capture_count_scope"], "exact_projection")
+        self.assertEqual(summary["needs_profile_completion_candidate_count"], 20)
+        self.assertEqual(summary["low_profile_richness_candidate_count"], 4)
+        self.assertEqual(summary["preview_candidate_count"], 20)
+
+    def test_exact_projection_card_text_uses_global_visible_total_despite_higher_delta_counters(self) -> None:
+        legacy_summary = {
+            "quality_fields_available": True,
+            "candidate_count": 140,
+            "display_ready_candidate_count": 140,
+            "profile_detail_candidate_count": 140,
+            "explicit_profile_capture_candidate_count": 140,
+            "preview_candidate_count": 0,
+        }
+        projection = {
+            "projection_id": "proj_exact_delta_card_text",
+            "membership_revision": "projidxinput_exact_delta_card_text",
+            "projection_type": "run_scope_projection",
+            "source_run_id": "job_exact_delta_card_text",
+            "visible_member_count": 140,
+            "read_contract": {
+                "source": "serving_projection_members",
+                "fallback_used": False,
+                "fail_closed": True,
+            },
+            "counts": {
+                "result_count": 140,
+                "candidate_count": 140,
+                "visible_member_count": 140,
+                "count_scope": "exact_projection",
+            },
+            "readiness": {
+                "row": "complete",
+                "row_count": 140,
+                "profile_ready_count": 140,
+                "card_ready_count": 115,
+                "count_scope": "exact_projection",
+            },
+        }
+        resolved = {
+            "status": "ready",
+            "projection": projection,
+            "projection_resolution": {
+                "source": "run_projection_link",
+                "source_run_id": "job_exact_delta_card_text",
+                "projection_id": "proj_exact_delta_card_text",
+                "fallback_used": False,
+                "migration_fallback_used": False,
+                "fail_closed": True,
+            },
+        }
+        asset_population = self.orchestrator._apply_linked_canonical_serving_projection_card_summary(  # noqa: SLF001
+            asset_population={
+                "available": True,
+                "snapshot_id": "snapshot_exact_delta_card_text",
+                "candidate_count": 140,
+                "card_materialization_summary": legacy_summary,
+            },
+            serving_projection_payload=resolved,
+        )
+        lifecycle = {
+            "state": "current_snapshot_serving",
+            "current_snapshot_id": "snapshot_exact_delta_card_text",
+            "served_snapshot_id": "snapshot_exact_delta_card_text",
+            "expected_candidate_count": 140,
+            "served_candidate_count": 140,
+            "baseline_candidate_count": 0,
+            "delta_profile_progress_applicable": True,
+            "delta_profile_required_count": 140,
+            "delta_profile_fetched_count": 140,
+            "delta_profile_materialized_count": 140,
+            "delta_profile_board_visible_count": 140,
+            "stage1_profile_fetch_required_count": 140,
+            "stage1_profile_fetched_count": 140,
+            "metadata": {"delta_profile_denominator_promoted": True},
+        }
+
+        board_state = self.orchestrator._build_board_runtime_state(  # noqa: SLF001
+            job_id="job_exact_delta_card_text",
+            job={"job_id": "job_exact_delta_card_text", "status": "completed"},
+            result_mode="asset_population",
+            result_view_lifecycle=lifecycle,
+            asset_population=asset_population,
+            linkedin_stage_1_progress={},
+        )
+
+        self.assertEqual(board_state["expected_candidate_count"], 140)
+        self.assertEqual(board_state["display_ready_candidate_count"], 115)
+        self.assertEqual(board_state["profile_detail_candidate_count"], 140)
+        self.assertIsNone(board_state["explicit_profile_capture_candidate_count"])
+        self.assertIsNone(board_state["needs_profile_completion_candidate_count"])
+        self.assertIsNone(board_state["low_profile_richness_candidate_count"])
+        self.assertEqual(board_state["preview_candidate_count"], 25)
+        self.assertEqual(board_state["card_materialization_status_text"], "卡片详情已合入看板 115/140")
+        self.assertEqual(board_state["row_publication_tier"], "serving_projection_members")
+        self.assertEqual(board_state["row_publication_revision"], "projidxinput_exact_delta_card_text")
+
+    def test_linked_exact_zero_projection_clears_stale_public_counts(self) -> None:
+        legacy_summary = {
+            "quality_fields_available": True,
+            "candidate_count": 140,
+            "display_ready_candidate_count": 140,
+            "profile_detail_candidate_count": 140,
+            "explicit_profile_capture_candidate_count": 140,
+            "preview_candidate_count": 0,
+        }
+        resolved = {
+            "status": "ready",
+            "projection": {
+                "projection_id": "proj_exact_zero",
+                "membership_revision": "projidxinput_exact_zero",
+                "projection_type": "run_scope_projection",
+                "source_run_id": "job_exact_zero",
+                "visible_member_count": 0,
+                "read_contract": {
+                    "source": "serving_projection_members",
+                    "fallback_used": False,
+                    "fail_closed": True,
+                },
+                "counts": {
+                    "result_count": 0,
+                    "candidate_count": 0,
+                    "visible_member_count": 0,
+                    "count_scope": "exact_projection",
+                },
+                "readiness": {
+                    "row": "complete",
+                    "row_count": 0,
+                    "profile_ready_count": 0,
+                    "card_ready_count": 0,
+                    "count_scope": "exact_projection",
+                },
+            },
+            "projection_resolution": {
+                "source": "run_projection_link",
+                "source_run_id": "job_exact_zero",
+                "projection_id": "proj_exact_zero",
+                "fallback_used": False,
+                "migration_fallback_used": False,
+                "fail_closed": True,
+            },
+        }
+        asset_population = self.orchestrator._apply_linked_canonical_serving_projection_card_summary(  # noqa: SLF001
+            asset_population={
+                "available": True,
+                "snapshot_id": "snapshot_exact_zero",
+                "candidate_count": 140,
+                "card_materialization_summary": legacy_summary,
+                "artifact_summary": {
+                    "candidate_count": 140,
+                    "card_materialization_summary": legacy_summary,
+                },
+            },
+            serving_projection_payload=resolved,
+        )
+        lifecycle = self.orchestrator._normalize_public_lifecycle_to_serving_projection(  # noqa: SLF001
+            result_view_lifecycle={
+                "state": "current_snapshot_serving",
+                "current_snapshot_id": "snapshot_exact_zero",
+                "served_snapshot_id": "snapshot_exact_zero",
+                "expected_candidate_count": 140,
+                "served_candidate_count": 140,
+                "baseline_candidate_count": 140,
+                "delta_profile_progress_applicable": True,
+                "delta_profile_required_count": 140,
+                "delta_profile_fetched_count": 140,
+                "delta_profile_materialized_count": 140,
+                "delta_profile_board_visible_count": 140,
+                "stage1_profile_fetch_required_count": 140,
+                "stage1_profile_fetched_count": 140,
+                "stage1_deduped_candidate_count": 140,
+            },
+            serving_projection_payload=resolved,
+        )
+        asset_population = self.orchestrator._canonicalize_public_asset_population_projection(  # noqa: SLF001
+            asset_population=asset_population,
+            result_view_lifecycle=lifecycle,
+            board_runtime_state={},
+        )
+        board_state = self.orchestrator._build_board_runtime_state(  # noqa: SLF001
+            job_id="job_exact_zero",
+            job={"job_id": "job_exact_zero", "status": "completed"},
+            result_mode="asset_population",
+            result_view_lifecycle=lifecycle,
+            asset_population=asset_population,
+            linkedin_stage_1_progress={},
+        )
+
+        self.assertEqual(asset_population["candidate_count"], 0)
+        self.assertEqual(asset_population["artifact_summary"]["candidate_count"], 0)
+        self.assertEqual(asset_population["card_materialization_summary"]["candidate_count"], 0)
+        self.assertEqual(lifecycle["expected_candidate_count"], 0)
+        self.assertEqual(lifecycle["served_candidate_count"], 0)
+        self.assertEqual(lifecycle["baseline_candidate_count"], 0)
+        self.assertEqual(lifecycle["delta_profile_required_count"], 0)
+        self.assertEqual(lifecycle["delta_profile_fetched_count"], 0)
+        self.assertEqual(lifecycle["delta_profile_materialized_count"], 0)
+        self.assertEqual(lifecycle["delta_profile_board_visible_count"], 0)
+        self.assertEqual(lifecycle["stage1_profile_fetch_required_count"], 0)
+        self.assertEqual(lifecycle["stage1_profile_fetched_count"], 0)
+        self.assertEqual(lifecycle["stage1_deduped_candidate_count"], 0)
+        self.assertEqual(board_state["expected_candidate_count"], 0)
+        self.assertEqual(board_state["served_candidate_count"], 0)
+        self.assertEqual(board_state["published_candidate_count"], 0)
+        self.assertEqual(board_state["display_ready_candidate_count"], 0)
+        self.assertEqual(board_state["preview_candidate_count"], 0)
+        self.assertEqual(board_state["row_hydration_target_count"], 0)
+        self.assertEqual(board_state["candidate_discovery_count"], 0)
+        self.assertEqual(board_state["profile_fetch_required_count"], 0)
+        self.assertEqual(board_state["profile_fetched_count"], 0)
+        self.assertEqual(board_state["publication_status"], "complete")
+        self.assertEqual(board_state["phase"], "canonical_projection_serving")
+        self.assertEqual(board_state["sync_status_text"], "0/0")
+        self.assertEqual(board_state["baseline_candidate_count"], 0)
+        self.assertEqual(board_state["delta_profile_required_count"], 0)
+        self.assertEqual(board_state["delta_profile_fetched_count"], 0)
+        self.assertEqual(board_state["delta_profile_materialized_count"], 0)
+        self.assertEqual(board_state["delta_profile_board_visible_count"], 0)
+        self.assertEqual(board_state["candidate_count_scope"], "exact_projection")
+        self.assertEqual(board_state["row_publication_tier"], "serving_projection_members")
+        self.assertEqual(board_state["row_publication_revision"], "projidxinput_exact_zero")
+        self.assertEqual(board_state["card_materialization_status_text"], "")
+        self.assertEqual(
+            self.orchestrator._public_progress_result_count(  # noqa: SLF001
+                job_id="job_exact_zero",
+                job={"request": {"target_scope": "full_company_asset"}},
+                ranked_result_count=140,
+                result_view_lifecycle=lifecycle,
+                board_runtime_state=board_state,
+                linkedin_stage_1_progress={"deduped_candidate_count": 140},
+            ),
+            0,
+        )
+
+    def test_run_projection_resolution_fails_closed_and_reports_legacy_fallback(self) -> None:
+        legacy_projection = {
+            "status": "ready",
+            "projection": {
+                "projection_id": "proj_legacy_fallback",
+                "projection_type": "run_scope_projection",
+                "source_run_id": "job_projection_resolution",
+                "read_contract": {
+                    "source": "serving_projection_members",
+                    "fallback_used": False,
+                    "fail_closed": True,
+                },
+            },
+        }
+        with (
+            mock.patch.object(
+                self.store.repos.serving_projection,
+                "get_run_link",
+                return_value={"projection_id": "proj_missing_authoritative"},
+            ),
+            mock.patch.object(
+                self.orchestrator.serving_projection_reader,
+                "get_projection",
+                return_value={
+                    "status": "not_ready",
+                    "reason": "projection_not_found",
+                    "projection_id": "proj_missing_authoritative",
+                    "read_contract": {
+                        "source": "serving_projection_members",
+                        "fallback_used": False,
+                        "fail_closed": True,
+                    },
+                },
+            ) as projection_read,
+        ):
+            authoritative_missing = self.orchestrator._load_job_canonical_serving_projection_payload(  # noqa: SLF001
+                job_id="job_projection_resolution",
+                result_view_lifecycle={"serving_projection_id": "proj_legacy_fallback"},
+            )
+
+        self.assertEqual(authoritative_missing["status"], "not_ready")
+        self.assertEqual(authoritative_missing["reason"], "projection_not_found")
+        self.assertEqual(
+            authoritative_missing["projection_resolution"]["source"],
+            "run_projection_link",
+        )
+        self.assertFalse(authoritative_missing["projection_resolution"]["fallback_used"])
+        projection_read.assert_called_once_with("proj_missing_authoritative")
+
+        with (
+            mock.patch.object(
+                self.store.repos.serving_projection,
+                "get_run_link",
+                return_value={"projection_id": "proj_linked_authoritative"},
+            ),
+            mock.patch.object(
+                self.orchestrator.serving_projection_reader,
+                "get_projection",
+                return_value={
+                    "status": "ready",
+                    "projection": {
+                        "projection_id": "proj_wrong_identity",
+                        "projection_type": "run_scope_projection",
+                        "source_run_id": "job_projection_resolution",
+                        "read_contract": {
+                            "source": "serving_projection_members",
+                            "fallback_used": False,
+                            "fail_closed": True,
+                        },
+                    },
+                },
+            ),
+        ):
+            identity_mismatch = self.orchestrator._load_job_canonical_serving_projection_payload(  # noqa: SLF001
+                job_id="job_projection_resolution",
+                result_view_lifecycle={"serving_projection_id": "proj_legacy_fallback"},
+            )
+
+        self.assertEqual(identity_mismatch["status"], "not_ready")
+        self.assertEqual(identity_mismatch["reason"], "run_projection_identity_mismatch")
+        self.assertFalse(identity_mismatch["projection_resolution"]["fallback_used"])
+
+        with (
+            mock.patch.object(
+                self.store.repos.serving_projection,
+                "get_run_link",
+                side_effect=RuntimeError("postgres unavailable"),
+            ),
+            mock.patch.object(self.orchestrator.serving_projection_reader, "get_projection") as projection_read,
+        ):
+            link_fault = self.orchestrator._load_job_canonical_serving_projection_payload(  # noqa: SLF001
+                job_id="job_projection_resolution",
+                result_view_lifecycle={"serving_projection_id": "proj_legacy_fallback"},
+            )
+
+        self.assertEqual(link_fault["status"], "not_ready")
+        self.assertEqual(link_fault["reason"], "run_projection_link_read_failed")
+        self.assertTrue(link_fault["projection_resolution"]["fail_closed"])
+        projection_read.assert_not_called()
+
+        with (
+            mock.patch.object(
+                self.store.repos.serving_projection,
+                "get_run_link",
+                return_value={"projection_id": "proj_faulted_authoritative"},
+            ),
+            mock.patch.object(
+                self.orchestrator.serving_projection_reader,
+                "get_projection",
+                side_effect=RuntimeError("projection reader unavailable"),
+            ) as projection_read,
+        ):
+            projection_fault = self.orchestrator._load_job_canonical_serving_projection_payload(  # noqa: SLF001
+                job_id="job_projection_resolution",
+                result_view_lifecycle={"serving_projection_id": "proj_legacy_fallback"},
+            )
+
+        self.assertEqual(projection_fault["status"], "not_ready")
+        self.assertEqual(projection_fault["reason"], "run_projection_read_failed")
+        self.assertEqual(
+            projection_fault["projection_resolution"]["projection_id"],
+            "proj_faulted_authoritative",
+        )
+        self.assertFalse(projection_fault["projection_resolution"]["fallback_used"])
+        projection_read.assert_called_once_with("proj_faulted_authoritative")
+
+        with (
+            mock.patch.object(self.store.repos.serving_projection, "get_run_link", return_value={}),
+            mock.patch.object(
+                self.orchestrator.serving_projection_reader,
+                "get_projection",
+                return_value=legacy_projection,
+            ),
+        ):
+            fallback = self.orchestrator._load_job_canonical_serving_projection_payload(  # noqa: SLF001
+                job_id="job_projection_resolution",
+                result_view_lifecycle={"serving_projection_id": "proj_legacy_fallback"},
+            )
+
+        self.assertEqual(fallback["status"], "ready")
+        self.assertEqual(fallback["projection_resolution"]["source"], "legacy_projection_reference")
+        self.assertTrue(fallback["projection_resolution"]["fallback_used"])
+        self.assertTrue(fallback["projection_resolution"]["migration_fallback_used"])
+        self.assertTrue(fallback["projection"]["read_contract"]["fallback_used"])
+        self.assertTrue(fallback["read_contract"]["fallback_used"])
+
+    def test_candidate_projection_page_pins_initial_resolution_across_run_link_cutover(self) -> None:
+        initial_projection_payload = {
+            "status": "ready",
+            "projection": {
+                "projection_id": "proj_before_cutover",
+                "membership_revision": "projidxinput_before_cutover",
+                "visible_member_count": 1,
+            },
+            "projection_resolution": {
+                "source": "run_projection_link",
+                "source_run_id": "job_projection_cutover",
+                "projection_id": "proj_before_cutover",
+                "status": "ready",
+                "fallback_used": False,
+                "migration_fallback_used": False,
+                "fail_closed": True,
+            },
+        }
+        public_projection = {
+            "asset_population": {
+                "candidate_count": 1,
+                "card_materialization_summary": {},
+            },
+            "serving_projection_payload": initial_projection_payload,
+            "serving_projection_resolution": dict(initial_projection_payload["projection_resolution"]),
+        }
+        page_payload = {
+            "status": "ready",
+            "projection": {
+                "projection_id": "proj_before_cutover",
+                "membership_revision": "projidxinput_before_cutover",
+            },
+            "candidate_count": 1,
+            "total_candidates": 1,
+            "filtered_candidate_count": 1,
+            "offset": 0,
+            "limit": 1,
+            "has_more": False,
+            "next_offset": None,
+            "candidates": [
+                {
+                    "projection_id": "proj_before_cutover",
+                    "candidate_identity_key": "linkedin:before-cutover",
+                    "public_summary": {"candidate_id": "before-cutover", "display_name": "Before Cutover"},
+                }
+            ],
+            "read_contract": {
+                "source": "serving_projection_members",
+                "fallback_used": False,
+                "fail_closed": True,
+            },
+        }
+        with (
+            mock.patch.object(
+                self.store.repos.serving_projection,
+                "get_run_link",
+                return_value={"projection_id": "proj_after_cutover"},
+            ) as run_link_read,
+            mock.patch.object(
+                self.orchestrator.serving_projection_reader,
+                "get_projection_candidates",
+                return_value=page_payload,
+            ) as candidate_read,
+        ):
+            page = self.orchestrator._build_job_asset_population_page_from_canonical_projection(  # noqa: SLF001
+                job_id="job_projection_cutover",
+                result_view_lifecycle={},
+                result_view={},
+                candidate_source={},
+                public_projection=public_projection,
+                candidate_filter={},
+                offset=0,
+                limit=24,
+            )
+
+        run_link_read.assert_not_called()
+        candidate_read.assert_called_once_with(
+            "proj_before_cutover",
+            offset=0,
+            limit=24,
+            candidate_filter={},
+        )
+        self.assertEqual(page["source_path"], "proj_before_cutover")
+        self.assertEqual(page["candidate_count"], 1)
+        self.assertEqual(page["candidates"][0]["candidate_id"], "before-cutover")
+
+    def test_candidate_projection_page_fails_closed_across_membership_revision_cutover(self) -> None:
+        resolution = {
+            "source": "run_projection_link",
+            "source_run_id": "job_projection_revision_cutover",
+            "projection_id": "proj_revision_cutover",
+            "status": "ready",
+            "fallback_used": False,
+            "migration_fallback_used": False,
+            "fail_closed": True,
+        }
+        public_projection = {
+            "asset_population": {"candidate_count": 1},
+            "serving_projection_payload": {
+                "status": "ready",
+                "projection": {
+                    "projection_id": "proj_revision_cutover",
+                    "membership_revision": "projidxinput_before_rewrite",
+                    "visible_member_count": 1,
+                },
+                "projection_resolution": resolution,
+            },
+            "serving_projection_resolution": resolution,
+        }
+        rewritten_page = {
+            "status": "ready",
+            "projection": {
+                "projection_id": "proj_revision_cutover",
+                "membership_revision": "projidxinput_after_rewrite",
+            },
+            "candidate_count": 1,
+            "total_candidates": 1,
+            "candidates": [{"candidate_identity_key": "linkedin:rewritten"}],
+        }
+
+        with mock.patch.object(
+            self.orchestrator.serving_projection_reader,
+            "get_projection_candidates",
+            return_value=rewritten_page,
+        ) as candidate_read:
+            mismatch = self.orchestrator._build_job_asset_population_page_from_canonical_projection(  # noqa: SLF001
+                job_id="job_projection_revision_cutover",
+                result_view_lifecycle={},
+                result_view={},
+                candidate_source={},
+                public_projection=public_projection,
+                candidate_filter={},
+                offset=0,
+                limit=24,
+            )
+
+        candidate_read.assert_called_once()
+        self.assertEqual(mismatch["status"], "not_ready")
+        self.assertEqual(mismatch["reason"], "projection_page_membership_revision_mismatch")
+        self.assertEqual(mismatch["candidates"], [])
+
+        missing_summary_revision = {
+            **public_projection,
+            "serving_projection_payload": {
+                **dict(public_projection["serving_projection_payload"]),
+                "projection": {
+                    "projection_id": "proj_revision_cutover",
+                    "visible_member_count": 1,
+                },
+            },
+        }
+        with mock.patch.object(
+            self.orchestrator.serving_projection_reader,
+            "get_projection_candidates",
+        ) as candidate_read:
+            missing = self.orchestrator._build_job_asset_population_page_from_canonical_projection(  # noqa: SLF001
+                job_id="job_projection_revision_cutover",
+                result_view_lifecycle={},
+                result_view={},
+                candidate_source={},
+                public_projection=missing_summary_revision,
+                candidate_filter={},
+                offset=0,
+                limit=24,
+            )
+
+        candidate_read.assert_not_called()
+        self.assertEqual(missing["status"], "not_ready")
+        self.assertEqual(missing["reason"], "projection_membership_revision_missing")
+
+    def test_candidate_projection_page_keeps_legacy_fallback_visible_when_index_is_not_ready(self) -> None:
+        resolution = {
+            "source": "legacy_projection_reference",
+            "source_run_id": "job_projection_fallback_page",
+            "projection_id": "proj_legacy_page",
+            "status": "ready",
+            "reason": "run_projection_link_missing",
+            "fallback_used": True,
+            "migration_fallback_used": True,
+            "fail_closed": True,
+        }
+        public_projection = {
+            "asset_population": {"candidate_count": 3},
+            "serving_projection_payload": {
+                "status": "ready",
+                "projection": {
+                    "projection_id": "proj_legacy_page",
+                    "visible_member_count": 3,
+                },
+                "projection_resolution": resolution,
+            },
+            "serving_projection_resolution": resolution,
+        }
+        with mock.patch.object(
+            self.orchestrator.serving_projection_reader,
+            "get_projection_candidates",
+            return_value={
+                "status": "not_ready",
+                "reason": "projection_person_search_index_unavailable",
+                "read_contract": {
+                    "source": "serving_projection_members",
+                    "fallback_used": False,
+                    "fail_closed": True,
+                },
+                "filter_contract": {},
+                "applied_filter": {},
+            },
+        ):
+            page = self.orchestrator._build_job_asset_population_page_from_canonical_projection(  # noqa: SLF001
+                job_id="job_projection_fallback_page",
+                result_view_lifecycle={},
+                result_view={},
+                candidate_source={},
+                public_projection=public_projection,
+                candidate_filter={},
+                offset=0,
+                limit=24,
+            )
+
+        self.assertEqual(page["status"], "not_ready")
+        self.assertTrue(page["read_contract"]["fallback_used"])
+        self.assertTrue(page["read_contract"]["migration_fallback_used"])
+        self.assertEqual(
+            page["serving_projection_resolution"]["source"],
+            "legacy_projection_reference",
+        )
+
+    def test_public_endpoints_fail_closed_when_membership_invalidates_facet_product(self) -> None:
         job_id = "job_projection_facet_lags_board_denominator"
         snapshot_id = "20260523Tfacetlag"
         projection_id = "proj_facet_lags_board_denominator"
@@ -5367,8 +6540,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "facet_build_status": "completed",
             },
             readiness={
-                "row": "building",
-                "row_count": len(projection_records) - 1,
+                "row": "complete",
+                "row_count": len(projection_records),
                 "profile": "complete",
                 "card": "complete",
                 "profile_ready_count": len(projection_records),
@@ -5381,6 +6554,42 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             projection_id=projection_id,
             count_scope="exact_projection",
             rebuild_person_indexes=False,
+        )
+        self.orchestrator.serving_projection_writer.publish_run_scope_projection(
+            run_id=job_id,
+            collection_id="company:google",
+            projection_id=projection_id,
+            members=[
+                {
+                    "candidate_identity_key": f"linkedin:google-gemini-{index}",
+                    "person_identity_key": f"linkedin:google-gemini-{index}",
+                    "candidate_id": record["candidate_id"],
+                    "rank_index": index,
+                    "visibility_state": "visible",
+                    "employment_scope": "current",
+                    "public_summary": record,
+                    "profile_readiness": "ready",
+                    "card_readiness": "ready",
+                }
+                for index, record in enumerate(board_records, start=1)
+            ],
+            replace_members=True,
+            counts={
+                "result_count": len(board_records),
+                "candidate_count": len(board_records),
+                "visible_member_count": len(board_records),
+                "count_scope": "exact_projection",
+            },
+            readiness={
+                "row": "complete",
+                "row_count": len(board_records),
+                "profile": "complete",
+                "card": "complete",
+                "profile_ready_count": len(board_records),
+                "profile_required_count": len(board_records),
+                "card_ready_count": len(board_records),
+            },
+            provenance={"source_run_id": job_id, "snapshot_id": snapshot_id},
         )
         snapshot_dir = self._write_materialized_snapshot_view(
             target_company="Google",
@@ -5490,15 +6699,15 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             self.assertEqual(board_state["filter_contract"]["facet_count_scope"], "unavailable")
             self.assertEqual(
                 board_state["filter_contract"]["facet_unavailable_reason"],
-                "projection_facet_count_mismatch_public_denominator",
+                "projection_facet_build_product_missing",
             )
-            self.assertEqual(
-                board_state["filter_contract"]["facet_summary_expected_candidate_count"],
-                len(board_records),
+            self.assertNotIn(
+                "facet_summary_expected_candidate_count",
+                board_state["filter_contract"],
             )
-            self.assertEqual(
-                board_state["filter_contract"]["facet_summary_actual_candidate_count"],
-                len(projection_records),
+            self.assertNotIn(
+                "facet_summary_actual_candidate_count",
+                board_state["filter_contract"],
             )
 
     def test_partial_public_artifact_does_not_lower_published_row_shell_count(self) -> None:
@@ -16883,10 +18092,20 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ],
             replace_members=True,
         )
+        membership_revision = str(
+            dict(
+                self.orchestrator.serving_projection_reader.get_projection(
+                    "proj_crm_public_web_service_e2e"
+                ).get("projection")
+                or {}
+            ).get("membership_revision")
+            or ""
+        )
         add_result = self.orchestrator.add_projection_candidate_to_crm(
             {
                 "projection_id": "proj_crm_public_web_service_e2e",
                 "candidate_identity_key": "linkedin:crm-public-web-service-e2e",
+                "expected_membership_revision": membership_revision,
                 "idempotency_key": "api-add-crm-public-web-service-e2e",
             }
         )
@@ -22409,6 +23628,10 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             },
             publish_lifecycle=False,
         )
+        index_queue_result = self.orchestrator._run_projection_person_search_index_queue_once(  # noqa: SLF001
+            {"job_id": job_id, "projection_person_search_index_item_limit": 1}
+        )
+        self.assertEqual(index_queue_result["completed_count"], 1, index_queue_result)
         self.store.upsert_job_result_lifecycle(
             job_id=job_id,
             fields={
@@ -22469,7 +23692,7 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "exact_projection",
             )
             self.assertEqual(board_state["profile_fetch_status_text"], "新增 LinkedIn Profile 已取回 0/4")
-            self.assertEqual(board_state["card_materialization_status_text"], "卡片详情已合入看板 0/4")
+            self.assertEqual(board_state["card_materialization_status_text"], "卡片详情已合入看板 10/14")
         assert page is not None
         self.assertEqual(page["facet_summary_scope"], dashboard_scope)
         self.assertEqual(dict(page["filter_contract"])["facet_count_scope"], "exact_projection")
@@ -22568,7 +23791,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         board_state = dict(page.get("board_runtime_state") or {})
         self.assertEqual(board_state["published_candidate_count"], 2)
         self.assertTrue(str(board_state.get("row_publication_started_at") or "").strip())
-        self.assertEqual(board_state["row_publication_tier"], "lifecycle")
+        self.assertEqual(board_state["row_publication_tier"], "serving_projection_members")
+        self.assertTrue(str(board_state.get("row_publication_revision") or "").strip())
         link = self.store.repos.serving_projection.get_run_link(job_id)
         projection_id = str(link.get("projection_id") or "")
         self.assertTrue(projection_id.startswith("proj_"))
@@ -22713,6 +23937,13 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(projection_page["read_contract"]["source"], "serving_projection_members")
         self.assertFalse(projection_page["read_contract"]["fallback_used"])
         self.assertEqual(projection_page["total_candidates"], 140)
+        canonical_projection = self.orchestrator.serving_projection_reader.get_projection(projection_id)
+        self.assertEqual(canonical_projection["status"], "ready")
+        projection_payload = dict(canonical_projection["projection"])
+        self.assertEqual(projection_payload["visible_member_count"], 140)
+        self.assertEqual(dict(projection_payload["counts"])["count_scope"], "exact_projection")
+        self.assertEqual(dict(projection_payload["readiness"])["count_scope"], "exact_projection")
+        self.assertEqual(dict(projection_payload["readiness"])["card_ready_count"], 115)
         page = self.orchestrator.get_job_candidate_page(job_id, offset=0, limit=24, lightweight=True)
         assert page is not None
         self.assertEqual(page["result_mode"], "asset_population")
@@ -22724,7 +23955,9 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(board_state["published_candidate_count"], 140)
         self.assertEqual(board_state["profile_fetch_required_count"], 140)
         self.assertEqual(board_state["profile_fetched_count"], 140)
-        self.assertEqual(board_state["card_materialization_status_text"], "卡片详情已合入看板 140/140")
+        self.assertEqual(board_state["display_ready_candidate_count"], 115)
+        self.assertEqual(board_state["preview_candidate_count"], 25)
+        self.assertEqual(board_state["card_materialization_status_text"], "卡片详情已合入看板 115/140")
         progress = self.orchestrator.get_job_progress(job_id)
         dashboard = self.orchestrator.get_job_dashboard(job_id)
         patch_log = self.orchestrator.get_job_board_visible_patch_log(job_id)
@@ -22748,6 +23981,21 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         for endpoint_name, payload in endpoint_payloads.items():
             assert payload is not None
             endpoint_state = dict(payload.get("board_runtime_state") or {})
+            self.assertEqual(
+                endpoint_state["expected_candidate_count"],
+                140,
+                msg=f"{endpoint_name} must use canonical projection membership",
+            )
+            self.assertEqual(endpoint_state["served_candidate_count"], 140)
+            self.assertEqual(endpoint_state["published_candidate_count"], 140)
+            self.assertEqual(endpoint_state["profile_fetched_count"], 140)
+            self.assertEqual(
+                endpoint_state["display_ready_candidate_count"],
+                115,
+                msg=f"{endpoint_name} must use exact canonical card readiness",
+            )
+            self.assertEqual(endpoint_state["preview_candidate_count"], 25)
+            self.assertEqual(endpoint_state["card_materialization_status_text"], "卡片详情已合入看板 115/140")
             self.assertEqual(
                 endpoint_state["facet_summary_status"],
                 reference_state["facet_summary_status"],
@@ -25415,6 +26663,12 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             }
         )
         self.assertEqual(projection_queue_result["completed_count"], 1, projection_queue_result)
+        projection_link = self.store.repos.serving_projection.get_run_link(job_id) or {}
+        self.orchestrator.person_asset_writer.rebuild_projection_person_search_index(
+            projection_id=str(projection_link.get("projection_id") or ""),
+            count_scope="exact_projection",
+            rebuild_person_indexes=False,
+        )
 
         page = self.orchestrator.get_job_candidate_page(job_id, offset=0, limit=24, lightweight=True)
         assert page is not None
@@ -25435,7 +26689,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(layer_counts.get("layer_0"), 597)
         self.assertEqual(board_state["facet_summary_status"], "complete")
         self.assertEqual(board_state["facet_summary_scope"], "global_full_population")
-        self.assertEqual(board_state["row_publication_tier"], "current_snapshot_serving")
+        self.assertEqual(board_state["row_publication_tier"], "serving_projection_members")
+        self.assertTrue(board_state["row_publication_revision"])
         self.assertEqual(board_state["sync_status_text"], "597/597")
         self.assertEqual(board_state["layering_status"], "completed")
 

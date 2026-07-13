@@ -581,9 +581,13 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         self.assertTrue(replacement_applied)
         self.assertEqual(stale_projection["metadata"]["search_index_build_status"], "stale")
         self.assertNotIn("public_facet_counts", stale_projection["counts"])
-        self.assertEqual(stale_page["facet_summary"]["status"], "unavailable")
-        self.assertEqual(stale_page["filter_contract"]["facet_count_scope"], "unavailable")
-        self.assertEqual(stale_page["index_filter_readiness"]["count_scope"], "unavailable")
+        self.assertEqual(stale_page["status"], "not_ready")
+        self.assertEqual(
+            stale_page["reason"],
+            "projection_membership_revision_changed_during_page_read",
+        )
+        self.assertTrue(stale_page["read_contract"]["fail_closed"])
+        self.assertFalse(stale_page["read_contract"]["fallback_used"])
 
         reset_page = self.person_asset_writer.rebuild_projection_person_search_index_page(
             projection_id=projection_id,
@@ -864,7 +868,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
         repository = self.store.repos.serving_projection
         failure = ControlPlaneAuthoritativeReadError("postgres unavailable after count")
 
-        with mock.patch.object(repository, "get_member", side_effect=failure):
+        with mock.patch.object(repository, "list_members_by_identity_keys", side_effect=failure):
             detail = self.projection_reader.get_projection_person_detail(projection_id, candidate_key)
         with (
             mock.patch.object(
@@ -1054,6 +1058,18 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
             ],
             replace_members=True,
         )
+        revision_a = str(
+            dict(self.projection_reader.get_projection("proj_crm").get("projection") or {}).get(
+                "membership_revision"
+            )
+            or ""
+        )
+
+        missing_revision = self.crm_writer.add_projection_member_to_crm(
+            projection_id="proj_crm",
+            candidate_identity_key="linkedin:lovable-ada",
+            idempotency_key="add-lovable-ada-missing-revision",
+        )
 
         result = self.crm_writer.add_projection_member_to_crm(
             projection_id="proj_crm",
@@ -1062,6 +1078,7 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
             actor_id="operator",
             idempotency_key="add-lovable-ada",
             stage="researching",
+            expected_membership_revision=revision_a,
         )
         idempotent = self.crm_writer.add_projection_member_to_crm(
             projection_id="proj_crm",
@@ -1070,12 +1087,52 @@ class PersonAssetCrmProjectionContractTest(PGControlPlaneStoreTestMixin, unittes
             actor_id="operator",
             idempotency_key="add-lovable-ada",
             stage="researching",
+            expected_membership_revision=revision_a,
+        )
+        self.projection_writer.publish_run_scope_projection(
+            run_id="job-lovable",
+            collection_id="company:lovable-dev",
+            projection_id="proj_crm",
+            members=[
+                {
+                    "candidate_id": "lovable-ada",
+                    "candidate_identity_key": "linkedin:lovable-ada",
+                    "public_summary": {
+                        "display_name": "Lovable Ada Updated",
+                        "linkedin_url": "https://www.linkedin.com/in/lovable-ada/",
+                    },
+                }
+            ],
+            replace_members=True,
+        )
+        revision_b = str(
+            dict(self.projection_reader.get_projection("proj_crm").get("projection") or {}).get(
+                "membership_revision"
+            )
+            or ""
+        )
+        reselected = self.crm_writer.add_projection_member_to_crm(
+            projection_id="proj_crm",
+            candidate_identity_key="linkedin:lovable-ada",
+            actor_type="user",
+            actor_id="operator",
+            idempotency_key="add-lovable-ada",
+            stage="researching",
+            expected_membership_revision=revision_b,
         )
         page = self.projection_reader.get_projection_candidates("proj_crm", limit=10)
         row = page["candidates"][0]
 
+        self.assertEqual(missing_revision["status"], "invalid")
+        self.assertEqual(missing_revision["reason"], "expected_membership_revision_required")
         self.assertEqual(result["status"], "upserted")
         self.assertEqual(idempotent["status"], "idempotent")
+        self.assertNotEqual(revision_a, revision_b)
+        self.assertEqual(reselected["status"], "reselected")
+        self.assertEqual(reselected["crm_event"]["event_type"], "projection_member_reselected")
+        self.assertEqual(reselected["crm_event"]["payload"]["source_membership_revision"], revision_b)
+        self.assertEqual(reselected["crm_record"]["metadata"]["last_source_membership_revision"], revision_b)
+        self.assertNotEqual(reselected["crm_event"]["event_id"], result["crm_event"]["event_id"])
         self.assertTrue(row["crm_overlay_summary"]["in_crm"])
         self.assertEqual(row["crm_overlay_summary"]["stage"], "researching")
         self.assertEqual(len(self.store.list_crm_engagements(crm_record_id=result["crm_record"]["crm_record_id"])), 1)

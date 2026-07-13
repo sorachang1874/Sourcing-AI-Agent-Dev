@@ -2707,6 +2707,8 @@ def excel_intake_run_idempotency_key(
 def export_projection_generate_idempotency_key(
     *,
     projection_id: str,
+    membership_revision: str = "",
+    source_candidate_count: int = 0,
     candidate_identity_keys: list[str] | tuple[str, ...] = (),
     include_llm_reviewed_unconfirmed_assertions: bool = False,
     include_crm_notes: bool = False,
@@ -2728,6 +2730,8 @@ def export_projection_generate_idempotency_key(
         json.dumps(
             {
                 "projection_id": normalized_projection_id,
+                "membership_revision": str(membership_revision or "").strip(),
+                "source_candidate_count": max(0, int(source_candidate_count or 0)),
                 "candidate_identity_keys": normalized_keys,
                 "include_llm_reviewed_unconfirmed_assertions": bool(include_llm_reviewed_unconfirmed_assertions),
                 "include_crm_notes": bool(include_crm_notes),

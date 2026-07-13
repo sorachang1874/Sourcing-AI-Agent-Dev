@@ -1007,18 +1007,32 @@ export function TargetCandidatesPanel({ sourceCollectionId = "" }: TargetCandida
 
   const publicWebExportRecordIds = exportRecordIds;
   const canonicalExportScope = useMemo(() => {
+    const selectionTuples = exportScopeRecords.map((record) => ({
+      projectionId: String(record.sourceProjectionId || "").trim(),
+      membershipRevision: String(record.sourceMembershipRevision || "").trim(),
+      candidateIdentityKey: String(record.candidateIdentityKey || "").trim(),
+    }));
     const sourceProjectionIds = Array.from(
-      new Set(exportScopeRecords.map((record) => record.sourceProjectionId || "").filter(Boolean)),
+      new Set(selectionTuples.map((selection) => selection.projectionId).filter(Boolean)),
     );
     const candidateIdentityKeys = Array.from(
-      new Set(exportScopeRecords.map((record) => record.candidateIdentityKey || "").filter(Boolean)),
+      new Set(selectionTuples.map((selection) => selection.candidateIdentityKey).filter(Boolean)),
+    );
+    const sourceMembershipRevisions = Array.from(
+      new Set(selectionTuples.map((selection) => selection.membershipRevision).filter(Boolean)),
     );
     return {
       projectionId: sourceProjectionIds.length === 1 ? sourceProjectionIds[0] : "",
+      membershipRevision: sourceMembershipRevisions.length === 1 ? sourceMembershipRevisions[0] : "",
       candidateIdentityKeys,
       complete:
         exportScopeRecords.length > 0 &&
+        selectionTuples.every(
+          (selection) =>
+            selection.projectionId && selection.membershipRevision && selection.candidateIdentityKey,
+        ) &&
         sourceProjectionIds.length === 1 &&
+        sourceMembershipRevisions.length === 1 &&
         candidateIdentityKeys.length === exportScopeRecords.length,
     };
   }, [exportScopeRecords]);
@@ -1503,10 +1517,11 @@ export function TargetCandidatesPanel({ sourceCollectionId = "" }: TargetCandida
     setExportNotice("");
     try {
       if (!canonicalExportScope.complete) {
-        throw new Error("当前选择中有候选人缺少可打包的人选资料，请改选候选人或先使用 Web Search 导出。");
+        throw new Error("当前选择不属于同一版可导出的候选人投影，请刷新列表后重试或改用 Web Search 导出。");
       }
       const download = await exportProjectionCandidatesArchive({
         projectionId: canonicalExportScope.projectionId,
+        expectedMembershipRevision: canonicalExportScope.membershipRevision,
         candidateIdentityKeys: canonicalExportScope.candidateIdentityKeys,
       });
       downloadBlobFile(download.filename || "target-candidates.zip", download.blob);

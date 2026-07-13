@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   getDashboard,
   getDashboardCandidatePage,
+  getProjectionDashboard,
   getProjectionCandidatePage,
+  dashboardCandidatePageRevisionMatches,
   mergeDashboardCandidatePage,
   storeProjectionDashboardCache,
   storeDashboardCache,
@@ -92,8 +94,10 @@ export function useDashboardCandidateHydration({
       const legacyProfileWorkPending =
         !boardRuntimeState && profileFetchProgressHasPendingWork(dashboardValue.profileFetchProgress);
       const candidateHydrationPending = dashboardCandidateHydrationPending(dashboardValue);
+      const projectionCardReadinessPending = canonicalProjectionCardReadinessPending(dashboardValue);
       return (
         boardRuntimePending ||
+        projectionCardReadinessPending ||
         legacyLifecyclePending ||
         legacyProfileTailPending ||
         legacyProfileWorkPending ||
@@ -109,8 +113,12 @@ export function useDashboardCandidateHydration({
       }
       refreshRound += 1;
       try {
+        const requestBaseDashboard = dashboardRef.current;
         const refreshedDashboard = projectionId
-          ? dashboardRef.current
+          ? await getProjectionDashboard(projectionId, {
+              forceRefresh: true,
+              runId: jobId,
+            })
           : await getDashboard(jobId, { forceRefresh: true });
         if (!refreshedDashboard) {
           return;
@@ -119,6 +127,14 @@ export function useDashboardCandidateHydration({
           return;
         }
         const latestDashboard = dashboardRef.current || refreshedDashboard;
+        if (
+          requestBaseDashboard &&
+          dashboardRef.current &&
+          dashboardPopulationShapeChanged(requestBaseDashboard, dashboardRef.current)
+        ) {
+          schedule();
+          return;
+        }
         const populationShapeChanged = dashboardPopulationShapeChanged(latestDashboard, refreshedDashboard);
         const refreshedTargetCount = refreshedDashboard.boardRuntimeState
           ? dashboardRowHydrationTargetCount(refreshedDashboard)
@@ -146,7 +162,11 @@ export function useDashboardCandidateHydration({
         const changed = dashboardRefreshChanged(latestDashboard, mergedDashboard);
         if (changed) {
           dashboardRef.current = mergedDashboard;
-          storeDashboardCache(jobId, mergedDashboard);
+          if (projectionId) {
+            storeProjectionDashboardCache(projectionId, mergedDashboard);
+          } else {
+            storeDashboardCache(jobId, mergedDashboard);
+          }
           onDashboardChange(mergedDashboard);
         }
         if (shouldContinuePolling(mergedDashboard, refreshRound)) {
@@ -274,7 +294,38 @@ export function useDashboardCandidateHydration({
         if (cancelled) {
           return;
         }
-        let mergedDashboard = currentDashboard;
+        const latestDashboard = dashboardRef.current;
+        if (!latestDashboard) {
+          return;
+        }
+        if (dashboardPopulationShapeChanged(currentDashboard, latestDashboard)) {
+          continue;
+        }
+        if (pages.some((page) => !dashboardCandidatePageRevisionMatches(latestDashboard, page))) {
+          const rereadBaseDashboard = dashboardRef.current;
+          const refreshedDashboard = projectionId
+            ? await getProjectionDashboard(projectionId, { forceRefresh: true, runId: jobId })
+            : await getDashboard(jobId, { forceRefresh: true });
+          if (cancelled || !refreshedDashboard) {
+            return;
+          }
+          if (
+            rereadBaseDashboard &&
+            dashboardRef.current &&
+            dashboardPopulationShapeChanged(rereadBaseDashboard, dashboardRef.current)
+          ) {
+            continue;
+          }
+          dashboardRef.current = refreshedDashboard;
+          if (projectionId) {
+            storeProjectionDashboardCache(projectionId, refreshedDashboard);
+          } else {
+            storeDashboardCache(jobId, refreshedDashboard);
+          }
+          onDashboardChange(refreshedDashboard);
+          continue;
+        }
+        let mergedDashboard = latestDashboard;
         for (const page of [...pages].sort((left, right) => left.offset - right.offset)) {
           mergedDashboard = mergeDashboardCandidatePage(mergedDashboard, page);
         }
@@ -390,6 +441,8 @@ function dashboardRefreshChanged(current: DashboardData, next: DashboardData): b
     (currentLifecycle?.deltaProfilePendingCount || 0) !== (nextLifecycle?.deltaProfilePendingCount || 0) ||
     (current.boardRuntimeState?.rowPublicationWatermark || "") !==
       (next.boardRuntimeState?.rowPublicationWatermark || "") ||
+    (current.boardRuntimeState?.rowPublicationRevision || "") !==
+      (next.boardRuntimeState?.rowPublicationRevision || "") ||
     (current.boardRuntimeState?.rowHydrationTargetCount || 0) !==
       (next.boardRuntimeState?.rowHydrationTargetCount || 0) ||
     (current.boardRuntimeState?.displayReadyCandidateCount || 0) !==
@@ -425,6 +478,8 @@ function dashboardPopulationShapeChanged(current: DashboardData, next: Dashboard
   return (
     current.resultMode !== next.resultMode ||
     current.snapshotId !== next.snapshotId ||
+    (current.boardRuntimeState?.rowPublicationRevision || "") !==
+      (next.boardRuntimeState?.rowPublicationRevision || "") ||
     dashboardExpectedCandidateCount(current) !== dashboardExpectedCandidateCount(next)
   );
 }
@@ -455,7 +510,10 @@ function dashboardHasActiveAssetLifecycle(dashboardValue: DashboardData | null):
   const lifecycle = dashboardValue.resultViewLifecycle;
   const boardRuntimeState = dashboardValue.boardRuntimeState;
   if (boardRuntimeState) {
-    return ["awaiting_publication", "partial_serving", "post_result_layering"].includes(boardRuntimeState.phase);
+    return (
+      ["awaiting_publication", "partial_serving", "post_result_layering"].includes(boardRuntimeState.phase) ||
+      canonicalProjectionCardReadinessPending(dashboardValue)
+    );
   }
   const pendingProfileWork = profileFetchProgressHasPendingWork(progress);
   const deltaLifecyclePending = Boolean(
@@ -465,6 +523,21 @@ function dashboardHasActiveAssetLifecycle(dashboardValue: DashboardData | null):
       ),
   );
   return pendingProfileWork || deltaLifecyclePending || resultViewLifecycleHasPendingDeltaProfileWork(lifecycle);
+}
+
+function canonicalProjectionCardReadinessPending(dashboardValue: DashboardData | null): boolean {
+  const board = dashboardValue?.boardRuntimeState;
+  if (
+    !board ||
+    board.rowPublicationTier !== "serving_projection_members" ||
+    !String(board.rowPublicationRevision || "").trim() ||
+    !board.cardMaterializationQualityFieldsAvailable
+  ) {
+    return false;
+  }
+  const expectedCount = Math.max(0, Number(board.expectedCandidateCount || 0));
+  const cardReadyCount = Math.max(0, Number(board.displayReadyCandidateCount || 0));
+  return expectedCount > 0 && cardReadyCount < expectedCount;
 }
 
 function profileFetchProgressHasPendingWork(progress: DashboardData["profileFetchProgress"]): boolean {

@@ -72,10 +72,11 @@
   - 同一个 `job_id` 的审核状态，应通过 `GET/POST /api/candidate-review-registry` 读写
   - 跨 workflow 的目标候选人池，应通过 `GET/POST/PATCH /api/crm/records` 读写
   - 从本地资产公司页进入目标候选人时，前端必须把 `collection` 上下文作为 `source_collection_id` 传给 `GET /api/crm/records`；CRM API 是 collection-scoped 列表的 owner，前端不得拉取全局 CRM 列表后自己按公司推断。
-  - 从 projection 添加目标候选人时，前端必须传 `projection_id + candidate_identity_key` 到 `POST /api/crm/records`，由 `CRMWriter` 去重和记录 provenance
+  - 从 projection 添加目标候选人时，前端必须传 `projection_id + candidate_identity_key + expected_membership_revision` 到 `POST /api/crm/records`，由 `CRMWriter` 在同一 revision-fenced PG UoW 中复验 selection、去重并记录 provenance。projection id 或 displayed revision 缺失时按钮必须禁用，不能由服务端绑定“当前版”。
   - CRM follow-up task 只读列表应通过 `GET /api/crm/tasks` 或 `GET /api/crm/records/{crm_record_id}/tasks` 获取；前端不得从 `crm_events` payload 自行拼任务状态。响应必须标记 `read_contract.source=crm_tasks`、`read_contract.audit_source=crm_events`、`fallback_used=false`。
   - 将某个已完成 workflow 的候选人批量导入目标池仍属于 legacy/migration/import surface；正常 projection 页面应通过 CRM add-from-projection，而不是 job-bound target write
-  - 导出普通候选人 CSV/profile bundle，应通过 `POST /api/projections/export`，并传入 `projection_id`；目标候选人页面只能在记录带有 `source_projection_id` / `candidate_identity_key` provenance 时调用该 canonical export。
+  - 导出普通候选人 CSV/profile bundle，应通过 `POST /api/projections/export`，并传入 `projection_id + expected_membership_revision`；目标候选人页面只有在每条记录都带完整 atomic `last_source_selection` tuple（projection/revision/source `N`/candidate/person）且所选记录属于同一 projection revision 时才能调用 canonical export。
+  - Candidate page、dashboard 和 mutation control 必须共享 canonical `projection_id + row_publication_revision`。旧 revision 的分页响应即使晚到也必须丢弃；`forceRefresh` 必须创建新的 request generation，旧 in-flight promise 不得满足强制刷新或回填 cache。
   - `POST /api/target-candidates/export` 已退役为 migration/test-only 兼容入口，默认返回 `410`。前端正常路径不得调用它。
     - 目标候选人 Public Web Search 应通过 `POST /api/crm/records/public-web-search` 触发，通过 `POST /api/crm/records/public-web-search/poll` 查询 batch/run 状态；请求体使用 `crm_record_ids`
     - POST 只做幂等排队，不在请求线程里跑 DataForSEO/fetch/LLM
@@ -124,7 +125,7 @@
   - 删除历史统一走 `DELETE /api/frontend-history/{history_id}`
   - 浏览器 `localStorage` 只保留为本地 cache / optimistic UI，不再作为跨设备真相源
 - 执行过程页与候选人看板 tab 的自动切换必须是 workflow-scoped、一次性的交互
-  - 当前 workflow 第一次出现可渲染看板行时，可以自动打开一次候选人看板
+  - 当前 workflow 第一次出现 exact canonical visible membership 且候选行可分页时，可以自动打开一次候选人看板；`card_ready=0` 不是阻塞条件
   - 用户之后手动切回执行过程页，后续 running/results phase 变化、progress refresh、dashboard refresh 都不得再次强制跳转
   - 新 workflow / 新 job 才能重新 armed 这次自动打开
 - Stage 1 之后的 LinkedIn 信息补全不应默认自动执行
@@ -137,18 +138,19 @@
 - `boardRuntimeState.expectedCandidateCount` 是看板 canonical total
   - `publishedCandidateCount` / `rowHydrationTargetCount` 只表示行级水位或加载目标，不得反向抬高总量
   - 前端在 boardRuntimeState 存在时，不应再用 `publishedCandidateCount` 去修饰 `expectedCandidateCount`
-  - `syncStatusText` 是 `候选人同步 X/Y` 的唯一真源；它表达 row-publication / canonical board progress，不表达 profile/card richness
-  - `displayReadyCandidateCount` 只用于卡片可用性和 renderability 判断；profile/card 文案必须来自 `syncNoteLines` 或专用 status text，不得由前端再推导
+  - `syncStatusText` 是主 `候选人同步 N/N` 的唯一真源；`N` 来自 exact canonical visible membership，不表达 profile/card richness
+  - `displayReadyCandidateCount` 是 exact card-ready `C` 的兼容视图，只用于 `卡片详情 C/N` 与详情状态；它不决定主同步、分页总数、列表可渲染性或空状态
+  - public `projection.membership_revision` 必须是 member-publication UoW 写入的非空 opaque equality token。summary/page/readiness 只可在 token 相等时合并；token 缺失/不等时丢弃混合快照、失效缓存并重新 resolve/read，不能按 token、`updated_at`、sequence 或 count 大小排序
   - `publishedCandidateCount` 是兼容旧 payload 的历史字段，不得再参与 `rowHydrationTargetCount`、分页、freshness 或其它主路径判断；若 canonical 字段缺失，视为后端 contract bug
 - `boardRuntimeState.sync_note_lines` 是候选人同步文案的唯一真源
   - 前端不得把 intent match、stage summary、profile progress fallback 拼进同一行
-  - 文案必须使用稳定分母形式，例如 `候选人发现 597/597；新增 LinkedIn Profile 已取回 297/297；卡片详情已合入看板 297/297`
+  - 文案必须保持独立分母，例如 `候选人发现 597/597；新增 LinkedIn Profile 已取回 P/R；卡片详情已合入看板 C/597`；前端不得把 `P`、`C` 或 explicit capture 强制补成同一个值
   - `manual_review_count` 只来自 job-level canonical count 或 `progress.counters.manual_review_count`；Stage 1/Stage 2 summary 中的 `manual_review_queue_count` 不得作为运行页“需人工审核候选人”指标
 - 候选人看板 filter/facet contract：
-  - `asset_population.facet_summary_scope="global_full_population"` 是后端声明全局 facet 真值的唯一标志
+  - public facet 真值 owner 始终是 revision-fenced `projection_person_search_index`；初始 membership publication 必须暴露 facet `pending` / `unavailable`，不得从 members、当前 page 或本地 rows 同步重算
   - `facet_summary_scope` 和 `filter_contract.facet_count_scope` 是两个不同字段。前者表示 facet summary 覆盖范围，后者表示 filter count 的计数来源/readiness。前端不得用其中一个推导另一个，也不得在不同 endpoint 返回不一致时自行择优合并；这属于后端 Contract 漂移，应该触发 preflight/烟测失败。
   - `filter_contract.facet_count_scope="exact_projection"` 表示 filter count 来自 canonical projection/index 的完整投影计数；`unavailable` 表示计数不可展示；`index_partial` 表示索引未追上完整投影。前端只消费这些枚举，不从本地候选行窗口重算全局计数。
-  - 前端只有在 canonical lifecycle 已到 `current_snapshot_serving` / `post_result_layering` 且 served/expected、delta materialized 已收敛时，才把 facet counts 作为全局计数展示
+  - 前端只有在 facet/index product 的 membership revision 与当前 projection token 相等且 scope exact 时，才把 facet counts 作为全局计数展示；membership `N/N` 或 card `C/N` 完成不能替代 index readiness
   - 在候选行仍按 chunk hydration 装载时，前端可以提供筛选控件，但不能把当前 chunk 的局部 counts 当作全局业务真值
   - 用户一旦手动修改 filter，后续 hydration、facet option 扩展、running->results phase 切换都不能把选择重置为默认值；只能移除已经不存在的 option id
   - 全部具体选项都被选中时，摘要应显示 `全量` / fallback label，而不是显示第一个选项
@@ -861,39 +863,40 @@ type WorkflowUiState = {
 
 当 `public_web_stage_applicable=false` 或 `active_phase_id` 是 `linkedin_acquisition` / `local_asset_materialization` / `post_result_layering` 时，前端不应展示默认 `Public Web Stage 2` 文案。对应可见标题应来自 `active_phase_label` 或 `stage_title_overrides`，例如 `LinkedIn Stage 1`、`本地资产物化`、`结果分层刷新`。
 
-候选人看板同步卡应展示 canonical business card-readiness 进度，而不是浏览器当前已经分页加载的候选行数，也不是单纯的 backend row-publication 计数：
+候选人看板同步卡应把 exact canonical visible membership 主同步 `N/N` 与独立卡片详情 `C/N` 分开展示；浏览器当前加载行数、patch 水位、profile readiness 和 card readiness 都不能互相代替：
 
-- 主计数必须优先来自 `board_runtime_state.sync_status_text` 与 `expected_candidate_count`。`display_ready_candidate_count` 表示 profile 已取回并合入列表卡片，或 provider 已明确尝试但只能生成 `needs_profile_completion` / `low_profile_richness` 的可审计卡片；它不是 `候选人同步` row-publication 分子。
+- 主计数必须来自 exact `serving_projection_members` visible membership 投影的 `board_runtime_state.sync_status_text` 与 `expected_candidate_count=N`，并显示 `N/N`。`display_ready_candidate_count=C` 只表示 exact card-ready/detail；它不是主同步、分页、export/CRM source total 或 render 分子。
 - `board_runtime_state.published_candidate_count` 是旧 row-publication 水位字段；新主路径的 hydration target 必须用 `board_runtime_state.row_hydration_target_count`。`published_candidate_count` 只能作为诊断/历史报告字段，不能进入分页、freshness、候选人同步或用户可见总量计算。
-- 前端合并 `/progress`、`/dashboard`、`/candidates`、`/board-patches` 的 `board_runtime_state` 时，必须先比较 `row_publication_tier`，再比较同 tier 内的 `row_publication_sequence`。`current_snapshot_serving` 是最终 serving tier，必须压过 `partial_patch`，即使 partial patch 的 sequence 更高；同为 `partial_patch` 时 sequence 才是 patch replay/merge 水位。同一 tier/sequence 下才允许保留已完成 layering/facet 的较完整 payload，避免旧 endpoint 响应把 `completed` 回退成 `running`。
-- 四个 endpoint 必须暴露同一份可比较的 `board_runtime_state` 业务字段。后端 public reader canonical projection v1 从 summary-only serving projection 生成 lifecycle、board-runtime、facet scope、filter contract；`/candidates` 的分页 payload 只能贡献 rows/filter window，不能根据当前 page/overlay 自行把 `facet_summary_scope` 升级为 `global_full_population`。前端 merge 只是处理响应先后和短暂采样差，不是修正后端多源漂移；若 `/progress`、`/dashboard`、`/candidates`、`/board-patches` 在 expected/served/display-ready、profile/card 文案、publication tier/watermark、layering 或 filter contract 上不一致，根因属于后端 contract 失败，scripted smoke 的 `require_board_runtime_state_cross_endpoint_parity` 必须先拦住。
-- 若新合同缺失，旧历史页面才可兼容读取 `result_view_lifecycle.served_candidate_count / expected_candidate_count`；兼容读取不能反向覆盖 `board_runtime_state`。
+- 前端合并 `/progress`、`/dashboard`、`/candidates`、`/board-patches` 时先区分 canonical membership tier 与 legacy/partial tier；canonical summary/page/readiness 还必须携带相同的 `projection.membership_revision`。该 token 只比较相等/不等，不能排序；缺失或 mismatch 时 direct merge fail closed、清掉受影响 cache 并重新 resolve 一次 projection 后 pin 同一 token 重读。`updated_at`、发布时间、`row_publication_sequence` 和更大的 count 都不能替代 token；sequence 只排序同一 patch generation。
+- 四个 endpoint 必须暴露同一 membership token 下可比较的 `board_runtime_state` 业务字段。`/candidates` 的分页 payload 只能贡献同 token 的 rows/filter window，不能根据当前 page/overlay 自行升级 membership、readiness 或 facet scope。若 endpoints 在 token、N、C、P、explicit capture、profile/card 文案、publication tier、layering 或 filter contract 上不一致，属于后端 contract 失败，fast preflight 与 `require_board_runtime_state_cross_endpoint_parity` 必须先拦住。
+- 一旦存在 canonical projection link，新合同缺失、non-exact、token mismatch 或 read fallback 都必须 fail closed。前端不得兼容读取 `result_view_lifecycle.served_candidate_count / expected_candidate_count`、overlay、patch 或本地 rows 补成业务总数；这些字段只保留诊断用途。
 - Frontend hydration 只能单独展示为“已加载候选行 loaded/expected”或“本地已缓存候选行”，不能把 `dashboard.candidates.length`、分页缓存长度、已加载片段筛选命中数称为最终同步进度。
-- 全局 facet/filter 选项必须优先消费后端 `facet_summary`（`asset_population.facet_summary` / candidate page top-level `facet_summary`）。`dashboard.candidates` 只是当前已 hydrated 的候选行窗口，不能用于推导全局地区、职能、在职状态或分层计数，除非后端 summary 缺失。
-- `facet_summary_scope` 是后端声明字段。只有当 `/dashboard` 或 `/candidates` 返回 `facet_summary_scope="global_full_population"`，且 summary candidate count 覆盖 canonical expected/served count 时，前端才能把 `facet_summary` 用作全局 filter count。前端不得因为自己有一个 summary 对象就把 scope 补成 global。
-- `facet_summary_scope` 的可见含义必须显式：`global_full_population` 才允许展示全局 counts；`current_served_partial` 只能作为当前已服务局部选项来源并隐藏 counts；`raw_profile_partial` 预留给未来 raw-profile 资产搜索；`unavailable` 表示不可用。前端不得把 partial scope 展示成全局 facet counts。
+- 全局 facet/filter 选项只能消费 `projection_person_search_index` owner 发布、且与当前 `projection.membership_revision` 相等的后端 `facet_summary`。`dashboard.candidates`、members、card-ready subset 和本地窗口不能推导全局地区、职能、在职状态或分层计数；后端 summary 缺失时保持 disabled/unavailable，不启用 fallback。
+- `facet_summary_scope` 是后端 index product 声明字段。只有 `/dashboard` 或 `/candidates` 返回 revision-matched `exact_projection` / `global_full_population` 且 candidate count 等于 canonical `N` 时，前端才能展示全局 facet counts。初始 membership publication 的合法状态是 `pending` / `unavailable`。
+- `current_served_partial` / `raw_profile_partial` 只能作为显式局部或未来 raw-profile 状态，不能显示为全局 counts；`unavailable` 隐藏/禁用相关计数和 active filter 请求。前端不得因为已有 summary 对象、exact membership 或 complete card detail 就把 facet scope 补成 global。
 - 当用户选中了某个 facet 的全部 concrete options 时，右侧摘要应显示 fallback/all label，例如地区全部选中显示 `全量`，不能显示第一个 option（例如 `美国`）。
 - 地区和职能这类 board-wide narrowing filters 的初始状态应是全量开放选择；除非用户明确切换，前端不得因为 hydration 期间 option/count 变化自动改成 `美国`、`未提供地区信息`、`Researcher` 等单选状态。
-- LinkedIn profile 获取进度和卡片合入进度必须拆开展示。`profile_fetch_status_text` 只报告 `新增 LinkedIn Profile 已取回 fetched/required` 或 `本次 LinkedIn Profile 已取回 fetched/required`；`card_materialization_status_text` 报告 `卡片详情已合入看板 display_ready/required`。`display_ready` 必须来自 backend board runtime/card materialization contract，不能从 fetched count、published rows 或 candidate-page hydration 推导。
+- LinkedIn profile 获取进度和卡片合入进度必须拆开展示。`profile_fetch_status_text` 只报告 owner-scoped `新增 LinkedIn Profile 已取回 P/R` 或 `本次 LinkedIn Profile 已取回 P/R`；`card_materialization_status_text` 报告同 membership token 的 exact `卡片详情已合入看板 C/N`。`profile_ready` 与 `card_ready` 各自独立，允许 `C>P` 或 `P>C`，前端不能从其中一个、published rows 或 hydration 推导另一个。
+- `explicit_profile_capture_candidate_count` 只消费 explicit capture owner 的 evidence/scope。缺失时保持 unavailable；不得用 `profile_ready_count`、`profile_fetched_count`、`card_ready_count`、`display_ready_candidate_count` 或 visible membership 代填。
 - `serving_projection_phase="current_snapshot_row_shell_overlay"` 表示后端已经发布可分页候选行，但 profile/card enrichment 仍在进行。前端可以渲染这些行和 row-sync 进度，但不能把它当作 `current_snapshot_serving`，也不能用全局 baseline profile 质量计数推导新增 delta 的 profile/card 完成数；profile/card 文案仍只消费 `board_runtime_state.profile_fetch_status_text` 和 `card_materialization_status_text`。
 - row-shell 现在在 Stage 1 / candidate-source terminal 事件发布，而不是等待 Stage 2 final retrieval。前端看到该 phase 时应立即允许列表行浏览，同时继续展示 profile/card enrichment 进度；不要把“可分页候选行已发布”解释成 profile/card 已完成。
-- 当 `board_runtime_state` 存在时，前端必须把 `profile_fetch_status_text` / `card_materialization_status_text` 当作用户可见 profile/card 进度的唯一来源。`linkedin_stage_1_progress` 仍可渲染执行过程页的 Stage 1 采集明细，但不能再二次格式化成另一套 profile/card 同步文案；`result_view_lifecycle` 只做 legacy fallback 和 serving repair 语义。
+- 当 `board_runtime_state` 存在时，前端必须把 `profile_fetch_status_text` / `card_materialization_status_text` 当作用户可见 profile/card 进度的唯一来源。`linkedin_stage_1_progress` 仍可渲染执行过程页的 Stage 1 采集明细，但不能再二次格式化成另一套 profile/card 同步文案；`result_view_lifecycle` 只保留 diagnostic/explicit migration repair 语义，canonical link 存在时不能 fallback 补数。
 - 候选人同步卡的说明行必须优先消费 `board_runtime_state.sync_note_lines`。前端可以保留 `note_text` 作为旧 payload 兼容，但不能把 `当前意图匹配 ...`、hydration 片段或本地 recall option counts 拼入同一 provider/card 业务进度行。
-- 对于已进入 `current_snapshot_serving` 且 `served_snapshot_id == current_snapshot_id`、`served_candidate_count >= expected_candidate_count`、`delta_profile_materialized_count >= delta_profile_required_count` 的 legacy 行，旧 `delta_profile_board_visible_count` patch mirror 不再是用户可见进度真源。前端必须通过共享 lifecycle helper 使用规范化后的 materialized 语义，不能让 stale `board_visible=0` 重新显示为 `卡片详情已合入看板 0/N`。
-- 执行过程页的 `总候选人数量` 应使用 `board_runtime_state.expected_candidate_count`；row-publication / hydration 水位应单独展示，不得和总候选人数量混算。旧 payload 缺失时才兼容 `result_view_lifecycle.expected_candidate_count` / `served_candidate_count`。baseline+delta 本地物化中不能只显示当前 baseline 数量；文案应说明“baseline 已服务，新增 delta 正在合并”。
-- 前端判断 results page 是否可渲染、是否仍在 candidate-page hydration、是否处于 bootstrapping，应统一使用 `dashboardHydration` 合同：`expected_candidate_count` / `served_candidate_count` / `asset_population_count` 提供公开总量；当 `board_runtime_state` 存在时，必须以 `display_ready_candidate_count > 0` 判定主看板是否有可渲染结果，不能因为 `published_candidate_count > 0` 或 `dashboard.candidates.length > 0` 就展示基础名单卡片为最终结果。局部分块筛选命中必须标成“已加载片段”，不能显示成最终空结果。
-- `post_result_layering` 不是 candidate-row serving blocker。若 canonical lifecycle 已经 `served_candidate_count >= expected_candidate_count`，frontend hydration banner 应关闭；outreach/layering 后台刷新可以继续轮询，但不能继续展示“正在分块装载候选人行”作为结果未稳定信号。
-- `current_snapshot_serving` + complete `global_full_population` facets/layers outranks stale `post_result_layering/running` progress mirrors. Frontend merge/freshness scoring must not let an older `/progress` sample downgrade a complete board runtime contract already obtained from `/dashboard`, `/candidates`, or `/board-patches`.
+- 对于已有 canonical projection link 的 legacy 行，lifecycle/patch mirror 不再是用户可见 N/C/P 真源。前端只接受同一 `projection.membership_revision` 下的 exact membership/readiness；缺失或 mismatch 时 fail closed 并重读，不能通过 lifecycle helper 把 profile/materialized/board-visible 数规范化成 card readiness。
+- 执行过程页的 `总候选人数量` 使用同 membership token 的 `board_runtime_state.expected_candidate_count=N`；row-publication / hydration 水位单独展示。只有尚无 canonical projection link 的显式历史迁移页可标记 migration fallback 读取 lifecycle；canonical link 存在时缺失/不 exact 直接 not-ready，不能显示 baseline 或 legacy expected 代替 `N`。
+- 前端判断 results page 是否可渲染、是否仍在 candidate-page hydration、是否处于 bootstrapping，应统一使用 `dashboardHydration` 合同：同 token 的 exact `expected_candidate_count == served_candidate_count == N` 与可读 membership page 决定主看板；`N>0,C=0` 必须渲染 row-shell/detail-pending 卡片，exact `N=0` 才是空结果。Non-exact/mismatch/read fallback 是 not-ready，不能当空；`display_ready_candidate_count > 0` 不再是 render 门槛。
+- `post_result_layering`、profile tail 和 card tail 都不是 candidate-row serving blocker。若 canonical exact membership `N/N` 已发布且 page token 匹配，frontend hydration banner 应关闭；独立 enrichment/index 状态继续显示自己的 pending 文案。
+- Canonical projection state 只能在相同 membership token 下与其他 endpoint 直接合并。Token mismatch 时不能用 tier、时间或较大 count 猜赢家；应失效缓存、重新 resolve/pin。Revision-matched complete index facets 可压过同 token 的 stale layering mirror，但不能跨 token 拼接。
 - 用户手动选择的 facet/filter 在 hydration 期间必须保留。选项 count 暂时为 0 只代表当前已加载片段不含该类别，不能自动重置到默认筛选。
-- 候选人看板分页 API 的默认用户路径应请求 `lightweight=1`，但这里的 lightweight 语义是“读取已物化 serving card projection”，不是“返回缺字段预览”。Serving page 必须已经包含头像、headline/summary、经历、教育、地区、状态、facets/source matches 等列表卡片字段；如果这些字段缺失，根因在物化/复用/source selection，不应靠 public-read raw timeline resolver 补。
-- 大规模历史结果应采用两阶段加载：先用 canonical lifecycle/facet summary + materialized lightweight serving rows 完成全局看板和筛选稳定，再通过 `/api/jobs/{job_id}/candidates/{candidate_id}` 或 `/candidates/batch` 读取 candidate shard/detail。详情接口优先消费 materialized shard；正常 public read 不应为了补字段解析 raw profile timeline。单候选详情只有显式诊断参数 `hydrate_legacy_timeline=1` 才允许进入 legacy resolver；后端内部 `get_job_candidate_detail(...)` 默认也必须保持 no-hydration，避免内部调用绕过 public API 合同。
+- 候选人看板分页 API 的默认用户路径应请求 `lightweight=1`，这里的 lightweight 语义是读取同一 membership token 的 bounded serving row。`card_ready` 行应包含其 exact card fields；row-shell 可以显式缺少仍 pending 的详情并继续可见。任何行都不得靠 public-read raw timeline resolver 补字段，且 card-ready subset 不能替代完整 membership page。
+- 大规模历史结果应采用两阶段加载：先用 exact canonical membership/page 与 revision-matched index summary 完成全局看板和筛选稳定，再通过 `/api/jobs/{job_id}/candidates/{candidate_id}` 或 `/candidates/batch` 读取 detail。详情接口消费 materialized shard；正常 public read 不为补字段解析 raw profile timeline。单候选详情只有显式诊断参数 `hydrate_legacy_timeline=1` 才允许进入 legacy resolver。
 - `GET /api/jobs/{job_id}/results?include_candidates=1` 也只应返回 materialized asset-population rows，不应触发 raw profile timeline hydration；ranked results 在 public `/results` API 中同样是 materialized/summary-only。前端主看板应继续使用 `/dashboard` + `/candidates?lightweight=1`。
-- `GET /api/jobs/{job_id}/board-patches` 是候选人看板的轻量增量观测接口。前端轮询必须传递并保存 `latest_sequence_index`，并附带 `latest_published_at` 作为兼容上下文，因为同一发布时间内可能存在多个 sequence patch。只要接口返回了新的 `returned_count > 0` 记录，就应触发 dashboard/candidate refresh；`display_ready` 只是主看板渲染阈值，不是 refresh 阈值。该接口不直接承载候选人行。
-- 候选人看板 header/filter 不得从 `dashboard.candidates.length` 或本地缓存行数推断 canonical business count。当前只加载了部分 offset window 时，应显示“已加载窗口筛选命中”；只有 backend-filtered paging 或本地窗口覆盖后端声明的 hydration target 时，才可显示“当前筛选命中”。
-- `GET /api/jobs/{job_id}/candidates` 是候选人看板筛选/分页的 canonical row endpoint。前端应把 `search`、`recall_buckets`、`employment_statuses`、`locations`、`function_buckets`、`layer_includes`、`layer_excludes`、`audit_statuses` 传给后端；后端必须先按完整 served population 过滤，再按 `offset/limit` 分页，并返回 `filtered_candidate_count` / `filter_contract.row_filter_scope="backend_filtered_served_population"`。当该 contract 可用时，前端不得回退到 `dashboard.candidates` 的已加载窗口做最终筛选或空结果判断。
-- Job-scoped baseline+delta overlay 是 serving projection，不是新的 profile 字段真源。若 overlay row 是旧式稀疏名单记录，后端 public read 必须优先用当前/基线 snapshot 的 materialized serving shard 补齐卡片字段；如果 materialized shard 也不存在，才暴露不完整状态并等待明确 repair/backfill。
+- `GET /api/jobs/{job_id}/board-patches` 是候选人看板的轻量增量观测接口。前端轮询必须传递并保存 `latest_sequence_index`，并附带 `latest_published_at` 作为兼容上下文，因为同一发布时间内可能存在多个 sequence patch。只要接口返回新的记录，就触发 authoritative projection/dashboard/page refresh；patch sequence 和 `display_ready` 都不是 membership revision、render 或 total 阈值。该接口不直接承载候选人行。
+- 候选人看板 header/filter 不得从 `dashboard.candidates.length` 或本地缓存行数推断 canonical business count。部分 offset window 只能显示“已加载窗口筛选命中”；最终筛选命中只来自同 membership token 的 backend-filtered paging，不能因本地窗口恰好覆盖旧 hydration target 而升级。
+- `GET /api/jobs/{job_id}/candidates` 是候选人看板筛选/分页的 canonical row endpoint。前端把 filters 传给后端；后端通过 revision-matched `projection_person_search_index` 对完整 exact visible membership 过滤，再分页并返回 `filtered_candidate_count`。Index pending/unavailable 时禁用 active global filters，不回退到 loaded window。
+- Job-scoped baseline+delta overlay 只是 migration/repair artifact，不是 profile/card/member 真源。稀疏旧 row 必须由事件期 repair/backfill 先写入 canonical projection/readiness；public read 不从 current/baseline snapshot 临时补字段或拼 membership。
 - Completed-workflow result-view repair 不能把 serving source repoint 到 raw `candidate_documents.json`。若旧 result view 只能从 candidate-doc 输入恢复，后端必须在事件期先生成 materialized serving artifact，再发布 manifest/materialized source；public read 不负责这一步。
-- 前端可以有短暂 API/UI 采样延迟，但如果后端已经暴露 `expected_candidate_count > baseline_candidate_count` 且 profile work pending，可见卡片不应长期停留在 `baseline/baseline`。当前 browser gate 使用 2.5s stale-complete budget 捕获这类回归。
+- 前端可以有短暂 API/UI 采样延迟，但 canonical link 存在后必须收敛到同一 opaque membership token 下的 `N/N`。Profile/card/capture/index work pending 可独立追尾，不得把主同步退回 baseline，也不得为了消除尾部把 C/P/capture 抬到 N。既有延迟 gate 衡量 token/owner 状态收敛，不再要求 card readiness 与 membership 同时完成。
 
 目标候选人 Public Web Search 的阶段展示应区分 remote provider wait 和 local processing：
 

@@ -182,8 +182,14 @@ export class SourcingBackendClient {
   async exportTargetCandidatesForJob(jobId: string, historyId = ""): Promise<{ blob: Blob; filename: string }> {
     void historyId;
     const projectionId = await getRunProjectionId(jobId);
+    const dashboard = await getDashboard(jobId, { forceRefresh: true });
+    const expectedMembershipRevision = String(dashboard.boardRuntimeState?.rowPublicationRevision || "").trim();
+    if (!expectedMembershipRevision) {
+      throw new Error("Canonical projection membership revision is not ready for export.");
+    }
     const result = await exportProjectionCandidatesArchive({
       projectionId,
+      expectedMembershipRevision,
     });
     return {
       blob: result.blob,

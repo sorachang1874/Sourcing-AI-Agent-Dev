@@ -4641,7 +4641,7 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
             self.assertIsNotNone(result)
             self.assertEqual(commit_counter["count"], 1)
             sql_calls = [str(call["sql"]) for call in calls]
-            self.assertIn("pg_advisory_xact_lock", sql_calls[0])
+            self.assertIn("pg_try_advisory_xact_lock", sql_calls[0])
             self.assertIn('INSERT INTO "serving_projections"', sql_calls[1])
             self.assertIn('DELETE FROM "serving_projection_members"', sql_calls[2])
             self.assertIn("CREATE TEMP TABLE", sql_calls[3])
@@ -4650,6 +4650,42 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
                 calls[0]["params"],
                 (adapter._advisory_lock_key("serving_projection_publication:proj-atomic"),),  # noqa: SLF001
             )
+
+    def test_transaction_lock_wait_returns_busy_connection_before_retrying(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = LiveControlPlanePostgresAdapter(
+                runtime_dir=Path(temp_dir),
+                sqlite_path=Path(temp_dir) / "shadow.db",
+                dsn="postgresql://example/test",
+                mode="postgres_only",
+            )
+            first_calls: list[dict[str, object]] = []
+            second_calls: list[dict[str, object]] = []
+            first_connection = _RecordingConnection(first_calls, {"count": 0})
+            second_connection = _RecordingConnection(second_calls, {"count": 0})
+            first_rollback = {"count": 0}
+            first_connection.rollback_counter = first_rollback
+            connections = iter((first_connection, second_connection))
+            adapter._connect = lambda: next(connections)  # type: ignore[method-assign]
+
+            with mock.patch.object(
+                adapter,
+                "_try_acquire_transaction_lock",
+                side_effect=[False, True],
+            ) as try_lock, mock.patch("sourcing_agent.control_plane_live_postgres.time.sleep"):
+                connection = adapter._connect_with_transaction_lock(  # noqa: SLF001
+                    "serving_projection_publication:proj-busy"
+                )
+
+            self.assertIs(connection, second_connection)
+            self.assertEqual(try_lock.call_count, 2)
+            self.assertEqual(first_rollback["count"], 1)
+            self.assertTrue(first_connection.closed)
+            self.assertFalse(second_connection.closed)
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            self.assertEqual(second_calls[0]["sql"], "SELECT 1")
+            connection.close()
 
     def test_projection_incremental_members_use_the_same_publication_lock(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -4673,7 +4709,7 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
 
             self.assertEqual(affected, 1)
             self.assertEqual(commit_counter["count"], 1)
-            self.assertIn("pg_advisory_xact_lock", str(calls[0]["sql"]))
+            self.assertIn("pg_try_advisory_xact_lock", str(calls[0]["sql"]))
             self.assertIn('INSERT INTO "serving_projection_members"', str(calls[1]["sql"]))
 
     def test_projection_parent_and_incremental_members_share_one_locked_transaction(self) -> None:
@@ -4702,7 +4738,7 @@ class LiveControlPlanePostgresRetryTest(unittest.TestCase):
 
             self.assertEqual(result, {"upserted_count": 1, "child_upserted_count": 1})
             self.assertEqual(commit_counter["count"], 1)
-            self.assertIn("pg_advisory_xact_lock", str(calls[0]["sql"]))
+            self.assertIn("pg_try_advisory_xact_lock", str(calls[0]["sql"]))
             self.assertIn('INSERT INTO "serving_projections"', str(calls[1]["sql"]))
             self.assertIn('INSERT INTO "serving_projection_members"', str(calls[2]["sql"]))
 

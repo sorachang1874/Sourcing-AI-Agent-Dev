@@ -1,6 +1,8 @@
 # Canonical Serving Projection Contract
 
 > Status: Top-level contract under implementation. Drafted 2026-05-18 to guide the next post-ECS implementation slice. Implementation started 2026-05-19 with the Testcontainers PG harness, ServingProjection storage/writer foundation, event-time run projection publication, collection-authoritative merge queue, projection public reader API v1, and frontend `/projections/:projection_id` cutover. Read with `JOB_RESULT_LIFECYCLE_DESIGN.md`, `WORKFLOW_PROGRESS_CONTRACT.md`, `AUTHORITATIVE_ASSET_COVERAGE_CONTRACT.md`, `DATA_ASSET_GOVERNANCE.md`, `FRONTEND_API_CONTRACT.md`, and `NEXT_TODO.md` before changing public readers, result routes, asset reuse, target-candidate flows, or workflow/result-page coupling.
+> D-3 semantic revision (owner approved 2026-07-13): exact canonical visible membership owns board population;
+> profile readiness, card readiness, and explicit profile capture are independent projections over that population.
 
 ## Purpose
 
@@ -60,6 +62,11 @@ Do not interpret public reader API v1 as full cutover completion. The normal new
 9. Migration is offline backfill plus cutover. Legacy job-result endpoints cannot remain a normal dual-track serving path after cutover.
 10. Projection membership is not CRM membership. Local assets and projection rows do not enter CRM unless a user, import, migration, or approved Agent action explicitly adds the person to CRM.
 11. Projection APIs must expose field visibility and readiness scopes. They must not leak contact fields, CRM notes, raw evidence, or restricted assets merely because the person is in the projection.
+12. Exact canonical visible membership owns the board population `N`. Main candidate sync, pagination totals, projection-sourced export totals, and projection-sourced CRM selection totals use `N/N`; card readiness does not gate or redefine them.
+13. Exact card readiness owns card-detail progress `C/N`. Profile readiness and card readiness are independent: each may be ahead of the other, and there is no `card_ready <= profile_ready` invariant.
+14. Explicit profile capture is an independent evidence fact. It must not be inferred from `profile_ready`, `card_ready`, fetched counts, or row visibility.
+15. An authoritative exact membership publication may correct `N` and revision-bound readiness aggregates upward, downward, or to zero. `projection.membership_revision` is an opaque equality token, not a sortable version; readers obtain the current publication through the projection/run-link owner and never choose by count magnitude or token order.
+16. Non-exact, inconsistent, or fallback-backed membership reads fail closed. They do not become an empty projection, a partial global total, or permission to read legacy summaries, overlays, patch logs, or frontend-loaded rows as the replacement source.
 
 ## Core Objects
 
@@ -127,9 +134,14 @@ Recommended logical tables:
 - stable rank/order keys
 - source shard/lane provenance
 - row/profile/card readiness flags
+- explicit profile-capture evidence flag or owned reference when the capture owner has published one
 - visibility flags
 - lightweight summary reference or denormalized bounded row cache
 - created/updated/published timestamps
+
+The public projection parent exposes `projection.membership_revision`, owned by the member-publication UoW and sourced
+from the existing member semantic-input revision. It is an opaque equality token used to bind summary/page/readiness
+snapshots and invalidate caches; this contract does not require a duplicate token column on every member row.
 
 Rules:
 
@@ -140,6 +152,11 @@ Rules:
 - A full member replacement must use `upsert_row_and_replace_rows` to upsert `serving_projections`, delete the existing `serving_projection_members` scope, and merge every replacement chunk in one PG transaction guarded by a schema-namespaced advisory lock for the `projection_id`. `members=[]` is a valid atomic clear.
 - An incremental member publication must use `upsert_row_and_upsert_rows` to upsert the same projection parent and merge all supplied members in one PG transaction. Direct repository member merges use that same publication-lock key. Incremental and replacement writers therefore serialize on one projection identity rather than racing a delete against an unlocked merge.
 - Normal run-scope and collection-authoritative publication must use `publish_serving_projection`: the parent, incremental or replacement members, and run-link or collection-pointer route commit atomically on one connection. A failed member merge, replacement, or route write rolls back the complete publication, so routing metadata cannot advance independently and a newly generated projection cannot be left orphaned.
+- A publication may expose a global visible-member total only when its member set, visible count, count scope, and publication revision are one exact atomic product. An exact empty replacement is `N=0`; a missing/partial read is `unavailable`, never an inferred zero.
+- The member-publication UoW is the only owner allowed to set `projection.membership_revision`. Summary, page, readiness, export, and projection-to-CRM reads must echo the same non-empty token. The token supports equality/inequality only; it must not be lexically, numerically, or chronologically sorted. Token mismatch invalidates caches and makes a direct response merge fail closed until the consumer re-resolves and re-reads one pinned projection snapshot.
+- `created_at`, `updated_at`, `published_at`, row sequence, and count magnitude are not membership revision substitutes. In particular, `updated_at` cannot disambiguate two publications in the same timestamp resolution and must not be used as a membership CAS or merge key.
+- Card/profile readiness aggregates are independently reduced from their owned per-member facts for the same membership revision. They are each bounded by `N`, but neither is derived from or ordered against the other.
+- Initial membership publication must not compute public facets by scanning the just-published members. It publishes facet/index state as `pending` or `unavailable`; only the revision-fenced `projection_person_search_index` owner may publish exact public facet counts.
 
 ### CollectionWriter
 
@@ -259,7 +276,7 @@ Properties:
 - `source_run_id` is required.
 - `collection_id` is required when the run is company-scoped.
 - `scope_spec` is the normalized business scope from the effective request, such as keywords, lanes, employment status, provider lanes, and baseline policy.
-- Candidate membership is mostly immutable once discovery is terminal. Profile/card readiness may continue to update.
+- Candidate membership is stable within one opaque membership token, but a newly authoritative exact publication may add, remove, replace, or clear visible members. Consumers re-resolve authority rather than ordering unequal tokens. Profile/card/capture readiness may also change only through their owned token-bound facts; none is a monotonic substitute for membership.
 - It can become row-shell serving before all profiles/cards are fetched, as long as counts and readiness states are explicit.
 
 ### `collection_authoritative_projection`
@@ -316,6 +333,7 @@ The logical projection record should include at least:
 | `collection_id` | company/local asset namespace |
 | `source_run_id` | nullable for collection-only projections |
 | `projection_version` | schema/version for membership and summary shape |
+| `membership_revision` | opaque member semantic-input equality token owned by the member-publication UoW; not sortable |
 | `state` | projection serving state |
 | `scope_label` | display label only |
 | `scope_spec_json` | normalized request/scope semantics |
@@ -395,12 +413,15 @@ V1 should expose separate readiness dimensions:
 | dimension | examples |
 | --- | --- |
 | `row_readiness` | `not_serving`, `row_shell_serving`, `complete` |
-| `profile_readiness` | required/fetched/failed counts and latest profile timestamp |
-| `card_readiness` | materialized/display-ready counts |
+| `profile_readiness` | independently owned required/ready/failed-or-not-required counts and latest profile revision; not derived from card readiness |
+| `card_readiness` | exact materialized/display-ready `C/N` for the bound membership revision; not derived from profile readiness |
+| `explicit_profile_capture` | independently evidenced capture count/status; unavailable when the capture owner has not published exact evidence |
 | `index_readiness` | raw/evidence index watermark and partial/full status |
 | `compaction_readiness` | background full artifact/index compaction status |
 
-User-visible result readiness is anchored to `row_readiness` and canonical board counts. Background full snapshot compaction is not allowed to block the result page once the projection is serving.
+For an exact membership revision, let `N` be visible members, `C` be card-ready members, and `P` be profile-ready members. `0 <= C <= N` and `0 <= P <= N`, but there is no ordering between `C` and `P`. Explicit profile capture is a fourth independently evidenced dimension and has no inferred equality with either count.
+
+User-visible result readiness is anchored to exact visible membership and `row_readiness`, so a board with `N>0` and `C=0` can render row shells while card details remain `0/N`. Exact `N=0` renders a real empty state. Missing/non-exact membership renders `not_ready`, not an empty state. Background card/profile work and full snapshot compaction are not allowed to block the result page once exact membership rows are serving.
 
 ## Write Ownership And State Transitions
 
@@ -412,7 +433,8 @@ It owns:
 
 - run/projection link creation
 - row-shell publication
-- profile/card readiness updates for the run projection
+- exact visible-membership publication and its canonical revision
+- projection of independently owned profile/card/capture readiness facts for that same revision
 - final projection serving state for the run result
 
 It does not own collection-authoritative merge.
@@ -500,12 +522,25 @@ Projection reader v1 rules:
 
 - `serving_projection_members` is the online source of truth for pagination and projection membership.
 - Only a successful authoritative PG count of zero means an empty projection. A missing authoritative table and count/readiness/page query failures must not become `0`, `[]`, or `{}`: public projection routes return `not_ready` with `projection_members_unavailable`, while internal consumers propagate the failure and perform no empty-set completion/finalization side effects.
+- A public total is canonical only when `counts.count_scope=exact_projection`, `read_contract.source=serving_projection_members`, `read_contract.fallback_used=false`, `read_contract.fail_closed=true`, and projection summary/page/readiness carry the same non-empty `projection.membership_revision`. Any missing, non-exact, token-mismatched, or fallback-backed product fails closed.
+- Direct projection response merging compares `membership_revision` for equality only. A mismatch does not mean either token is greater; the consumer discards the mixed snapshot, invalidates the affected page/cache, re-resolves the authoritative projection/run link, and re-reads summary and page under one pinned token.
+- Exact canonical visible membership `N` owns the main candidate sync `N/N`, unfiltered pagination total, projection export input total, and projection-to-CRM source selection total. Export policy/permission skips and actual CRM record membership remain separately reported outcomes; they must not rewrite source projection `N`.
+- `card_ready_count` / the board compatibility alias `display_ready_candidate_count` owns card-detail progress `C/N`. It never owns page membership or the main sync numerator, and `C=0` does not prevent exact visible rows from rendering.
+- `profile_ready_count`, `card_ready_count`, and explicit profile-capture count are independently sourced. Readers validate each against `0..N` for the bound revision but must not impose a cross-dimension inequality or synthesize one from another.
 - `GET /api/projections/{projection_id}/candidates` may page membership rows for unfiltered candidate windows. Active search/filter requests must use `projection_person_search_index`; if the index is unavailable, the reader fails closed rather than scanning all membership rows. It must not read overlay files, job summaries, stage files, candidate sidecars, raw profile JSON, or manifest sidecars as normal fallback sources.
 - The response must include `candidate_count` / `total_candidates` for the whole projection and `filtered_candidate_count` for the requested filter.
 - `filter_contract.backend_filtered_paging_supported=true` means the backend, not the frontend loaded-row window, owns filtered paging for this projection. If `facet_count_scope` / `index_filter_readiness.count_scope` is `unavailable`, the frontend must fail closed by disabling search/facet controls instead of issuing active filter requests that the projection reader will reject.
-- Facet counts remain `unavailable` until a bounded facet/layering builder or index-backed API publishes exact projection-wide counts.
+- Facet counts remain `pending` / `unavailable` after initial membership publication until the revision-fenced `projection_person_search_index` owner publishes exact projection-wide counts. Membership rows, current pages, overlays, and frontend caches are not facet fallbacks.
 - Projection-only result pages are read-only for job-bound actions such as manual-review enqueue and profile-completion. Adding a person to CRM/target candidates is allowed only through the projection-aware CRM writer path with source projection/person identity provenance; the frontend must not silently call old job-bound target-candidate APIs with an empty `job_id`.
 - Implemented foundation: `/api/projections/{projection_id}/crm-state` and projection candidate rows may expose compact read-only CRM overlay from `crm_records`, but this path must not create CRM records. Creating CRM records from a projection is an explicit write through `/api/crm/records` and `CRMWriter`.
+- Projection-sourced CRM and export mutations require the non-empty membership revision displayed to the user. The server does not bind a missing token to whatever revision is current when the request arrives. A stale token returns `not_ready`/HTTP 409 and performs no domain write; an explicit idempotency key reused with different immutable input returns a conflict rather than replaying the old action.
+- Projection-bound dispatch serializes revision validation and command planning with `operation_dispatch:{operation_run_id}` followed by `serving_projection_publication:{projection_id}` session locks. Every transaction that contends on either namespace must acquire its transaction lock through the pool-safe try-lock path: a busy attempt rolls back and returns its connection to the pool before backoff, while the successful attempt keeps the same connection and lock for the complete transaction. A blocking advisory-lock wait while holding a pooled connection is forbidden because it deadlocks at `POOL_MAX=1` when the session-lock owner needs the pool. The contract preflight must exercise real concurrent publication and cancel waiters at `POOL_MAX=1`, not only probe lock availability.
+- A cancel request that waited behind an in-flight dispatch may observe one non-terminal status advance before its fixed UoW obtains the dispatch lock. The high-level cancel writer retries that structured CAS conflict once with the committed non-terminal status; terminal winners and a second conflict remain fail-closed. This retry does not cancel an already queued workflow command, so command cancellation/effect fencing remains in R-019 rather than being implied by an `OperationRun` status.
+- A projection-bound operation that discovers a stale membership revision before dispatch uses the fixed PG `stale_input_failure` transition: lock the operation event stream, CAS the locked `operation_run`, lock and validate its linked action/workspace, update both rows to `failed`, and append exactly one revision-bound `OperationInputRevisionStale` event in the same transaction. Exact replay must preserve the event identity; an event failure, linked-action mismatch, or terminal-state conflict rolls back the whole transition. This UoW does not include a workflow command or CRM domain mutation, so the broader R-019/R-028 boundary remains explicit.
+- Projection-to-CRM selection uses the fixed PG `projection_crm_selection_uow`: acquire the projection publication advisory lock, re-read exact revision/`N`/selected visible members, acquire sorted workspace-person identity locks, then write `crm_records`, `crm_engagements`, and `crm_events` in one transaction. A revision/count/member mismatch, duplicate selected candidates for one person, or any table-write exception leaves the complete batch unchanged. Same revision/event replay is `idempotent`; a new revision for an existing person is `reselected` and appends a revision-bound event without creating a second engagement.
+- CRM rows expose one atomic `metadata.last_source_selection` tuple containing `projection_id`, `membership_revision`, `source_candidate_count`, `candidate_identity_key`, and `person_identity_key`. Target-candidate export must accept a selection only when every selected row has a complete tuple and all tuples share the same projection/revision. It must not combine top-level projection fields with independently updated metadata fields.
+- The fixed selection UoW does not claim that every legacy CRM edit or workflow-command completion is in the same transaction. Legacy `add_person_to_crm`/`update_crm_record`, command cancellation, Activity/entity-delta recording, and command terminal CAS retain the explicit R-019/R-028 recovery boundary until the CRM repository/command-completion migration unifies them. No signoff document may describe the current scope as global CRM exactly-once.
+- `ControlPlaneStore.apply_projection_crm_selection` is a report-visible temporary adapter facade required while `CRMWriter` has no dedicated Repository owner. The CRM repository migration must move this fixed UoW behind that repository and delete the Store facade in the same batch; it is not a second implementation or fallback.
 - Implemented foundation: `/api/collections/{collection_id}/authoritative-projection` resolves the active `collection_authoritative_pointer` to a projection id and fails closed when the pointer/projection is missing. Local asset entry must use this pointer rather than searching for "latest" projections by timestamp.
 - Implemented foundation: `/api/projections/{projection_id}/export-policy` exposes field visibility/export groups. It is policy metadata only; export services still must re-check person assertion and CRM permissions at export time.
 
@@ -529,9 +564,12 @@ nightly pressure suite.
 | source | owner writer | authority | allowed normal readers | forbidden normal use | fallback rule |
 | --- | --- | --- | --- | --- | --- |
 | `serving_projections` | `ServingProjectionWriter` | projection metadata, readiness, counts, field visibility | projection APIs, collection asset entry, smoke/signoff | mutating state from public readers | missing/invalid projection fails closed |
-| `serving_projection_members` | `ServingProjectionWriter` / bounded projection builders | online projection membership and pagination source of truth | `/api/projections/{projection_id}/candidates`, projection search result hydration | scanning job overlays or sidecars to replace membership | no fallback in normal reads |
-| `projection_person_search_index` | `PersonAssetWriter` / recovery index builder | search/filter membership and global facet count input | projection search/filter APIs | membership scan for active filters, frontend-loaded-row filtering as global truth | explicit migration flag only, report `filter_contract.fallback_used=true` |
-| `board_runtime_state` | event-time projection/board publication writers | user-visible progress/readiness mirror for in-flight runs | `/progress`, `/dashboard`, `/candidates`, `/board-patches` as comparable fields | lowering canonical projection/lifecycle counts from stale patches | parity drift blocks smoke/signoff |
+| `serving_projection_members` | `ServingProjectionWriter` / bounded projection builders | exact visible membership revision; main sync, pagination, projection export/CRM source totals | `/api/projections/{projection_id}/candidates`, board-runtime adapter, projection export/CRM selection owners | card readiness gating membership; scanning job overlays or sidecars to replace membership | no fallback in normal reads; non-exact/mixed revision fails closed |
+| `projection.membership_revision` | serving-projection member-publication UoW | opaque equality token sourced from the current member semantic-input revision | summary/page snapshot binding, cache invalidation, export/CRM input pinning, parity gates | sorting tokens; using timestamps, sequence, or counts as a substitute; merging unequal tokens | missing/mismatch fails closed and requires authoritative re-resolution/re-read |
+| per-member profile/card readiness | profile asset owner and card materialization owner; projected by `ServingProjectionWriter` | independent revision-bound `profile_ready_count` and `card_ready_count` | profile/card status lines, detail availability, quality diagnostics | deriving card from profile, profile from card, or either from visible row count | unavailable until the owning facts are exact for the membership revision |
+| explicit profile-capture evidence | profile ingest/capture owner; projected by `ServingProjectionWriter` | explicit capture fact/count only | capture audit and quality diagnostics | substituting profile-ready, card-ready, fetched, or display-ready counts | unavailable when owned evidence is absent; no derivation fallback |
+| `projection_person_search_index` | `PersonAssetWriter` / recovery index builder | search/filter membership and exact public facet count product | projection search/filter/facet APIs | membership scan for active filters or initial facets, frontend-loaded-row filtering as global truth | explicit migration flag only, report `filter_contract.fallback_used=true`; normal initial state pending/unavailable |
+| `board_runtime_state` | event-time projection/board publication writers | user-visible projection of exact `N/N` plus independent profile/card/capture readiness | `/progress`, `/dashboard`, `/candidates`, `/board-patches` as comparable fields | max-merging counts across unequal tokens; sorting revision tokens; using display-ready as sync/page/render gate | parity/revision drift blocks smoke/signoff |
 | `job_result_lifecycle` | lifecycle/event-time writer | execution lifecycle and progress diagnostics | run/progress diagnostics, projection readiness comparison | becoming candidate membership source or overriding projection membership | diagnostic only after projection exists |
 | `job_result_view` summary | workflow result writer | run summary and projection link metadata | run page, migration/backfill evidence | terminalizing baseline+delta from partial candidate counts | must not decide final board count |
 | board patch log | board-visible writer | replay/audit of board-visible publication sequence | service metrics, replayability checks, debugging | serving final page membership independently from projection members | missing replayability is a signoff failure |
@@ -562,10 +600,13 @@ Required count fields:
 
 | field | meaning |
 | --- | --- |
-| `result_count` | canonical deduped board row count |
+| `visible_member_count` (`result_count` / `candidate_count` / `total_candidates` compatibility views) | exact canonical visible membership `N` for one publication revision; owner of main sync, pagination, projection export/CRM source totals |
 | `profile_fetch_required_count` | unique profile URLs/persons requiring LinkedIn profile detail |
 | `profile_fetched_count` | required profiles fetched or available locally |
-| `card_materialized_count` | candidates with board card detail materialized |
+| `profile_ready_count` | visible members with independently owned exact profile readiness for the bound membership revision |
+| `card_ready_count` (`card_materialized_count` / `display_ready_candidate_count` compatibility views) | visible members with independently owned exact board card detail, `C` in `C/N` |
+| `explicit_profile_capture_candidate_count` | visible members with explicit owned profile-capture evidence; unavailable rather than inferred when that evidence is not exact |
+| `needs_profile_completion_candidate_count` / `low_profile_richness_candidate_count` | optional exact member-quality classifications; published only when every visible member in the revision carries the corresponding owned `projection_metrics` fact |
 | `row_shell_count` | candidates with lightweight row-shell visibility |
 | `raw_source_row_count` | audit-only provider/source row count before candidate dedupe |
 
@@ -580,9 +621,13 @@ Required `count_scope` values:
 
 Rules:
 
-- `result_count` aligns with `/projections/{projection_id}/candidates.total_candidates`.
+- `visible_member_count`, `result_count`, `candidate_count`, `/projections/{projection_id}/candidates.total_candidates`, and the board `expected_candidate_count` compatibility view must agree exactly for one canonical revision.
 - `raw_source_row_count` may be larger than `result_count`, but it is audit metadata, not board population.
 - Finalization must publish the serving projection/overlay member count as `result_count` / `candidate_count`. If legacy candidate-source or lifecycle evidence carries a larger raw expected count, preserve it only as diagnostics such as `raw_expected_candidate_count`; do not promote it to a frontend-visible board total.
+- A current authoritative exact membership publication may change the visible population and all revision-bound aggregates upward, downward, or to zero. Readers obtain that publication from the projection/run-link owner and pin its opaque `membership_revision`; they do not select between unequal tokens by order, timestamp, or `max(old, new)`. Within one token, all aliases and page totals must remain equal.
+- Card detail text is `C/N` from exact `card_ready_count`; main sync is `N/N`. `profile_ready_count` and `card_ready_count` are each bounded by `N`, but neither bounds the other. A card may be ready from non-profile materialized evidence, and a fetched/ready profile may still lack a card.
+- Explicit profile capture must be counted only from explicit capture-owner evidence. It is not equal to `profile_ready_count`, `profile_fetched_count`, or `card_ready_count` by default.
+- If membership is non-exact, unreadable, mixed-revision, or fallback-backed, its public count scope is `unavailable` and pagination/export/CRM source totals fail closed. If membership is exact but card/profile/capture facts are not, main `N/N` remains usable while only those independent readiness fields are unavailable.
 - Facets shown as global must have `count_scope=exact_projection`.
 - If a filter depends on raw profile/evidence fields and the index is partial, the UI must label it as partial or unavailable rather than showing it as a complete global count.
 - The long-term card filter should be migrated to backend raw/evidence index semantics where possible. It should not remain limited to lossy card fields when raw profiles contain richer evidence.
@@ -593,8 +638,13 @@ Projection/public-reader fields must not be re-derived independently per endpoin
 
 | field | owner/source of truth | allowed values / shape | normal consumers | forbidden derivation | preflight |
 | --- | --- | --- | --- | --- | --- |
+| `projection.membership_revision` | serving-projection member-publication UoW from the existing member semantic-input revision | non-empty opaque equality token; equality/inequality only | summary/page binding, board parity, cache invalidation, export/CRM input pin | ordering tokens; using `updated_at`, publication sequence, or count as a revision | same-token happy path, mismatch fail-closed, same-timestamp distinct-token fixture |
+| `visible_member_count` and public total aliases | `ServingProjectionWriter` from exact visible `serving_projection_members` at one publication revision | non-negative integer with `count_scope=exact_projection`; exact zero is valid | main sync, pagination, projection export and projection-to-CRM source selection | display/card/profile counts, lifecycle expected, overlays, patch max, loaded rows | exact up/down/zero revision fixtures plus cross-endpoint total parity |
+| `card_ready_count` / `display_ready_candidate_count` | card materialization owner facts projected for the same membership revision | non-negative `C <= N`, or unavailable when facts/revision are not exact | `C/N` card detail line, detail availability, quality diagnostics | profile-ready/fetched counts, visible membership, patch or overlay max | exact card text/count parity including `C=0`, `C<N`, and revision correction |
+| `profile_ready_count` | profile asset/readiness owner facts projected for the same membership revision | non-negative `P <= N`, or unavailable | profile readiness/status and detail diagnostics | card-ready, display-ready, row membership | fixtures with `P<C`, `P>C`, and independent revision changes |
+| `explicit_profile_capture_candidate_count` | profile ingest/capture owner from explicit per-member capture evidence | independently evidenced count/scope, or unavailable | capture audit/quality diagnostics | profile-ready, profile-fetched, card-ready, display-ready, visible membership | poison fixture where profile/card readiness exists without capture evidence |
 | `filter_contract.facet_count_scope` | projection reader from canonical projection facet counts / `projection_person_search_index` readiness | `exact_projection`, `index_partial`, `unavailable`; legacy migration may report fallback explicitly | `/api/projections/*`, job projection-backed `/candidates`, board-runtime parity smoke | deriving from `facet_summary_scope`, dashboard local rows, overlay sidecars, frontend cache | projection reader tests plus cross-endpoint `board_runtime_state.filter_contract` parity |
-| `asset_population.facet_summary_scope` / top-level `facet_summary_scope` | board/projection summary writer | `exact_projection`, `global_full_population`, `current_served_partial`, `raw_profile_partial`, `unavailable` | frontend facet visibility and count display | deriving from `filter_contract.facet_count_scope`; upgrading partial summaries to global in readers | `/progress`, `/dashboard`, `/candidates`, `/board-patches` parity smoke |
+| `asset_population.facet_summary_scope` / top-level `facet_summary_scope` | projection summary reader from revision-fenced `projection_person_search_index` public facet product | `exact_projection`, `global_full_population`, `current_served_partial`, `raw_profile_partial`, `unavailable`; initial membership publication is pending/unavailable | frontend facet visibility and count display | deriving from membership rows, `filter_contract.facet_count_scope`, dashboard local rows, overlay sidecars, frontend cache | initial-membership unavailable fixture plus index-finalization and cross-endpoint parity smoke |
 | `filtered_candidate_count` | projection/candidate row reader after backend filtering | integer over complete served/projection population for the active filter | candidate board header, pagination, export preview | frontend-loaded offset window count | candidate-page backend filtering tests |
 | `media_summary` | projection reader from canonical `PersonAsset.avatar_media` through `media.asset.cache` / `media_asset_owner` | `avatar_status=available` with stable `avatar_asset_id`/`avatar_url`, or `avatar_unavailable`; `fallback_used=false` in normal path | projection person detail, person summary, projection candidate page rows, candidate avatar display | provider `avatar_url` / `photo_url` hotlinks, raw profile media, frontend URL guessing | person asset projection contract tests plus frontend source contract preflight |
 | `read_contract.fallback_used` | public reader adapter | boolean plus explicit fallback reason when true | smoke/signoff, frontend diagnostics | silently reading overlay/job summary/stage files | strict signoff blocks normal fallback |
@@ -606,6 +656,7 @@ Projection/public-reader fields must not be re-derived independently per endpoin
 - `filter_contract.facet_count_scope` describes the count source/readiness for filter counts in the row API.
 - They may both indicate a complete projection/global state, but one must not be computed from the other unless a future contract explicitly says so.
 - Local asset projection boards treat `facet_summary_scope=exact_projection` as a complete canonical facet summary. Frontend consumers must not wait for the older job-board `global_full_population` scope before enabling projection-scoped search and filters.
+- Exact membership does not make either facet field exact. The initial membership publication exposes pending/unavailable facets until `projection_person_search_index` finalizes against the same semantic input revision.
 
 ## Local Asset Consumption Entry
 
@@ -704,7 +755,18 @@ Implementation is not complete until tests prove:
 - target-candidate add/export can source from a projection without depending on job lifetime
 - projection row APIs enforce field visibility and do not expose raw profile, restricted evidence, CRM notes, or contact assertions without the correct API/policy
 - projection CRM overlay reads are read-only and do not auto-create CRM records
+- projection CRM/export mutations require the displayed membership revision; stale/missing tokens produce zero writes
+- projection-bound dispatch excludes concurrent membership publication and operation cancel through the documented lock order; real `POOL_MAX=1` publication/cancel waiters complete without pool/advisory-lock deadlock, duplicate commands, or duplicate events
+- projection-to-CRM batch selection rechecks revision/`N`/members under the publication lock and atomically commits record, engagement, and event rows; injected table failure and duplicate-person selection roll back the whole batch
+- exact selection replay writes nothing, while a new revision for an existing person records one `projection_member_reselected` event and preserves one engagement
+- target-candidate export consumes one complete `last_source_selection` tuple per row and rejects mixed projection/revision provenance
 - raw/evidence filter counts expose `count_scope`
+- exact visible membership drives the same `N/N` through main sync, pagination, projection export, and projection-to-CRM source totals even when `card_ready_count` is below `N` or zero
+- profile readiness and card readiness are independently testable in both directions; no test or reader imposes `card_ready <= profile_ready`
+- explicit profile capture and optional member-quality classifications are aggregated only from per-member owned `projection_metrics` on the same revision; a legacy summary or any member missing the fact makes that aggregate unavailable rather than an inferred zero
+- a newly authoritative exact membership publication can correct counts upward, downward, and to exact zero, while non-exact/token-mismatched/fallback reads fail closed
+- summary/page/readiness/export/CRM inputs bind to one opaque `projection.membership_revision`; the reader compares that token before and after member-count/readiness aggregation so a concurrent publication cannot pair new counts with an old token (or the reverse). Missing/unequal/changing tokens fail closed, inequality invalidates caches, token ordering is never attempted, and same-timestamp distinct publications remain distinguishable
+- initial membership publication leaves public facets pending/unavailable until `projection_person_search_index` publishes a revision-matched exact facet product
 - legacy job-result endpoints do not participate in normal serving after cutover
 - Pre-Manual Scripted Signoff blocks missing projection reports, fallback usage, cross-endpoint drift, and candidate page timeouts
 
@@ -727,6 +789,10 @@ non-pressure contract gates must already be green:
   nightly: stale/partial overlay, partial `result_view`, partial lifecycle, and
   partial projection visible counts must not lower a canonical projection or
   terminalize a baseline+delta run.
+
+The preceding partial-source guard does not make exact membership monotonic. A current canonical exact publication may
+lower or clear the population. Its opaque token does not say "newer" by itself; authority comes from the pinned projection
+resolution, and only stale, partial, fallback-backed, or token-mismatched evidence is forbidden from replacing that snapshot.
 
 Required scripted coverage should include:
 

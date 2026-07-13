@@ -7,6 +7,7 @@ from .control_plane_repository import ControlPlaneAuthoritativeReadError
 from .media_asset_owner import media_asset_frontend_url
 from .projection_search_index_contract import (
     PROJECTION_SEARCH_INDEX_BINDING_KEYS,
+    PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY,
     projection_search_index_publication_state,
 )
 from .public_candidate_facets import (
@@ -63,6 +64,15 @@ class ServingProjectionReader:
                 projection_id=normalized_projection_id,
                 projection=projection,
             )
+        initial_membership_revision = str(
+            dict(projection.get("metadata") or {}).get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
+        ).strip()
+        if not initial_membership_revision:
+            return self._projection_error(
+                "projection_membership_revision_missing",
+                projection_id=normalized_projection_id,
+                projection=projection,
+            )
         try:
             visible_count = self.store.repos.serving_projection.count_members(
                 normalized_projection_id,
@@ -87,6 +97,15 @@ class ServingProjectionReader:
                 projection_id=normalized_projection_id,
                 projection=latest_projection,
             )
+        latest_membership_revision = str(
+            dict(latest_projection.get("metadata") or {}).get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
+        ).strip()
+        if latest_membership_revision != initial_membership_revision:
+            return self._projection_error(
+                "projection_membership_revision_changed_during_read",
+                projection_id=normalized_projection_id,
+                projection=latest_projection,
+            )
         projection = latest_projection
         return {
             "status": "ready",
@@ -95,6 +114,129 @@ class ServingProjectionReader:
                 visible_count=visible_count,
                 readiness_counts=readiness_counts,
             ),
+        }
+
+    def get_projection_member_snapshot(
+        self,
+        projection_id: str,
+        *,
+        candidate_identity_keys: list[str] | tuple[str, ...] | None = None,
+        limit: int = 100_000,
+        page_size: int = 500,
+        require_all_requested: bool = True,
+    ) -> dict[str, Any]:
+        """Read visible members behind one exact, pre/post-fenced revision."""
+        projection_payload = self.get_projection(projection_id)
+        if str(projection_payload.get("status") or "") != "ready":
+            return projection_payload
+        projection = dict(projection_payload.get("projection") or {})
+        normalized_projection_id = str(projection.get("projection_id") or "").strip()
+        pinned_revision = str(projection.get("membership_revision") or "").strip()
+        source_candidate_count = int(projection.get("visible_member_count") or 0)
+        normalized_limit = min(max(int(limit or 100_000), 1), 100_000)
+        normalized_page_size = min(max(int(page_size or 500), 1), 1000)
+        requested_keys = [
+            str(key or "").strip() for key in dict.fromkeys(candidate_identity_keys or ()) if str(key or "").strip()
+        ][:normalized_limit]
+        members: list[dict[str, Any]] = []
+        try:
+            if requested_keys:
+                fetched_members = self.store.repos.serving_projection.list_members_by_identity_keys(
+                    normalized_projection_id,
+                    requested_keys,
+                    visible_only=True,
+                )
+                members_by_key = {
+                    str(member.get("candidate_identity_key") or "").strip(): member
+                    for member in fetched_members
+                    if str(member.get("candidate_identity_key") or "").strip()
+                }
+                members = [members_by_key[key] for key in requested_keys if key in members_by_key]
+            else:
+                offset = 0
+                while len(members) < normalized_limit:
+                    page = self.store.repos.serving_projection.list_members(
+                        normalized_projection_id,
+                        offset=offset,
+                        limit=min(normalized_page_size, normalized_limit - len(members)),
+                        visible_only=True,
+                    )
+                    if not page:
+                        break
+                    members.extend(page)
+                    offset += len(page)
+                    if len(page) < normalized_page_size:
+                        break
+        except ControlPlaneAuthoritativeReadError:
+            return self._projection_error(
+                "projection_members_unavailable",
+                projection_id=normalized_projection_id,
+                projection=projection,
+            )
+
+        final_projection_payload = self.get_projection(normalized_projection_id)
+        if str(final_projection_payload.get("status") or "") != "ready":
+            return final_projection_payload
+        final_projection = dict(final_projection_payload.get("projection") or {})
+        final_revision = str(final_projection.get("membership_revision") or "").strip()
+        final_source_candidate_count = int(final_projection.get("visible_member_count") or 0)
+        if final_revision != pinned_revision or final_source_candidate_count != source_candidate_count:
+            return self._projection_error(
+                "projection_membership_revision_changed_during_member_snapshot",
+                projection_id=normalized_projection_id,
+                projection=final_projection,
+            )
+
+        member_keys: list[str] = []
+        for member in members:
+            member_key = str(member.get("candidate_identity_key") or "").strip()
+            if (
+                not member_key
+                or member_key in member_keys
+                or str(member.get("projection_id") or "").strip() != normalized_projection_id
+                or str(member.get("visibility_state") or "visible").strip() != _VISIBLE_MEMBER_STATE
+            ):
+                return self._projection_error(
+                    "projection_member_snapshot_inconsistent",
+                    projection_id=normalized_projection_id,
+                    projection=final_projection,
+                )
+            member_keys.append(member_key)
+        missing_requested_keys = [key for key in requested_keys if key not in set(member_keys)]
+        if require_all_requested and missing_requested_keys:
+            error = self._projection_error(
+                "projection_member_selection_not_visible",
+                projection_id=normalized_projection_id,
+                projection=final_projection,
+            )
+            error["missing_candidate_identity_keys"] = missing_requested_keys
+            return error
+        expected_selected_count = (
+            len(requested_keys)
+            if requested_keys and require_all_requested
+            else len(members)
+            if requested_keys
+            else min(source_candidate_count, normalized_limit)
+        )
+        if len(members) != expected_selected_count:
+            return self._projection_error(
+                "projection_member_snapshot_count_mismatch",
+                projection_id=normalized_projection_id,
+                projection=final_projection,
+            )
+        return {
+            "status": "ready",
+            "projection": final_projection,
+            "members": members,
+            "membership_revision": pinned_revision,
+            "source_candidate_count": source_candidate_count,
+            "selected_candidate_count": len(members),
+            "read_contract": {
+                "source": "serving_projection_members",
+                "fallback_used": False,
+                "fail_closed": True,
+                "revision_fenced": True,
+            },
         }
 
     def get_projection_candidates(
@@ -110,6 +252,7 @@ class ServingProjectionReader:
             return projection_payload
         projection = dict(projection_payload.get("projection") or {})
         normalized_projection_id = str(projection.get("projection_id") or "").strip()
+        pinned_membership_revision = str(projection.get("membership_revision") or "").strip()
         normalized_offset = max(0, int(offset or 0))
         normalized_limit = min(max(1, int(limit or 120)), 250)
         normalized_filter = normalize_candidate_page_filter(candidate_filter)
@@ -182,12 +325,19 @@ class ServingProjectionReader:
                 projection_id=normalized_projection_id,
                 projection=projection,
             )
+        final_projection_payload = self.get_projection(normalized_projection_id)
+        if str(final_projection_payload.get("status") or "") != "ready":
+            return final_projection_payload
+        final_projection = dict(final_projection_payload.get("projection") or {})
+        if str(final_projection.get("membership_revision") or "").strip() != pinned_membership_revision:
+            return self._projection_error(
+                "projection_membership_revision_changed_during_page_read",
+                projection_id=normalized_projection_id,
+                projection=final_projection,
+            )
+        projection = final_projection
+        total_count = int(projection.get("visible_member_count") or 0)
         if not filter_active:
-            final_projection_payload = self.get_projection(normalized_projection_id)
-            if str(final_projection_payload.get("status") or "") != "ready":
-                return final_projection_payload
-            projection = dict(final_projection_payload.get("projection") or {})
-            total_count = int(projection.get("visible_member_count") or 0)
             filtered_count = total_count
             index_filter_readiness = self._index_filter_readiness_payload(projection)
         crm_overlays_by_person = self._crm_overlays_for_members(members)
@@ -257,27 +407,22 @@ class ServingProjectionReader:
         *,
         workspace_id: str = "default",
     ) -> dict[str, Any]:
-        projection_payload = self.get_projection(projection_id)
-        if str(projection_payload.get("status") or "") != "ready":
-            return projection_payload
         normalized_projection_id = str(projection_id or "").strip()
         normalized_candidate_key = str(candidate_identity_key or "").strip()
         if not normalized_candidate_key:
             return self._projection_error("candidate_identity_key_required", projection_id=normalized_projection_id)
-        try:
-            member = self.store.repos.serving_projection.get_member(
-                normalized_projection_id,
-                normalized_candidate_key,
-                visible_only=True,
-            )
-        except ControlPlaneAuthoritativeReadError:
-            return self._projection_error(
-                "projection_members_unavailable",
-                projection_id=normalized_projection_id,
-                projection=dict(projection_payload.get("projection") or {}),
-            )
-        if not member:
+        snapshot = self.get_projection_member_snapshot(
+            normalized_projection_id,
+            candidate_identity_keys=[normalized_candidate_key],
+            limit=1,
+            require_all_requested=False,
+        )
+        if str(snapshot.get("status") or "") != "ready":
+            return snapshot
+        members = list(snapshot.get("members") or [])
+        if not members:
             return self._projection_error("projection_member_not_found", projection_id=normalized_projection_id)
+        member = dict(members[0])
         person_key = str(member.get("person_identity_key") or "").strip()
         assets = self.store.list_person_assets(person_identity_key=person_key, limit=50) if person_key else []
         assertions = self.store.list_person_assertions(person_identity_key=person_key, limit=100) if person_key else []
@@ -293,6 +438,8 @@ class ServingProjectionReader:
         return {
             "status": "ready",
             "projection_id": normalized_projection_id,
+            "membership_revision": str(snapshot.get("membership_revision") or ""),
+            "source_candidate_count": int(snapshot.get("source_candidate_count") or 0),
             "candidate_identity_key": normalized_candidate_key,
             "person_identity_key": person_key,
             "public_summary": _scrub_public_projection_payload(dict(member.get("public_summary") or {})),
@@ -327,6 +474,7 @@ class ServingProjectionReader:
             return projection_payload
         projection = dict(projection_payload.get("projection") or {})
         normalized_projection_id = str(projection.get("projection_id") or "").strip()
+        pinned_membership_revision = str(projection.get("membership_revision") or "").strip()
         normalized_offset = max(0, int(offset or 0))
         normalized_limit = min(max(1, int(limit or 120)), 250)
         try:
@@ -396,6 +544,17 @@ class ServingProjectionReader:
                     "fail_closed": True,
                 },
             }
+        final_projection_payload = self.get_projection(normalized_projection_id)
+        if str(final_projection_payload.get("status") or "") != "ready":
+            return final_projection_payload
+        final_projection = dict(final_projection_payload.get("projection") or {})
+        if str(final_projection.get("membership_revision") or "").strip() != pinned_membership_revision:
+            return self._projection_error(
+                "projection_membership_revision_changed_during_search_read",
+                projection_id=normalized_projection_id,
+                projection=final_projection,
+            )
+        projection = final_projection
         crm_overlays_by_person = self._crm_overlays_for_members(members)
         if crm_overlays_by_person:
             members = [
@@ -411,6 +570,7 @@ class ServingProjectionReader:
         return {
             "status": "ready",
             "projection": projection,
+            "membership_revision": pinned_membership_revision,
             "candidate_count": int(projection.get("visible_member_count") or 0),
             "total_candidates": int(projection.get("visible_member_count") or 0),
             "filtered_candidate_count": int(search_result.get("matched_count") or 0),
@@ -750,6 +910,9 @@ class ServingProjectionReader:
         payload = dict(projection or {})
         counts = dict(payload.get("counts") or {})
         readiness = dict(payload.get("readiness") or {})
+        membership_revision = str(
+            dict(payload.get("metadata") or {}).get(PROJECTION_SEARCH_INDEX_INPUT_REVISION_KEY) or ""
+        ).strip()
         public_facet_counts = dict(counts.get("public_facet_counts") or {})
         facet_build_state = projection_search_index_publication_state(
             dict(payload.get("metadata") or {}),
@@ -806,6 +969,14 @@ class ServingProjectionReader:
             readiness["profile_required_count"] = int(normalized_readiness_counts.get("profile_required_count") or 0)
             readiness["profile_ready_count"] = int(normalized_readiness_counts.get("profile_ready_count") or 0)
             readiness["card_ready_count"] = int(normalized_readiness_counts.get("card_ready_count") or 0)
+            for owner_count_key in (
+                "explicit_profile_capture_candidate_count",
+                "needs_profile_completion_candidate_count",
+                "low_profile_richness_candidate_count",
+            ):
+                readiness.pop(owner_count_key, None)
+                if owner_count_key in normalized_readiness_counts:
+                    readiness[owner_count_key] = int(normalized_readiness_counts[owner_count_key])
             readiness["count_scope"] = "exact_projection"
             counts["profile_fetch_required_count"] = readiness.get("profile_required_count") or 0
             counts["profile_fetched_count"] = readiness.get("profile_ready_count") or 0
@@ -824,6 +995,9 @@ class ServingProjectionReader:
             "readiness": readiness,
             "provenance": dict(payload.get("provenance") or {}),
             "manual_overlay_version": str(payload.get("manual_overlay_version") or "").strip(),
+            # Opaque equality token for binding projection summaries to member
+            # pages. Clients must not order UUID-backed revisions.
+            "membership_revision": membership_revision,
             "raw_profile_index_watermark": (
                 str(payload.get("raw_profile_index_watermark") or "").strip()
                 if str(readiness_build_state.get("status") or "") == "ready"

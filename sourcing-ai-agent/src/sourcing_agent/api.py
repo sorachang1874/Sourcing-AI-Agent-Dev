@@ -466,9 +466,7 @@ class _CorsHeaderMiddleware:
         await self.app(scope, receive, send_with_cors)
 
 
-def _cors_response_headers(
-    request_headers: Headers, allowed_origins: tuple[str, ...]
-) -> list[tuple[bytes, bytes]]:
+def _cors_response_headers(request_headers: Headers, allowed_origins: tuple[str, ...]) -> list[tuple[bytes, bytes]]:
     headers: list[tuple[bytes, bytes]] = []
     origin = _cors_allow_origin(str(request_headers.get("Origin") or "").strip(), allowed_origins)
     if origin:
@@ -483,6 +481,7 @@ def _cors_response_headers(
             b"Access-Control-Expose-Headers",
             b"Content-Disposition, X-Sourcing-Export-Record-Count, "
             b"X-Sourcing-Exported-Record-Count, X-Sourcing-Exported-Signal-Count, "
+            b"X-Sourcing-Membership-Revision, X-Sourcing-Source-Candidate-Count, "
             b"X-Sourcing-No-Public-Web-Result-Count, X-Sourcing-No-Exportable-Signal-Count, "
             b"X-Sourcing-Non-Terminal-Run-Count, X-Sourcing-Projection-Id, "
             b"X-Sourcing-Skipped-Assertion-Count",
@@ -531,9 +530,7 @@ def _raw_header_response(status: HTTPStatus | int, body: bytes, headers: list[tu
     """
     status_code = status.value if isinstance(status, HTTPStatus) else int(status)
     response = Response(content=body, status_code=status_code)
-    response.raw_headers = [
-        (name.encode("latin-1"), value.encode("latin-1")) for name, value in headers
-    ]
+    response.raw_headers = [(name.encode("latin-1"), value.encode("latin-1")) for name, value in headers]
     return response
 
 
@@ -759,9 +756,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/workflow/activity-attempts", get_workflow_activity_attempts)
 
     def get_workflow_activity_attempt(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.get_workflow_activity_attempt_api(
-            _decode_path_param(request.path_params["attempt_id"])
-        )
+        result = orchestrator.get_workflow_activity_attempt_api(_decode_path_param(request.path_params["attempt_id"]))
         status = HTTPStatus.OK if result.get("status") == "ok" else HTTPStatus.NOT_FOUND
         return _json_response(status, result)
 
@@ -785,9 +780,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
     add(["GET"], "/api/workflow/discovery-lanes", get_workflow_discovery_lanes)
 
     def get_workflow_discovery_lane(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
-        result = orchestrator.get_acquisition_discovery_lane_api(
-            _decode_path_param(request.path_params["lane_id"])
-        )
+        result = orchestrator.get_acquisition_discovery_lane_api(_decode_path_param(request.path_params["lane_id"]))
         status = HTTPStatus.OK if result.get("status") == "ok" else HTTPStatus.NOT_FOUND
         return _json_response(status, result)
 
@@ -1587,9 +1580,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
             result = orchestrator.handle_remote_provider_event({**event_payload, "recovery_mode": "sync_recovery"})
             status = HTTPStatus.ACCEPTED if result.get("status") == "accepted" else HTTPStatus.BAD_REQUEST
             return _json_response(status, result)
-        result = orchestrator.handle_remote_provider_event(
-            {**event_payload, "recovery_mode": "job_scoped_recovery"}
-        )
+        result = orchestrator.handle_remote_provider_event({**event_payload, "recovery_mode": "job_scoped_recovery"})
         if result.get("status") != "accepted":
             return _json_response(HTTPStatus.BAD_REQUEST, result)
         return _json_response(
@@ -1801,9 +1792,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
 
     def post_workflow_command_retry(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
         _apply_server_identity(payload, request, actor_fields=("actor",))
-        result = orchestrator.retry_workflow_command_api(
-            _decode_path_param(request.path_params["command_id"]), payload
-        )
+        result = orchestrator.retry_workflow_command_api(_decode_path_param(request.path_params["command_id"]), payload)
         status = HTTPStatus.ACCEPTED if result.get("status") == "queued" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
@@ -1962,7 +1951,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
 
     add(["POST"], "/api/target-candidates/export", post_target_candidates_export, read_body=True)
 
-    def post_target_public_web_export_gone(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+    def post_target_public_web_export_gone(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
         return _json_response(
             HTTPStatus.GONE,
             _legacy_target_public_web_endpoint_payload(
@@ -2011,8 +2002,14 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         _apply_server_identity(payload, request, actor_fields=("actor_id",), lock_actor_type=True)
         result = orchestrator.add_projection_candidate_to_crm(payload)
         status = HTTPStatus.CREATED if result.get("status") in {"upserted", "idempotent"} else HTTPStatus.BAD_REQUEST
+        if result.get("status") == "reselected":
+            status = HTTPStatus.OK
+        if result.get("status") == "partial":
+            status = HTTPStatus.MULTI_STATUS
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "not_ready":
+            status = HTTPStatus.CONFLICT
         return _json_response(status, result)
 
     add(["POST"], "/api/crm/records", post_crm_records, read_body=True)
@@ -2127,9 +2124,7 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
 
     add(["POST"], "/api/media/backfill-person-avatars", post_media_backfill_person_avatars, read_body=True)
 
-    def post_media_backfill_company_logos(
-        request: Request, query: dict[str, Any], payload: dict[str, Any]
-    ) -> Response:
+    def post_media_backfill_company_logos(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
         result = orchestrator.backfill_company_logo_media_assets_api(payload)
         status = HTTPStatus.OK if result.get("status") in {"planned", "dry_run"} else HTTPStatus.BAD_REQUEST
         return _json_response(status, result)
@@ -2184,8 +2179,12 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         # An idempotent hit on an already-succeeded export replays 200 + its handle.
         result = orchestrator.export_projection_candidates_archive(payload)
         status = str(result.get("status") or "").strip()
-        if status == "failed":
+        if status in {"failed", "invalid"}:
             return _json_response(HTTPStatus.BAD_REQUEST, result)
+        if status == "not_found":
+            return _json_response(HTTPStatus.NOT_FOUND, result)
+        if status == "not_ready":
+            return _json_response(HTTPStatus.CONFLICT, result)
         if status == "succeeded":
             return _json_response(HTTPStatus.OK, result)
         return _json_response(HTTPStatus.ACCEPTED, result)
@@ -2234,7 +2233,9 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
 
     add(["POST"], "/api/crm/records/public-web-search/retry", post_crm_public_web_search_retry, read_body=True)
 
-    def post_target_public_web_search_gone(request: Request, query: dict[str, Any], payload: dict[str, Any]) -> Response:
+    def post_target_public_web_search_gone(
+        request: Request, query: dict[str, Any], payload: dict[str, Any]
+    ) -> Response:
         return _json_response(
             HTTPStatus.GONE,
             _legacy_target_public_web_endpoint_payload(
@@ -2615,8 +2616,8 @@ def _request_priority_lane(method: str, path: str) -> str:
         "/api/migrations/legacy-public-web",
         "/api/migrations/legacy-result-endpoints",
         "/api/manual-review",
-            "/api/candidate-review-registry",
-            "/api/target-candidates",
+        "/api/candidate-review-registry",
+        "/api/target-candidates",
         "/api/crm/records",
         "/api/crm/tasks",
         "/api/assets/governance/default-pointers",
@@ -2729,9 +2730,7 @@ def _legacy_job_result_endpoint_payload(
     return {
         "status": "retired",
         "reason": (
-            "legacy_job_result_endpoint_retired"
-            if projection_id
-            else "legacy_job_result_endpoint_migration_required"
+            "legacy_job_result_endpoint_retired" if projection_id else "legacy_job_result_endpoint_migration_required"
         ),
         "run_id": normalized_run_id,
         "legacy_endpoint": legacy_endpoint,

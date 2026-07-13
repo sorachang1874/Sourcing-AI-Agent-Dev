@@ -395,6 +395,7 @@ export function SearchFlow({
               <ResultsBoardPanel
                 key={`results:${panelContextKey}`}
                 dashboard={dashboard}
+                projectionId={dashboard.projectionId || dashboard.resultViewLifecycle?.servingProjectionId || ""}
                 historyId={historyId}
                 jobId={jobId}
                 initialCandidateId={selectedCandidateId}

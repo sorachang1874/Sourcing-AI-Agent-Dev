@@ -28,10 +28,16 @@ import {
   sanitizeCandidateText,
 } from "../lib/candidatePresentation";
 import { addCandidateToReviewRegistry } from "../lib/reviewRegistry";
-import { addTargetCandidate, readTargetCandidates, targetCandidatesUpdatedEventName } from "../lib/targetCandidatesStore";
+import {
+  addTargetCandidate,
+  addTargetCandidates,
+  readTargetCandidates,
+  targetCandidatesUpdatedEventName,
+} from "../lib/targetCandidatesStore";
 import { getFormattedEducationExperience, getFormattedWorkExperience } from "../lib/profileFormatting";
 import {
   dashboardCandidatePageFilterSignature,
+  dashboardCandidatePageRevisionMatches,
   exportProjectionCandidatesArchive,
   getCandidateDetailsBatch,
   getDashboardCandidatePage,
@@ -503,6 +509,11 @@ export function ResultsBoardPanel({
   onReviewStateChanged,
   onHydrationWindowChange,
 }: ResultsBoardPanelProps) {
+  const resolvedProjectionId = String(
+    projectionId || dashboard.projectionId || dashboard.resultViewLifecycle?.servingProjectionId || "",
+  ).trim();
+  const membershipRevision = String(dashboard.boardRuntimeState?.rowPublicationRevision || "").trim();
+  const projectionMutationReady = Boolean(resolvedProjectionId && membershipRevision);
   const [keyword, setKeyword] = useState("");
   const [focusedCandidateId, setFocusedCandidateId] = useState("");
   const [selectedLayerStates, setSelectedLayerStates] = useState<Record<string, LayerSelectionState>>(
@@ -539,10 +550,10 @@ export function ResultsBoardPanel({
     audit: false,
   });
   const resultsContextKey = useMemo(
-    () => [historyId || "no-history", jobId || "no-job", projectionId || "no-projection"].join(":"),
-    [historyId, jobId, projectionId],
+    () => [historyId || "no-history", jobId || "no-job", resolvedProjectionId || "no-projection"].join(":"),
+    [historyId, jobId, resolvedProjectionId],
   );
-  const projectionOnlyReadOnly = Boolean(projectionId && !jobId);
+  const projectionOnlyReadOnly = Boolean(resolvedProjectionId && !jobId);
   const projectionOnlyReadOnlyMessage =
     "当前从本地公司资产打开，可浏览候选人并加入目标候选人；人工审核和资料补全需要从具体任务进入。";
   const targetCandidatesRoute = collectionId.trim()
@@ -557,7 +568,7 @@ export function ResultsBoardPanel({
     Number(dashboard.boardRuntimeState?.profileDetailCandidateCount || 0),
   );
   const profileDetailsIncomplete = Boolean(
-    projectionId && expectedCandidateCount > 0 && profileDetailCandidateCount < expectedCandidateCount,
+    resolvedProjectionId && expectedCandidateCount > 0 && profileDetailCandidateCount < expectedCandidateCount,
   );
   const hasGlobalFacetSummary = hasCanonicalFacetSummaryForServedPopulation(dashboard, expectedCandidateCount);
   const hasBoardRuntimeState = Boolean(dashboard.boardRuntimeState);
@@ -956,7 +967,8 @@ export function ResultsBoardPanel({
       backendCandidatePage &&
       backendCandidatePageRequestSignature === backendFilterSignature &&
       backendCandidatePage.offset === backendPageOffset &&
-      backendCandidatePage.limit <= RESULTS_PAGE_SIZE,
+      backendCandidatePage.limit <= RESULTS_PAGE_SIZE &&
+      dashboardCandidatePageRevisionMatches(dashboard, backendCandidatePage),
   );
   const waitingForBackendPage = backendFilteredPagingSupported && !backendPageReady;
   const freshFilteredCandidateCount = backendPageReady
@@ -1068,7 +1080,7 @@ export function ResultsBoardPanel({
   ]);
 
   useEffect(() => {
-    if ((!jobId && !projectionId) || !backendFilteredPagingSupported) {
+    if ((!jobId && !resolvedProjectionId) || !backendFilteredPagingSupported) {
       setBackendCandidatePage(null);
       setBackendCandidatePageRequestSignature("");
       setBackendCandidatePageLoading(false);
@@ -1077,8 +1089,8 @@ export function ResultsBoardPanel({
     let cancelled = false;
     setBackendCandidatePageLoading(true);
     setBackendCandidatePageError("");
-    const pageRequest = projectionId
-      ? getProjectionCandidatePage(projectionId, {
+    const pageRequest = resolvedProjectionId
+      ? getProjectionCandidatePage(resolvedProjectionId, {
           offset: backendPageOffset,
           limit: RESULTS_PAGE_SIZE,
           forceRefresh: true,
@@ -1094,6 +1106,11 @@ export function ResultsBoardPanel({
     void pageRequest
       .then((page) => {
         if (cancelled) {
+          return;
+        }
+        if (!dashboardCandidatePageRevisionMatches(dashboard, page)) {
+          setBackendCandidatePage(null);
+          setBackendCandidatePageRequestSignature("");
           return;
         }
         setBackendCandidatePage(page);
@@ -1118,9 +1135,11 @@ export function ResultsBoardPanel({
     backendFilterSignature,
     backendPageFilter,
     backendPageOffset,
+    dashboard,
+    dashboard.boardRuntimeState?.rowPublicationRevision,
     dashboard.boardRuntimeState?.rowPublicationWatermark,
     jobId,
-    projectionId,
+    resolvedProjectionId,
   ]);
 
   useEffect(() => {
@@ -1152,7 +1171,7 @@ export function ResultsBoardPanel({
   }, [deferredCurrentPage, expectedCandidateCount, onHydrationWindowChange]);
 
   useEffect(() => {
-    if (!jobId || projectionId || pagedCandidates.length === 0) {
+    if (!jobId || resolvedProjectionId || pagedCandidates.length === 0) {
       setCandidateDetailLoadingIds([]);
       return;
     }
@@ -1199,7 +1218,7 @@ export function ResultsBoardPanel({
     return () => {
       cancelled = true;
     };
-  }, [candidateDetailsById, jobId, pagedCandidates, projectionId, resultsContextKey]);
+  }, [candidateDetailsById, jobId, pagedCandidates, resolvedProjectionId, resultsContextKey]);
 
   const toggleCandidateSelection = (candidate: Candidate) => {
     setSelectedCandidates((current) => {
@@ -1267,12 +1286,19 @@ export function ResultsBoardPanel({
     setTargetActionCompleted(false);
     setBatchActionBusy("target");
     try {
-      await Promise.all(
-        candidates.map((candidate) => addTargetCandidate(candidate, { historyId, jobId, projectionId })),
-      );
-      setSelectedCandidates({});
-      setBatchActionMessage(`已将 ${candidates.length} 位候选人加入目标候选人。`);
-      setTargetActionCompleted(true);
+      const result = await addTargetCandidates(candidates, {
+        projectionId: resolvedProjectionId,
+        membershipRevision,
+      });
+      if (result.failedWriteCount > 0) {
+        setBatchActionMessage(
+          `目标候选人写入部分完成：成功 ${result.successfulWriteCount}/${result.requestedCandidateCount}，失败 ${result.failedWriteCount}。`,
+        );
+      } else {
+        setSelectedCandidates({});
+        setBatchActionMessage(`已将 ${result.successfulWriteCount} 位候选人加入目标候选人。`);
+        setTargetActionCompleted(true);
+      }
     } catch (error) {
       setBatchActionMessage(error instanceof Error ? error.message : "批量加入目标候选人失败。");
       setTargetActionCompleted(false);
@@ -1310,14 +1336,17 @@ export function ResultsBoardPanel({
   };
 
   const exportProjectionArchive = async () => {
-    if (!projectionId || batchActionBusy) {
+    if (!projectionMutationReady || batchActionBusy) {
       return;
     }
     setBatchActionMessage("");
     setTargetActionCompleted(false);
     setBatchActionBusy("export");
     try {
-      const download = await exportProjectionCandidatesArchive({ projectionId });
+      const download = await exportProjectionCandidatesArchive({
+        projectionId: resolvedProjectionId,
+        expectedMembershipRevision: membershipRevision,
+      });
       downloadBlobFile(download.filename || "projection-candidates.zip", download.blob);
       const stats = download.exportStats;
       setBatchActionMessage(
@@ -1340,7 +1369,12 @@ export function ResultsBoardPanel({
     setSingleTargetActionCandidateId(candidate.id);
     setTargetCandidateIds((current) => (current.includes(candidate.id) ? current : [...current, candidate.id]));
     try {
-      await addTargetCandidate(candidate, { historyId, jobId, projectionId });
+      await addTargetCandidate(candidate, {
+        historyId,
+        jobId,
+        projectionId: resolvedProjectionId,
+        membershipRevision,
+      });
       setBatchActionMessage(`已将 ${candidate.name} 加入目标候选人。`);
       setTargetActionCompleted(true);
     } catch (error) {
@@ -1563,18 +1597,18 @@ export function ResultsBoardPanel({
               onClick={() => {
                 void addSelectedToTargets();
               }}
-              disabled={selectedCandidateIds.length === 0 || batchActionBusy !== ""}
+              disabled={!projectionMutationReady || selectedCandidateIds.length === 0 || batchActionBusy !== ""}
             >
               {batchActionBusy === "target" ? "加入目标候选人中..." : "批量加入目标候选人"}
             </button>
-            {projectionId ? (
+            {resolvedProjectionId ? (
               <button
                 type="button"
                 className="ghost-button small-button"
                 onClick={() => {
                   void exportProjectionArchive();
                 }}
-                disabled={batchActionBusy !== ""}
+                disabled={!projectionMutationReady || batchActionBusy !== ""}
               >
                 {batchActionBusy === "export" ? "正在导出..." : "导出 Projection"}
               </button>
@@ -1815,7 +1849,11 @@ export function ResultsBoardPanel({
                                 event.stopPropagation();
                                 void addSingleCandidateToTargets(candidate);
                               }}
-                              disabled={isTargetCandidate || singleTargetActionCandidateId === candidate.id}
+                              disabled={
+                                !projectionMutationReady ||
+                                isTargetCandidate ||
+                                singleTargetActionCandidateId === candidate.id
+                              }
                             >
                               {isTargetCandidate
                                 ? "已加入目标候选人"

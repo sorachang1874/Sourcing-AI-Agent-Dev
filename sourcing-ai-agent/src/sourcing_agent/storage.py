@@ -4289,6 +4289,150 @@ class ControlPlaneStore:
             }
         return {}
 
+    def apply_projection_crm_selection(
+        self,
+        *,
+        projection_id: str,
+        expected_membership_revision: str,
+        expected_source_candidate_count: int,
+        candidate_identity_keys: list[str] | tuple[str, ...],
+        workspace_id: str,
+        selection_idempotency_keys: dict[str, str],
+        payload_builder: Any,
+    ) -> dict[str, Any]:
+        """Temporary Store facade for the fixed projection-to-CRM PG UoW.
+
+        CRM repository migration removes this facade; callers receive domain
+        rows while the adapter owns the transaction and lock ordering.
+        """
+
+        if not callable(payload_builder):
+            raise TypeError("payload_builder must be callable")
+
+        def build_storage_payload(**raw_payload: Any) -> dict[str, Any]:
+            projection_row = dict(raw_payload.get("projection_row") or {})
+            member_rows_by_key = {
+                str(key or "").strip(): self.repos.serving_projection._member_from_row(row)  # noqa: SLF001
+                for key, row in dict(raw_payload.get("member_rows_by_key") or {}).items()
+            }
+            existing_records_by_person = {
+                str(key or "").strip(): self._crm_record_from_row(row)
+                for key, row in dict(raw_payload.get("existing_records_by_person") or {}).items()
+            }
+            existing_engagements_by_id = {
+                str(key or "").strip(): self._crm_engagement_from_row(row)
+                for key, row in dict(raw_payload.get("existing_engagements_by_id") or {}).items()
+            }
+            existing_events_by_idempotency = {
+                str(key or "").strip(): self._crm_event_from_row(row)
+                for key, row in dict(raw_payload.get("existing_events_by_idempotency") or {}).items()
+            }
+            built = payload_builder(
+                projection=self.repos.serving_projection._projection_from_row(projection_row),  # noqa: SLF001
+                members_by_candidate_key=member_rows_by_key,
+                existing_records_by_person=existing_records_by_person,
+                existing_engagements_by_id=existing_engagements_by_id,
+                existing_events_by_idempotency=existing_events_by_idempotency,
+                selection_now=str(raw_payload.get("selection_now") or ""),
+                source_candidate_count=int(raw_payload.get("source_candidate_count") or 0),
+            )
+            if not isinstance(built, dict):
+                raise TypeError("projection CRM domain payload_builder must return a dict")
+            record_rows = [
+                _crm_core_repo.CRM_RECORDS.to_columns(
+                    {
+                        **dict(row or {}),
+                        "metadata": _normalize_json_object_payload(
+                            dict(row or {}).get("metadata") or dict(row or {}).get("metadata_json")
+                        ),
+                    }
+                )
+                for row in list(built.get("record_rows") or [])
+            ]
+            engagement_rows = []
+            for raw_row in list(built.get("engagement_rows") or []):
+                row = dict(raw_row or {})
+                engagement_rows.append(
+                    {
+                        "engagement_id": str(row.get("engagement_id") or "").strip(),
+                        "crm_record_id": str(row.get("crm_record_id") or "").strip(),
+                        "pipeline_id": str(row.get("pipeline_id") or "default_sourcing").strip()
+                        or "default_sourcing",
+                        "stage": str(row.get("stage") or "new").strip() or "new",
+                        "stage_category": str(
+                            row.get("stage_category") or _crm_stage_category(row.get("stage"))
+                        ).strip()
+                        or "open",
+                        "priority": str(row.get("priority") or "normal").strip() or "normal",
+                        "quality_score": row.get("quality_score"),
+                        "next_action_at": str(row.get("next_action_at") or "").strip(),
+                        "last_contacted_at": str(row.get("last_contacted_at") or "").strip(),
+                        "source_projection_id": str(row.get("source_projection_id") or "").strip(),
+                        "source_run_id": str(row.get("source_run_id") or "").strip(),
+                        "source_selection_reason": str(row.get("source_selection_reason") or "").strip(),
+                        "created_by_actor": str(row.get("created_by_actor") or "").strip(),
+                        "metadata_json": json.dumps(
+                            _normalize_json_object_payload(row.get("metadata") or row.get("metadata_json")),
+                            ensure_ascii=False,
+                        ),
+                        "created_at": str(row.get("created_at") or "").strip(),
+                        "updated_at": str(row.get("updated_at") or "").strip(),
+                    }
+                )
+            event_rows = [
+                _crm_core_repo.CRM_EVENTS.to_columns(
+                    {
+                        **dict(row or {}),
+                        "payload": _normalize_json_object_payload(
+                            dict(row or {}).get("payload") or dict(row or {}).get("payload_json")
+                        ),
+                        "metadata": _normalize_json_object_payload(
+                            dict(row or {}).get("metadata") or dict(row or {}).get("metadata_json")
+                        ),
+                    }
+                )
+                for row in list(built.get("event_rows") or [])
+            ]
+            return {
+                **built,
+                "record_rows": record_rows,
+                "engagement_rows": engagement_rows,
+                "event_rows": event_rows,
+            }
+
+        result = self._call_control_plane_postgres_native(
+            "apply_projection_crm_selection",
+            table_name="crm_records",
+            projection_id=projection_id,
+            expected_membership_revision=expected_membership_revision,
+            expected_source_candidate_count=expected_source_candidate_count,
+            candidate_identity_keys=list(candidate_identity_keys or []),
+            workspace_id=workspace_id,
+            selection_idempotency_keys=dict(selection_idempotency_keys or {}),
+            payload_builder=build_storage_payload,
+        )
+        if not isinstance(result, dict):
+            self._raise_control_plane_postgres_write_failure(
+                table_name="crm_records",
+                method_name="apply_projection_crm_selection",
+                reason="postgres-only: projection CRM UoW returned no confirmation",
+            )
+        return {
+            **result,
+            "projection": self.repos.serving_projection._projection_from_row(  # noqa: SLF001
+                result.get("projection_row")
+            ),
+            "members": [
+                self.repos.serving_projection._member_from_row(row)  # noqa: SLF001
+                for row in list(result.get("member_rows") or [])
+            ],
+            "crm_records": [self._crm_record_from_row(row) for row in list(result.get("record_rows") or [])],
+            "crm_engagements": [
+                self._crm_engagement_from_row(row) for row in list(result.get("engagement_rows") or [])
+            ],
+            "crm_events": [self._crm_event_from_row(row) for row in list(result.get("event_rows") or [])],
+        }
+
     def upsert_crm_record(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload or {})
         workspace_id = str(normalized.get("workspace_id") or "default").strip() or "default"
