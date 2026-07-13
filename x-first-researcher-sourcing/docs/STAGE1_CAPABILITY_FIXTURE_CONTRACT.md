@@ -91,6 +91,8 @@ Validation rejects:
 - a second execution/call/page, a sixth observation, deadline overrun, or totals that do not reconcile; observation
   validation and content scanning are sliced to the fixed five-item maximum before iteration, producing one static
   overflow diagnostic and no submitted array index above four;
+- a second structured error; error validation and content scanning are sliced to the schema's fixed one-item maximum
+  before iteration, producing one static overflow diagnostic and no submitted array index above zero;
 - unknown or inconsistent run/task/verdict values;
 - missing or duplicate stable IDs, target-account mismatch, invalid timestamps, or unbounded excerpt/full-body
   retention;

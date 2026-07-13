@@ -19,6 +19,7 @@ EXECUTION_MODE = "fixture_only"
 SAFETY_POLICY_VERSION = "x-first-public-professional-v1"
 MAX_ERROR_MESSAGE_CHARS = 280
 MAX_CAPABILITY_OBSERVATIONS = 5
+MAX_CAPABILITY_ERRORS = 1
 REQUEST_DIAGNOSTIC_CODE = "XCAP_REQUEST_INVALID"
 BOUND_REQUEST_DIAGNOSTIC_CODE = "XCAP_BOUND_REQUEST_INVALID"
 RESULT_DIAGNOSTIC_CODE = "XCAP_RESULT_INVALID"
@@ -596,9 +597,12 @@ def validate_capability_result(
     errors_value = result.get("errors")
     if not isinstance(errors_value, list):
         errors.append("result.errors must be an array")
-    result_errors = errors_value if isinstance(errors_value, list) else []
+    error_count = len(errors_value) if isinstance(errors_value, list) else 0
+    result_errors = errors_value[:MAX_CAPABILITY_ERRORS] if isinstance(errors_value, list) else []
+    if error_count > MAX_CAPABILITY_ERRORS:
+        errors.append("result.errors exceeds the fixed maximum of one")
     expected_error_count = 0 if verdict == "fixture_contract_validated" else 1
-    if len(result_errors) != expected_error_count:
+    if error_count != expected_error_count:
         errors.append("capability error count contradicts verdict")
     for index, error_value in enumerate(result_errors):
         error = _validate_shape(
@@ -639,9 +643,14 @@ def validate_capability_result(
             errors.append(f"result.claims.{field} must be false")
 
     content_scan_payload = payload
-    if isinstance(payload, dict) and observation_count > MAX_CAPABILITY_OBSERVATIONS:
+    if isinstance(payload, dict) and (
+        observation_count > MAX_CAPABILITY_OBSERVATIONS or error_count > MAX_CAPABILITY_ERRORS
+    ):
         content_scan_payload = dict(payload)
-        content_scan_payload["observations"] = observations
+        if observation_count > MAX_CAPABILITY_OBSERVATIONS:
+            content_scan_payload["observations"] = observations
+        if error_count > MAX_CAPABILITY_ERRORS:
+            content_scan_payload["errors"] = result_errors
     errors.extend(_prohibited_content_errors(content_scan_payload, root="result", include_locations=False))
     errors.extend(_credential_errors(content_scan_payload, root="result"))
     return sorted(set(bound_request_errors + _encode_diagnostics(RESULT_DIAGNOSTIC_CODE, errors)))

@@ -38,6 +38,7 @@ from x_first.capability_probe import (  # noqa: E402
     CAPABILITY_OBSERVATION_EXCERPTS,
     DIAGNOSTIC_CODES,
     ERROR_ENVELOPE_BY_VERDICT,
+    MAX_CAPABILITY_ERRORS,
     MAX_CAPABILITY_OBSERVATIONS,
     REQUEST_JSON_LOAD_DIAGNOSTIC,
     REQUEST_VALIDATION_DIAGNOSTIC,
@@ -370,6 +371,10 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
         self.assertEqual(
             self.result_schema["properties"]["observations"]["maxItems"],
             MAX_CAPABILITY_OBSERVATIONS,
+        )
+        self.assertEqual(
+            self.result_schema["properties"]["errors"]["maxItems"],
+            MAX_CAPABILITY_ERRORS,
         )
         self.assertEqual(
             self.request_schema["properties"]["hard_budgets"]["properties"]["max_observations"]["const"],
@@ -825,6 +830,41 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
         self.assertLessEqual(len(rendered.encode("utf-8")), 4096, rendered)
         self.assertTrue(all(index < MAX_CAPABILITY_OBSERVATIONS for index in observation_indices))
         self.assertNotIn("result.observations[5]", rendered)
+
+    def test_error_iteration_is_bounded_before_validating_attacker_sized_arrays(self) -> None:
+        result = self.build_failure_result()
+        result["errors"] = [
+            {
+                "code": f"SENTINEL_ERROR_CODE_{index}_7D3F",
+                "message": f"SENTINEL_ERROR_MESSAGE_{index}_7D3F",
+                "retryable": False,
+                **(
+                    {
+                        "api_key": f"SENTINEL_ERROR_SECRET_{index}_7D3F",
+                        "nationality": f"SENTINEL_ERROR_PROXY_{index}_7D3F",
+                    }
+                    if index
+                    else {}
+                ),
+            }
+            for index in range(1000)
+        ]
+
+        errors = validate_capability_result(result, request=self.request)
+        overflow_errors = [error for error in errors if "exceeds the fixed maximum of one" in error]
+        self.assertEqual(len(overflow_errors), 1, errors)
+        rendered = json.dumps(errors, ensure_ascii=False)
+        error_indices = [
+            int(match.group(1)) for match in re.finditer(r"result\.errors\[([0-9]+)\]", rendered)
+        ]
+        self.assertTrue(errors)
+        self.assertLessEqual(len(errors), 12, errors)
+        self.assertLessEqual(len(rendered.encode("utf-8")), 4096, rendered)
+        self.assertTrue(all(index < MAX_CAPABILITY_ERRORS for index in error_indices))
+        self.assertNotIn("result.errors[1]", rendered)
+        self.assertNotIn("SENTINEL_ERROR_", rendered)
+        self.assertNotIn("credential-bearing field", rendered)
+        self.assertNotIn("prohibited protected/proxy field", rendered)
 
     def test_observation_identity_url_time_and_minimization_fail_closed(self) -> None:
         mutations: dict[str, tuple[Callable[[dict[str, Any]], None], str]] = {
