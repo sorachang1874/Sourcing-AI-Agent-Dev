@@ -199,15 +199,22 @@ class ToolCallingSessionBase(abc.ABC):
     # 解析器产出类型化 outcome:ParsedTurn = {advisory_events: [...], terminal_result: ToolTurnResult}
     # ——terminal_result 由解析器内部状态(含服务端信封:response model/call id/usage/route)构造,
     # 事件流只是同一解析器状态的 advisory 投影,两者不存在"从事件重建结果"的方向。
-    def run_tool_turn(self, ctx, messages, tools) -> ToolTurnResult:   # = parse(...).terminal_result
-    def stream_tool_turn(self, ctx, messages, tools) -> Iterator[AgentTurnEvent]:
-        # 逐 advisory 事件产出,最后一个事件 = terminal_result 的显式 terminal 事件
-    # scripted 子类:实现 canonical ToolTurnResult 回放,基类按 coalescing 规则 v1 合成 advisory 流。
+    @abc.abstractmethod
+    def _parse_tool_turn(self, request, messages, tools) -> ParsedToolTurn: ...
+    def run_tool_turn(self, request, messages, tools) -> ToolTurnResult:
+        return self._parse_tool_turn(request, messages, tools).terminal_result
+    def stream_tool_turn(self, request, messages, tools) -> Iterator[AgentTurnEvent]:
+        yield from self._parse_tool_turn(request, messages, tools).advisory_events
+    # scripted 子类只实现 canonical ParsedToolTurn 回放；两个公开投影由基类唯一拥有。
 ```
 **等价测试改为语义等价**（v2 修正）：同一 wire 转写的多种合法 SSE 分块切法（逐字节流/整帧/跨帧
 切分/args 分片重组）→ 独立手写的期望 `ToolTurnResult` 完全一致；不再断言事件逐帧相等。
 v3 追加：流路径消费到的 terminal 事件所载结果与 `run_tool_turn` 返回值逐字段一致（同一解析器
 状态、两种投影）。
+
+**D0d author implementation（2026-07-14）** 已按上式落地非 live 基类和 scripted 单一 parse 路径；
+当前参数仍是 D0a `ToolTurnRequest`，不代表 §2.3 的完整 live `ModelTurnExecutionContext` 已实现。详见
+`TRACK_D_D0D_TOOL_SESSION_BASE_IMPLEMENTATION.md`。
 
 ### 2.5 「流式输出 advisory、终态结果 authorize」（v2 新增核心安全规则）
 

@@ -95,6 +95,7 @@
 - [TRACK_D_D0A_PROVIDER_NEUTRAL_RUNTIME_IMPLEMENTATION.md](TRACK_D_D0A_PROVIDER_NEUTRAL_RUNTIME_IMPLEMENTATION.md) — D0a 非 live provider-neutral substrate 实施记录（消息/工具/usage/result 类型、bounded SSE parser、canonical request hash、scripted replay、draft route registry；无 transport/storage/effect owner）。
 - [TRACK_D_D0B_MODEL_CLIENT_V1_CHARACTERIZATION.md](TRACK_D_D0B_MODEL_CLIENT_V1_CHARACTERIZATION.md) — D0b 非 live characterize-first 实施记录（17 方法完整签名、自动发现的 5 个 concrete/factory parity、25 个消费模块/29 调用点、17 方法 runtime delegate graph、三种完整既有 wire shape 与身份边界；零产品码）。
 - [TRACK_D_D0C_MODEL_INVOCATION_CONTRACT.md](TRACK_D_D0C_MODEL_INVOCATION_CONTRACT.md) — D0c 非 live invocation evidence 实施记录（单一不可变 envelope、exact serialization/digest、typed absence/quarantine、narrow result mirror、route manifest mechanical preflight；durable issuer/persistence/live 仍 deferred）。
+- [TRACK_D_D0D_TOOL_SESSION_BASE_IMPLEMENTATION.md](TRACK_D_D0D_TOOL_SESSION_BASE_IMPLEMENTATION.md) — D0d 非 live canonical session projection 实施记录（抽象 session base 唯一拥有 buffered/stream 投影，scripted 只实现一个 `ParsedToolTurn` canonical parse 路径；无 transport/storage/live/effect）。
 - [TRACK_D_D3_COMPANY_IDENTITY_SELF_VERIFICATION_DESIGN.md](TRACK_D_D3_COMPANY_IDENTITY_SELF_VERIFICATION_DESIGN.md) — D3 批级设计（公司身份自验证 loop：`verify_company_identity` action + `company.identity.verify` 命令 + 置信阶梯出口；误确认率=0 硬门；不依赖 D0/D2/model_native_search）。
 - [NEXT_TODO.md](NEXT_TODO.md) — 活跃待办（滚动文件）。
 - [../PROGRESS.md](../PROGRESS.md) — 进展日志（滚动文件，月度归档于 `archive/progress/`）。

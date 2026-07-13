@@ -34,11 +34,13 @@ from sourcing_agent.model_tool_runtime import (
     ModelToolRequestBindingError,
     ModelToolRuntimeError,
     ModelToolSchemaError,
+    ParsedToolTurn,
     ScriptedToolReplayError,
     ScriptedToolTurnSession,
     ScriptedToolTurnTranscript,
     SystemMessage,
     TerminalEvent,
+    ToolCallingSessionBase,
     ToolSpec,
     UserMessage,
     canonical_model_turn_transcript_sha256,
@@ -923,6 +925,71 @@ def test_scripted_session_replays_exact_hash_and_stream_terminal_matches_buffere
 
     assert isinstance(streamed[-1], TerminalEvent)
     assert streamed[-1].result == buffered
+
+
+def test_tool_calling_session_base_is_abstract_and_owns_both_public_projections() -> None:
+    with pytest.raises(TypeError, match="abstract"):
+        ToolCallingSessionBase()
+
+    request = _request()
+    messages = _messages()
+    tools = _tools()
+    parsed = parse_openai_chat_sse(
+        [_tool_turn_bytes()],
+        request=request,
+        messages=messages,
+        tools=tools,
+    )
+
+    class ProbeToolCallingSession(ToolCallingSessionBase):
+        def __init__(self) -> None:
+            self.parse_calls = 0
+
+        def _parse_tool_turn(self, actual_request, actual_messages, actual_tools):
+            self.parse_calls += 1
+            assert actual_request is request
+            assert tuple(actual_messages) == messages
+            assert tuple(actual_tools) == tools
+            return parsed
+
+    session = ProbeToolCallingSession()
+    buffered = session.run_tool_turn(request, messages, tools)
+    streamed = tuple(session.stream_tool_turn(request, messages, tools))
+
+    assert buffered is parsed.terminal_result
+    assert streamed == parsed.advisory_events
+    assert isinstance(streamed[-1], TerminalEvent)
+    assert streamed[-1].result is parsed.terminal_result
+    assert session.parse_calls == 2
+
+
+def test_scripted_session_cannot_override_the_canonical_public_projections() -> None:
+    assert ScriptedToolTurnSession.run_tool_turn is ToolCallingSessionBase.run_tool_turn
+    assert ScriptedToolTurnSession.stream_tool_turn is ToolCallingSessionBase.stream_tool_turn
+    assert ScriptedToolTurnSession._parse_tool_turn is not ToolCallingSessionBase._parse_tool_turn
+
+
+def test_parsed_tool_turn_rejects_missing_or_mismatched_terminal_projection() -> None:
+    payload = _tool_turn_bytes()
+    parsed = parse_openai_chat_sse(
+        [payload],
+        request=_request(transcript=payload),
+        messages=_messages(),
+        tools=_tools(),
+    )
+
+    with pytest.raises(ModelToolProtocolError, match="terminal_event_missing"):
+        ParsedToolTurn(
+            advisory_events=parsed.advisory_events[:-1],
+            terminal_result=parsed.terminal_result,
+        )
+
+    different_result = replace(parsed.terminal_result, text="A different canonical result.")
+    with pytest.raises(ModelToolProtocolError, match="terminal_event_result_mismatch"):
+        ParsedToolTurn(
+            advisory_events=(*parsed.advisory_events[:-1], TerminalEvent(different_result)),
+            terminal_result=parsed.terminal_result,
+        )
 
 
 def test_transcript_digest_is_chunk_boundary_independent_and_content_bound() -> None:

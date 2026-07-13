@@ -10,6 +10,7 @@ never authorizes an effect.
 
 from __future__ import annotations
 
+import abc
 import codecs
 import hashlib
 import json
@@ -1683,7 +1684,43 @@ class ScriptedToolTurnTranscript:
         return canonical_model_turn_transcript_sha256(self.chunks)
 
 
-class ScriptedToolTurnSession:
+class ToolCallingSessionBase(abc.ABC):
+    """Project one canonical parsed turn into buffered and advisory views.
+
+    Subclasses own transport/replay preparation and parsing, but they must
+    return one validated ``ParsedToolTurn``.  The public projections never
+    reconstruct a terminal result from advisory events.
+    """
+
+    @abc.abstractmethod
+    def _parse_tool_turn(
+        self,
+        request: ToolTurnRequest,
+        messages: Iterable[ModelTurnMessage],
+        tools: Iterable[ToolSpec],
+    ) -> ParsedToolTurn:
+        """Return the canonical parser outcome for exactly one tool turn."""
+
+        raise NotImplementedError
+
+    def run_tool_turn(
+        self,
+        request: ToolTurnRequest,
+        messages: Iterable[ModelTurnMessage],
+        tools: Iterable[ToolSpec],
+    ) -> ToolTurnResult:
+        return self._parse_tool_turn(request, messages, tools).terminal_result
+
+    def stream_tool_turn(
+        self,
+        request: ToolTurnRequest,
+        messages: Iterable[ModelTurnMessage],
+        tools: Iterable[ToolSpec],
+    ) -> Iterator[AgentTurnEvent]:
+        yield from self._parse_tool_turn(request, messages, tools).advisory_events
+
+
+class ScriptedToolTurnSession(ToolCallingSessionBase):
     """Deterministically replay one identity-bound synthetic/non-live transcript."""
 
     def __init__(self, transcript: ScriptedToolTurnTranscript) -> None:
@@ -1705,33 +1742,12 @@ class ScriptedToolTurnSession:
             raise ScriptedToolReplayError("model_tool_transcript_workspace_mismatch")
         return route
 
-    def run_tool_turn(
+    def _parse_tool_turn(
         self,
         request: ToolTurnRequest,
         messages: Iterable[ModelTurnMessage],
         tools: Iterable[ToolSpec],
-    ) -> ToolTurnResult:
-        # Fence live/unknown routes before touching caller-owned iterables.
-        _assert_d0a_request_route_binding(request)
-        message_tuple, _ = _collect_message_records(messages)
-        tool_tuple, _ = _collect_tool_records(tools)
-        self._prepare(request, message_tuple, tool_tuple)
-        result = parse_openai_chat_sse(
-            self._transcript.chunks,
-            request=request,
-            messages=message_tuple,
-            tools=tool_tuple,
-        ).terminal_result
-        if result.canonical_request_sha256 != self._transcript.request_sha256:
-            raise ScriptedToolReplayError("model_tool_transcript_terminal_request_hash_mismatch")
-        return result
-
-    def stream_tool_turn(
-        self,
-        request: ToolTurnRequest,
-        messages: Iterable[ModelTurnMessage],
-        tools: Iterable[ToolSpec],
-    ) -> Iterator[AgentTurnEvent]:
+    ) -> ParsedToolTurn:
         # Fence live/unknown routes before touching caller-owned iterables.
         _assert_d0a_request_route_binding(request)
         message_tuple, _ = _collect_message_records(messages)
@@ -1745,7 +1761,7 @@ class ScriptedToolTurnSession:
         )
         if parsed.terminal_result.canonical_request_sha256 != self._transcript.request_sha256:
             raise ScriptedToolReplayError("model_tool_transcript_terminal_request_hash_mismatch")
-        yield from parsed.advisory_events
+        return parsed
 
 
 def request_for_model_route(
@@ -1822,6 +1838,7 @@ __all__ = [
     "SystemMessage",
     "TerminalEvent",
     "TextDeltaEvent",
+    "ToolCallingSessionBase",
     "ToolCallPartialEvent",
     "ToolCallRecord",
     "ToolResultMessage",

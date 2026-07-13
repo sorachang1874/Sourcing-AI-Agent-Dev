@@ -111,6 +111,12 @@
   零 transport/settings/env/storage/migration/provider call，D0a 仍只执行 `simulate|scripted`；durable issuer/
   persistence/result-slot CAS、ExecutionContext、cost ledger 与 R8 OB-2.2/4.3/10.3/10.4 仍 deferred。author evidence
   = `145 passed` + provider/characterization `60 passed + 11 subtests` + Ruff/mypy/diff-check；formal review pending。
+- [x] D0d canonical tool-session projection author implementation（2026-07-14）：新增抽象
+  `ToolCallingSessionBase`，两个公开入口只投影同一 `_parse_tool_turn -> ParsedToolTurn`；scripted replay 删除
+  buffered/stream 双份解析路径，route fence 仍先于 caller iterable 消费，terminal event/result coherence 由
+  `ParsedToolTurn` fail-closed。零 transport/settings/env/storage/provider/model/effect，request/hash/result/envelope
+  schema 与执行权限不变；ExecutionContext、budget/cost/result-slot/live 仍 deferred。scoped author validation 与
+  formal review 状态见 `TRACK_D_D0D_TOOL_SESSION_BASE_IMPLEMENTATION.md`。
 - [ ] Agent Session 契约：服务端 agentic loop；工具面 = M1 manifest 导出 + 只读上下文工具 + model_native_search/fetch 转正；效果全部走 typed AgentAction（边界已由 `AGENT_OPERATION_CONTRACT.md` 规定）。
 - [ ] 第一垂直切片：公司身份自验证 loop（搜索→fetch 验证→歧义才升级人工），替代 PlanCard 手动修正 LinkedIn URL。
 - [ ] 之后：plan review 对话化、intent→plan 前门流式化；OpenClaw/Claude 作为可插拔外脑。

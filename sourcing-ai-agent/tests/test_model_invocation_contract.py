@@ -444,6 +444,7 @@ def test_d0c_contract_modules_have_no_transport_settings_environment_or_storage_
     expected_imports = {
         SOURCE_ROOT / "model_tool_runtime.py": {
             "__future__",
+            "abc",
             "codecs",
             "dataclasses",
             "hashlib",
