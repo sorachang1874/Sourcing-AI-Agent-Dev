@@ -36,6 +36,10 @@ MAX_TOOL_SCHEMA_BYTES = 128 * 1024
 MAX_TOTAL_TOOL_SCHEMA_BYTES = 512 * 1024
 MAX_TOOL_SPECS = 128
 MAX_SSE_FRAME_BYTES = 256 * 1024
+# Wire-line and unfinished-remainder semantics are independent even though
+# D0a currently gives them the same ceiling. Complete lines are measured after
+# splitting before LF, so a CR in CRLF is part of the bounded raw line.
+MAX_SSE_LINE_BYTES = 512 * 1024
 MAX_SSE_PENDING_BYTES = 512 * 1024
 MAX_SSE_TOTAL_BYTES = 4 * 1024 * 1024
 MAX_SSE_CHUNKS = 128 * 1024
@@ -947,6 +951,8 @@ def _iter_sse_data_frames(chunks: Iterable[bytes]) -> Iterator[str]:
             pending = complete_lines.pop()
             line_count += complete_line_count
             for raw_line in complete_lines:
+                if len(raw_line.encode("utf-8")) > MAX_SSE_LINE_BYTES:
+                    raise ModelToolProtocolError("model_tool_sse_line_too_large")
                 line = raw_line[:-1] if raw_line.endswith("\r") else raw_line
                 if line == "":
                     if data_lines:
@@ -975,8 +981,9 @@ def _iter_sse_data_frames(chunks: Iterable[bytes]) -> Iterator[str]:
             # Complete lines are consumed before this bound is applied. A large
             # transport chunk containing many complete frames is therefore
             # equivalent to smaller chunking; only the unfinished line remains.
-            if len(pending.encode("utf-8")) > MAX_SSE_PENDING_BYTES:
-                raise ModelToolProtocolError("model_tool_sse_pending_too_large")
+            pending_bytes = len(pending.encode("utf-8"))
+            if pending_bytes > MAX_SSE_LINE_BYTES or pending_bytes > MAX_SSE_PENDING_BYTES:
+                raise ModelToolProtocolError("model_tool_sse_line_too_large")
         pending += decoder.decode(b"", final=True)
     except UnicodeDecodeError as exc:
         raise ModelToolProtocolError("model_tool_sse_utf8_invalid") from exc

@@ -70,7 +70,7 @@
 - [x] psycopg_pool 连接池（2026-06-11）：per-adapter 懒加载池（`SOURCING_CONTROL_PLANE_PG_POOL_MIN/MAX`，默认 1/8）；25 个调用点事务语义逐一核验不变；实测 200 次顺序操作 1.516s→0.743s、新建连接 200→1；`ControlPlaneStore.close()` 接线。
 - [ ] 重活出请求线程：plan compile / `/api/jobs` / 导出统一为 enqueue + 轮询（后续 SSE）。C1 durable plan-task 设计见 `docs/TRACK_C_C1_DURABLE_PLAN_TASK_DESIGN.md`；先落不依赖存储裁决的 C1a fast contract lane，consumer table / 202 cutover / publication UoW / TTL 四项 owner 决策未决前不做 migration。
   - [x] C1a author implementation（2026-07-14）：exact export light lane、owner-supplied `artifact.handle` fail-closed、frontend terminal-total status registry、Plan `pending|queued` bridge；无 schema/provider/model。targeted + frontend build 已绿，scope-matched independent review pending；有效 `GO` 前不做本 scope 的 live/manual/product signoff。
-  - [x] C1b author implementation（2026-07-14）：集中固定当前 HTTP 200/pending、唯一 hydration thread owner、history/side-effect/identity 行为；API 缺 owner 时 fail-closed，`async_task_contract.py` missing/unknown 已改为 terminal failed。targeted、lint 与 `349+2+11+1+2` fast contract lane 已绿，mypy 保持 `81 errors / 4 files`；scope-matched independent review pending。不得越过 D-C1-1..4 做 C1c-e migration。
+  - [x] C1b author implementation + pinned advisory fixed-forward（2026-07-14）：HTTP 200/pending 与唯一 hydration owner 保持；late same-signature consumer 由同锁 retirement barrier 原子 drain/转 successor，history publication 有 generation fence；AST 覆盖 alias/thread/executor；authenticated unlinked Plan submit/read/list/resubmit 以 server provenance fail-closed；空 artifact handle 拒绝。真实 compiler 竞态仍可留下 orphan review/criteria，明确阻断 durable/live/manual/product 签收，须 D-C1-3/C1d compute/publish split；formal review pending，不越过 D-C1-1..4 做 C1c-e migration。
 - [ ] worker 与 API 进程分离（`worker_daemon` 独立进程成为唯一模式）。
 - [ ] 最小鉴权 + 用户身份（token；`requester_id/tenant_id` 列已存在但来自未认证 payload）。
 - [x] FastAPI + uvicorn 传输层等价重写 api.py（2026-06-12）：同路由/同 payload/同状态码/同 headers；CORS allowlist + localhost 自动放行 + header 回显；Apify webhook token 校验保留；双道信号量改 middleware（HarvestAPI 并发约束保留至 M2 provider 预算落地）；`create_server` 兼容垫片包 uvicorn（serve_forever/shutdown/port-0）；`tests/test_api_transport_parity.py` 传输等价测试。
@@ -91,6 +91,12 @@
   reviewer CODEX_HOME（`configs/reviewer-codex/` + bootstrap，ChatGPT Desktop 切配置免疫），
   超时用 `REVIEW_TIMEOUT_SECONDS=1800`。
 - [ ] ModelClient 升级：streaming + tool-calling（现有 14 个单发方法、阻塞 requests、无流式）。
+- [ ] D0 usage type 收敛门（2026-07-14）：首个 model transport 或 product callsite 集成前，必须先把
+  `OpenAIModelUsage` / 临时 `ModelTurnUsage` 的五字段 value object 提取到无 transport/env 依赖的共享
+  provider-neutral 模块，让 `model_provider.py` 与 `model_tool_runtime.py` 只导入该单一类型，并删除
+  `ModelTurnUsage`。删除前，`src/sourcing_agent/` 除 D0a owner 外不得引用该临时类型；
+  `test_temporary_usage_type_cannot_escape_into_production_modules` 为 fail-closed ratchet，且 D0a 继续禁止
+  live/product integration。
 - [ ] Agent Session 契约：服务端 agentic loop；工具面 = M1 manifest 导出 + 只读上下文工具 + model_native_search/fetch 转正；效果全部走 typed AgentAction（边界已由 `AGENT_OPERATION_CONTRACT.md` 规定）。
 - [ ] 第一垂直切片：公司身份自验证 loop（搜索→fetch 验证→歧义才升级人工），替代 PlanCard 手动修正 LinkedIn URL。
 - [ ] 之后：plan review 对话化、intent→plan 前门流式化；OpenClaw/Claude 作为可插拔外脑。

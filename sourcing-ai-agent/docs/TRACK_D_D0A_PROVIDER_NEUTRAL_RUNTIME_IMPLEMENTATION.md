@@ -28,7 +28,7 @@ no API route.
 | D0a execution mode | `assert_d0a_route_execution_allowed` | Exact `simulate|scripted`; `live` and every other value reject | scripted session before any parse | environment-derived fallback or silent mode coercion | Deleted only when a later live adapter replaces it with a strictly stronger gate | `test_d0a_route_predicate_rejects_live_and_unowned_modes` |
 | Typed message/tool schema | `model_tool_runtime.py` dataclasses and strict schema subset | Messages, tool count, per-tool schema, total tool fingerprints, and arguments are incrementally bounded canonical JSON; unsupported schema keywords reject rather than being partially interpreted | canonical hash and parser | raw untyped dictionaries treated as authorized commands or unbounded caller iterables | D1 may project registry-owned `ActionRequestSpec`; it must preserve this fail-closed validation boundary | schema/parser limit and sentinel-generator regression cases |
 | Canonical request identity | `canonical_tool_turn_request_payload/hash` | SHA-256 over route revision and snapshot digest, provider/model/API style, output/stream controls, tool schema, messages, policy revisions, tenant/actor/scope, transcript digest, runtime namespace, and provider mode | transcript lookup and terminal result evidence | timestamps, credentials, endpoint secrets, caller-supplied partial fingerprints | A durable owner may wrap the hash but must not omit or re-derive its fields | parametrized hash sensitivity tests |
-| Stream semantic result | `parse_openai_chat_sse` parser state | Exactly one choice/index 0, stable call/model identity, bounded total/chunks/complete lines/frames/deltas, incomplete-remainder-only pending bound, explicit finish + `[DONE]`, schema-valid complete calls | scripted replay | advisory delta events authorizing effects | A later transport adapter must consume this result, not rebuild it from events | arbitrary byte-split, >512 KiB same-byte chunking parity, and malformed-stream tests |
+| Stream semantic result | `parse_openai_chat_sse` parser state | Exactly one choice/index 0, stable call/model identity, bounded total/chunks/complete-line count/raw wire-line bytes/frames/deltas, incomplete remainder bound at the same current byte ceiling, explicit finish + `[DONE]`, schema-valid complete calls. Raw line size is measured after splitting before LF, so CR is included | scripted replay | advisory delta events authorizing effects | A later transport adapter must consume this result, not rebuild it from events | arbitrary byte-split, >512 KiB same-byte chunking parity, exact/+1 LF/CRLF line boundaries, and malformed-stream tests |
 | Policy-evaluation eligibility | `ToolTurnResult.eligible_for_policy_evaluation` | Requires an explicit provider response call id plus either validated `end_turn` with zero calls or `tool_calls` with one or more calls; missing id and `length|content_filter` are false. `D0A_EFFECT_AUTHORIZATION_AVAILABLE=false` is unconditional | future owner policy gate input (not an effect adapter) | permission, approval, budget, cost, result-slot, CAS, or execution authorization | Durable owner policy + result-slot/consume CAS is required before any real action can be accepted | terminal-shape, missing-identity, and policy-sensitive negative tests |
 | Scripted transcript scope | `ScriptedToolTurnTranscript` plus canonical request hash | Exact SHA-256 of concatenated SSE bytes, independent of chunk boundaries; exact request hash; non-synthetic transcript also requires exact workspace | scripted session | caller-declared digest without byte proof, cross-mode/live authorization, or source-controlled real-person transcript | Recording/TTL/redaction governance is a later D0 batch; real data remains prohibited here | content mutation, chunk-split, request-hash, type, and workspace tests |
 
@@ -41,12 +41,15 @@ duplicate with stricter parser-side value validation, and a fast test pins valid
 two types. Before the first D0 transport adapter or product callsite is connected, the shared five-field value object
 must move to a provider-neutral module, both owners must import that single type, and `ModelTurnUsage` must be deleted.
 Until that deletion condition is met, D0a remains non-live and no downstream contract may accept either type by duck
-typing or add a third usage representation.
+typing or add a third usage representation. `docs/NEXT_TODO.md` records this as a mandatory predecessor of the first
+transport/product integration, and a production-source AST/reference ratchet prevents the temporary type from escaping
+its D0a owner while still allowing this focused D0 test and implementation documentation.
 
 ## 3. Parser state and authorization boundary
 
 ```text
 bounded SSE bytes
+  -> bounded raw wire lines (CR counts before LF; chunk-independent)
   -> complete data frames
   -> one choice / stable response identity
   -> bounded text + indexed tool-call fragments
@@ -132,6 +135,6 @@ PYTHONPATH=src .venv/bin/python -m mypy --follow-imports=skip \
   src/sourcing_agent/model_tool_runtime.py
 ```
 
-Author evidence on 2026-07-14 after pinned-review forward fixes: `64 passed`; existing provider suite `39 passed + 11
-subtests`; Ruff clean; focused mypy clean. This is author evidence only and does not
+Author evidence on 2026-07-14 after pinned re-review forward fixes: D0a `77 passed`; combined D0a + existing provider
+suite `116 passed + 11 subtests`; Ruff clean; focused mypy clean. This is author evidence only and does not
 replace the required pinned non-author review for the contract-heavy batch.

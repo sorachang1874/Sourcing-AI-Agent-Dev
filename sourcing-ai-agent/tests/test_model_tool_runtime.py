@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 from dataclasses import fields, replace
@@ -22,6 +23,7 @@ from sourcing_agent.model_route_registry import (
 from sourcing_agent.model_tool_runtime import (
     D0A_EFFECT_AUTHORIZATION_AVAILABLE,
     MAX_SSE_CHUNKS,
+    MAX_SSE_LINE_BYTES,
     MAX_SSE_LINES,
     MAX_SSE_PENDING_BYTES,
     MAX_TOOL_SCHEMA_BYTES,
@@ -257,6 +259,56 @@ def _text_turn_bytes(
 
 def _split_every_byte(payload: bytes) -> tuple[bytes, ...]:
     return tuple(payload[index : index + 1] for index in range(len(payload)))
+
+
+def _split_at_wire_boundaries(payload: bytes, line_wire_bytes: int) -> tuple[bytes, ...]:
+    boundaries = sorted(
+        {
+            0,
+            1,
+            MAX_SSE_LINE_BYTES // 2,
+            line_wire_bytes - 2,
+            line_wire_bytes - 1,
+            line_wire_bytes,
+            line_wire_bytes + 1,
+            len(payload),
+        }
+    )
+    return tuple(
+        payload[start:end]
+        for start, end in zip(boundaries, boundaries[1:])
+        if 0 <= start < end <= len(payload)
+    )
+
+
+def _bounded_sse_wire_line(prefix: bytes, newline: bytes, *, extra_raw_bytes: int = 0) -> bytes:
+    assert newline in {b"\n", b"\r\n"}
+    trailing_cr_bytes = 1 if newline == b"\r\n" else 0
+    filler_bytes = MAX_SSE_LINE_BYTES + extra_raw_bytes - len(prefix) - trailing_cr_bytes
+    assert filler_bytes >= 0
+    wire = prefix + (b"x" * filler_bytes) + newline
+    raw_line = wire.split(b"\n", 1)[0]
+    assert len(raw_line) == MAX_SSE_LINE_BYTES + extra_raw_bytes
+    return wire
+
+
+def _temporary_usage_reference_lines(source: str) -> tuple[int, ...]:
+    tree = ast.parse(source)
+    lines: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "ModelTurnUsage":
+            lines.add(node.lineno)
+        elif isinstance(node, ast.Attribute) and node.attr == "ModelTurnUsage":
+            lines.add(node.lineno)
+        elif isinstance(node, ast.Constant) and node.value == "ModelTurnUsage":
+            lines.add(node.lineno)
+        elif isinstance(node, ast.ImportFrom):
+            module_name = str(node.module or "")
+            if module_name.endswith("model_tool_runtime") and any(
+                alias.name in {"ModelTurnUsage", "*"} for alias in node.names
+            ):
+                lines.add(node.lineno)
+    return tuple(sorted(lines))
 
 
 def test_route_registry_is_content_revisioned_and_draft_only() -> None:
@@ -567,6 +619,88 @@ def test_parser_large_complete_line_chunk_is_chunk_boundary_independent() -> Non
     split = parse_openai_chat_sse(split_chunks, request=request, messages=_messages(), tools=_tools())
 
     assert split == whole
+
+
+@pytest.mark.parametrize("prefix", [b":", b"event:"])
+@pytest.mark.parametrize("newline", [b"\n", b"\r\n"])
+def test_complete_comment_and_ignored_lines_accept_exact_wire_limit_for_any_chunking(
+    prefix: bytes,
+    newline: bytes,
+) -> None:
+    line_wire = _bounded_sse_wire_line(prefix, newline)
+    payload = line_wire + _tool_turn_bytes()
+    request = _request(transcript=payload)
+
+    single = parse_openai_chat_sse((payload,), request=request, messages=_messages(), tools=_tools())
+    split = parse_openai_chat_sse(
+        _split_at_wire_boundaries(payload, len(line_wire)),
+        request=request,
+        messages=_messages(),
+        tools=_tools(),
+    )
+
+    assert MAX_SSE_LINE_BYTES == MAX_SSE_PENDING_BYTES
+    assert split == single
+
+
+@pytest.mark.parametrize("prefix", [b":", b"event:"])
+@pytest.mark.parametrize("newline", [b"\n", b"\r\n"])
+def test_complete_comment_and_ignored_lines_reject_wire_limit_plus_one_for_any_chunking(
+    prefix: bytes,
+    newline: bytes,
+) -> None:
+    line_wire = _bounded_sse_wire_line(prefix, newline, extra_raw_bytes=1)
+    payload = line_wire + _tool_turn_bytes()
+    request = _request(transcript=payload)
+
+    for chunks in ((payload,), _split_at_wire_boundaries(payload, len(line_wire))):
+        with pytest.raises(ModelToolProtocolError, match="sse_line_too_large"):
+            parse_openai_chat_sse(chunks, request=request, messages=_messages(), tools=_tools())
+
+
+@pytest.mark.parametrize("newline", [b"\n", b"\r\n"])
+def test_complete_data_line_applies_wire_limit_before_frame_limit(newline: bytes) -> None:
+    exact_line_wire = _bounded_sse_wire_line(b"data: ", newline)
+    exact_payload = exact_line_wire + newline
+    exact_request = _request(transcript=exact_payload)
+    for chunks in (
+        (exact_payload,),
+        _split_at_wire_boundaries(exact_payload, len(exact_line_wire)),
+    ):
+        with pytest.raises(ModelToolProtocolError, match="sse_frame_too_large"):
+            parse_openai_chat_sse(chunks, request=exact_request, messages=_messages(), tools=_tools())
+
+    oversized_line_wire = _bounded_sse_wire_line(b"data: ", newline, extra_raw_bytes=1)
+    oversized_payload = oversized_line_wire + newline
+    oversized_request = _request(transcript=oversized_payload)
+    for chunks in (
+        (oversized_payload,),
+        _split_at_wire_boundaries(oversized_payload, len(oversized_line_wire)),
+    ):
+        with pytest.raises(ModelToolProtocolError, match="sse_line_too_large"):
+            parse_openai_chat_sse(chunks, request=oversized_request, messages=_messages(), tools=_tools())
+
+
+@pytest.mark.parametrize("trailing_cr", [False, True])
+def test_unfinished_pending_line_uses_same_exact_wire_limit_for_any_chunking(trailing_cr: bool) -> None:
+    exact_payload = (b"x" * (MAX_SSE_LINE_BYTES - int(trailing_cr))) + (b"\r" if trailing_cr else b"")
+    assert len(exact_payload) == MAX_SSE_LINE_BYTES
+    exact_request = _request(transcript=exact_payload)
+    for chunks in (
+        (exact_payload,),
+        _split_at_wire_boundaries(exact_payload, len(exact_payload)),
+    ):
+        with pytest.raises(ModelToolProtocolError, match="sse_incomplete_frame"):
+            parse_openai_chat_sse(chunks, request=exact_request, messages=_messages(), tools=_tools())
+
+    oversized_payload = exact_payload + b"x"
+    oversized_request = _request(transcript=oversized_payload)
+    for chunks in (
+        (oversized_payload,),
+        _split_at_wire_boundaries(oversized_payload, len(oversized_payload)),
+    ):
+        with pytest.raises(ModelToolProtocolError, match="sse_line_too_large"):
+            parse_openai_chat_sse(chunks, request=oversized_request, messages=_messages(), tools=_tools())
 
 
 def test_parser_bounds_complete_sse_lines_separately_from_pending_remainder() -> None:
@@ -957,6 +1091,36 @@ def test_temporary_usage_type_matches_existing_valid_value_contract() -> None:
     assert ModelTurnUsage().to_record() == OpenAIModelUsage().to_record() == {}
     with pytest.raises(ModelToolProtocolError, match="usage_value_invalid"):
         ModelTurnUsage(input_tokens=-1)
+
+
+def test_temporary_usage_type_cannot_escape_into_production_modules() -> None:
+    assert _temporary_usage_reference_lines("from .model_tool_runtime import ModelTurnUsage")
+    assert _temporary_usage_reference_lines(
+        "import sourcing_agent.model_tool_runtime as runtime\nUsage = runtime.ModelTurnUsage"
+    )
+    assert _temporary_usage_reference_lines("from .model_tool_runtime import *")
+    assert _temporary_usage_reference_lines(
+        'import sourcing_agent.model_tool_runtime as runtime\nUsage = getattr(runtime, "ModelTurnUsage")'
+    )
+    assert not _temporary_usage_reference_lines("from .model_tool_runtime import ToolSpec")
+
+    repository_root = Path(__file__).resolve().parents[1]
+    production_root = repository_root / "src" / "sourcing_agent"
+    owner_path = production_root / "model_tool_runtime.py"
+    violations: dict[str, tuple[int, ...]] = {}
+    for path in sorted(production_root.rglob("*.py")):
+        if path == owner_path:
+            continue
+        source = path.read_text()
+        if "ModelTurnUsage" not in source and "model_tool_runtime" not in source:
+            continue
+        references = _temporary_usage_reference_lines(source)
+        if references:
+            violations[str(path.relative_to(repository_root))] = references
+
+    # D0's owner module, this focused test, and implementation docs are the
+    # only current references. The ratchet deliberately scans production src.
+    assert violations == {}
 
 
 def test_d0a_modules_have_no_transport_or_environment_dependency() -> None:
