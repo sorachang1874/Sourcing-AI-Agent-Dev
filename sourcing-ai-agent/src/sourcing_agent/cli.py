@@ -1282,13 +1282,12 @@ def assert_recovery_coverage_or_fail_closed(
     """Fail closed unless something actually drives worker recovery (Step 5a).
 
     Coverage sources, in priority order:
-      1. The in-process shared recovery thread is alive — it started cleanly
-         (watchdog enabled, no external daemon held the lock). Covered.
-      2. Otherwise (watchdog disabled, OR the in-process thread yielded to an
-         external daemon via SingleInstanceError and is no longer alive) — a
-         FRESH external recovery daemon must exist. Because a just-launched
-         systemd daemon can race serve's boot, we re-check within a short
-         bounded window before deciding, then refuse.
+      1. In the explicit dev-only compatibility mode, a live in-process shared
+         recovery thread covers recovery.
+      2. In the default API-only mode, or when that compatibility thread yielded
+         to an external daemon and exited, a FRESH external recovery daemon must
+         exist. Because a just-launched systemd daemon can race serve's boot, we
+         re-check within a short bounded window before deciding, then refuse.
 
     If neither source covers recovery, raise RecoveryCoverageError so serve never
     starts believing recovery is covered when nothing drives it. The
@@ -1344,9 +1343,9 @@ def assert_recovery_coverage_or_fail_closed(
     detail["message"] = (
         "serve refused to start: worker recovery is not covered. No in-process "
         "recovery thread is running and no fresh external worker-recovery-daemon "
-        "was found. Start the standalone recovery daemon, drop "
-        "--disable-runtime-watchdog, or pass --allow-uncovered-recovery if recovery "
-        "truly runs elsewhere."
+        "was found. Start the standalone recovery daemon, use the dev-only "
+        "--enable-runtime-watchdog compatibility path, or pass "
+        "--allow-uncovered-recovery if recovery truly runs elsewhere."
     )
     print(json.dumps(detail, ensure_ascii=False), file=sys.stderr, flush=True)
     raise RecoveryCoverageError(detail["message"])
@@ -3369,8 +3368,22 @@ def main() -> None:
     )
     serve_parser.add_argument("--host", default="127.0.0.1")
     serve_parser.add_argument("--port", type=int, default=8765)
-    serve_parser.add_argument(
-        "--disable-runtime-watchdog", action="store_true", help="Disable the server-side recovery watchdog loop"
+    runtime_watchdog_mode = serve_parser.add_mutually_exclusive_group()
+    runtime_watchdog_mode.add_argument(
+        "--enable-runtime-watchdog",
+        action="store_true",
+        help=(
+            "Dev-only compatibility mode: run shared recovery and the runtime watchdog "
+            "inside the API process. Production/default serve requires a fresh external daemon."
+        ),
+    )
+    runtime_watchdog_mode.add_argument(
+        "--disable-runtime-watchdog",
+        action="store_true",
+        help=(
+            "Deprecated compatibility no-op. In-process recovery is disabled by default; "
+            "serve requires a fresh external daemon unless explicitly opted out."
+        ),
     )
     serve_parser.add_argument(
         "--runtime-watchdog-poll-seconds",
@@ -5039,38 +5052,44 @@ def main() -> None:
         shared_recovery_thread = None
         watchdog_stop = None
         watchdog_thread = None
-        if not args.disable_runtime_watchdog:
-            shared_recovery_stop, shared_recovery_thread = start_shared_recovery_service(orchestrator)
-            watchdog_stop, watchdog_thread = start_server_runtime_watchdog(
-                orchestrator,
-                poll_seconds=float(args.runtime_watchdog_poll_seconds or 15.0),
-            )
-        # Step 5a: make "recovery is driven" a code invariant. If neither the
-        # in-process shared recovery thread nor a fresh external daemon covers
-        # recovery, refuse to serve (study docs/RECOVERY_DRIVING_REDESIGN_STUDY.md §5).
-        assert_recovery_coverage_or_fail_closed(
-            orchestrator,
-            shared_recovery_thread=shared_recovery_thread,
-            watchdog_disabled=bool(args.disable_runtime_watchdog),
-            allow_uncovered_recovery=bool(getattr(args, "allow_uncovered_recovery", False)),
-        )
-        orchestrator.start_background_organization_asset_warmup()
-        server = create_server(orchestrator, host=args.host, port=args.port)
-        print(f"Serving on http://{args.host}:{args.port}")
+        server = None
+        in_process_recovery_enabled = bool(args.enable_runtime_watchdog)
         try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            pass
+            if in_process_recovery_enabled:
+                shared_recovery_stop, shared_recovery_thread = start_shared_recovery_service(orchestrator)
+                watchdog_stop, watchdog_thread = start_server_runtime_watchdog(
+                    orchestrator,
+                    poll_seconds=float(args.runtime_watchdog_poll_seconds or 15.0),
+                )
+            # C3a: recovery is external by default. The compatibility threads
+            # above only exist behind an explicit dev opt-in. If neither that
+            # path nor a fresh external daemon covers recovery, refuse to serve.
+            assert_recovery_coverage_or_fail_closed(
+                orchestrator,
+                shared_recovery_thread=shared_recovery_thread,
+                watchdog_disabled=not in_process_recovery_enabled,
+                allow_uncovered_recovery=bool(getattr(args, "allow_uncovered_recovery", False)),
+            )
+            orchestrator.start_background_organization_asset_warmup()
+            server = create_server(orchestrator, host=args.host, port=args.port)
+            print(f"Serving on http://{args.host}:{args.port}")
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                pass
         finally:
-            server.server_close()
-            if watchdog_stop is not None:
-                watchdog_stop.set()
-            if shared_recovery_stop is not None:
-                shared_recovery_stop.set()
-            if watchdog_thread is not None:
-                watchdog_thread.join(timeout=max(1.0, float(args.runtime_watchdog_poll_seconds or 15.0)))
-            if shared_recovery_thread is not None:
-                shared_recovery_thread.join(timeout=5.0)
+            try:
+                if server is not None:
+                    server.server_close()
+            finally:
+                if watchdog_stop is not None:
+                    watchdog_stop.set()
+                if shared_recovery_stop is not None:
+                    shared_recovery_stop.set()
+                if watchdog_thread is not None:
+                    watchdog_thread.join(timeout=max(1.0, float(args.runtime_watchdog_poll_seconds or 15.0)))
+                if shared_recovery_thread is not None:
+                    shared_recovery_thread.join(timeout=5.0)
 
 
 if __name__ == "__main__":

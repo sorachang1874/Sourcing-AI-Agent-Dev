@@ -3,10 +3,10 @@
 Design anchor: docs/RECOVERY_DRIVING_REDESIGN_STUDY.md §5. Both sub-steps are
 additive/safe:
 
-* 5a (cli.serve fail-closed): "recovery is driven" becomes a startup invariant
-  rather than an implicit deployment convention. serve refuses to start when
-  neither an in-process recovery thread nor a fresh external worker-recovery
-  daemon covers recovery.
+* 5a/C3a (cli.serve fail-closed): "recovery is driven" becomes a startup
+  invariant rather than an implicit deployment convention. serve defaults to
+  external recovery and refuses to start without a fresh worker-recovery daemon;
+  in-process recovery exists only behind an explicit dev opt-in.
 * 5b (event-signaled wakeup): the orchestrator-owned DurableRuntimeWriter signals
   the shared recovery daemon (request_service_wakeup) the moment a durable
   transition produces new recovery work (a typed command enqueue or the
@@ -93,9 +93,9 @@ class ServeRecoveryCoverageGuardTest(unittest.TestCase):
                 recheck_window_seconds=0.0,
             )
 
-    def test_watchdog_enabled_live_in_process_thread_is_covered(self) -> None:
-        # (i) watchdog enabled -> a live in-process recovery thread covers recovery;
-        # no external daemon status is consulted, no refusal.
+    def test_explicit_dev_opt_in_live_in_process_thread_is_covered(self) -> None:
+        # The dev-only compatibility mode still permits a live in-process
+        # recovery thread to cover recovery without consulting daemon status.
         live_thread = mock.Mock()
         live_thread.is_alive.return_value = True
 
@@ -110,9 +110,8 @@ class ServeRecoveryCoverageGuardTest(unittest.TestCase):
         self.assertEqual(result["coverage"], "in_process_shared_recovery_thread")
         read_status_mock.assert_not_called()
 
-    def test_disable_watchdog_without_fresh_external_daemon_fails_closed(self) -> None:
-        # (ii) --disable-runtime-watchdog + NO fresh external daemon -> fail closed.
-        with self.assertRaises(cli.RecoveryCoverageError):
+    def test_external_only_default_without_fresh_daemon_fails_closed(self) -> None:
+        with self.assertRaisesRegex(cli.RecoveryCoverageError, "--enable-runtime-watchdog"):
             cli.assert_recovery_coverage_or_fail_closed(
                 self.orchestrator,
                 shared_recovery_thread=None,
@@ -133,8 +132,7 @@ class ServeRecoveryCoverageGuardTest(unittest.TestCase):
                 recheck_window_seconds=0.0,
             )
 
-    def test_disable_watchdog_with_fresh_external_daemon_proceeds(self) -> None:
-        # (iii) --disable-runtime-watchdog + a fresh external daemon status -> proceeds.
+    def test_external_only_default_with_fresh_daemon_proceeds(self) -> None:
         self._write_fresh_external_status()
         self.assertEqual(self._covered["coverage"], "external_recovery_daemon")
         self.assertEqual(self._covered["external_status"], "running")

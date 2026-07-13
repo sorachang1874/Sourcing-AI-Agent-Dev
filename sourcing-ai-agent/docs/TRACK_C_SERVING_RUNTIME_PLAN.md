@@ -1,16 +1,16 @@
 # Track C — Serving Runtime Plan
 
-> Status: Plan for owner review (2026-06-15). Track C Serving Runtime for ~20 concurrent users.
+> Status: Active implementation. C3a external-recovery default implemented 2026-07-14; C3b/5d and cross-container single-writer remain owner- and residual-gated.
 
-文件路径均相对仓库根；行号锚定 `src/sourcing_agent/`（审计引用为裸文件名，路径已落实到该包）。本文件只规划、不改码。
+文件路径均相对仓库根；行号锚定 `src/sourcing_agent/`（审计引用为裸文件名，路径已落实到该包）。本文件同时记录原计划和已落地的有界切片；实施状态以本文档、`NEXT_TODO.md` 与当前代码交叉校验。
 
 ## 1. 现状
 
 **已完成（serving 地基三件）**：(a) psycopg_pool per-adapter 懒加载连接池（`SOURCING_CONTROL_PLANE_PG_POOL_MIN/MAX` 默认 1/8，25 调用点事务语义逐一核验，adc1cc2）；(b) FastAPI+uvicorn 传输等价重写 `api.py`（同路由/payload/状态码/headers，`create_server` 垫片，双道信号量改 middleware，CORS allowlist + localhost 放行）；(c) Phase 4 recovery 改事件驱动——5a serve 启动 `assert_recovery_coverage_or_fail_closed`（`cli.py:1271`）缺 driver 即 fail-closed、5b durable-commit 尾部 `request_service_wakeup`、5c poll 降为 30s backstop、5e 请求/读路径 signal-only + durable `workflow_recovery_intents` 单赢 claim 表。
 
-**当前 serving 模型（一段话）**：单进程 uvicorn，100+ handler 经 `_make_endpoint`（`api.py:360`）以 `run_in_threadpool` 跑同步阻塞函数（`api.py:367`，线程池首请求扩到 `max(40,(8+2)*2)=40`，`api.py:200`）；事件循环只做 body-read/CORS/lane。硬上限是 `_RequestConcurrencyMiddleware` 的 **8 槽 shared 信号量**（`api.py:64`，刻意护 HarvestAPI ~8 actor 隐性限制）+ 2 槽 light-reserved（`api.py:69`）。重活（`post_plan`/`post_jobs`/导出）**整段 LLM/检索/归档跑在请求线程里且全程占住 1/8 共享槽**——20 用户下 ≤8 个重请求并发，其余排队，重载时连轮询都掉到 2 个保底槽而饿死。recovery 当前由 serve 进程内线程或外部 daemon **靠 host-local flock 抢锁先到先得**（`service_daemon.py` flock）——非设计性「唯一 runner」。身份列 `requester_id/tenant_id` 仅存在于 `jobs`/`query_dispatches` 两表，全部来自**未认证 request body**（`orchestrator.py:52451`），无任何用户鉴权。
+**当前 serving 模型（一段话）**：传输层仍是单进程 uvicorn，同步 handler 经 `_make_endpoint` 进 `run_in_threadpool`，并由 8 槽 shared + 2 槽 light-reserved lane 限流；但原计划中的 heavy-handler 清单已不再成立。C1a/C1b 已删除同步 `POST /api/plan` 和 `POST /api/jobs`：实时 UI 的 Plan 走 `POST /api/plan/submit` 兼容桥（当前 `200/pending`，后台 hydration + frontend-history 轮询），检索工作流走 durable `POST /api/workflows` `202`。canonical projection/CRM export 也已是 `202` command-owner worker task，统一通过 `GET /api/exports/{task_id}` 轮询并从 artifact endpoint 下载；旧 target-candidate export 默认 `410`。因此当前主要过渡性耦合是 C1b 的进程内 legacy hydration owner，不是已删除的 Plan/Jobs/导出同步重路由。C3a 后 `serve` 默认也不再运行 recovery/watchdog，必须看到 fresh 外置 daemon 才启动；显式 dev opt-in 是唯一单进程兼容路径。daemon 唯一性仍依赖 **host-local flock**，所以这是 same-host/systemd 切片，不是跨容器完成态。
 
-**剩余 6 项 + 5d**：(1) 重活出请求线程 enqueue+poll；(2) worker/API 进程分离（worker_daemon 成唯一 runner）；(3) 最小鉴权 + 用户身份；(4) FastAPI 第二步（pydantic→OpenAPI + SSE）；(5) 多用户 agent serving 拓扑（按角色容器化 + agent_session/agent_turn + agent_events SSE + per-user 限额 + 凭证只在 provider worker）；(6) 对象存储读穿（later）；外加 **5d** durable `runtime_outbox` consumer（已推迟到进程拆分时）。
+**剩余项**：C3a 只完成「API 默认不运行 recovery + fresh external daemon gate」。C3b 的跨容器唯一 runner、**5d** durable `runtime_outbox` consumer 和无共享卷唤醒仍未实施；它们受 `RESIDUAL_LEDGER.md` R-019/R-023 约束，不得借 C3a 顺手并入。其余剩余项仍是 FastAPI/OpenAPI+SSE、Track D 多用户 agent serving 拓扑与 later 对象存储读穿。
 
 ## 2. 依赖图与推荐排序
 
@@ -37,7 +37,8 @@
 - **响应形状变化 + 前端影响**：同步 200+完整体 → 202+`{job_id,status:"queued"}`，前端 poll `/api/jobs/{id}/progress`（已有）或新 plan-status 端点取结果。前端**已在轮询 progress**，故 `post_jobs` 几乎零新摩擦；`post_plan`/导出需新增「先拿 token 再 poll 下载」交互。**characterize-first 必须**：这是 API 语义变更，先把现同步形状钉进 transport-parity 套件，再迁，避免静默破坏前端。
 
 ### C3 进程分离 + 5d
-- **API-never-runs-recovery**：今天 `serve`（`cli.py:5037`）默认起 `start_shared_recovery_service`（`cli.py:1193`，在 API 进程内构 `WorkerDaemonService.run_forever`，靠 flock 抢锁，输者线程 return）+ watchdog（`cli.py:1149`）。改法 = **反转默认**：serve 默认**不**起进程内 recovery 线程，把进程内路径降级为 dev-only 显式 `--enable-runtime-watchdog`（今 `--disable-runtime-watchdog` 的反义）。此时 `assert_recovery_coverage_or_fail_closed`（`cli.py:1271`）的 coverage source #1（进程内线程）永不触发，自动落到「要求 fresh external daemon」分支——即所需不变量。`--allow-uncovered-recovery`（`cli.py:3382`）保留作「recovery 在另一容器」opt-out。**wakeup 生产者留在 API**（`_signal_shared_recovery_wakeup`、durable_runtime `_signal_recovery_wakeup`）——API = 信号者，worker = runner。
+- **C3a API-never-runs-recovery（已落地）**：`serve` 默认不起 `start_shared_recovery_service` 或 `start_server_runtime_watchdog`，`assert_recovery_coverage_or_fail_closed` 必须证明 fresh external `worker-recovery-daemon` 才能创建 server。唯一启用进程内路径的入口是 dev-only `--enable-runtime-watchdog`；旧 `--disable-runtime-watchdog` 是可解析的兼容 no-op。启动任一阶段失败也经统一 `finally` 停止并 join 已启动线程。`--allow-uncovered-recovery` 仍只是 loud opt-out，不会暗中启动 recovery。**wakeup 生产者留在 API**（`_signal_shared_recovery_wakeup`、durable_runtime `_signal_recovery_wakeup`）——API = 信号者，worker = runner。
+- **C3a 范围边界**：该切片只改变 same-host/systemd 下的默认运行拓扑，没有新增 outbox consumer、dispatch/command 状态迁移、schema 或 PG advisory singleton，也不允许宣称跨容器 C3 完成。
 - **5d durable outbox consumer**：channel 半成品——生产者 `enqueue_runtime_outbox`（`control_plane_live_postgres.py:3919`）、marker `mark_runtime_outbox_dispatched`（:3975）、ready 索引 `idx_runtime_outbox_ready`（:5796），**缺 consumer**。补 `claim_runtime_outbox` verb，**逐字复用** `claim_workflow_recovery_intents`（:2855）的 `FOR UPDATE SKIP LOCKED` + lease 模式（`UPDATE…SET status='claimed',lease_owner,lease_expires_at WHERE outbox_id IN (SELECT…WHERE queued or expired-claim ORDER BY not_before_at LIMIT n FOR UPDATE SKIP LOCKED) RETURNING *`），在 `run_worker_recovery_once`（`orchestrator.py:38184`）每 tick 调用、dispatch、`mark_runtime_outbox_dispatched`。**为何需要**：host-local wake-file（`service_daemon.py request_service_wakeup`）仅同主机/共享 bind-mount 有效；api 与 agent-worker 拆成无共享卷的独立容器后 wake 文件不可见，sub-second 唤醒静默降到 30s backstop（5c）——5d 是跨容器 durable floor。
 - **跨容器单写者**：flock 是 host-local，拆容器后两个 worker 各抢各 host 的锁、双跑。改走 PG-native：`_advisory_lock_key`（`control_plane_live_postgres.py:6052`）schema-prefixed 的 database-global advisory lock。**rollout 约束：锁身份已变，必须全停重启、禁新旧进程共存**（systemd 天然满足）。
 - **LISTEN/NOTIFY 何时进**：**仅** 5d 之上、容器拆分后求 sub-second 跨容器唤醒时（outbox-enqueue 时 NOTIFY + worker LISTEN）。`claim_runtime_outbox`+poll 单独已正确，NOTIFY 只买 latency，非正确性必需——与 memo 的「拆进程时再 revisit」一致。

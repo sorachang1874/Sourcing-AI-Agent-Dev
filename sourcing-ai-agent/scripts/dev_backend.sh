@@ -20,7 +20,12 @@ DEV_API_PORT="${DEV_API_PORT:-8765}"
 DEV_DAEMON_POLL_SECONDS="${DEV_DAEMON_POLL_SECONDS:-5}"
 DEV_FRONTEND_PORTS_DEFAULT="${DEV_FRONTEND_PORTS:-4173,4174}"
 START_DAEMON=1
-DISABLE_RUNTIME_WATCHDOG=0
+# C3a default: serve is API-only and requires the external worker daemon.
+# Keep the legacy negative flag as an accepted compatibility input; only the
+# positive dev opt-in below enables in-process recovery.
+DISABLE_RUNTIME_WATCHDOG=1
+RUNTIME_WATCHDOG_MODE_FLAG=""
+ALLOW_UNCOVERED_RECOVERY=0
 PRINT_CONFIG=0
 DEV_BACKEND_SKIP_POSTGRES_AUTO_SOURCE=0
 declare -a FRONTEND_PORTS=()
@@ -33,7 +38,8 @@ Usage:
   bash ./scripts/dev_backend.sh --print-config
   bash ./scripts/dev_backend.sh --host 127.0.0.1 --port 8766 --frontend-port 4173 --frontend-port 4174
   bash ./scripts/dev_backend.sh --runtime-dir runtime/test_env --port 8775
-  bash ./scripts/dev_backend.sh --no-daemon
+  bash ./scripts/dev_backend.sh --no-daemon --enable-runtime-watchdog
+  bash ./scripts/dev_backend.sh --no-daemon --allow-uncovered-recovery
 
 What it does:
   - sources local_dev_proxy_guard.sh
@@ -49,12 +55,27 @@ Options:
   --frontend-port <port>         Allow localhost/127.0.0.1 frontend origin for this port. Repeatable.
   --allow-origin <origin>        Add extra explicit origin. Repeatable.
   --daemon-poll-seconds <sec>    Worker daemon poll interval. Default: 5
-  --no-daemon                    Start only serve; also disables the server-side runtime watchdog.
-  --disable-runtime-watchdog     Pass --disable-runtime-watchdog to the API serve process.
-  --enable-runtime-watchdog      Re-enable the server-side runtime watchdog after --no-daemon.
+  --no-daemon                    Do not launch a wrapper-owned worker daemon; serve still requires a fresh external daemon.
+  --disable-runtime-watchdog     Deprecated compatibility no-op; external recovery is already the default.
+  --enable-runtime-watchdog      Dev-only: run recovery and the watchdog inside serve (normally pair with --no-daemon).
+  --allow-uncovered-recovery     Loud API-only opt-out when recovery is guaranteed elsewhere.
   --print-config                 Print resolved config and exit.
   --help                         Show this help.
 EOF
+}
+
+_dev_backend_set_runtime_watchdog_mode() {
+  local requested_mode="$1"
+  if [[ -n "${RUNTIME_WATCHDOG_MODE_FLAG}" ]] && [[ "${RUNTIME_WATCHDOG_MODE_FLAG}" != "${requested_mode}" ]]; then
+    printf 'Conflicting runtime watchdog flags: --enable-runtime-watchdog and --disable-runtime-watchdog are mutually exclusive.\n' >&2
+    exit 2
+  fi
+  RUNTIME_WATCHDOG_MODE_FLAG="${requested_mode}"
+  if [[ "${requested_mode}" == "enable" ]]; then
+    DISABLE_RUNTIME_WATCHDOG=0
+  else
+    DISABLE_RUNTIME_WATCHDOG=1
+  fi
 }
 
 _dev_backend_append_csv_value() {
@@ -242,15 +263,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-daemon)
       START_DAEMON=0
-      DISABLE_RUNTIME_WATCHDOG=1
       shift
       ;;
     --disable-runtime-watchdog)
-      DISABLE_RUNTIME_WATCHDOG=1
+      _dev_backend_set_runtime_watchdog_mode disable
       shift
       ;;
     --enable-runtime-watchdog)
-      DISABLE_RUNTIME_WATCHDOG=0
+      _dev_backend_set_runtime_watchdog_mode enable
+      shift
+      ;;
+    --allow-uncovered-recovery)
+      ALLOW_UNCOVERED_RECOVERY=1
       shift
       ;;
     --print-config)
@@ -321,6 +345,8 @@ if [[ $PRINT_CONFIG -eq 1 ]]; then
   printf 'api_port=%s\n' "$DEV_API_PORT"
   printf 'start_daemon=%s\n' "$START_DAEMON"
   printf 'disable_runtime_watchdog=%s\n' "$DISABLE_RUNTIME_WATCHDOG"
+  printf 'enable_runtime_watchdog=%s\n' "$((1 - DISABLE_RUNTIME_WATCHDOG))"
+  printf 'allow_uncovered_recovery=%s\n' "$ALLOW_UNCOVERED_RECOVERY"
   printf 'daemon_poll_seconds=%s\n' "$DEV_DAEMON_POLL_SECONDS"
   printf 'frontend_ports=%s\n' "$(IFS=,; printf '%s' "${FRONTEND_PORTS[*]}")"
   printf 'SOURCING_API_ALLOWED_ORIGINS=%s\n' "${SOURCING_API_ALLOWED_ORIGINS}"
@@ -384,7 +410,7 @@ if [[ $START_DAEMON -eq 1 ]]; then
       daemon_pid=""
       daemon_owned_by_wrapper=0
       rm -f -- "${daemon_pid_file}"
-      printf 'worker daemon did not stay running; continuing with API serve only. Check %s if needed.\n' "${daemon_log}" >&2
+      printf 'worker daemon did not stay running; API serve will fail closed unless another fresh daemon owns this runtime. Check %s if needed.\n' "${daemon_log}" >&2
     fi
   fi
 fi
@@ -398,7 +424,10 @@ fi
 
 cd "${PROJECT_ROOT}"
 serve_args=(serve --host "${DEV_API_HOST}" --port "${DEV_API_PORT}")
-if [[ $DISABLE_RUNTIME_WATCHDOG -eq 1 ]]; then
-  serve_args+=(--disable-runtime-watchdog)
+if [[ $DISABLE_RUNTIME_WATCHDOG -eq 0 ]]; then
+  serve_args+=(--enable-runtime-watchdog)
+fi
+if [[ $ALLOW_UNCOVERED_RECOVERY -eq 1 ]]; then
+  serve_args+=(--allow-uncovered-recovery)
 fi
 PYTHONPATH=src "${DEV_PYTHON_BIN}" -m sourcing_agent.cli "${serve_args[@]}"

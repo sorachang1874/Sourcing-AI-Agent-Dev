@@ -314,14 +314,15 @@ cd "/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent"
 bash ./scripts/dev_frontend.sh
 ```
 
-如果你想显式分开控制 daemon / serve，仍可退回原始命令：
+如果你想显式分开控制 daemon / serve，仍可退回原始命令（两者分属不同终端）：
 
 ```bash
 cd "/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent"
 source ./scripts/local_dev_proxy_guard.sh
 export SOURCING_API_ALLOWED_ORIGINS=http://localhost:4173,http://127.0.0.1:4173
-PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
 PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5
+# 确认 daemon fresh 后再在另一终端启动 API：
+PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
 ```
 
 如果你当前想固定使用 `4174`，对应命令是：

@@ -16,13 +16,14 @@
 - 恢复守护：`run-worker-daemon-service`
 - object storage：默认使用阿里云 OSS（通过 `S3-compatible` 配置接入）
 
-最小命令：
+最小命令（daemon 与 API 应作为两个常驻进程）：
 
 ```bash
 cd "sourcing-ai-agent"
 PYTHONPATH=src python3 -m sourcing_agent.cli test-model
-PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
 PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5
+# 确认 worker-recovery-daemon fresh 后，在另一终端/服务中启动：
+PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
 ```
 
 ## 2. 前端接入边界

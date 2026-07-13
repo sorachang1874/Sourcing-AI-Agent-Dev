@@ -99,9 +99,12 @@ PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
 
 ### 4. Only then start hosted runtime
 
+daemon 与 API 是两个常驻进程；先启动 daemon 并确认 fresh，再启动 API。
+
 ```bash
-PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
 PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5
+# 另一终端/服务：
+PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
 ```
 
 ## Consumption Rules

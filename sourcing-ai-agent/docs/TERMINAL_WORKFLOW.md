@@ -443,7 +443,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-job --job-id <job_id>
 
 ## 5. HTTP API 入口
 
-如果你不想直接用 CLI，也可以先起 HTTP API：
+如果你不想直接用 CLI，也可以起 HTTP API。先按 §1 在另一终端启动 daemon 并确认状态 fresh，再运行：
 
 ```bash
 PYTHONPATH=src python3 -m sourcing_agent.cli serve --port 8765

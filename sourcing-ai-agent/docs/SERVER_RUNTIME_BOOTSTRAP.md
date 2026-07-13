@@ -26,6 +26,7 @@ canonical bundle 选择请同时参考：
 - API 进程
   - 提供 `serve`
   - 暴露 `/health`、`/api/providers/health`
+  - 默认不运行 recovery/watchdog；启动前要求外置 worker daemon 状态 fresh
 - worker daemon
   - 提供 `run-worker-daemon-service`
   - 持续恢复和推进可恢复 worker
@@ -271,21 +272,9 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-daemon-status
 
 如果当前 server 不打算启用 browser lane，不要求 `google_browser` live search 可用。
 
-### 6. Start API server
+### 6. Start worker daemon
 
-```bash
-PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
-```
-
-本地手测如果只需要打开页面和 API，不希望后台恢复自动抢跑 scheduled materialization / recovery backlog，应使用：
-
-```bash
-bash ./scripts/dev_backend.sh --no-daemon
-```
-
-当前脚本契约中，`--no-daemon` 同时关闭外置 worker daemon 和 serve 内置 runtime watchdog。只有明确要测试 serve 内置 watchdog、但不启动外置 daemon 时，才额外传 `--enable-runtime-watchdog`。
-
-### 7. Start worker daemon
+该命令是常驻进程，应由独立终端或 systemd 运行；确认状态 fresh 后再在另一进程启动 API。
 
 ```bash
 PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service \
@@ -301,6 +290,37 @@ PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service \
 ```bash
 PYTHONPATH=src python3 -m sourcing_agent.cli write-worker-daemon-systemd-unit \
   --service-name worker-recovery-daemon
+```
+
+### 7. Start API server
+
+`serve` 默认是 API-only：它不再创建进程内 shared recovery 或 runtime watchdog。
+启动前，第 6 步的 `worker-recovery-daemon` 必须处于 fresh `running` 状态，否则
+coverage gate 在创建 HTTP server 前 fail closed。
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
+```
+
+`scripts/dev_backend.sh` 默认会先启动 worker daemon，所以普通本地启动仍使用：
+
+```bash
+bash ./scripts/dev_backend.sh
+```
+
+`--no-daemon` 只表示 wrapper 不启动 daemon；它不放宽 serve 的 coverage gate，因此只能在
+已有 fresh 外置 daemon 时单独使用。仅为单进程本地调试保留一个显式兼容入口：
+
+```bash
+bash ./scripts/dev_backend.sh --no-daemon --enable-runtime-watchdog
+```
+
+该 flag 会同时启用进程内 recovery 和 watchdog，不是 production 拓扑。旧
+`--disable-runtime-watchdog` 仍可被 CLI/wrapper 接受，但只是兼容 no-op，因为外置 recovery
+已是默认。只有在 recovery 确实由其他部署面提供时，才能使用会输出显式 warning 的：
+
+```bash
+bash ./scripts/dev_backend.sh --no-daemon --allow-uncovered-recovery
 ```
 
 ## Health Checks

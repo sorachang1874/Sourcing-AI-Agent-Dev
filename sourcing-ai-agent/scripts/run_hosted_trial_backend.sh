@@ -21,6 +21,7 @@ HOSTED_MAX_PARALLEL_REQUESTS="${HOSTED_MAX_PARALLEL_REQUESTS:-8}"
 HOSTED_LIGHT_REQUEST_RESERVED="${HOSTED_LIGHT_REQUEST_RESERVED:-2}"
 HOSTED_EXTERNAL_PROVIDER_MODE_DEFAULT="${HOSTED_EXTERNAL_PROVIDER_MODE:-live}"
 START_DAEMON=1
+ALLOW_UNCOVERED_RECOVERY=0
 PRINT_CONFIG=0
 
 _usage() {
@@ -44,7 +45,8 @@ Options:
   --daemon-poll-seconds <n>  Worker daemon poll interval. Default: 8
   --max-parallel <n>         SOURCING_API_MAX_PARALLEL_REQUESTS. Default: 8
   --light-reserved <n>       SOURCING_API_LIGHT_REQUEST_RESERVED. Default: 2
-  --no-daemon                Start serve only.
+  --no-daemon                Do not launch a wrapper-owned daemon; requires a fresh external daemon.
+  --allow-uncovered-recovery Loud API-only opt-out when recovery runs in another deployment plane.
   --print-config             Print resolved config and exit.
   --help                     Show this help.
 EOF
@@ -86,6 +88,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-daemon)
       START_DAEMON=0
+      shift
+      ;;
+    --allow-uncovered-recovery)
+      ALLOW_UNCOVERED_RECOVERY=1
       shift
       ;;
     --print-config)
@@ -146,6 +152,7 @@ if [[ ${PRINT_CONFIG} -eq 1 ]]; then
   printf 'api_port=%s\n' "${HOSTED_API_PORT}"
   printf 'frontend_origin=%s\n' "${HOSTED_FRONTEND_ORIGIN}"
   printf 'start_daemon=%s\n' "${START_DAEMON}"
+  printf 'allow_uncovered_recovery=%s\n' "${ALLOW_UNCOVERED_RECOVERY}"
   printf 'daemon_poll_seconds=%s\n' "${HOSTED_DAEMON_POLL_SECONDS}"
   printf 'SOURCING_API_MAX_PARALLEL_REQUESTS=%s\n' "${SOURCING_API_MAX_PARALLEL_REQUESTS}"
   printf 'SOURCING_API_LIGHT_REQUEST_RESERVED=%s\n' "${SOURCING_API_LIGHT_REQUEST_RESERVED}"
@@ -184,7 +191,7 @@ if [[ ${START_DAEMON} -eq 1 ]]; then
   sleep 1
   if ! kill -0 "${daemon_pid}" 2>/dev/null; then
     daemon_pid=""
-    printf 'worker daemon did not stay running; continuing with API serve only. Check %s if needed.\n' "${daemon_log}" >&2
+    printf 'worker daemon did not stay running; API serve will fail closed unless another fresh daemon owns this runtime or --allow-uncovered-recovery was explicit. Check %s if needed.\n' "${daemon_log}" >&2
   fi
 fi
 
@@ -198,4 +205,8 @@ if [[ -n "${daemon_pid}" ]]; then
 fi
 
 cd "${PROJECT_ROOT}"
-PYTHONPATH=src "${HOSTED_PYTHON_BIN}" -m sourcing_agent.cli serve --host "${HOSTED_API_HOST}" --port "${HOSTED_API_PORT}"
+serve_args=(serve --host "${HOSTED_API_HOST}" --port "${HOSTED_API_PORT}")
+if [[ ${ALLOW_UNCOVERED_RECOVERY} -eq 1 ]]; then
+  serve_args+=(--allow-uncovered-recovery)
+fi
+PYTHONPATH=src "${HOSTED_PYTHON_BIN}" -m sourcing_agent.cli "${serve_args[@]}"

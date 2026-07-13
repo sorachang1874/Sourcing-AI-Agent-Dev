@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -1097,7 +1098,71 @@ class CliWorkflowRunnerTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         )
         print_mock.assert_called_once()
 
-    def test_serve_command_starts_watchdog_without_blocking_bootstrap_pass(self) -> None:
+    def test_serve_defaults_to_external_recovery_without_starting_in_process_threads(self) -> None:
+        orchestrator = mock.Mock()
+        server = mock.Mock()
+        server.serve_forever.side_effect = KeyboardInterrupt()
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+            mock.patch.object(cli, "start_shared_recovery_service") as start_shared_recovery_mock,
+            mock.patch.object(cli, "start_server_runtime_watchdog") as start_watchdog_mock,
+            mock.patch.object(
+                cli,
+                "assert_recovery_coverage_or_fail_closed",
+                return_value={"coverage": "external_recovery_daemon"},
+            ) as coverage_mock,
+            mock.patch.object(cli, "create_server", return_value=server),
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                ["cli", "serve", "--host", "127.0.0.1", "--port", "8765"],
+            ),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        start_shared_recovery_mock.assert_not_called()
+        start_watchdog_mock.assert_not_called()
+        coverage_mock.assert_called_once_with(
+            orchestrator,
+            shared_recovery_thread=None,
+            watchdog_disabled=True,
+            allow_uncovered_recovery=False,
+        )
+        orchestrator.start_background_organization_asset_warmup.assert_called_once_with()
+        server.server_close.assert_called_once_with()
+
+    def test_serve_default_recovery_coverage_failure_precedes_server_creation(self) -> None:
+        orchestrator = mock.Mock()
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+            mock.patch.object(cli, "start_shared_recovery_service") as start_shared_recovery_mock,
+            mock.patch.object(cli, "start_server_runtime_watchdog") as start_watchdog_mock,
+            mock.patch.object(
+                cli,
+                "assert_recovery_coverage_or_fail_closed",
+                side_effect=cli.RecoveryCoverageError("external recovery daemon is unavailable"),
+            ) as coverage_mock,
+            mock.patch.object(cli, "create_server") as create_server_mock,
+            mock.patch.object(cli.sys, "argv", ["cli", "serve"]),
+        ):
+            with self.assertRaisesRegex(cli.RecoveryCoverageError, "external recovery daemon is unavailable"):
+                cli.main()
+
+        start_shared_recovery_mock.assert_not_called()
+        start_watchdog_mock.assert_not_called()
+        coverage_mock.assert_called_once_with(
+            orchestrator,
+            shared_recovery_thread=None,
+            watchdog_disabled=True,
+            allow_uncovered_recovery=False,
+        )
+        orchestrator.start_background_organization_asset_warmup.assert_not_called()
+        create_server_mock.assert_not_called()
+
+    def test_serve_explicit_dev_opt_in_starts_and_joins_in_process_recovery(self) -> None:
         orchestrator = mock.Mock()
         server = mock.Mock()
         server.serve_forever.side_effect = KeyboardInterrupt()
@@ -1123,14 +1188,19 @@ class CliWorkflowRunnerTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "create_server",
                 return_value=server,
             ),
-            mock.patch.object(
-                cli,
-                "run_server_runtime_watchdog_once",
-            ) as bootstrap_once_mock,
+            mock.patch.object(cli, "assert_recovery_coverage_or_fail_closed") as coverage_mock,
             mock.patch.object(
                 cli.sys,
                 "argv",
-                ["cli", "serve", "--host", "127.0.0.1", "--port", "8765"],
+                [
+                    "cli",
+                    "serve",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    "8765",
+                    "--enable-runtime-watchdog",
+                ],
             ),
             mock.patch("builtins.print"),
         ):
@@ -1138,12 +1208,201 @@ class CliWorkflowRunnerTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
         start_shared_recovery_mock.assert_called_once_with(orchestrator)
         start_watchdog_mock.assert_called_once()
-        bootstrap_once_mock.assert_not_called()
-        server.server_close.assert_called_once()
-        watchdog_stop.set.assert_called_once()
-        shared_recovery_stop.set.assert_called_once()
-        watchdog_thread.join.assert_called_once()
-        shared_recovery_thread.join.assert_called_once()
+        coverage_mock.assert_called_once_with(
+            orchestrator,
+            shared_recovery_thread=shared_recovery_thread,
+            watchdog_disabled=False,
+            allow_uncovered_recovery=False,
+        )
+        server.server_close.assert_called_once_with()
+        watchdog_stop.set.assert_called_once_with()
+        shared_recovery_stop.set.assert_called_once_with()
+        watchdog_thread.join.assert_called_once_with(timeout=15.0)
+        shared_recovery_thread.join.assert_called_once_with(timeout=5.0)
+
+    def test_serve_explicit_dev_opt_in_joins_threads_when_coverage_check_fails(self) -> None:
+        orchestrator = mock.Mock()
+        shared_recovery_stop = mock.Mock()
+        shared_recovery_thread = mock.Mock()
+        watchdog_stop = mock.Mock()
+        watchdog_thread = mock.Mock()
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+            mock.patch.object(
+                cli,
+                "start_shared_recovery_service",
+                return_value=(shared_recovery_stop, shared_recovery_thread),
+            ),
+            mock.patch.object(
+                cli,
+                "start_server_runtime_watchdog",
+                return_value=(watchdog_stop, watchdog_thread),
+            ),
+            mock.patch.object(
+                cli,
+                "assert_recovery_coverage_or_fail_closed",
+                side_effect=cli.RecoveryCoverageError("recovery unavailable"),
+            ),
+            mock.patch.object(cli, "create_server") as create_server_mock,
+            mock.patch.object(cli.sys, "argv", ["cli", "serve", "--enable-runtime-watchdog"]),
+        ):
+            with self.assertRaisesRegex(cli.RecoveryCoverageError, "recovery unavailable"):
+                cli.main()
+
+        create_server_mock.assert_not_called()
+        watchdog_stop.set.assert_called_once_with()
+        shared_recovery_stop.set.assert_called_once_with()
+        watchdog_thread.join.assert_called_once_with(timeout=15.0)
+        shared_recovery_thread.join.assert_called_once_with(timeout=5.0)
+
+    def test_serve_allow_uncovered_does_not_silently_start_in_process_recovery(self) -> None:
+        orchestrator = mock.Mock()
+        server = mock.Mock()
+        server.serve_forever.side_effect = KeyboardInterrupt()
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+            mock.patch.object(cli, "start_shared_recovery_service") as start_shared_recovery_mock,
+            mock.patch.object(cli, "start_server_runtime_watchdog") as start_watchdog_mock,
+            mock.patch.object(
+                cli,
+                "assert_recovery_coverage_or_fail_closed",
+                return_value={"coverage": "opt_out_allow_uncovered_recovery", "severity": "warning"},
+            ) as coverage_mock,
+            mock.patch.object(cli, "create_server", return_value=server),
+            mock.patch.object(cli.sys, "argv", ["cli", "serve", "--allow-uncovered-recovery"]),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        start_shared_recovery_mock.assert_not_called()
+        start_watchdog_mock.assert_not_called()
+        coverage_mock.assert_called_once_with(
+            orchestrator,
+            shared_recovery_thread=None,
+            watchdog_disabled=True,
+            allow_uncovered_recovery=True,
+        )
+
+    def test_serve_deprecated_disable_flag_preserves_external_only_behavior(self) -> None:
+        orchestrator = mock.Mock()
+        server = mock.Mock()
+        server.serve_forever.side_effect = KeyboardInterrupt()
+
+        with (
+            mock.patch.object(cli, "build_orchestrator", return_value=orchestrator),
+            mock.patch.object(cli, "start_shared_recovery_service") as start_shared_recovery_mock,
+            mock.patch.object(cli, "start_server_runtime_watchdog") as start_watchdog_mock,
+            mock.patch.object(cli, "assert_recovery_coverage_or_fail_closed") as coverage_mock,
+            mock.patch.object(cli, "create_server", return_value=server),
+            mock.patch.object(cli.sys, "argv", ["cli", "serve", "--disable-runtime-watchdog"]),
+            mock.patch("builtins.print"),
+        ):
+            cli.main()
+
+        start_shared_recovery_mock.assert_not_called()
+        start_watchdog_mock.assert_not_called()
+        coverage_mock.assert_called_once_with(
+            orchestrator,
+            shared_recovery_thread=None,
+            watchdog_disabled=True,
+            allow_uncovered_recovery=False,
+        )
+
+    def test_serve_rejects_conflicting_runtime_watchdog_flags_before_building_runtime(self) -> None:
+        with (
+            mock.patch.object(cli, "build_orchestrator") as build_orchestrator_mock,
+            mock.patch.object(
+                cli.sys,
+                "argv",
+                ["cli", "serve", "--enable-runtime-watchdog", "--disable-runtime-watchdog"],
+            ),
+            mock.patch.object(cli.sys, "stderr"),
+        ):
+            with self.assertRaises(SystemExit) as raised:
+                cli.main()
+
+        self.assertEqual(raised.exception.code, 2)
+        build_orchestrator_mock.assert_not_called()
+
+    def test_dev_backend_rejects_conflicting_runtime_watchdog_flags_in_either_order(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        script_path = repo_root / "scripts" / "dev_backend.sh"
+        flag_orders = (
+            ("--enable-runtime-watchdog", "--disable-runtime-watchdog"),
+            ("--disable-runtime-watchdog", "--enable-runtime-watchdog"),
+        )
+
+        for flag_order in flag_orders:
+            with self.subTest(flag_order=flag_order):
+                completed = subprocess.run(
+                    ["bash", str(script_path), *flag_order, "--print-config"],
+                    cwd=repo_root,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+
+                self.assertEqual(completed.returncode, 2)
+                self.assertIn("Conflicting runtime watchdog flags", completed.stderr)
+
+    def test_hosted_backend_defaults_to_external_daemon_and_forwards_only_explicit_uncovered_opt_out(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        script_path = repo_root / "scripts" / "run_hosted_trial_backend.sh"
+        script_source = script_path.read_text(encoding="utf-8")
+        self.assertLess(script_source.index("run-worker-daemon-service"), script_source.index("serve_args=(serve"))
+        self.assertIn("serve_args+=(--allow-uncovered-recovery)", script_source)
+        self.assertNotIn("--enable-runtime-watchdog", script_source)
+
+        cases = (
+            ((), {"start_daemon": "1", "allow_uncovered_recovery": "0"}),
+            (("--no-daemon",), {"start_daemon": "0", "allow_uncovered_recovery": "0"}),
+            (
+                ("--no-daemon", "--allow-uncovered-recovery"),
+                {"start_daemon": "0", "allow_uncovered_recovery": "1"},
+            ),
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            empty_pg_env = Path(tempdir) / "empty-postgres.env"
+            empty_pg_env.write_text("", encoding="utf-8")
+            env = {
+                **os.environ,
+                "HOSTED_PYTHON_BIN": cli.sys.executable,
+                "SOURCING_LOCAL_POSTGRES_ENV_FILE": str(empty_pg_env),
+                "SOURCING_CONTROL_PLANE_POSTGRES_DSN": "postgresql://sourcing@127.0.0.1:55432/sourcing_test",
+                "SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE": "postgres_only",
+                "SOURCING_RUNTIME_ENVIRONMENT": "test",
+                "SOURCING_EXTERNAL_PROVIDER_MODE": "simulate",
+            }
+            for flags, expected in cases:
+                with self.subTest(flags=flags):
+                    completed = subprocess.run(
+                        [
+                            "bash",
+                            str(script_path),
+                            "--runtime-dir",
+                            str(Path(tempdir) / "runtime"),
+                            *flags,
+                            "--print-config",
+                        ],
+                        cwd=repo_root,
+                        env=env,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    config = dict(line.split("=", 1) for line in completed.stdout.splitlines() if "=" in line)
+                    for key, value in expected.items():
+                        self.assertEqual(config[key], value)
+
+    def test_local_proxy_raw_serve_example_uses_explicit_dev_only_recovery_opt_in(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        script_source = (repo_root / "scripts" / "local_dev_proxy_guard.sh").read_text(encoding="utf-8")
+
+        self.assertIn("sourcing_agent.cli serve", script_source)
+        self.assertIn("serve --host 0.0.0.0 --port 8765 --enable-runtime-watchdog", script_source)
 
     def test_upload_asset_bundle_command_defaults_to_auto_archive_mode(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

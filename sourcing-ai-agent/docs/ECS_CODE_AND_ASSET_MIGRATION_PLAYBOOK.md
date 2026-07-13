@@ -45,7 +45,8 @@ Code migration gates:
 3. Align systemd `WorkingDirectory`, `ExecStart`, venv path, env file, and Nginx upstream docs to that same root.
 4. Move the old `/opt/sourcing-ai-agent` root out of active service paths after probes pass. Do not delete `runtime/secrets` by accident.
 5. Do not require legacy sibling skill packages (`anthropic-employee-scan`, `investor-chinese-scan`, `biz-visit-onepager`) for hosted runtime startup. They may exist in a developer monorepo, but production runtime summary must work from the `sourcing-ai-agent` repo plus in-repo `local_asset_packages`.
-6. Verify the running process imports the new code:
+6. 先启动与 API 使用同一 runtime 的 worker daemon 并确认状态 fresh，再启动 API unit；`serve` 默认不再在进程内补 recovery。
+7. Verify the running process imports the new code:
 
 ```bash
 pwd
@@ -56,7 +57,7 @@ bash ./scripts/run_hosted_trial_backend.sh --print-config
 
 If `/api/providers/apify/webhook` is still `404` after restart, ECS is still serving old code or an old route.
 
-Recommended systemd shape, with secrets kept in an env file rather than embedded in the unit:
+Recommended API systemd shape, with secrets kept in an env file rather than embedded in the unit. This unit is valid only when a separately managed worker-daemon unit for the same runtime is ordered before it and remains fresh; otherwise `serve` fails closed before binding HTTP:
 
 ```ini
 [Service]

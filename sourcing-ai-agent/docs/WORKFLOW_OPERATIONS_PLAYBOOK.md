@@ -100,16 +100,17 @@ PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-se
 
 默认应使用 hosted 路径：
 
-1. `serve` 常驻托管 API 与 workflow 调度
-2. `run-worker-daemon-service` 常驻推进 recoverable workers
+1. `run-worker-daemon-service` 先常驻启动并推进 recoverable workers
+2. 确认 daemon fresh 后，`serve` 作为另一常驻进程托管 API 与 workflow 调度
 
 最小启动组合：
 
 ```bash
 cd "sourcing-ai-agent"
 PYTHONPATH=src python3 -m sourcing_agent.cli test-model
-PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
 PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5
+# 另一终端/服务：
+PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
 ```
 
 基础健康检查：

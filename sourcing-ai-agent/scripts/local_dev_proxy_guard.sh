@@ -82,7 +82,7 @@ What it does:
 Examples:
   source ./scripts/local_dev_proxy_guard.sh
   ./scripts/local_dev_proxy_guard.sh curl http://127.0.0.1:8765/health
-  ./scripts/local_dev_proxy_guard.sh env SOURCING_API_ALLOWED_ORIGINS=http://localhost:4173,http://127.0.0.1:4173 PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
+  ./scripts/local_dev_proxy_guard.sh env SOURCING_API_ALLOWED_ORIGINS=http://localhost:4173,http://127.0.0.1:4173 PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765 --enable-runtime-watchdog
 EOF
 }
 

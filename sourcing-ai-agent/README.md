@@ -663,8 +663,8 @@ sourcing-ai-agent/
 
 推荐常驻进程：
 
-- API: `PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765`
-- Recovery daemon: `PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5`
+- Recovery daemon（先启动并确认 fresh）: `PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5`
+- API（另一常驻进程）: `PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765`
 
 推荐健康检查：
 
@@ -697,8 +697,10 @@ source ./scripts/local_dev_proxy_guard.sh
 
 ```bash
 ./scripts/local_dev_proxy_guard.sh curl http://127.0.0.1:8765/health
-./scripts/local_dev_proxy_guard.sh env SOURCING_API_ALLOWED_ORIGINS=http://localhost:4173,http://127.0.0.1:4173 PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
+./scripts/local_dev_proxy_guard.sh env SOURCING_API_ALLOWED_ORIGINS=http://localhost:4173,http://127.0.0.1:4173 PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765 --enable-runtime-watchdog
 ```
+
+上面的 raw `serve` 是单进程本地调试示例，因此明确使用 dev-only opt-in。正常启动仍应用下方 wrapper，由它先启动外置 daemon；production raw `serve` 在未看到 fresh daemon 时会 fail closed。
 
 在这之上，常用本地启动入口现在也收敛成两个 helper：
 
@@ -826,8 +828,9 @@ SQLite snapshot export/restore intentionally remains outside quick start. It is 
 cd "sourcing-ai-agent"
 source ./scripts/local_dev_proxy_guard.sh
 PYTHONPATH=src python3 -m sourcing_agent.cli test-model
-PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
 PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5
+# 确认 worker-recovery-daemon fresh 后，在另一终端/服务中启动：
+PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
 ```
 
 ## 模型配置

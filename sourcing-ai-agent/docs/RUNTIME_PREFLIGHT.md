@@ -57,6 +57,7 @@ Rules:
 - Before debugging Postgres/DSN behavior, run `make dev-doctor` or `bash ./scripts/dev_backend.sh --print-config`.
 - Before debugging GitHub/Codex/Claude Code transport, run `make agent-network-preflight` and treat it as the source of truth for allowed diagnostics.
 - Do not assume a prior frontend/backend is still alive after context compaction or a new terminal/tool session. Check status.
+- `serve` is API-only by default. It starts neither shared recovery nor the runtime watchdog and fails closed unless `worker-recovery-daemon` is fresh; the only in-process path is the explicit dev-only `--enable-runtime-watchdog` opt-in.
 
 ## Choose The Runtime Mode
 
@@ -93,6 +94,30 @@ make dev-status
 make dev-logs
 make dev-stop
 ```
+
+`scripts/dev_backend.sh` normally starts the external worker daemon before `serve`, so the
+default local commands above satisfy the recovery coverage gate. For a direct CLI launch,
+start the daemon in a dedicated terminal or service first:
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m sourcing_agent.cli run-worker-daemon-service \
+  --service-name worker-recovery-daemon
+```
+
+Then check it and start the API from another terminal:
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m sourcing_agent.cli show-daemon-status \
+  --service-name worker-recovery-daemon
+PYTHONPATH=src ./.venv/bin/python -m sourcing_agent.cli serve
+```
+
+`bash ./scripts/dev_backend.sh --no-daemon` no longer means uncovered recovery: it only
+suppresses the wrapper-owned daemon and therefore requires an already-running fresh external
+daemon. Single-process recovery is available only for explicit local debugging via
+`--no-daemon --enable-runtime-watchdog`. If recovery truly runs in another deployment plane,
+`--no-daemon --allow-uncovered-recovery` is the loud, auditable opt-out and emits a warning;
+it does not silently start recovery in the API.
 
 ### Interactive Scripted Environment
 
