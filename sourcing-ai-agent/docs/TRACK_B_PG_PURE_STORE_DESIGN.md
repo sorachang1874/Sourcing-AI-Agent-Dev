@@ -927,5 +927,6 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     OperationRun/AgentAction 的 post-commit sync 仍在事务外，二者继续由 **R-019** 跟踪，不得把 R-020 closed 解释为
     acquisition 全链原子化。owner 已轮换 Apify Token/API Keys，当前版本未配置可用新凭据且未授权本批 live，故
     live provider 验证显式延期；
-    provider simulation、local PG 与非 live 合同开发继续，不受异步 review 阻断。下一分子批为 workflow_runtime
-    read-model trio，settle 后按 scope-local async Codex lane 登记评审。D-1/D-2/D-3 截止仍为 **2026-07-31**。
+    provider simulation、local PG 与非 live 合同开发继续，不受异步 review 阻断。R-022 已登记 pinned
+    `af50f45..30a703e` scope-local async Codex review，只冻结本批 live/W6/manual/里程碑签收。下一分子批为
+    workflow_runtime read-model trio。D-1/D-2/D-3 截止仍为 **2026-07-31**。

@@ -1,13 +1,14 @@
 # Track B ② Repository 迁移 Handbook(新一轮的入口文档)
 
 > Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
-> 状态:**②.4c 完成(2026-07-13)** —— workflow_runtime 的 activity spine
+> 状态:**②.4c 完成(2026-07-13,implementation `30a703e`)** —— workflow_runtime 的 activity spine
 > (`workflow_activity_runs` / `workflow_activity_attempts` / `workflow_entity_deltas`)已退役到
 > `store.repos.workflow_runtime`;当前分支 `storage.py` 12,564 → 12,190 行,production 165 + tests 134 个旧调用
 > 全部迁移,旧 9 facade / 3 mapper / 3 descriptor dispatch keys 清零。五表共享 identity/terminal/write-once
 > 原语已落地,plan-commit / scale-plan / profile-fetch 三条 owner cancel 现由 command/run/activity/lane 单事务 UoW
 > 闭合 R-020。该 UoW 不提供提交后 phantom child/attempt ownership fence,linked Operation post-commit sync 也仍在
-> R-019;不得误读为 acquisition 全链原子化。批记录见 `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。
+> R-019;不得误读为 acquisition 全链原子化。R-022 已固定 `af50f45..30a703e` 异步 Codex review，
+> 不阻断下一批。批记录见 `TRACK_B_PG_PURE_STORE_DESIGN.md` §6 末条。
 > 下一批为 **②.4 workflow_runtime read-model trio**。
 > B4.3 影子拆除 100% 完成(commit 952f9ee)。本文档是路线图
 > **②「Repository 查询方法建设 + 按域迁移调用方」** 这一轮的执行手册。
