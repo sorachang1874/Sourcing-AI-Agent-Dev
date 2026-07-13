@@ -853,7 +853,7 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     已原子化。R-018 登记本批 pinned 异步 Codex review;GO 前只冻结 ②.4a 的 live/W6/manual/里程碑签收。
     下一批为 ②.4b acquisition-control。D-1/D-2/D-3 截止仍为 **2026-07-31**。
 
-- **2026-07-13 ②.4b 完成 —— acquisition-control 退役到 `store.repos.workflow_runtime`**:
+- **2026-07-13 ②.4b 完成(`d6e1e2a`) —— acquisition-control 退役到 `store.repos.workflow_runtime`**:
   - **范围/Scout/删除**:`acquisition_runs` 与 `acquisition_discovery_lanes` 两表，6 个原 Store public + 2 mapper
     迁为 Repository 的 run 三方法与 discovery-lane 三个短名方法；activity spine、commands、
     `acquisition_shard_registry` 均未越界合批。`storage.py` **12,809 → 12,564**(-245)，workflow repository
@@ -883,5 +883,5 @@ dual *code*(非 dual *data*)是行语义分歧(`WORKFLOW_BEHAVIOR_GUARDRAILS.md`
     **87 errors / 4 files**，新 Repository/adapter 无新增。未运行 full `test_pipeline.py`、live provider、W6 或 manual signoff。
   - **边界/接续**:`acquisition_discovery_lanes` 仍是 read model，控制目标仍是 owning workflow command。本批单行
     原语不等于跨表 cancel UoW；plan-commit、scale-plan、profile-fetch 三条 module-state→command 部分提交窗口单列
-    R-020。下一分子批为 ②.4c activity spine + R-020 fixed-forward。D-1/D-2/D-3 截止仍为 **2026-07-31**；本批 pinned 异步 Codex review
-    在 implementation commit 固定后登记，只冻结本 scope 的 live/W6/manual/里程碑签收。
+    R-020。下一分子批为 ②.4c activity spine + R-020 fixed-forward。D-1/D-2/D-3 截止仍为 **2026-07-31**；
+    R-021 已登记 pinned `a1c2a99..d6e1e2a` 异步 Codex review，只冻结本 scope 的 live/W6/manual/里程碑签收。

@@ -1,7 +1,7 @@
 # Track B ② Repository 迁移 Handbook(新一轮的入口文档)
 
 > Status: Living handbook — Track B ② 轮(按域退役 storage.py 到 store.repos.*)的入口执行手册。
-> 状态:**②.4b 完成(2026-07-13,待本批 implementation commit 固定)** —— workflow_runtime 的 acquisition-control
+> 状态:**②.4b 完成(2026-07-13,implementation `d6e1e2a`)** —— workflow_runtime 的 acquisition-control
 > (`acquisition_runs` / `acquisition_discovery_lanes`)已退役到 `store.repos.workflow_runtime`;
 > 当前分支 `storage.py` 12,809 → 12,564 行,production 38 + tests 15 个旧调用全部迁移,
 > 旧 6 facade / 2 mapper / 2 descriptor dispatch keys 清零。单行写现已具有 identity collision fail-closed、
