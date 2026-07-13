@@ -92,6 +92,7 @@
 - [TRACK_C_C1_DURABLE_PLAN_TASK_DESIGN.md](TRACK_C_C1_DURABLE_PLAN_TASK_DESIGN.md) — C1 durable Plan task current authority（2026-07-14；C1a/C1b author batches 与 pinned-advisory fixed-forward 已记录，formal gate pending；C1c-e 仍受 D-C1-1..4 owner decisions 约束）。
 - [TRACK_D_AGENT_RUNTIME_PLAN.md](TRACK_D_AGENT_RUNTIME_PLAN.md) — Track D 强 Agent 化执行计划（2026-07-13，Claude Fable 5 起草的跨模型设计输入，owner 待审；含现状基线修正：W8/W9 substrate 已在位，实际缺口 = ModelClient streaming/tool-calling、agent 会话三表、SSE、planner loop；顺序建议 D0→D1→D3→D2→D4，与 Track C 并行）。
 - [TRACK_D_D0_MODEL_TOOL_RUNTIME_DESIGN.md](TRACK_D_D0_MODEL_TOOL_RUNTIME_DESIGN.md) — D0+D1 批级设计（streaming/tool-calling 能力面 `model_tool_runtime.py` + `/api/agent/tool-registry`；14 方法 facade 不变量、SSE delta 累积、scripted 回放、批协议与守卫）。
+- [TRACK_D_D0B_MODEL_CLIENT_V1_CHARACTERIZATION.md](TRACK_D_D0B_MODEL_CLIENT_V1_CHARACTERIZATION.md) — D0b 非 live characterize-first 实施记录（17 方法签名、5 个 concrete surface、24 个消费模块/27 调用点、三种既有 wire shape 与身份边界；零产品码）。
 - [TRACK_D_D3_COMPANY_IDENTITY_SELF_VERIFICATION_DESIGN.md](TRACK_D_D3_COMPANY_IDENTITY_SELF_VERIFICATION_DESIGN.md) — D3 批级设计（公司身份自验证 loop：`verify_company_identity` action + `company.identity.verify` 命令 + 置信阶梯出口；误确认率=0 硬门；不依赖 D0/D2/model_native_search）。
 - [NEXT_TODO.md](NEXT_TODO.md) — 活跃待办（滚动文件）。
 - [../PROGRESS.md](../PROGRESS.md) — 进展日志（滚动文件，月度归档于 `archive/progress/`）。
