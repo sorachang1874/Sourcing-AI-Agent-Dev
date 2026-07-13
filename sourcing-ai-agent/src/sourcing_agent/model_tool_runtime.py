@@ -17,7 +17,7 @@ import math
 import re
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
-from typing import Any, Iterable, Iterator, Literal, Mapping, TypeAlias
+from typing import Any, Iterable, Iterator, Literal, Mapping, TypeAlias, cast
 
 from .model_route_registry import (
     ModelRouteExecutionRejected,
@@ -29,7 +29,53 @@ from .model_usage import ModelUsage
 MODEL_TURN_MESSAGE_SCHEMA_VERSION = "model_turn_message_v1"
 MODEL_TOOL_REQUEST_HASH_SCHEMA_VERSION = "model_tool_request_hash_v1"
 MODEL_TOOL_TRANSCRIPT_SCHEMA_VERSION = "model_tool_transcript_v1"
+MODEL_INVOCATION_ENVELOPE_SCHEMA_VERSION = "model_invocation_envelope_v1"
 D0A_EFFECT_AUTHORIZATION_AVAILABLE = False
+
+MODEL_INVOCATION_ENVELOPE_RECORD_KEYS = frozenset(
+    {
+        "schema_version",
+        "route_id",
+        "route_revision",
+        "provider",
+        "api_style",
+        "requested_model",
+        "response_model",
+        "effective_model",
+        "model_identity_provenance",
+        "effective_route_snapshot_ref",
+        "effective_route_snapshot_digest",
+        "circuit_identity",
+        "runtime_namespace",
+        "provider_mode",
+        "workspace_id",
+        "actor_id",
+        "permission_scope",
+        "prompt_policy_version",
+        "permission_scope_revision",
+        "outbound_policy_revision",
+        "model_safe_schema_revision",
+        "operation_run_id",
+        "turn_id",
+        "step_id",
+        "workflow_command_id",
+        "activity_run_id",
+        "activity_attempt_id",
+        "provider_call_id",
+        "terminal_reason",
+        "usage",
+        "usage_status",
+        "fallback_status",
+        "circuit_state",
+        "evidence_bundle_hash",
+        "canonical_result_digest",
+        "result_artifact_ref",
+        "result_artifact_digest",
+        "cost_exposure_ref",
+        "canonical_request_digest",
+        "envelope_digest",
+    }
+)
 
 MAX_MESSAGE_CONTENT_BYTES = 64 * 1024
 MAX_TOTAL_MESSAGE_BYTES = 256 * 1024
@@ -96,9 +142,20 @@ class ModelToolRequestBindingError(ModelToolRuntimeError):
     """Raised when a request conflicts with its checked-in route declaration."""
 
 
+class ModelInvocationEnvelopeError(ModelToolRuntimeError):
+    """Raised when immutable invocation evidence is incomplete or inconsistent."""
+
+
+class ModelInvocationMirrorError(ModelInvocationEnvelopeError):
+    """Raised when a D0a result conflicts with shared envelope evidence."""
+
+
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 TerminalReason: TypeAlias = Literal["end_turn", "tool_calls", "length", "content_filter"]
 UsageStatus: TypeAlias = Literal["reported", "unavailable", "invalid"]
+EnvelopeProviderMode: TypeAlias = Literal["simulate", "scripted", "live"]
+FallbackStatus: TypeAlias = Literal["not_used", "blocked", "used"]
+CircuitState: TypeAlias = Literal["not_checked", "closed", "open", "half_open"]
 
 _FINISH_REASON_MAP: dict[str, TerminalReason] = {
     "stop": "end_turn",
@@ -162,6 +219,31 @@ def _required_sha256(field_name: str, value: str) -> str:
     if re.fullmatch(r"[0-9a-f]{64}", normalized) is None:
         raise ModelToolRuntimeError(f"model_tool_invalid_{field_name}_sha256")
     return normalized
+
+
+def _envelope_required_text(field_name: str, value: object) -> str:
+    if type(value) is not str or not value or value != value.strip():
+        raise ModelInvocationEnvelopeError(f"model_invocation_invalid_{field_name}")
+    return value
+
+
+def _envelope_optional_text(field_name: str, value: object) -> str | None:
+    if value is None:
+        return None
+    return _envelope_required_text(field_name, value)
+
+
+def _envelope_required_sha256(field_name: str, value: object) -> str:
+    normalized = _envelope_required_text(field_name, value)
+    if re.fullmatch(r"[0-9a-f]{64}", normalized) is None:
+        raise ModelInvocationEnvelopeError(f"model_invocation_invalid_{field_name}_sha256")
+    return normalized
+
+
+def _envelope_optional_sha256(field_name: str, value: object) -> str | None:
+    if value is None:
+        return None
+    return _envelope_required_sha256(field_name, value)
 
 
 def _bounded_text(field_name: str, value: str, *, maximum_bytes: int = MAX_MESSAGE_CONTENT_BYTES) -> str:
@@ -356,6 +438,306 @@ class ModelIdentity:
 
 
 @dataclass(frozen=True, slots=True)
+class ModelInvocationEnvelopeV1:
+    """Canonical immutable terminal-result model invocation evidence.
+
+    Optional references represent typed absence. This value does not mint refs,
+    persist itself, authorize an effect, or imply that a durable owner exists.
+    Pre-call, transport, and protocol failures require a future closed attempt
+    outcome contract and must not be encoded as fabricated terminal results.
+    """
+
+    schema_version: str
+    route_id: str
+    route_revision: str
+    provider: str
+    api_style: str
+    requested_model: str
+    response_model: str
+    effective_model: str
+    model_identity_provenance: str
+    effective_route_snapshot_ref: str | None
+    effective_route_snapshot_digest: str
+    circuit_identity: str
+    runtime_namespace: str
+    provider_mode: EnvelopeProviderMode
+    workspace_id: str
+    actor_id: str
+    permission_scope: str
+    prompt_policy_version: str
+    permission_scope_revision: str
+    outbound_policy_revision: str
+    model_safe_schema_revision: str
+    operation_run_id: str | None
+    turn_id: str | None
+    step_id: str | None
+    workflow_command_id: str | None
+    activity_run_id: str | None
+    activity_attempt_id: str | None
+    provider_call_id: str | None
+    terminal_reason: TerminalReason
+    usage: ModelUsage
+    usage_status: UsageStatus
+    fallback_status: FallbackStatus
+    circuit_state: CircuitState
+    evidence_bundle_hash: str | None
+    canonical_result_digest: str
+    result_artifact_ref: str | None
+    result_artifact_digest: str | None
+    cost_exposure_ref: str | None
+    canonical_request_digest: str
+
+    def __post_init__(self) -> None:
+        if self.schema_version != MODEL_INVOCATION_ENVELOPE_SCHEMA_VERSION:
+            raise ModelInvocationEnvelopeError(
+                f"model_invocation_schema_unsupported:{self.schema_version or '<missing>'}"
+            )
+        for field_name in (
+            "route_id",
+            "provider",
+            "api_style",
+            "requested_model",
+            "response_model",
+            "effective_model",
+            "circuit_identity",
+            "runtime_namespace",
+            "workspace_id",
+            "actor_id",
+            "permission_scope",
+            "prompt_policy_version",
+            "permission_scope_revision",
+            "outbound_policy_revision",
+            "model_safe_schema_revision",
+        ):
+            _envelope_required_text(field_name, getattr(self, field_name))
+        _envelope_required_sha256("route_revision", self.route_revision)
+        _envelope_required_sha256("effective_route_snapshot_digest", self.effective_route_snapshot_digest)
+        _envelope_required_sha256("canonical_result_digest", self.canonical_result_digest)
+        _envelope_required_sha256("canonical_request_digest", self.canonical_request_digest)
+        _envelope_optional_text("effective_route_snapshot_ref", self.effective_route_snapshot_ref)
+        _envelope_optional_text("provider_call_id", self.provider_call_id)
+        _envelope_optional_sha256("evidence_bundle_hash", self.evidence_bundle_hash)
+        _envelope_optional_text("result_artifact_ref", self.result_artifact_ref)
+        _envelope_optional_sha256("result_artifact_digest", self.result_artifact_digest)
+        _envelope_optional_text("cost_exposure_ref", self.cost_exposure_ref)
+        _envelope_required_text("model_identity_provenance", self.model_identity_provenance)
+        _envelope_required_text("provider_mode", self.provider_mode)
+        _envelope_required_text("terminal_reason", self.terminal_reason)
+        _envelope_required_text("usage_status", self.usage_status)
+        _envelope_required_text("fallback_status", self.fallback_status)
+        _envelope_required_text("circuit_state", self.circuit_state)
+        if self.model_identity_provenance != "provider_response":
+            raise ModelInvocationEnvelopeError(
+                f"model_invocation_identity_provenance_invalid:{self.model_identity_provenance}"
+            )
+        if self.provider_mode not in {"simulate", "scripted", "live"}:
+            raise ModelInvocationEnvelopeError(f"model_invocation_provider_mode_invalid:{self.provider_mode}")
+        if self.provider_mode != self.provider_mode.lower():
+            raise ModelInvocationEnvelopeError(f"model_invocation_provider_mode_noncanonical:{self.provider_mode}")
+        if self.terminal_reason not in _FINISH_REASON_MAP.values():
+            raise ModelInvocationEnvelopeError(f"model_invocation_terminal_reason_invalid:{self.terminal_reason}")
+        if type(self.usage) is not ModelUsage:
+            raise ModelInvocationEnvelopeError("model_invocation_usage_type_invalid")
+        if self.usage_status not in {"reported", "unavailable", "invalid"}:
+            raise ModelInvocationEnvelopeError(f"model_invocation_usage_status_invalid:{self.usage_status}")
+        if self.usage_status == "reported" and not self.usage.to_record():
+            raise ModelInvocationEnvelopeError("model_invocation_reported_usage_empty")
+        if self.usage_status == "unavailable" and self.usage.to_record():
+            raise ModelInvocationEnvelopeError("model_invocation_unavailable_usage_present")
+        if self.fallback_status not in {"not_used", "blocked", "used"}:
+            raise ModelInvocationEnvelopeError(f"model_invocation_fallback_status_invalid:{self.fallback_status}")
+        if self.circuit_state not in {"not_checked", "closed", "open", "half_open"}:
+            raise ModelInvocationEnvelopeError(f"model_invocation_circuit_state_invalid:{self.circuit_state}")
+
+        causality = (
+            self.operation_run_id,
+            self.turn_id,
+            self.step_id,
+            self.workflow_command_id,
+            self.activity_run_id,
+            self.activity_attempt_id,
+        )
+        for field_name, value in zip(
+            (
+                "operation_run_id",
+                "turn_id",
+                "step_id",
+                "workflow_command_id",
+                "activity_run_id",
+                "activity_attempt_id",
+            ),
+            causality,
+            strict=True,
+        ):
+            _envelope_optional_text(field_name, value)
+        if any(value is None for value in causality) and any(value is not None for value in causality):
+            raise ModelInvocationEnvelopeError("model_invocation_causality_must_be_complete_or_absent")
+        if (self.result_artifact_ref is None) != (self.result_artifact_digest is None):
+            raise ModelInvocationEnvelopeError("model_invocation_result_artifact_pair_incomplete")
+
+    def _record_without_envelope_digest(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "route_id": self.route_id,
+            "route_revision": self.route_revision,
+            "provider": self.provider,
+            "api_style": self.api_style,
+            "requested_model": self.requested_model,
+            "response_model": self.response_model,
+            "effective_model": self.effective_model,
+            "model_identity_provenance": self.model_identity_provenance,
+            "effective_route_snapshot_ref": self.effective_route_snapshot_ref,
+            "effective_route_snapshot_digest": self.effective_route_snapshot_digest,
+            "circuit_identity": self.circuit_identity,
+            "runtime_namespace": self.runtime_namespace,
+            "provider_mode": self.provider_mode,
+            "workspace_id": self.workspace_id,
+            "actor_id": self.actor_id,
+            "permission_scope": self.permission_scope,
+            "prompt_policy_version": self.prompt_policy_version,
+            "permission_scope_revision": self.permission_scope_revision,
+            "outbound_policy_revision": self.outbound_policy_revision,
+            "model_safe_schema_revision": self.model_safe_schema_revision,
+            "operation_run_id": self.operation_run_id,
+            "turn_id": self.turn_id,
+            "step_id": self.step_id,
+            "workflow_command_id": self.workflow_command_id,
+            "activity_run_id": self.activity_run_id,
+            "activity_attempt_id": self.activity_attempt_id,
+            "provider_call_id": self.provider_call_id,
+            "terminal_reason": self.terminal_reason,
+            "usage": self.usage.to_record(),
+            "usage_status": self.usage_status,
+            "fallback_status": self.fallback_status,
+            "circuit_state": self.circuit_state,
+            "evidence_bundle_hash": self.evidence_bundle_hash,
+            "canonical_result_digest": self.canonical_result_digest,
+            "result_artifact_ref": self.result_artifact_ref,
+            "result_artifact_digest": self.result_artifact_digest,
+            "cost_exposure_ref": self.cost_exposure_ref,
+            "canonical_request_digest": self.canonical_request_digest,
+        }
+
+    @property
+    def envelope_digest(self) -> str:
+        return _sha256_json(self._record_without_envelope_digest())
+
+    def to_record(self) -> dict[str, object]:
+        return {**self._record_without_envelope_digest(), "envelope_digest": self.envelope_digest}
+
+    @classmethod
+    def from_record(cls, record: Mapping[str, object]) -> ModelInvocationEnvelopeV1:
+        if not isinstance(record, Mapping) or set(record) != MODEL_INVOCATION_ENVELOPE_RECORD_KEYS:
+            raise ModelInvocationEnvelopeError("model_invocation_record_keyset_invalid")
+        envelope_digest = _envelope_required_sha256("envelope_digest", record["envelope_digest"])
+        unsigned_input = {key: value for key, value in record.items() if key != "envelope_digest"}
+        if _sha256_json(unsigned_input) != envelope_digest:
+            raise ModelInvocationEnvelopeError("model_invocation_envelope_digest_mismatch")
+        usage_record = record.get("usage")
+        usage_keys = {
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+            "cached_input_tokens",
+            "reasoning_output_tokens",
+        }
+        if not isinstance(usage_record, Mapping) or not set(usage_record) <= usage_keys:
+            raise ModelInvocationEnvelopeError("model_invocation_usage_record_invalid")
+
+        def usage_value(field_name: str) -> int | None:
+            value = usage_record.get(field_name)
+            if value is None:
+                return None
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ModelInvocationEnvelopeError(f"model_invocation_usage_value_invalid:{field_name}")
+            return value
+
+        envelope = cls(
+            schema_version=_envelope_required_text("schema_version", record["schema_version"]),
+            route_id=_envelope_required_text("route_id", record["route_id"]),
+            route_revision=_envelope_required_text("route_revision", record["route_revision"]),
+            provider=_envelope_required_text("provider", record["provider"]),
+            api_style=_envelope_required_text("api_style", record["api_style"]),
+            requested_model=_envelope_required_text("requested_model", record["requested_model"]),
+            response_model=_envelope_required_text("response_model", record["response_model"]),
+            effective_model=_envelope_required_text("effective_model", record["effective_model"]),
+            model_identity_provenance=_envelope_required_text(
+                "model_identity_provenance", record["model_identity_provenance"]
+            ),
+            effective_route_snapshot_ref=_envelope_optional_text(
+                "effective_route_snapshot_ref", record["effective_route_snapshot_ref"]
+            ),
+            effective_route_snapshot_digest=_envelope_required_text(
+                "effective_route_snapshot_digest", record["effective_route_snapshot_digest"]
+            ),
+            circuit_identity=_envelope_required_text("circuit_identity", record["circuit_identity"]),
+            runtime_namespace=_envelope_required_text("runtime_namespace", record["runtime_namespace"]),
+            provider_mode=cast(
+                EnvelopeProviderMode,
+                _envelope_required_text("provider_mode", record["provider_mode"]),
+            ),
+            workspace_id=_envelope_required_text("workspace_id", record["workspace_id"]),
+            actor_id=_envelope_required_text("actor_id", record["actor_id"]),
+            permission_scope=_envelope_required_text("permission_scope", record["permission_scope"]),
+            prompt_policy_version=_envelope_required_text("prompt_policy_version", record["prompt_policy_version"]),
+            permission_scope_revision=_envelope_required_text(
+                "permission_scope_revision", record["permission_scope_revision"]
+            ),
+            outbound_policy_revision=_envelope_required_text(
+                "outbound_policy_revision", record["outbound_policy_revision"]
+            ),
+            model_safe_schema_revision=_envelope_required_text(
+                "model_safe_schema_revision", record["model_safe_schema_revision"]
+            ),
+            operation_run_id=_envelope_optional_text("operation_run_id", record["operation_run_id"]),
+            turn_id=_envelope_optional_text("turn_id", record["turn_id"]),
+            step_id=_envelope_optional_text("step_id", record["step_id"]),
+            workflow_command_id=_envelope_optional_text("workflow_command_id", record["workflow_command_id"]),
+            activity_run_id=_envelope_optional_text("activity_run_id", record["activity_run_id"]),
+            activity_attempt_id=_envelope_optional_text("activity_attempt_id", record["activity_attempt_id"]),
+            provider_call_id=_envelope_optional_text("provider_call_id", record["provider_call_id"]),
+            terminal_reason=cast(
+                TerminalReason,
+                _envelope_required_text("terminal_reason", record["terminal_reason"]),
+            ),
+            usage=ModelUsage(
+                input_tokens=usage_value("input_tokens"),
+                output_tokens=usage_value("output_tokens"),
+                total_tokens=usage_value("total_tokens"),
+                cached_input_tokens=usage_value("cached_input_tokens"),
+                reasoning_output_tokens=usage_value("reasoning_output_tokens"),
+            ),
+            usage_status=cast(
+                UsageStatus,
+                _envelope_required_text("usage_status", record["usage_status"]),
+            ),
+            fallback_status=cast(
+                FallbackStatus,
+                _envelope_required_text("fallback_status", record["fallback_status"]),
+            ),
+            circuit_state=cast(
+                CircuitState,
+                _envelope_required_text("circuit_state", record["circuit_state"]),
+            ),
+            evidence_bundle_hash=_envelope_optional_sha256("evidence_bundle_hash", record["evidence_bundle_hash"]),
+            canonical_result_digest=_envelope_required_text(
+                "canonical_result_digest", record["canonical_result_digest"]
+            ),
+            result_artifact_ref=_envelope_optional_text("result_artifact_ref", record["result_artifact_ref"]),
+            result_artifact_digest=_envelope_optional_sha256(
+                "result_artifact_digest", record["result_artifact_digest"]
+            ),
+            cost_exposure_ref=_envelope_optional_text("cost_exposure_ref", record["cost_exposure_ref"]),
+            canonical_request_digest=_envelope_required_text(
+                "canonical_request_digest", record["canonical_request_digest"]
+            ),
+        )
+        if envelope.to_record() != _thaw_json(record):
+            raise ModelInvocationEnvelopeError("model_invocation_record_not_canonical")
+        return envelope
+
+
+@dataclass(frozen=True, slots=True)
 class ToolTurnResult:
     text: str
     tool_calls: tuple[ToolCallRecord, ...]
@@ -423,6 +805,48 @@ class ToolTurnResult:
                 "tool_calls": [call.to_record() for call in self.tool_calls],
             }
         )
+
+
+def validate_tool_turn_result_envelope_mirror(
+    result: ToolTurnResult,
+    envelope: ModelInvocationEnvelopeV1,
+) -> None:
+    """Compare only authority fields physically shared by result and envelope.
+
+    Passing this mirror check is evidence coherence only. It is not durable
+    ownership, result-slot acceptance, permission, budget, or effect authority.
+    """
+
+    if type(result) is not ToolTurnResult:
+        raise ModelInvocationMirrorError("model_invocation_mirror_result_type_invalid")
+    if type(envelope) is not ModelInvocationEnvelopeV1:
+        raise ModelInvocationMirrorError("model_invocation_mirror_envelope_type_invalid")
+    shared = {
+        "route_id": (result.route_id, envelope.route_id),
+        "workspace_id": (result.workspace_id, envelope.workspace_id),
+        "actor_id": (result.actor_id, envelope.actor_id),
+        "runtime_namespace": (result.runtime_namespace, envelope.runtime_namespace),
+        "provider_mode": (result.provider_mode, envelope.provider_mode),
+        "canonical_request_digest": (result.canonical_request_sha256, envelope.canonical_request_digest),
+        "requested_model": (result.model_identity.requested_model, envelope.requested_model),
+        "response_model": (result.model_identity.response_model, envelope.response_model),
+        "effective_model": (result.model_identity.effective_model, envelope.effective_model),
+        "model_identity_provenance": (
+            result.model_identity.provenance,
+            envelope.model_identity_provenance,
+        ),
+        "terminal_reason": (result.terminal_reason, envelope.terminal_reason),
+        "provider_call_id": (result.provider_call_id, envelope.provider_call_id),
+        "usage": (result.usage, envelope.usage),
+        "usage_status": (result.usage_status, envelope.usage_status),
+        "canonical_result_digest": (
+            result.canonical_outcome_sha256,
+            envelope.canonical_result_digest,
+        ),
+    }
+    mismatches = sorted(field_name for field_name, (actual, mirrored) in shared.items() if actual != mirrored)
+    if mismatches:
+        raise ModelInvocationMirrorError(f"model_invocation_mirror_mismatch:{','.join(mismatches)}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -938,9 +1362,7 @@ def _iter_sse_data_frames(chunks: Iterable[bytes]) -> Iterator[str]:
                     continue
                 if separator and field_value.startswith(" "):
                     field_value = field_value[1:]
-                candidate_frame_bytes = (
-                    data_frame_bytes + (1 if data_lines else 0) + len(field_value.encode("utf-8"))
-                )
+                candidate_frame_bytes = data_frame_bytes + (1 if data_lines else 0) + len(field_value.encode("utf-8"))
                 if candidate_frame_bytes > MAX_SSE_FRAME_BYTES:
                     raise ModelToolProtocolError("model_tool_sse_frame_too_large")
                 data_lines.append(field_value)
@@ -1379,7 +1801,12 @@ __all__ = [
     "AssistantToolCallsMessage",
     "D0A_EFFECT_AUTHORIZATION_AVAILABLE",
     "ErrorEvent",
+    "MODEL_INVOCATION_ENVELOPE_RECORD_KEYS",
+    "MODEL_INVOCATION_ENVELOPE_SCHEMA_VERSION",
     "ModelIdentity",
+    "ModelInvocationEnvelopeError",
+    "ModelInvocationEnvelopeV1",
+    "ModelInvocationMirrorError",
     "ModelRouteExecutionRejected",
     "ModelToolProtocolError",
     "ModelToolRequestBindingError",
@@ -1408,5 +1835,6 @@ __all__ = [
     "canonical_tool_turn_request_payload",
     "parse_openai_chat_sse",
     "request_for_model_route",
+    "validate_tool_turn_result_envelope_mirror",
     "with_provider_mode",
 ]

@@ -104,6 +104,13 @@
   删除。回归直接证明单一 class owner、provider/runtime identity、严格非负 integer/non-bool 校验和依赖中立，
   不再用可反射绕过的 AST escape ratchet 代替架构收敛。此项只关闭首个 transport/product callsite 的前置债务；
   D0a 仍禁止 live/product integration，其他 durable owner/cost/policy/result-slot/review gates 不变。
+- [x] D0c invocation evidence contract author implementation（2026-07-14）：单一 immutable
+  `ModelInvocationEnvelopeV1` 已落 exact schema/version/serialization/SHA-256，物理 ref 使用 typed absence 且保留
+  quarantine/non-authorizable outcome；D0a result mirror 只比对真正共享字段，不产生 durable/effect authority。
+  route registry preflight 现强制 exact keysets、`route_id+circuit_key` 分别唯一、全 draft、manifest non-live。
+  零 transport/settings/env/storage/migration/provider call，D0a 仍只执行 `simulate|scripted`；durable issuer/
+  persistence/result-slot CAS、ExecutionContext、cost ledger 与 R8 OB-2.2/4.3/10.3/10.4 仍 deferred。author evidence
+  = `145 passed` + provider/characterization `60 passed + 11 subtests` + Ruff/mypy/diff-check；formal review pending。
 - [ ] Agent Session 契约：服务端 agentic loop；工具面 = M1 manifest 导出 + 只读上下文工具 + model_native_search/fetch 转正；效果全部走 typed AgentAction（边界已由 `AGENT_OPERATION_CONTRACT.md` 规定）。
 - [ ] 第一垂直切片：公司身份自验证 loop（搜索→fetch 验证→歧义才升级人工），替代 PlanCard 手动修正 LinkedIn URL。
 - [ ] 之后：plan review 对话化、intent→plan 前门流式化；OpenClaw/Claude 作为可插拔外脑。

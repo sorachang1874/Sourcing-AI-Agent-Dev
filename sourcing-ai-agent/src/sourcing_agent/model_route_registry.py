@@ -18,6 +18,31 @@ MODEL_ROUTE_REGISTRY_SCHEMA_VERSION = "model_route_registry_v1"
 MODEL_ROUTE_ROLLOUT_DRAFT = "draft"
 MODEL_ROUTE_FALLBACK_FAIL_CLOSED = "fail_closed"
 
+MODEL_ROUTE_SPEC_RECORD_KEYS = frozenset(
+    {
+        "route_id",
+        "use_case",
+        "provider",
+        "model",
+        "api_style",
+        "capabilities",
+        "budget_class",
+        "simulate_mapping",
+        "fallback_policy",
+        "circuit_key",
+        "rollout_state",
+    }
+)
+MODEL_ROUTE_MANIFEST_KEYS = frozenset(
+    {
+        "schema_version",
+        "live_enabled",
+        "allowed_provider_modes",
+        "routes",
+    }
+)
+MODEL_ROUTE_MANIFEST_ROUTE_KEYS = MODEL_ROUTE_SPEC_RECORD_KEYS | {"route_revision"}
+
 D0A_ALLOWED_PROVIDER_MODES = frozenset({"simulate", "scripted"})
 _KNOWN_ROLLOUT_STATES = frozenset({"draft", "canary", "active", "retired"})
 _KNOWN_CAPABILITIES = frozenset({"stream", "tools", "usage", "identity_check"})
@@ -142,12 +167,19 @@ def validate_model_route_specs(
     """Validate uniqueness and the current batch's draft-only rollout fence."""
 
     routes: dict[str, ModelRouteSpec] = {}
+    circuit_owners: dict[str, str] = {}
     for spec in specs:
         if spec.route_id in routes:
             raise ModelRouteRegistryError(f"model_route_duplicate:{spec.route_id}")
+        existing_circuit_owner = circuit_owners.get(spec.circuit_key)
+        if existing_circuit_owner is not None:
+            raise ModelRouteRegistryError(
+                f"model_route_circuit_key_duplicate:{spec.circuit_key}:{existing_circuit_owner}:{spec.route_id}"
+            )
         if require_draft_only and spec.rollout_state != MODEL_ROUTE_ROLLOUT_DRAFT:
             raise ModelRouteRegistryError(f"model_route_d0a_requires_draft:{spec.route_id}:{spec.rollout_state}")
         routes[spec.route_id] = spec
+        circuit_owners[spec.circuit_key] = spec.route_id
     if not routes:
         raise ModelRouteRegistryError("model_route_registry_empty")
     return MappingProxyType(routes)
@@ -209,3 +241,51 @@ def model_route_registry_manifest() -> dict[str, object]:
             for spec in sorted(MODEL_ROUTE_SPECS_BY_ID.values(), key=lambda item: item.route_id)
         ],
     }
+
+
+def validate_model_route_registry_manifest(
+    manifest: Mapping[str, object],
+    *,
+    specs: Iterable[ModelRouteSpec] = DEFAULT_MODEL_ROUTE_SPECS,
+) -> None:
+    """Fail closed on registry/manifest drift in the current draft-only lane."""
+
+    if not isinstance(manifest, Mapping) or set(manifest) != MODEL_ROUTE_MANIFEST_KEYS:
+        raise ModelRouteRegistryError("model_route_manifest_keyset_invalid")
+    if manifest.get("schema_version") != MODEL_ROUTE_REGISTRY_SCHEMA_VERSION:
+        raise ModelRouteRegistryError("model_route_manifest_schema_version_invalid")
+    if manifest.get("live_enabled") is not False:
+        raise ModelRouteRegistryError("model_route_manifest_live_must_remain_disabled")
+    if manifest.get("allowed_provider_modes") != sorted(D0A_ALLOWED_PROVIDER_MODES):
+        raise ModelRouteRegistryError("model_route_manifest_provider_modes_invalid")
+
+    validated = validate_model_route_specs(tuple(specs), require_draft_only=True)
+    manifest_routes = manifest.get("routes")
+    if not isinstance(manifest_routes, list) or len(manifest_routes) != len(validated):
+        raise ModelRouteRegistryError("model_route_manifest_routes_invalid")
+    expected_routes = {
+        spec.route_id: {**spec.to_record(), "route_revision": spec.revision} for spec in validated.values()
+    }
+    observed_route_ids: set[str] = set()
+    observed_circuit_keys: set[str] = set()
+    for route_record in manifest_routes:
+        if not isinstance(route_record, dict) or set(route_record) != MODEL_ROUTE_MANIFEST_ROUTE_KEYS:
+            raise ModelRouteRegistryError("model_route_manifest_route_keyset_invalid")
+        route_id = route_record.get("route_id")
+        circuit_key = route_record.get("circuit_key")
+        if type(route_id) is not str or route_id in observed_route_ids:
+            raise ModelRouteRegistryError("model_route_manifest_route_id_invalid")
+        if type(circuit_key) is not str or circuit_key in observed_circuit_keys:
+            raise ModelRouteRegistryError("model_route_manifest_circuit_key_invalid")
+        expected = expected_routes.get(route_id)
+        if expected is None or route_record != expected:
+            raise ModelRouteRegistryError(f"model_route_manifest_route_mismatch:{route_id}")
+        if route_record.get("rollout_state") != MODEL_ROUTE_ROLLOUT_DRAFT:
+            raise ModelRouteRegistryError(f"model_route_manifest_route_not_draft:{route_id}")
+        observed_route_ids.add(route_id)
+        observed_circuit_keys.add(circuit_key)
+    if observed_route_ids != set(validated):
+        raise ModelRouteRegistryError("model_route_manifest_route_population_mismatch")
+
+
+validate_model_route_registry_manifest(model_route_registry_manifest())

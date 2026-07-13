@@ -1,6 +1,7 @@
 # Track D — D0+D1 批级设计：模型工具运行时 + 工具面 serve
 
-> Status: Cross-model design input for owner review（v6 2026-07-13，作者 = Claude Fable 5；只设计、不改码）。
+> Status: Track D D0+D1 design record（v6 2026-07-13，作者 = Claude Fable 5）。2026-07-14 的 D0a/D0b/D0c
+> 只落 additive、non-live 前置能力；它们不等于完整 D0/D1，也不授权 live/product 集成。
 > 修订史：v1→R1 24 findings→v2（29 断言核查+24 路覆盖审计）→v3（R2 16 findings）→v4（R3 #9-15：
 > terminal 事件、结果槽、路由快照、pin 生命周期、字段所有权、model-safe、预算台账）→v5（R4
 > #10-15：快照创建点前移+digest 入指纹、pin 物理生命周期、归一化边界、三策略 revision、成本
@@ -84,17 +85,69 @@ class ToolTurnResult:         # 唯一可授权后续动作的 canonical 语义�
                                              # (v4 统一词汇:与解析器/授权集合同用 provider 语义 "length")
     provider_call_id: str | None
     route_id: str
-    invocation_envelope_ref: str             # v6(R5#8):**单一物理 schema `ModelInvocationEnvelope`**,
-                                             # 本注释即 canonical 字段清单(D3 §6 引用不复述):快照
-                                             # ref+digest、workspace/actor/permission/outbound-policy/
-                                             # model-safe-schema revisions、command/attempt 因果、
-                                             # provider 响应身份(requested/response/effective +
-                                             # provenance + call id)、**terminal_reason**、usage +
-                                             # usage_status、fallback/circuit 证据、evidence bundle
-                                             # hash、result artifact ref+digest、成本暴露行引用;经
-                                             # action/command/attempt/结果槽/journal 与接受 CAS 全链绑定
     workspace_id: str; actor_id: str         # v4(#14):冗余镜像便于查询;信封为权威
+    # 当前 D0a 内存结果没有 invocation_envelope_ref。未来 durable result-slot owner 持久化
+    # ModelInvocationEnvelopeV1 后，在其 own wrapper/journal 中关联 owner-issued ref；不回填伪造值。
+
+@dataclass(frozen=True, slots=True)
+class ModelInvocationEnvelopeV1:             # 单一物理结果侧 schema；实现 owner = model_tool_runtime.py
+    schema_version: str                      # 固定 model_invocation_envelope_v1
+    route_id: str
+    route_revision: str                      # route 完整内容 SHA-256
+    provider: str
+    api_style: str
+    requested_model: str
+    response_model: str
+    effective_model: str
+    model_identity_provenance: str           # 当前唯一 provider_response
+    effective_route_snapshot_ref: str | None
+    effective_route_snapshot_digest: str     # SHA-256；ref 缺席也不允许缺 digest
+    circuit_identity: str
+    runtime_namespace: str
+    provider_mode: str                       # simulate | scripted | live；仅表达数据，不是执行许可
+    workspace_id: str
+    actor_id: str
+    permission_scope: str
+    prompt_policy_version: str
+    permission_scope_revision: str
+    outbound_policy_revision: str
+    model_safe_schema_revision: str
+    operation_run_id: str | None             # 以下六项必须全有或全无
+    turn_id: str | None
+    step_id: str | None
+    workflow_command_id: str | None
+    activity_run_id: str | None
+    activity_attempt_id: str | None
+    provider_call_id: str | None             # provider response 缺 call id 的 quarantine 可显式缺席
+    terminal_reason: str                     # end_turn | tool_calls | length | content_filter
+    usage: ModelUsage
+    usage_status: str                        # reported | unavailable | invalid
+    fallback_status: str                     # not_used | blocked | used
+    circuit_state: str                       # not_checked | closed | open | half_open
+    evidence_bundle_hash: str | None         # SHA-256；物理 bundle 不存在时为 None
+    canonical_result_digest: str             # SHA-256
+    result_artifact_ref: str | None          # ref/digest 必须成对出现或成对缺席
+    result_artifact_digest: str | None        # SHA-256
+    cost_exposure_ref: str | None
+    canonical_request_digest: str            # SHA-256
+    # envelope_digest 是 exact to_record() 的派生字段：对上述 canonical record 做
+    # sorted-key compact JSON SHA-256，计算时排除 envelope_digest 自身，避免自循环。
 ```
+
+`ModelInvocationEnvelopeV1` 的字段集即 D0 与 D3 §6 共用的 canonical 定义，不允许另建第二个物理
+schema。严格反序列化要求顶层 keyset 完全相等；不接受 opaque dict、raw provider payload、credential、
+authorization 或 API key。该 v1 是 **terminal-result-only**：它要求已观察到 provider response identity、
+terminal reason 与 canonical result digest；pre-call、transport 与 protocol failure 尚不属于此 schema，未来必须
+由闭集 attempt-outcome discriminator 或独立 attempt artifact 表达，禁止伪造 terminal/result。`None` 是当前
+terminal result 中物理证据尚不存在的类型化缺席，尤其用于 simulate/scripted 与可审计的 quarantine outcome；
+`provider_call_id=None` 只表示 response 未提供可用 call id，绝不证明“没有发生调用”。不得为满足非空检查伪造
+snapshot/artifact/cost/evidence ref。真实 durable issuer 对 live
+路径施加的更强 presence/CAS 规则仍由后续 owner 批决定。D0a 的 `simulate|scripted` 执行 predicate 与该
+数据 schema 分离：schema 能无损表达未来 `live`，但绝不因此打开 live 路由。
+
+`validate_tool_turn_result_envelope_mirror` 只 fail-closed 比对两个对象真正共享的权威字段（route、tenant/
+actor、namespace/mode、request/result digest、模型身份、provider call、terminal、usage/status）。它是证据
+一致性检查，不是 durable owner、result-slot accept/consume CAS、permission/budget/approval 或 effect 授权。
 
 ### 2.3 执行上下文（v2 新增——live 的准入契约）
 
@@ -327,6 +380,11 @@ class ModelRouteSpec:
 CRM 的产品模型锁与本表**互不引用**（锁在 `analyze_public_web_candidate_signals` 路径，
 本表在 agent/裁决路径——同模型是巧合不是耦合，两处各自独立变更）。`fallback_policy =
 fail_closed` 唯一初始值。路由变更 = 配置提交 + 审计，不是运行时行为。
+
+D0c 机械 preflight 对 route record、manifest 顶层与 manifest route record 使用显式 exact keyset；要求
+`route_id` 与 `circuit_key` 各自全局唯一、所有 checked-in route 都是 `draft`、`live_enabled=false`，且
+manifest 与 checked-in revision 逐字段完全一致。该 preflight 不包含 canary/live predicate，也不改变 D0a
+只允许 `simulate|scripted` 的执行门。
 
 ## 5. 批协议（handbook §4 形态，v2 更新）
 
