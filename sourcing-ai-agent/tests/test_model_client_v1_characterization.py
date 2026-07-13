@@ -271,7 +271,7 @@ def _factory_return_population(tree: ast.Module) -> frozenset[str]:
     )
     return frozenset(
         _symbol_tail(node.value.func)
-        for node in _scope_nodes(factory)
+        for node in _same_owner_nodes(factory)
         if isinstance(node, ast.Return) and isinstance(node.value, ast.Call)
     )
 
@@ -425,13 +425,19 @@ def _local_model_helpers(
                 module_aliases=module_aliases,
                 concrete=concrete,
             )
-            for item in _scope_nodes(node)
+            for item in _same_owner_nodes(node)
         ):
             helpers.add(node.name)
     return frozenset(helpers)
 
 
-def _scope_nodes(root: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.AST]:
+def _same_owner_nodes(root: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.AST]:
+    """Return descendants that execute under ``root``'s owner.
+
+    Nested function and lambda bodies have their own stable owners and are
+    traversed separately by ``_LexicalModelCallAnalyzer``.
+    """
+
     nodes: list[ast.AST] = []
     pending = list(ast.iter_child_nodes(root))
     while pending:
@@ -516,18 +522,18 @@ def _is_model_expression(
     )
 
 
-def _method_reference(
+def _method_references(
     node: ast.AST | None,
     *,
     receivers: set[str],
-    callable_aliases: dict[str, str],
+    callable_aliases: dict[str, frozenset[str]],
     imported_symbols: dict[str, str],
     module_aliases: frozenset[str],
     concrete: frozenset[str],
     protocol_methods: frozenset[str],
-) -> str:
+) -> frozenset[str]:
     if isinstance(node, (ast.Name, ast.Attribute)):
-        alias = callable_aliases.get(_dotted_name(node), "")
+        alias = callable_aliases.get(_dotted_name(node), frozenset())
         if alias:
             return alias
     if (
@@ -541,7 +547,7 @@ def _method_reference(
             concrete=concrete,
         )
     ):
-        return node.attr
+        return frozenset({node.attr})
     if (
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
@@ -558,8 +564,409 @@ def _method_reference(
             concrete=concrete,
         )
     ):
-        return node.args[1].value
-    return ""
+        return frozenset({node.args[1].value})
+    return frozenset()
+
+
+class _ModelAliasState:
+    def __init__(
+        self,
+        *,
+        receivers: set[str] | None = None,
+        callable_aliases: dict[str, frozenset[str]] | None = None,
+    ) -> None:
+        self.receivers = set(receivers or ())
+        self.callable_aliases = dict(callable_aliases or {})
+
+    def copy(self) -> _ModelAliasState:
+        return _ModelAliasState(
+            receivers=self.receivers,
+            callable_aliases=self.callable_aliases,
+        )
+
+    def replace(self, other: _ModelAliasState) -> None:
+        self.receivers = set(other.receivers)
+        self.callable_aliases = dict(other.callable_aliases)
+
+
+def _merge_alias_states(*states: _ModelAliasState) -> _ModelAliasState:
+    receivers = set().union(*(state.receivers for state in states))
+    alias_keys = set().union(*(state.callable_aliases for state in states))
+    callable_aliases = {
+        key: frozenset().union(*(state.callable_aliases.get(key, frozenset()) for state in states))
+        for key in alias_keys
+    }
+    return _ModelAliasState(receivers=receivers, callable_aliases=callable_aliases)
+
+
+def _argument_nodes(arguments: ast.arguments) -> tuple[ast.arg, ...]:
+    optional = tuple(arg for arg in (arguments.vararg, arguments.kwarg) if arg is not None)
+    return (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs, *optional)
+
+
+def _pattern_target_keys(pattern: ast.pattern) -> tuple[str, ...]:
+    if isinstance(pattern, ast.MatchAs):
+        nested = _pattern_target_keys(pattern.pattern) if pattern.pattern is not None else ()
+        return (*nested, *((pattern.name,) if pattern.name else ()))
+    if isinstance(pattern, ast.MatchStar):
+        return (pattern.name,) if pattern.name else ()
+    if isinstance(pattern, ast.MatchMapping):
+        nested = tuple(key for item in pattern.patterns for key in _pattern_target_keys(item))
+        return (*nested, *((pattern.rest,) if pattern.rest else ()))
+    if isinstance(pattern, ast.MatchSequence):
+        return tuple(key for item in pattern.patterns for key in _pattern_target_keys(item))
+    if isinstance(pattern, ast.MatchClass):
+        return tuple(key for item in (*pattern.patterns, *pattern.kwd_patterns) for key in _pattern_target_keys(item))
+    if isinstance(pattern, ast.MatchOr):
+        return tuple(key for item in pattern.patterns for key in _pattern_target_keys(item))
+    return ()
+
+
+class _LexicalModelCallAnalyzer:
+    """Statement-ordered, lexical model receiver/callable analysis.
+
+    Branch joins deliberately retain every possible alias. Nested callables are
+    analyzed under definition-point lexical state, but keep distinct owners.
+    """
+
+    def __init__(
+        self,
+        *,
+        class_receivers: dict[str, frozenset[str]],
+        imported_symbols: dict[str, str],
+        module_aliases: frozenset[str],
+        concrete: frozenset[str],
+        model_types: frozenset[str],
+        protocol_methods: frozenset[str],
+        record_calls: bool = True,
+    ) -> None:
+        self.class_receivers = class_receivers
+        self.imported_symbols = imported_symbols
+        self.module_aliases = module_aliases
+        self.concrete = concrete
+        self.model_types = model_types
+        self.protocol_methods = protocol_methods
+        self.record_calls = record_calls
+        self.calls: Counter[tuple[str, str]] = Counter()
+
+    def _is_model_expression(self, node: ast.AST | None, state: _ModelAliasState) -> bool:
+        return _is_model_expression(
+            node,
+            receivers=state.receivers,
+            imported_symbols=self.imported_symbols,
+            module_aliases=self.module_aliases,
+            concrete=self.concrete,
+        )
+
+    def _method_references(self, node: ast.AST | None, state: _ModelAliasState) -> frozenset[str]:
+        return _method_references(
+            node,
+            receivers=state.receivers,
+            callable_aliases=state.callable_aliases,
+            imported_symbols=self.imported_symbols,
+            module_aliases=self.module_aliases,
+            concrete=self.concrete,
+            protocol_methods=self.protocol_methods,
+        )
+
+    @staticmethod
+    def _kill_target(state: _ModelAliasState, target: str) -> None:
+        prefix = f"{target}."
+        state.receivers.difference_update(
+            receiver for receiver in tuple(state.receivers) if receiver == target or receiver.startswith(prefix)
+        )
+        state.callable_aliases = {
+            alias: methods
+            for alias, methods in state.callable_aliases.items()
+            if alias != target and not alias.startswith(prefix)
+        }
+
+    def _write_targets(
+        self,
+        state: _ModelAliasState,
+        targets: tuple[str, ...],
+        *,
+        is_receiver: bool,
+        methods: frozenset[str],
+    ) -> None:
+        for target in targets:
+            self._kill_target(state, target)
+            if is_receiver:
+                state.receivers.add(target)
+            elif methods:
+                state.callable_aliases[target] = methods
+
+    def _assignment_semantics(
+        self,
+        value: ast.AST | None,
+        state: _ModelAliasState,
+        *,
+        annotation: ast.expr | None = None,
+    ) -> tuple[bool, frozenset[str]]:
+        is_typed_declaration = value is None and _annotation_mentions_model(
+            annotation,
+            imported_symbols=self.imported_symbols,
+            module_aliases=self.module_aliases,
+            model_types=self.model_types,
+        )
+        return is_typed_declaration or self._is_model_expression(value, state), self._method_references(value, state)
+
+    def _record_call(self, owner: str, methods: frozenset[str]) -> None:
+        if self.record_calls:
+            self.calls.update((owner, method) for method in methods)
+
+    def _analyze_store_target(self, node: ast.AST, state: _ModelAliasState, owner: str) -> None:
+        if isinstance(node, ast.Attribute):
+            self._analyze_expression(node.value, state, owner)
+        elif isinstance(node, ast.Subscript):
+            self._analyze_expression(node.value, state, owner)
+            self._analyze_expression(node.slice, state, owner)
+        elif isinstance(node, (ast.Tuple, ast.List)):
+            for item in node.elts:
+                self._analyze_store_target(item, state, owner)
+
+    def _analyze_comprehension(
+        self,
+        node: ast.ListComp | ast.SetComp | ast.GeneratorExp | ast.DictComp,
+        state: _ModelAliasState,
+        owner: str,
+    ) -> None:
+        local = state.copy()
+        for generator in node.generators:
+            self._analyze_expression(generator.iter, local, owner)
+            self._write_targets(local, _target_keys(generator.target), is_receiver=False, methods=frozenset())
+            for condition in generator.ifs:
+                self._analyze_expression(condition, local, owner)
+        if isinstance(node, ast.DictComp):
+            self._analyze_expression(node.key, local, owner)
+            self._analyze_expression(node.value, local, owner)
+        else:
+            self._analyze_expression(node.elt, local, owner)
+
+    def _analyze_expression(self, node: ast.AST | None, state: _ModelAliasState, owner: str) -> None:
+        if node is None:
+            return
+        if isinstance(node, ast.Lambda):
+            nested_state = state.copy()
+            for argument in _argument_nodes(node.args):
+                self._kill_target(nested_state, argument.arg)
+            lambda_owner = f"{owner}.<locals>.<lambda@L{node.lineno}C{node.col_offset}>"
+            self._analyze_expression(node.body, nested_state, lambda_owner)
+            return
+        if isinstance(node, ast.NamedExpr):
+            self._analyze_expression(node.value, state, owner)
+            is_receiver, methods = self._assignment_semantics(node.value, state)
+            self._write_targets(
+                state,
+                _target_keys(node.target),
+                is_receiver=is_receiver,
+                methods=methods,
+            )
+            return
+        if isinstance(node, ast.Call):
+            methods = self._method_references(node.func, state)
+            self._analyze_expression(node.func, state, owner)
+            for argument in node.args:
+                self._analyze_expression(argument, state, owner)
+            for keyword in node.keywords:
+                self._analyze_expression(keyword.value, state, owner)
+            self._record_call(owner, methods)
+            return
+        if isinstance(node, ast.IfExp):
+            self._analyze_expression(node.test, state, owner)
+            body_state = state.copy()
+            else_state = state.copy()
+            self._analyze_expression(node.body, body_state, owner)
+            self._analyze_expression(node.orelse, else_state, owner)
+            state.replace(_merge_alias_states(body_state, else_state))
+            return
+        if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+            self._analyze_comprehension(node, state, owner)
+            return
+        for child in ast.iter_child_nodes(node):
+            self._analyze_expression(child, state, owner)
+
+    def _analyze_nested_function(
+        self,
+        node: ast.FunctionDef | ast.AsyncFunctionDef,
+        state: _ModelAliasState,
+        owner: str,
+    ) -> None:
+        for expression in (*node.decorator_list, *node.args.defaults, *node.args.kw_defaults):
+            self._analyze_expression(expression, state, owner)
+        self._kill_target(state, node.name)
+        nested_owner = f"{owner}.<locals>.{node.name}"
+        self.analyze_function(node, owner=nested_owner, inherited=state.copy())
+
+    def _analyze_statement(self, node: ast.stmt, state: _ModelAliasState, owner: str) -> None:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            self._analyze_nested_function(node, state, owner)
+            return
+        if isinstance(node, ast.ClassDef):
+            for expression in (*node.decorator_list, *node.bases, *(keyword.value for keyword in node.keywords)):
+                self._analyze_expression(expression, state, owner)
+            self._kill_target(state, node.name)
+            return
+        if isinstance(node, ast.Assign):
+            self._analyze_expression(node.value, state, owner)
+            is_receiver, methods = self._assignment_semantics(node.value, state)
+            for target in node.targets:
+                self._analyze_store_target(target, state, owner)
+            targets = tuple(key for target in node.targets for key in _target_keys(target))
+            self._write_targets(state, targets, is_receiver=is_receiver, methods=methods)
+            return
+        if isinstance(node, ast.AnnAssign):
+            self._analyze_expression(node.value, state, owner)
+            self._analyze_store_target(node.target, state, owner)
+            is_receiver, methods = self._assignment_semantics(node.value, state, annotation=node.annotation)
+            self._write_targets(
+                state,
+                _target_keys(node.target),
+                is_receiver=is_receiver,
+                methods=methods,
+            )
+            return
+        if isinstance(node, ast.AugAssign):
+            self._analyze_expression(node.target, state, owner)
+            self._analyze_expression(node.value, state, owner)
+            self._write_targets(
+                state,
+                _target_keys(node.target),
+                is_receiver=False,
+                methods=frozenset(),
+            )
+            return
+        if isinstance(node, ast.Delete):
+            for target in node.targets:
+                self._write_targets(
+                    state,
+                    _target_keys(target),
+                    is_receiver=False,
+                    methods=frozenset(),
+                )
+            return
+        if isinstance(node, ast.If):
+            self._analyze_expression(node.test, state, owner)
+            body_state = self._analyze_statements(node.body, state.copy(), owner)
+            else_state = self._analyze_statements(node.orelse, state.copy(), owner)
+            state.replace(_merge_alias_states(body_state, else_state))
+            return
+        if isinstance(node, (ast.For, ast.AsyncFor)):
+            self._analyze_expression(node.iter, state, owner)
+            body_state = state.copy()
+            self._write_targets(
+                body_state,
+                _target_keys(node.target),
+                is_receiver=False,
+                methods=frozenset(),
+            )
+            body_state = self._analyze_statements(node.body, body_state, owner)
+            loop_exit = _merge_alias_states(state, body_state)
+            else_state = self._analyze_statements(node.orelse, loop_exit.copy(), owner)
+            state.replace(_merge_alias_states(loop_exit, else_state))
+            return
+        if isinstance(node, ast.While):
+            self._analyze_expression(node.test, state, owner)
+            body_state = self._analyze_statements(node.body, state.copy(), owner)
+            loop_exit = _merge_alias_states(state, body_state)
+            else_state = self._analyze_statements(node.orelse, loop_exit.copy(), owner)
+            state.replace(_merge_alias_states(loop_exit, else_state))
+            return
+        if isinstance(node, (ast.Try, ast.TryStar)):
+            incoming = state.copy()
+            body_state = self._analyze_statements(node.body, incoming.copy(), owner)
+            branch_states = [incoming, body_state]
+            for handler in node.handlers:
+                handler_state = incoming.copy()
+                if handler.type is not None:
+                    self._analyze_expression(handler.type, handler_state, owner)
+                if handler.name:
+                    self._kill_target(handler_state, handler.name)
+                branch_states.append(self._analyze_statements(handler.body, handler_state, owner))
+            if node.orelse:
+                branch_states.append(self._analyze_statements(node.orelse, body_state.copy(), owner))
+            state.replace(_merge_alias_states(*branch_states))
+            self._analyze_statements(node.finalbody, state, owner)
+            return
+        if isinstance(node, (ast.With, ast.AsyncWith)):
+            for item in node.items:
+                self._analyze_expression(item.context_expr, state, owner)
+                if item.optional_vars is not None:
+                    self._write_targets(
+                        state,
+                        _target_keys(item.optional_vars),
+                        is_receiver=False,
+                        methods=frozenset(),
+                    )
+            self._analyze_statements(node.body, state, owner)
+            return
+        if isinstance(node, ast.Match):
+            self._analyze_expression(node.subject, state, owner)
+            branch_states = [state.copy()]
+            for case in node.cases:
+                case_state = state.copy()
+                self._write_targets(
+                    case_state,
+                    _pattern_target_keys(case.pattern),
+                    is_receiver=False,
+                    methods=frozenset(),
+                )
+                self._analyze_expression(case.guard, case_state, owner)
+                branch_states.append(self._analyze_statements(case.body, case_state, owner))
+            state.replace(_merge_alias_states(*branch_states))
+            return
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            names = tuple(alias.asname or alias.name.split(".")[0] for alias in node.names)
+            self._write_targets(state, names, is_receiver=False, methods=frozenset())
+            return
+        if isinstance(node, ast.Expr):
+            self._analyze_expression(node.value, state, owner)
+            return
+        if isinstance(node, ast.Return):
+            self._analyze_expression(node.value, state, owner)
+            return
+        if isinstance(node, ast.Raise):
+            self._analyze_expression(node.exc, state, owner)
+            self._analyze_expression(node.cause, state, owner)
+            return
+        if isinstance(node, ast.Assert):
+            self._analyze_expression(node.test, state, owner)
+            self._analyze_expression(node.msg, state, owner)
+            return
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.expr):
+                self._analyze_expression(child, state, owner)
+
+    def _analyze_statements(
+        self,
+        nodes: list[ast.stmt],
+        state: _ModelAliasState,
+        owner: str,
+    ) -> _ModelAliasState:
+        for node in nodes:
+            self._analyze_statement(node, state, owner)
+        return state
+
+    def analyze_function(
+        self,
+        node: ast.FunctionDef | ast.AsyncFunctionDef,
+        *,
+        owner: str,
+        class_name: str = "",
+        inherited: _ModelAliasState | None = None,
+    ) -> _ModelAliasState:
+        state = inherited.copy() if inherited is not None else _ModelAliasState()
+        for argument in _argument_nodes(node.args):
+            self._kill_target(state, argument.arg)
+            if _annotation_mentions_model(
+                argument.annotation,
+                imported_symbols=self.imported_symbols,
+                module_aliases=self.module_aliases,
+                model_types=self.model_types,
+            ):
+                state.receivers.add(argument.arg)
+        state.receivers.update(self.class_receivers.get(class_name, ()))
+        return self._analyze_statements(node.body, state, owner)
 
 
 def _class_model_receivers(
@@ -573,53 +980,20 @@ def _class_model_receivers(
     result: dict[str, frozenset[str]] = {}
     for class_definition in (node for node in tree.body if isinstance(node, ast.ClassDef)):
         attributes: set[str] = set()
+        analyzer = _LexicalModelCallAnalyzer(
+            class_receivers={},
+            imported_symbols=imported_symbols,
+            module_aliases=module_aliases,
+            concrete=concrete,
+            model_types=model_types,
+            protocol_methods=frozenset(),
+            record_calls=False,
+        )
         for method in (
             node for node in class_definition.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         ):
-            receivers = {
-                arg.arg
-                for arg in [*method.args.posonlyargs, *method.args.args, *method.args.kwonlyargs]
-                if _annotation_mentions_model(
-                    arg.annotation,
-                    imported_symbols=imported_symbols,
-                    module_aliases=module_aliases,
-                    model_types=model_types,
-                )
-            }
-            scope = _scope_nodes(method)
-            changed = True
-            while changed:
-                changed = False
-                for node in scope:
-                    value: ast.AST | None = None
-                    targets: tuple[str, ...] = ()
-                    annotation: ast.expr | None = None
-                    if isinstance(node, ast.Assign):
-                        value = node.value
-                        targets = tuple(key for target in node.targets for key in _target_keys(target))
-                    elif isinstance(node, ast.AnnAssign):
-                        value = node.value
-                        targets = _target_keys(node.target)
-                        annotation = node.annotation
-                    if not targets:
-                        continue
-                    is_model = _annotation_mentions_model(
-                        annotation,
-                        imported_symbols=imported_symbols,
-                        module_aliases=module_aliases,
-                        model_types=model_types,
-                    ) or _is_model_expression(
-                        value,
-                        receivers=receivers,
-                        imported_symbols=imported_symbols,
-                        module_aliases=module_aliases,
-                        concrete=concrete,
-                    )
-                    if is_model:
-                        before = len(receivers)
-                        receivers.update(targets)
-                        changed |= len(receivers) != before
-            attributes.update(key for key in receivers if key.startswith("self."))
+            final_state = analyzer.analyze_function(method, owner=method.name)
+            attributes.update(key for key in final_state.receivers if key.startswith("self."))
         result[class_definition.name] = frozenset(attributes)
     return result
 
@@ -627,6 +1001,7 @@ def _class_model_receivers(
 def _function_call_points(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
     *,
+    owner: str,
     class_name: str,
     class_receivers: dict[str, frozenset[str]],
     imported_symbols: dict[str, str],
@@ -634,84 +1009,17 @@ def _function_call_points(
     concrete: frozenset[str],
     model_types: frozenset[str],
     protocol_methods: frozenset[str],
-) -> Counter[str]:
-    receivers = set(class_receivers.get(class_name, ()))
-    receivers.update(
-        arg.arg
-        for arg in [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
-        if _annotation_mentions_model(
-            arg.annotation,
-            imported_symbols=imported_symbols,
-            module_aliases=module_aliases,
-            model_types=model_types,
-        )
+) -> Counter[tuple[str, str]]:
+    analyzer = _LexicalModelCallAnalyzer(
+        class_receivers=class_receivers,
+        imported_symbols=imported_symbols,
+        module_aliases=module_aliases,
+        concrete=concrete,
+        model_types=model_types,
+        protocol_methods=protocol_methods,
     )
-    callable_aliases: dict[str, str] = {}
-    scope = _scope_nodes(node)
-    changed = True
-    while changed:
-        changed = False
-        for item in scope:
-            value: ast.AST | None = None
-            targets: tuple[str, ...] = ()
-            annotation: ast.expr | None = None
-            if isinstance(item, ast.Assign):
-                value = item.value
-                targets = tuple(key for target in item.targets for key in _target_keys(target))
-            elif isinstance(item, ast.AnnAssign):
-                value = item.value
-                targets = _target_keys(item.target)
-                annotation = item.annotation
-            elif isinstance(item, ast.NamedExpr):
-                value = item.value
-                targets = _target_keys(item.target)
-            if not targets:
-                continue
-            if _annotation_mentions_model(
-                annotation,
-                imported_symbols=imported_symbols,
-                module_aliases=module_aliases,
-                model_types=model_types,
-            ) or _is_model_expression(
-                value,
-                receivers=receivers,
-                imported_symbols=imported_symbols,
-                module_aliases=module_aliases,
-                concrete=concrete,
-            ):
-                before = len(receivers)
-                receivers.update(targets)
-                changed |= len(receivers) != before
-            method = _method_reference(
-                value,
-                receivers=receivers,
-                callable_aliases=callable_aliases,
-                imported_symbols=imported_symbols,
-                module_aliases=module_aliases,
-                concrete=concrete,
-                protocol_methods=protocol_methods,
-            )
-            if method:
-                before = len(callable_aliases)
-                callable_aliases.update({target: method for target in targets})
-                changed |= len(callable_aliases) != before
-
-    calls: Counter[str] = Counter()
-    for item in scope:
-        if not isinstance(item, ast.Call):
-            continue
-        method = _method_reference(
-            item.func,
-            receivers=receivers,
-            callable_aliases=callable_aliases,
-            imported_symbols=imported_symbols,
-            module_aliases=module_aliases,
-            concrete=concrete,
-            protocol_methods=protocol_methods,
-        )
-        if method:
-            calls[method] += 1
-    return calls
+    analyzer.analyze_function(node, owner=owner, class_name=class_name)
+    return analyzer.calls
 
 
 def _has_non_null_model_handoff(tree: ast.Module) -> bool:
@@ -755,6 +1063,7 @@ def _analyze_module(
         if isinstance(top_level, (ast.FunctionDef, ast.AsyncFunctionDef)):
             function_calls = _function_call_points(
                 top_level,
+                owner=top_level.name,
                 class_name="",
                 class_receivers=class_receivers,
                 imported_symbols=imported_symbols,
@@ -763,13 +1072,15 @@ def _analyze_module(
                 model_types=model_types,
                 protocol_methods=protocol_methods,
             )
-            calls.update((module_name, top_level.name, method) for method in function_calls.elements())
+            for (owner, method), count in function_calls.items():
+                calls[(module_name, owner, method)] += count
         elif isinstance(top_level, ast.ClassDef):
             for method in (
                 node for node in top_level.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
             ):
                 function_calls = _function_call_points(
                     method,
+                    owner=method.name,
                     class_name=top_level.name,
                     class_receivers=class_receivers,
                     imported_symbols=imported_symbols,
@@ -778,7 +1089,8 @@ def _analyze_module(
                     model_types=model_types,
                     protocol_methods=protocol_methods,
                 )
-                calls.update((module_name, method.name, facade_method) for facade_method in function_calls.elements())
+                for (owner, facade_method), count in function_calls.items():
+                    calls[(module_name, owner, facade_method)] += count
     constructs_client = any(
         _is_constructor_or_factory(
             node,
@@ -818,6 +1130,19 @@ def _consumer_inventory() -> tuple[frozenset[str], Counter[tuple[str, str, str]]
             modules.add(module_name)
         calls.update(module_calls)
     return frozenset(modules), calls
+
+
+def _call_points_for_source(source: str, *, module_name: str) -> Counter[tuple[str, str, str]]:
+    provider_tree = ast.parse(MODEL_PROVIDER_PATH.read_text(encoding="utf-8"), filename=str(MODEL_PROVIDER_PATH))
+    concrete = _concrete_client_population(provider_tree)
+    protocol_methods = frozenset(_protocol_surface(provider_tree))
+    _, calls = _analyze_module(
+        ast.parse(source, filename=module_name),
+        module_name=module_name,
+        concrete=concrete,
+        protocol_methods=protocol_methods,
+    )
+    return calls
 
 
 class _RequestsResponse:
@@ -982,6 +1307,108 @@ def test_model_client_consumer_inventory_and_call_points_match_v1_golden() -> No
     assert len(modules) == 25
     assert sum(calls.values()) == 29
     assert {method_name for _, _, method_name in calls} == set(PROTOCOL_METHOD_CONTRACTS)
+
+
+def test_consumer_analysis_recurses_nested_sync_async_and_lambda_owners() -> None:
+    source = """\
+from sourcing_agent.model_provider import ModelClient
+
+def outer(model_client: ModelClient):
+    client = model_client
+    callable_alias = client.judge_company_equivalence
+
+    def nested_sync():
+        def nested_deep():
+            return client.normalize_request({})
+
+        return client.healthcheck(), callable_alias({}), nested_deep
+
+    async def nested_async():
+        return client.provider_name()
+
+    callback = lambda: client.supports_outreach_ai_verification()
+    return nested_sync, nested_async, callback
+"""
+
+    calls = _call_points_for_source(source, module_name="nested.py")
+
+    assert calls == Counter(
+        {
+            ("nested.py", "outer.<locals>.nested_sync", "healthcheck"): 1,
+            ("nested.py", "outer.<locals>.nested_sync", "judge_company_equivalence"): 1,
+            ("nested.py", "outer.<locals>.nested_sync.<locals>.nested_deep", "normalize_request"): 1,
+            ("nested.py", "outer.<locals>.nested_async", "provider_name"): 1,
+            (
+                "nested.py",
+                "outer.<locals>.<lambda@L16C15>",
+                "supports_outreach_ai_verification",
+            ): 1,
+        }
+    )
+
+
+def test_consumer_analysis_kills_and_rebinds_receiver_and_callable_aliases_in_order() -> None:
+    source = """\
+from sourcing_agent.model_provider import ModelClient
+
+def ordered(model_client: ModelClient, flag: bool):
+    client.healthcheck()
+    client = model_client
+    client.healthcheck()
+    probe()
+    probe = client.provider_name
+    probe()
+    client = object()
+    client.healthcheck()
+    probe = object()
+    probe()
+    client = model_client
+    client.healthcheck()
+    probe = client.provider_name
+    probe()
+    if flag:
+        possible_client = model_client
+    possible_client.healthcheck()
+"""
+
+    calls = _call_points_for_source(source, module_name="ordered.py")
+
+    assert calls == Counter(
+        {
+            ("ordered.py", "ordered", "healthcheck"): 3,
+            ("ordered.py", "ordered", "provider_name"): 2,
+        }
+    )
+
+
+def test_existing_consumer_nested_call_mutation_changes_the_owned_multiset() -> None:
+    path = SOURCE_ROOT / "orchestrator.py"
+    source = path.read_text(encoding="utf-8")
+    needle = """\
+    def healthcheck_model(self) -> dict[str, Any]:
+        model_health = self.model_client.healthcheck()
+"""
+    replacement = """\
+    def healthcheck_model(self) -> dict[str, Any]:
+        def nested_healthcheck() -> dict[str, Any]:
+            return self.model_client.healthcheck()
+
+        model_health = self.model_client.healthcheck()
+"""
+    assert source.count(needle) == 1
+
+    baseline = _call_points_for_source(source, module_name="orchestrator.py")
+    mutated = _call_points_for_source(source.replace(needle, replacement), module_name="orchestrator.py")
+
+    assert mutated == baseline + Counter(
+        {
+            (
+                "orchestrator.py",
+                "healthcheck_model.<locals>.nested_healthcheck",
+                "healthcheck",
+            ): 1
+        }
+    )
 
 
 def test_openai_chat_completions_wire_shape_remains_v1() -> None:
