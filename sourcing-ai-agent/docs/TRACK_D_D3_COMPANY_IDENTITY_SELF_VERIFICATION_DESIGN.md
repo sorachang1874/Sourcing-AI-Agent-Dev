@@ -83,16 +83,28 @@ acquisition.plan.build 结果事件（含 plan 期廉价解析的置信度）
   → reducer 计划 acquisition.plan_review.request
   → request owner 创建 review session（id 此刻才存在），发 session-created 结果事件
   → reducer（置信 < high 时）计划 company.identity.verify.evidence（携带 session id + fingerprint + intent）
-  → 验证 terminal 结果事件
-  → reducer 计划 company.identity.verification.record（owner = 验证 owner；幂等键 =
-    `record:<workspace_id>:<intent_id>`——v7 修 R6#1：workflow_commands 唯一约束是
-    (workflow_run_id, idempotency_key)，record/apply 必须命令类型命名空间化否则同 workflow 互撞）
+  → 验证 terminal 结果事件（判别化，v8 修 R7#3——reducer 按结果变体路由，消除"全部事件到
+    record"与"只有 final_adjudication 到 record"的矛盾）：
+      final_adjudication        → record（授权分支）
+      evidence_insufficient     → grant 可用 ⇒ search.expand；不可用 ⇒ record（非授权分支，
+                                  intent 迁入 durable `awaiting_budget` 态；此后 grant 授予事件 →
+                                  reducer 计划后继 verify.evidence 子命令【phase gen+1，同 root intent】）
+      失败/超时/needs_human 类  → record（非授权分支）
+  → company.identity.verification.record（owner = 验证 owner；幂等键 =
+    `record:<runtime_namespace>:<workspace_id>:<intent_id>:<phase_generation>`——v7 修 R6#1 的
+    命令类型命名空间化 + v8 补 namespace/phase；**三分支语义（v8 统一 R7#3/#4）**：
+    授权分支 = 全条件 CAS 过 + manifest 完备 ⇒ shadow_would_verify；**非授权分支 = 同样过身份/
+    围栏 CAS 但落 needs_human/failed/timed_out 域写**（record 是这些迁移的唯一 owner，非授权
+    结果也是真实域状态）；`not_applied` **只保留给** stale 身份/generation/epoch/hash 失配——
+    不再与 needs_human 混用）
   → record owner 单 UoW：§4c 全条件 CAS，只写自己的聚合（verification 行 + intent 迁移 +
     not_applied/applied 证据），发 company_identity_verification_recorded 域事件
-  → reducer **仅对 record 结果 = applied** 计划 plan_review.identity_result.apply
-    （owner = plan review owner；幂等键 = `apply:<workspace_id>:<session_id>:<源域事件 id>`——
-    v7：同一 intent 的过期/supersession/promotion/人工各次转移各有源事件、各自成键，互不去重；
-    not_applied 永不触发 gate 更新）
+  → reducer 对 record 的**授权与非授权分支结果**（不含 not_applied）计划
+    plan_review.identity_result.apply（owner = plan review owner；幂等键 =
+    `apply:<runtime_namespace>:<workspace_id>:<session_id>:<源域事件 id>`——v8 修 R7#2：
+    namespace + provider_mode 绑入 apply 的事件/命令身份/幂等 scope/gate 行与 **CAS 每一条**
+    【含 expiry/supersession/human 路径】，跨模式污染 preflight 覆盖 apply；v7：各次转移各有
+    源事件、各自成键；not_applied 永不触发 gate 更新）
   → apply owner 单 UoW（v6 补 R5#1 的 gate 侧围栏）：CAS 于 {workspace + session 当前 revision +
     source 事件 id 匹配 + generation 规则}；**watermark 单调、每次成功 apply（含 blocking 方向）
     都推进**（sweep blocker 修正——阻塞若不推进 watermark，晚到的旧 clearing 可在
@@ -246,11 +258,13 @@ decision_generation；`intent_state ∈ {pending, applied, cancelled, timed_out,
   （epoch/revision），旧 record 在异步 supersession 落地前即已被挡；AND **（v7 修 R6#6）
   adjudication-set manifest 全终态聚合 hash 匹配**（见下）——全过则原子：intent→applied +
   verification 行迁移 + applied 证据事件；任一失配 ⇒ 全不动 + `not_applied` no-op 证据事件；
-- **多候选完备性证明（v7，R6#6）**：owner 在裁决开始前持久化 **adjudication-set manifest**
-  （键 = workspace/intent/phase generation）：服务端枚举的全部 expected candidate ids +
-  逐 call 的信封/结果/状态 + all-terminal 聚合 hash；record CAS 要求 manifest 全终态且 hash
-  匹配——crash/过滤/未跑的兄弟候选缺席 ⇒ 聚合不成立 ⇒ needs_human，"幸存者显得唯一有效"
-  被结构性堵死；
+- **多候选完备性证明（v7，R6#6；v8 修 R7#4 的产生机制矛盾）**：owner 在裁决开始前**预创建**
+  manifest 全部条目（键 = workspace/intent/phase generation；服务端枚举的 expected candidate
+  ids）；每条目经裁决调用终态化，**未决条目由 owner 的超时/对账命令终态化**（标 unresolved）；
+  完整 terminal bitmap 参与聚合 hash。**授权分支**要求 bitmap 全部 resolved-authorizable 且
+  hash 匹配；存在 unresolved/非授权条目 ⇒ **走 record 非授权分支落 needs_human（真实域写）**
+  ——不是 not_applied（后者只留给 stale 围栏失配）。"幸存者显得唯一有效"仍被结构性堵死，
+  且 needs_human 有了明确的产生者；
 - **retry ABA 窗口封堵（v6，R5#2）**：requeue 在同一控制 UoW 内先递增命令的 **durable control
   epoch**（与 claim generation 分立、requeue 即变），intent 记录 epoch——旧结果在"已 requeue、
   未重 claim"窗口内因 epoch 失配即拒；后继 intent 只在新 claim + 新 ActivityAttempt 创建事务内

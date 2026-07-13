@@ -189,11 +189,10 @@ plan review 对话化；intent→plan 前门流式化（依赖 D0+C4）；`model
 - **TD-2**（已裁决 2026-07-13：接受建议）D3 = durable operation 内嵌 plan 流水线，不等 D2。
   v2 具体化为 W11 子命令 + plan 期廉价解析前移。
 - **TD-3**（已裁决 2026-07-13：接受建议）D2 poll-first 先行；SSE 与 C4 一次做。
-- **TD-4**（**待终审，live 硬前置**）产品侧模型路由注册表：v2 已在 D0 详设 §4 给出
-  `ModelRouteRegistry` 草案（route_id→provider/model/api_style/能力/预算类/simulate 映射/
-  fail-closed fallback/rollout_state；调用方只传 route_id）。**与 review gate 的 reviewer 路由表
-  彻底分离**（v1 建议同表管理是错的，reviewer 表是 operator 基础设施，耦合会让评审配置改变产品
-  行为）。任何 live D0/D3 模型调用在 owner 批准初始路由表前 fail-closed。
+- **TD-4**（**已裁决 2026-07-13：owner 批准按推荐落档初始表**，见 D0 详设 §4——
+  `agent.planner.loop` 与 `company.identity.adjudicate` 两条均 gpt-5.6-sol / chat_completions /
+  fail-closed fallback / **rollout_state=draft**；live 启用 = 逐条 draft→canary，仍由 owner
+  拨动）。与 reviewer 路由表彻底分离；CRM 产品模型锁与本表互不引用。
 - **TD-5**（已裁决 2026-07-13：内部产品软默认非硬限，可配置倾向宽松）**额度单位 = 每次授予**
   （v7 矩阵审计统一口径：`identity_search_budget_grant` 每次授予默认 3 次检索，plan 生命周期内
   可多次授予——不是 per-plan 总量硬限）；信封维度化（searches/fetches/model tokens/wall）、

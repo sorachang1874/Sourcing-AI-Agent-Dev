@@ -163,12 +163,14 @@ v3 追加：流路径消费到的 terminal 事件所载结果与 `run_tool_turn`
   **v3（#11）**：`length` / `content_filter` / 未知 reason 的 terminal 结果 =
   `authorizable=false` 的隔离终态（结果照记、证据照留，**不得授权任何 action**）——看似完整或
   schema-valid 的截断前缀不能逃逸；可授权集合初始只含 {`end_turn`, `tool_calls`}。
-- **v4（round3#10）工具执行去重改为逻辑结果槽 + 首成功 CAS**：provider `tool_call_id` 仅证据；
-  owner 为每个 (turn_id, step_id) 维护 **workspace-scoped 逻辑结果槽**——首个验证通过的 terminal
-  结果以 CAS 占槽（journal 落库得 `accepted_result_id`）；此后同槽的重试结果**join**（同
-  tool_name + canonical_args_digest ⇒ 幂等命中既有 action）或 **quarantine**（不同内容 ⇒ 隔离
-  证据，不产新 action）；**有意重新生成**必须显式推进槽 generation（新 step）。action 身份 =
-  `(result_slot_id, slot_generation, tool_name, canonical_args_digest)`——tool_ordinal 不入身份。
+- **v4（round3#10）工具执行去重改为逻辑结果槽 + 首成功 CAS；v8 修 R7#1 的多 call 语义**：
+  provider `tool_call_id` 仅证据；owner 为每个 (turn_id, step_id) 维护 workspace-scoped 逻辑
+  结果槽——首个验证通过的 terminal 结果以 CAS 占槽（journal 落库得 `accepted_result_id` +
+  **canonical terminal-outcome digest**：覆盖终态变体 + text + **有序 call 多重集**）；重试结果
+  **只在 outcome digest 精确相等时 join**（子集/超集/重排一律 quarantine——不再按单 call
+  比对产生歧义 join）；同一逻辑 call 出现多次 ⇒ 每次获得**稳定 occurrence 序号**入身份。
+  action 身份 = `(result_slot_id, slot_generation, tool_name, canonical_args_digest,
+  occurrence_ordinal)`；**有意重新生成**显式推进槽 generation。
 - **v5（round4#5）槽的取消/失效围栏**：槽自带 `slot_state ∈ {open, accepted, consumed, closed,
   superseded}`；**接受 CAS 的全条件** = 槽 open + 所属 OperationRun/turn/WorkflowCommand 均非终态
   + claim/attempt 身份匹配 + **durable control epoch 匹配**（sweep 修正：requeue→重 claim 窗口的
@@ -313,9 +315,18 @@ class ModelRouteSpec:
     circuit_key: str
     rollout_state: str       # draft | canary | active | retired
 ```
-初始表（draft，owner 终审）：`agent.planner.loop` 与 `company.identity.adjudicate` 两条，
-provider/model 由 owner 定（CRM 的 `gpt-5.6-sol` 锁不外溢到这里）。路由变更 = 配置提交 + 审计，
-不是运行时行为。
+**初始表（owner 2026-07-13 批准起草并按推荐落档；rollout_state 全部 = draft，live 启用前
+逐条升 canary 仍需 owner 拨动）**：
+
+| route_id | provider | model | api_style | capabilities | budget_class | simulate_mapping |
+|---|---|---|---|---|---|---|
+| `agent.planner.loop` | openai_compatible relay | `gpt-5.6-sol` | openai_chat_completions | stream,tools,usage,identity_check | agent_turn_standard | scripted_tool_turn |
+| `company.identity.adjudicate` | openai_compatible relay | `gpt-5.6-sol` | openai_chat_completions | usage,identity_check | adjudication_small | scripted_adjudication |
+
+理由：owner 现有最强 relay 模型即 gpt-5.6-sol，chat_completions 是 D0 唯一 live 目标；
+CRM 的产品模型锁与本表**互不引用**（锁在 `analyze_public_web_candidate_signals` 路径，
+本表在 agent/裁决路径——同模型是巧合不是耦合，两处各自独立变更）。`fallback_policy =
+fail_closed` 唯一初始值。路由变更 = 配置提交 + 审计，不是运行时行为。
 
 ## 5. 批协议（handbook §4 形态，v2 更新）
 
