@@ -34,6 +34,10 @@ Required before a capability probe:
 
 ## Stage 1: minimal capability probe
 
+The repository now contains fixture-only request/result schemas and an executable offline validator described in
+`STAGE1_CAPABILITY_FIXTURE_CONTRACT.md`. They validate shape and fail-closed behavior only. They cannot represent a
+live call, cannot emit `x_native_proven`, and do not change this gate's `NO-GO` verdict.
+
 Use one official lab account, not a researcher population. The request asks for at most five recent public technical
 posts and requires for each returned item:
 

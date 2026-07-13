@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.grok.capability_probe.request.v1.schema.json",
+  "title": "X-first offline capability-probe request fixture v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "probe_id",
+    "execution_mode",
+    "owner_decisions",
+    "target",
+    "query",
+    "hard_budgets",
+    "kill_switch",
+    "retention",
+    "safety_policy_version",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.grok.capability_probe.request.v1"},
+    "probe_id": {"const": "xprobe_fixture_openai_official_v1"},
+    "execution_mode": {"const": "fixture_only"},
+    "owner_decisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["live_execution", "legal_privacy", "model_access", "retention_policy"],
+      "properties": {
+        "live_execution": {"const": "deferred"},
+        "legal_privacy": {"const": "deferred"},
+        "model_access": {"const": "deferred"},
+        "retention_policy": {"const": "deferred"}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lab_id", "account_kind", "platform_user_id", "current_handle"],
+      "properties": {
+        "lab_id": {"const": "openai"},
+        "account_kind": {"const": "official_lab"},
+        "platform_user_id": {"const": "xuid_fixture_official_openai"},
+        "current_handle": {"const": "fixture_openai_official"}
+      }
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["query_kind", "query_template"],
+      "properties": {
+        "query_kind": {"const": "recent_public_technical_posts"},
+        "query_template": {"const": "fixture://openai/official/recent-public-technical-posts"}
+      }
+    },
+    "hard_budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_executions",
+        "max_external_calls",
+        "max_pages",
+        "max_observations",
+        "max_cost_usd",
+        "deadline_ms"
+      ],
+      "properties": {
+        "max_executions": {"const": 1},
+        "max_external_calls": {"const": 1},
+        "max_pages": {"const": 1},
+        "max_observations": {"const": 5},
+        "max_cost_usd": {"const": 0},
+        "deadline_ms": {"const": 1000}
+      }
+    },
+    "kill_switch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["armed", "trip_conditions"],
+      "properties": {
+        "armed": {"const": true},
+        "trip_conditions": {
+          "const": [
+            "external_execution_attempted",
+            "live_url_observed",
+            "budget_exceeded",
+            "credential_material_observed",
+            "canonical_write_attempted"
+          ]
+        }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "delete_after", "bounded_excerpt_max_chars", "full_body_allowed"],
+      "properties": {
+        "class": {"const": "synthetic_fixture_only"},
+        "delete_after": {"type": "null"},
+        "bounded_excerpt_max_chars": {"const": 280},
+        "full_body_allowed": {"const": false}
+      }
+    },
+    "safety_policy_version": {"const": "x-first-public-professional-v1"},
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "external_execution_authorized",
+        "researcher_mapping_authorized",
+        "graph_expansion_authorized",
+        "provider_fallback_authorized",
+        "canonical_writes_authorized",
+        "outreach_authorized"
+      ],
+      "properties": {
+        "external_execution_authorized": {"const": false},
+        "researcher_mapping_authorized": {"const": false},
+        "graph_expansion_authorized": {"const": false},
+        "provider_fallback_authorized": {"const": false},
+        "canonical_writes_authorized": {"const": false},
+        "outreach_authorized": {"const": false}
+      }
+    }
+  }
+}

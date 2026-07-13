@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.grok.capability_probe.result.v1.schema.json",
+  "title": "X-first offline capability-probe result fixture v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "probe_id",
+    "request_sha256",
+    "execution_mode",
+    "run",
+    "task",
+    "capability",
+    "provenance",
+    "usage",
+    "observations",
+    "errors",
+    "retention",
+    "candidate_packets",
+    "identity_link_proposals",
+    "assertions",
+    "canonical_writes",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.grok.capability_probe.result.v1"},
+    "probe_id": {"const": "xprobe_fixture_openai_official_v1"},
+    "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "execution_mode": {"const": "fixture_only"},
+    "run": {"$ref": "#/$defs/run"},
+    "task": {"$ref": "#/$defs/task"},
+    "capability": {"$ref": "#/$defs/capability"},
+    "provenance": {"$ref": "#/$defs/provenance"},
+    "usage": {"$ref": "#/$defs/usage"},
+    "observations": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/observation"}
+    },
+    "errors": {
+      "type": "array",
+      "maxItems": 1,
+      "items": {"$ref": "#/$defs/error"}
+    },
+    "retention": {"$ref": "#/$defs/retention"},
+    "candidate_packets": {"type": "array", "maxItems": 0},
+    "identity_link_proposals": {"type": "array", "maxItems": 0},
+    "assertions": {"type": "array", "maxItems": 0},
+    "canonical_writes": {"type": "array", "maxItems": 0},
+    "claims": {"$ref": "#/$defs/claims"}
+  },
+  "$defs": {
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "status", "started_at", "completed_at"],
+      "properties": {
+        "run_id": {"const": "xprobe_run_fixture_openai_official_v1"},
+        "status": {"enum": ["completed", "failed", "cancelled", "killed"]},
+        "started_at": {"type": "string", "format": "date-time"},
+        "completed_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "status", "stop_reason"],
+      "properties": {
+        "task_id": {"const": "xprobe_task_fixture_openai_official_v1"},
+        "status": {"enum": ["succeeded", "failed", "cancelled", "expired"]},
+        "stop_reason": {"enum": ["fixture_complete", "fixture_failed"]}
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict", "proof_scope", "x_native_access_proven"],
+      "properties": {
+        "verdict": {
+          "enum": ["fixture_contract_validated", "capability_unavailable", "probe_error", "killed"]
+        },
+        "proof_scope": {"const": "offline_synthetic_only"},
+        "x_native_access_proven": {"const": false}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "access_mode",
+        "model_id",
+        "tool_id",
+        "provider_request_id",
+        "prompt_version",
+        "request_sha256",
+        "raw_response_sha256"
+      ],
+      "properties": {
+        "provider_id": {"const": "offline_fixture"},
+        "access_mode": {"const": "fixture"},
+        "model_id": {"type": "null"},
+        "tool_id": {"type": "null"},
+        "provider_request_id": {"type": "null"},
+        "prompt_version": {"const": "fixture-capability-v1"},
+        "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "raw_response_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executions", "external_calls", "pages", "observations", "cost_usd", "elapsed_ms"],
+      "properties": {
+        "executions": {"const": 0},
+        "external_calls": {"const": 0},
+        "pages": {"const": 0},
+        "observations": {"type": "integer", "minimum": 0, "maximum": 5},
+        "cost_usd": {"const": 0},
+        "elapsed_ms": {"type": "integer", "minimum": 0, "maximum": 1000}
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation_id",
+        "platform_object_id",
+        "platform_user_id",
+        "author_handle",
+        "canonical_url",
+        "authored_at",
+        "observed_at",
+        "excerpt",
+        "full_body_stored"
+      ],
+      "properties": {
+        "observation_id": {"type": "string", "pattern": "^xprobe_obs_fixture_[0-9]{3}$"},
+        "platform_object_id": {"type": "string", "pattern": "^xpost_fixture_[0-9]{3}$"},
+        "platform_user_id": {"const": "xuid_fixture_official_openai"},
+        "author_handle": {"const": "fixture_openai_official"},
+        "canonical_url": {
+          "type": "string",
+          "pattern": "^https://posts\\.invalid/fixture_openai_official/status/xpost_fixture_[0-9]{3}$"
+        },
+        "authored_at": {"type": "string", "format": "date-time"},
+        "observed_at": {"type": "string", "format": "date-time"},
+        "excerpt": {"type": "string", "maxLength": 280},
+        "full_body_stored": {"const": false}
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+        "message": {"type": "string", "maxLength": 280},
+        "retryable": {"type": "boolean"}
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "delete_after", "full_body_stored", "deletion_status"],
+      "properties": {
+        "class": {"const": "synthetic_fixture_only"},
+        "delete_after": {"type": "null"},
+        "full_body_stored": {"const": false},
+        "deletion_status": {"const": "not_applicable_synthetic"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exhaustive",
+        "current_employment_guaranteed",
+        "outreach_permission",
+        "researcher_mapping_authorized"
+      ],
+      "properties": {
+        "exhaustive": {"const": false},
+        "current_employment_guaranteed": {"const": false},
+        "outreach_permission": {"const": false},
+        "researcher_mapping_authorized": {"const": false}
+      }
+    }
+  }
+}

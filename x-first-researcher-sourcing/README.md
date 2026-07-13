@@ -21,6 +21,10 @@ The first vertical slice covers OpenAI with:
 
 All URLs use the reserved `.invalid` domain. No real person, handle, post, or X URL appears in the fixture.
 
+An additional Stage 1 offline slice now validates synthetic capability-probe request/result envelopes. It remains
+account-level and fixture-only: its only positive verdict is `fixture_contract_validated`, and it explicitly records
+`x_native_access_proven=false`. See `docs/ARCHITECTURE.md` and `docs/STAGE1_CAPABILITY_FIXTURE_CONTRACT.md`.
+
 ## Population boundary
 
 The population is defined only by current lab affiliation and `PRETRAIN_CORE` or `PRETRAIN_ADJACENT` professional
@@ -40,7 +44,9 @@ From this folder:
 ```bash
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest discover -s tests -v
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.contracts
+PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.capability_probe
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_openai_fixture.py --check
+PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_capability_probe_fixtures.py --check
 ```
 
 Regenerate the deterministic fixture only when the contract intentionally changes:
@@ -51,6 +57,8 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python scripts/generate_openai_fix
 
 ## Next gate
 
-The next allowed step is a bounded Grok capability probe after the decisions in
-`docs/GROK_CAPABILITY_GATE.md` are approved. It must prove actual canonical X post access; generic web search does not
-count. Live researcher mapping remains `NO-GO` until that gate and independent review are complete.
+The Stage 1 offline request/result fixture contracts now exist, but they do not authorize execution. The next possible
+live step remains a bounded Grok capability probe only after the decisions in `docs/GROK_CAPABILITY_GATE.md` are
+approved and a separate live-capable contract/runner passes independent review. It must prove actual canonical X post
+access; generic web search does not count. Live researcher mapping remains `NO-GO` until that gate and a later owner
+decision are complete.
