@@ -14,7 +14,7 @@ import requests
 
 from .document_extraction import infer_structured_signals_from_payload
 from .domain import JobRequest
-from .model_usage import ModelUsage
+from .model_usage import ModelUsage as OpenAIModelUsage
 from .query_intent_policy import build_supported_rewrite_policy_prompt_context
 from .runtime_environment import assert_live_provider_access_allowed, external_provider_mode
 from .settings import ModelProviderSettings, QwenSettings
@@ -34,9 +34,8 @@ _MODEL_PROVIDER_USAGE_TOKEN_LIMIT = 1_000_000_000
 CRM_PUBLIC_WEB_PRODUCT_MODEL = "gpt-5.6-sol"
 
 
-# Compatibility import for existing provider callers. ``ModelUsage`` is the
-# only class owner; new provider-neutral code should import it from model_usage.
-OpenAIModelUsage = ModelUsage
+# Compatibility import alias for existing provider callers. ``ModelUsage`` is
+# the only class owner; new provider-neutral code should import it directly.
 
 
 @dataclass(frozen=True, slots=True)
