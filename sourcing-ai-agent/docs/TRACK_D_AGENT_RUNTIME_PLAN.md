@@ -225,8 +225,17 @@ checklist 驱动单遍扫描；终止规则见该文 §2.3。
 R7#2 apply 全路径 namespace/mode 绑定、R7#3 判别化终态路由 + `awaiting_budget` durable 态、
 R7#4 manifest 预创建 + owner 终态化 + record 非授权分支产生 needs_human；簿记类全修——
 R7#5/#6/#8/#9 经矩阵 v3 重生成（200 格、含新机制行、OB-ID 稳定编号）、R7#7/#10 文字同步。
-TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。**round 8 = 对 v8 的 checklist 驱动
-评审**（阻断集若空或全为 OB-ID 已记录项 ⇒ GO 带义务，触发终止规则）。
+TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
+
+**round-8 终局状态（artifact `20260713T154827Z_*`，NO-GO 7 新阻断 + 6 非阻断 re-raise）**：
+八轮总曲线 24→16→17→6→5→11→9→7；**决定性证据 = R8#1/#2 是 v8 为修 R7#3 新引入的
+`awaiting_budget` 机制自身的状态机/lost-wakeup 问题**——"每个新修复机制孵化下一轮 findings"
+在协议加持下依然重演，散文层不存在不动点。R8 七条阻断（awaiting_budget 状态机一致性、grant
+续跑 lost-wakeup、accepted 结果的 crash/lease 接管恢复、manifest 物理隔离、TD-4 表字段实例化、
+非授权结果的 EntityDelta 因果、pre-transport 围栏泛化）+ 六条 re-raise **均转为对应实施批的
+开工义务**——它们全部是"真实 PG + 竞态测试几小时内可判定，散文继续迭代只会孵化元问题"类。
+**设计作者终局建议（第二次，携八轮数据）**：按 gate Failure Policy 走 owner-accepted exception
+（引 R8 artifact），设计定稿 v8、进入实施；实施每批照常 per-batch gate。owner 裁决记录于此。
 
 ## 6. 实施批义务清单（round-4 校准裁定：非设计阻断，随各实施批执行并逐条验收）
 
