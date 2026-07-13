@@ -19,34 +19,34 @@
   "observations": [
     {
       "author_handle": "fixture_openai_official",
-      "authored_at": "2026-07-11T12:00:00Z",
+      "authored_at": "2026-07-11T12:00:00.000Z",
       "canonical_url": "https://posts.invalid/fixture_openai_official/status/xpost_fixture_001",
       "excerpt": "Synthetic capability evidence 001 for xpost_fixture_001 about public technical model-training work.",
       "full_body_stored": false,
       "observation_id": "xprobe_obs_fixture_001",
-      "observed_at": "2026-07-14T00:00:00Z",
+      "observed_at": "2026-07-14T00:00:00.000Z",
       "platform_object_id": "xpost_fixture_001",
       "platform_user_id": "xuid_fixture_official_openai"
     },
     {
       "author_handle": "fixture_openai_official",
-      "authored_at": "2026-07-12T12:00:00Z",
+      "authored_at": "2026-07-12T12:00:00.000Z",
       "canonical_url": "https://posts.invalid/fixture_openai_official/status/xpost_fixture_002",
       "excerpt": "Synthetic capability evidence 002 for xpost_fixture_002 about public technical model-training work.",
       "full_body_stored": false,
       "observation_id": "xprobe_obs_fixture_002",
-      "observed_at": "2026-07-14T00:00:00Z",
+      "observed_at": "2026-07-14T00:00:00.000Z",
       "platform_object_id": "xpost_fixture_002",
       "platform_user_id": "xuid_fixture_official_openai"
     },
     {
       "author_handle": "fixture_openai_official",
-      "authored_at": "2026-07-13T12:00:00Z",
+      "authored_at": "2026-07-13T12:00:00.000Z",
       "canonical_url": "https://posts.invalid/fixture_openai_official/status/xpost_fixture_003",
       "excerpt": "Synthetic capability evidence 003 for xpost_fixture_003 about public technical model-training work.",
       "full_body_stored": false,
       "observation_id": "xprobe_obs_fixture_003",
-      "observed_at": "2026-07-14T00:00:00Z",
+      "observed_at": "2026-07-14T00:00:00.000Z",
       "platform_object_id": "xpost_fixture_003",
       "platform_user_id": "xuid_fixture_official_openai"
     }
@@ -70,9 +70,9 @@
     "full_body_stored": false
   },
   "run": {
-    "completed_at": "2026-07-14T00:00:00Z",
+    "completed_at": "2026-07-14T00:00:00.000Z",
     "run_id": "xprobe_run_fixture_openai_official_v1",
-    "started_at": "2026-07-14T00:00:00Z",
+    "started_at": "2026-07-14T00:00:00.000Z",
     "status": "completed"
   },
   "schema_version": "x.grok.capability_probe.result.v1",

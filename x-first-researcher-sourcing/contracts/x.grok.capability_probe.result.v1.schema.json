@@ -58,8 +58,20 @@
       "properties": {
         "run_id": {"const": "xprobe_run_fixture_openai_official_v1"},
         "status": {"enum": ["completed", "failed", "cancelled", "killed"]},
-        "started_at": {"type": "string", "format": "date-time"},
-        "completed_at": {"type": "string", "format": "date-time"}
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "minLength": 24,
+          "maxLength": 24,
+          "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:[0-2][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time",
+          "minLength": 24,
+          "maxLength": 24,
+          "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:[0-2][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$"
+        }
       }
     },
     "task": {
@@ -146,8 +158,20 @@
           "type": "string",
           "pattern": "^https://posts\\.invalid/fixture_openai_official/status/xpost_fixture_[0-9]{3}$"
         },
-        "authored_at": {"type": "string", "format": "date-time"},
-        "observed_at": {"type": "string", "format": "date-time"},
+        "authored_at": {
+          "type": "string",
+          "format": "date-time",
+          "minLength": 24,
+          "maxLength": 24,
+          "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:[0-2][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time",
+          "minLength": 24,
+          "maxLength": 24,
+          "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:[0-2][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$"
+        },
         "excerpt": {
           "type": "string",
           "maxLength": 280,
@@ -179,7 +203,7 @@
             "Synthetic capability probe killed."
           ]
         },
-        "retryable": {"type": "boolean"}
+        "retryable": {"const": false}
       }
     },
     "retention": {

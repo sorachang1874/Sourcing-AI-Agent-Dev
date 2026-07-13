@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import ast
+import contextlib
 import copy
+import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -19,13 +22,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import generate_capability_probe_fixtures as capability_fixture_generator  # noqa: E402
 from generate_capability_probe_fixtures import (  # noqa: E402
+    OWNED_TEMP_PREFIX,
     _atomic_write_many,
+    _write_same_directory_temp,
     build_request_fixture,
     build_result_fixture,
 )
 
 from x_first.capability_probe import (  # noqa: E402
+    CANONICAL_RFC3339_UTC_MILLIS_PATTERN,
     CAPABILITY_OBSERVATION_EXCERPTS,
     ERROR_ENVELOPE_BY_VERDICT,
     SYNTHETIC_RAW_RESPONSE_SHA256,
@@ -114,7 +121,17 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
             _atomic_write_many(((first, "new-first"), (second, "new-second")))
             self.assertEqual(first.read_text(encoding="utf-8"), "new-first")
             self.assertEqual(second.read_text(encoding="utf-8"), "new-second")
-            self.assertFalse(list(root.glob(".*.tmp")))
+            self.assertFalse(list(root.glob(f"{OWNED_TEMP_PREFIX}*.tmp")))
+
+            stale_owned_temp = _write_same_directory_temp(first, b"hard-crash-orphan")
+            unrelated_temp = root / f"{OWNED_TEMP_PREFIX}{first.name}.not-owned.tmp"
+            unrelated_temp.write_text("unrelated", encoding="utf-8")
+            reaped = _atomic_write_many(((first, "repaired-first"), (second, "repaired-second")))
+            self.assertEqual(reaped, (stale_owned_temp,))
+            self.assertFalse(stale_owned_temp.exists())
+            self.assertEqual(unrelated_temp.read_text(encoding="utf-8"), "unrelated")
+            self.assertEqual(first.read_text(encoding="utf-8"), "repaired-first")
+            self.assertEqual(second.read_text(encoding="utf-8"), "repaired-second")
 
             target = root / "target.json"
             symlink = root / "symlink.json"
@@ -123,7 +140,7 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "refusing to replace symlink"):
                 _atomic_write_many(((symlink, "must-not-write"), (second, "must-not-write")))
             self.assertEqual(target.read_text(encoding="utf-8"), "target-original")
-            self.assertEqual(second.read_text(encoding="utf-8"), "new-second")
+            self.assertEqual(second.read_text(encoding="utf-8"), "repaired-second")
 
             first.write_text("rollback-first", encoding="utf-8")
             second.write_text("rollback-second", encoding="utf-8")
@@ -142,7 +159,38 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
                     _atomic_write_many(((first, "partial-first"), (second, "partial-second")))
             self.assertEqual(first.read_text(encoding="utf-8"), "rollback-first")
             self.assertEqual(second.read_text(encoding="utf-8"), "rollback-second")
-            self.assertFalse(list(root.glob(".*.tmp")))
+            self.assertFalse(
+                [path for path in root.glob(f"{OWNED_TEMP_PREFIX}*.tmp") if path != unrelated_temp]
+            )
+            self.assertEqual(unrelated_temp.read_text(encoding="utf-8"), "unrelated")
+
+    def test_generator_check_rejects_symlink_even_when_target_bytes_match(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture_root = root / "fixtures"
+            fixture_root.mkdir()
+            request = build_request_fixture()
+            result = build_result_fixture(request)
+
+            def serialize(payload: dict[str, Any]) -> str:
+                return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+
+            request_target = fixture_root / "request-target.json"
+            request_target.write_text(serialize(request), encoding="utf-8")
+            request_path = fixture_root / "capability_probe_request_fixture_v1.json"
+            request_path.symlink_to(request_target)
+            (fixture_root / "capability_probe_result_fixture_v1.json").write_text(
+                serialize(result), encoding="utf-8"
+            )
+
+            output = io.StringIO()
+            with (
+                mock.patch.object(capability_fixture_generator, "ROOT", root),
+                contextlib.redirect_stdout(output),
+            ):
+                return_code = capability_fixture_generator.main(["--check"])
+            self.assertEqual(return_code, 1)
+            self.assertIn(str(request_path), output.getvalue())
 
     def test_positive_fixture_validates_and_binds_request(self) -> None:
         self.assertEqual(validate_capability_request(self.request), [])
@@ -183,6 +231,20 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
             set(error_properties["message"]["enum"]),
             {value[1] for value in ERROR_ENVELOPE_BY_VERDICT.values()},
         )
+        self.assertEqual(
+            {error_properties["retryable"]["const"]},
+            {value[2] for value in ERROR_ENVELOPE_BY_VERDICT.values()},
+        )
+        timestamp_properties = (
+            self.result_schema["$defs"]["run"]["properties"]["started_at"],
+            self.result_schema["$defs"]["run"]["properties"]["completed_at"],
+            self.result_schema["$defs"]["observation"]["properties"]["authored_at"],
+            self.result_schema["$defs"]["observation"]["properties"]["observed_at"],
+        )
+        for timestamp_property in timestamp_properties:
+            self.assertEqual(timestamp_property["pattern"], CANONICAL_RFC3339_UTC_MILLIS_PATTERN)
+            self.assertEqual(timestamp_property["minLength"], 24)
+            self.assertEqual(timestamp_property["maxLength"], 24)
         stage0 = load_json(ROOT / "contracts/x.grok.collection.v1.schema.json")
         self.assertEqual(stage0["properties"]["schema_version"]["const"], "x.grok.collection.v1")
         self.assertNotIn("capability", stage0["properties"])
@@ -282,6 +344,12 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assert_result_rejected(mutation, contains=expected)
 
+    def test_non_object_bound_requests_fail_closed_without_exception(self) -> None:
+        for request in (None, [], "request", 1, True):
+            with self.subTest(request=request):
+                errors = validate_capability_result(copy.deepcopy(self.result), request=request)
+                self.assertTrue(any("bound request invalid: request must be an object" in error for error in errors))
+
     def test_terminal_total_state_registry_and_failure_envelope(self) -> None:
         failure = self.build_failure_result()
         self.assertEqual(validate_capability_result(failure, request=self.request), [])
@@ -358,6 +426,14 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
             wrong_code_errors,
         )
 
+        retryable_failure = self.build_failure_result()
+        retryable_failure["errors"][0]["retryable"] = True
+        retryable_errors = validate_capability_result(retryable_failure, request=self.request)
+        self.assertTrue(
+            any("must match the deterministic verdict envelope" in error for error in retryable_errors),
+            retryable_errors,
+        )
+
     def test_run_duration_and_elapsed_ms_reconcile_exactly(self) -> None:
         one_millisecond = copy.deepcopy(self.result)
         one_millisecond["run"]["completed_at"] = "2026-07-14T00:00:00.001Z"
@@ -374,8 +450,43 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
         )
         self.assert_result_rejected(
             lambda payload: payload["run"].__setitem__("completed_at", "2026-07-14T00:00:00.000001Z"),
-            contains="must resolve to an exact non-negative millisecond count",
+            contains="must use canonical UTC RFC3339 millisecond form",
         )
+
+    def test_timestamp_fields_reject_noncanonical_and_control_bearing_forms(self) -> None:
+        variants = (
+            "2026-07-14T00:00:00Z",
+            "20260714T000000.000Z",
+            "2026-W29-2T00:00:00.000Z",
+            "2026-07-14T00:00:00.000+00:00",
+            "2026-07-14T08:00:00.000+08:00",
+            "2026-07-14 00:00:00.000Z",
+            "2026-07-14T00:00:00.000z",
+            " 2026-07-14T00:00:00.000Z",
+            "\x002026-07-14T00:00:00.000Z",
+            "2026-07-14T00:00:\n00.000Z",
+            "2026-07-14T00:00:\r00.000Z",
+            "2026-07-14T00:00:\t00.000Z",
+        )
+        for timestamp in variants:
+            with self.subTest(field="run.completed_at", timestamp=repr(timestamp)):
+                result = copy.deepcopy(self.result)
+                result["run"]["completed_at"] = timestamp
+                errors = validate_capability_result(result, request=self.request)
+                self.assertTrue(any("canonical UTC RFC3339 millisecond form" in error for error in errors), errors)
+            with self.subTest(field="observations[0].observed_at", timestamp=repr(timestamp)):
+                result = copy.deepcopy(self.result)
+                result["observations"][0]["observed_at"] = timestamp
+                errors = validate_capability_result(result, request=self.request)
+                self.assertTrue(any("canonical UTC RFC3339 millisecond form" in error for error in errors), errors)
+
+        for timestamp in (
+            self.result["run"]["started_at"],
+            self.result["run"]["completed_at"],
+            *(observation["authored_at"] for observation in self.result["observations"]),
+            *(observation["observed_at"] for observation in self.result["observations"]),
+        ):
+            self.assertIsNotNone(re.fullmatch(CANONICAL_RFC3339_UTC_MILLIS_PATTERN, timestamp))
 
     def test_usage_totals_and_hard_budgets_fail_closed(self) -> None:
         mutations: dict[str, tuple[Callable[[dict[str, Any]], None], str]] = {
@@ -441,12 +552,12 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
                 "account mismatch",
             ),
             "future authored": (
-                lambda p: p["observations"][0].__setitem__("authored_at", "2027-01-01T00:00:00Z"),
+                lambda p: p["observations"][0].__setitem__("authored_at", "2027-01-01T00:00:00.000Z"),
                 "authored_at follows observed_at",
             ),
             "naive timestamp": (
                 lambda p: p["observations"][0].__setitem__("observed_at", "2026-07-14T00:00:00"),
-                "timestamps are invalid",
+                "must use canonical UTC RFC3339 millisecond form",
             ),
             "unbounded text": (
                 lambda p: p["observations"][0].__setitem__("excerpt", "Synthetic capability evidence " + "x" * 300),
@@ -466,6 +577,26 @@ class XFirstCapabilityProbeFixtureTest(unittest.TestCase):
         for name, (mutation, expected) in mutations.items():
             with self.subTest(name=name):
                 self.assert_result_rejected(mutation, contains=expected)
+
+    def test_observation_raw_url_must_match_exactly_before_defensive_parsing(self) -> None:
+        canonical = self.result["observations"][0]["canonical_url"]
+        variants = (
+            canonical.replace("https", "HTTPS", 1),
+            canonical.replace("posts.invalid", "POSTS.INVALID", 1),
+            f"{canonical}?",
+            f"{canonical}#",
+            f" {canonical}",
+            f"\x00{canonical}",
+            canonical.replace("posts.invalid", "posts.inva\nlid", 1),
+            canonical.replace("posts.invalid", "posts.inva\rlid", 1),
+            canonical.replace("posts.invalid", "posts.inva\tlid", 1),
+        )
+        for url in variants:
+            with self.subTest(url=repr(url)):
+                self.assert_result_rejected(
+                    lambda payload, url=url: payload["observations"][0].__setitem__("canonical_url", url),
+                    contains="not the exact canonical synthetic string",
+                )
 
     def test_writers_claims_credentials_and_disallowed_signals_fail_closed(self) -> None:
         self.assert_result_rejected(

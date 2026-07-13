@@ -18,6 +18,10 @@ RESULT_SCHEMA_VERSION = "x.grok.capability_probe.result.v1"
 EXECUTION_MODE = "fixture_only"
 SAFETY_POLICY_VERSION = "x-first-public-professional-v1"
 MAX_ERROR_MESSAGE_CHARS = 280
+CANONICAL_RFC3339_UTC_MILLIS_PATTERN = (
+    r"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:[0-2][0-9]|3[01])T"
+    r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\.[0-9]{3}Z$"
+)
 SYNTHETIC_RAW_RESPONSE_BYTES = b"synthetic fixture response v1"
 SYNTHETIC_RAW_RESPONSE_SHA256 = hashlib.sha256(SYNTHETIC_RAW_RESPONSE_BYTES).hexdigest()
 CAPABILITY_OBSERVATION_EXCERPTS: Mapping[str, str] = MappingProxyType(
@@ -233,13 +237,13 @@ def _credential_errors(value: Any, *, root: str) -> list[str]:
 
 
 def _parse_datetime(value: Any) -> datetime | None:
-    if not isinstance(value, str):
+    if not isinstance(value, str) or re.fullmatch(CANONICAL_RFC3339_UTC_MILLIS_PATTERN, value) is None:
         return None
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(f"{value[:-1]}+00:00")
     except ValueError:
         return None
-    return parsed if parsed.tzinfo is not None else None
+    return parsed
 
 
 def _exact_duration_ms(started_at: datetime, completed_at: datetime) -> int | None:
@@ -281,7 +285,7 @@ def _is_false(value: Any) -> bool:
     return type(value) is bool and value is False
 
 
-def validate_capability_request(payload: Mapping[str, Any]) -> list[str]:
+def validate_capability_request(payload: Any) -> list[str]:
     errors: list[str] = []
     request = _validate_object(payload, fields=REQUEST_FIELDS, location="request", errors=errors)
     if request.get("schema_version") != REQUEST_SCHEMA_VERSION:
@@ -356,19 +360,20 @@ def validate_capability_request(payload: Mapping[str, Any]) -> list[str]:
 
 
 def validate_capability_result(
-    payload: Mapping[str, Any],
+    payload: Any,
     *,
-    request: Mapping[str, Any],
+    request: Any,
 ) -> list[str]:
     errors = [f"bound request invalid: {error}" for error in validate_capability_request(request)]
+    bound_request = request if isinstance(request, dict) else {}
     result = _validate_object(payload, fields=RESULT_FIELDS, location="result", errors=errors)
     if result.get("schema_version") != RESULT_SCHEMA_VERSION:
         errors.append(f"result.schema_version must be {RESULT_SCHEMA_VERSION}")
-    if result.get("probe_id") != request.get("probe_id"):
+    if result.get("probe_id") != bound_request.get("probe_id"):
         errors.append("result probe_id must match request")
     if result.get("execution_mode") != EXECUTION_MODE:
         errors.append("result.execution_mode must be fixture_only")
-    request_hash = canonical_sha256(request)
+    request_hash = canonical_sha256(bound_request)
     if result.get("request_sha256") != request_hash:
         errors.append("result request_sha256 must bind the canonical request")
 
@@ -399,7 +404,7 @@ def validate_capability_result(
     completed_at = _parse_datetime(run.get("completed_at"))
     run_duration_ms: int | None = None
     if started_at is None or completed_at is None:
-        errors.append("capability run timestamps must be timezone-aware ISO-8601 values")
+        errors.append("capability run timestamps must use canonical UTC RFC3339 millisecond form")
     elif started_at > completed_at:
         errors.append("capability run started_at must not follow completed_at")
     else:
@@ -440,7 +445,11 @@ def validate_capability_result(
             errors.append("capability usage elapsed_ms must exactly match the run timestamp duration")
     if any(usage.get(field) != 0 for field in ("executions", "external_calls", "pages", "cost_usd")):
         errors.append("fixture-only capability results must have zero external execution, calls, pages, and cost")
-    budgets = request.get("hard_budgets") if isinstance(request.get("hard_budgets"), dict) else {}
+    budgets = (
+        bound_request.get("hard_budgets")
+        if isinstance(bound_request.get("hard_budgets"), dict)
+        else {}
+    )
     for usage_field, budget_field in (
         ("executions", "max_executions"),
         ("external_calls", "max_external_calls"),
@@ -466,10 +475,10 @@ def validate_capability_result(
     observation_ids: set[str] = set()
     object_ids: set[str] = set()
     canonical_urls: set[str] = set()
-    target = request.get("target") if isinstance(request.get("target"), dict) else {}
+    target = bound_request.get("target") if isinstance(bound_request.get("target"), dict) else {}
     max_excerpt_chars = (
-        request.get("retention", {}).get("bounded_excerpt_max_chars")
-        if isinstance(request.get("retention"), dict)
+        bound_request.get("retention", {}).get("bounded_excerpt_max_chars")
+        if isinstance(bound_request.get("retention"), dict)
         else None
     )
     for index, observation_value in enumerate(observations):
@@ -481,7 +490,8 @@ def validate_capability_result(
         )
         observation_id = str(observation.get("observation_id") or "")
         object_id = str(observation.get("platform_object_id") or "")
-        canonical_url = str(observation.get("canonical_url") or "")
+        canonical_url_value = observation.get("canonical_url")
+        canonical_url = canonical_url_value if isinstance(canonical_url_value, str) else ""
         if not re.fullmatch(r"xprobe_obs_fixture_[0-9]{3}", observation_id):
             errors.append(f"capability observation ID is not synthetic: {observation_id}")
         if not re.fullmatch(r"xpost_fixture_[0-9]{3}", object_id):
@@ -495,9 +505,12 @@ def validate_capability_result(
             errors.append(f"capability observation account mismatch: {observation_id}")
         if observation.get("author_handle") != target.get("current_handle"):
             errors.append(f"capability observation handle mismatch: {observation_id}")
+        expected_url = f"https://posts.invalid/{target.get('current_handle')}/status/{object_id}"
+        if canonical_url_value != expected_url:
+            errors.append(f"capability observation URL is not the exact canonical synthetic string: {observation_id}")
         try:
-            parsed_url = urlsplit(canonical_url)
-        except ValueError:
+            parsed_url = urlsplit(canonical_url_value) if isinstance(canonical_url_value, str) else None
+        except (TypeError, ValueError):
             parsed_url = None
             errors.append(f"capability observation URL cannot be parsed safely: {observation_id}")
         expected_path = f"/{target.get('current_handle')}/status/{object_id}"
@@ -513,7 +526,9 @@ def validate_capability_result(
         authored_at = _parse_datetime(observation.get("authored_at"))
         observed_at = _parse_datetime(observation.get("observed_at"))
         if authored_at is None or observed_at is None:
-            errors.append(f"capability observation timestamps are invalid: {observation_id}")
+            errors.append(
+                f"capability observation timestamps must use canonical UTC RFC3339 millisecond form: {observation_id}"
+            )
         elif authored_at > observed_at:
             errors.append(f"capability observation authored_at follows observed_at: {observation_id}")
         elif started_at is not None and completed_at is not None and not started_at <= observed_at <= completed_at:

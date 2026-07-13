@@ -48,14 +48,20 @@ Unknown or cross-paired states are invalid. `x_native_proven` is intentionally n
 `x_native_access_proven` is always false.
 
 Run duration is derived from `completed_at - started_at` at exact millisecond precision. It must equal
-`usage.elapsed_ms`; sub-millisecond timestamps are rejected rather than rounded. The fixed
+`usage.elapsed_ms`. Every run and observation timestamp has one canonical representation:
+`YYYY-MM-DDTHH:MM:SS.sssZ` (ASCII RFC 3339, UTC `Z`, and exactly three fractional-second digits). Offsets, basic or
+week-date forms, omitted/sub-millisecond fractions, whitespace, and control characters are rejected rather than
+normalized or rounded. The fixed
 `raw_response_sha256` is the digest of the canonical synthetic raw bytes owned by the executable contract, not an
 unbound caller-supplied hash.
 
-Fixture regeneration refuses symlink destinations, materializes every candidate file in a same-directory temporary
-file, fsyncs it, and uses atomic replacement. A normal multi-file replacement failure rolls already replaced files
-back to their prior bytes. A process-loss boundary cannot make a mismatched pair valid because the result binds the
-canonical request hash and both `--check` and the validator fail closed on drift.
+Fixture regeneration refuses symlink destinations, and `--check` treats symlink fixtures as stale even when their
+targets contain the expected bytes. Writes materialize every candidate file in an owned, same-directory temporary
+file, fsync it, and use atomic replacement. A successful repair reaps only temp files in the generator-owned
+`.x-first-capability-fixture.<destination>.<32 lowercase hex>.tmp` namespace; other files remain untouched. A normal
+multi-file replacement failure rolls already replaced files back to their prior bytes. A process-loss boundary cannot
+make a mismatched pair valid because the result binds the canonical request hash and both `--check` and the validator
+fail closed on drift.
 
 ## Fail-closed rules
 
@@ -65,10 +71,15 @@ Validation rejects:
 - generic-web provenance, live X/Twitter URL, credential-bearing field, or unbound request hash;
 - a second execution/call/page, a sixth observation, deadline overrun, or totals that do not reconcile;
 - unknown or inconsistent run/task/verdict values;
-- missing or duplicate stable IDs, URL/object-ID mismatch, target-account mismatch, invalid timestamps, or unbounded
-  excerpt/full-body retention;
+- missing or duplicate stable IDs, target-account mismatch, invalid timestamps, or unbounded excerpt/full-body
+  retention;
+- any raw URL that is not byte-for-byte equal to the object-bound
+  `https://posts.invalid/{handle}/status/{object_id}` string before defensive parsing, including case variants, empty
+  query/fragment delimiters, leading whitespace/C0 bytes, or inserted LF/CR/TAB characters;
 - excerpts or terminal error messages outside their exact object/verdict-bound synthetic template registries;
 - parser exceptions, raw-response hash drift, or a mismatch between run timestamp duration and `elapsed_ms`;
+- any structured terminal error outside its verdict-bound envelope; v1 errors always have `retryable=false` in both
+  the executable registry and declarative schema;
 - candidate packets, identity links, assertions, canonical writes, outreach/ranking authorization, or protected-trait
   and proxy fields/values.
 

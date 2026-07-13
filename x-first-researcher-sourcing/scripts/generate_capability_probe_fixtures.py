@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import tempfile
+import re
+import secrets
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,9 @@ from x_first.capability_probe import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-TIMESTAMP = "2026-07-14T00:00:00Z"
+TIMESTAMP = "2026-07-14T00:00:00.000Z"
+OWNED_TEMP_PREFIX = ".x-first-capability-fixture."
+_OWNED_TEMP_TOKEN_PATTERN = r"[0-9a-f]{32}"
 
 
 def build_request_fixture() -> dict[str, Any]:
@@ -90,7 +93,7 @@ def build_result_fixture(request: dict[str, Any] | None = None) -> dict[str, Any
                 "platform_user_id": target["platform_user_id"],
                 "author_handle": target["current_handle"],
                 "canonical_url": f"https://posts.invalid/{target['current_handle']}/status/{object_id}",
-                "authored_at": f"2026-07-{10 + number:02d}T12:00:00Z",
+                "authored_at": f"2026-07-{10 + number:02d}T12:00:00.000Z",
                 "observed_at": TIMESTAMP,
                 "excerpt": CAPABILITY_OBSERVATION_EXCERPTS[object_id],
                 "full_body_stored": False,
@@ -161,28 +164,57 @@ def _serialized(payload: dict[str, Any]) -> str:
 
 
 def _check(path: Path, expected: str) -> bool:
-    return path.exists() and path.read_text(encoding="utf-8") == expected
+    try:
+        return not path.is_symlink() and path.is_file() and path.read_text(encoding="utf-8") == expected
+    except (OSError, UnicodeError):
+        return False
+
+
+def _owned_temp_prefix(path: Path) -> str:
+    return f"{OWNED_TEMP_PREFIX}{path.name}."
+
+
+def _is_owned_temp(path: Path, candidate: Path) -> bool:
+    if candidate.parent != path.parent:
+        return False
+    pattern = rf"{re.escape(_owned_temp_prefix(path))}{_OWNED_TEMP_TOKEN_PATTERN}\.tmp"
+    return re.fullmatch(pattern, candidate.name) is not None
+
+
+def _reap_owned_stale_temps(paths: list[Path]) -> tuple[Path, ...]:
+    reaped: list[Path] = []
+    seen: set[Path] = set()
+    for path in paths:
+        for candidate in path.parent.iterdir():
+            if candidate in seen or not _is_owned_temp(path, candidate):
+                continue
+            seen.add(candidate)
+            if candidate.is_symlink() or candidate.is_file():
+                candidate.unlink()
+                reaped.append(candidate)
+    return tuple(sorted(reaped, key=str))
 
 
 def _write_same_directory_temp(path: Path, content: bytes) -> Path:
-    handle = tempfile.NamedTemporaryFile(
-        mode="wb",
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-        delete=False,
-    )
-    temp_path = Path(handle.name)
+    for _attempt in range(100):
+        temp_path = path.parent / f"{_owned_temp_prefix(path)}{secrets.token_hex(16)}.tmp"
+        try:
+            handle = temp_path.open("xb")
+        except FileExistsError:
+            continue
+        break
+    else:
+        raise RuntimeError(f"could not allocate an owned fixture temp file for {path}")
     try:
         handle.write(content)
         handle.flush()
         os.fsync(handle.fileno())
-        handle.close()
         temp_path.chmod(0o644)
     except BaseException:
         handle.close()
         temp_path.unlink(missing_ok=True)
         raise
+    handle.close()
     return temp_path
 
 
@@ -194,7 +226,7 @@ def _fsync_directory(path: Path) -> None:
         os.close(directory_fd)
 
 
-def _atomic_write_many(values: tuple[tuple[Path, str], ...]) -> None:
+def _atomic_write_many(values: tuple[tuple[Path, str], ...]) -> tuple[Path, ...]:
     paths = [path for path, _content in values]
     if len(set(paths)) != len(paths):
         raise ValueError("capability fixture destinations must be unique")
@@ -204,6 +236,7 @@ def _atomic_write_many(values: tuple[tuple[Path, str], ...]) -> None:
         if path.exists() and not path.is_file():
             raise ValueError(f"fixture destination must be a regular file or absent: {path}")
 
+    reaped_stale_temps = _reap_owned_stale_temps(paths)
     originals = {path: path.read_bytes() if path.exists() else None for path in paths}
     pending: dict[Path, Path] = {}
     try:
@@ -243,14 +276,15 @@ def _atomic_write_many(values: tuple[tuple[Path, str], ...]) -> None:
     finally:
         for temp_path in pending.values():
             temp_path.unlink(missing_ok=True)
+    return reaped_stale_temps
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate or check deterministic capability-probe fixtures")
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--write", action="store_true")
     action.add_argument("--check", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     request_path = ROOT / "fixtures/capability_probe_request_fixture_v1.json"
     result_path = ROOT / "fixtures/capability_probe_result_fixture_v1.json"
@@ -260,8 +294,17 @@ def main() -> int:
         (result_path, _serialized(build_result_fixture(request))),
     )
     if args.write:
-        _atomic_write_many(values)
-        print(json.dumps({"status": "written", "paths": [str(path) for path, _ in values]}, indent=2))
+        reaped_stale_temps = _atomic_write_many(values)
+        print(
+            json.dumps(
+                {
+                    "status": "written",
+                    "paths": [str(path) for path, _ in values],
+                    "reaped_stale_temp_paths": [str(path) for path in reaped_stale_temps],
+                },
+                indent=2,
+            )
+        )
         return 0
 
     stale = [str(path) for path, expected in values if not _check(path, expected)]
