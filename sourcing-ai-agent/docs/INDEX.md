@@ -87,6 +87,9 @@
 - [RECOVERY_DRIVING_REDESIGN_STUDY.md](RECOVERY_DRIVING_REDESIGN_STUDY.md) — recovery 驱动机制事件化重设计研究（2026-06-14，重定义 Phase 4 Step 5；决策已定、Phase 4 已收官，保留为设计研究记录；后续设计见 RECOVERY_TAKEOVER_INTENT_DESIGN）。
 - [RECOVERY_TAKEOVER_INTENT_DESIGN.md](RECOVERY_TAKEOVER_INTENT_DESIGN.md) — Option B 设计：durable per-job 接管意图表（2026-06-14，owner 审定；分离 notification 与 intent，解决 5e 两次 NO-GO 的 F1 注入 / F2 clobber）。
 - [TRACK_C_SERVING_RUNTIME_PLAN.md](TRACK_C_SERVING_RUNTIME_PLAN.md) — Track C serving runtime 排序计划（2026-06-15，已批准执行；C1+C2 已完成，C3 起未动；顺序：C1 重活出线程 → C2 鉴权 → C3 进程分离+5d → C4 OpenAPI+SSE → C5 并入 Track D → C6 later）。
+- [TRACK_D_AGENT_RUNTIME_PLAN.md](TRACK_D_AGENT_RUNTIME_PLAN.md) — Track D 强 Agent 化执行计划（2026-07-13，Claude Fable 5 起草的跨模型设计输入，owner 待审；含现状基线修正：W8/W9 substrate 已在位，实际缺口 = ModelClient streaming/tool-calling、agent 会话三表、SSE、planner loop；顺序建议 D0→D1→D3→D2→D4，与 Track C 并行）。
+- [TRACK_D_D0_MODEL_TOOL_RUNTIME_DESIGN.md](TRACK_D_D0_MODEL_TOOL_RUNTIME_DESIGN.md) — D0+D1 批级设计（streaming/tool-calling 能力面 `model_tool_runtime.py` + `/api/agent/tool-registry`；14 方法 facade 不变量、SSE delta 累积、scripted 回放、批协议与守卫）。
+- [TRACK_D_D3_COMPANY_IDENTITY_SELF_VERIFICATION_DESIGN.md](TRACK_D_D3_COMPANY_IDENTITY_SELF_VERIFICATION_DESIGN.md) — D3 批级设计（公司身份自验证 loop：`verify_company_identity` action + `company.identity.verify` 命令 + 置信阶梯出口；误确认率=0 硬门；不依赖 D0/D2/model_native_search）。
 - [NEXT_TODO.md](NEXT_TODO.md) — 活跃待办（滚动文件）。
 - [../PROGRESS.md](../PROGRESS.md) — 进展日志（滚动文件，月度归档于 `archive/progress/`）。
 - [PG_ONLY_CUTOVER_TRACKER.md](PG_ONLY_CUTOVER_TRACKER.md) — PG-only cutover 尾巴。
