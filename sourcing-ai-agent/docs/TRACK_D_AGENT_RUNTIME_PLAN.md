@@ -234,8 +234,11 @@ TD-4 初始路由表已按 owner 2026-07-13 裁决落档（D0 §4）。
 续跑 lost-wakeup、accepted 结果的 crash/lease 接管恢复、manifest 物理隔离、TD-4 表字段实例化、
 非授权结果的 EntityDelta 因果、pre-transport 围栏泛化）+ 六条 re-raise **均转为对应实施批的
 开工义务**——它们全部是"真实 PG + 竞态测试几小时内可判定，散文继续迭代只会孵化元问题"类。
-**设计作者终局建议（第二次，携八轮数据）**：按 gate Failure Policy 走 owner-accepted exception
-（引 R8 artifact），设计定稿 v8、进入实施；实施每批照常 per-batch gate。owner 裁决记录于此。
+**owner 裁决（2026-07-13，终局）**：接受 exception（不再发 R9），**设计定稿 = v8**（`660f5a5`）。
+按 gate Failure Policy 记录：exception 引用 R8 artifact `20260713T154827Z_*`；R8 全部 findings +
+矩阵 OB-ID 义务 + §6 义务清单 = 各实施批的开工义务（batch step 1 处置、per-batch gate 验收）；
+本行即 gate 要求的"carried in TODO"记录（NEXT_TODO Track D 同步指向）。实施顺序 D0→D1→D3
+（poll-mode）→D2（与 C4/C5 合流）→D4 不变。
 
 ## 6. 实施批义务清单（round-4 校准裁定：非设计阻断，随各实施批执行并逐条验收）
 

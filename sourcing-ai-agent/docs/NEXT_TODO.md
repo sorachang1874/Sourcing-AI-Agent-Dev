@@ -78,7 +78,16 @@
 - 明确不做：Redis、LISTEN/NOTIFY（当前规模不需要）。
 
 ### Track D — 强 Agent 化
-- 2026-07-13 跨模型设计输入落档：`docs/TRACK_D_AGENT_RUNTIME_PLAN.md`（Fable 5 起草，owner 待审；基线修正——W8/W9 AgentAction/OperationRun/审批/预算 substrate 已 active，`command_type_manifest()` 工具面种子已就绪未 serve；建议顺序 D0 ModelClient→D1 tool registry serve→D3 垂直切片(poll-mode)→D2 会话/事件层(与 C4/C5 合流)；四个 owner 决策点 TD-1…TD-4 见该文 §5）。
+- **2026-07-13 Track D 设计定稿 v8（owner-accepted exception，可开工）**：入口 =
+  `docs/TRACK_D_AGENT_RUNTIME_PLAN.md`（§5a 终局裁决 + §6 义务清单）+ 两份详设（D0/D3 各带
+  findings 覆盖映射）+ `docs/TRACK_D_INVARIANT_SWEEP_2026-07-13.md`（200 格矩阵 v3，OB-ID 义务）。
+  经八轮 gpt-5.6-sol 对抗评审（曲线 24→16→17→6→5→11→9→7；3 份有效 artifact + 提取件，
+  `runtime/reviews/20260713T*`），R8 findings 已转实施批开工义务。TD-1…TD-7 全部裁决（含 TD-4
+  初始路由表，rollout=draft）。**实施顺序 D0→D1→D3(poll-mode)→D2(与 C4/C5 合流)**；每批照
+  handbook §4 协议 + per-batch review gate；开工前读 `docs/DESIGN_INVARIANT_CHECKLIST.md`（v2
+  十类，设计/实施通用自查协议）。评审基础设施：`make independent-review-gate` 已内建专属
+  reviewer CODEX_HOME（`configs/reviewer-codex/` + bootstrap，ChatGPT Desktop 切配置免疫），
+  超时用 `REVIEW_TIMEOUT_SECONDS=1800`。
 - [ ] ModelClient 升级：streaming + tool-calling（现有 14 个单发方法、阻塞 requests、无流式）。
 - [ ] Agent Session 契约：服务端 agentic loop；工具面 = M1 manifest 导出 + 只读上下文工具 + model_native_search/fetch 转正；效果全部走 typed AgentAction（边界已由 `AGENT_OPERATION_CONTRACT.md` 规定）。
 - [ ] 第一垂直切片：公司身份自验证 loop（搜索→fetch 验证→歧义才升级人工），替代 PlanCard 手动修正 LinkedIn URL。
