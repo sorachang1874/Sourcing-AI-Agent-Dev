@@ -1,0 +1,2564 @@
+{
+  "accounts": [
+    {
+      "current_handle": "fixture_openai_001_v2",
+      "display_label": "Synthetic Account 001",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_001_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": "2026-01-01T00:00:00Z"
+        },
+        {
+          "handle": "fixture_openai_001_v2",
+          "observed_from": "2026-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_001",
+      "profile_url": "https://profiles.invalid/openai/account-001"
+    },
+    {
+      "current_handle": "fixture_openai_002_v2",
+      "display_label": "Synthetic Account 002",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_002_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": "2026-01-01T00:00:00Z"
+        },
+        {
+          "handle": "fixture_openai_002_v2",
+          "observed_from": "2026-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_002",
+      "profile_url": "https://profiles.invalid/openai/account-002"
+    },
+    {
+      "current_handle": "fixture_openai_003_v2",
+      "display_label": "Synthetic Account 003",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_003_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": "2026-01-01T00:00:00Z"
+        },
+        {
+          "handle": "fixture_openai_003_v2",
+          "observed_from": "2026-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_003",
+      "profile_url": "https://profiles.invalid/openai/account-003"
+    },
+    {
+      "current_handle": "fixture_openai_004_v2",
+      "display_label": "Synthetic Account 004",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_004_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": "2026-01-01T00:00:00Z"
+        },
+        {
+          "handle": "fixture_openai_004_v2",
+          "observed_from": "2026-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_004",
+      "profile_url": "https://profiles.invalid/openai/account-004"
+    },
+    {
+      "current_handle": "fixture_openai_005_v2",
+      "display_label": "Synthetic Account 005",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_005_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": "2026-01-01T00:00:00Z"
+        },
+        {
+          "handle": "fixture_openai_005_v2",
+          "observed_from": "2026-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_005",
+      "profile_url": "https://profiles.invalid/openai/account-005"
+    },
+    {
+      "current_handle": "fixture_openai_006_v2",
+      "display_label": "Synthetic Account 006",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_006_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": "2026-01-01T00:00:00Z"
+        },
+        {
+          "handle": "fixture_openai_006_v2",
+          "observed_from": "2026-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_006",
+      "profile_url": "https://profiles.invalid/openai/account-006"
+    },
+    {
+      "current_handle": "fixture_openai_007_v1",
+      "display_label": "Synthetic Account 007",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_007_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_007",
+      "profile_url": "https://profiles.invalid/openai/account-007"
+    },
+    {
+      "current_handle": "fixture_openai_008_v1",
+      "display_label": "Synthetic Account 008",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_008_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_008",
+      "profile_url": "https://profiles.invalid/openai/account-008"
+    },
+    {
+      "current_handle": "fixture_openai_009_v1",
+      "display_label": "Synthetic Account 009",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_009_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_009",
+      "profile_url": "https://profiles.invalid/openai/account-009"
+    },
+    {
+      "current_handle": "fixture_openai_010_v1",
+      "display_label": "Synthetic Account 010",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_010_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_010",
+      "profile_url": "https://profiles.invalid/openai/account-010"
+    },
+    {
+      "current_handle": "fixture_openai_011_v1",
+      "display_label": "Synthetic Account 011",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_011_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_011",
+      "profile_url": "https://profiles.invalid/openai/account-011"
+    },
+    {
+      "current_handle": "fixture_openai_012_v1",
+      "display_label": "Synthetic Account 012",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_012_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_012",
+      "profile_url": "https://profiles.invalid/openai/account-012"
+    },
+    {
+      "current_handle": "fixture_openai_013_v1",
+      "display_label": "Synthetic Account 013",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_013_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_013",
+      "profile_url": "https://profiles.invalid/openai/account-013"
+    },
+    {
+      "current_handle": "fixture_openai_014_v1",
+      "display_label": "Synthetic Account 014",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_014_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_014",
+      "profile_url": "https://profiles.invalid/openai/account-014"
+    },
+    {
+      "current_handle": "fixture_openai_015_v1",
+      "display_label": "Synthetic Account 015",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_015_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_015",
+      "profile_url": "https://profiles.invalid/openai/account-015"
+    },
+    {
+      "current_handle": "fixture_openai_016_v1",
+      "display_label": "Synthetic Account 016",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_016_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_016",
+      "profile_url": "https://profiles.invalid/openai/account-016"
+    },
+    {
+      "current_handle": "fixture_openai_017_v1",
+      "display_label": "Synthetic Account 017",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_017_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_017",
+      "profile_url": "https://profiles.invalid/openai/account-017"
+    },
+    {
+      "current_handle": "fixture_openai_018_v1",
+      "display_label": "Synthetic Account 018",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_018_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_018",
+      "profile_url": "https://profiles.invalid/openai/account-018"
+    },
+    {
+      "current_handle": "fixture_openai_019_v1",
+      "display_label": "Synthetic Account 019",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_019_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_019",
+      "profile_url": "https://profiles.invalid/openai/account-019"
+    },
+    {
+      "current_handle": "fixture_openai_020_v1",
+      "display_label": "Synthetic Account 020",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_020_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_020",
+      "profile_url": "https://profiles.invalid/openai/account-020"
+    },
+    {
+      "current_handle": "fixture_openai_021_v1",
+      "display_label": "Synthetic Account 021",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_021_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_021",
+      "profile_url": "https://profiles.invalid/openai/account-021"
+    },
+    {
+      "current_handle": "fixture_openai_022_v1",
+      "display_label": "Synthetic Account 022",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_022_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_022",
+      "profile_url": "https://profiles.invalid/openai/account-022"
+    },
+    {
+      "current_handle": "fixture_openai_023_v1",
+      "display_label": "Synthetic Account 023",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_023_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_023",
+      "profile_url": "https://profiles.invalid/openai/account-023"
+    },
+    {
+      "current_handle": "fixture_openai_024_v1",
+      "display_label": "Synthetic Account 024",
+      "handle_history": [
+        {
+          "handle": "fixture_openai_024_v1",
+          "observed_from": "2025-01-01T00:00:00Z",
+          "observed_to": null
+        }
+      ],
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_user_id": "xuid_fixture_024",
+      "profile_url": "https://profiles.invalid/openai/account-024"
+    }
+  ],
+  "assertions": [],
+  "candidate_packets": [
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_001",
+          "xobs_fixture_002"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_001",
+        "xobs_fixture_002",
+        "xobs_fixture_003",
+        "xobs_fixture_004"
+      ],
+      "platform_user_id": "xuid_fixture_001",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000001",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_005",
+          "xobs_fixture_006"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_005",
+        "xobs_fixture_006",
+        "xobs_fixture_007",
+        "xobs_fixture_008"
+      ],
+      "platform_user_id": "xuid_fixture_002",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000002",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_009",
+          "xobs_fixture_010"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_009",
+        "xobs_fixture_010",
+        "xobs_fixture_011",
+        "xobs_fixture_012"
+      ],
+      "platform_user_id": "xuid_fixture_003",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000003",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_013",
+          "xobs_fixture_014"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_013",
+        "xobs_fixture_014",
+        "xobs_fixture_015",
+        "xobs_fixture_016"
+      ],
+      "platform_user_id": "xuid_fixture_004",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000004",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_017",
+          "xobs_fixture_018"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_017",
+        "xobs_fixture_018",
+        "xobs_fixture_019",
+        "xobs_fixture_020"
+      ],
+      "platform_user_id": "xuid_fixture_005",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000005",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_021",
+          "xobs_fixture_022"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_021",
+        "xobs_fixture_022",
+        "xobs_fixture_023",
+        "xobs_fixture_024"
+      ],
+      "platform_user_id": "xuid_fixture_006",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000006",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_025",
+          "xobs_fixture_026"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_025",
+        "xobs_fixture_026",
+        "xobs_fixture_027",
+        "xobs_fixture_028"
+      ],
+      "platform_user_id": "xuid_fixture_007",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000007",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_029",
+          "xobs_fixture_030"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_029",
+        "xobs_fixture_030",
+        "xobs_fixture_031",
+        "xobs_fixture_032"
+      ],
+      "platform_user_id": "xuid_fixture_008",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000008",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_033",
+          "xobs_fixture_034"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_033",
+        "xobs_fixture_034",
+        "xobs_fixture_035",
+        "xobs_fixture_036"
+      ],
+      "platform_user_id": "xuid_fixture_009",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000009",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_037",
+          "xobs_fixture_038"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_037",
+        "xobs_fixture_038",
+        "xobs_fixture_039",
+        "xobs_fixture_040"
+      ],
+      "platform_user_id": "xuid_fixture_010",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000010",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_041",
+          "xobs_fixture_042"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_041",
+        "xobs_fixture_042",
+        "xobs_fixture_043",
+        "xobs_fixture_044"
+      ],
+      "platform_user_id": "xuid_fixture_011",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000011",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_045",
+          "xobs_fixture_046"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_045",
+        "xobs_fixture_046",
+        "xobs_fixture_047",
+        "xobs_fixture_048"
+      ],
+      "platform_user_id": "xuid_fixture_012",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000012",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_049",
+          "xobs_fixture_050"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_049",
+        "xobs_fixture_050",
+        "xobs_fixture_051",
+        "xobs_fixture_052"
+      ],
+      "platform_user_id": "xuid_fixture_013",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000013",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_053",
+          "xobs_fixture_054"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_053",
+        "xobs_fixture_054",
+        "xobs_fixture_055",
+        "xobs_fixture_056"
+      ],
+      "platform_user_id": "xuid_fixture_014",
+      "pretrain_relevance": "PRETRAIN_CORE",
+      "provisional_person_id": "pp_x_01J00000000000000000000014",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_057",
+          "xobs_fixture_058"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_057",
+        "xobs_fixture_058",
+        "xobs_fixture_059",
+        "xobs_fixture_060"
+      ],
+      "platform_user_id": "xuid_fixture_015",
+      "pretrain_relevance": "PRETRAIN_ADJACENT",
+      "provisional_person_id": "pp_x_01J00000000000000000000015",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_061",
+          "xobs_fixture_062"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_061",
+        "xobs_fixture_062",
+        "xobs_fixture_063",
+        "xobs_fixture_064"
+      ],
+      "platform_user_id": "xuid_fixture_016",
+      "pretrain_relevance": "PRETRAIN_ADJACENT",
+      "provisional_person_id": "pp_x_01J00000000000000000000016",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_065",
+          "xobs_fixture_066"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_065",
+        "xobs_fixture_066",
+        "xobs_fixture_067",
+        "xobs_fixture_068"
+      ],
+      "platform_user_id": "xuid_fixture_017",
+      "pretrain_relevance": "PRETRAIN_ADJACENT",
+      "provisional_person_id": "pp_x_01J00000000000000000000017",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_069",
+          "xobs_fixture_070"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_069",
+        "xobs_fixture_070",
+        "xobs_fixture_071",
+        "xobs_fixture_072"
+      ],
+      "platform_user_id": "xuid_fixture_018",
+      "pretrain_relevance": "PRETRAIN_ADJACENT",
+      "provisional_person_id": "pp_x_01J00000000000000000000018",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_073",
+          "xobs_fixture_074"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_073",
+        "xobs_fixture_074",
+        "xobs_fixture_075",
+        "xobs_fixture_076"
+      ],
+      "platform_user_id": "xuid_fixture_019",
+      "pretrain_relevance": "PRETRAIN_ADJACENT",
+      "provisional_person_id": "pp_x_01J00000000000000000000019",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_077",
+          "xobs_fixture_078"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_077",
+        "xobs_fixture_078",
+        "xobs_fixture_079",
+        "xobs_fixture_080"
+      ],
+      "platform_user_id": "xuid_fixture_020",
+      "pretrain_relevance": "PRETRAIN_ADJACENT",
+      "provisional_person_id": "pp_x_01J00000000000000000000020",
+      "review_status": "fixture_ready",
+      "selected_for_review": true
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_081",
+          "xobs_fixture_082"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_081",
+        "xobs_fixture_082",
+        "xobs_fixture_083",
+        "xobs_fixture_084"
+      ],
+      "platform_user_id": "xuid_fixture_021",
+      "pretrain_relevance": "OUT_OF_SCOPE",
+      "provisional_person_id": "pp_x_01J00000000000000000000021",
+      "review_status": "fixture_ready",
+      "selected_for_review": false
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_085",
+          "xobs_fixture_086"
+        ],
+        "lab_id": "openai",
+        "status": "current_proposed"
+      },
+      "evidence_refs": [
+        "xobs_fixture_085",
+        "xobs_fixture_086",
+        "xobs_fixture_087",
+        "xobs_fixture_088"
+      ],
+      "platform_user_id": "xuid_fixture_022",
+      "pretrain_relevance": "OUT_OF_SCOPE",
+      "provisional_person_id": "pp_x_01J00000000000000000000022",
+      "review_status": "fixture_ready",
+      "selected_for_review": false
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_089",
+          "xobs_fixture_090"
+        ],
+        "lab_id": "openai",
+        "status": "unknown"
+      },
+      "evidence_refs": [
+        "xobs_fixture_089",
+        "xobs_fixture_090",
+        "xobs_fixture_091",
+        "xobs_fixture_092"
+      ],
+      "platform_user_id": "xuid_fixture_023",
+      "pretrain_relevance": "UNKNOWN",
+      "provisional_person_id": "pp_x_01J00000000000000000000023",
+      "review_status": "quarantined",
+      "selected_for_review": false
+    },
+    {
+      "current_affiliation_proposal": {
+        "evidence_refs": [
+          "xobs_fixture_093",
+          "xobs_fixture_094"
+        ],
+        "lab_id": "openai",
+        "status": "unknown"
+      },
+      "evidence_refs": [
+        "xobs_fixture_093",
+        "xobs_fixture_094",
+        "xobs_fixture_095",
+        "xobs_fixture_096"
+      ],
+      "platform_user_id": "xuid_fixture_024",
+      "pretrain_relevance": "UNKNOWN",
+      "provisional_person_id": "pp_x_01J00000000000000000000024",
+      "review_status": "quarantined",
+      "selected_for_review": false
+    }
+  ],
+  "claims": {
+    "current_employment_guaranteed": false,
+    "exhaustive": false,
+    "outreach_permission": false,
+    "protected_traits_inferred": false
+  },
+  "coverage_ledger": [
+    {
+      "exhaustive": false,
+      "lab_id": "openai",
+      "observation_count": 12,
+      "query_family": "official_lab_output",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_official_lab_output"
+    },
+    {
+      "exhaustive": false,
+      "lab_id": "openai",
+      "observation_count": 12,
+      "query_family": "public_bio_affiliation",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_public_bio_affiliation"
+    },
+    {
+      "exhaustive": false,
+      "lab_id": "openai",
+      "observation_count": 12,
+      "query_family": "first_party_technical_posts",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_first_party_technical_posts"
+    },
+    {
+      "exhaustive": false,
+      "lab_id": "openai",
+      "observation_count": 12,
+      "query_family": "replies_mentions",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_replies_mentions"
+    },
+    {
+      "exhaustive": false,
+      "lab_id": "openai",
+      "observation_count": 12,
+      "query_family": "official_lab_interactions",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_official_lab_interactions"
+    },
+    {
+      "exhaustive": false,
+      "lab_id": "openai",
+      "observation_count": 12,
+      "query_family": "curated_lists",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_curated_lists"
+    },
+    {
+      "exhaustive": false,
+      "lab_id": "openai",
+      "observation_count": 12,
+      "query_family": "paper_conference_linkage",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_paper_conference_linkage"
+    },
+    {
+      "exhaustive": false,
+      "lab_id": "openai",
+      "observation_count": 12,
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_one_hop_graph_and_conflict_checks"
+    }
+  ],
+  "errors": [],
+  "identity_link_proposals": [],
+  "observations": [
+    {
+      "authored_at": "2026-06-02T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-001",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 001 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_lab_output",
+      "observation_id": "xobs_fixture_001",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_001",
+      "platform_user_id": "xuid_fixture_001",
+      "query_family": "official_lab_output",
+      "source_task_id": "xtask_fixture_official_lab_output",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-03T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-002",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 002 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "bio",
+      "observation_id": "xobs_fixture_002",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_002",
+      "platform_user_id": "xuid_fixture_001",
+      "query_family": "public_bio_affiliation",
+      "source_task_id": "xtask_fixture_public_bio_affiliation",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-04T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-003",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 003 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "post",
+      "observation_id": "xobs_fixture_003",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_003",
+      "platform_user_id": "xuid_fixture_001",
+      "query_family": "first_party_technical_posts",
+      "source_task_id": "xtask_fixture_first_party_technical_posts",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-05T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-004",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 004 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "reply",
+      "observation_id": "xobs_fixture_004",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_004",
+      "platform_user_id": "xuid_fixture_001",
+      "query_family": "replies_mentions",
+      "source_task_id": "xtask_fixture_replies_mentions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-06T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-005",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 005 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_interaction",
+      "observation_id": "xobs_fixture_005",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_005",
+      "platform_user_id": "xuid_fixture_002",
+      "query_family": "official_lab_interactions",
+      "source_task_id": "xtask_fixture_official_lab_interactions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-07T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-006",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 006 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "list_reference",
+      "observation_id": "xobs_fixture_006",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_006",
+      "platform_user_id": "xuid_fixture_002",
+      "query_family": "curated_lists",
+      "source_task_id": "xtask_fixture_curated_lists",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-08T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-007",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 007 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "paper_link",
+      "observation_id": "xobs_fixture_007",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_007",
+      "platform_user_id": "xuid_fixture_002",
+      "query_family": "paper_conference_linkage",
+      "source_task_id": "xtask_fixture_paper_conference_linkage",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-09T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-008",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 008 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "graph_edge",
+      "observation_id": "xobs_fixture_008",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_008",
+      "platform_user_id": "xuid_fixture_002",
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "source_task_id": "xtask_fixture_one_hop_graph_and_conflict_checks",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-10T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-009",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 009 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_lab_output",
+      "observation_id": "xobs_fixture_009",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_009",
+      "platform_user_id": "xuid_fixture_003",
+      "query_family": "official_lab_output",
+      "source_task_id": "xtask_fixture_official_lab_output",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-11T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-010",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 010 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "bio",
+      "observation_id": "xobs_fixture_010",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_010",
+      "platform_user_id": "xuid_fixture_003",
+      "query_family": "public_bio_affiliation",
+      "source_task_id": "xtask_fixture_public_bio_affiliation",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-12T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-011",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 011 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "post",
+      "observation_id": "xobs_fixture_011",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_011",
+      "platform_user_id": "xuid_fixture_003",
+      "query_family": "first_party_technical_posts",
+      "source_task_id": "xtask_fixture_first_party_technical_posts",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-13T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-012",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 012 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "reply",
+      "observation_id": "xobs_fixture_012",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_012",
+      "platform_user_id": "xuid_fixture_003",
+      "query_family": "replies_mentions",
+      "source_task_id": "xtask_fixture_replies_mentions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-14T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-013",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 013 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_interaction",
+      "observation_id": "xobs_fixture_013",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_013",
+      "platform_user_id": "xuid_fixture_004",
+      "query_family": "official_lab_interactions",
+      "source_task_id": "xtask_fixture_official_lab_interactions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-15T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-014",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 014 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "list_reference",
+      "observation_id": "xobs_fixture_014",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_014",
+      "platform_user_id": "xuid_fixture_004",
+      "query_family": "curated_lists",
+      "source_task_id": "xtask_fixture_curated_lists",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-16T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-015",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 015 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "paper_link",
+      "observation_id": "xobs_fixture_015",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_015",
+      "platform_user_id": "xuid_fixture_004",
+      "query_family": "paper_conference_linkage",
+      "source_task_id": "xtask_fixture_paper_conference_linkage",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-17T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-016",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 016 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "graph_edge",
+      "observation_id": "xobs_fixture_016",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_016",
+      "platform_user_id": "xuid_fixture_004",
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "source_task_id": "xtask_fixture_one_hop_graph_and_conflict_checks",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-18T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-017",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 017 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_lab_output",
+      "observation_id": "xobs_fixture_017",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_017",
+      "platform_user_id": "xuid_fixture_005",
+      "query_family": "official_lab_output",
+      "source_task_id": "xtask_fixture_official_lab_output",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-19T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-018",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 018 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "bio",
+      "observation_id": "xobs_fixture_018",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_018",
+      "platform_user_id": "xuid_fixture_005",
+      "query_family": "public_bio_affiliation",
+      "source_task_id": "xtask_fixture_public_bio_affiliation",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-20T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-019",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 019 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "post",
+      "observation_id": "xobs_fixture_019",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_019",
+      "platform_user_id": "xuid_fixture_005",
+      "query_family": "first_party_technical_posts",
+      "source_task_id": "xtask_fixture_first_party_technical_posts",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-21T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-020",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 020 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "reply",
+      "observation_id": "xobs_fixture_020",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_020",
+      "platform_user_id": "xuid_fixture_005",
+      "query_family": "replies_mentions",
+      "source_task_id": "xtask_fixture_replies_mentions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-22T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-021",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 021 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_interaction",
+      "observation_id": "xobs_fixture_021",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_021",
+      "platform_user_id": "xuid_fixture_006",
+      "query_family": "official_lab_interactions",
+      "source_task_id": "xtask_fixture_official_lab_interactions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-23T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-022",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 022 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "list_reference",
+      "observation_id": "xobs_fixture_022",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_022",
+      "platform_user_id": "xuid_fixture_006",
+      "query_family": "curated_lists",
+      "source_task_id": "xtask_fixture_curated_lists",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-24T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-023",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 023 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "paper_link",
+      "observation_id": "xobs_fixture_023",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_023",
+      "platform_user_id": "xuid_fixture_006",
+      "query_family": "paper_conference_linkage",
+      "source_task_id": "xtask_fixture_paper_conference_linkage",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-25T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-024",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 024 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "graph_edge",
+      "observation_id": "xobs_fixture_024",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_024",
+      "platform_user_id": "xuid_fixture_006",
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "source_task_id": "xtask_fixture_one_hop_graph_and_conflict_checks",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-26T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-025",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 025 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_lab_output",
+      "observation_id": "xobs_fixture_025",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_025",
+      "platform_user_id": "xuid_fixture_007",
+      "query_family": "official_lab_output",
+      "source_task_id": "xtask_fixture_official_lab_output",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-27T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-026",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 026 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "bio",
+      "observation_id": "xobs_fixture_026",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_026",
+      "platform_user_id": "xuid_fixture_007",
+      "query_family": "public_bio_affiliation",
+      "source_task_id": "xtask_fixture_public_bio_affiliation",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-28T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-027",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 027 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "post",
+      "observation_id": "xobs_fixture_027",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_027",
+      "platform_user_id": "xuid_fixture_007",
+      "query_family": "first_party_technical_posts",
+      "source_task_id": "xtask_fixture_first_party_technical_posts",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-01T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-028",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 028 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "reply",
+      "observation_id": "xobs_fixture_028",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_028",
+      "platform_user_id": "xuid_fixture_007",
+      "query_family": "replies_mentions",
+      "source_task_id": "xtask_fixture_replies_mentions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-02T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-029",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 029 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_interaction",
+      "observation_id": "xobs_fixture_029",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_029",
+      "platform_user_id": "xuid_fixture_008",
+      "query_family": "official_lab_interactions",
+      "source_task_id": "xtask_fixture_official_lab_interactions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-03T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-030",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 030 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "list_reference",
+      "observation_id": "xobs_fixture_030",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_030",
+      "platform_user_id": "xuid_fixture_008",
+      "query_family": "curated_lists",
+      "source_task_id": "xtask_fixture_curated_lists",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-04T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-031",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 031 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "paper_link",
+      "observation_id": "xobs_fixture_031",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_031",
+      "platform_user_id": "xuid_fixture_008",
+      "query_family": "paper_conference_linkage",
+      "source_task_id": "xtask_fixture_paper_conference_linkage",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-05T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-032",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 032 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "graph_edge",
+      "observation_id": "xobs_fixture_032",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_032",
+      "platform_user_id": "xuid_fixture_008",
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "source_task_id": "xtask_fixture_one_hop_graph_and_conflict_checks",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-06T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-033",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 033 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_lab_output",
+      "observation_id": "xobs_fixture_033",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_033",
+      "platform_user_id": "xuid_fixture_009",
+      "query_family": "official_lab_output",
+      "source_task_id": "xtask_fixture_official_lab_output",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-07T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-034",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 034 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "bio",
+      "observation_id": "xobs_fixture_034",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_034",
+      "platform_user_id": "xuid_fixture_009",
+      "query_family": "public_bio_affiliation",
+      "source_task_id": "xtask_fixture_public_bio_affiliation",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-08T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-035",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 035 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "post",
+      "observation_id": "xobs_fixture_035",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_035",
+      "platform_user_id": "xuid_fixture_009",
+      "query_family": "first_party_technical_posts",
+      "source_task_id": "xtask_fixture_first_party_technical_posts",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-09T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-036",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 036 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "reply",
+      "observation_id": "xobs_fixture_036",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_036",
+      "platform_user_id": "xuid_fixture_009",
+      "query_family": "replies_mentions",
+      "source_task_id": "xtask_fixture_replies_mentions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-10T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-037",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 037 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_interaction",
+      "observation_id": "xobs_fixture_037",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_037",
+      "platform_user_id": "xuid_fixture_010",
+      "query_family": "official_lab_interactions",
+      "source_task_id": "xtask_fixture_official_lab_interactions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-11T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-038",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 038 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "list_reference",
+      "observation_id": "xobs_fixture_038",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_038",
+      "platform_user_id": "xuid_fixture_010",
+      "query_family": "curated_lists",
+      "source_task_id": "xtask_fixture_curated_lists",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-12T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-039",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 039 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "paper_link",
+      "observation_id": "xobs_fixture_039",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_039",
+      "platform_user_id": "xuid_fixture_010",
+      "query_family": "paper_conference_linkage",
+      "source_task_id": "xtask_fixture_paper_conference_linkage",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-13T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-040",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 040 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "graph_edge",
+      "observation_id": "xobs_fixture_040",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_040",
+      "platform_user_id": "xuid_fixture_010",
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "source_task_id": "xtask_fixture_one_hop_graph_and_conflict_checks",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-14T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-041",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 041 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_lab_output",
+      "observation_id": "xobs_fixture_041",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_041",
+      "platform_user_id": "xuid_fixture_011",
+      "query_family": "official_lab_output",
+      "source_task_id": "xtask_fixture_official_lab_output",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-15T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-042",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 042 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "bio",
+      "observation_id": "xobs_fixture_042",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_042",
+      "platform_user_id": "xuid_fixture_011",
+      "query_family": "public_bio_affiliation",
+      "source_task_id": "xtask_fixture_public_bio_affiliation",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-16T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-043",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 043 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "post",
+      "observation_id": "xobs_fixture_043",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_043",
+      "platform_user_id": "xuid_fixture_011",
+      "query_family": "first_party_technical_posts",
+      "source_task_id": "xtask_fixture_first_party_technical_posts",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-17T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-044",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 044 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "reply",
+      "observation_id": "xobs_fixture_044",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_044",
+      "platform_user_id": "xuid_fixture_011",
+      "query_family": "replies_mentions",
+      "source_task_id": "xtask_fixture_replies_mentions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-18T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-045",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 045 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_interaction",
+      "observation_id": "xobs_fixture_045",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_045",
+      "platform_user_id": "xuid_fixture_012",
+      "query_family": "official_lab_interactions",
+      "source_task_id": "xtask_fixture_official_lab_interactions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-19T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-046",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 046 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "list_reference",
+      "observation_id": "xobs_fixture_046",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_046",
+      "platform_user_id": "xuid_fixture_012",
+      "query_family": "curated_lists",
+      "source_task_id": "xtask_fixture_curated_lists",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-20T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-047",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 047 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "paper_link",
+      "observation_id": "xobs_fixture_047",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_047",
+      "platform_user_id": "xuid_fixture_012",
+      "query_family": "paper_conference_linkage",
+      "source_task_id": "xtask_fixture_paper_conference_linkage",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-21T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-048",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 048 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "graph_edge",
+      "observation_id": "xobs_fixture_048",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_048",
+      "platform_user_id": "xuid_fixture_012",
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "source_task_id": "xtask_fixture_one_hop_graph_and_conflict_checks",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-22T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-049",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 049 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_lab_output",
+      "observation_id": "xobs_fixture_049",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_049",
+      "platform_user_id": "xuid_fixture_013",
+      "query_family": "official_lab_output",
+      "source_task_id": "xtask_fixture_official_lab_output",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-23T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-050",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 050 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "bio",
+      "observation_id": "xobs_fixture_050",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_050",
+      "platform_user_id": "xuid_fixture_013",
+      "query_family": "public_bio_affiliation",
+      "source_task_id": "xtask_fixture_public_bio_affiliation",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-24T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-051",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 051 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "post",
+      "observation_id": "xobs_fixture_051",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_051",
+      "platform_user_id": "xuid_fixture_013",
+      "query_family": "first_party_technical_posts",
+      "source_task_id": "xtask_fixture_first_party_technical_posts",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-25T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-052",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 052 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "reply",
+      "observation_id": "xobs_fixture_052",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_052",
+      "platform_user_id": "xuid_fixture_013",
+      "query_family": "replies_mentions",
+      "source_task_id": "xtask_fixture_replies_mentions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-26T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-053",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 053 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_interaction",
+      "observation_id": "xobs_fixture_053",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_053",
+      "platform_user_id": "xuid_fixture_014",
+      "query_family": "official_lab_interactions",
+      "source_task_id": "xtask_fixture_official_lab_interactions",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-27T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-054",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 054 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "list_reference",
+      "observation_id": "xobs_fixture_054",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_054",
+      "platform_user_id": "xuid_fixture_014",
+      "query_family": "curated_lists",
+      "source_task_id": "xtask_fixture_curated_lists",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-28T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-055",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 055 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "paper_link",
+      "observation_id": "xobs_fixture_055",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_055",
+      "platform_user_id": "xuid_fixture_014",
+      "query_family": "paper_conference_linkage",
+      "source_task_id": "xtask_fixture_paper_conference_linkage",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-01T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-056",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 056 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "graph_edge",
+      "observation_id": "xobs_fixture_056",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_056",
+      "platform_user_id": "xuid_fixture_014",
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "source_task_id": "xtask_fixture_one_hop_graph_and_conflict_checks",
+      "technical_scope": "PRETRAIN_CORE"
+    },
+    {
+      "authored_at": "2026-06-02T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-057",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 057 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_lab_output",
+      "observation_id": "xobs_fixture_057",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_057",
+      "platform_user_id": "xuid_fixture_015",
+      "query_family": "official_lab_output",
+      "source_task_id": "xtask_fixture_official_lab_output",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-03T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-058",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 058 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "bio",
+      "observation_id": "xobs_fixture_058",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_058",
+      "platform_user_id": "xuid_fixture_015",
+      "query_family": "public_bio_affiliation",
+      "source_task_id": "xtask_fixture_public_bio_affiliation",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-04T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-059",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 059 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "post",
+      "observation_id": "xobs_fixture_059",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_059",
+      "platform_user_id": "xuid_fixture_015",
+      "query_family": "first_party_technical_posts",
+      "source_task_id": "xtask_fixture_first_party_technical_posts",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-05T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-060",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 060 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "reply",
+      "observation_id": "xobs_fixture_060",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_060",
+      "platform_user_id": "xuid_fixture_015",
+      "query_family": "replies_mentions",
+      "source_task_id": "xtask_fixture_replies_mentions",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-06T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-061",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 061 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_interaction",
+      "observation_id": "xobs_fixture_061",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_061",
+      "platform_user_id": "xuid_fixture_016",
+      "query_family": "official_lab_interactions",
+      "source_task_id": "xtask_fixture_official_lab_interactions",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-07T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-062",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 062 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "list_reference",
+      "observation_id": "xobs_fixture_062",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_062",
+      "platform_user_id": "xuid_fixture_016",
+      "query_family": "curated_lists",
+      "source_task_id": "xtask_fixture_curated_lists",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-08T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-063",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 063 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "paper_link",
+      "observation_id": "xobs_fixture_063",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_063",
+      "platform_user_id": "xuid_fixture_016",
+      "query_family": "paper_conference_linkage",
+      "source_task_id": "xtask_fixture_paper_conference_linkage",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-09T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-064",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 064 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "graph_edge",
+      "observation_id": "xobs_fixture_064",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_064",
+      "platform_user_id": "xuid_fixture_016",
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "source_task_id": "xtask_fixture_one_hop_graph_and_conflict_checks",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-10T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-065",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 065 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_lab_output",
+      "observation_id": "xobs_fixture_065",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_065",
+      "platform_user_id": "xuid_fixture_017",
+      "query_family": "official_lab_output",
+      "source_task_id": "xtask_fixture_official_lab_output",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-11T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-066",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 066 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "bio",
+      "observation_id": "xobs_fixture_066",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_066",
+      "platform_user_id": "xuid_fixture_017",
+      "query_family": "public_bio_affiliation",
+      "source_task_id": "xtask_fixture_public_bio_affiliation",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-12T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-067",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 067 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "post",
+      "observation_id": "xobs_fixture_067",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_067",
+      "platform_user_id": "xuid_fixture_017",
+      "query_family": "first_party_technical_posts",
+      "source_task_id": "xtask_fixture_first_party_technical_posts",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-13T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-068",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 068 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "reply",
+      "observation_id": "xobs_fixture_068",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_068",
+      "platform_user_id": "xuid_fixture_017",
+      "query_family": "replies_mentions",
+      "source_task_id": "xtask_fixture_replies_mentions",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-14T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-069",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 069 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_interaction",
+      "observation_id": "xobs_fixture_069",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_069",
+      "platform_user_id": "xuid_fixture_018",
+      "query_family": "official_lab_interactions",
+      "source_task_id": "xtask_fixture_official_lab_interactions",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-15T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-070",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 070 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "list_reference",
+      "observation_id": "xobs_fixture_070",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_070",
+      "platform_user_id": "xuid_fixture_018",
+      "query_family": "curated_lists",
+      "source_task_id": "xtask_fixture_curated_lists",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-16T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-071",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 071 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "paper_link",
+      "observation_id": "xobs_fixture_071",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_071",
+      "platform_user_id": "xuid_fixture_018",
+      "query_family": "paper_conference_linkage",
+      "source_task_id": "xtask_fixture_paper_conference_linkage",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-17T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-072",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 072 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "graph_edge",
+      "observation_id": "xobs_fixture_072",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_072",
+      "platform_user_id": "xuid_fixture_018",
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "source_task_id": "xtask_fixture_one_hop_graph_and_conflict_checks",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-18T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-073",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 073 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_lab_output",
+      "observation_id": "xobs_fixture_073",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_073",
+      "platform_user_id": "xuid_fixture_019",
+      "query_family": "official_lab_output",
+      "source_task_id": "xtask_fixture_official_lab_output",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-19T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-074",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 074 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "bio",
+      "observation_id": "xobs_fixture_074",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_074",
+      "platform_user_id": "xuid_fixture_019",
+      "query_family": "public_bio_affiliation",
+      "source_task_id": "xtask_fixture_public_bio_affiliation",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-20T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-075",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 075 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "post",
+      "observation_id": "xobs_fixture_075",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_075",
+      "platform_user_id": "xuid_fixture_019",
+      "query_family": "first_party_technical_posts",
+      "source_task_id": "xtask_fixture_first_party_technical_posts",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-21T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-076",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 076 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "reply",
+      "observation_id": "xobs_fixture_076",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_076",
+      "platform_user_id": "xuid_fixture_019",
+      "query_family": "replies_mentions",
+      "source_task_id": "xtask_fixture_replies_mentions",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-22T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-077",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 077 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_interaction",
+      "observation_id": "xobs_fixture_077",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_077",
+      "platform_user_id": "xuid_fixture_020",
+      "query_family": "official_lab_interactions",
+      "source_task_id": "xtask_fixture_official_lab_interactions",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-23T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-078",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 078 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "list_reference",
+      "observation_id": "xobs_fixture_078",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_078",
+      "platform_user_id": "xuid_fixture_020",
+      "query_family": "curated_lists",
+      "source_task_id": "xtask_fixture_curated_lists",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-24T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-079",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 079 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "paper_link",
+      "observation_id": "xobs_fixture_079",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_079",
+      "platform_user_id": "xuid_fixture_020",
+      "query_family": "paper_conference_linkage",
+      "source_task_id": "xtask_fixture_paper_conference_linkage",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-25T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-080",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 080 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "graph_edge",
+      "observation_id": "xobs_fixture_080",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_080",
+      "platform_user_id": "xuid_fixture_020",
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "source_task_id": "xtask_fixture_one_hop_graph_and_conflict_checks",
+      "technical_scope": "PRETRAIN_ADJACENT"
+    },
+    {
+      "authored_at": "2026-06-26T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-081",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 081 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_lab_output",
+      "observation_id": "xobs_fixture_081",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_081",
+      "platform_user_id": "xuid_fixture_021",
+      "query_family": "official_lab_output",
+      "source_task_id": "xtask_fixture_official_lab_output",
+      "technical_scope": "OUT_OF_SCOPE"
+    },
+    {
+      "authored_at": "2026-06-27T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-082",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 082 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "bio",
+      "observation_id": "xobs_fixture_082",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_082",
+      "platform_user_id": "xuid_fixture_021",
+      "query_family": "public_bio_affiliation",
+      "source_task_id": "xtask_fixture_public_bio_affiliation",
+      "technical_scope": "OUT_OF_SCOPE"
+    },
+    {
+      "authored_at": "2026-06-28T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-083",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 083 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "post",
+      "observation_id": "xobs_fixture_083",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_083",
+      "platform_user_id": "xuid_fixture_021",
+      "query_family": "first_party_technical_posts",
+      "source_task_id": "xtask_fixture_first_party_technical_posts",
+      "technical_scope": "OUT_OF_SCOPE"
+    },
+    {
+      "authored_at": "2026-06-01T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-084",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 084 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "reply",
+      "observation_id": "xobs_fixture_084",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_084",
+      "platform_user_id": "xuid_fixture_021",
+      "query_family": "replies_mentions",
+      "source_task_id": "xtask_fixture_replies_mentions",
+      "technical_scope": "OUT_OF_SCOPE"
+    },
+    {
+      "authored_at": "2026-06-02T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-085",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 085 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_interaction",
+      "observation_id": "xobs_fixture_085",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_085",
+      "platform_user_id": "xuid_fixture_022",
+      "query_family": "official_lab_interactions",
+      "source_task_id": "xtask_fixture_official_lab_interactions",
+      "technical_scope": "OUT_OF_SCOPE"
+    },
+    {
+      "authored_at": "2026-06-03T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-086",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 086 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "list_reference",
+      "observation_id": "xobs_fixture_086",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_086",
+      "platform_user_id": "xuid_fixture_022",
+      "query_family": "curated_lists",
+      "source_task_id": "xtask_fixture_curated_lists",
+      "technical_scope": "OUT_OF_SCOPE"
+    },
+    {
+      "authored_at": "2026-06-04T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-087",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 087 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "paper_link",
+      "observation_id": "xobs_fixture_087",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_087",
+      "platform_user_id": "xuid_fixture_022",
+      "query_family": "paper_conference_linkage",
+      "source_task_id": "xtask_fixture_paper_conference_linkage",
+      "technical_scope": "OUT_OF_SCOPE"
+    },
+    {
+      "authored_at": "2026-06-05T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-088",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 088 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "graph_edge",
+      "observation_id": "xobs_fixture_088",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_088",
+      "platform_user_id": "xuid_fixture_022",
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "source_task_id": "xtask_fixture_one_hop_graph_and_conflict_checks",
+      "technical_scope": "OUT_OF_SCOPE"
+    },
+    {
+      "authored_at": "2026-06-06T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-089",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 089 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_lab_output",
+      "observation_id": "xobs_fixture_089",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_089",
+      "platform_user_id": "xuid_fixture_023",
+      "query_family": "official_lab_output",
+      "source_task_id": "xtask_fixture_official_lab_output",
+      "technical_scope": "UNKNOWN"
+    },
+    {
+      "authored_at": "2026-06-07T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-090",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 090 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "bio",
+      "observation_id": "xobs_fixture_090",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_090",
+      "platform_user_id": "xuid_fixture_023",
+      "query_family": "public_bio_affiliation",
+      "source_task_id": "xtask_fixture_public_bio_affiliation",
+      "technical_scope": "UNKNOWN"
+    },
+    {
+      "authored_at": "2026-06-08T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-091",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 091 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "post",
+      "observation_id": "xobs_fixture_091",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_091",
+      "platform_user_id": "xuid_fixture_023",
+      "query_family": "first_party_technical_posts",
+      "source_task_id": "xtask_fixture_first_party_technical_posts",
+      "technical_scope": "UNKNOWN"
+    },
+    {
+      "authored_at": "2026-06-09T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-092",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 092 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "reply",
+      "observation_id": "xobs_fixture_092",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_092",
+      "platform_user_id": "xuid_fixture_023",
+      "query_family": "replies_mentions",
+      "source_task_id": "xtask_fixture_replies_mentions",
+      "technical_scope": "UNKNOWN"
+    },
+    {
+      "authored_at": "2026-06-10T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-093",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 093 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "official_interaction",
+      "observation_id": "xobs_fixture_093",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_093",
+      "platform_user_id": "xuid_fixture_024",
+      "query_family": "official_lab_interactions",
+      "source_task_id": "xtask_fixture_official_lab_interactions",
+      "technical_scope": "UNKNOWN"
+    },
+    {
+      "authored_at": "2026-06-11T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-094",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 094 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "list_reference",
+      "observation_id": "xobs_fixture_094",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_094",
+      "platform_user_id": "xuid_fixture_024",
+      "query_family": "curated_lists",
+      "source_task_id": "xtask_fixture_curated_lists",
+      "technical_scope": "UNKNOWN"
+    },
+    {
+      "authored_at": "2026-06-12T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-095",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 095 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "paper_link",
+      "observation_id": "xobs_fixture_095",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_095",
+      "platform_user_id": "xuid_fixture_024",
+      "query_family": "paper_conference_linkage",
+      "source_task_id": "xtask_fixture_paper_conference_linkage",
+      "technical_scope": "UNKNOWN"
+    },
+    {
+      "authored_at": "2026-06-13T12:00:00Z",
+      "canonical_url": "https://evidence.invalid/openai/observation-096",
+      "evidence_scope": "public_professional",
+      "excerpt": "Synthetic professional evidence 096 about model training systems, optimization, data quality, and reliable research infrastructure.",
+      "kind": "graph_edge",
+      "observation_id": "xobs_fixture_096",
+      "observed_at": "2026-07-14T00:00:00Z",
+      "platform_object_id": "xobject_fixture_096",
+      "platform_user_id": "xuid_fixture_024",
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "source_task_id": "xtask_fixture_one_hop_graph_and_conflict_checks",
+      "technical_scope": "UNKNOWN"
+    }
+  ],
+  "run": {
+    "completed_at": "2026-07-14T00:00:00Z",
+    "hard_budgets": {
+      "max_candidate_packets": 24,
+      "max_observations": 96,
+      "max_pages": 8,
+      "max_tasks": 8
+    },
+    "lab_scope": [
+      "openai"
+    ],
+    "mode": "fixture",
+    "provider": {
+      "access_mode": "fixture",
+      "cost_usd": 0,
+      "external_calls": 0,
+      "model_id": null,
+      "prompt_version": "fixture-v1",
+      "provider_id": "offline_fixture"
+    },
+    "run_id": "xrun_fixture_openai_v1",
+    "started_at": "2026-07-14T00:00:00Z",
+    "status": "completed"
+  },
+  "schema_version": "x.grok.collection.v1",
+  "tasks": [
+    {
+      "cursor": null,
+      "lab_id": "openai",
+      "observation_ids": [
+        "xobs_fixture_001",
+        "xobs_fixture_009",
+        "xobs_fixture_017",
+        "xobs_fixture_025",
+        "xobs_fixture_033",
+        "xobs_fixture_041",
+        "xobs_fixture_049",
+        "xobs_fixture_057",
+        "xobs_fixture_065",
+        "xobs_fixture_073",
+        "xobs_fixture_081",
+        "xobs_fixture_089"
+      ],
+      "pages": 1,
+      "provenance": {
+        "collector_contract_version": "x.grok.collection.v1",
+        "query_registry_version": "x.query-family.registry.v1"
+      },
+      "query_family": "official_lab_output",
+      "query_template": "fixture://openai/official_lab_output",
+      "status": "succeeded",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_official_lab_output",
+      "task_key": "xtask_7cf04e8bd6d046bf2a06fc22",
+      "window": "fixture-v1"
+    },
+    {
+      "cursor": null,
+      "lab_id": "openai",
+      "observation_ids": [
+        "xobs_fixture_002",
+        "xobs_fixture_010",
+        "xobs_fixture_018",
+        "xobs_fixture_026",
+        "xobs_fixture_034",
+        "xobs_fixture_042",
+        "xobs_fixture_050",
+        "xobs_fixture_058",
+        "xobs_fixture_066",
+        "xobs_fixture_074",
+        "xobs_fixture_082",
+        "xobs_fixture_090"
+      ],
+      "pages": 1,
+      "provenance": {
+        "collector_contract_version": "x.grok.collection.v1",
+        "query_registry_version": "x.query-family.registry.v1"
+      },
+      "query_family": "public_bio_affiliation",
+      "query_template": "fixture://openai/public_bio_affiliation",
+      "status": "succeeded",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_public_bio_affiliation",
+      "task_key": "xtask_790ce9fb1739a4e0f69d335d",
+      "window": "fixture-v1"
+    },
+    {
+      "cursor": null,
+      "lab_id": "openai",
+      "observation_ids": [
+        "xobs_fixture_003",
+        "xobs_fixture_011",
+        "xobs_fixture_019",
+        "xobs_fixture_027",
+        "xobs_fixture_035",
+        "xobs_fixture_043",
+        "xobs_fixture_051",
+        "xobs_fixture_059",
+        "xobs_fixture_067",
+        "xobs_fixture_075",
+        "xobs_fixture_083",
+        "xobs_fixture_091"
+      ],
+      "pages": 1,
+      "provenance": {
+        "collector_contract_version": "x.grok.collection.v1",
+        "query_registry_version": "x.query-family.registry.v1"
+      },
+      "query_family": "first_party_technical_posts",
+      "query_template": "fixture://openai/first_party_technical_posts",
+      "status": "succeeded",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_first_party_technical_posts",
+      "task_key": "xtask_58955dfa13201e371a39a459",
+      "window": "fixture-v1"
+    },
+    {
+      "cursor": null,
+      "lab_id": "openai",
+      "observation_ids": [
+        "xobs_fixture_004",
+        "xobs_fixture_012",
+        "xobs_fixture_020",
+        "xobs_fixture_028",
+        "xobs_fixture_036",
+        "xobs_fixture_044",
+        "xobs_fixture_052",
+        "xobs_fixture_060",
+        "xobs_fixture_068",
+        "xobs_fixture_076",
+        "xobs_fixture_084",
+        "xobs_fixture_092"
+      ],
+      "pages": 1,
+      "provenance": {
+        "collector_contract_version": "x.grok.collection.v1",
+        "query_registry_version": "x.query-family.registry.v1"
+      },
+      "query_family": "replies_mentions",
+      "query_template": "fixture://openai/replies_mentions",
+      "status": "succeeded",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_replies_mentions",
+      "task_key": "xtask_5cb413b05abe8279ef6f280e",
+      "window": "fixture-v1"
+    },
+    {
+      "cursor": null,
+      "lab_id": "openai",
+      "observation_ids": [
+        "xobs_fixture_005",
+        "xobs_fixture_013",
+        "xobs_fixture_021",
+        "xobs_fixture_029",
+        "xobs_fixture_037",
+        "xobs_fixture_045",
+        "xobs_fixture_053",
+        "xobs_fixture_061",
+        "xobs_fixture_069",
+        "xobs_fixture_077",
+        "xobs_fixture_085",
+        "xobs_fixture_093"
+      ],
+      "pages": 1,
+      "provenance": {
+        "collector_contract_version": "x.grok.collection.v1",
+        "query_registry_version": "x.query-family.registry.v1"
+      },
+      "query_family": "official_lab_interactions",
+      "query_template": "fixture://openai/official_lab_interactions",
+      "status": "succeeded",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_official_lab_interactions",
+      "task_key": "xtask_2342fc7279d3e0bd521fbe1b",
+      "window": "fixture-v1"
+    },
+    {
+      "cursor": null,
+      "lab_id": "openai",
+      "observation_ids": [
+        "xobs_fixture_006",
+        "xobs_fixture_014",
+        "xobs_fixture_022",
+        "xobs_fixture_030",
+        "xobs_fixture_038",
+        "xobs_fixture_046",
+        "xobs_fixture_054",
+        "xobs_fixture_062",
+        "xobs_fixture_070",
+        "xobs_fixture_078",
+        "xobs_fixture_086",
+        "xobs_fixture_094"
+      ],
+      "pages": 1,
+      "provenance": {
+        "collector_contract_version": "x.grok.collection.v1",
+        "query_registry_version": "x.query-family.registry.v1"
+      },
+      "query_family": "curated_lists",
+      "query_template": "fixture://openai/curated_lists",
+      "status": "succeeded",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_curated_lists",
+      "task_key": "xtask_78326c3e6674b60c2fab26fe",
+      "window": "fixture-v1"
+    },
+    {
+      "cursor": null,
+      "lab_id": "openai",
+      "observation_ids": [
+        "xobs_fixture_007",
+        "xobs_fixture_015",
+        "xobs_fixture_023",
+        "xobs_fixture_031",
+        "xobs_fixture_039",
+        "xobs_fixture_047",
+        "xobs_fixture_055",
+        "xobs_fixture_063",
+        "xobs_fixture_071",
+        "xobs_fixture_079",
+        "xobs_fixture_087",
+        "xobs_fixture_095"
+      ],
+      "pages": 1,
+      "provenance": {
+        "collector_contract_version": "x.grok.collection.v1",
+        "query_registry_version": "x.query-family.registry.v1"
+      },
+      "query_family": "paper_conference_linkage",
+      "query_template": "fixture://openai/paper_conference_linkage",
+      "status": "succeeded",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_paper_conference_linkage",
+      "task_key": "xtask_95fed1765de7fdace85e8952",
+      "window": "fixture-v1"
+    },
+    {
+      "cursor": null,
+      "lab_id": "openai",
+      "observation_ids": [
+        "xobs_fixture_008",
+        "xobs_fixture_016",
+        "xobs_fixture_024",
+        "xobs_fixture_032",
+        "xobs_fixture_040",
+        "xobs_fixture_048",
+        "xobs_fixture_056",
+        "xobs_fixture_064",
+        "xobs_fixture_072",
+        "xobs_fixture_080",
+        "xobs_fixture_088",
+        "xobs_fixture_096"
+      ],
+      "pages": 1,
+      "provenance": {
+        "collector_contract_version": "x.grok.collection.v1",
+        "query_registry_version": "x.query-family.registry.v1"
+      },
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "query_template": "fixture://openai/one_hop_graph_and_conflict_checks",
+      "status": "succeeded",
+      "stop_reason": "fixture_complete",
+      "task_id": "xtask_fixture_one_hop_graph_and_conflict_checks",
+      "task_key": "xtask_0302c2c795f28058998f24ae",
+      "window": "fixture-v1"
+    }
+  ]
+}

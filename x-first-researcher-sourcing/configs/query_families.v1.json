@@ -1,0 +1,61 @@
+{
+  "schema_version": "x.query-family.registry.v1",
+  "families": [
+    {
+      "query_family": "official_lab_output",
+      "purpose": "Find first-party lab technical output and named professional contributors.",
+      "fixture_enabled": true,
+      "max_pages": 2,
+      "max_observations": 20
+    },
+    {
+      "query_family": "public_bio_affiliation",
+      "purpose": "Collect public current-affiliation proposals from account bios.",
+      "fixture_enabled": true,
+      "max_pages": 2,
+      "max_observations": 20
+    },
+    {
+      "query_family": "first_party_technical_posts",
+      "purpose": "Find first-party posts about model training, systems, optimization, and data work.",
+      "fixture_enabled": true,
+      "max_pages": 2,
+      "max_observations": 20
+    },
+    {
+      "query_family": "replies_mentions",
+      "purpose": "Collect bounded professional reply and mention evidence without treating it as identity truth.",
+      "fixture_enabled": true,
+      "max_pages": 2,
+      "max_observations": 20
+    },
+    {
+      "query_family": "official_lab_interactions",
+      "purpose": "Collect interactions from authoritative lab accounts as evidence proposals.",
+      "fixture_enabled": true,
+      "max_pages": 2,
+      "max_observations": 20
+    },
+    {
+      "query_family": "curated_lists",
+      "purpose": "Use public professional lists as low-authority seeds that require independent evidence.",
+      "fixture_enabled": true,
+      "max_pages": 2,
+      "max_observations": 20
+    },
+    {
+      "query_family": "paper_conference_linkage",
+      "purpose": "Connect public paper or conference evidence to an external account without automatic person merge.",
+      "fixture_enabled": true,
+      "max_pages": 2,
+      "max_observations": 20
+    },
+    {
+      "query_family": "one_hop_graph_and_conflict_checks",
+      "purpose": "Perform one-hop professional graph expansion and explicit conflict checks.",
+      "fixture_enabled": true,
+      "max_pages": 2,
+      "max_observations": 20
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": "x.lab.registry.v1",
+  "labs": [
+    {
+      "lab_id": "openai",
+      "display_name": "OpenAI",
+      "status": "fixture_enabled"
+    },
+    {
+      "lab_id": "anthropic",
+      "display_name": "Anthropic",
+      "status": "planned"
+    },
+    {
+      "lab_id": "google_deepmind",
+      "display_name": "Google DeepMind",
+      "status": "planned"
+    },
+    {
+      "lab_id": "xai",
+      "display_name": "xAI",
+      "status": "planned"
+    },
+    {
+      "lab_id": "meta",
+      "display_name": "Meta",
+      "status": "owner_decision_required"
+    },
+    {
+      "lab_id": "thinking_machines_lab",
+      "display_name": "Thinking Machines Lab",
+      "status": "planned"
+    }
+  ]
+}
