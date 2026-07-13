@@ -11,7 +11,7 @@ attempts:
   rows (PRIMARY KEY job_id), and a scoped takeover intent coexists with a generic
   global nudge without narrowing each other (NOTIFICATION vs INTENT separation).
 * Invariant 1 (no duplicate dispatch) — two concurrent
-  claim_workflow_recovery_intents calls claim disjoint sets (single-winner
+  claim_recovery_intents calls claim disjoint sets (single-winner
   RETURNING / conditional UPDATE); the drain phase takes over a job exactly once.
 * Invariant 3 (timely takeover) — a classified dead-runner job carrying a pending
   intent is taken over by the workflow_takeover_intent_drain phase with stale=0
@@ -47,9 +47,7 @@ from sourcing_agent.settings import (
     SemanticProviderSettings,
 )
 from sourcing_agent.storage import ControlPlaneStore
-
 from tests.pg_durable_runtime import PGDurableRuntimeTestMixin
-
 
 SHARED_DAEMON = "worker-recovery-daemon"
 
@@ -159,7 +157,7 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             recovery_payload={"workflow_resume_limit": 999, "injected": "attacker"},
         )
 
-        intent = self.store.get_workflow_recovery_intent(job_id)
+        intent = self.store.repos.workflow_runtime.get_recovery_intent(job_id)
         self.assertEqual(intent.get("status"), "pending")
         self.assertEqual(intent.get("classification"), "runner_not_alive")
         self.assertEqual(intent.get("requested_by"), "progress_poll")
@@ -231,7 +229,7 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
 
         def _upsert(jid: str, classification: str) -> None:
             barrier.wait(timeout=5.0)
-            self.store.upsert_workflow_recovery_intent(
+            self.store.repos.workflow_runtime.upsert_recovery_intent(
                 jid,
                 classification=classification,
                 params={"workflow_stale_scope_job_id": jid, "workflow_resume_limit": 1},
@@ -247,8 +245,8 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         for thread in threads:
             thread.join(timeout=10.0)
 
-        intent_a = self.store.get_workflow_recovery_intent(job_a)
-        intent_b = self.store.get_workflow_recovery_intent(job_b)
+        intent_a = self.store.repos.workflow_runtime.get_recovery_intent(job_a)
+        intent_b = self.store.repos.workflow_runtime.get_recovery_intent(job_b)
         # Two independent rows — neither clobbers the other.
         self.assertEqual(intent_a.get("status"), "pending")
         self.assertEqual(intent_b.get("status"), "pending")
@@ -262,7 +260,7 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         # (request-path wake, no scope) are two separate mechanisms; the nudge
         # never narrows or overwrites the scoped intent's contract.
         scoped_job = "job_f2_scoped"
-        self.store.upsert_workflow_recovery_intent(
+        self.store.repos.workflow_runtime.upsert_recovery_intent(
             scoped_job,
             classification="runner_not_alive",
             params={
@@ -280,7 +278,7 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         )
 
         # The durable intent is untouched by the unscoped nudge.
-        intent = self.store.get_workflow_recovery_intent(scoped_job)
+        intent = self.store.repos.workflow_runtime.get_recovery_intent(scoped_job)
         self.assertEqual(intent.get("status"), "pending")
         params = dict(intent.get("params") or {})
         self.assertEqual(params.get("workflow_stale_scope_job_id"), scoped_job)
@@ -300,7 +298,7 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         # the union of both claim sets has no duplicate job_id.
         job_ids = [f"job_inv1_{i}" for i in range(3)]
         for jid in job_ids:
-            self.store.upsert_workflow_recovery_intent(
+            self.store.repos.workflow_runtime.upsert_recovery_intent(
                 jid,
                 classification="runner_not_alive",
                 params={"workflow_stale_scope_job_id": jid},
@@ -312,7 +310,7 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
 
         def _claim(owner: str) -> None:
             barrier.wait(timeout=5.0)
-            claimed = self.store.claim_workflow_recovery_intents(
+            claimed = self.store.repos.workflow_runtime.claim_recovery_intents(
                 lease_owner=owner,
                 lease_seconds=120,
                 limit=3,
@@ -336,14 +334,14 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertEqual(sorted(claimed_a + claimed_b), sorted(job_ids))
         # Each claimed row is now 'claimed' (not still 'pending').
         for jid in job_ids:
-            self.assertEqual(self.store.get_workflow_recovery_intent(jid).get("status"), "claimed")
+            self.assertEqual(self.store.repos.workflow_runtime.get_recovery_intent(jid).get("status"), "claimed")
 
     def test_invariant1_drain_phase_takes_over_a_job_exactly_once(self) -> None:
         # Drive the drain helper twice. The first tick claims + consumes the
         # intent; the second finds nothing pending → the job is not re-dispatched.
         job_id = "job_inv1_once"
         self._save_queued_workflow(job_id)
-        self.store.upsert_workflow_recovery_intent(
+        self.store.repos.workflow_runtime.upsert_recovery_intent(
             job_id,
             classification="runner_not_alive",
             params={"workflow_stale_scope_job_id": job_id},
@@ -361,7 +359,7 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 {"jobs": []}, payload={}
             )
             self._join_takeover_thread(job_id)
-            self.assertEqual(self.store.get_workflow_recovery_intent(job_id).get("status"), "consumed")
+            self.assertEqual(self.store.repos.workflow_runtime.get_recovery_intent(job_id).get("status"), "consumed")
             # Second drain: nothing pending → no result rows, no re-dispatch.
             second = self.orchestrator._drain_workflow_takeover_intents(  # noqa: SLF001
                 {"jobs": []}, payload={}
@@ -395,7 +393,7 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             return {"job_id": str(kwargs.get("job_id") or ""), "status": "skipped"}
 
         # Write the durable intent (server-side literals, scoped, zero stale).
-        self.store.upsert_workflow_recovery_intent(
+        self.store.repos.workflow_runtime.upsert_recovery_intent(
             job_id,
             classification="runner_not_alive",
             params={
@@ -419,7 +417,7 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         # The drain phase ran (metered) and consumed the intent → taken over via
         # the durable intent, exactly once.
         self.assertIn("workflow_takeover_intent_drain", result.get("recovery_phase_metrics", {}))
-        self.assertEqual(self.store.get_workflow_recovery_intent(job_id).get("status"), "consumed")
+        self.assertEqual(self.store.repos.workflow_runtime.get_recovery_intent(job_id).get("status"), "consumed")
         self.assertEqual(drove.count(job_id), 1)
 
         # The takeover surfaced in workflow_resume AND is attributed to the intent
@@ -450,7 +448,7 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         # while the drain phase invokes it scoped with stale=0.
         job_id = "job_inv3_generic_default"
         self._save_queued_workflow(job_id)
-        self.store.upsert_workflow_recovery_intent(
+        self.store.repos.workflow_runtime.upsert_recovery_intent(
             job_id,
             classification="runner_not_alive",
             params={
@@ -498,18 +496,18 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
     def test_consume_is_claim_identity_scoped_and_does_not_clobber_a_newer_intent(self) -> None:
         # NO-GO finding 1 (stale-claim clobber): a daemon claims intent v1, then a
         # NEWER same-job intent v2 is upserted (re-arming the row to 'pending')
-        # before the daemon consumes. mark_workflow_recovery_intent_consumed must
+        # before the daemon consumes. mark_recovery_intent_consumed must
         # match the CLAIM identity (lease_owner + claimed_at), so the stale
         # consume is a no-op and v2 survives as pending for the next drain.
         job_id = "job_consume_identity"
         self._save_queued_workflow(job_id)
-        self.store.upsert_workflow_recovery_intent(
+        self.store.repos.workflow_runtime.upsert_recovery_intent(
             job_id,
             classification="runner_not_alive",
             params={"workflow_stale_scope_job_id": job_id, "generation": "v1"},
             requested_by="progress_poll",
         )
-        claimed = self.store.claim_workflow_recovery_intents(
+        claimed = self.store.repos.workflow_runtime.claim_recovery_intents(
             lease_owner="daemon-A", lease_seconds=120, limit=10
         )
         self.assertEqual(len(claimed), 1)
@@ -519,23 +517,23 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         self.assertTrue(claim_claimed_at)
 
         # A newer same-job intent arrives between claim and consume → re-armed pending.
-        self.store.upsert_workflow_recovery_intent(
+        self.store.repos.workflow_runtime.upsert_recovery_intent(
             job_id,
             classification="runner_not_alive",
             params={"workflow_stale_scope_job_id": job_id, "generation": "v2"},
             requested_by="progress_poll",
         )
-        self.assertEqual(self.store.get_workflow_recovery_intent(job_id).get("status"), "pending")
+        self.assertEqual(self.store.repos.workflow_runtime.get_recovery_intent(job_id).get("status"), "pending")
 
         # The stale claim's consume must NOT clobber v2.
-        self.store.mark_workflow_recovery_intent_consumed(
+        self.store.repos.workflow_runtime.mark_recovery_intent_consumed(
             job_id, lease_owner=claim_owner, claimed_at=claim_claimed_at
         )
-        survived = self.store.get_workflow_recovery_intent(job_id)
+        survived = self.store.repos.workflow_runtime.get_recovery_intent(job_id)
         self.assertEqual(survived.get("status"), "pending")
         self.assertEqual(dict(survived.get("params") or {}).get("generation"), "v2")
         # The fresh intent is re-claimable.
-        reclaimed = self.store.claim_workflow_recovery_intents(
+        reclaimed = self.store.repos.workflow_runtime.claim_recovery_intents(
             lease_owner="daemon-B", lease_seconds=120, limit=10
         )
         self.assertEqual([str(r.get("job_id") or "") for r in reclaimed], [job_id])
@@ -547,7 +545,7 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         # instead of dropping the job to the generic default-stale window.
         job_id = "job_resume_fails_retry"
         self._save_queued_workflow(job_id)
-        self.store.upsert_workflow_recovery_intent(
+        self.store.repos.workflow_runtime.upsert_recovery_intent(
             job_id,
             classification="runner_not_alive",
             params={"workflow_stale_scope_job_id": job_id},
@@ -567,7 +565,7 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         # The intent was NOT consumed; it stays claimed with its lease so it is
         # re-claimable once the lease expires (retryable), not lost.
         self.assertTrue(any(str(item.get("status") or "") == "takeover_failed" for item in result))
-        self.assertNotEqual(self.store.get_workflow_recovery_intent(job_id).get("status"), "consumed")
+        self.assertNotEqual(self.store.repos.workflow_runtime.get_recovery_intent(job_id).get("status"), "consumed")
 
     def test_claim_reclaims_expired_claimed_intent_so_failed_takeover_retries(self) -> None:
         # NO-GO finding (retry path): the drain leaves a takeover_failed intent in
@@ -577,31 +575,31 @@ class RecoveryTakeoverIntentTest(PGDurableRuntimeTestMixin, unittest.TestCase):
         # Deterministic: claim, backdate the lease to the past, re-claim.
         job_id = "job_claim_reclaim_expired"
         self._save_queued_workflow(job_id)
-        self.store.upsert_workflow_recovery_intent(
+        self.store.repos.workflow_runtime.upsert_recovery_intent(
             job_id,
             classification="runner_not_alive",
             params={"workflow_stale_scope_job_id": job_id},
             requested_by="progress_poll",
         )
-        first = self.store.claim_workflow_recovery_intents(
+        first = self.store.repos.workflow_runtime.claim_recovery_intents(
             lease_owner="daemon-A", lease_seconds=120, limit=10
         )
         self.assertEqual([str(r.get("job_id") or "") for r in first], [job_id])
         # Simulate takeover_failed: the row stays 'claimed' (NOT consumed), then
         # its lease expires (backdated to the past via the authoritative adapter).
-        self.assertEqual(self.store.get_workflow_recovery_intent(job_id).get("status"), "claimed")
+        self.assertEqual(self.store.repos.workflow_runtime.get_recovery_intent(job_id).get("status"), "claimed")
         self.store._control_plane_postgres.execute_non_query(  # noqa: SLF001
             "UPDATE workflow_recovery_intents SET lease_expires_at = %s WHERE job_id = %s",
             ("2000-01-01T00:00:00+00:00", job_id),
         )
         # A different daemon reclaims the expired-claimed intent.
-        reclaimed = self.store.claim_workflow_recovery_intents(
+        reclaimed = self.store.repos.workflow_runtime.claim_recovery_intents(
             lease_owner="daemon-B", lease_seconds=120, limit=10
         )
         self.assertEqual([str(r.get("job_id") or "") for r in reclaimed], [job_id])
         self.assertEqual(str(reclaimed[0].get("lease_owner") or ""), "daemon-B")
         # A non-expired claimed row is NOT reclaimable (single-winner during lease).
-        third = self.store.claim_workflow_recovery_intents(
+        third = self.store.repos.workflow_runtime.claim_recovery_intents(
             lease_owner="daemon-C", lease_seconds=120, limit=10
         )
         self.assertEqual(third, [])

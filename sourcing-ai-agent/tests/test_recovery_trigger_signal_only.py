@@ -57,9 +57,7 @@ from sourcing_agent.settings import (
     SemanticProviderSettings,
 )
 from sourcing_agent.storage import ControlPlaneStore
-
 from tests.pg_durable_runtime import PGDurableRuntimeTestMixin
-
 
 SHARED_DAEMON = "worker-recovery-daemon"
 
@@ -343,7 +341,7 @@ class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase
         # The takeover contract now lives in the DURABLE per-job intent table:
         # all 8 params are server-side literals (not request-derived), scoped to
         # THIS job_id, with zero stale thresholds.
-        intent = self.store.get_workflow_recovery_intent(job_id)
+        intent = self.store.repos.workflow_runtime.get_recovery_intent(job_id)
         self.assertEqual(intent.get("status"), "pending")
         self.assertEqual(intent.get("classification"), "runner_not_alive")
         self.assertEqual(intent.get("requested_by"), "progress_poll")
@@ -452,7 +450,7 @@ class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase
         # The wake file is a pure nudge; the takeover contract is in the intent.
         callback = dict(wakeup.get("callback_payload") or {})
         self.assertNotIn("workflow_stale_scope_job_id", callback)
-        intent = self.store.get_workflow_recovery_intent(job_id)
+        intent = self.store.repos.workflow_runtime.get_recovery_intent(job_id)
         self.assertEqual(intent.get("status"), "pending")
 
         # Step 2: the woken daemon runs a PLAIN global recovery tick. Its
@@ -490,7 +488,7 @@ class RecoveryTriggerSignalOnlyTest(PGDurableRuntimeTestMixin, unittest.TestCase
         # this job (off the request/read path, on the daemon's behalf).
         self.assertIn(job_id, drove_via_daemon)
         # The intent was consumed by the drain phase (taken over exactly once).
-        self.assertEqual(self.store.get_workflow_recovery_intent(job_id).get("status"), "consumed")
+        self.assertEqual(self.store.repos.workflow_runtime.get_recovery_intent(job_id).get("status"), "consumed")
 
 
 if __name__ == "__main__":

@@ -37331,7 +37331,7 @@ class SourcingOrchestrator:
                 "workflow_queue_resume_limit": 1,
                 "stale_after_seconds": 0,
             }
-            intent = self.store.upsert_workflow_recovery_intent(
+            intent = self.store.repos.workflow_runtime.upsert_recovery_intent(
                 job_id,
                 classification=classification,
                 params=intent_params,
@@ -61084,7 +61084,7 @@ class SourcingOrchestrator:
     ) -> list[dict[str, Any]]:
         """Claim + consume durable per-job recovery-takeover intents (Option B).
 
-        Single-winner ``claim_workflow_recovery_intents`` guarantees two
+        Single-winner ``claim_recovery_intents`` guarantees two
         concurrent daemon ticks claim disjoint sets, so a job is taken over
         exactly once per pending intent. For each claimed ``job_id`` the read
         path's server-side ``stale=0`` scoped resume contract is replayed via
@@ -61110,7 +61110,7 @@ class SourcingOrchestrator:
         )
         lease_owner = self._workflow_job_lease_owner()
         try:
-            claimed_intents = self.store.claim_workflow_recovery_intents(
+            claimed_intents = self.store.repos.workflow_runtime.claim_recovery_intents(
                 lease_owner=lease_owner,
                 lease_seconds=lease_seconds,
                 limit=claim_limit,
@@ -61153,7 +61153,7 @@ class SourcingOrchestrator:
                 # Consume only the row THIS daemon claimed (identity = lease_owner
                 # + claimed_at), so a newer upsert that re-armed the row between
                 # claim and consume is not clobbered.
-                self.store.mark_workflow_recovery_intent_consumed(
+                self.store.repos.workflow_runtime.mark_recovery_intent_consumed(
                     job_id,
                     lease_owner=lease_owner,
                     claimed_at=str(dict(intent or {}).get("claimed_at") or ""),

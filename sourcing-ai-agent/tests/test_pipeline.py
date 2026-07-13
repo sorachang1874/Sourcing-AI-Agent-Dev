@@ -9820,7 +9820,7 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(captured_payloads[0], {})
         # The takeover contract lives in the DURABLE intent: server-side literals,
         # scoped to this job, zero stale, queue-takeover on.
-        intent = self.store.get_workflow_recovery_intent(job_id)
+        intent = self.store.repos.workflow_runtime.get_recovery_intent(job_id)
         self.assertEqual(intent.get("status"), "pending")
         self.assertEqual(intent.get("classification"), "runner_not_alive")
         intent_params = dict(intent.get("params") or {})
@@ -10355,7 +10355,7 @@ class PipelineTest(unittest.TestCase):
         tick_mock.assert_not_called()
         self.assertEqual(len(captured_payloads), 1)
         self.assertEqual(captured_payloads[0], {})
-        intent = self.store.get_workflow_recovery_intent(job_id)
+        intent = self.store.repos.workflow_runtime.get_recovery_intent(job_id)
         self.assertEqual(intent.get("status"), "pending")
         self.assertEqual(intent.get("classification"), "blocked_on_acquisition_workers")
         self.assertEqual(int(dict(intent.get("params") or {}).get("stale_after_seconds")), 0)
@@ -10503,7 +10503,7 @@ class PipelineTest(unittest.TestCase):
         tick_mock.assert_not_called()
         self.assertEqual(captured_payloads[0], {})
         self.assertEqual(
-            self.store.get_workflow_recovery_intent(job_id).get("classification"),
+            self.store.repos.workflow_runtime.get_recovery_intent(job_id).get("classification"),
             "blocked_on_acquisition_workers",
         )
         self.assertEqual(progress["auto_recovery"]["status"], "queued")
@@ -10588,7 +10588,7 @@ class PipelineTest(unittest.TestCase):
         # intent carries the takeover contract.
         self.assertEqual(captured_payloads[0], {})
         self.assertEqual(
-            self.store.get_workflow_recovery_intent(job_id).get("classification"),
+            self.store.repos.workflow_runtime.get_recovery_intent(job_id).get("classification"),
             "blocked_on_acquisition_workers",
         )
         self.assertEqual(progress["auto_recovery"]["status"], "queued")

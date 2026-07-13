@@ -161,6 +161,28 @@ _WORKFLOW_READ_MODEL_REPOSITORY_METHODS = {
     "_workflow_current_state_from_row",
     "_runtime_outbox_from_row",
 }
+_RETIRED_RECOVERY_INTENT_STORE_METHODS = {
+    "upsert_workflow_recovery_intent",
+    "claim_workflow_recovery_intents",
+    "mark_workflow_recovery_intent_consumed",
+    "get_workflow_recovery_intent",
+    "_workflow_recovery_intent_from_row",
+}
+_RETIRED_RECOVERY_INTENT_CALL_ATTRIBUTES = {
+    name for name in _RETIRED_RECOVERY_INTENT_STORE_METHODS if not name.startswith("_")
+}
+_RETIRED_RECOVERY_INTENT_NATIVE_DISPATCH_KEYS = {
+    "upsert_workflow_recovery_intent",
+    "claim_workflow_recovery_intents",
+    "mark_workflow_recovery_intent_consumed",
+}
+_RECOVERY_INTENT_REPOSITORY_METHODS = {
+    "upsert_recovery_intent",
+    "claim_recovery_intents",
+    "mark_recovery_intent_consumed",
+    "get_recovery_intent",
+    "_recovery_intent_from_row",
+}
 _RETIRED_SERVING_PROJECTION_STORE_METHODS = {
     "upsert_serving_projection",
     "get_serving_projection",
@@ -420,6 +442,37 @@ def _retired_workflow_read_model_references(tree: ast.AST) -> list[tuple[int, st
     return offenders
 
 
+def _retired_recovery_intent_references(tree: ast.AST) -> list[tuple[int, str]]:
+    offenders: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr in _RETIRED_RECOVERY_INTENT_CALL_ATTRIBUTES
+            and _is_workflow_read_model_store_receiver(node.value)
+        ):
+            offenders.append((node.lineno, node.attr))
+        if not isinstance(node, ast.Call):
+            continue
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id in {"getattr", "hasattr"}
+            and len(node.args) >= 2
+            and _is_workflow_read_model_store_receiver(node.args[0])
+            and isinstance(node.args[1], ast.Constant)
+            and node.args[1].value in _RETIRED_RECOVERY_INTENT_CALL_ATTRIBUTES
+        ):
+            offenders.append((node.lineno, f"{node.func.id}:{node.args[1].value}"))
+        if (
+            _is_patch_object_call(node)
+            and len(node.args) >= 2
+            and _is_workflow_read_model_store_receiver(node.args[0])
+            and isinstance(node.args[1], ast.Constant)
+            and node.args[1].value in _RETIRED_RECOVERY_INTENT_CALL_ATTRIBUTES
+        ):
+            offenders.append((node.lineno, f"mock.patch.object:{node.args[1].value}"))
+    return offenders
+
+
 def _workflow_runtime_state_update_count(tree: ast.AST) -> int:
     count = 0
     for node in ast.walk(tree):
@@ -660,6 +713,39 @@ class _WorkflowReadModelFaultAdapter:
 
     def mark_runtime_outbox_dispatched(self, *, table_name: str, outbox_id: str) -> None:
         self._raise_if_failing("mark_runtime_outbox_dispatched")
+        return None
+
+
+class _RecoveryIntentFaultAdapter:
+    mode = "postgres_only"
+
+    def __init__(self, *, failing_method: str) -> None:
+        self.failing_method = failing_method
+
+    def should_prefer_read(self, _table_name: str) -> bool:
+        return True
+
+    def is_authoritative(self, _table_name: str) -> bool:
+        return True
+
+    def _raise_if_failing(self, method_name: str) -> None:
+        if self.failing_method == method_name:
+            raise RuntimeError(f"{method_name}-boom")
+
+    def select_one(self, _table_name: str, **_kwargs: object) -> None:
+        self._raise_if_failing("select_one")
+        return None
+
+    def upsert_workflow_recovery_intent(self, *, table_name: str, **_kwargs: object) -> None:
+        self._raise_if_failing("upsert_workflow_recovery_intent")
+        return None
+
+    def claim_workflow_recovery_intents(self, *, table_name: str, **_kwargs: object) -> None:
+        self._raise_if_failing("claim_workflow_recovery_intents")
+        return None
+
+    def mark_workflow_recovery_intent_consumed(self, *, table_name: str, **_kwargs: object) -> None:
+        self._raise_if_failing("mark_workflow_recovery_intent_consumed")
         return None
 
 
@@ -1310,6 +1396,170 @@ def test_workflow_read_model_authoritative_native_writes_require_returned_rows(m
 
     assert method_name in str(error)
     assert "returned no row" in str(error)
+
+
+def test_recovery_intent_storage_facade_is_retired_to_workflow_runtime_repository() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    storage_path = repo_root / "src" / "sourcing_agent" / "storage.py"
+    repository_path = repo_root / "src" / "sourcing_agent" / "repositories" / "workflow_runtime.py"
+    storage_methods = _class_method_names(storage_path, "ControlPlaneStore")
+    repository_methods = _class_method_names(repository_path, "WorkflowRuntimeRepository")
+    descriptor_dispatch_keys = _assigned_literal_dict_keys(repository_path, "FROM_ROW_DESCRIPTORS")
+
+    assert len(_RETIRED_RECOVERY_INTENT_STORE_METHODS) == 5
+    assert storage_methods.isdisjoint(_RETIRED_RECOVERY_INTENT_STORE_METHODS)
+    assert len(_RECOVERY_INTENT_REPOSITORY_METHODS) == 5
+    assert _RECOVERY_INTENT_REPOSITORY_METHODS <= repository_methods
+    assert descriptor_dispatch_keys.isdisjoint({"_workflow_recovery_intent_from_row"})
+
+
+def test_recovery_intent_retired_calls_and_native_dispatch_keys_cannot_return() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    synthetic = ast.parse(
+        "\n".join(
+            [
+                'store.upsert_workflow_recovery_intent("job-1")',
+                "callback = api_store.claim_workflow_recovery_intents",
+                'dynamic = getattr(self._store, "get_workflow_recovery_intent")',
+                'feature = hasattr(self.store, "mark_workflow_recovery_intent_consumed")',
+                'patcher = mock.patch.object(store, "claim_workflow_recovery_intents")',
+                'ControlPlaneStore.get_workflow_recovery_intent(store, "job-1")',
+                'store.repos.workflow_runtime.upsert_recovery_intent("job-1")',
+                'adapter.upsert_workflow_recovery_intent(job_id="job-1", table_name="workflow_recovery_intents")',
+                "live_pg_adapter.claim_workflow_recovery_intents("
+                'lease_owner="daemon-1", table_name="workflow_recovery_intents")',
+            ]
+        )
+    )
+    assert {label for _line, label in _retired_recovery_intent_references(synthetic)} == {
+        "upsert_workflow_recovery_intent",
+        "claim_workflow_recovery_intents",
+        "getattr:get_workflow_recovery_intent",
+        "hasattr:mark_workflow_recovery_intent_consumed",
+        "mock.patch.object:claim_workflow_recovery_intents",
+        "get_workflow_recovery_intent",
+    }
+
+    offenders: list[str] = []
+    checked_roots = [repo_root / "src" / "sourcing_agent", repo_root / "scripts", repo_root / "tests"]
+    current_test = Path(__file__).resolve()
+    for root in checked_roots:
+        for path in root.rglob("*.py"):
+            if path.resolve() == current_test:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            offenders.extend(
+                f"{path.relative_to(repo_root)}:{line}:{label}"
+                for line, label in _retired_recovery_intent_references(tree)
+            )
+
+    native_dispatch_keys = _assigned_literal_dict_keys(
+        repo_root / "src" / "sourcing_agent" / "storage.py",
+        "_CONTROL_PLANE_POSTGRES_NATIVE_TABLES",
+    )
+    assert offenders == []
+    assert native_dispatch_keys.isdisjoint(_RETIRED_RECOVERY_INTENT_NATIVE_DISPATCH_KEYS)
+
+
+@pytest.mark.parametrize(
+    ("method_name", "invoke_with_wrong_table"),
+    [
+        (
+            "upsert_workflow_recovery_intent",
+            lambda adapter: adapter.upsert_workflow_recovery_intent("job-1", table_name="workflow_events"),
+        ),
+        (
+            "claim_workflow_recovery_intents",
+            lambda adapter: adapter.claim_workflow_recovery_intents(
+                lease_owner="daemon-1", table_name="workflow_events"
+            ),
+        ),
+        (
+            "mark_workflow_recovery_intent_consumed",
+            lambda adapter: adapter.mark_workflow_recovery_intent_consumed("job-1", table_name="workflow_events"),
+        ),
+    ],
+)
+def test_recovery_intent_native_writers_require_exact_authority_table(
+    method_name: str,
+    invoke_with_wrong_table,
+) -> None:
+    from sourcing_agent.control_plane_live_postgres import LiveControlPlanePostgresAdapter
+
+    method = getattr(LiveControlPlanePostgresAdapter, method_name)
+    parameter = inspect.signature(method).parameters["table_name"]
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameter.default == "workflow_recovery_intents"
+
+    adapter = object.__new__(LiveControlPlanePostgresAdapter)
+    with pytest.raises(
+        ValueError,
+        match=rf"{method_name} requires table_name=workflow_recovery_intents",
+    ):
+        invoke_with_wrong_table(adapter)
+
+
+def test_recovery_intent_repository_preserves_postgres_only_and_authority_fault_contracts() -> None:
+    repository = WorkflowRuntimeRepository(SimpleNamespace(mode="prefer_postgres"))
+    with pytest.raises(RuntimeError, match="workflow_recovery_intents is PG-only durable runtime storage"):
+        repository.get_recovery_intent("job-1")
+
+    cases = [
+        (
+            "select_one",
+            lambda recovery_repository: recovery_repository.get_recovery_intent("job-1"),
+            "read",
+        ),
+        (
+            "upsert_workflow_recovery_intent",
+            lambda recovery_repository: recovery_repository.upsert_recovery_intent("job-1"),
+            "write",
+        ),
+        (
+            "claim_workflow_recovery_intents",
+            lambda recovery_repository: recovery_repository.claim_recovery_intents(lease_owner="daemon-1"),
+            "write",
+        ),
+        (
+            "mark_workflow_recovery_intent_consumed",
+            lambda recovery_repository: recovery_repository.mark_recovery_intent_consumed(
+                "job-1",
+                lease_owner="daemon-1",
+                claimed_at="2026-07-13T00:00:00Z",
+            ),
+            "write",
+        ),
+    ]
+    for primitive, call, operation in cases:
+        recovery_repository = WorkflowRuntimeRepository(_RecoveryIntentFaultAdapter(failing_method=primitive))
+        error = _runtime_error(lambda: call(recovery_repository))
+        assert str(error) == (
+            f"Postgres authoritative {operation} failed for workflow_recovery_intents "
+            f"via {primitive}: RuntimeError: {primitive}-boom"
+        )
+        assert isinstance(error.__cause__, RuntimeError)
+
+
+def test_recovery_intent_authoritative_returned_row_contracts_preserve_fenced_noop() -> None:
+    repository = WorkflowRuntimeRepository(_RecoveryIntentFaultAdapter(failing_method=""))
+
+    upsert_error = _runtime_error(lambda: repository.upsert_recovery_intent("job-1"))
+    assert "upsert_workflow_recovery_intent" in str(upsert_error)
+    assert "returned no row" in str(upsert_error)
+
+    claim_error = _runtime_error(lambda: repository.claim_recovery_intents(lease_owner="daemon-1"))
+    assert "claim_workflow_recovery_intents" in str(claim_error)
+    assert "returned no rows" in str(claim_error)
+
+    assert (
+        repository.mark_recovery_intent_consumed(
+            "job-1",
+            lease_owner="daemon-1",
+            claimed_at="2026-07-13T00:00:00Z",
+        )
+        == {}
+    )
+    assert repository.get_recovery_intent("missing-job") == {}
 
 
 def test_operation_state_sync_residual_callers_are_ratcheted() -> None:

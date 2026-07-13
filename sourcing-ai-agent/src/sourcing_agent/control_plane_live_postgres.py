@@ -4362,10 +4362,13 @@ class LiveControlPlanePostgresAdapter:
         self,
         job_id: str,
         *,
+        table_name: str = "workflow_recovery_intents",
         classification: str = "",
         params: dict[str, Any] | None = None,
         requested_by: str = "",
     ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "workflow_recovery_intents":
+            raise ValueError("upsert_workflow_recovery_intent requires table_name=workflow_recovery_intents")
         if not self.should_prefer_read("workflow_recovery_intents"):
             return None
         self._ensure_runtime_coordination_schema()
@@ -4415,10 +4418,13 @@ class LiveControlPlanePostgresAdapter:
     def claim_workflow_recovery_intents(
         self,
         *,
+        table_name: str = "workflow_recovery_intents",
         lease_owner: str,
         lease_seconds: int = 300,
         limit: int = 1,
     ) -> list[dict[str, Any]]:
+        if _normalize_postgres_identifier(table_name) != "workflow_recovery_intents":
+            raise ValueError("claim_workflow_recovery_intents requires table_name=workflow_recovery_intents")
         if not self.should_prefer_read("workflow_recovery_intents"):
             return []
         self._ensure_runtime_coordination_schema()
@@ -4472,8 +4478,15 @@ class LiveControlPlanePostgresAdapter:
                 time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
     def mark_workflow_recovery_intent_consumed(
-        self, job_id: str, lease_owner: str = "", claimed_at: str = ""
+        self,
+        job_id: str,
+        *,
+        table_name: str = "workflow_recovery_intents",
+        lease_owner: str = "",
+        claimed_at: str = "",
     ) -> dict[str, Any] | None:
+        if _normalize_postgres_identifier(table_name) != "workflow_recovery_intents":
+            raise ValueError("mark_workflow_recovery_intent_consumed requires table_name=workflow_recovery_intents")
         if not self.should_prefer_read("workflow_recovery_intents"):
             return None
         normalized_job_id = str(job_id or "").strip()

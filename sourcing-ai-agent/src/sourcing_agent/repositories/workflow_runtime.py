@@ -397,7 +397,6 @@ RUNTIME_OUTBOX = TableDescriptor(
 
 # Read-path descriptors keyed by the ControlPlaneStore mapper method they replace.
 FROM_ROW_DESCRIPTORS = {
-    "_workflow_recovery_intent_from_row": WORKFLOW_RECOVERY_INTENTS,
     "_workflow_command_from_row": WORKFLOW_COMMANDS,
 }
 
@@ -505,6 +504,116 @@ class WorkflowRuntimeRepository(Repository):
             "Set SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only with a resolved Postgres DSN; "
             "SQLite durable runtime execution is not a normal path."
         )
+
+    def upsert_recovery_intent(
+        self,
+        job_id: str,
+        *,
+        classification: str = "",
+        params: dict[str, Any] | None = None,
+        requested_by: str = "",
+    ) -> dict[str, Any]:
+        """Create or re-arm the latest durable recovery request for one job."""
+
+        self._require_postgres_for_durable_runtime("workflow_recovery_intents")
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id:
+            return {}
+        if self._should_prefer_read("workflow_recovery_intents"):
+            row = self._call_native_write(
+                "upsert_workflow_recovery_intent",
+                table_name="workflow_recovery_intents",
+                job_id=normalized_job_id,
+                classification=str(classification or ""),
+                params=dict(params or {}),
+                requested_by=str(requested_by or ""),
+            )
+            if row is not None:
+                return self._recovery_intent_from_row(row)
+            if self._strict_authoritative("workflow_recovery_intents"):
+                self._raise_write_failure(
+                    table_name="workflow_recovery_intents",
+                    method_name="upsert_workflow_recovery_intent",
+                    reason="native writer returned no row",
+                )
+        self._raise_postgres_only_invariant(
+            table_name="workflow_recovery_intents",
+            method_name="upsert_recovery_intent",
+        )
+
+    def claim_recovery_intents(
+        self,
+        *,
+        lease_owner: str,
+        lease_seconds: int = 300,
+        limit: int = 1,
+    ) -> list[dict[str, Any]]:
+        """Claim pending or expired recovery requests for one daemon owner."""
+
+        self._require_postgres_for_durable_runtime("workflow_recovery_intents")
+        normalized_owner = str(lease_owner or "").strip()
+        if not normalized_owner:
+            return []
+        if self._should_prefer_read("workflow_recovery_intents"):
+            rows = self._call_native_write(
+                "claim_workflow_recovery_intents",
+                table_name="workflow_recovery_intents",
+                lease_owner=normalized_owner,
+                lease_seconds=max(1, int(lease_seconds or 300)),
+                limit=max(1, int(limit or 1)),
+            )
+            if rows is not None:
+                return [self._recovery_intent_from_row(row) for row in rows]
+            if self._strict_authoritative("workflow_recovery_intents"):
+                self._raise_write_failure(
+                    table_name="workflow_recovery_intents",
+                    method_name="claim_workflow_recovery_intents",
+                    reason="native writer returned no rows",
+                )
+        self._raise_postgres_only_invariant(
+            table_name="workflow_recovery_intents",
+            method_name="claim_recovery_intents",
+        )
+
+    def mark_recovery_intent_consumed(
+        self,
+        job_id: str,
+        *,
+        lease_owner: str = "",
+        claimed_at: str = "",
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_recovery_intents")
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id:
+            return {}
+        if self._should_prefer_read("workflow_recovery_intents"):
+            row = self._call_native_write(
+                "mark_workflow_recovery_intent_consumed",
+                table_name="workflow_recovery_intents",
+                job_id=normalized_job_id,
+                lease_owner=str(lease_owner or "").strip(),
+                claimed_at=str(claimed_at or "").strip(),
+            )
+            # A fresh upsert re-arms the row and intentionally makes a stale
+            # claim identity match no rows. That fenced no-op is not a write failure.
+            return self._recovery_intent_from_row(row) if row is not None else {}
+        self._raise_postgres_only_invariant(
+            table_name="workflow_recovery_intents",
+            method_name="mark_recovery_intent_consumed",
+        )
+
+    def get_recovery_intent(self, job_id: str) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("workflow_recovery_intents")
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id:
+            return {}
+        row = self._select_row(
+            "workflow_recovery_intents",
+            row_builder=self._recovery_intent_from_row,
+            where_sql="job_id = %s",
+            params=[normalized_job_id],
+        )
+        return row if row is not None else {}
 
     def append_workflow_event(
         self,
@@ -2184,6 +2293,9 @@ class WorkflowRuntimeRepository(Repository):
 
     def _entity_delta_from_row(self, row: Any) -> dict[str, Any]:
         return WORKFLOW_ENTITY_DELTAS.from_row(row)
+
+    def _recovery_intent_from_row(self, row: Any) -> dict[str, Any]:
+        return WORKFLOW_RECOVERY_INTENTS.from_row(row)
 
     def _workflow_event_from_row(self, row: Any) -> dict[str, Any]:
         return WORKFLOW_EVENTS.from_row(row)
