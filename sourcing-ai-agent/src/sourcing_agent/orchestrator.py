@@ -193,6 +193,7 @@ from .operation_runtime import (
     ACTION_ADD_TO_CRM,
     ACTION_CREATE_CRM_TASK,
     ACTION_EXPORT_CANDIDATES,
+    ACTION_REQUEST_PIN_FIELDS,
     ACTION_SEARCH_PROJECTION,
     ACTION_SET_CRM_STAGE,
     DEFAULT_ACTION_REGISTRY,
@@ -48213,6 +48214,15 @@ class SourcingOrchestrator:
         action_type = str(payload.get("action_type") or "").strip()
         if not action_type:
             return {"status": "invalid", "reason": "action_type is required"}
+        caller_metadata = dict(payload.get("metadata") or {})
+        reserved_pin_fields = sorted(
+            (ACTION_REQUEST_PIN_FIELDS & set(payload)) | (ACTION_REQUEST_PIN_FIELDS & set(caller_metadata))
+        )
+        if reserved_pin_fields:
+            return {
+                "status": "invalid",
+                "reason": ("action_request_pin_fields_are_owner_reserved:" + ",".join(reserved_pin_fields)),
+            }
         target_ref = dict(payload.get("target_ref") or {})
         input_payload = dict(payload.get("input") or payload.get("input_payload") or {})
         binding = self._bind_operation_projection_membership(
@@ -48236,7 +48246,7 @@ class SourcingOrchestrator:
                 actor=str(payload.get("actor") or "api").strip() or "api",
                 source="api.operation_action_submit",
                 metadata={
-                    **dict(payload.get("metadata") or {}),
+                    **caller_metadata,
                     **dict(binding.get("metadata") or {}),
                 },
             )
@@ -48887,6 +48897,23 @@ class SourcingOrchestrator:
         actor: str,
     ) -> dict[str, Any]:
         action_type = str(action.get("action_type") or "").strip()
+        try:
+            self.operation_runtime_writer.validate_persisted_action_request(
+                action=action,
+                operation_run=operation_run,
+            )
+        except OperationRuntimeStateConflict as exc:
+            return self._operation_run_control_response_record(
+                {
+                    "status": "conflict",
+                    "reason": exc.reason,
+                    "operation_run": operation_run,
+                    "action": action,
+                    "module_state_mutated": False,
+                    "request_schema_revalidation_required": True,
+                    "contract": "w9_operation_run_dispatch_v1",
+                }
+            )
         try:
             action_spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
         except KeyError:

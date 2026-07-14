@@ -304,6 +304,8 @@ export interface OperationRunRecord {
   progress: Record<string, unknown>;
   workflowRef: Record<string, unknown>;
   resultRef: Record<string, unknown>;
+  requestSchemaVersion?: string;
+  requestSchemaDigest?: string;
   controlState?: OperationRunControlState;
   statusSummary?: OperationRunStatusSummary;
   raw: Record<string, unknown>;
@@ -320,6 +322,8 @@ export interface OperationActionRecord {
   status: string;
   targetRef: Record<string, unknown>;
   input: Record<string, unknown>;
+  requestSchemaVersion?: string;
+  requestSchemaDigest?: string;
   createdAt: string;
   updatedAt: string;
   raw: Record<string, unknown>;
@@ -1084,6 +1088,8 @@ function deriveOperationRunRecord(record: Record<string, unknown>): OperationRun
     progress: asObjectRecord(record.progress),
     workflowRef: asObjectRecord(record.workflow_ref),
     resultRef: asObjectRecord(record.result_ref),
+    requestSchemaVersion: asOptionalString(record.request_schema_version),
+    requestSchemaDigest: asOptionalString(record.request_schema_digest),
     controlState: Object.keys(controlState).length ? deriveOperationRunControlState(controlState) : undefined,
     statusSummary: Object.keys(statusSummary).length ? deriveOperationRunStatusSummary(statusSummary) : undefined,
     raw: record,
@@ -1102,6 +1108,8 @@ function deriveOperationActionRecord(record: Record<string, unknown>): Operation
     status: asString(record.status),
     targetRef: asObjectRecord(record.target_ref),
     input: asObjectRecord(record.input),
+    requestSchemaVersion: asOptionalString(record.request_schema_version),
+    requestSchemaDigest: asOptionalString(record.request_schema_digest),
     createdAt: asString(record.created_at),
     updatedAt: asString(record.updated_at),
     raw: record,
@@ -6479,6 +6487,10 @@ function asString(value: unknown): string {
     return "";
   }
   return trimmed;
+}
+
+function asOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }
 
 function asNumber(value: unknown): number | null {

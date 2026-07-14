@@ -89,7 +89,7 @@ EXPECTED_ACTION_DISPATCH_ADAPTERS = {
     "external_intake": "",
 }
 
-SUBMIT_ACTION_CALL_INVENTORY_SHA256 = "9d9a79d8bfc49e742a81f959080cf1e2ccf8be5952b3bbb202aef49a8138ddbe"
+SUBMIT_ACTION_CALL_INVENTORY_SHA256 = "1db4e85dcc539941c87bc7d0bb33bdddc5f8f35a7af74da776d620acd5eef46b"
 
 
 def _class_method(tree: ast.Module, class_name: str, method_name: str) -> ast.FunctionDef:
@@ -212,6 +212,8 @@ class _WorkflowRuntimeRepoProbe:
             "operation_type": kwargs["operation_type"],
             "target_ref": dict(kwargs["target_ref"]),
             "input": dict(kwargs["input_payload"]),
+            "request_schema_version": kwargs["request_schema_version"],
+            "request_schema_digest": kwargs["request_schema_digest"],
             "approval_status": kwargs["approval_status"],
             "approval_policy": kwargs["approval_policy"],
             "budget": dict(kwargs["budget"]),
@@ -219,6 +221,22 @@ class _WorkflowRuntimeRepoProbe:
             "status": kwargs["status"],
             "metadata": dict(kwargs["metadata"]),
         }
+
+    def get_action(self, action_id: str) -> dict[str, Any]:
+        self.calls.append(("get_action", {"action_id": action_id}))
+        return {}
+
+    def get_action_by_idempotency(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("get_action_by_idempotency", dict(kwargs)))
+        return {}
+
+    def get_operation(self, operation_run_id: str) -> dict[str, Any]:
+        self.calls.append(("get_operation", {"operation_run_id": operation_run_id}))
+        return {}
+
+    def get_operation_by_idempotency(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("get_operation_by_idempotency", dict(kwargs)))
+        return {}
 
     def upsert_operation(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("upsert_operation", dict(kwargs)))
@@ -252,6 +270,7 @@ class _FailClosedOperationRuntimeWriter(OperationRuntimeWriter):
 
 class _DispatchProbe:
     _operation_dispatch_adapter_bindings = SourcingOrchestrator._operation_dispatch_adapter_bindings
+    operation_runtime_writer = SimpleNamespace(validate_persisted_action_request=lambda **_: None)
 
     @staticmethod
     def _operation_run_control_response_record(record: dict[str, Any]) -> dict[str, Any]:
@@ -287,12 +306,16 @@ def _plan_probe() -> SimpleNamespace:
     )
 
 
-def test_action_spec_and_registry_record_freeze_the_pre_request_schema_surface() -> None:
+def test_action_request_spec_and_registry_record_freeze_the_schema_foundation_surface() -> None:
+    assert operation_runtime.ActionSpec is operation_runtime.ActionRequestSpec
     assert tuple(field.name for field in fields(operation_runtime.ActionSpec)) == (
         "action_type",
         "owner_module",
         "operation_type",
         "dispatch_adapter",
+        "request_schema",
+        "request_schema_version",
+        "target_ref_field_aliases",
         "approval_policy",
         "budget_required",
         "description",
@@ -315,6 +338,12 @@ def test_action_spec_and_registry_record_freeze_the_pre_request_schema_surface()
     assert {
         action_type: DEFAULT_ACTION_REGISTRY.spec_for(action_type).dispatch_adapter for action_type in records
     } == EXPECTED_ACTION_DISPATCH_ADAPTERS
+    assert all(
+        DEFAULT_ACTION_REGISTRY.spec_for(action_type).request_schema is None
+        and DEFAULT_ACTION_REGISTRY.spec_for(action_type).request_schema_version == ""
+        and DEFAULT_ACTION_REGISTRY.spec_for(action_type).request_schema_digest == ""
+        for action_type in records
+    )
 
     base_record_keys = {
         "owner_module",
@@ -393,6 +422,7 @@ def test_submit_action_ast_freezes_keyword_only_surface_and_write_order() -> Non
             ("workspace_id", "str", "'default'"),
             ("conversation_id", "str", "''"),
             ("target_ref", "dict[str, Any] | None", "None"),
+            ("owner_bound_target_ref", "OwnerBoundTargetRef | None", "None"),
             ("input_payload", "dict[str, Any] | None", "None"),
             ("budget", "dict[str, Any] | None", "None"),
             ("idempotency_key", "str", "''"),
@@ -407,7 +437,7 @@ def test_submit_action_ast_freezes_keyword_only_surface_and_write_order() -> Non
     assert _signature_contract(method) == expected_signature
 
     call_inventory = _call_inventory(method)
-    assert len(call_inventory) == 41
+    assert len(call_inventory) == 32
     assert _call_inventory_digest(method) == SUBMIT_ACTION_CALL_INVENTORY_SHA256, _call_inventory_roots(method)
 
     repository_calls = sorted(
@@ -446,8 +476,8 @@ def test_submit_action_ast_freezes_keyword_only_surface_and_write_order() -> Non
     assert _signature_contract(kwargs_method)["kwarg"] == ("kwargs", "Any")
 
     runner_mutation = source.replace(
-        "        requested_identity = {\n",
-        "        runner(action)\n        requested_identity = {\n",
+        '        event_type = "ActionApprovalRequired" if spec.requires_approval else "AgentActionQueued"\n',
+        '        runner(action)\n        event_type = "ActionApprovalRequired" if spec.requires_approval else "AgentActionQueued"\n',
         1,
     )
     assert runner_mutation != source
@@ -482,6 +512,10 @@ def test_submit_action_preserves_current_validation_and_non_dispatch_baseline() 
     assert result.action["input"] == input_payload
     assert result.operation_run["status"] == "queued"
     assert [name for name, _ in repository.calls] == [
+        "get_action",
+        "get_action_by_idempotency",
+        "get_operation",
+        "get_operation_by_idempotency",
         "upsert_action",
         "append_operation_event",
         "upsert_operation",

@@ -1198,6 +1198,8 @@
         "status": { "type": "string" },
         "result_ref": { "$ref": "#/$defs/JsonObject" },
         "metadata": { "$ref": "#/$defs/JsonObject" },
+        "request_schema_version": { "type": "string" },
+        "request_schema_digest": { "type": "string" },
         "created_at": { "type": "string" },
         "updated_at": { "type": "string" }
       }
@@ -1218,6 +1220,8 @@
         "cost_budget": { "$ref": "#/$defs/JsonObject" },
         "result_ref": { "$ref": "#/$defs/JsonObject" },
         "metadata": { "$ref": "#/$defs/JsonObject" },
+        "request_schema_version": { "type": "string" },
+        "request_schema_digest": { "type": "string" },
         "control_state": { "$ref": "#/$defs/OperationRunControlState" },
         "status_summary": { "$ref": "#/$defs/OperationRunStatusSummary" },
         "started_at": { "type": "string" },

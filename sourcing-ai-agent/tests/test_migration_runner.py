@@ -126,10 +126,14 @@ class MigrationRunnerTest(unittest.TestCase):
             with conn.cursor() as cur:
                 runner_fp = _fingerprint(cur, runner_schema)
 
-        self.assertEqual(result.applied, ["0001_baseline"])
+        self.assertEqual(result.applied, ["0001_baseline", "0002_action_request_schema_pins"])
         self.assertEqual(result.stamped, [])
-        self.assertEqual(runner_fp["tables"], live_fp["tables"], "table set: schema created outside the migration ledger")
-        self.assertEqual(runner_fp["columns"], live_fp["columns"], "column: schema created outside the migration ledger")
+        self.assertEqual(
+            runner_fp["tables"], live_fp["tables"], "table set: schema created outside the migration ledger"
+        )
+        self.assertEqual(
+            runner_fp["columns"], live_fp["columns"], "column: schema created outside the migration ledger"
+        )
         self.assertEqual(runner_fp["indexes"], live_fp["indexes"], "index: schema created outside the migration ledger")
         self.assertEqual(len(runner_fp["tables"]), 83)
 
@@ -138,10 +142,13 @@ class MigrationRunnerTest(unittest.TestCase):
         with psycopg.connect(self.dsn, client_encoding="utf8") as conn:
             first = mr.apply_pending_migrations(conn, schema=schema)
             second = mr.apply_pending_migrations(conn, schema=schema)
-        self.assertEqual(first.applied, ["0001_baseline"])
+        self.assertEqual(first.applied, ["0001_baseline", "0002_action_request_schema_pins"])
         self.assertEqual(second.applied, [])
         self.assertEqual(second.stamped, [])
-        self.assertEqual(second.already_applied, ["0001_baseline"])
+        self.assertEqual(
+            second.already_applied,
+            ["0001_baseline", "0002_action_request_schema_pins"],
+        )
 
     def test_brownfield_schema_is_stamped_not_recreated(self) -> None:
         # Simulate a pre-runner DB: apply the baseline DDL DIRECTLY (no ledger), as the old
@@ -161,8 +168,8 @@ class MigrationRunnerTest(unittest.TestCase):
                 cur.execute("SELECT version FROM schema_migrations ORDER BY 1")
                 ledger = [r[0] for r in cur.fetchall()]
         self.assertEqual(result.stamped, ["0001_baseline"])
-        self.assertEqual(result.applied, [])
-        self.assertEqual(ledger, ["0001_baseline"])
+        self.assertEqual(result.applied, ["0002_action_request_schema_pins"])
+        self.assertEqual(ledger, ["0001_baseline", "0002_action_request_schema_pins"])
 
     def test_applied_migration_checksum_change_fails_closed(self) -> None:
         schema = self._fresh_schema("checksum")

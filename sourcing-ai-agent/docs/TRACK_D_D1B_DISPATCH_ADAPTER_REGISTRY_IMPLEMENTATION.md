@@ -1,8 +1,9 @@
 # Track D D1b — Explicit dispatch-adapter registry implementation
 
-> Status: Author implementation, non-live and review-pending (2026-07-14). This batch is behavior-equivalent to the
-> D1a dispatch inventory and does not claim D1 completion, independent-review `GO`, served Agent tools, live-provider
-> approval, manual/product signoff, or milestone closure.
+> Status: Current candidate `97a81d0` has a scope-local advisory `GO` (P0/P1/P2/P3=`0/0/0/0`); formal review remains
+> pending (2026-07-14). This batch is behavior-equivalent to the D1a dispatch inventory and does not claim D1
+> completion, formal independent-review `GO`, served Agent tools, live-provider approval, manual/product signoff, or
+> milestone closure.
 >
 > The scoped pinned review of `2184d64` found one false-green regression oracle: a hard-coded registered action-name
 > literal branch for an action other than the single mutated export case could pass all D1a+D1b tests. This follow-up
@@ -18,17 +19,18 @@
 > all 15 adjacent operation-runtime nodes, and command-spec tests stayed green. The follow-up at `e22d720` read the raw
 > class-dictionary function and rejected that wrapper. Its pinned re-review found a deeper source-location false-green:
 > arbitrary runtime bytecode could copy the canonical function's filename, first line, name, and qualname, causing
-> `inspect.getsource(code)` to return canonical text even though the rebound function executed another body. The current
-> author follow-up compiles the complete module source without executing it and compares the actual runtime code object
+> `inspect.getsource(code)` to return canonical text even though the rebound function executed another body. The fifth
+> follow-up compiles the complete module source without executing it and compares the actual runtime code object
 > with the uniquely qualified freshly compiled code object using a location-independent recursive fingerprint; a new
-> non-author re-review remains pending.
+> non-author scoped advisory re-review returned `GO`. That advisory is engineering evidence, not the formal gate.
 
 ## 1. Outcome and scope
 
 D1b removes action-name dispatch classification from `SourcingOrchestrator` and makes
-`operation_runtime.ActionRegistry` the single declaration owner for action-to-adapter selection. `ActionSpec` adds one
-normalized, closed-set `dispatch_adapter` string. The orchestrator owns a separate explicit five-entry mapping from
-those adapter identifiers to existing bound owner methods. Runtime selection is therefore:
+`operation_runtime.ActionRegistry` the single declaration owner for action-to-adapter selection. The then-current
+`ActionSpec` added one normalized, closed-set `dispatch_adapter` string; D1c now names the canonical type
+`ActionRequestSpec` and retains `ActionSpec` only as an object-identical alias. The orchestrator owns a separate explicit
+five-entry mapping from those adapter identifiers to existing bound owner methods. Runtime selection is therefore:
 
 ```text
 persisted action_type -> ActionRegistry.spec_for -> dispatch_adapter -> explicit bound-method map
@@ -78,8 +80,9 @@ the existing action-registry HTTP route; D1b therefore leaves its public payload
 | workflow-command exposure | `ActionSpec.allowed_workflow_command_types` plus existing command owner/Activity/control registries | unchanged from D1a | command metadata never synthesizes a dispatch adapter |
 | served Agent tool population | future D1 served predicate | empty in D1b | adapter presence alone is insufficient; request schema, Activity spine, revisioned model-safe result schema, and simulate preflight are still required |
 
-The persisted action record continues to carry only `action_type`; dispatch resolves the current registry declaration at
-runtime. Immutable request-schema version/digest pins are outside D1b and must not be emulated with metadata.
+The persisted action record's adapter identity continues to carry only `action_type`; dispatch resolves the current
+registry declaration at runtime. D1c separately adds physical request-schema version/digest pins to action/run rows;
+those pins are owner-derived identity and must not be emulated or overridden through metadata.
 
 ## 4. Regression and mutation coverage
 
@@ -120,19 +123,20 @@ runtime. Immutable request-schema version/digest pins are outside D1b and must n
 The probes use local dictionaries and methods only. They create no PG rows, files, network traffic, provider requests,
 model calls, or live side effects.
 
-## 5. Deferred D1 work
+## 5. D1 continuation work
 
-D1b satisfies only the explicit dispatch declaration prerequisite. A later bounded batch must still decide and land:
+D1b satisfies only the explicit dispatch declaration prerequisite. D1c has since landed the generic owner-bound target
+type, strict request-schema shape/validator, physical action/run pin columns, submit/approve/retry/dispatch copy/verify
+foundation, and R-029 residual for the schema-less bridge. Remaining work still includes:
 
-- the owner-bound target source and rejection of caller/model target aliases;
-- versioned request schemas and a physical residual ledger for temporarily schema-less actions;
-- immutable schema version/digest columns and copy/verify behavior at submit, approve, and retry-child creation;
+- reviewed per-action production schemas and owner-target binders; all 15 production actions remain schema-less;
 - revisioned model-safe result schemas and their validator owner;
-- the full served predicate and simulate-dispatch serializer preflight.
+- the full served predicate and simulate-dispatch serializer preflight;
+- bridge retirement only after every API-submittable action records zero compatibility hits for one release window.
 
-Until all predicates exist, the served Agent tool population is zero. D1b may receive a scoped asynchronous independent
-review without blocking unrelated non-live Track C or D implementation; a `NO-GO` would block promotion of this scope,
-not author progress elsewhere.
+Until all predicates exist, the served Agent tool population is zero. D1b's scope-local advisory `GO` does not replace
+its pending formal review. Formal review may proceed asynchronously without blocking unrelated non-live Track C or D
+implementation; a formal `NO-GO` would block promotion of this scope, not author progress elsewhere.
 
 ## 6. Validation
 
@@ -221,4 +225,5 @@ command-spec suite passed 16 tests; focused mypy reported no issues in three che
 and scoped whitespace diff check passed. The two forged-code regressions prove that copying all legacy source-location
 and function metadata keeps `inspect.getsource(code)` canonical for both methods while the actual runtime bytecode is
 different and the freshly compiled recursive fingerprint fails closed. This follow-up changes only the D1b test and
-this document; its evidence remains author evidence, and a fresh non-author re-review is required.
+this document. Candidate `97a81d0` subsequently received a scope-local advisory `GO` with no P0-P3 findings; author and
+advisory evidence still do not constitute the pending formal review.

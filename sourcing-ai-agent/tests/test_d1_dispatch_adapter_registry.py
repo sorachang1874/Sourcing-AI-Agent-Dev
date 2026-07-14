@@ -6,7 +6,7 @@ import inspect
 import textwrap
 from dataclasses import replace
 from pathlib import Path
-from types import CodeType, FunctionType
+from types import CodeType, FunctionType, SimpleNamespace
 from typing import Any, Callable
 
 import pytest
@@ -27,6 +27,8 @@ from sourcing_agent.orchestrator import SourcingOrchestrator
 
 
 class _DispatchProbe:
+    operation_runtime_writer = SimpleNamespace(validate_persisted_action_request=lambda **_: None)
+
     @staticmethod
     def _operation_run_control_response_record(record: dict[str, Any]) -> dict[str, Any]:
         return record
@@ -253,6 +255,23 @@ def _dispatch_operation_run_from_records(
 ) -> dict[str, Any]:
     action_type = str(action.get("action_type") or "").strip()
     try:
+        self.operation_runtime_writer.validate_persisted_action_request(
+            action=action,
+            operation_run=operation_run,
+        )
+    except OperationRuntimeStateConflict as exc:
+        return self._operation_run_control_response_record(
+            {
+                "status": "conflict",
+                "reason": exc.reason,
+                "operation_run": operation_run,
+                "action": action,
+                "module_state_mutated": False,
+                "request_schema_revalidation_required": True,
+                "contract": "w9_operation_run_dispatch_v1",
+            }
+        )
+    try:
         action_spec = DEFAULT_ACTION_REGISTRY.spec_for(action_type)
     except KeyError:
         action_spec = None
@@ -295,12 +314,14 @@ _EXPECTED_SELECTOR_BODY_DEPENDENCIES = frozenset(
     {
         "DEFAULT_ACTION_REGISTRY",
         "KeyError",
+        "OperationRuntimeStateConflict",
         "action",
         "action_spec",
         "action_type",
         "actor",
         "dispatch_adapter",
         "dispatch_handler",
+        "exc",
         "operation_run",
         "self",
         "str",

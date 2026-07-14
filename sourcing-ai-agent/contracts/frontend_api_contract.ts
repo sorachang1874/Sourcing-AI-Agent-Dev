@@ -1098,6 +1098,8 @@ export interface OperationActionRecord extends JsonObject {
   status?: string;
   result_ref?: JsonObject;
   metadata?: JsonObject;
+  request_schema_version?: string;
+  request_schema_digest?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -1115,6 +1117,8 @@ export interface OperationRunRecord extends JsonObject {
   cost_budget?: JsonObject;
   result_ref?: JsonObject;
   metadata?: JsonObject;
+  request_schema_version?: string;
+  request_schema_digest?: string;
   control_state?: OperationRunControlState;
   status_summary?: OperationRunStatusSummary;
   started_at?: string;

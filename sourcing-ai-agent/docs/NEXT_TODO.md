@@ -135,9 +135,27 @@
   当前观测为 15 actions、11 个 command-bearing actions、18 refs/17 unique commands、12 个 dispatch 分支命中；
   `external_intake` 已具 `excel.intake.run` metadata/owner/Activity/control，但 action adapter 仍 unsupported，不能把
   command readiness 当 dispatch readiness。初版 `d88161e` 的 pinned review=`NO-GO`；fixed-forward `bbad0fa` 的
-  pinned advisory re-review=`GO`（P0/P1/P2=`0/0/0`）。D1 `ActionRequestSpec`/schema pin/显式 adapter/served
-  predicate 仍未实施；formal review pending，scoped evidence 见
+  pinned advisory re-review=`GO`（P0/P1/P2=`0/0/0`）。显式 adapter 与 request-schema pin foundation 已分别
+  由 D1b/D1c 接续；formal review pending，scoped evidence 见
   `TRACK_D_D1A_ACTION_REQUEST_SURFACE_CHARACTERIZATION.md`。
+- [x] D1b explicit dispatch-adapter registry（2026-07-14）：`ActionRegistry` 声明 closed-set adapter，
+  orchestrator 只持五项显式 bound-method map；12 supported/3 unsupported 行为不变，无 dynamic lookup。
+  current candidate=`97a81d0`；scope-local advisory `GO`（P0/P1/P2/P3=`0/0/0/0`），formal review pending；
+  advisory 不得写成 formal `GO`。served Agent tool population 仍为零。
+- [x] D1c request-schema pin foundation（2026-07-14；implementation commit=本条所在 enclosing commit，exact hash
+  由 fresh pinned review request 绑定）：共享 D0 `ToolSpec`
+  validator/digest 的 `ActionRequestSpec`、owner-bound target、`agent_actions`/`operation_runs` 物理 version+digest、
+  submit/approve/retry/dispatch copy+verify 已落；全部 15 个 production actions 仍为 schema-less，物理空/空 pin
+  + durable compatibility-hit marker 是 R-029 迁移证据，served population=0。D1 OB-ID set=`∅`；本批唯一编号
+  义务是 Plan §6#3，已由 R-029 + 本条登记。owner 允许按既定 Track D plan 继续，因此 R-019 仅记录 D1c
+  pre-write validation/copy/verify 的一次有界例外；26-call ratchet 不增、无新 mutation/command/lock caller，
+  UoW/lease/lock-budget 边界仍未闭合。author stable-head evidence=`54+18`、migration `4`、operation `129`、
+  D0 model/tool `109`、command specs `16`、lint `58`、mypy `81/4`；fresh pinned formal review 必须绑定 enclosing
+  commit，hash-bound valid artifact 存在前 formal status=pending，且不阻断无关 non-live Track D 开发。
+- [ ] R-029：宽松 action-schema bridge 仅可在 production action 尚无 reviewed schema/owner binder 期间存在；
+  删除条件 = 全部 API-submittable actions（不是只看 served subset）连续一个 release window durable hit=0。
+  任一 action 进入 served 集前必须满足完整 schema+adapter+Activity+revisioned model-safe result+simulate serializer
+  谓词；当前 15/15 schema-less、served=0。
 - [ ] Agent Session 契约：服务端 agentic loop；工具面 = M1 manifest 导出 + 只读上下文工具 + model_native_search/fetch 转正；效果全部走 typed AgentAction（边界已由 `AGENT_OPERATION_CONTRACT.md` 规定）。
 - [ ] 第一垂直切片：公司身份自验证 loop（搜索→fetch 验证→歧义才升级人工），替代 PlanCard 手动修正 LinkedIn URL。
 - [ ] 之后：plan review 对话化、intent→plan 前门流式化；OpenClaw/Claude 作为可插拔外脑。

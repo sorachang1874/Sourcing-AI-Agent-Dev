@@ -5786,6 +5786,8 @@ class LiveControlPlanePostgresAdapter:
             "operation_type": operation_type,
             "target_ref_json": str(payload.get("target_ref_json") or "{}"),
             "input_json": str(payload.get("input_json") or "{}"),
+            "request_schema_version": str(payload.get("request_schema_version") or "").strip(),
+            "request_schema_digest": str(payload.get("request_schema_digest") or "").strip(),
             "approval_status": str(payload.get("approval_status") or "not_required").strip() or "not_required",
             "approval_policy": str(payload.get("approval_policy") or "not_required").strip() or "not_required",
             "budget_json": str(payload.get("budget_json") or "{}"),
@@ -5809,6 +5811,7 @@ class LiveControlPlanePostgresAdapter:
                 )
                 existing = _fetch_one_dict_row(cursor, cursor.fetchone())
                 if existing is not None:
+                    _assert_request_schema_pin_identity(existing, row_payload, record_kind="agent_action")
                     connection.commit()
                     return existing
                 cursor.execute(
@@ -5835,6 +5838,8 @@ class LiveControlPlanePostgresAdapter:
                 if existing is None:
                     cursor.execute("SELECT * FROM agent_actions WHERE action_id = %s LIMIT 1", (action_id,))
                     existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                if existing is not None:
+                    _assert_request_schema_pin_identity(existing, row_payload, record_kind="agent_action")
             connection.commit()
         return existing
 
@@ -6180,6 +6185,8 @@ class LiveControlPlanePostgresAdapter:
             "action_id": action_id,
             "owner_module": owner_module,
             "operation_type": operation_type,
+            "request_schema_version": str(payload.get("request_schema_version") or "").strip(),
+            "request_schema_digest": str(payload.get("request_schema_digest") or "").strip(),
             "status": str(payload.get("status") or "queued").strip() or "queued",
             "progress_json": str(payload.get("progress_json") or "{}"),
             "workflow_ref_json": str(payload.get("workflow_ref_json") or "{}"),
@@ -6205,6 +6212,7 @@ class LiveControlPlanePostgresAdapter:
                 )
                 existing = _fetch_one_dict_row(cursor, cursor.fetchone())
                 if existing is not None:
+                    _assert_request_schema_pin_identity(existing, row_payload, record_kind="operation_run")
                     connection.commit()
                     return existing
                 cursor.execute(
@@ -6234,6 +6242,8 @@ class LiveControlPlanePostgresAdapter:
                         (operation_run_id,),
                     )
                     existing = _fetch_one_dict_row(cursor, cursor.fetchone())
+                if existing is not None:
+                    _assert_request_schema_pin_identity(existing, row_payload, record_kind="operation_run")
             connection.commit()
         return existing
 
@@ -10803,6 +10813,24 @@ def _normalize_postgres_row_payload(payload: dict[str, Any]) -> dict[str, Any]:
             continue
         normalized[normalized_key] = _normalize_postgres_payload(value)
     return normalized
+
+
+def _assert_request_schema_pin_identity(
+    existing: dict[str, Any],
+    requested: dict[str, Any],
+    *,
+    record_kind: str,
+) -> None:
+    mismatches = [
+        column
+        for column in ("request_schema_version", "request_schema_digest")
+        if str(existing.get(column) or "").strip() != str(requested.get(column) or "").strip()
+    ]
+    if mismatches:
+        raise ValueError(
+            f"{str(record_kind or 'operation_record').strip()} immutable request schema pin collision: "
+            + ", ".join(mismatches)
+        )
 
 
 def _normalize_postgres_identifier(value: Any) -> str:

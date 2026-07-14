@@ -42,6 +42,24 @@ W8 operation persistence contract:
 - Unknown action types fail closed through the action registry.
 - Approval-required actions stop at `AgentAction(status='approval_required')` plus an append-only approval-required event until W9 approval execution APIs approve them.
 - Budget-required actions require explicit budget before persistence.
+- A schema-defined action request is owned by checked-in `ActionRequestSpec`; its single strict schema covers closed
+  `input_payload` and `target_ref` segments and is validated/digested by the same D0 `ToolSpec` owner used for model
+  tool parsing. Caller/model values may populate only `input_payload`; the action owner mints `OwnerBoundTargetRef`.
+  Raw caller targets, cross-owner targets, duplicate/alias owner fields, and caller-supplied pin fields fail before the
+  first action write.
+- `agent_actions` and `operation_runs` carry physical `request_schema_version` and `request_schema_digest` columns.
+  The action writer derives the pair from the checked-in registry; each immediate, approval-created, or retry-child run
+  copies the exact action pair. Native upsert replay, approval, retry, and dispatch compare the persisted action/run
+  pair and current registry before accepting work. Dispatch also revalidates a schema-defined persisted request before
+  invoking an adapter; drift returns a zero-module-mutation conflict.
+- Migration `0002_action_request_schema_pins.sql` permits only empty/empty or a normalized non-empty version paired with
+  a lowercase 64-hex digest. The database CHECK owns pair shape; repository/upsert and runtime preflight own immutable
+  replay identity. No direct-SQL immutability-trigger guarantee is claimed.
+- All 15 production actions remain on the R-029 schema-less compatibility bridge: physical pins are empty/empty and
+  durable action metadata plus the submission event record `request_schema_status=schema_less_compatibility` and
+  `request_schema_compatibility_hit=true`. Served Agent tool population remains zero. The bridge closes only after all
+  API-submittable actions have reviewed schemas/owner binders and the complete population records zero hits for one
+  release window; measuring only a future served subset is insufficient.
 - Operation-layer persistence must not create `workflow_commands`, CRM rows, projection rows, person assets/evidence/assertions, provider registry rows, or export artifacts. Those remain module-owner effects.
 - W9 backend operation controls may approve, reject, query, and cancel operation state through operation runtime tables and append-only events. They must still not execute module side effects or bypass workflow command owners.
 - `store.repos.workflow_runtime` is the public storage owner for `agent_actions`, `operation_runs`, `operation_events`,
@@ -76,6 +94,10 @@ W8 operation persistence contract:
   transaction commits, and it does not include linked OperationRun/AgentAction post-commit synchronization. Those
   guarantees require parent-command generation/lease-token ownership fencing and operation synchronization under
   `RESIDUAL_LEDGER.md` R-019; R-020 closure must not be used as evidence that the wider acquisition chain is atomic.
+- D1 request-pin preflights occur before approve/retry writes on a drift path, but the existing action/event/run and
+  retry reservation/child/event sequences are still multi-step. They do not close R-019's UoW, command-generation /
+  lease-token, post-sync, or total transaction-lock acquisition-budget boundaries. Concurrent identity/state changes
+  after the read preflight remain an R-019 race; the zero-write guarantee is limited to preflight-observed drift.
 
 ### Workflow Layer
 

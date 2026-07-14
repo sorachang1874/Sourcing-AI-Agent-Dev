@@ -835,6 +835,8 @@ export function mapOperationActionRecord(payload: unknown): OperationActionRecor
     status: asOptionalString(source.status),
     result_ref: source.result_ref ? asJsonObject(source.result_ref) : undefined,
     metadata: source.metadata ? asJsonObject(source.metadata) : undefined,
+    request_schema_version: asOptionalString(source.request_schema_version),
+    request_schema_digest: asOptionalString(source.request_schema_digest),
     created_at: asOptionalString(source.created_at),
     updated_at: asOptionalString(source.updated_at),
   };
@@ -858,6 +860,8 @@ export function mapOperationRunRecord(payload: unknown): OperationRunRecord {
     cost_budget: source.cost_budget ? asJsonObject(source.cost_budget) : undefined,
     result_ref: source.result_ref ? asJsonObject(source.result_ref) : undefined,
     metadata: source.metadata ? asJsonObject(source.metadata) : undefined,
+    request_schema_version: asOptionalString(source.request_schema_version),
+    request_schema_digest: asOptionalString(source.request_schema_digest),
     control_state: source.control_state ? mapOperationRunControlState(source.control_state) : undefined,
     status_summary: source.status_summary ? mapOperationRunStatusSummary(source.status_summary) : undefined,
     started_at: asOptionalString(source.started_at),

@@ -420,6 +420,30 @@ class ToolSpec:
             "budget_required": self.budget_required,
         }
 
+    @property
+    def input_schema_digest(self) -> str:
+        """Return the canonical SHA-256 identity of the validated input schema."""
+
+        return _sha256_json(self.input_schema)
+
+    def validate_input(self, value: Mapping[str, Any]) -> dict[str, JsonValue]:
+        """Validate and normalize one input object against this ToolSpec's schema.
+
+        D0 tool parsing and D1 action-request validation deliberately share this
+        implementation so the served schema cannot acquire a second validator.
+        """
+
+        try:
+            copied_value = _json_loads_strict(_canonical_json(value))
+        except (ModelToolRuntimeError, json.JSONDecodeError, ValueError) as exc:
+            raise ModelToolSchemaError("model_tool_argument_not_json") from exc
+        if not isinstance(copied_value, dict):
+            raise ModelToolSchemaError("model_tool_argument_must_be_object")
+        schema = _thaw_json(self.input_schema)
+        assert isinstance(schema, dict)
+        _validate_json_value(copied_value, schema, path="$")
+        return copied_value
+
 
 @dataclass(frozen=True, slots=True)
 class ModelIdentity:
@@ -1687,9 +1711,7 @@ def parse_openai_chat_sse(
             raise ModelToolSchemaError("model_tool_arguments_invalid_json") from exc
         if not isinstance(parsed_arguments, dict):
             raise ModelToolSchemaError("model_tool_arguments_must_be_object")
-        input_schema = _thaw_json(spec.input_schema)
-        assert isinstance(input_schema, dict)
-        _validate_json_value(parsed_arguments, input_schema, path="$")
+        parsed_arguments = spec.validate_input(parsed_arguments)
         canonical_arguments = _canonical_json(parsed_arguments)
         logical_key = (state["name"], hashlib.sha256(canonical_arguments.encode("utf-8")).hexdigest())
         occurrence_counts[logical_key] = occurrence_counts.get(logical_key, 0) + 1

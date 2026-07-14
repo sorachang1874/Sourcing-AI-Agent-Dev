@@ -92,8 +92,10 @@ This means the Agent UI/graph is not the next step after a single module cutover
 | `conversation_id` | parent conversation |
 | `action_type` | typed operation |
 | `operation_type` | durable operation class selected by the registry |
-| `target_ref_json` | projection/person/CRM/run/collection refs |
-| `input_json` | bounded structured input |
+| `target_ref_json` | owner-minted projection/person/CRM/run/collection refs for schema-defined actions; legacy caller refs only while R-029 remains open |
+| `input_json` | bounded caller/model request options validated by the action request schema when present |
+| `request_schema_version` | immutable checked-in request-schema version derived by the action owner; empty only for the R-029 bridge |
+| `request_schema_digest` | canonical lowercase SHA-256 schema identity paired with the version; empty only for the R-029 bridge |
 | `owner_module` | module responsible for execution |
 | `approval_status` | `not_required`, `required`, `approved`, `rejected`, `expired` |
 | `approval_policy` | default approval rule selected by the registry |
@@ -113,6 +115,8 @@ This means the Agent UI/graph is not the next step after a single module cutover
 | `action_id` | source Agent action |
 | `owner_module` | execution owner |
 | `operation_type` | `acquisition_run`, `profile_sample`, `crm_update`, `person_enrichment`, `export`, etc. |
+| `request_schema_version` | exact copy of the linked AgentAction pin at this run's creation point |
+| `request_schema_digest` | exact copy of the linked AgentAction schema digest; replay/dispatch must verify equality |
 | `status` | durable status |
 | `progress_json` | bounded progress |
 | `workflow_ref_json` | existing job/worker refs when applicable |
@@ -159,6 +163,45 @@ W8 foundation is active.
 - Budget-required actions fail closed unless an explicit budget is supplied.
 - Read-only/non-sensitive actions can create an idempotent queued `OperationRun`, but W8 still does not execute module side effects.
 - Operation persistence must not create `workflow_commands` or mutate CRM/projection/person asset/provider tables. Module execution remains owner-owned and belongs to W9+ action execution surfaces.
+
+### D1 Request Schema And Physical Pin Foundation
+
+The D1c foundation is active but no production action is served to a model.
+
+- `operation_runtime.ActionRequestSpec` is the checked-in action request-contract owner. `ActionSpec` is an
+  object-identical compatibility alias, not a second schema model. A non-empty request schema is a closed root object
+  with exactly two required closed object segments, `input_payload` and `target_ref`; the segments cannot share field
+  names, and declared target aliases cannot be caller-owned fields.
+- D0 `ToolSpec.validate_input(...)` and `ToolSpec.input_schema_digest` are the shared schema validator and canonical
+  digest owner. D1 must not add a second JSON-schema evaluator or digest algorithm.
+- For a schema-defined action, caller/model values enter only through `input_payload`. The action owner must mint an
+  `OwnerBoundTargetRef` whose owner equals `ActionRequestSpec.owner_module`; raw caller/model `target_ref`, a duplicate
+  owner field, or a declared alias override fails before persistence. The API and writer also reject caller-supplied
+  `request_schema_version` / `request_schema_digest` fields.
+- `agent_actions.request_schema_version` and `agent_actions.request_schema_digest` are physical owner-derived pins.
+  `operation_runs` copies the exact pair from the linked action at each actual creation point: immediate submit,
+  approval, and retry child. Idempotent native upserts reject a different pair. Approval and retry compare the
+  persisted action/current registry and any primary-key/unique-key existing run/child before their first write.
+- Dispatch revalidates a schema-defined persisted request and compares current registry, action, and run pins before
+  resolving an adapter. A mismatch returns a conflict with `module_state_mutated=false`; no owner adapter may run.
+- Migration `0002_action_request_schema_pins.sql` permits only empty/empty or a normalized non-empty version paired with
+  a lowercase 64-hex digest. The CHECK constrains physical shape; repository/upsert and runtime preflight enforce
+  immutable identity. This is not a claim that unrestricted direct SQL is protected by an immutability trigger.
+- All 15 production actions remain schema-less. Their physical pins are empty/empty and each submission records
+  `request_schema_status=schema_less_compatibility` plus `request_schema_compatibility_hit=true` in action metadata and
+  the submission event payload. This explicit migration path is tracked by R-029; it does not make an action served.
+- Served population remains zero until an action has a reviewed request schema and owner binder, D1b adapter,
+  Agent-callable Activity spine, revisioned model-safe result schema/validator, and a simulate dispatch that exercises
+  the result serializer. D1c does not add `GET /api/agent/tool-registry`.
+
+The Track D D1 OB-ID set is `∅`; the numbered D1 obligation is Plan §6 item 3, satisfied as bookkeeping by the R-029
+ledger and `NEXT_TODO` entries before the compatibility bridge is used. The bridge remains open until every
+API-submittable action, not only a future served subset, records zero compatibility hits for one release window.
+
+D1c adds zero-write pin-drift preflights but does not combine approval or retry state/event/run writes into one UoW.
+The generic operation/command atomicity, generation/lease fence, and transaction-lock budget limits in R-019 remain
+open and must not be inferred closed from this foundation. A concurrent identity insert after the read preflight can
+still reach that pre-existing multi-write window; only preflight-observed drift has the stated zero-write guarantee.
 
 ## W9 Implementation Status
 

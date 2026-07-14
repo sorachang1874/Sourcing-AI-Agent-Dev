@@ -103,6 +103,8 @@ AGENT_ACTIONS = TableDescriptor(
         Column("operation_type"),
         Column("target_ref_json", Kind.JSON, field="target_ref"),
         Column("input_json", Kind.JSON, field="input"),
+        Column("request_schema_version"),
+        Column("request_schema_digest"),
         Column("approval_status", default="not_required"),
         Column("approval_policy", default="not_required"),
         Column("budget_json", Kind.JSON, field="budget"),
@@ -125,6 +127,8 @@ OPERATION_RUNS = TableDescriptor(
         Column("action_id"),
         Column("owner_module"),
         Column("operation_type"),
+        Column("request_schema_version"),
+        Column("request_schema_digest"),
         Column("status", default="queued"),
         Column("progress_json", Kind.JSON, field="progress"),
         Column("workflow_ref_json", Kind.JSON, field="workflow_ref"),
@@ -1615,6 +1619,8 @@ class WorkflowRuntimeRepository(Repository):
         operation_type: str,
         target_ref: dict[str, Any] | None = None,
         input_payload: dict[str, Any] | None = None,
+        request_schema_version: str = "",
+        request_schema_digest: str = "",
         approval_status: str = "not_required",
         approval_policy: str = "not_required",
         budget: dict[str, Any] | None = None,
@@ -1650,6 +1656,8 @@ class WorkflowRuntimeRepository(Repository):
                 "operation_type": normalized_operation_type,
                 "target_ref": target_ref or {},
                 "input": input_payload or {},
+                "request_schema_version": str(request_schema_version or "").strip(),
+                "request_schema_digest": str(request_schema_digest or "").strip(),
                 "approval_status": approval_status,
                 "approval_policy": approval_policy,
                 "budget": budget or {},
@@ -1686,6 +1694,27 @@ class WorkflowRuntimeRepository(Repository):
             row_builder=self._action_from_row,
             where_sql="action_id = %s",
             params=[normalized_action_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        return {}
+
+    def get_action_by_idempotency(
+        self,
+        *,
+        workspace_id: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("agent_actions")
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        normalized_idempotency = str(idempotency_key or "").strip()
+        if not normalized_idempotency:
+            return {}
+        postgres_row = self._select_row(
+            "agent_actions",
+            row_builder=self._action_from_row,
+            where_sql="workspace_id = %s AND idempotency_key = %s",
+            params=[normalized_workspace_id, normalized_idempotency],
         )
         if postgres_row is not None:
             return postgres_row
@@ -1846,6 +1875,8 @@ class WorkflowRuntimeRepository(Repository):
         action_id: str,
         owner_module: str,
         operation_type: str,
+        request_schema_version: str = "",
+        request_schema_digest: str = "",
         status: str = "queued",
         progress: dict[str, Any] | None = None,
         workflow_ref: dict[str, Any] | None = None,
@@ -1880,6 +1911,8 @@ class WorkflowRuntimeRepository(Repository):
                 "action_id": normalized_action_id,
                 "owner_module": normalized_owner,
                 "operation_type": normalized_operation_type,
+                "request_schema_version": str(request_schema_version or "").strip(),
+                "request_schema_digest": str(request_schema_digest or "").strip(),
                 "status": status,
                 "progress": progress or {},
                 "workflow_ref": workflow_ref or {},
@@ -1918,6 +1951,27 @@ class WorkflowRuntimeRepository(Repository):
             row_builder=self._operation_from_row,
             where_sql="operation_run_id = %s",
             params=[normalized_operation_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        return {}
+
+    def get_operation_by_idempotency(
+        self,
+        *,
+        workspace_id: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        self._require_postgres_for_durable_runtime("operation_runs")
+        normalized_workspace_id = str(workspace_id or "default").strip() or "default"
+        normalized_idempotency = str(idempotency_key or "").strip()
+        if not normalized_idempotency:
+            return {}
+        postgres_row = self._select_row(
+            "operation_runs",
+            row_builder=self._operation_from_row,
+            where_sql="workspace_id = %s AND idempotency_key = %s",
+            params=[normalized_workspace_id, normalized_idempotency],
         )
         if postgres_row is not None:
             return postgres_row

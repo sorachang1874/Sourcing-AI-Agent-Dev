@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from hashlib import sha1
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Mapping
 
 from sourcing_agent.durable_runtime import (
     ACQUISITION_RUN_CREATE_COMMAND_TYPE,
@@ -31,6 +33,7 @@ from sourcing_agent.durable_runtime import (
     workflow_command_control_policy,
     workflow_command_display_contract,
 )
+from sourcing_agent.model_tool_runtime import ModelToolSchemaError, ToolSpec
 
 ACTION_PLAN_ACQUISITION = "plan_acquisition"
 ACTION_START_ACQUISITION_RUN = "start_acquisition_run"
@@ -68,14 +71,67 @@ ACTION_DISPATCH_ADAPTERS = frozenset(
         DISPATCH_ADAPTER_CRM_WRITER,
     }
 )
+ACTION_REQUEST_PIN_FIELDS = frozenset(
+    {
+        "request_schema_version",
+        "request_schema_digest",
+    }
+)
+REQUEST_SCHEMA_STATUS_VALIDATED = "validated"
+REQUEST_SCHEMA_STATUS_SCHEMA_LESS = "schema_less_compatibility"
+_REQUEST_SCHEMA_VERSION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
+
+
+class ActionRequestValidationError(ValueError):
+    """Raised before persistence when an action request violates its checked-in contract."""
+
+
+def _freeze_action_request_json(value: Any) -> Any:
+    if isinstance(value, dict):
+        return MappingProxyType({key: _freeze_action_request_json(child) for key, child in value.items()})
+    if isinstance(value, list):
+        return tuple(_freeze_action_request_json(child) for child in value)
+    return value
 
 
 @dataclass(frozen=True)
-class ActionSpec:
+class OwnerBoundTargetRef:
+    """A target reference minted by the action owner rather than supplied by a caller/model."""
+
+    owner_module: str
+    target_ref: Mapping[str, Any]
+
+    def __post_init__(self) -> None:
+        normalized_owner = str(self.owner_module or "").strip()
+        if not normalized_owner or normalized_owner != self.owner_module:
+            raise ActionRequestValidationError("action_request_target_owner_invalid")
+        try:
+            copied = json.loads(
+                json.dumps(
+                    self.target_ref,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
+            )
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ActionRequestValidationError("action_request_target_not_json") from exc
+        if not isinstance(copied, dict):
+            raise ActionRequestValidationError("action_request_target_must_be_object")
+        object.__setattr__(self, "owner_module", normalized_owner)
+        object.__setattr__(self, "target_ref", _freeze_action_request_json(copied))
+
+
+@dataclass(frozen=True)
+class ActionRequestSpec:
     action_type: str
     owner_module: str
     operation_type: str
     dispatch_adapter: str = ""
+    request_schema: Mapping[str, Any] | None = None
+    request_schema_version: str = ""
+    target_ref_field_aliases: tuple[tuple[str, tuple[str, ...]], ...] = ()
     approval_policy: str = APPROVAL_NOT_REQUIRED
     budget_required: bool = False
     description: str = ""
@@ -84,9 +140,127 @@ class ActionSpec:
     allowed_workflow_command_types: tuple[str, ...] = ()
     default_workflow_command_type: str = ""
 
+    def __post_init__(self) -> None:
+        normalized_version = str(self.request_schema_version or "").strip()
+        if self.request_schema is None:
+            if normalized_version or self.target_ref_field_aliases:
+                raise ValueError("schema-less action cannot declare request schema metadata")
+            return
+        if (
+            not normalized_version
+            or normalized_version != self.request_schema_version
+            or _REQUEST_SCHEMA_VERSION_PATTERN.fullmatch(normalized_version) is None
+        ):
+            raise ValueError("request_schema_version is required and must be normalized")
+        try:
+            tool_spec = self._tool_spec()
+        except ModelToolSchemaError as exc:
+            raise ValueError(f"invalid action request schema: {exc}") from exc
+        schema_record = tool_spec.to_fingerprint_record()["input_schema"]
+        if not isinstance(schema_record, dict):
+            raise ValueError("action request schema must be an object")
+        schema = dict(schema_record)
+        properties = schema.get("properties")
+        if (
+            not isinstance(properties, dict)
+            or set(properties) != {"input_payload", "target_ref"}
+            or set(schema.get("required") or []) != {"input_payload", "target_ref"}
+            or schema.get("additionalProperties") is not False
+        ):
+            raise ValueError(
+                "action request schema must be a closed object with required input_payload and target_ref segments"
+            )
+        input_schema = properties.get("input_payload")
+        target_schema = properties.get("target_ref")
+        if any(
+            not isinstance(segment, dict)
+            or segment.get("type") != "object"
+            or segment.get("additionalProperties") is not False
+            for segment in (input_schema, target_schema)
+        ):
+            raise ValueError("action request input_payload and target_ref segments must be closed objects")
+        assert isinstance(input_schema, dict)
+        assert isinstance(target_schema, dict)
+        input_fields = set(dict(input_schema.get("properties") or {}))
+        target_fields = set(dict(target_schema.get("properties") or {}))
+        overlap = sorted(input_fields & target_fields)
+        if overlap:
+            raise ValueError(f"action request fields cannot have dual owners: {','.join(overlap)}")
+        seen_aliases: set[str] = set()
+        normalized_alias_rows: list[tuple[str, tuple[str, ...]]] = []
+        for target_field, aliases in self.target_ref_field_aliases:
+            normalized_target = str(target_field or "").strip()
+            normalized_aliases = tuple(str(alias or "").strip() for alias in aliases)
+            if (
+                normalized_target not in target_fields
+                or normalized_target != target_field
+                or not normalized_aliases
+                or any(not alias for alias in normalized_aliases)
+                or len(set(normalized_aliases)) != len(normalized_aliases)
+            ):
+                raise ValueError("action request target_ref_field_aliases are invalid")
+            forbidden = set(normalized_aliases) & (input_fields | target_fields | seen_aliases)
+            if forbidden:
+                raise ValueError(f"action request target aliases cannot be caller-owned: {','.join(sorted(forbidden))}")
+            seen_aliases.update(normalized_aliases)
+            normalized_alias_rows.append((normalized_target, normalized_aliases))
+        object.__setattr__(self, "request_schema", tool_spec.input_schema)
+        object.__setattr__(self, "request_schema_version", normalized_version)
+        object.__setattr__(self, "target_ref_field_aliases", tuple(normalized_alias_rows))
+
+    def _tool_spec(self) -> ToolSpec:
+        if self.request_schema is None:
+            raise ValueError("schema-less action has no request ToolSpec")
+        return ToolSpec(
+            name=self.action_type,
+            description=self.description or f"Validated request for {self.action_type}",
+            input_schema=self.request_schema,
+            schema_version=self.request_schema_version,
+            approval_policy=self.approval_policy,
+            budget_required=self.budget_required,
+        )
+
+    @property
+    def request_schema_digest(self) -> str:
+        if self.request_schema is None:
+            return ""
+        return self._tool_spec().input_schema_digest
+
+    @property
+    def has_request_schema(self) -> bool:
+        return self.request_schema is not None
+
+    def validate_request(
+        self,
+        *,
+        input_payload: Mapping[str, Any],
+        target_ref: Mapping[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        if self.request_schema is None:
+            raise ActionRequestValidationError("action_request_schema_missing")
+        try:
+            normalized = self._tool_spec().validate_input(
+                {
+                    "input_payload": input_payload,
+                    "target_ref": target_ref,
+                }
+            )
+        except ModelToolSchemaError as exc:
+            raise ActionRequestValidationError(f"action_request_schema_validation_failed:{exc}") from exc
+        normalized_input = normalized.get("input_payload")
+        normalized_target = normalized.get("target_ref")
+        if not isinstance(normalized_input, dict) or not isinstance(normalized_target, dict):
+            raise ActionRequestValidationError("action_request_schema_segments_invalid")
+        return dict(normalized_input), dict(normalized_target)
+
     @property
     def requires_approval(self) -> bool:
         return self.approval_policy == APPROVAL_REQUIRED
+
+
+# Object-identical compatibility alias while production call sites move to the
+# canonical ActionRequestSpec owner. It does not preserve a second schema model.
+ActionSpec = ActionRequestSpec
 
 
 @dataclass(frozen=True)
@@ -116,12 +290,12 @@ class OperationActionDisplayContract:
 
 
 class ActionRegistry:
-    def __init__(self, mapping: dict[str, ActionSpec] | None = None) -> None:
-        self._mapping: dict[str, ActionSpec] = {}
+    def __init__(self, mapping: dict[str, ActionRequestSpec] | None = None) -> None:
+        self._mapping: dict[str, ActionRequestSpec] = {}
         for action_type, spec in dict(mapping or {}).items():
             self.register(action_type, spec)
 
-    def register(self, action_type: str, spec: ActionSpec) -> None:
+    def register(self, action_type: str, spec: ActionRequestSpec) -> None:
         normalized_type = str(action_type or "").strip()
         if not normalized_type:
             raise ValueError("action_type is required")
@@ -170,7 +344,7 @@ class ActionRegistry:
             raise ValueError(f"action_type {normalized_type!r} is already registered")
         self._mapping[normalized_type] = spec
 
-    def spec_for(self, action_type: str) -> ActionSpec:
+    def spec_for(self, action_type: str) -> ActionRequestSpec:
         normalized_type = str(action_type or "").strip()
         spec = self._mapping.get(normalized_type)
         if spec is None:
@@ -687,6 +861,276 @@ class OperationRuntimeWriter:
         self.store = store
         self.action_registry = action_registry or DEFAULT_ACTION_REGISTRY
 
+    @staticmethod
+    def _request_schema_pin(spec: ActionRequestSpec) -> tuple[str, str]:
+        if not spec.has_request_schema:
+            return "", ""
+        return spec.request_schema_version, spec.request_schema_digest
+
+    @staticmethod
+    def _assert_no_request_pin_override(metadata: Mapping[str, Any]) -> None:
+        forbidden = sorted(ACTION_REQUEST_PIN_FIELDS & set(metadata))
+        if forbidden:
+            raise ActionRequestValidationError(f"action_request_pin_fields_are_owner_reserved:{','.join(forbidden)}")
+
+    def _prepare_submission_request(
+        self,
+        *,
+        spec: ActionRequestSpec,
+        target_ref: Mapping[str, Any],
+        owner_bound_target_ref: OwnerBoundTargetRef | None,
+        input_payload: Mapping[str, Any],
+        metadata: Mapping[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any], str, str, str]:
+        self._assert_no_request_pin_override(metadata)
+        request_schema_version, request_schema_digest = self._request_schema_pin(spec)
+        if not spec.has_request_schema:
+            if owner_bound_target_ref is not None:
+                raise ActionRequestValidationError("schema_less_action_cannot_accept_owner_bound_target")
+            return (
+                dict(input_payload),
+                dict(target_ref),
+                request_schema_version,
+                request_schema_digest,
+                REQUEST_SCHEMA_STATUS_SCHEMA_LESS,
+            )
+        if target_ref:
+            raise ActionRequestValidationError("action_request_target_must_be_owner_bound")
+        if owner_bound_target_ref is None:
+            raise ActionRequestValidationError("action_request_owner_bound_target_required")
+        if owner_bound_target_ref.owner_module != spec.owner_module:
+            raise ActionRequestValidationError("action_request_target_owner_mismatch")
+        normalized_input, normalized_target = spec.validate_request(
+            input_payload=input_payload,
+            target_ref=owner_bound_target_ref.target_ref,
+        )
+        return (
+            normalized_input,
+            normalized_target,
+            request_schema_version,
+            request_schema_digest,
+            REQUEST_SCHEMA_STATUS_VALIDATED,
+        )
+
+    def validate_persisted_action_request(
+        self,
+        *,
+        action: Mapping[str, Any],
+        operation_run: Mapping[str, Any] | None = None,
+    ) -> ActionRequestSpec:
+        action_record = dict(action or {})
+        action_type = str(action_record.get("action_type") or "").strip()
+        try:
+            spec = self.action_registry.spec_for(action_type)
+        except KeyError as exc:
+            raise OperationRuntimeStateConflict(
+                "operation_action_request_schema_unknown_action", action_record
+            ) from exc
+        expected_version, expected_digest = self._request_schema_pin(spec)
+        action_version = str(action_record.get("request_schema_version") or "").strip()
+        action_digest = str(action_record.get("request_schema_digest") or "").strip()
+        if str(action_record.get("owner_module") or "").strip() != spec.owner_module:
+            raise OperationRuntimeStateConflict("operation_action_request_owner_conflict", action_record)
+        if action_version != expected_version or action_digest != expected_digest:
+            raise OperationRuntimeStateConflict("operation_action_request_schema_pin_conflict", action_record)
+        if spec.has_request_schema:
+            persisted_input = action_record.get("input")
+            persisted_target = action_record.get("target_ref")
+            if not isinstance(persisted_input, Mapping) or not isinstance(persisted_target, Mapping):
+                raise OperationRuntimeStateConflict(
+                    "operation_action_request_schema_validation_conflict",
+                    action_record,
+                )
+            try:
+                spec.validate_request(
+                    input_payload=persisted_input,
+                    target_ref=persisted_target,
+                )
+            except ActionRequestValidationError as exc:
+                raise OperationRuntimeStateConflict(
+                    "operation_action_request_schema_validation_conflict",
+                    action_record,
+                ) from exc
+        if operation_run is not None:
+            operation_record = dict(operation_run or {})
+            if (
+                str(operation_record.get("action_id") or "").strip()
+                != str(action_record.get("action_id") or "").strip()
+                or (str(operation_record.get("workspace_id") or "default").strip() or "default")
+                != (str(action_record.get("workspace_id") or "default").strip() or "default")
+                or str(operation_record.get("owner_module") or "").strip()
+                != str(action_record.get("owner_module") or "").strip()
+                or str(operation_record.get("operation_type") or "").strip()
+                != str(action_record.get("operation_type") or "").strip()
+            ):
+                raise OperationRuntimeStateConflict(
+                    "operation_run_request_identity_conflict",
+                    operation_record,
+                )
+            if (
+                str(operation_record.get("request_schema_version") or "").strip() != action_version
+                or str(operation_record.get("request_schema_digest") or "").strip() != action_digest
+            ):
+                raise OperationRuntimeStateConflict(
+                    "operation_run_request_schema_pin_conflict",
+                    operation_record,
+                )
+        return spec
+
+    @staticmethod
+    def _assert_operation_request_pin(
+        operation_run: Mapping[str, Any],
+        *,
+        action: Mapping[str, Any],
+    ) -> None:
+        if (
+            str(operation_run.get("request_schema_version") or "").strip()
+            != str(action.get("request_schema_version") or "").strip()
+            or str(operation_run.get("request_schema_digest") or "").strip()
+            != str(action.get("request_schema_digest") or "").strip()
+        ):
+            raise OperationRuntimeStateConflict(
+                "operation_run_request_schema_pin_conflict",
+                dict(operation_run or {}),
+            )
+
+    def _assert_action_replay_identity(
+        self,
+        action: Mapping[str, Any],
+        *,
+        expected_action: Mapping[str, Any],
+    ) -> None:
+        persisted_version = str(action.get("request_schema_version") or "").strip()
+        persisted_digest = str(action.get("request_schema_digest") or "").strip()
+        if (
+            persisted_version != str(expected_action.get("request_schema_version") or "").strip()
+            or persisted_digest != str(expected_action.get("request_schema_digest") or "").strip()
+        ):
+            raise OperationRuntimeStateConflict(
+                "operation_action_request_schema_pin_conflict",
+                dict(action or {}),
+            )
+        target_ref = action.get("target_ref")
+        input_payload = action.get("input")
+        budget = action.get("budget")
+        if (
+            not isinstance(target_ref, Mapping)
+            or not isinstance(input_payload, Mapping)
+            or not isinstance(budget, Mapping)
+        ):
+            raise OperationRuntimeStateConflict(
+                "operation_action_idempotency_payload_conflict",
+                dict(action or {}),
+            )
+        persisted_identity = {
+            "action_id": str(action.get("action_id") or "").strip(),
+            "workspace_id": str(action.get("workspace_id") or "default").strip() or "default",
+            "conversation_id": str(action.get("conversation_id") or "").strip(),
+            "action_type": str(action.get("action_type") or "").strip(),
+            "owner_module": str(action.get("owner_module") or "").strip(),
+            "operation_type": str(action.get("operation_type") or "").strip(),
+            "target_ref": dict(target_ref),
+            "input": dict(input_payload),
+            "budget": dict(budget),
+            "request_schema_version": persisted_version,
+            "request_schema_digest": persisted_digest,
+            "approval_policy": str(action.get("approval_policy") or "").strip(),
+            "idempotency_key": str(action.get("idempotency_key") or "").strip(),
+        }
+        if persisted_identity != dict(expected_action):
+            raise OperationRuntimeStateConflict(
+                "operation_action_idempotency_payload_conflict",
+                dict(action or {}),
+            )
+        self.validate_persisted_action_request(action=action)
+
+    def _preflight_action_replay(self, *, expected_action: Mapping[str, Any]) -> dict[str, Any]:
+        action_id = str(expected_action.get("action_id") or "").strip()
+        workspace_id = str(expected_action.get("workspace_id") or "default").strip() or "default"
+        idempotency_key = str(expected_action.get("idempotency_key") or "").strip()
+        candidates = (
+            self.store.repos.workflow_runtime.get_action(action_id),
+            self.store.repos.workflow_runtime.get_action_by_idempotency(
+                workspace_id=workspace_id,
+                idempotency_key=idempotency_key,
+            ),
+        )
+        matched: dict[str, Any] = {}
+        seen_ids: set[str] = set()
+        for candidate in candidates:
+            if not candidate:
+                continue
+            candidate_id = str(candidate.get("action_id") or "").strip()
+            if candidate_id in seen_ids:
+                continue
+            seen_ids.add(candidate_id)
+            self._assert_action_replay_identity(candidate, expected_action=expected_action)
+            matched = dict(candidate)
+        return matched
+
+    def _assert_operation_replay_identity(
+        self,
+        operation_run: Mapping[str, Any],
+        *,
+        action: Mapping[str, Any],
+        operation_run_id: str,
+        idempotency_key: str,
+        identity_conflict_reason: str,
+    ) -> None:
+        self._assert_operation_request_pin(operation_run, action=action)
+        expected_identity = {
+            "operation_run_id": str(operation_run_id or "").strip(),
+            "workspace_id": str(action.get("workspace_id") or "default").strip() or "default",
+            "action_id": str(action.get("action_id") or "").strip(),
+            "owner_module": str(action.get("owner_module") or "").strip(),
+            "operation_type": str(action.get("operation_type") or "").strip(),
+            "idempotency_key": str(idempotency_key or "").strip(),
+        }
+        persisted_identity = {
+            "operation_run_id": str(operation_run.get("operation_run_id") or "").strip(),
+            "workspace_id": str(operation_run.get("workspace_id") or "default").strip() or "default",
+            "action_id": str(operation_run.get("action_id") or "").strip(),
+            "owner_module": str(operation_run.get("owner_module") or "").strip(),
+            "operation_type": str(operation_run.get("operation_type") or "").strip(),
+            "idempotency_key": str(operation_run.get("idempotency_key") or "").strip(),
+        }
+        if persisted_identity != expected_identity:
+            raise OperationRuntimeStateConflict(identity_conflict_reason, dict(operation_run or {}))
+
+    def _preflight_operation_replay(
+        self,
+        *,
+        action: Mapping[str, Any],
+        operation_run_id: str,
+        idempotency_key: str,
+        identity_conflict_reason: str,
+    ) -> dict[str, Any]:
+        candidates = (
+            self.store.repos.workflow_runtime.get_operation(operation_run_id),
+            self.store.repos.workflow_runtime.get_operation_by_idempotency(
+                workspace_id=str(action.get("workspace_id") or "default").strip() or "default",
+                idempotency_key=idempotency_key,
+            ),
+        )
+        matched: dict[str, Any] = {}
+        seen_ids: set[str] = set()
+        for candidate in candidates:
+            if not candidate:
+                continue
+            candidate_id = str(candidate.get("operation_run_id") or "").strip()
+            if candidate_id in seen_ids:
+                continue
+            seen_ids.add(candidate_id)
+            self._assert_operation_replay_identity(
+                candidate,
+                action=action,
+                operation_run_id=operation_run_id,
+                idempotency_key=idempotency_key,
+                identity_conflict_reason=identity_conflict_reason,
+            )
+            matched = dict(candidate)
+        return matched
+
     def submit_action(
         self,
         *,
@@ -694,6 +1138,7 @@ class OperationRuntimeWriter:
         workspace_id: str = "default",
         conversation_id: str = "",
         target_ref: dict[str, Any] | None = None,
+        owner_bound_target_ref: OwnerBoundTargetRef | None = None,
         input_payload: dict[str, Any] | None = None,
         budget: dict[str, Any] | None = None,
         idempotency_key: str = "",
@@ -702,12 +1147,26 @@ class OperationRuntimeWriter:
         metadata: dict[str, Any] | None = None,
     ) -> OperationSubmissionResult:
         spec = self.action_registry.spec_for(action_type)
+        caller_metadata = dict(metadata or {})
+        (
+            normalized_input_payload,
+            normalized_target_ref,
+            request_schema_version,
+            request_schema_digest,
+            request_schema_status,
+        ) = self._prepare_submission_request(
+            spec=spec,
+            target_ref=dict(target_ref or {}),
+            owner_bound_target_ref=owner_bound_target_ref,
+            input_payload=dict(input_payload or {}),
+            metadata=caller_metadata,
+        )
         normalized_workspace_id = str(workspace_id or "default").strip() or "default"
         normalized_idempotency = str(idempotency_key or "").strip() or default_action_idempotency_key(
             workspace_id=normalized_workspace_id,
             action_type=spec.action_type,
-            target_ref=target_ref or {},
-            input_payload=input_payload or {},
+            target_ref=normalized_target_ref,
+            input_payload=normalized_input_payload,
         )
         budget_payload = dict(budget or {})
         if spec.budget_required and not budget_payload:
@@ -719,6 +1178,42 @@ class OperationRuntimeWriter:
         )
         approval_status = APPROVAL_REQUIRED if spec.requires_approval else APPROVAL_NOT_REQUIRED
         action_status = "approval_required" if spec.requires_approval else "queued"
+        expected_action_identity = {
+            "action_id": action_id,
+            "workspace_id": normalized_workspace_id,
+            "conversation_id": str(conversation_id or "").strip(),
+            "action_type": spec.action_type,
+            "owner_module": spec.owner_module,
+            "operation_type": spec.operation_type,
+            "target_ref": normalized_target_ref,
+            "input": normalized_input_payload,
+            "budget": budget_payload,
+            "request_schema_version": request_schema_version,
+            "request_schema_digest": request_schema_digest,
+            "approval_policy": spec.approval_policy,
+            "idempotency_key": normalized_idempotency,
+        }
+        self._preflight_action_replay(expected_action=expected_action_identity)
+        operation_id = ""
+        if not spec.requires_approval:
+            operation_id = operation_run_id_for(
+                action_id=action_id,
+                operation_type=spec.operation_type,
+                idempotency_key=normalized_idempotency,
+            )
+            self._preflight_operation_replay(
+                action={
+                    "action_id": action_id,
+                    "workspace_id": normalized_workspace_id,
+                    "owner_module": spec.owner_module,
+                    "operation_type": spec.operation_type,
+                    "request_schema_version": request_schema_version,
+                    "request_schema_digest": request_schema_digest,
+                },
+                operation_run_id=operation_id,
+                idempotency_key=normalized_idempotency,
+                identity_conflict_reason="operation_run_idempotency_payload_conflict",
+            )
         action = self.store.repos.workflow_runtime.upsert_action(
             action_id=action_id,
             workspace_id=normalized_workspace_id,
@@ -726,8 +1221,10 @@ class OperationRuntimeWriter:
             action_type=spec.action_type,
             owner_module=spec.owner_module,
             operation_type=spec.operation_type,
-            target_ref=target_ref or {},
-            input_payload=input_payload or {},
+            target_ref=normalized_target_ref,
+            input_payload=normalized_input_payload,
+            request_schema_version=request_schema_version,
+            request_schema_digest=request_schema_digest,
             approval_status=approval_status,
             approval_policy=spec.approval_policy,
             budget=budget_payload,
@@ -736,29 +1233,12 @@ class OperationRuntimeWriter:
             metadata={
                 "operation_runtime_contract": "w8_operation_action_v1",
                 "budget_required": spec.budget_required,
-                **dict(metadata or {}),
+                **caller_metadata,
+                "request_schema_status": request_schema_status,
+                "request_schema_compatibility_hit": (request_schema_status == REQUEST_SCHEMA_STATUS_SCHEMA_LESS),
             },
         )
-        requested_identity = {
-            "conversation_id": str(conversation_id or "").strip(),
-            "action_type": spec.action_type,
-            "owner_module": spec.owner_module,
-            "operation_type": spec.operation_type,
-            "target_ref": dict(target_ref or {}),
-            "input": dict(input_payload or {}),
-            "budget": budget_payload,
-        }
-        persisted_identity = {
-            "conversation_id": str(action.get("conversation_id") or "").strip(),
-            "action_type": str(action.get("action_type") or "").strip(),
-            "owner_module": str(action.get("owner_module") or "").strip(),
-            "operation_type": str(action.get("operation_type") or "").strip(),
-            "target_ref": dict(action.get("target_ref") or {}),
-            "input": dict(action.get("input") or action.get("input_payload") or {}),
-            "budget": dict(action.get("budget") or {}),
-        }
-        if persisted_identity != requested_identity:
-            raise OperationRuntimeStateConflict("operation_action_idempotency_payload_conflict", action)
+        self._assert_action_replay_identity(action, expected_action=expected_action_identity)
         event_type = "ActionApprovalRequired" if spec.requires_approval else "AgentActionQueued"
         action_event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=normalized_workspace_id,
@@ -775,15 +1255,14 @@ class OperationRuntimeWriter:
                 "operation_type": spec.operation_type,
                 "approval_policy": spec.approval_policy,
                 "executable": not spec.requires_approval,
+                "request_schema_version": request_schema_version,
+                "request_schema_digest": request_schema_digest,
+                "request_schema_status": request_schema_status,
+                "request_schema_compatibility_hit": (request_schema_status == REQUEST_SCHEMA_STATUS_SCHEMA_LESS),
             },
         )
         if spec.requires_approval:
             return OperationSubmissionResult(action=action, events=(action_event,))
-        operation_id = operation_run_id_for(
-            action_id=action_id,
-            operation_type=spec.operation_type,
-            idempotency_key=normalized_idempotency,
-        )
         operation_run = self.store.repos.workflow_runtime.upsert_operation(
             operation_run_id=operation_id,
             workspace_id=normalized_workspace_id,
@@ -795,10 +1274,19 @@ class OperationRuntimeWriter:
             workflow_ref={},
             cost_budget=budget_payload,
             idempotency_key=normalized_idempotency,
+            request_schema_version=str(action.get("request_schema_version") or "").strip(),
+            request_schema_digest=str(action.get("request_schema_digest") or "").strip(),
             metadata={
                 "operation_runtime_contract": "w8_operation_run_v1",
                 "source_action_type": spec.action_type,
             },
+        )
+        self._assert_operation_replay_identity(
+            operation_run,
+            action=action,
+            operation_run_id=operation_id,
+            idempotency_key=normalized_idempotency,
+            identity_conflict_reason="operation_run_idempotency_payload_conflict",
         )
         operation_event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=normalized_workspace_id,
@@ -840,6 +1328,21 @@ class OperationRuntimeWriter:
             raise ValueError(f"terminal action cannot be approved: {action.get('status')}")
         workspace_id = str(action.get("workspace_id") or "default").strip() or "default"
         idempotency_key = str(action.get("idempotency_key") or "").strip()
+        operation_id = operation_run_id_for(
+            action_id=str(action.get("action_id") or ""),
+            operation_type=str(action.get("operation_type") or ""),
+            idempotency_key=idempotency_key,
+        )
+        existing_operation = self._preflight_operation_replay(
+            action=action,
+            operation_run_id=operation_id,
+            idempotency_key=idempotency_key,
+            identity_conflict_reason="operation_action_approval_run_identity_conflict",
+        )
+        self.validate_persisted_action_request(
+            action=action,
+            operation_run=existing_operation if existing_operation else None,
+        )
         action = self.store.repos.workflow_runtime.update_action_state(
             str(action.get("action_id") or ""),
             status="queued",
@@ -862,11 +1365,6 @@ class OperationRuntimeWriter:
             source=source,
             payload={"action_type": action.get("action_type"), "owner_module": action.get("owner_module")},
         )
-        operation_id = operation_run_id_for(
-            action_id=str(action.get("action_id") or ""),
-            operation_type=str(action.get("operation_type") or ""),
-            idempotency_key=idempotency_key,
-        )
         operation_run = self.store.repos.workflow_runtime.upsert_operation(
             operation_run_id=operation_id,
             workspace_id=workspace_id,
@@ -878,10 +1376,19 @@ class OperationRuntimeWriter:
             workflow_ref={},
             cost_budget=dict(action.get("budget") or {}),
             idempotency_key=idempotency_key,
+            request_schema_version=str(action.get("request_schema_version") or "").strip(),
+            request_schema_digest=str(action.get("request_schema_digest") or "").strip(),
             metadata={
                 "operation_runtime_contract": "w9_operation_approval_v1",
                 "source_action_type": action.get("action_type"),
             },
+        )
+        self._assert_operation_replay_identity(
+            operation_run,
+            action=action,
+            operation_run_id=operation_id,
+            idempotency_key=idempotency_key,
+            identity_conflict_reason="operation_action_approval_run_identity_conflict",
         )
         operation_event = self.store.repos.workflow_runtime.append_operation_event(
             workspace_id=workspace_id,
@@ -1020,7 +1527,13 @@ class OperationRuntimeWriter:
             raise ValueError("linked_action_missing")
         if action and action_workspace_id != workspace_id:
             raise OperationRuntimeStateConflict("operation_run_retry_workspace_conflict", action)
-        existing_retry_run = self.store.repos.workflow_runtime.get_operation(retry_run_id)
+        self.validate_persisted_action_request(action=action, operation_run=operation)
+        existing_retry_run = self._preflight_operation_replay(
+            action=action,
+            operation_run_id=retry_run_id,
+            idempotency_key=persisted_retry_key,
+            identity_conflict_reason="operation_run_retry_identity_conflict",
+        )
         if existing_retry_run:
             retry_metadata = dict(existing_retry_run.get("metadata") or {})
             if (
@@ -1122,11 +1635,20 @@ class OperationRuntimeWriter:
             workflow_ref={},
             cost_budget=dict(operation.get("cost_budget") or {}),
             idempotency_key=persisted_retry_key,
+            request_schema_version=str(action.get("request_schema_version") or "").strip(),
+            request_schema_digest=str(action.get("request_schema_digest") or "").strip(),
             metadata={
                 "operation_runtime_contract": "w9_operation_retry_v1",
                 "parent_operation_run_id": operation.get("operation_run_id"),
                 "retry_requested_by": actor,
             },
+        )
+        self._assert_operation_replay_identity(
+            retry_run,
+            action=action,
+            operation_run_id=retry_run_id,
+            idempotency_key=persisted_retry_key,
+            identity_conflict_reason="operation_run_retry_identity_conflict",
         )
         retry_metadata = dict(retry_run.get("metadata") or {})
         if (

@@ -3,12 +3,14 @@
 > Status: Author characterization batch with pinned-review fixed-forward (2026-07-14). The review of pinned commit
 > `d88161e` returned `NO-GO` for two false-green oracles; both are addressed in `bbad0fa`, whose scoped pinned advisory
 > re-review returned `GO` (P0/P1/P2=0/0/0). Formal review remains pending. This is a zero-product-code, non-live
-> baseline for the later `ActionRequestSpec` implementation. It is not a D1 completion claim, formal independent-review
+> baseline consumed by the later `ActionRequestSpec` implementation. It is not a D1 completion claim, formal independent-review
 > `GO`, live-provider approval, or Agent tool activation.
 >
 > D1b follow-up: the bounded non-live implementation recorded in
 > `TRACK_D_D1B_DISPATCH_ADAPTER_REGISTRY_IMPLEMENTATION.md` intentionally replaces only the hard-coded dispatch
-> classification characterized here. The remaining pre-request-schema observations stay in force.
+> classification characterized here. D1c then replaces the permissive pre-schema submission baseline with the bounded
+> foundation recorded in `TRACK_D_D1C_REQUEST_SCHEMA_PIN_FOUNDATION_IMPLEMENTATION.md`; all 15 production actions still
+> use its explicit schema-less bridge and the served population remains zero.
 
 ## 1. Outcome and boundary
 
@@ -41,10 +43,10 @@ adapter and remains unsupported.
 
 | Surface | Current owner | D1a freezes | Known D1 debt |
 |---|---|---|---|
-| Action metadata | `operation_runtime.ActionSpec` | D1a froze the exact ten-field pre-schema surface | D1b adds only the eleventh `dispatch_adapter` field; no request schema, version/digest, or model-safe result schema |
-| Registry serialization | `operation_runtime.ActionRegistry.to_record()` | action constant↔registry parity; exact compact record keys; optional command contract projection | D1b keeps adapter internal to `spec_for()` so the public action-registry payload remains unchanged; request shape is not serialized or pinned |
-| Submission | `OperationRuntimeWriter.submit_action` | exact complete signature/decorators; complete structural `ast.Call` inventory; unknown action and required-budget fail-closed gates; payload identity replay fence; action/event/run write order; approval-required actions stop before run creation; unexpected writer/store/repository callback or outbox access fails the runtime probe | `target_ref` and `input_payload` currently pass through without structural request-schema validation |
-| Dispatch | `ActionRegistry` declaration + `SourcingOrchestrator` adapter bindings | D1a froze the old branch classification for every discovered action; D1b preserves the same 12 supported/three unsupported result | request validation and served-tool predicates remain deferred |
+| Action metadata | `operation_runtime.ActionRequestSpec` (`ActionSpec` is an object-identical alias) | D1a froze the exact ten-field pre-schema surface | D1b added `dispatch_adapter`; D1c adds `request_schema`, `request_schema_version`, and target aliases; model-safe result schema remains deferred |
+| Registry serialization | `operation_runtime.ActionRegistry.to_record()` | action constant↔registry parity; exact compact record keys; optional command contract projection | adapter and request schema remain internal; physical pins live on action/run rows rather than this public registry record |
+| Submission | `OperationRuntimeWriter.submit_action` | D1a froze the old complete signature/call inventory, fail-closed gates, payload replay fence, write order, and approval boundary | D1c intentionally updates the signature/inventory and validates schema-defined requests before write; all production actions remain on the recorded schema-less bridge |
+| Dispatch | `ActionRegistry` declaration + `SourcingOrchestrator` adapter bindings | D1a froze the old branch classification for every discovered action; D1b preserves the same 12 supported/three unsupported result | D1c adds pin/request preflight before adapter invocation; the full served-tool predicate remains deferred |
 | Command exposure mirror | `_agent_callable_workflow_command_types_for_action` | exact set projection of `ActionSpec.allowed_workflow_command_types`; unknown action returns empty | no served-tool predicate or result-schema gate |
 | Command plan selection | `_build_agent_callable_workflow_command_plan` | command selection is `input.command_type` → `target.command_type` → registry default; a present but disallowed higher-priority value fails closed instead of falling back | input and target remain dual behavior-driving sources pending D1 normalization |
 | Command execution contracts | command owner registry + Activity/control policy registries | every exposed command resolves to the same owner; Activity policy is Agent-callable and non-legacy; Activity and control records are fail-closed | this proves command readiness only, not action adapter or model-safe output readiness |
@@ -93,8 +95,8 @@ rejected during registry construction, and a missing runtime binding fails close
 
 The suite fails when any of these current facts drift without an intentional D1 update:
 
-1. an `ACTION_*` constant and the runtime registry stop matching, or the pre-request-schema
-   `ActionSpec`/compact-record fields change;
+1. an `ACTION_*` constant and the runtime registry stop matching, or the characterized/current
+   `ActionRequestSpec`/compact-record fields change;
 2. a registered command loses its owner, becomes legacy/non-Agent-callable on the Activity spine, or stops exposing a
    fail-closed control record;
 3. `submit_action` changes any positional-only/positional/vararg/keyword-only/kwarg parameter or annotation/default,
@@ -114,17 +116,17 @@ The suite fails when any of these current facts drift without an intentional D1 
 The probes use synthetic dictionaries and local stubs only. They create no PG rows, files, network traffic, provider
 requests, model calls, or external side effects.
 
-## 5. Deferred D1 implementation gates
+## 5. D1 continuation gates
 
-D1a does not introduce `ActionRequestSpec` or decide its final schema. The next implementation batch still must:
+D1c now provides the single validator/digest owner, strict two-segment schema form, owner-bound target wrapper, physical
+action/run pins, and submit/approve/retry/dispatch copy/verify foundation. The remaining D1 work must still:
 
-- establish the single versioned request schema and immutable pin at every actual durable creation point;
-- define owner-bound `target_ref` versus caller/model-provided `input_payload`, reject duplicate/alias override paths,
-  and remove the characterized dual-source ambiguity;
+- define reviewed per-action schemas and owner target binders for production actions, then retire the R-029 schema-less
+  bridge only after all API-submittable actions record zero compatibility hits for one release window;
 - use the D1b registry-owned adapter as one necessary served-subset input, then derive the served subset only after
-  schema + Activity + revisioned model-safe result schema + simulate preflight also exist;
-- preserve approval/budget/idempotency/tenant fences while updating submit, approve, retry-child, dispatch, API, tests,
-  and docs in one bounded slice;
+  schema + Activity + revisioned model-safe result schema + simulate serializer preflight also exist;
+- expose the future Agent tool registry from that full predicate without treating action registration, adapter presence,
+  or command readiness as served readiness;
 - remain non-live until the typed model-turn owner, cost/budget/result-slot obligations, and a scope-matched independent
   review permit activation.
 
