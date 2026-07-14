@@ -4,6 +4,31 @@
   "title": "Adaptive Grok recall-wave operator receipt v2",
   "type": "object",
   "additionalProperties": false,
+  "allOf": [
+    {
+      "not": {
+        "properties": {
+          "process": {
+            "properties": {
+              "timed_out": {
+                "const": true
+              },
+              "technical_limit_kind": {
+                "const": "session_tree_scan_deadline"
+              }
+            },
+            "required": [
+              "timed_out",
+              "technical_limit_kind"
+            ]
+          }
+        },
+        "required": [
+          "process"
+        ]
+      }
+    }
+  ],
   "required": [
     "schema_version",
     "run_id",
@@ -603,6 +628,7 @@
           "$ref": "#/$defs/sha256"
         },
         "effective_prompt_policy_sha256": {
+          "description": "Entry-scoped semantic binding over the immutable policy owner fields and selected entry; it is not the mutable registry file digest.",
           "type": [
             "string",
             "null"

@@ -1,5 +1,6 @@
 {
   "schema_version": "x.grok.adaptive_recall_wave.effective_prompt_policy.v1",
+  "binding_version": "adaptive-effective-prompt-entry-semantics-v1",
   "policy_id": "adaptive_base_discovery_effective_prompts.v1",
   "owner": "x_first_adaptive_wave_operator",
   "allowed_discovery_dimensions": [

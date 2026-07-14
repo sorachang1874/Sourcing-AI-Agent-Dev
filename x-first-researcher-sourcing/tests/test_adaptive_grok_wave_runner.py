@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import runpy
+import signal
 import socket
 import stat
 import subprocess
@@ -230,6 +231,7 @@ class FakeExecutor:
         execution_error: str = "none",
         technical_limit_kind: str | None = None,
         session_mutator: Any = None,
+        session_tree_mutator: Any = None,
         extra_session_bytes: int = 0,
     ) -> None:
         self.clock = clock
@@ -243,6 +245,7 @@ class FakeExecutor:
         self.execution_error = execution_error
         self.technical_limit_kind = technical_limit_kind
         self.session_mutator = session_mutator
+        self.session_tree_mutator = session_tree_mutator
         self.extra_session_bytes = extra_session_bytes
         self.commands: list[list[str]] = []
         self.environments: list[dict[str, str]] = []
@@ -294,6 +297,10 @@ class FakeExecutor:
             on_spawn(child_pid, process_group_id, kernel_birth_identity, identity_token)
             self.target_release_count += 1
             session_updates_path.parent.mkdir(parents=True, mode=0o700)
+            created_parent = session_updates_path.parent
+            while created_parent != session_tree_root:
+                os.chmod(created_parent, 0o700)
+                created_parent = created_parent.parent
             model_id = command[command.index("--model") + 1]
             session_id = command[command.index("--session-id") + 1]
             prompt_id = "synthetic-prompt-1"
@@ -337,7 +344,7 @@ class FakeExecutor:
                             "rawOutput": {
                                 "call_id": "provider-call-1",
                                 "id": "tool-1",
-                                "input": canonical_json({"query": "synthetic query"}),
+                                "input": canonical_json({"query": "synthetic query", "limit": "100", "mode": "Latest"}),
                                 "name": "x_keyword_search",
                             },
                         },
@@ -385,6 +392,8 @@ class FakeExecutor:
                 extra = session_tree_root / "oversized-session-artifact.bin"
                 extra.write_bytes(b"x" * self.extra_session_bytes)
                 os.chmod(extra, 0o600)
+            if self.session_tree_mutator is not None:
+                self.session_tree_mutator(session_tree_root, session_updates_path)
             self.assert_session_tree_root = session_tree_root
         _write_private(stdout_spool, self.raw)
         _write_private(stderr_spool, self.stderr)
@@ -536,6 +545,13 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 os.chmod(root, 0o700)
                 binary, auth, binary_sha = _live_material(root)
                 request, request_path = _build_request(root, binary_sha=binary_sha)
+                with self.assertRaisesRegex(PermissionError, "effective_prompt_target_not_approved"):
+                    issue_live_grant(
+                        request_path=request_path,
+                        grant_root=root / "fixture-rejected-approvals",
+                        auth_source=auth,
+                        wall_clock=lambda: FIXED_TIME,
+                    )
                 prompt_raw = prompt_paths[0].read_bytes()
                 _write_private(Path(request["prompt_source"]["path"]), prompt_raw)
                 request["prompt_source"]["sha256"] = _bytes_sha(prompt_raw)
@@ -548,6 +564,44 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                     wall_clock=lambda: FIXED_TIME,
                 )
                 self.assertEqual(grant["effective_prompt_policy_entry_id"], "openai_pretraining_recall_wave1.v1")
+
+    def test_effective_prompt_binding_survives_unrelated_append_and_purge_replay(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_root, approvals = _completed_live_run(root)
+            original_binding = json.loads(run_root.joinpath("operator-receipt.json").read_text())["command_binding"]
+            policy = json.loads(TEST_EFFECTIVE_PROMPT_POLICY.read_text())
+            policy["entries"].append(
+                {
+                    "policy_entry_id": "unrelated_lab_unrelated_focus.v1",
+                    "target": {
+                        "lab_id": "unrelated_lab",
+                        "research_focus_id": "unrelated_focus",
+                        "scope": "Public professional evidence for an unrelated additive registry row.",
+                    },
+                    "source_prompt_sha256": "f" * 64,
+                    "authority": "live_authorized",
+                }
+            )
+            extended_policy = root / "extended-effective-prompt-policy.json"
+            _write_private(extended_policy, (canonical_json(policy) + "\n").encode())
+            with mock.patch.object(runner, "DEFAULT_EFFECTIVE_PROMPT_POLICY", extended_policy):
+                self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+                replayed_binding = runner._approved_effective_prompt_binding(
+                    json.loads(run_root.joinpath("operator-request.json").read_text())
+                )
+                self.assertEqual(
+                    replayed_binding.policy_sha256,
+                    original_binding["effective_prompt_policy_sha256"],
+                )
+                deletion_receipts = purge_expired_adaptive_runs(
+                    runtime_root=root / "runtime",
+                    deletion_root=root / "deletions",
+                    approval_root=approvals,
+                    wall_clock=lambda: FIXED_TIME + timedelta(days=2),
+                )
+            self.assertEqual(len(deletion_receipts), 1)
+            self.assertFalse(run_root.exists())
 
     def test_prior_waves_are_sha_bound_casefold_unique_and_exclusion_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -753,7 +807,11 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(receipt["process"]["elapsed_ms"], 2_500)
             self.assertEqual(fake.deadlines, [1_900.0])
             command = fake.commands[0]
-            self.assertEqual(command[command.index("--tools") + 1], ",".join(runner.NATIVE_X_TOOLS))
+            # Grok CLI 0.2.99 does not map the hosted x_* tool names through
+            # its built-in --tools allowlist.  Passing them removes native X
+            # capability in a real OAuth session, so the runner relies on the
+            # explicit web/local deny surface plus replayed native-X proof.
+            self.assertNotIn("--tools", command)
             self.assertEqual(command[command.index("--permission-mode") + 1], "dontAsk")
             self.assertNotIn("--always-approve", command)
             self.assertNotIn("bypassPermissions", command)
@@ -1734,44 +1792,59 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(receipt["session_proof"]["status"], "invalid")
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
-    def test_live_transcript_rejects_protected_category_query_subjects(self) -> None:
-        def protected_query(updates: list[dict[str, Any]]) -> None:
-            updates[2]["params"]["update"]["rawOutput"]["input"] = canonical_json(
-                {"query": "OpenAI women pretraining researchers"}
-            )
+    def test_live_transcript_rejects_protected_and_secondary_semantic_arguments(self) -> None:
+        rejected_arguments = (
+            {"query": "OpenAI autistic pretraining researcher", "limit": "100", "mode": "Latest"},
+            {
+                "query": "OpenAI pretraining researcher",
+                "limit": "100",
+                "mode": "Latest",
+                "exclude": "women researchers",
+            },
+            {
+                "query": "OpenAI pretraining researcher",
+                "limit": "100",
+                "mode": "Latest",
+                "url": "https://x.com/OpenAI/status/123456",
+            },
+        )
+        for arguments in rejected_arguments:
+            with self.subTest(arguments=arguments), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                os.chmod(root, 0o700)
+                binary, auth, binary_sha = _live_material(root)
+                request, request_path = _build_request(root, binary_sha=binary_sha)
+                approvals = root / "approvals"
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
 
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            os.chmod(root, 0o700)
-            binary, auth, binary_sha = _live_material(root)
-            request, request_path = _build_request(root, binary_sha=binary_sha)
-            approvals = root / "approvals"
-            issue_live_grant(
-                request_path=request_path,
-                grant_root=approvals,
-                auth_source=auth,
-                wall_clock=lambda: FIXED_TIME,
-            )
-            fake = FakeExecutor(
-                MutableClock(),
-                (canonical_json(_empty_result()) + "\n").encode(),
-                spawn=True,
-                session_mutator=protected_query,
-            )
-            receipt, run_root = _run_adaptive_wave(
-                request=request,
-                execution_mode="live",
-                runtime_root=root / "runtime",
-                approval_root=approvals,
-                binary=binary,
-                auth_source=auth,
-                executor=fake,
-                monotonic=fake.clock,
-                wall_clock=lambda: FIXED_TIME,
-            )
-            self.assertEqual(receipt["status"], "provider_evidence_invalid")
-            self.assertEqual(receipt["session_proof"]["status"], "invalid")
-            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+                def rejected_tool_arguments(updates: list[dict[str, Any]]) -> None:
+                    updates[2]["params"]["update"]["rawOutput"]["input"] = canonical_json(arguments)
+
+                fake = FakeExecutor(
+                    MutableClock(),
+                    (canonical_json(_empty_result()) + "\n").encode(),
+                    spawn=True,
+                    session_mutator=rejected_tool_arguments,
+                )
+                receipt, run_root = _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=fake,
+                    monotonic=fake.clock,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                self.assertEqual(receipt["status"], "provider_evidence_invalid")
+                self.assertEqual(receipt["session_proof"]["status"], "invalid")
+                self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
     def test_intent_precedes_auth_and_executor_exception_deletes_entire_ephemeral_home(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1891,6 +1964,184 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             self.assertEqual(recovered["status"], "crash_recovered")
             self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
 
+    def test_run_root_creation_failure_rolls_back_before_purge_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime_root = root / "runtime"
+            runtime_root.mkdir(mode=0o700)
+            real_fsync = runner._fsync_directory
+            calls = 0
+
+            def fail_first_parent_fsync(path: Path) -> None:
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    raise OSError("synthetic_parent_fsync_failure")
+                real_fsync(path)
+
+            with mock.patch.object(runner, "_fsync_directory", side_effect=fail_first_parent_fsync):
+                with self.assertRaisesRegex(OSError, "synthetic_parent_fsync_failure"):
+                    runner._create_run_root(
+                        runtime_root,
+                        "grok_wave_fixture_44444444444444444444444444444444",
+                    )
+            self.assertEqual(list(runtime_root.iterdir()), [])
+            self.assertEqual(
+                purge_expired_adaptive_runs(
+                    runtime_root=runtime_root,
+                    deletion_root=root / "deletions",
+                ),
+                [],
+            )
+
+    def test_post_process_scan_preserves_actual_process_timeout_ownership(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            binary, auth, binary_sha = _live_material(root)
+            request, request_path = _build_request(root, binary_sha=binary_sha)
+            request["emergency"]["deadline_ms"] = 1_000
+            _write_private(request_path, (canonical_json(request) + "\n").encode())
+            approvals = root / "approvals"
+            issue_live_grant(
+                request_path=request_path,
+                grant_root=approvals,
+                auth_source=auth,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            fake = FakeExecutor(
+                MutableClock(),
+                (canonical_json(_empty_result()) + "\n").encode(),
+                spawn=True,
+                exit_code=-signal.SIGTERM,
+                timed_out=True,
+                term_sent=True,
+            )
+            receipt, run_root = _run_adaptive_wave(
+                request=request,
+                execution_mode="live",
+                runtime_root=root / "runtime",
+                approval_root=approvals,
+                binary=binary,
+                auth_source=auth,
+                executor=fake,
+                monotonic=fake.clock,
+                wall_clock=lambda: FIXED_TIME,
+            )
+            self.assertEqual(receipt["status"], "timed_out")
+            self.assertTrue(receipt["process"]["timed_out"])
+            self.assertFalse(receipt["process"]["technical_limit_exceeded"])
+            self.assertIsNone(receipt["process"]["technical_limit_kind"])
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+            contradictory = copy.deepcopy(receipt)
+            contradictory["status"] = "technical_limit_exceeded"
+            contradictory["process"]["technical_limit_exceeded"] = True
+            contradictory["process"]["technical_limit_kind"] = "session_tree_scan_deadline"
+            self.assertIn("receipt_timeout_ownership_invalid", validate_operator_receipt(contradictory))
+            with self.assertRaises(MiniDraft202012Error):
+                assert_schema_valid(
+                    contradictory,
+                    "x.grok.adaptive_recall_wave.operator_receipt.v2.schema.json",
+                )
+
+    def test_provider_mode_tampering_fails_closed_and_mode_zero_tree_is_deleted(self) -> None:
+        def expose_auth(session_root: Path, updates_path: Path) -> None:
+            del updates_path
+            os.chmod(session_root / "auth.json", 0o644)
+
+        def seal_tree(session_root: Path, updates_path: Path) -> None:
+            del updates_path
+            sealed = session_root / "provider-sealed" / "nested"
+            sealed.mkdir(parents=True, mode=0o700)
+            secret = sealed / "provider-secret"
+            _write_private(secret, b"synthetic secret")
+            os.chmod(sealed, 0o000)
+            os.chmod(sealed.parent, 0o000)
+            os.chmod(session_root, 0o000)
+
+        for mutation in (expose_auth, seal_tree):
+            with self.subTest(mutation=mutation.__name__), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                os.chmod(root, 0o700)
+                binary, auth, binary_sha = _live_material(root)
+                request, request_path = _build_request(root, binary_sha=binary_sha)
+                approvals = root / "approvals"
+                issue_live_grant(
+                    request_path=request_path,
+                    grant_root=approvals,
+                    auth_source=auth,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                fake = FakeExecutor(
+                    MutableClock(),
+                    (canonical_json(_empty_result()) + "\n").encode(),
+                    spawn=True,
+                    session_tree_mutator=mutation,
+                )
+                receipt, run_root = _run_adaptive_wave(
+                    request=request,
+                    execution_mode="live",
+                    runtime_root=root / "runtime",
+                    approval_root=approvals,
+                    binary=binary,
+                    auth_source=auth,
+                    executor=fake,
+                    monotonic=fake.clock,
+                    wall_clock=lambda: FIXED_TIME,
+                )
+                self.assertEqual(receipt["status"], "technical_limit_exceeded")
+                self.assertEqual(receipt["process"]["technical_limit_kind"], "session_tree_entry_invalid")
+                self.assertFalse((run_root / "ephemeral-home").exists())
+                self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_recovery_deletes_mode_zero_auth_without_manual_chmod(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_root, approvals = _completed_live_run(root)
+            (run_root / "operator-receipt.json").unlink()
+            ephemeral_home = run_root / "ephemeral-home"
+            nested = ephemeral_home / "provider-sealed"
+            nested.mkdir(parents=True, mode=0o700)
+            _write_private(ephemeral_home / "auth.json", b'{"synthetic":"oauth-copy"}\n')
+            _write_private(nested / "secret", b"synthetic secret")
+            os.chmod(nested, 0o000)
+            os.chmod(ephemeral_home, 0o000)
+            recovered = recover_incomplete_run(
+                run_root,
+                approval_root=approvals,
+                process_group_is_alive=lambda group: False,
+                wall_clock=lambda: FIXED_TIME + timedelta(minutes=5),
+            )
+            self.assertEqual(recovered["status"], "crash_recovered")
+            self.assertFalse(ephemeral_home.exists())
+            self.assertEqual(validate_operator_bundle(run_root, approval_root=approvals), [])
+
+    def test_session_tree_measurement_runtime_matches_receipt_schema_boundaries(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chmod(root, 0o700)
+            receipt, _ = run_adaptive_grok_wave_fixture(
+                request_path=_build_request(root)[1],
+                runtime_root=root / "runtime",
+            )
+            mutations = {
+                "session_tree_file_count": -1,
+                "session_tree_entry_count": -1,
+                "session_tree_max_depth": runner.MAX_SESSION_TREE_DEPTH + 1,
+                "session_tree_total_bytes": -1,
+                "session_tree_max_file_bytes": False,
+            }
+            for field, value in mutations.items():
+                with self.subTest(field=field):
+                    changed = copy.deepcopy(receipt)
+                    changed["artifacts"][field] = value
+                    with self.assertRaises(MiniDraft202012Error):
+                        assert_schema_valid(
+                            changed,
+                            "x.grok.adaptive_recall_wave.operator_receipt.v2.schema.json",
+                        )
+                    self.assertIn("receipt_artifacts_value_invalid", validate_operator_receipt(changed))
+
     def test_session_tree_counts_directories_allows_one_socket_and_bounds_depth_and_deadline(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "session"
@@ -1905,6 +2156,16 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
             )
             self.assertEqual(entries.limit_kind, "session_tree_entries")
             self.assertGreater(entries.entry_count, entries.file_count)
+            self.assertEqual(entries.entry_count, 3)
+            os.chmod(root / "directory-0", 0o755)
+            widened = runner._measure_session_tree(
+                root,
+                max_files=16,
+                max_file_bytes=1_000_000,
+                max_total_bytes=2_000_000,
+            )
+            self.assertEqual(widened.limit_kind, "session_tree_entry_invalid")
+            os.chmod(root / "directory-0", 0o700)
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "session"
@@ -1941,6 +2202,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "session"
+            root.mkdir(mode=0o700)
             nested = root
             for name in ("one", "two", "three"):
                 nested /= name
@@ -1953,6 +2215,7 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 max_depth=2,
             )
             self.assertEqual(depth.limit_kind, "session_tree_depth")
+            self.assertEqual(depth.max_depth, 2)
             deadline_clock = MutableClock()
             deadline = runner._measure_session_tree(
                 root,
@@ -1963,6 +2226,23 @@ class AdaptiveGrokWaveRunnerTests(unittest.TestCase):
                 monotonic=deadline_clock,
             )
             self.assertEqual(deadline.limit_kind, "session_tree_scan_deadline")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "session"
+            root.mkdir(mode=0o700)
+            nested = root
+            for index in range(runner.MAX_SESSION_TREE_DEPTH + 1):
+                nested /= f"d{index}"
+                nested.mkdir(mode=0o700)
+            overflow = runner._measure_session_tree(
+                root,
+                max_files=1_000,
+                max_file_bytes=1_000_000,
+                max_total_bytes=2_000_000,
+                max_depth=runner.MAX_SESSION_TREE_DEPTH,
+            )
+            self.assertEqual(overflow.limit_kind, "session_tree_depth")
+            self.assertEqual(overflow.max_depth, runner.MAX_SESSION_TREE_DEPTH)
 
     def test_session_tree_ceiling_is_a_technical_failure_and_home_is_deleted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -11,8 +11,11 @@ Use two separate transports rather than stretching the Grok CLI into a batch ser
 1. **Grok CLI OAuth** is the interactive capability and bounded exploration transport. Seven CLI 0.2.99 sessions have
    now exercised hosted native keyword, semantic, user, and thread search. It is not promoted into a batch service. In CLI 0.2.99,
    `--tools` is a built-in internal-id allowlist; neither the documented public streaming events nor binary strings
-   establish that `--tools x_search` is a supported enforcement boundary. The runner does not depend on it, and the
-   CLI cannot enforce a provider-side maximum number of tool calls.
+   establish that `--tools x_search` is a supported enforcement boundary. A 2026-07-15 live A/B confirmed the four
+   hosted `x_*` names are unmappable through that flag: the allowlisted arm made zero native-X calls, while removing
+   the flag exposed `x_user_search` immediately. The runner therefore does not pass `--tools`; it retains web/local
+   denials and requires replayed native-X session proof. The CLI cannot enforce a provider-side maximum number of tool
+   calls.
 2. **xAI Responses/Batch API** is the intended Stage 2/scale transport after a supported xAI API credential, a
    provider adapter, and a separate independent review exist. Requests expose only `x_search`, use handle/date filters,
    carry unique idempotency keys, and retain structured call/source receipts.
@@ -55,6 +58,19 @@ an apparent decline, while the final two strategies fell to `5/104` and `1/70` n
 supports coverage-aware, call-normalized diagnostics instead of a fixed packet limit. The operator paused for
 hydration, but the replay evaluator remains `insufficient_proof / continue_expansion`; it does not claim exhaustive
 coverage. It also does not upgrade the model-mediated Bios, IDs, or excerpts into source records.
+
+A later profile-field blind test against `@lilianweng` established the practical `x_user_search` card. One exact bare
+handle returned stable platform id, handle/display name, Bio, blue-verification label, follower count, and avatar.
+Location, website, professional category, joined date, following count, and X verified-organization affiliation badge
+were not exposed. Repeating `@handle` and full-profile-URL variants added no field; name-plus-organization returned no
+exact account. Hydration therefore uses one canonical bare handle, derives the profile URL locally, and routes missing
+fields to another source rather than spending more Grok calls.
+
+The same evaluation quantified the recall/precision frontier. A Thinking Machines broad wave found 41 parsed unique
+handles with 132 replayed calls (`0.311` handle/call), while an independent three-gate precision prompt spent 88 calls
+to return six already-present handles and no novel account. Broad discovery followed by cheap screening and selective
+deep validation is the champion; independent precision-first discovery remains an audit lane. See
+`docs/live-evidence/2026-07-15-grok-cli-profile-and-performance-evaluation.md` for exact sessions and metrics.
 
 Stage 1 recognizes provider post evidence only at the versioned closed, direct `rawOutput.posts[*]` path. Unread
 provider metadata is tolerated but cannot become evidence. Nested diagnostic/request-echo objects, prose URLs,

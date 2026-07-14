@@ -143,8 +143,12 @@ No array in the request or result schemas has `maxItems`.
 `configs/adaptive_grok_wave_effective_prompt_policy.v1.json` is the production owner for the complete live objective,
 not merely a prompt allowlist. A row binds the exact target tuple and exact source-prompt SHA-256 and is explicitly
 `fixture_only` or `live_authorized`. Grant issuance accepts only `live_authorized`; the policy digest and entry ID are
-bound into the grant, intent, command binding, terminal receipt, and bundle replay. The production registry currently
-authorizes the seven tracked OpenAI recall-wave prompts for one controlled target tuple:
+bound into the grant, intent, command binding, terminal receipt, and bundle replay. The digest is an entry-scoped
+semantic binding over the binding version, schema version, policy ID, owner, globally allowed discovery dimensions,
+and exact selected entry. It is deliberately not the complete mutable registry-file digest: appending an unrelated
+valid row cannot invalidate an issued grant, retained bundle, or TTL purge, while changing the selected row or any
+immutable owner semantic fails replay. The production registry currently authorizes the seven tracked OpenAI
+recall-wave prompts for one controlled target tuple:
 
 ```text
 lab_id=openai
@@ -154,7 +158,7 @@ scope=Public professional evidence of current or historical OpenAI affiliation a
 
 The synthetic row is `fixture_only`. Tests replace the module path with an isolated test policy; no public live
 entrypoint accepts a caller-supplied policy path. Adding another lab, focus, scope, or prompt therefore requires a
-reviewed registry change rather than an algorithm special case. Prior-wave files remain parsed handle exclusions and
+reviewed append-only registry row rather than an algorithm special case. Prior-wave files remain parsed handle exclusions and
 material-update baselines only; they cannot replace or extend the approved objective.
 
 ## Native-X command and isolation
@@ -168,7 +172,6 @@ The relevant policy is:
 
 ```text
 --output-format plain
---tools x_keyword_search,x_semantic_search,x_user_search,x_thread_fetch
 --disable-web-search
 --disallowed-tools run_terminal_cmd,grep,read_file,search_replace,list_dir,web_search,web_fetch,todo_write,task,Agent
 --no-subagents
@@ -181,7 +184,13 @@ The relevant policy is:
 ```
 
 There is no `--always-approve`, `bypassPermissions`, generic browser/search tool, connector, subagent, shell, or local
-file tool. The closed `--tools` list is the primary capability boundary; the denylist is defense in depth.
+file tool. Grok CLI 0.2.99 does **not** map the hosted `x_keyword_search`, `x_semantic_search`, `x_user_search`, or
+`x_thread_fetch` names through its built-in `--tools` allowlist. A 2026-07-15 live A/B produced zero native-X calls
+when those names were passed and immediately exposed `x_user_search` when the flag was removed. The command therefore
+does not pass `--tools`. `--disable-web-search` plus the local-tool denylist constrain the launch surface, and the
+retained session proof accepts only the four registered native-X tool names and their closed argument profiles before
+the result can complete. The registry digest explicitly binds both `cli_native_x_allowlist_enforced=false` and
+`native_x_session_proof_required=true` so replay cannot silently restore the broken flag or weaken evidence checks.
 
 The operator intentionally uses `--output-format plain` and embeds the result schema in the compiled prompt. On the
 locally inspected Grok CLI, `--json-schema` changes output to a CLI envelope; plain mode is needed to preserve exact
@@ -205,7 +214,10 @@ before auth is copied. From the copy through grant consumption, executor complet
 and transcript capture, every exit deletes the complete ephemeral home in a `finally` boundary. Normal execution
 deletes it before raw stdout/stderr publication, structured-output parsing, sanitized-result publication, or terminal
 receipt construction. A terminal receipt requires `ephemeral_tree_deleted=true`; a post-executor publication failure
-can be recovered from the durable intent/spools without retaining OAuth bytes.
+can be recovered from the durable intent/spools without retaining OAuth bytes. Because the provider can write this
+tree, deletion restores owner-only traversal mode through no-follow directory descriptors and unlinks without
+following provider-created links. A provider that changes any directory away from `0700` or regular file away from
+`0600` fails the session-tree boundary; even mode-`000` nested directories are deleted without an operator chmod step.
 
 ## Preissued single-use live grant
 
@@ -303,9 +315,20 @@ candidate-count limits.
 
 The v2 wire field `max_session_files` is retained for compatibility but is enforced as a stricter all-entry ceiling:
 regular files, directories, and the one exact `ephemeral-home/leader.sock` all count. The scanner rejects every other
-socket and all symlinks/special entries, enforces a hard depth ceiling, and checks the run's monotonic deadline during
-traversal. Receipts record both regular-file and all-entry counts plus maximum depth. Recovery applies the same entry,
-socket, and depth rules under its own bounded monotonic scan window.
+socket and all symlinks/special entries, requires exact current-owner `0700` directories and `0600` regular files,
+enforces a hard depth ceiling, and checks a monotonic deadline during traversal. Limit observations are recorded at
+the admitted ceiling rather than one past it, so a depth overflow records at most 64 and every generated measurement
+remains valid under both runtime and receipt schema. Receipts record both regular-file and all-entry counts plus
+maximum depth. The executor deadline owns process timeout. The final post-process scan and recovery each receive a
+fresh, independent, five-second cleanup deadline; an expired process deadline can therefore never be relabelled
+`session_tree_scan_deadline`. Recovery applies the same entry, mode, socket, depth, and bounded-scan rules.
+If a dead provider left a structurally invalid or mode-`000` tree, recovery discards its transcript, deletes the tree,
+and seals only `crash_recovered` in that same invocation; it never promotes the invalid provider evidence.
+
+Completed session transcripts are admitted only when every actual native-X tool call passes the shared versioned,
+closed per-tool argument predicate. All semantic string operands are checked, not merely the first `query`; unknown,
+nested, or secondary arguments fail closed, while only explicitly typed count/limit/mode controls are non-semantic.
+The shared argument-policy version is part of the tool-registry digest bound into grants and receipts.
 
 The direct child first runs a tiny isolated gated launcher in a new session with `umask 077`. It acknowledges a random inherited
 identity token, then blocks. The parent reads a kernel/process-table birth identity and atomically publishes
@@ -346,7 +369,7 @@ null.
 | `fixture_complete` | Strict deterministic result; zero external process/provider call |
 | `completed` | Live child spawned, exit 0, exact JSON, strict result valid, and session transcript fully verified |
 | `process_failed` | Spawn/execution error or nonzero exit |
-| `timed_out` | Monotonic deadline fired and cleanup ran |
+| `timed_out` | The process monotonic deadline fired and cleanup ran; a final scan deadline cannot override this owner |
 | `technical_limit_exceeded` | Stream, JSON-complexity, or session-tree ceiling fired and cleanup ran |
 | `structured_output_noncompliant` | JSON had a non-whitespace prefix/suffix or no exact object |
 | `result_contract_invalid` | Exact JSON syntax but schema/runtime semantics failed |
@@ -368,6 +391,10 @@ unique `O_CREAT|O_EXCL` pending file, fsync, no-replace hard link, and directory
 - optional process ledger for an actual spawn;
 - terminal operator receipt with process, session, budget, retention, artifact, grant, and reconciliation bindings;
 - no ephemeral home: it is recursively deleted before terminal publication.
+
+Run-root creation is transactional: if validation or parent fsync fails after `mkdir` but before lease/intent
+ownership, the still-empty root is removed and the runtime parent is fsynced again. Purge inventory therefore never
+inherits an empty, valid-looking run directory from a failed creation attempt.
 
 `validate_operator_bundle` uses descriptor-bound, owner/link/mode/size-checked reads. It re-derives model, effort,
 emergency values, exact actual argv, command policy, tool registry, isolated-environment policy, result-schema hash,
@@ -415,7 +442,10 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python \
 The suite covers unbounded synthetic candidate arrays; 120 bound prior waves; strict overlap completion; v2
 schema/runtime key parity; staged symlinked binary; account/auth binding; missing, pre-link, post-link and gated-release
 expiry, wrong-scope, and consumed grants; launcher-time replay; exact closed tools; raw model/tool/usage/terminal proof; prompt-file argv privacy; stream/JSON/session
-ceilings; descriptor symlink rejection; TERM-to-KILL; active-owner recovery exclusion; full recovery replay; deletion
+ceilings; entry-scoped prompt-policy append replay and purge; full actual-argument protected-boundary checks;
+transactional pre-intent root rollback; independent timeout/cleanup-scan ownership; exact session-tree modes and
+mode-`000` no-follow auth deletion/recovery; measurement/schema parity; descriptor symlink rejection; TERM-to-KILL;
+active-owner recovery exclusion; full recovery replay; deletion
 journal/receipt; lease-held blocked campaign bridge, same-path bundle swap, missing-source and schema/authority mutation
 cases; bundle tampering; and
 redacted CLI output. It performs no Grok or X live call.

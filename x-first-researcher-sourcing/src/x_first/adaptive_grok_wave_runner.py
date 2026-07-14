@@ -35,7 +35,10 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote
 
-from x_first.grok_cli_exploration import base_discovery_tool_subject_allowed
+from x_first.grok_cli_exploration import (
+    BASE_DISCOVERY_TOOL_ARGUMENT_POLICY_VERSION,
+    base_discovery_tool_arguments_allowed,
+)
 
 REQUEST_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.request.v2"
 RESULT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.result.v1"
@@ -58,12 +61,14 @@ MAX_GROK_BINARY_BYTES = 268_435_456
 MAX_CONTRACT_SCHEMA_BYTES = 16_777_216
 MAX_EFFECTIVE_PROMPT_POLICY_BYTES = 4_194_304
 MAX_SESSION_TREE_DEPTH = 64
+FINAL_SESSION_TREE_SCAN_BUDGET_SECONDS = 5.0
 DEFAULT_EFFECTIVE_PROMPT_POLICY = (
     Path(__file__).resolve().parents[2] / "configs/adaptive_grok_wave_effective_prompt_policy.v1.json"
 )
 EFFECTIVE_PROMPT_POLICY_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.effective_prompt_policy.v1"
 EFFECTIVE_PROMPT_POLICY_ID = "adaptive_base_discovery_effective_prompts.v1"
 EFFECTIVE_PROMPT_POLICY_OWNER = "x_first_adaptive_wave_operator"
+EFFECTIVE_PROMPT_POLICY_BINDING_VERSION = "adaptive-effective-prompt-entry-semantics-v1"
 ALLOWED_DISCOVERY_DIMENSIONS = (
     "target_lab_affiliation",
     "professional_role_or_function",
@@ -1442,13 +1447,16 @@ def tool_registry_sha256() -> str:
         {
             "allowed_native_x_tools": list(NATIVE_X_TOOLS),
             "disallowed_tools": list(DISALLOWED_TOOLS),
+            "base_discovery_tool_argument_policy_version": BASE_DISCOVERY_TOOL_ARGUMENT_POLICY_VERSION,
+            "cli_native_x_allowlist_enforced": False,
+            "native_x_session_proof_required": True,
             "generic_web_disabled": True,
             "provider_fallback_authorized": False,
         }
     )
 
 
-def _load_effective_prompt_policy() -> tuple[dict[str, Any], str]:
+def _load_effective_prompt_policy() -> dict[str, Any]:
     """Load the module-owned live prompt/target owner with a closed shape."""
 
     try:
@@ -1466,6 +1474,7 @@ def _load_effective_prompt_policy() -> tuple[dict[str, Any], str]:
         raise AdaptiveWaveValidationError("effective_prompt_policy_unavailable") from exc
     expected_keys = {
         "schema_version",
+        "binding_version",
         "policy_id",
         "owner",
         "allowed_discovery_dimensions",
@@ -1475,6 +1484,7 @@ def _load_effective_prompt_policy() -> tuple[dict[str, Any], str]:
         not isinstance(policy, dict)
         or set(policy) != expected_keys
         or policy.get("schema_version") != EFFECTIVE_PROMPT_POLICY_SCHEMA_VERSION
+        or policy.get("binding_version") != EFFECTIVE_PROMPT_POLICY_BINDING_VERSION
         or policy.get("policy_id") != EFFECTIVE_PROMPT_POLICY_ID
         or policy.get("owner") != EFFECTIVE_PROMPT_POLICY_OWNER
         or policy.get("allowed_discovery_dimensions") != list(ALLOWED_DISCOVERY_DIMENSIONS)
@@ -1514,11 +1524,35 @@ def _load_effective_prompt_policy() -> tuple[dict[str, Any], str]:
             raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
         entry_ids.add(entry_id)
         bindings.add(binding)
-    return policy, bytes_sha256(raw)
+    return policy
+
+
+def _effective_prompt_policy_entry_sha256(
+    policy: Mapping[str, Any],
+    entry: Mapping[str, Any],
+) -> str:
+    """Bind immutable owner semantics plus one selected append-only entry.
+
+    The registry is intentionally extensible.  Hashing its complete bytes
+    would make an unrelated additive row invalidate already issued grants and
+    retained bundles.  The wire field keeps its v2 name for compatibility, but
+    its value is this entry-scoped semantic digest rather than a file digest.
+    """
+
+    return canonical_sha256(
+        {
+            "binding_version": policy["binding_version"],
+            "schema_version": policy["schema_version"],
+            "policy_id": policy["policy_id"],
+            "owner": policy["owner"],
+            "allowed_discovery_dimensions": policy["allowed_discovery_dimensions"],
+            "entry": dict(entry),
+        }
+    )
 
 
 def _approved_effective_prompt_binding(request: Mapping[str, Any]) -> EffectivePromptPolicyBinding:
-    policy, policy_sha = _load_effective_prompt_policy()
+    policy = _load_effective_prompt_policy()
     target_sha = canonical_sha256(request["target"])
     prompt_sha = request["prompt_source"]["sha256"]
     matches = [
@@ -1530,9 +1564,10 @@ def _approved_effective_prompt_binding(request: Mapping[str, Any]) -> EffectiveP
     ]
     if len(matches) != 1:
         raise PermissionError("effective_prompt_target_not_approved")
+    selected_entry = matches[0]
     return EffectivePromptPolicyBinding(
-        policy_sha256=policy_sha,
-        policy_entry_id=matches[0]["policy_entry_id"],
+        policy_sha256=_effective_prompt_policy_entry_sha256(policy, selected_entry),
+        policy_entry_id=selected_entry["policy_entry_id"],
     )
 
 
@@ -1610,8 +1645,6 @@ def build_grok_command(
         transport["reasoning_effort"],
         "--output-format",
         "plain",
-        "--tools",
-        ",".join(NATIVE_X_TOOLS),
         "--disable-web-search",
         "--disallowed-tools",
         ",".join(DISALLOWED_TOOLS),
@@ -1702,9 +1735,16 @@ def _measure_session_tree(
     deepest = 0
     limit_kind: str | None = None
     try:
-        root.lstat()
+        root_metadata = root.lstat()
     except FileNotFoundError:
         return SessionTreeMeasurement(0, 0, 0, 0, 0, None)
+    if (
+        root.is_symlink()
+        or not stat.S_ISDIR(root_metadata.st_mode)
+        or root_metadata.st_uid != os.getuid()
+        or stat.S_IMODE(root_metadata.st_mode) != 0o700
+    ):
+        return SessionTreeMeasurement(0, 0, 0, 0, 0, "session_tree_entry_invalid")
     scan_deadline = deadline_at if deadline_at is not None else float("inf")
     stack: list[tuple[Path, int]] = [(root, 0)]
     while stack:
@@ -1718,6 +1758,7 @@ def _measure_session_tree(
                 current.is_symlink()
                 or not stat.S_ISDIR(current_metadata.st_mode)
                 or current_metadata.st_uid != os.getuid()
+                or stat.S_IMODE(current_metadata.st_mode) != 0o700
             ):
                 limit_kind = "session_tree_entry_invalid"
                 break
@@ -1728,19 +1769,22 @@ def _measure_session_tree(
                         break
                     path = current / entry.name
                     metadata = entry.stat(follow_symlinks=False)
-                    entry_count += 1
-                    if entry_count > max_files:
+                    if entry_count >= max_files:
                         limit_kind = "session_tree_entries"
                         break
+                    entry_count += 1
                     depth = current_depth + 1
-                    deepest = max(deepest, depth)
                     if depth > max_depth:
                         limit_kind = "session_tree_depth"
                         break
+                    deepest = max(deepest, depth)
                     if stat.S_ISLNK(metadata.st_mode) or metadata.st_uid != os.getuid():
                         limit_kind = "session_tree_entry_invalid"
                         break
                     if stat.S_ISDIR(metadata.st_mode):
+                        if stat.S_IMODE(metadata.st_mode) != 0o700:
+                            limit_kind = "session_tree_entry_invalid"
+                            break
                         stack.append((path, depth))
                         continue
                     if stat.S_ISSOCK(metadata.st_mode):
@@ -1748,12 +1792,17 @@ def _measure_session_tree(
                             limit_kind = "session_tree_unexpected_socket"
                             break
                         continue
-                    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                    if (
+                        not stat.S_ISREG(metadata.st_mode)
+                        or metadata.st_nlink != 1
+                        or stat.S_IMODE(metadata.st_mode) != 0o600
+                    ):
                         limit_kind = "session_tree_entry_invalid"
                         break
                     file_count += 1
-                    total_bytes += metadata.st_size
-                    largest = max(largest, metadata.st_size)
+                    next_total_bytes = total_bytes + metadata.st_size
+                    total_bytes = min(next_total_bytes, max_total_bytes)
+                    largest = max(largest, min(metadata.st_size, max_file_bytes))
                     if updates_path is not None and path == updates_path and max_updates_bytes is not None:
                         if metadata.st_size > max_updates_bytes:
                             limit_kind = "session_updates_bytes"
@@ -1761,7 +1810,7 @@ def _measure_session_tree(
                     if metadata.st_size > max_file_bytes:
                         limit_kind = "session_tree_file_bytes"
                         break
-                    if total_bytes > max_total_bytes:
+                    if next_total_bytes > max_total_bytes:
                         limit_kind = "session_tree_total_bytes"
                         break
                 if limit_kind is not None:
@@ -2985,7 +3034,7 @@ def _parse_session_proof(
                 raise AdaptiveWaveValidationError("session_tool_arguments_invalid") from exc
             if not isinstance(arguments, dict):
                 raise AdaptiveWaveValidationError("session_tool_arguments_invalid")
-            if not base_discovery_tool_subject_allowed(arguments, raw_output["name"]):
+            if not base_discovery_tool_arguments_allowed(arguments, raw_output["name"]):
                 raise AdaptiveWaveValidationError("session_tool_subject_boundary_invalid")
             provider_call_ids.add(raw_output["call_id"])
             completed.add(call_id)
@@ -3143,8 +3192,16 @@ def _create_run_root(runtime_root: Path, run_id: str) -> Path:
     _ensure_private_directory(runtime_root, create=True)
     run_root = runtime_root / run_id
     run_root.mkdir(mode=0o700, exist_ok=False)
-    _fsync_directory(runtime_root)
-    _ensure_private_directory(run_root, create=False)
+    try:
+        _fsync_directory(runtime_root)
+        _ensure_private_directory(run_root, create=False)
+    except BaseException:
+        try:
+            run_root.rmdir()
+            _fsync_directory(runtime_root)
+        except BaseException as rollback_error:
+            raise AdaptiveWaveValidationError("run_root_creation_rollback_failed") from rollback_error
+        raise
     return run_root
 
 
@@ -3207,13 +3264,97 @@ def _load_request(path: Path) -> dict[str, Any]:
     return request
 
 
+def _delete_owned_directory_at(parent_descriptor: int, name: str) -> None:
+    """Recursively unlink one current-owner directory without following links.
+
+    The provider can write its isolated home and can therefore remove search
+    permission from directories before it exits.  Restore only the minimum
+    owner mode needed for deletion, bind every descent to a directory
+    descriptor, and unlink non-directories without following them.
+    """
+
+    try:
+        before = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("owned_tree_entry_unavailable") from exc
+    if not stat.S_ISDIR(before.st_mode) or before.st_uid != os.getuid():
+        raise AdaptiveWaveValidationError("owned_tree_directory_invalid")
+    try:
+        os.chmod(name, 0o700, dir_fd=parent_descriptor, follow_symlinks=False)
+        flags = os.O_RDONLY | os.O_DIRECTORY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(name, flags, dir_fd=parent_descriptor)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("owned_tree_directory_open_failed") from exc
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or opened.st_uid != os.getuid()
+            or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)
+        ):
+            raise AdaptiveWaveValidationError("owned_tree_directory_changed")
+        os.fchmod(descriptor, 0o700)
+        with os.scandir(descriptor) as entries:
+            names = [entry.name for entry in entries]
+        for child_name in names:
+            try:
+                child = os.stat(child_name, dir_fd=descriptor, follow_symlinks=False)
+            except OSError as exc:
+                raise AdaptiveWaveValidationError("owned_tree_entry_unavailable") from exc
+            if child.st_uid != os.getuid():
+                raise AdaptiveWaveValidationError("owned_tree_entry_owner_invalid")
+            if stat.S_ISDIR(child.st_mode):
+                _delete_owned_directory_at(descriptor, child_name)
+            else:
+                try:
+                    os.unlink(child_name, dir_fd=descriptor)
+                except OSError as exc:
+                    raise AdaptiveWaveValidationError("owned_tree_entry_delete_failed") from exc
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    try:
+        os.rmdir(name, dir_fd=parent_descriptor)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("owned_tree_directory_delete_failed") from exc
+
+
+def _delete_owned_directory_tree(path: Path) -> None:
+    """Delete an owner-controlled tree durably, including mode-000 children."""
+
+    flags = os.O_RDONLY | os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        parent_descriptor = os.open(path.parent, flags)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("owned_tree_parent_open_failed") from exc
+    try:
+        try:
+            os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        _delete_owned_directory_at(parent_descriptor, path.name)
+        os.fsync(parent_descriptor)
+    finally:
+        os.close(parent_descriptor)
+
+
 def _delete_ephemeral_tree(path: Path) -> None:
-    if path.is_symlink():
-        raise AdaptiveWaveValidationError("ephemeral_tree_symlink_invalid")
-    if path.exists():
-        shutil.rmtree(path)
-        _fsync_directory(path.parent)
-    if path.exists() or path.is_symlink():
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return
+    if path.is_symlink() or not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != os.getuid():
+        raise AdaptiveWaveValidationError("ephemeral_tree_invalid")
+    _delete_owned_directory_tree(path)
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return
+    else:
         raise AdaptiveWaveValidationError("ephemeral_tree_deletion_failed")
 
 
@@ -3237,12 +3378,23 @@ def _discard_run_root_without_intent_on_failure(run_root: Path) -> Any:
         except OSError:
             durable_intent_present = False
         if not durable_intent_present:
-            if run_root.is_symlink():
-                raise AdaptiveWaveValidationError("preintent_run_root_symlink_invalid")
-            if run_root.exists():
-                shutil.rmtree(run_root)
-                _fsync_directory(run_root.parent)
-            if run_root.exists() or run_root.is_symlink():
+            try:
+                run_metadata = run_root.lstat()
+            except FileNotFoundError:
+                run_metadata = None
+            if run_metadata is not None:
+                if (
+                    run_root.is_symlink()
+                    or not stat.S_ISDIR(run_metadata.st_mode)
+                    or run_metadata.st_uid != os.getuid()
+                ):
+                    raise AdaptiveWaveValidationError("preintent_run_root_invalid")
+                _delete_owned_directory_tree(run_root)
+            try:
+                run_root.lstat()
+            except FileNotFoundError:
+                pass
+            else:
                 raise AdaptiveWaveValidationError("preintent_run_root_deletion_failed")
         raise
 
@@ -3488,10 +3640,10 @@ def _run_adaptive_wave(
                 max_updates_bytes=request["technical_limits"]["max_session_updates_bytes"],
                 expected_socket_path=ephemeral_home / "leader.sock",
                 max_depth=MAX_SESSION_TREE_DEPTH,
-                deadline_at=execution_deadline,
+                deadline_at=monotonic() + FINAL_SESSION_TREE_SCAN_BUDGET_SECONDS,
                 monotonic=monotonic,
             )
-            if execution_mode == "live" and updates_source_path.exists() and measurement.limit_kind is None:
+            if execution_mode == "live" and measurement.limit_kind is None and updates_source_path.exists():
                 try:
                     updates_raw = _read_regular_owned_bounded(
                         updates_source_path,
@@ -3507,7 +3659,13 @@ def _run_adaptive_wave(
         elapsed_ms = max(0, round((monotonic() - started_monotonic) * 1000))
         completed_clock = wall_clock().astimezone(UTC)
         completed_at = _timestamp(completed_clock)
-        technical_limit_kind = process_result.technical_limit_kind or measurement.limit_kind
+        final_measurement_limit = measurement.limit_kind
+        if process_result.timed_out and final_measurement_limit == "session_tree_scan_deadline":
+            # The executor's process deadline owns this terminal transition.
+            # A separately bounded post-process diagnostic scan must not
+            # relabel an actual timeout as its own cleanup deadline.
+            final_measurement_limit = None
+        technical_limit_kind = process_result.technical_limit_kind or final_measurement_limit
         stdout_raw = _read_regular_owned_bounded(
             stdout_spool,
             maximum_bytes=request["technical_limits"]["max_stdout_bytes"],
@@ -4156,6 +4314,7 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
                 "session_tree_max_file_bytes",
             )
         )
+        or artifacts.get("session_tree_max_depth", MAX_SESSION_TREE_DEPTH + 1) > MAX_SESSION_TREE_DEPTH
     ):
         errors.append("receipt_artifacts_value_invalid")
 
@@ -4222,6 +4381,8 @@ def validate_operator_receipt(receipt: Any) -> list[str]:
             errors.append("receipt_live_completion_spawn_invalid")
         if status == "timed_out" and process.get("timed_out") is not True:
             errors.append("receipt_timeout_claim_invalid")
+        if process.get("timed_out") is True and process.get("technical_limit_kind") == "session_tree_scan_deadline":
+            errors.append("receipt_timeout_ownership_invalid")
         if status == "technical_limit_exceeded" and process.get("technical_limit_exceeded") is not True:
             errors.append("receipt_technical_limit_claim_invalid")
         if status != "technical_limit_exceeded" and process.get("technical_limit_exceeded") is True:
@@ -4670,6 +4831,8 @@ def validate_operator_bundle(
         errors.append("compiled_prompt_artifact_hash_mismatch")
     if isinstance(artifacts, dict) and (
         artifacts.get("session_tree_file_count", 0) > limits["max_session_files"]
+        or artifacts.get("session_tree_entry_count", 0) > limits["max_session_files"]
+        or artifacts.get("session_tree_max_depth", 0) > MAX_SESSION_TREE_DEPTH
         or artifacts.get("session_tree_total_bytes", 0) > limits["max_session_total_bytes"]
         or artifacts.get("session_tree_max_file_bytes", 0) > limits["max_session_file_bytes"]
     ):
@@ -4914,13 +5077,10 @@ def _recover_incomplete_run_locked(
             max_updates_bytes=intent["technical_limits"]["max_session_updates_bytes"],
             expected_socket_path=ephemeral_home / "leader.sock",
             max_depth=MAX_SESSION_TREE_DEPTH,
-            deadline_at=monotonic() + 5.0,
+            deadline_at=monotonic() + FINAL_SESSION_TREE_SCAN_BUDGET_SECONDS,
             monotonic=monotonic,
         )
-        if measurement.limit_kind is not None:
-            _delete_ephemeral_tree(ephemeral_home)
-            raise AdaptiveWaveValidationError("recovery_session_tree_invalid")
-        if source_updates_path.exists():
+        if measurement.limit_kind is None and source_updates_path.exists():
             updates_raw = _read_regular_owned_bounded(
                 source_updates_path,
                 maximum_bytes=intent["technical_limits"]["max_session_updates_bytes"],

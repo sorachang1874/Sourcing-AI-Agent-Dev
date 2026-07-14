@@ -100,6 +100,7 @@
       "pattern": "^[0-9a-f]{64}$"
     },
     "effective_prompt_policy_sha256": {
+      "description": "Entry-scoped semantic binding over the immutable policy owner fields and selected entry; it is not the mutable registry file digest.",
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
