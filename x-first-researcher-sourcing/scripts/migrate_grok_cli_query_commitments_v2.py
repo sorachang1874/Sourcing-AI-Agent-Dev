@@ -439,13 +439,7 @@ def _commitment(key: bytes, nonce: bytes, *, domain: str, payload: Any) -> str:
 
 
 def _issuance_id(policy_version: str, run_binding: str, key_id: str, nonce_id: str) -> str:
-    material = {
-        "policy_version": policy_version,
-        "run_binding_commitment": run_binding,
-        "commitment_key_id": key_id,
-        "commitment_nonce_id": nonce_id,
-    }
-    return f"qci_{hashlib.sha256(canonical_json(material).encode()).hexdigest()[:24]}"
+    return exploration.query_commitment_issuance_id(policy_version, run_binding, key_id, nonce_id)
 
 
 def _validate_legacy_policy(policy: Any, receipt: Mapping[str, Any]) -> None:
@@ -587,10 +581,16 @@ def _public_payload(receipt: Mapping[str, Any], policy: Mapping[str, Any]) -> di
             for sequence, call in enumerate(receipt["calls"])
         ],
     }
+    policy_path = "configs/grok_cli_exploration_query_policy_descriptor.v2.json"
+    policy_sha256 = canonical_sha256(descriptor)
     issuance = {
         "lineage_position": 0,
         "issuance_id": issuance_id,
         "policy_version": descriptor["policy_version"],
+        "policy_path": policy_path,
+        "policy_sha256": policy_sha256,
+        "protected_category_boundary_version": descriptor["protected_category_boundary_version"],
+        "semantic_manifest_sha256": canonical_sha256(descriptor["query_manifest"]),
         "run_binding_commitment": descriptor["run_binding_commitment"],
         "commitment_key_id": descriptor["commitment_key_id"],
         "commitment_nonce_id": descriptor["commitment_nonce_id"],
@@ -598,12 +598,17 @@ def _public_payload(receipt: Mapping[str, Any], policy: Mapping[str, Any]) -> di
     registry = {
         "schema_version": "x.grok_cli.exploration.query_policy_registry.v2",
         "registry_version": "approved-query-policies-v2",
+        "snapshot_position": 0,
+        "predecessor_registry_version": None,
+        "predecessor_registry_sha256": None,
+        "issuance_history_count": 1,
+        "issuance_history_head_sha256": canonical_sha256(issuance),
         "commitment_issuance_lineage": [issuance],
         "policies": [
             {
                 "policy_version": descriptor["policy_version"],
-                "policy_path": "configs/grok_cli_exploration_query_policy_descriptor.v2.json",
-                "policy_sha256": canonical_sha256(descriptor),
+                "policy_path": policy_path,
+                "policy_sha256": policy_sha256,
                 "commitment_scheme": SCHEME,
                 "commitment_issuance_id": issuance_id,
                 "commitment_key_id": descriptor["commitment_key_id"],
@@ -695,7 +700,23 @@ def _validate_public_artifacts(
         or row["policy_sha256"] != canonical_sha256(descriptor)
         or row["commitment_issuance_id"] != issuance["issuance_id"]
         or row["protected_category_boundary_version"] != descriptor["protected_category_boundary_version"]
+        or registry["snapshot_position"] != 0
+        or registry["predecessor_registry_version"] is not None
+        or registry["predecessor_registry_sha256"] is not None
+        or registry["issuance_history_count"] != 1
+        or registry["issuance_history_head_sha256"] != canonical_sha256(issuance)
         or issuance["lineage_position"] != 0
+        or issuance["policy_path"] != row["policy_path"]
+        or issuance["policy_sha256"] != row["policy_sha256"]
+        or issuance["protected_category_boundary_version"] != row["protected_category_boundary_version"]
+        or issuance["semantic_manifest_sha256"] != canonical_sha256(descriptor["query_manifest"])
+        or issuance["issuance_id"]
+        != exploration.query_commitment_issuance_id(
+            issuance["policy_version"],
+            issuance["run_binding_commitment"],
+            issuance["commitment_key_id"],
+            issuance["commitment_nonce_id"],
+        )
         or any(
             row[field] != issuance[field]
             for field in (

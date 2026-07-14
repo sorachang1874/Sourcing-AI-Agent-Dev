@@ -211,9 +211,7 @@ def _public_query_policy_registry() -> dict[str, Any]:
 
 
 def _public_query_commitment_issuance_history() -> dict[str, Any]:
-    return json.loads(
-        (ROOT / "configs/grok_cli_exploration_query_commitment_issuance_history.v1.json").read_text()
-    )
+    return json.loads((ROOT / "configs/grok_cli_exploration_query_commitment_issuance_history.v1.json").read_text())
 
 
 def _pre_migration_evaluation_fixture() -> dict[str, Any]:
@@ -291,7 +289,7 @@ def _canonical_policy() -> dict[str, Any]:
         ],
         "professional_experience_proxy_query_allowed": False,
         "protected_identity_query_allowed": False,
-        "protected_category_boundary_version": "base-discovery-protected-category-boundary-v2",
+        "protected_category_boundary_version": "base-discovery-protected-category-boundary-v3",
         "query_manifest": [
             {
                 "sequence": index,
@@ -308,10 +306,15 @@ def _canonical_policy() -> dict[str, Any]:
 
 def _query_policy_registry() -> dict[str, Any]:
     policy = _canonical_policy()
+    policy_path = "configs/grok_cli_exploration_query_policy_descriptor.v2.json"
     issuance = {
         "lineage_position": 0,
         "issuance_id": policy["commitment_issuance_id"],
         "policy_version": policy["policy_version"],
+        "policy_path": policy_path,
+        "policy_sha256": canonical_sha256(policy),
+        "protected_category_boundary_version": policy["protected_category_boundary_version"],
+        "semantic_manifest_sha256": canonical_sha256(policy["query_manifest"]),
         "run_binding_commitment": policy["run_binding_commitment"],
         "commitment_key_id": policy["commitment_key_id"],
         "commitment_nonce_id": policy["commitment_nonce_id"],
@@ -319,11 +322,16 @@ def _query_policy_registry() -> dict[str, Any]:
     return {
         "schema_version": "x.grok_cli.exploration.query_policy_registry.v2",
         "registry_version": "approved-query-policies-v2",
+        "snapshot_position": 0,
+        "predecessor_registry_version": None,
+        "predecessor_registry_sha256": None,
+        "issuance_history_count": 1,
+        "issuance_history_head_sha256": canonical_sha256(issuance),
         "commitment_issuance_lineage": [issuance],
         "policies": [
             {
                 "policy_version": policy["policy_version"],
-                "policy_path": "configs/grok_cli_exploration_query_policy_descriptor.v2.json",
+                "policy_path": policy_path,
                 "policy_sha256": canonical_sha256(policy),
                 "commitment_scheme": policy["commitment_scheme"],
                 "commitment_issuance_id": policy["commitment_issuance_id"],
@@ -339,6 +347,41 @@ def _query_policy_registry() -> dict[str, Any]:
             }
         ],
     }
+
+
+def _registry_admissions(*registries: dict[str, Any]) -> tuple[tuple[str, str, str], ...]:
+    return tuple(
+        (
+            registry["registry_version"],
+            canonical_sha256(registry),
+            registry["issuance_history_head_sha256"],
+        )
+        for registry in registries
+    )
+
+
+def _registry_with_policy(
+    policy: dict[str, Any],
+    registry: dict[str, Any] | None = None,
+    *,
+    policy_index: int = 0,
+) -> dict[str, Any]:
+    bound = copy.deepcopy(_query_policy_registry() if registry is None else registry)
+    row = bound["policies"][policy_index]
+    issuance = bound["commitment_issuance_lineage"][policy_index]
+    row.update(
+        policy_sha256=canonical_sha256(policy),
+        protected_category_boundary_version=policy["protected_category_boundary_version"],
+    )
+    issuance.update(
+        policy_path=row["policy_path"],
+        policy_sha256=row["policy_sha256"],
+        protected_category_boundary_version=row["protected_category_boundary_version"],
+        semantic_manifest_sha256=canonical_sha256(policy["query_manifest"]),
+    )
+    bound["issuance_history_count"] = len(bound["commitment_issuance_lineage"])
+    bound["issuance_history_head_sha256"] = canonical_sha256(bound["commitment_issuance_lineage"][-1])
+    return bound
 
 
 def _query_commitment_issuance_history(
@@ -540,13 +583,15 @@ def _binding() -> dict[str, str]:
 class GrokCliExplorationTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        cls._production_registry_admissions = exploration_module.QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS
         cls._policy_workspace = tempfile.TemporaryDirectory()
         project_root = Path(cls._policy_workspace.name)
         configs = project_root / "configs"
         registry_directory = configs / "grok_cli_exploration_query_policy_registries"
         registry_directory.mkdir(parents=True)
         (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(json.dumps(_canonical_policy()))
-        (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(_query_policy_registry()))
+        registry = _query_policy_registry()
+        (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(registry))
         _write_query_commitment_issuance_history(configs)
         cls._root_patch = mock.patch.object(exploration_module, "PROJECT_ROOT", project_root)
         cls._registry_patch = mock.patch.object(
@@ -554,11 +599,18 @@ class GrokCliExplorationTest(unittest.TestCase):
             "QUERY_POLICY_REGISTRY_DIRECTORY",
             registry_directory,
         )
+        cls._admission_patch = mock.patch.object(
+            exploration_module,
+            "QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS",
+            _registry_admissions(registry),
+        )
         cls._root_patch.start()
         cls._registry_patch.start()
+        cls._admission_patch.start()
 
     @classmethod
     def tearDownClass(cls) -> None:
+        cls._admission_patch.stop()
         cls._registry_patch.stop()
         cls._root_patch.stop()
         cls._policy_workspace.cleanup()
@@ -580,10 +632,7 @@ class GrokCliExplorationTest(unittest.TestCase):
             (ROOT / "contracts/x.grok_cli.exploration.query_policy_registry.v2.schema.json").read_text()
         )
         issuance_history_schema = json.loads(
-            (
-                ROOT
-                / "contracts/x.grok_cli.exploration.query_commitment_issuance_history.v1.schema.json"
-            ).read_text()
+            (ROOT / "contracts/x.grok_cli.exploration.query_commitment_issuance_history.v1.schema.json").read_text()
         )
 
         def assert_closed_objects(value: Any, path: str = "$") -> None:
@@ -788,8 +837,7 @@ class GrokCliExplorationTest(unittest.TestCase):
             }
             for index, call in enumerate(calls)
         ]
-        registry = _query_policy_registry()
-        registry["policies"][0]["policy_sha256"] = canonical_sha256(policy)
+        registry = _registry_with_policy(policy)
         with tempfile.TemporaryDirectory() as directory:
             project_root = Path(directory)
             configs = project_root / "configs"
@@ -797,10 +845,15 @@ class GrokCliExplorationTest(unittest.TestCase):
             registry_directory.mkdir(parents=True)
             (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(json.dumps(policy))
             (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(registry))
-            _write_query_commitment_issuance_history(configs)
+            _write_query_commitment_issuance_history(configs, registry["commitment_issuance_lineage"])
             with (
                 mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
                 mock.patch.object(exploration_module, "QUERY_POLICY_REGISTRY_DIRECTORY", registry_directory),
+                mock.patch.object(
+                    exploration_module,
+                    "QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS",
+                    _registry_admissions(registry),
+                ),
             ):
                 observed = evaluate_exploration(
                     _result(calls=calls, candidates=candidates),
@@ -873,6 +926,19 @@ class GrokCliExplorationTest(unittest.TestCase):
             "investigador estadounidense de preentrenamiento",
             "アメリカ人の研究者",
             "미국인 연구원",
+            "LGBTQ researcher on pretraining systems.",
+            "Autistic engineer working on model training.",
+            "Wheelchair users at the target lab.",
+            "自闭症研究员负责预训练。",
+            "輪椅使用者負責模型訓練。",
+            "chercheur autiste en préentraînement",
+            "utilisateur de fauteuil roulant au laboratoire",
+            "investigador autista de preentrenamiento",
+            "usuario de silla de ruedas en el laboratorio",
+            "自閉症の研究者",
+            "車椅子利用者の研究者",
+            "자폐성 연구원",
+            "휠체어 사용자 연구원",
         ):
             protected_support = _candidate()
             protected_support["evidence"][1]["excerpt"] = protected_text
@@ -890,6 +956,25 @@ class GrokCliExplorationTest(unittest.TestCase):
             "Worked in China and across Asia on professional pretraining systems."
         )
         _evaluate(_result(candidate=professional_geography), _receipt())
+
+        for neutral_text in (
+            "Diagnosed a race condition in the pretraining scheduler.",
+            "Ran a blind evaluation of the base model.",
+            "Published a white paper about training systems.",
+            "Implemented a straight-through estimator for model training.",
+        ):
+            neutral_support = _candidate()
+            neutral_support["evidence"][1]["excerpt"] = neutral_text
+            with self.subTest(neutral_support=neutral_text):
+                _evaluate(_result(candidate=neutral_support), _receipt())
+
+        mixed_neutral_and_protected = _candidate()
+        mixed_neutral_and_protected["evidence"][1]["excerpt"] = "Published a white paper about women in pretraining."
+        with self.assertRaisesRegex(
+            ExplorationValidationError,
+            "protected_identity_decision_evidence_forbidden",
+        ):
+            _evaluate(_result(candidate=mixed_neutral_and_protected), _receipt())
 
     def test_public_outputs_never_contain_private_commitment_material_or_query_plaintext(self) -> None:
         evaluation = _evaluate(_result(candidate=_candidate(platform_user_id=None)), _receipt())
@@ -944,6 +1029,18 @@ class GrokCliExplorationTest(unittest.TestCase):
             _canonical_policy()["legacy_full_policy_commitment"],
         )
         self.assertEqual(public_registry["policies"][0]["policy_sha256"], canonical_sha256(public_policy))
+        self.assertEqual(
+            self._production_registry_admissions,
+            _registry_admissions(public_registry),
+        )
+        self.assertEqual(
+            public_registry["issuance_history_head_sha256"],
+            canonical_sha256(public_registry["commitment_issuance_lineage"][-1]),
+        )
+        self.assertEqual(
+            public_registry["commitment_issuance_lineage"],
+            _public_query_commitment_issuance_history()["issuances"],
+        )
         self.assertEqual(
             public_registry["policies"][0]["legacy_full_policy_commitment"],
             public_policy["legacy_full_policy_commitment"],
@@ -1100,7 +1197,7 @@ class GrokCliExplorationTest(unittest.TestCase):
                 registry_directory.mkdir(parents=True)
                 (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(json.dumps(policy))
                 (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(registry))
-                _write_query_commitment_issuance_history(configs)
+                _write_query_commitment_issuance_history(configs, registry["commitment_issuance_lineage"])
                 with (
                     mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
                     mock.patch.object(
@@ -1108,16 +1205,23 @@ class GrokCliExplorationTest(unittest.TestCase):
                         "QUERY_POLICY_REGISTRY_DIRECTORY",
                         registry_directory,
                     ),
+                    mock.patch.object(
+                        exploration_module,
+                        "QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS",
+                        _registry_admissions(registry),
+                    ),
                 ):
                     evaluate_exploration(_result(), _receipt())
 
         changed_call = copy.deepcopy(_canonical_policy())
         changed_call["query_manifest"][0]["call_commitment"] = "0" * 64
-        with self.assertRaisesRegex(ExplorationValidationError, "approved_query_policy_hash_mismatch"):
+        with self.assertRaisesRegex(
+            ExplorationValidationError,
+            "query_policy_registry_descriptor_binding_invalid",
+        ):
             evaluate_with(changed_call, _query_policy_registry())
 
-        changed_call_registry = copy.deepcopy(_query_policy_registry())
-        changed_call_registry["policies"][0]["policy_sha256"] = canonical_sha256(changed_call)
+        changed_call_registry = _registry_with_policy(changed_call)
         with self.assertRaisesRegex(ExplorationValidationError, "query_policy_manifest_mismatch"):
             evaluate_with(changed_call, changed_call_registry)
 
@@ -1128,14 +1232,16 @@ class GrokCliExplorationTest(unittest.TestCase):
         )
         for sequence, item in enumerate(reordered["query_manifest"]):
             item["sequence"] = sequence
-        reordered_registry = copy.deepcopy(_query_policy_registry())
-        reordered_registry["policies"][0]["policy_sha256"] = canonical_sha256(reordered)
+        reordered_registry = _registry_with_policy(reordered)
         with self.assertRaisesRegex(ExplorationValidationError, "query_policy_manifest_mismatch"):
             evaluate_with(reordered, reordered_registry)
 
         changed_legacy_registry = copy.deepcopy(_query_policy_registry())
         changed_legacy_registry["policies"][0]["legacy_full_policy_commitment"] = "f" * 64
-        with self.assertRaisesRegex(ExplorationValidationError, "query_policy_binding_invalid"):
+        with self.assertRaisesRegex(
+            ExplorationValidationError,
+            "query_policy_registry_descriptor_binding_invalid",
+        ):
             evaluate_with(_canonical_policy(), changed_legacy_registry)
 
     def test_candidate_value_policy_and_schema_own_temporal_ordering_and_completeness(self) -> None:
@@ -1242,25 +1348,36 @@ class GrokCliExplorationTest(unittest.TestCase):
             )
             policy_path = configs / "anthropic_query_policy.v1.json"
             policy_path.write_text(json.dumps(policy))
+            policy_relative_path = "configs/anthropic_query_policy.v1.json"
+            second_issuance = {
+                "lineage_position": 1,
+                "issuance_id": policy["commitment_issuance_id"],
+                "policy_version": policy["policy_version"],
+                "policy_path": policy_relative_path,
+                "policy_sha256": canonical_sha256(policy),
+                "protected_category_boundary_version": policy["protected_category_boundary_version"],
+                "semantic_manifest_sha256": canonical_sha256(policy["query_manifest"]),
+                "run_binding_commitment": policy["run_binding_commitment"],
+                "commitment_key_id": policy["commitment_key_id"],
+                "commitment_nonce_id": policy["commitment_nonce_id"],
+            }
             registry = {
                 "schema_version": "x.grok_cli.exploration.query_policy_registry.v2",
                 "registry_version": "approved-query-policies-v3",
+                "snapshot_position": 1,
+                "predecessor_registry_version": canonical_registry["registry_version"],
+                "predecessor_registry_sha256": canonical_sha256(canonical_registry),
+                "issuance_history_count": 2,
+                "issuance_history_head_sha256": canonical_sha256(second_issuance),
                 "commitment_issuance_lineage": [
                     *canonical_registry["commitment_issuance_lineage"],
-                    {
-                        "lineage_position": 1,
-                        "issuance_id": policy["commitment_issuance_id"],
-                        "policy_version": policy["policy_version"],
-                        "run_binding_commitment": policy["run_binding_commitment"],
-                        "commitment_key_id": policy["commitment_key_id"],
-                        "commitment_nonce_id": policy["commitment_nonce_id"],
-                    },
+                    second_issuance,
                 ],
                 "policies": [
                     *canonical_registry["policies"],
                     {
                         "policy_version": policy["policy_version"],
-                        "policy_path": "configs/anthropic_query_policy.v1.json",
+                        "policy_path": policy_relative_path,
                         "policy_sha256": canonical_sha256(policy),
                         "commitment_scheme": policy["commitment_scheme"],
                         "commitment_issuance_id": policy["commitment_issuance_id"],
@@ -1293,6 +1410,11 @@ class GrokCliExplorationTest(unittest.TestCase):
             with (
                 mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
                 mock.patch.object(exploration_module, "QUERY_POLICY_REGISTRY_DIRECTORY", registry_directory),
+                mock.patch.object(
+                    exploration_module,
+                    "QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS",
+                    _registry_admissions(canonical_registry, registry),
+                ),
             ):
                 historical = evaluate_exploration(
                     _result(),
@@ -1357,20 +1479,46 @@ class GrokCliExplorationTest(unittest.TestCase):
                 ):
                     evaluate_exploration(_result(), _receipt())
 
-    def test_registry_snapshot_must_be_exact_prefix_of_all_history_owner(self) -> None:
+    def test_runtime_recomputes_deterministic_issuance_id_after_coherent_rewrite(self) -> None:
+        policy = copy.deepcopy(_canonical_policy())
+        forged_issuance_id = "qci_" + "f" * 24
+        policy["commitment_issuance_id"] = forged_issuance_id
         registry = copy.deepcopy(_query_policy_registry())
-        registry["registry_version"] = "approved-query-policies-v3"
-        forged = copy.deepcopy(registry["commitment_issuance_lineage"][0])
-        forged.update(
-            issuance_id="qci_" + "a" * 24,
-            policy_version="anthropic-pretrain-base-discovery-fixture-v1",
-            run_binding_commitment="a" * 64,
-            commitment_nonce_id="b" * 64,
-        )
-        # Reusing the v2 key in a standalone v3 snapshot used to evade the
-        # per-file uniqueness check.  The all-history owner must reject it
-        # before the policy body can be selected.
-        registry["commitment_issuance_lineage"] = [forged]
+        registry["policies"][0]["commitment_issuance_id"] = forged_issuance_id
+        registry["commitment_issuance_lineage"][0]["issuance_id"] = forged_issuance_id
+        registry = _registry_with_policy(policy, registry)
+        with tempfile.TemporaryDirectory() as directory:
+            project_root = Path(directory)
+            configs = project_root / "configs"
+            registry_directory = configs / "grok_cli_exploration_query_policy_registries"
+            registry_directory.mkdir(parents=True)
+            (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(json.dumps(policy))
+            (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(registry))
+            _write_query_commitment_issuance_history(configs, registry["commitment_issuance_lineage"])
+            with (
+                mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
+                mock.patch.object(exploration_module, "QUERY_POLICY_REGISTRY_DIRECTORY", registry_directory),
+                mock.patch.object(
+                    exploration_module,
+                    "QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS",
+                    _registry_admissions(registry),
+                ),
+                self.assertRaisesRegex(
+                    ExplorationValidationError,
+                    "query_commitment_issuance_history_invalid",
+                ),
+            ):
+                evaluate_exploration(_result(), _receipt())
+
+    def test_history_rows_bind_policy_path_hash_boundary_and_semantic_manifest(self) -> None:
+        registry = _query_policy_registry()
+        canonical_history = registry["commitment_issuance_lineage"]
+        mutations = {
+            "policy_path": "configs/other_reviewed_policy.json",
+            "policy_sha256": "f" * 64,
+            "protected_category_boundary_version": "base-discovery-protected-category-boundary-v2",
+            "semantic_manifest_sha256": "e" * 64,
+        }
         with tempfile.TemporaryDirectory() as directory:
             project_root = Path(directory)
             configs = project_root / "configs"
@@ -1379,25 +1527,164 @@ class GrokCliExplorationTest(unittest.TestCase):
             (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(
                 json.dumps(_canonical_policy())
             )
-            (registry_directory / "approved-query-policies-v3.json").write_text(json.dumps(registry))
-            _write_query_commitment_issuance_history(configs)
+            (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(registry))
+            for field, value in mutations.items():
+                history = copy.deepcopy(canonical_history)
+                history[0][field] = value
+                _write_query_commitment_issuance_history(configs, history)
+                with (
+                    self.subTest(history_field=field),
+                    mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
+                    mock.patch.object(
+                        exploration_module,
+                        "QUERY_POLICY_REGISTRY_DIRECTORY",
+                        registry_directory,
+                    ),
+                    mock.patch.object(
+                        exploration_module,
+                        "QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS",
+                        _registry_admissions(registry),
+                    ),
+                    self.assertRaises(ExplorationValidationError),
+                ):
+                    evaluate_exploration(_result(), _receipt())
+
+    def test_complete_admitted_snapshot_chain_replays_old_and_rejects_truncated_latest_or_history(self) -> None:
+        canonical_registry = _query_policy_registry()
+        second_policy = copy.deepcopy(_canonical_policy())
+        second_policy.update(
+            policy_version="anthropic-pretrain-base-discovery-fixture-v1",
+            lab_id="anthropic",
+            commitment_key_id="a" * 64,
+            commitment_nonce_id="b" * 64,
+            run_binding_commitment="c" * 64,
+            legacy_full_policy_commitment="d" * 64,
+        )
+        second_policy["commitment_issuance_id"] = exploration_module.query_commitment_issuance_id(
+            second_policy["policy_version"],
+            second_policy["run_binding_commitment"],
+            second_policy["commitment_key_id"],
+            second_policy["commitment_nonce_id"],
+        )
+        second_path = "configs/anthropic_query_policy.v1.json"
+        second_issuance = {
+            "lineage_position": 1,
+            "issuance_id": second_policy["commitment_issuance_id"],
+            "policy_version": second_policy["policy_version"],
+            "policy_path": second_path,
+            "policy_sha256": canonical_sha256(second_policy),
+            "protected_category_boundary_version": second_policy["protected_category_boundary_version"],
+            "semantic_manifest_sha256": canonical_sha256(second_policy["query_manifest"]),
+            "run_binding_commitment": second_policy["run_binding_commitment"],
+            "commitment_key_id": second_policy["commitment_key_id"],
+            "commitment_nonce_id": second_policy["commitment_nonce_id"],
+        }
+        registry = {
+            "schema_version": "x.grok_cli.exploration.query_policy_registry.v2",
+            "registry_version": "approved-query-policies-v3",
+            "snapshot_position": 1,
+            "predecessor_registry_version": canonical_registry["registry_version"],
+            "predecessor_registry_sha256": canonical_sha256(canonical_registry),
+            "issuance_history_count": 2,
+            "issuance_history_head_sha256": canonical_sha256(second_issuance),
+            "commitment_issuance_lineage": [
+                *canonical_registry["commitment_issuance_lineage"],
+                second_issuance,
+            ],
+            "policies": [
+                *canonical_registry["policies"],
+                {
+                    "policy_version": second_policy["policy_version"],
+                    "policy_path": second_path,
+                    "policy_sha256": canonical_sha256(second_policy),
+                    "commitment_scheme": second_policy["commitment_scheme"],
+                    "commitment_issuance_id": second_policy["commitment_issuance_id"],
+                    "commitment_key_id": second_policy["commitment_key_id"],
+                    "commitment_nonce_id": second_policy["commitment_nonce_id"],
+                    "legacy_full_policy_commitment": second_policy["legacy_full_policy_commitment"],
+                    "policy_schema_version": second_policy["schema_version"],
+                    "purpose": second_policy["purpose"],
+                    "lab_id": second_policy["lab_id"],
+                    "protected_category_boundary_version": second_policy["protected_category_boundary_version"],
+                    "run_binding_commitment": second_policy["run_binding_commitment"],
+                    "enabled": True,
+                },
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            project_root = Path(directory)
+            configs = project_root / "configs"
+            registry_directory = configs / "grok_cli_exploration_query_policy_registries"
+            registry_directory.mkdir(parents=True)
+            (configs / "grok_cli_exploration_query_policy_descriptor.v2.json").write_text(
+                json.dumps(_canonical_policy())
+            )
+            (configs / "anthropic_query_policy.v1.json").write_text(json.dumps(second_policy))
+            (registry_directory / "approved-query-policies-v2.json").write_text(json.dumps(canonical_registry))
+            latest_path = registry_directory / "approved-query-policies-v3.json"
+            history_path = configs / "grok_cli_exploration_query_commitment_issuance_history.v1.json"
+
+            def evaluate_chain(latest: dict[str, Any], history: list[dict[str, Any]]) -> None:
+                latest_path.write_text(json.dumps(latest))
+                history_path.write_text(json.dumps(_query_commitment_issuance_history(history)))
+                with (
+                    mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
+                    mock.patch.object(
+                        exploration_module,
+                        "QUERY_POLICY_REGISTRY_DIRECTORY",
+                        registry_directory,
+                    ),
+                    mock.patch.object(
+                        exploration_module,
+                        "QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS",
+                        _registry_admissions(canonical_registry, latest),
+                    ),
+                ):
+                    evaluate_exploration(
+                        _result(),
+                        _receipt(),
+                        query_policy_registry_version="approved-query-policies-v2",
+                    )
+
+            full_history = registry["commitment_issuance_lineage"]
+            evaluate_chain(registry, full_history)
+
+            truncated_latest = copy.deepcopy(registry)
+            truncated_latest["commitment_issuance_lineage"] = truncated_latest["commitment_issuance_lineage"][:1]
+            truncated_latest["policies"] = truncated_latest["policies"][:1]
+            truncated_latest["issuance_history_count"] = 1
+            truncated_latest["issuance_history_head_sha256"] = canonical_sha256(
+                truncated_latest["commitment_issuance_lineage"][0]
+            )
             with (
-                mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
-                mock.patch.object(
-                    exploration_module,
-                    "QUERY_POLICY_REGISTRY_DIRECTORY",
-                    registry_directory,
-                ),
                 self.assertRaisesRegex(
                     ExplorationValidationError,
-                    "query_commitment_issuance_history_prefix_invalid",
+                    "query_policy_registry_snapshot_inheritance_invalid",
                 ),
             ):
-                evaluate_exploration(
-                    _result(),
-                    _receipt(),
-                    query_policy_registry_version="approved-query-policies-v3",
-                )
+                evaluate_chain(truncated_latest, full_history)
+
+            with self.assertRaisesRegex(
+                ExplorationValidationError,
+                "query_commitment_issuance_history_prefix_invalid",
+            ):
+                evaluate_chain(registry, full_history[:1])
+
+            wrong_predecessor = copy.deepcopy(registry)
+            wrong_predecessor["predecessor_registry_sha256"] = "f" * 64
+            with self.assertRaisesRegex(
+                ExplorationValidationError,
+                "query_policy_registry_snapshot_chain_invalid",
+            ):
+                evaluate_chain(wrong_predecessor, full_history)
+
+            rewritten_inherited = copy.deepcopy(registry)
+            rewritten_inherited["commitment_issuance_lineage"][0]["semantic_manifest_sha256"] = "f" * 64
+            with self.assertRaisesRegex(
+                ExplorationValidationError,
+                "query_commitment_issuance_history_prefix_invalid",
+            ):
+                evaluate_chain(rewritten_inherited, full_history)
 
     def test_one_absolute_deadline_is_forwarded_through_hydration_and_shape(self) -> None:
         observed_deadlines: list[float] = []
@@ -1433,9 +1720,15 @@ class GrokCliExplorationTest(unittest.TestCase):
 
             def evaluate_registry(registry: dict[str, Any]) -> None:
                 registry_path.write_text(json.dumps(registry))
+                _write_query_commitment_issuance_history(configs, registry["commitment_issuance_lineage"])
                 with (
                     mock.patch.object(exploration_module, "PROJECT_ROOT", project_root),
                     mock.patch.object(exploration_module, "QUERY_POLICY_REGISTRY_DIRECTORY", registry_directory),
+                    mock.patch.object(
+                        exploration_module,
+                        "QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS",
+                        _registry_admissions(registry),
+                    ),
                 ):
                     evaluate_exploration(_result(), _receipt())
 
@@ -1453,6 +1746,7 @@ class GrokCliExplorationTest(unittest.TestCase):
             link_path = configs / "linked_policy.json"
             link_path.symlink_to(policy_path.name)
             symlink["policies"][0]["policy_path"] = "configs/linked_policy.json"
+            symlink = _registry_with_policy(_canonical_policy(), symlink)
             with self.assertRaisesRegex(ExplorationValidationError, "query_policy_path_invalid"):
                 evaluate_registry(symlink)
 
@@ -1520,11 +1814,24 @@ class GrokCliExplorationTest(unittest.TestCase):
             "OpenAI Black pretraining researcher",
             "OpenAI disabled pretraining scientist",
             "OpenAI gay pretraining researcher",
+            "OpenAI LGBTQ pretraining researcher",
+            "OpenAI autistic pretraining engineer",
+            "OpenAI wheelchair users pretraining",
             "OpenAI 美国人 预训练 researcher",
+            "OpenAI 自闭症 预训练 researcher",
+            "OpenAI 輪椅使用者 预训练 researcher",
             "OpenAI chercheur musulman préentraînement",
+            "OpenAI chercheur autiste préentraînement",
+            "OpenAI utilisateur de fauteuil roulant préentraînement",
             "OpenAI investigador estadounidense preentrenamiento",
+            "OpenAI investigador autista preentrenamiento",
+            "OpenAI usuario de silla de ruedas preentrenamiento",
             "OpenAI アメリカ人 事前学習",
+            "OpenAI 自閉症 事前学習",
+            "OpenAI 車椅子利用者 事前学習",
             "OpenAI 미국인 사전학습 연구원",
+            "OpenAI 자폐성 사전학습 연구원",
+            "OpenAI 휠체어 사용자 사전학습 연구원",
         ):
             protected_call = _call(query=protected_query)
             with (
@@ -1542,6 +1849,84 @@ class GrokCliExplorationTest(unittest.TestCase):
                     "limit": "10",
                     "mode": "Latest",
                 },
+                "x_keyword_search",
+            )
+        )
+        for neutral_query in (
+            "OpenAI pretraining race condition",
+            "OpenAI blind evaluation pretraining",
+            "OpenAI pretraining white paper",
+            "OpenAI straight-through estimator pretraining",
+        ):
+            with self.subTest(neutral_query=neutral_query):
+                self.assertTrue(
+                    exploration_module._tool_arguments_valid(
+                        {"query": neutral_query, "limit": "10", "mode": "Latest"},
+                        "x_keyword_search",
+                    )
+                )
+        for near_miss in (
+            "OpenAI race researcher",
+            "OpenAI blind researchers",
+            "OpenAI white researchers",
+            "OpenAI straight researchers",
+            "OpenAI white paper women pretraining",
+        ):
+            with self.subTest(near_miss=near_miss):
+                self.assertFalse(
+                    exploration_module._tool_arguments_valid(
+                        {"query": near_miss, "limit": "10", "mode": "Latest"},
+                        "x_keyword_search",
+                    )
+                )
+
+    def test_public_v3_tool_argument_policy_closes_secondary_semantic_fields(self) -> None:
+        self.assertEqual(
+            exploration_module.BASE_DISCOVERY_TOOL_ARGUMENT_POLICY_VERSION,
+            "base-discovery-tool-arguments-v3",
+        )
+        valid = {
+            "query": "OpenAI pretraining race condition",
+            "limit": "10",
+            "mode": "Latest",
+        }
+        self.assertTrue(exploration_module.base_discovery_tool_arguments_allowed(valid, "x_keyword_search"))
+        self.assertTrue(exploration_module.base_discovery_tool_subject_allowed(valid, "x_keyword_search"))
+        for extra_key, extra_value in (
+            ("secondary_query", "LGBTQ researchers"),
+            ("filter", "autistic"),
+            ("metadata", {"audience": "wheelchair users"}),
+            ("cursor", "women"),
+        ):
+            hidden = {**valid, extra_key: extra_value}
+            with self.subTest(extra_key=extra_key):
+                self.assertFalse(
+                    exploration_module.base_discovery_tool_arguments_allowed(
+                        hidden,
+                        "x_keyword_search",
+                    )
+                )
+                self.assertFalse(
+                    exploration_module.base_discovery_tool_subject_allowed(
+                        hidden,
+                        "x_keyword_search",
+                    )
+                )
+        self.assertFalse(
+            exploration_module.base_discovery_tool_arguments_allowed(
+                {"query": "OpenAI pretraining", "limit": "10", "mode": "Latest"},
+                "future_x_search",
+            )
+        )
+        self.assertFalse(
+            exploration_module.base_discovery_tool_arguments_allowed(
+                {"url": "https://x.com/xfsynth_fixture/status/123456", "query": "women"},
+                "x_thread_fetch",
+            )
+        )
+        self.assertFalse(
+            exploration_module.base_discovery_tool_arguments_allowed(
+                {"query": "OpenAI pretraining", "limit": "10", "mode": {"hidden": "women"}},
                 "x_keyword_search",
             )
         )
@@ -1939,9 +2324,22 @@ class GrokCliExplorationTest(unittest.TestCase):
             (
                 project_root / "configs/grok_cli_exploration_query_policy_registries/approved-query-policies-v2.json"
             ).write_text(json.dumps(_query_policy_registry()))
-            (
-                project_root / "configs/grok_cli_exploration_query_commitment_issuance_history.v1.json"
-            ).write_text(json.dumps(_query_commitment_issuance_history()))
+            (project_root / "configs/grok_cli_exploration_query_commitment_issuance_history.v1.json").write_text(
+                json.dumps(_query_commitment_issuance_history())
+            )
+            copied_module = project_root / "src/x_first/grok_cli_exploration.py"
+            copied_source = copied_module.read_text()
+            synthetic_admission = _registry_admissions(_query_policy_registry())[0]
+            public_registry = _public_query_policy_registry()
+            production_admission = _registry_admissions(public_registry)[0]
+            for production_value, synthetic_value in zip(
+                production_admission[1:],
+                synthetic_admission[1:],
+                strict=True,
+            ):
+                self.assertIn(production_value, copied_source)
+                copied_source = copied_source.replace(production_value, synthetic_value, 1)
+            copied_module.write_text(copied_source)
             result_path = root / "result.json"
             receipt_path = root / "receipt.json"
             output_path = root / "evaluation.json"

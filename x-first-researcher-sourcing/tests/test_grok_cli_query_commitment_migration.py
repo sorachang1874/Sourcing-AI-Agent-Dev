@@ -21,6 +21,7 @@ from tests.test_grok_cli_exploration import (  # noqa: E402
     COMMITMENT_NONCE_HEX,
     _query_commitment_issuance_history,
     _receipt,
+    _registry_admissions,
     _result,
     _synthetic_legacy_full_policy,
 )
@@ -100,14 +101,10 @@ class GrokCliQueryCommitmentMigrationTest(unittest.TestCase):
             json.dumps(artifacts["registry"]), encoding="utf-8"
         )
         (configs / "grok_cli_exploration_query_commitment_issuance_history.v1.json").write_text(
-            json.dumps(
-                _query_commitment_issuance_history(
-                    artifacts["registry"]["commitment_issuance_lineage"]
-                )
-            ),
+            json.dumps(_query_commitment_issuance_history(artifacts["registry"]["commitment_issuance_lineage"])),
             encoding="utf-8",
         )
-        return temporary, project_root, registry_directory
+        return temporary, project_root, registry_directory, _registry_admissions(artifacts["registry"])
 
     def test_prepare_is_atomic_durable_owner_only_and_identical_rerun_is_explicit(self) -> None:
         temporary, root, bundle = self._source_tree()
@@ -122,6 +119,30 @@ class GrokCliQueryCommitmentMigrationTest(unittest.TestCase):
         with mock.patch.object(migration.os, "fsync", side_effect=observed_fsync):
             created = self._prepare_fixed(root)
         self.assertEqual((created["status"], created["idempotent"]), ("prepared", False))
+        descriptor = created["policy"]
+        registry = created["registry"]
+        issuance = registry["commitment_issuance_lineage"][0]
+        self.assertEqual(
+            issuance["issuance_id"],
+            exploration.query_commitment_issuance_id(
+                issuance["policy_version"],
+                issuance["run_binding_commitment"],
+                issuance["commitment_key_id"],
+                issuance["commitment_nonce_id"],
+            ),
+        )
+        self.assertEqual(issuance["policy_sha256"], exploration.canonical_sha256(descriptor))
+        self.assertEqual(
+            issuance["semantic_manifest_sha256"],
+            exploration.canonical_sha256(descriptor["query_manifest"]),
+        )
+        self.assertEqual(issuance["policy_path"], registry["policies"][0]["policy_path"])
+        self.assertEqual(
+            issuance["protected_category_boundary_version"],
+            exploration.PROTECTED_CATEGORY_BOUNDARY_VERSION,
+        )
+        self.assertEqual(registry["issuance_history_count"], 1)
+        self.assertEqual(registry["issuance_history_head_sha256"], exploration.canonical_sha256(issuance))
         self.assertIn("file", fsync_kinds)
         self.assertIn("directory", fsync_kinds)
         for name in (
@@ -281,11 +302,12 @@ class GrokCliQueryCommitmentMigrationTest(unittest.TestCase):
         temporary, root, bundle = self._source_tree()
         self.addCleanup(temporary.cleanup)
         artifacts = self._prepare_fixed(root)
-        registry_tmp, project_root, registry_directory = self._runtime_registry(artifacts)
+        registry_tmp, project_root, registry_directory, admissions = self._runtime_registry(artifacts)
         self.addCleanup(registry_tmp.cleanup)
         with (
             mock.patch.object(exploration, "PROJECT_ROOT", project_root),
             mock.patch.object(exploration, "QUERY_POLICY_REGISTRY_DIRECTORY", registry_directory),
+            mock.patch.object(exploration, "QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS", admissions),
         ):
             evaluated = migration.run_operation(root, "evaluate")
             replayed = migration.run_operation(root, "evaluate")
@@ -310,11 +332,12 @@ class GrokCliQueryCommitmentMigrationTest(unittest.TestCase):
         temporary, root, _ = self._source_tree()
         self.addCleanup(temporary.cleanup)
         artifacts = self._prepare_fixed(root)
-        registry_tmp, project_root, registry_directory = self._runtime_registry(artifacts)
+        registry_tmp, project_root, registry_directory, admissions = self._runtime_registry(artifacts)
         self.addCleanup(registry_tmp.cleanup)
         with (
             mock.patch.object(exploration, "PROJECT_ROOT", project_root),
             mock.patch.object(exploration, "QUERY_POLICY_REGISTRY_DIRECTORY", registry_directory),
+            mock.patch.object(exploration, "QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS", admissions),
         ):
             migration.run_operation(root, "evaluate")
         real_unlink = migration._unlink_private

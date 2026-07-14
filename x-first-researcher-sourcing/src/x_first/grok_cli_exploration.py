@@ -29,15 +29,24 @@ HYDRATION_TASK_VERSION = "x.grok_cli.candidate_hydration.task.v1"
 SUPPORTED_RECEIPT_VERSION = "x.grok_cli.exploration.tool_receipt.v1"
 QUERY_POLICY_SCHEMA_VERSION = "x.grok_cli.exploration.query_policy_descriptor.v2"
 QUERY_POLICY_REGISTRY_SCHEMA_VERSION = "x.grok_cli.exploration.query_policy_registry.v2"
-QUERY_COMMITMENT_ISSUANCE_HISTORY_SCHEMA_VERSION = (
-    "x.grok_cli.exploration.query_commitment_issuance_history.v1"
-)
+QUERY_COMMITMENT_ISSUANCE_HISTORY_SCHEMA_VERSION = "x.grok_cli.exploration.query_commitment_issuance_history.v1"
 QUERY_COMMITMENT_ISSUANCE_HISTORY_VERSION = "approved-query-commitment-issuances-v1"
 CANDIDATE_VALUE_POLICY_SCHEMA_VERSION = "x.grok_cli.candidate_value_segment_policy.v1"
 CANDIDATE_VALUE_POLICY_CANONICAL_SHA256 = "78800fd8ae6977e49301aaf1c6ee3663d74639d7969d829354a7e1676a917d91"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_QUERY_POLICY_REGISTRY_VERSION = "approved-query-policies-v2"
 QUERY_POLICY_REGISTRY_DIRECTORY = PROJECT_ROOT / "configs/grok_cli_exploration_query_policy_registries"
+# Every admitted snapshot is code reviewed and bound by canonical registry and
+# issuance-head hashes.  Appending a snapshot therefore requires an explicit
+# source change in addition to new immutable config.  Tests replace this tuple
+# with hashes for their isolated synthetic snapshot chains.
+QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS = (
+    (
+        "approved-query-policies-v2",
+        "92405d29c8f06fa04957b5abd12a87653740e2bb40edbb069c56c305a800424d",
+        "25ac1292974577513b03f5366cc5e4a5b7bb676be01087d579a25a6772ce478a",
+    ),
+)
 QUERY_COMMITMENT_ISSUANCE_HISTORY_RELATIVE_PATH = Path(
     "configs/grok_cli_exploration_query_commitment_issuance_history.v1.json"
 )
@@ -183,6 +192,11 @@ _EXPERIMENT_BINDING_KEYS = {
 _QUERY_POLICY_REGISTRY_KEYS = {
     "schema_version",
     "registry_version",
+    "snapshot_position",
+    "predecessor_registry_version",
+    "predecessor_registry_sha256",
+    "issuance_history_count",
+    "issuance_history_head_sha256",
     "commitment_issuance_lineage",
     "policies",
 }
@@ -211,6 +225,10 @@ _QUERY_COMMITMENT_ISSUANCE_KEYS = {
     "lineage_position",
     "issuance_id",
     "policy_version",
+    "policy_path",
+    "policy_sha256",
+    "protected_category_boundary_version",
+    "semantic_manifest_sha256",
     "run_binding_commitment",
     "commitment_key_id",
     "commitment_nonce_id",
@@ -384,7 +402,8 @@ _RAW_SESSION_BINDING_KEYS = {
     "tool_disable_flags_verified",
     "owner_only_permissions",
 }
-PROTECTED_CATEGORY_BOUNDARY_VERSION = "base-discovery-protected-category-boundary-v2"
+PROTECTED_CATEGORY_BOUNDARY_VERSION = "base-discovery-protected-category-boundary-v3"
+BASE_DISCOVERY_TOOL_ARGUMENT_POLICY_VERSION = "base-discovery-tool-arguments-v3"
 
 # This is a governed value registry, not a growing identity-value regex.  A
 # reviewed code/version change is required to add a category or value.  The
@@ -452,11 +471,29 @@ _PROTECTED_IDENTITY_VALUES = {
     "disability": (
         "disabled",
         "neurodivergent",
+        "autistic",
+        "autism",
         "deaf",
         "blind",
+        "wheelchair user",
+        "wheelchair users",
         "残障人士",
         "殘障人士",
         "残疾人",
+        "自闭症",
+        "自閉症",
+        "轮椅使用者",
+        "輪椅使用者",
+        "autiste",
+        "utilisateur de fauteuil roulant",
+        "utilisateurs de fauteuil roulant",
+        "autista",
+        "usuario de silla de ruedas",
+        "usuarios de silla de ruedas",
+        "自閉症",
+        "車椅子利用者",
+        "자폐성",
+        "휠체어 사용자",
     ),
     "gender": (
         "woman",
@@ -537,6 +574,8 @@ _PROTECTED_IDENTITY_VALUES = {
         "무슬림",
     ),
     "sexual_orientation": (
+        "lgbtq",
+        "lgbt",
         "gay",
         "lesbian",
         "bisexual",
@@ -549,9 +588,26 @@ _PROTECTED_IDENTITY_VALUES = {
         "女同性戀",
         "双性恋",
         "雙性戀",
+        "同性恋者",
+        "同性戀者",
+        "personne lgbtq",
+        "persona lgbtq",
+        "lgbtqの人",
+        "성소수자",
     ),
 }
 _PROTECTED_FIELD_TOKENS = frozenset(_PROTECTED_CATEGORY_MARKERS)
+
+# These are exact, reviewed professional collocations.  They suppress only the
+# protected token occurrence contained in the full collocation; another
+# protected operand in the same span still fails closed.  This is deliberately
+# not a global token allowlist.
+_NEUTRAL_PROFESSIONAL_COLLOCATIONS = (
+    ("race", "condition"),
+    ("blind", "evaluation"),
+    ("white", "paper"),
+    ("straight", "through", "estimator"),
+)
 
 
 class ExplorationValidationError(ValueError):
@@ -564,6 +620,23 @@ def canonical_json(value: Any) -> str:
 
 def canonical_sha256(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode()).hexdigest()
+
+
+def query_commitment_issuance_id(
+    policy_version: str,
+    run_binding_commitment: str,
+    commitment_key_id: str,
+    commitment_nonce_id: str,
+) -> str:
+    """Derive the public opaque issuance identity from its immutable owners."""
+
+    material = {
+        "policy_version": policy_version,
+        "run_binding_commitment": run_binding_commitment,
+        "commitment_key_id": commitment_key_id,
+        "commitment_nonce_id": commitment_nonce_id,
+    }
+    return f"qci_{hashlib.sha256(canonical_json(material).encode()).hexdigest()[:24]}"
 
 
 def _check_deadline(deadline_monotonic: float) -> None:
@@ -797,17 +870,38 @@ def _normalized_phrase_tokens(value: str) -> tuple[str, ...]:
     return tuple(token for token in re.split(r"[^\w]+", normalized, flags=re.UNICODE) if token)
 
 
-def _contains_governed_phrase(text: str, phrase: str) -> bool:
+def _token_span_matches(tokens: tuple[str, ...], phrase: tuple[str, ...]) -> list[tuple[int, int]]:
+    width = len(phrase)
+    if not width:
+        return []
+    return [
+        (index, index + width) for index in range(len(tokens) - width + 1) if tokens[index : index + width] == phrase
+    ]
+
+
+def _contains_unexcepted_governed_phrase(text: str, phrase: str) -> bool:
+    """Detect one governed phrase outside a reviewed neutral collocation."""
+
     normalized_text = unicodedata.normalize("NFKC", text).casefold()
     normalized_phrase = unicodedata.normalize("NFKC", phrase).casefold()
     phrase_tokens = _normalized_phrase_tokens(normalized_phrase)
     if not phrase_tokens:
         return False
-    if any(character.isascii() and character.isalnum() for character in normalized_phrase):
-        text_tokens = _normalized_phrase_tokens(normalized_text)
-        width = len(phrase_tokens)
-        return any(text_tokens[index : index + width] == phrase_tokens for index in range(len(text_tokens) - width + 1))
-    return normalized_phrase in normalized_text
+    if not any(character.isascii() and character.isalnum() for character in normalized_phrase):
+        return normalized_phrase in normalized_text
+    text_tokens = _normalized_phrase_tokens(normalized_text)
+    governed_spans = _token_span_matches(text_tokens, phrase_tokens)
+    if not governed_spans:
+        return False
+    neutral_spans = [
+        span
+        for collocation in _NEUTRAL_PROFESSIONAL_COLLOCATIONS
+        for span in _token_span_matches(text_tokens, collocation)
+    ]
+    return any(
+        not any(neutral_start <= start and end <= neutral_end for neutral_start, neutral_end in neutral_spans)
+        for start, end in governed_spans
+    )
 
 
 def _protected_category_or_value_present(text: str) -> bool:
@@ -825,7 +919,7 @@ def _protected_category_or_value_present(text: str) -> bool:
         for category_phrases in (*_PROTECTED_CATEGORY_MARKERS.values(), *_PROTECTED_IDENTITY_VALUES.values())
         for phrase in category_phrases
     )
-    return any(_contains_governed_phrase(text, phrase) for phrase in governed_phrases)
+    return any(_contains_unexcepted_governed_phrase(text, phrase) for phrase in governed_phrases)
 
 
 def _evidence_supports(candidate: Mapping[str, Any], field: str, *, high_authority_only: bool) -> bool:
@@ -862,42 +956,65 @@ def _tool_subject(arguments: Mapping[str, Any], tool_name: str) -> str | None:
     return present[0] if len(present) == 1 else None
 
 
-def base_discovery_tool_subject_allowed(arguments: Mapping[str, Any], tool_name: str) -> bool:
-    """Apply the shared protected-category boundary to one native-X operand.
-
-    This deliberately validates only the base-discovery subject.  Each caller
-    still owns its transport-specific argument shape and numeric ceilings.
-    """
-
+def _base_discovery_tool_subject_text_allowed(arguments: Mapping[str, Any], tool_name: str) -> bool:
     subject = _tool_subject(arguments, tool_name)
     return subject is not None and len(subject) <= 2_000 and not _protected_category_or_value_present(subject)
 
 
-def _tool_arguments_valid(arguments: Mapping[str, Any], tool_name: str) -> bool:
-    if not base_discovery_tool_subject_allowed(arguments, tool_name):
+def base_discovery_tool_subject_allowed(arguments: Mapping[str, Any], tool_name: str) -> bool:
+    """Backward-compatible fail-closed alias for the complete v3 envelope."""
+
+    return base_discovery_tool_arguments_allowed(arguments, tool_name)
+
+
+def base_discovery_tool_arguments_allowed(arguments: Mapping[str, Any], tool_name: str) -> bool:
+    """Validate the complete versioned native-X argument envelope.
+
+    The per-tool shapes are closed, so a second string, nested object, cursor,
+    or future field cannot bypass the shared protected-value predicate.  Only
+    the explicitly typed transport controls ``limit``, ``count``, and ``mode``
+    are non-semantic.
+    """
+
+    if not isinstance(arguments, dict) or tool_name not in ALLOWED_TOOL_NAMES:
         return False
-    subject = _tool_subject(arguments, tool_name)
-    assert subject is not None
     if tool_name == "x_keyword_search":
-        if set(arguments) != {"query", "limit", "mode"} or arguments["mode"] not in {"Latest", "Top"}:
+        if (
+            set(arguments) != {"query", "limit", "mode"}
+            or not isinstance(arguments["mode"], str)
+            or arguments["mode"] not in {"Latest", "Top"}
+        ):
+            return False
+        if not _base_discovery_tool_subject_text_allowed(arguments, tool_name):
             return False
         bound = arguments["limit"]
         return isinstance(bound, str) and bound.isdecimal() and 1 <= int(bound) <= 100
     if tool_name == "x_semantic_search":
         if set(arguments) != {"query", "limit"}:
             return False
+        if not _base_discovery_tool_subject_text_allowed(arguments, tool_name):
+            return False
         bound = arguments["limit"]
         return isinstance(bound, str) and bound.isdecimal() and 1 <= int(bound) <= 100
     if tool_name == "x_user_search":
         if set(arguments) != {"query", "count"}:
             return False
+        if not _base_discovery_tool_subject_text_allowed(arguments, tool_name):
+            return False
         bound = arguments["count"]
         return isinstance(bound, str) and bound.isdecimal() and 1 <= int(bound) <= 50
+    subject = _tool_subject(arguments, tool_name)
+    if subject is None or len(subject) > 2_000 or _protected_category_or_value_present(subject):
+        return False
     if set(arguments) in ({"post_id"}, {"tweet_id"}):
         return _POST_ID_RE.fullmatch(subject) is not None
     if set(arguments) == {"url"}:
         return _POST_URL_RE.fullmatch(subject) is not None
     return set(arguments) == {"query"}
+
+
+def _tool_arguments_valid(arguments: Mapping[str, Any], tool_name: str) -> bool:
+    return base_discovery_tool_arguments_allowed(arguments, tool_name)
 
 
 def _validate_receipt(receipt: Any, *, deadline_monotonic: float | None = None) -> list[dict[str, Any]]:
@@ -987,6 +1104,22 @@ def _query_policy_registry_path(registry_version: str | None) -> tuple[str, Path
     selected_version = registry_version or DEFAULT_QUERY_POLICY_REGISTRY_VERSION
     if _POLICY_VERSION_RE.fullmatch(str(selected_version)) is None:
         raise ExplorationValidationError("query_policy_registry_selector_invalid")
+    admissions = QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS
+    if not isinstance(admissions, tuple) or any(
+        not isinstance(item, tuple)
+        or len(item) != 3
+        or not isinstance(item[0], str)
+        or _POLICY_VERSION_RE.fullmatch(item[0]) is None
+        or not isinstance(item[1], str)
+        or _SHA256_RE.fullmatch(item[1]) is None
+        or not isinstance(item[2], str)
+        or _SHA256_RE.fullmatch(item[2]) is None
+        for item in admissions
+    ):
+        raise ExplorationValidationError("query_policy_registry_admission_invalid")
+    admitted_versions = {item[0] for item in admissions}
+    if selected_version not in admitted_versions:
+        raise ExplorationValidationError("query_policy_registry_selector_not_admitted")
     unresolved_directory = QUERY_POLICY_REGISTRY_DIRECTORY
     if unresolved_directory.is_symlink():
         raise ExplorationValidationError("query_policy_registry_path_invalid")
@@ -1048,6 +1181,10 @@ def _query_commitment_issuance_history(
             raise ExplorationValidationError("query_commitment_issuance_history_invalid")
         issuance_id = issuance.get("issuance_id")
         policy_version = issuance.get("policy_version")
+        policy_path = issuance.get("policy_path")
+        policy_sha256 = issuance.get("policy_sha256")
+        boundary_version = issuance.get("protected_category_boundary_version")
+        semantic_manifest_sha256 = issuance.get("semantic_manifest_sha256")
         run_commitment = issuance.get("run_binding_commitment")
         key_id = issuance.get("commitment_key_id")
         nonce_id = issuance.get("commitment_nonce_id")
@@ -1060,6 +1197,17 @@ def _query_commitment_issuance_history(
             or not isinstance(policy_version, str)
             or _POLICY_VERSION_RE.fullmatch(policy_version) is None
             or policy_version in seen_policy_versions
+            or not isinstance(policy_path, str)
+            or re.fullmatch(r"configs/[A-Za-z0-9_./-]+\.json", policy_path) is None
+            or Path(policy_path).is_absolute()
+            or Path(policy_path).parts[:1] != ("configs",)
+            or ".." in Path(policy_path).parts
+            or Path(policy_path).as_posix() != policy_path
+            or not isinstance(policy_sha256, str)
+            or _SHA256_RE.fullmatch(policy_sha256) is None
+            or boundary_version != PROTECTED_CATEGORY_BOUNDARY_VERSION
+            or not isinstance(semantic_manifest_sha256, str)
+            or _SHA256_RE.fullmatch(semantic_manifest_sha256) is None
             or not isinstance(run_commitment, str)
             or _SHA256_RE.fullmatch(run_commitment) is None
             or run_commitment in seen_runs
@@ -1069,6 +1217,13 @@ def _query_commitment_issuance_history(
             or not isinstance(nonce_id, str)
             or _SHA256_RE.fullmatch(nonce_id) is None
             or nonce_id in seen_nonce_ids
+            or issuance_id
+            != query_commitment_issuance_id(
+                policy_version,
+                run_commitment,
+                key_id,
+                nonce_id,
+            )
         ):
             raise ExplorationValidationError("query_commitment_issuance_history_invalid")
         seen_issuance_ids.add(issuance_id)
@@ -1077,6 +1232,268 @@ def _query_commitment_issuance_history(
         seen_key_ids.add(key_id)
         seen_nonce_ids.add(nonce_id)
     return issuances
+
+
+def _load_registry_policy_descriptor(
+    record: Mapping[str, Any],
+    issuance: Mapping[str, Any],
+    *,
+    deadline_monotonic: float | None,
+) -> Mapping[str, Any]:
+    """Verify one intended-public descriptor without private receipt material."""
+
+    relative_path = Path(record["policy_path"])
+    unresolved_policy_path = PROJECT_ROOT / relative_path
+    cursor = PROJECT_ROOT
+    for component in relative_path.parts:
+        cursor /= component
+        if cursor.is_symlink():
+            raise ExplorationValidationError("query_policy_path_invalid")
+    policy_path = unresolved_policy_path.resolve()
+    try:
+        policy_path.relative_to(PROJECT_ROOT.resolve())
+    except ValueError as exc:
+        raise ExplorationValidationError("query_policy_path_invalid") from exc
+    policy = _load_closed_json(
+        policy_path,
+        maximum_bytes=MAX_INPUT_CANONICAL_BYTES,
+        error="query_policy_file_invalid",
+    )
+    _assert_technical_envelope(
+        policy,
+        error="query_policy_technical_envelope_exceeded",
+        deadline_monotonic=deadline_monotonic,
+    )
+    manifest = policy.get("query_manifest") if isinstance(policy, dict) else None
+    if (
+        not isinstance(policy, dict)
+        or set(policy) != _QUERY_POLICY_KEYS
+        or canonical_sha256(policy) != record["policy_sha256"]
+        or issuance.get("policy_path") != record["policy_path"]
+        or issuance.get("policy_sha256") != record["policy_sha256"]
+        or issuance.get("protected_category_boundary_version") != record["protected_category_boundary_version"]
+        or not isinstance(manifest, list)
+        or not manifest
+        or canonical_sha256(manifest) != issuance.get("semantic_manifest_sha256")
+        or policy.get("schema_version") != record["policy_schema_version"]
+        or policy.get("policy_version") != record["policy_version"]
+        or policy.get("purpose") != record["purpose"]
+        or policy.get("lab_id") != record["lab_id"]
+        or policy.get("commitment_scheme") != record["commitment_scheme"]
+        or policy.get("commitment_issuance_id") != record["commitment_issuance_id"]
+        or policy.get("commitment_key_id") != record["commitment_key_id"]
+        or policy.get("commitment_nonce_id") != record["commitment_nonce_id"]
+        or policy.get("run_binding_commitment") != record["run_binding_commitment"]
+        or policy.get("legacy_full_policy_commitment") != record["legacy_full_policy_commitment"]
+        or policy.get("allowed_decision_dimensions") != _BASE_DISCOVERY_DIMENSIONS
+        or policy.get("professional_experience_proxy_query_allowed") is not False
+        or policy.get("protected_identity_query_allowed") is not False
+        or policy.get("protected_category_boundary_version") != PROTECTED_CATEGORY_BOUNDARY_VERSION
+    ):
+        raise ExplorationValidationError("query_policy_registry_descriptor_binding_invalid")
+    for sequence, item in enumerate(manifest):
+        if deadline_monotonic is not None:
+            _check_deadline(deadline_monotonic)
+        if (
+            not isinstance(item, dict)
+            or set(item) != _QUERY_POLICY_MANIFEST_KEYS
+            or type(item.get("sequence")) is not int
+            or item.get("sequence") != sequence
+            or item.get("tool_name") not in ALLOWED_TOOL_NAMES
+            or not isinstance(item.get("call_commitment"), str)
+            or _SHA256_RE.fullmatch(item["call_commitment"]) is None
+        ):
+            raise ExplorationValidationError("query_policy_registry_descriptor_binding_invalid")
+    return policy
+
+
+def _validate_query_policy_registry_snapshot(
+    registry: Mapping[str, Any],
+    issuance_history: list[Mapping[str, Any]],
+    *,
+    deadline_monotonic: float | None,
+) -> None:
+    """Validate all rows and descriptors in one admitted immutable snapshot."""
+
+    lineage = registry["commitment_issuance_lineage"]
+    policies = registry["policies"]
+    if (
+        not isinstance(lineage, list)
+        or not lineage
+        or len(lineage) > len(issuance_history)
+        or canonical_json(lineage) != canonical_json(issuance_history[: len(lineage)])
+    ):
+        raise ExplorationValidationError("query_commitment_issuance_history_prefix_invalid")
+    if not isinstance(policies, list) or len(policies) != len(lineage):
+        raise ExplorationValidationError("query_policy_registry_rows_invalid")
+    issuance_by_id = {item["issuance_id"]: item for item in lineage}
+    seen_versions: set[str] = set()
+    seen_runs: set[str] = set()
+    seen_hashes: set[str] = set()
+    seen_paths: set[str] = set()
+    policy_issuance_ids: list[str] = []
+    for record in policies:
+        if deadline_monotonic is not None:
+            _check_deadline(deadline_monotonic)
+        if not isinstance(record, dict) or set(record) != _QUERY_POLICY_REGISTRY_ROW_KEYS:
+            raise ExplorationValidationError("query_policy_registry_rows_invalid")
+        policy_version = record.get("policy_version")
+        policy_path = record.get("policy_path")
+        policy_sha256 = record.get("policy_sha256")
+        run_key = record.get("run_binding_commitment")
+        issuance_id = record.get("commitment_issuance_id")
+        issuance = issuance_by_id.get(str(issuance_id))
+        relative_path = Path(str(policy_path))
+        if (
+            _POLICY_VERSION_RE.fullmatch(str(policy_version)) is None
+            or policy_version in seen_versions
+            or not isinstance(policy_path, str)
+            or re.fullmatch(r"configs/[A-Za-z0-9_./-]+\.json", policy_path) is None
+            or relative_path.is_absolute()
+            or relative_path.parts[:1] != ("configs",)
+            or ".." in relative_path.parts
+            or relative_path.as_posix() != policy_path
+            or policy_path in seen_paths
+            or not isinstance(policy_sha256, str)
+            or _SHA256_RE.fullmatch(policy_sha256) is None
+            or policy_sha256 in seen_hashes
+            or record.get("commitment_scheme") != QUERY_COMMITMENT_SCHEME
+            or issuance is None
+            or issuance.get("policy_version") != policy_version
+            or issuance.get("policy_path") != policy_path
+            or issuance.get("policy_sha256") != policy_sha256
+            or issuance.get("protected_category_boundary_version") != record.get("protected_category_boundary_version")
+            or issuance.get("run_binding_commitment") != run_key
+            or issuance.get("commitment_key_id") != record.get("commitment_key_id")
+            or issuance.get("commitment_nonce_id") != record.get("commitment_nonce_id")
+            or not isinstance(record.get("commitment_key_id"), str)
+            or _SHA256_RE.fullmatch(record["commitment_key_id"]) is None
+            or not isinstance(record.get("commitment_nonce_id"), str)
+            or _SHA256_RE.fullmatch(record["commitment_nonce_id"]) is None
+            or not isinstance(record.get("legacy_full_policy_commitment"), str)
+            or _SHA256_RE.fullmatch(record["legacy_full_policy_commitment"]) is None
+            or record.get("policy_schema_version") != QUERY_POLICY_SCHEMA_VERSION
+            or record.get("purpose") != "base_researcher_discovery"
+            or record.get("protected_category_boundary_version") != PROTECTED_CATEGORY_BOUNDARY_VERSION
+            or not isinstance(record.get("lab_id"), str)
+            or _LAB_ID_RE.fullmatch(record["lab_id"]) is None
+            or not isinstance(run_key, str)
+            or _SHA256_RE.fullmatch(run_key) is None
+            or run_key in seen_runs
+            or type(record.get("enabled")) is not bool
+        ):
+            raise ExplorationValidationError("query_policy_registry_rows_invalid")
+        _load_registry_policy_descriptor(
+            record,
+            issuance,
+            deadline_monotonic=deadline_monotonic,
+        )
+        seen_versions.add(policy_version)
+        seen_runs.add(run_key)
+        seen_hashes.add(policy_sha256)
+        seen_paths.add(policy_path)
+        policy_issuance_ids.append(issuance_id)
+    if policy_issuance_ids != [item["issuance_id"] for item in lineage]:
+        raise ExplorationValidationError("query_policy_registry_rows_invalid")
+
+
+def _admitted_query_policy_registries(
+    issuance_history: list[Mapping[str, Any]],
+    *,
+    deadline_monotonic: float | None,
+) -> dict[str, Mapping[str, Any]]:
+    """Load and validate the complete code-admitted snapshot chain."""
+
+    admissions = QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS
+    if not admissions:
+        raise ExplorationValidationError("query_policy_registry_admission_invalid")
+    versions: set[str] = set()
+    for admission in admissions:
+        if (
+            not isinstance(admission, tuple)
+            or len(admission) != 3
+            or _POLICY_VERSION_RE.fullmatch(str(admission[0])) is None
+            or admission[0] in versions
+            or _SHA256_RE.fullmatch(str(admission[1])) is None
+            or _SHA256_RE.fullmatch(str(admission[2])) is None
+        ):
+            raise ExplorationValidationError("query_policy_registry_admission_invalid")
+        versions.add(admission[0])
+    registry_directory = QUERY_POLICY_REGISTRY_DIRECTORY
+    if registry_directory.is_symlink():
+        raise ExplorationValidationError("query_policy_registry_path_invalid")
+    try:
+        registry_directory.resolve().relative_to(PROJECT_ROOT.resolve())
+        directory_entries = list(registry_directory.iterdir())
+    except (OSError, ValueError) as exc:
+        raise ExplorationValidationError("query_policy_registry_path_invalid") from exc
+    expected_names = {f"{version}.json" for version in versions}
+    if {entry.name for entry in directory_entries} != expected_names or any(
+        entry.is_symlink() or not entry.is_file() for entry in directory_entries
+    ):
+        raise ExplorationValidationError("query_policy_registry_admission_set_invalid")
+
+    loaded: dict[str, Mapping[str, Any]] = {}
+    previous_registry: Mapping[str, Any] | None = None
+    previous_version: str | None = None
+    previous_sha256: str | None = None
+    for position, (version, admitted_sha256, admitted_head_sha256) in enumerate(admissions):
+        if deadline_monotonic is not None:
+            _check_deadline(deadline_monotonic)
+        _, registry_path = _query_policy_registry_path(version)
+        registry = _load_closed_json(
+            registry_path,
+            maximum_bytes=MAX_INPUT_CANONICAL_BYTES,
+            error="query_policy_registry_file_invalid",
+        )
+        _assert_technical_envelope(
+            registry,
+            error="query_policy_registry_technical_envelope_exceeded",
+            deadline_monotonic=deadline_monotonic,
+        )
+        registry_sha256 = canonical_sha256(registry)
+        registry_lineage = registry.get("commitment_issuance_lineage") if isinstance(registry, dict) else None
+        if (
+            not isinstance(registry, dict)
+            or set(registry) != _QUERY_POLICY_REGISTRY_KEYS
+            or registry.get("schema_version") != QUERY_POLICY_REGISTRY_SCHEMA_VERSION
+            or registry.get("registry_version") != version
+            or registry_sha256 != admitted_sha256
+            or type(registry.get("snapshot_position")) is not int
+            or registry.get("snapshot_position") != position
+            or registry.get("predecessor_registry_version") != previous_version
+            or registry.get("predecessor_registry_sha256") != previous_sha256
+            or type(registry.get("issuance_history_count")) is not int
+            or not isinstance(registry_lineage, list)
+            or not registry_lineage
+            or registry.get("issuance_history_count") != len(registry_lineage)
+            or registry.get("issuance_history_head_sha256") != admitted_head_sha256
+            or registry.get("issuance_history_head_sha256") != canonical_sha256(registry_lineage[-1])
+        ):
+            raise ExplorationValidationError("query_policy_registry_snapshot_chain_invalid")
+        _validate_query_policy_registry_snapshot(
+            registry,
+            issuance_history,
+            deadline_monotonic=deadline_monotonic,
+        )
+        if previous_registry is not None:
+            prior_lineage = previous_registry["commitment_issuance_lineage"]
+            prior_policies = previous_registry["policies"]
+            if (
+                len(registry["commitment_issuance_lineage"]) <= len(prior_lineage)
+                or canonical_json(registry["commitment_issuance_lineage"][: len(prior_lineage)])
+                != canonical_json(prior_lineage)
+                or canonical_json(registry["policies"][: len(prior_policies)]) != canonical_json(prior_policies)
+            ):
+                raise ExplorationValidationError("query_policy_registry_snapshot_inheritance_invalid")
+        loaded[version] = registry
+        previous_registry = registry
+        previous_version = version
+        previous_sha256 = registry_sha256
+    latest = loaded[admissions[-1][0]]
+    if canonical_json(latest["commitment_issuance_lineage"]) != canonical_json(issuance_history):
+        raise ExplorationValidationError("query_policy_registry_latest_history_incomplete")
+    return loaded
 
 
 def _approved_query_policy_record(
@@ -1089,33 +1506,14 @@ def _approved_query_policy_record(
 ) -> tuple[Mapping[str, Any], Mapping[str, Any], Mapping[str, str]]:
     if deadline_monotonic is not None:
         _check_deadline(deadline_monotonic)
-    selected_registry_version, registry_path = _query_policy_registry_path(query_policy_registry_version)
-    registry = _load_closed_json(
-        registry_path,
-        maximum_bytes=MAX_INPUT_CANONICAL_BYTES,
-        error="query_policy_registry_file_invalid",
-    )
-    if not isinstance(registry, dict) or set(registry) != _QUERY_POLICY_REGISTRY_KEYS:
-        raise ExplorationValidationError("query_policy_registry_schema_invalid")
-    if (
-        registry.get("schema_version") != QUERY_POLICY_REGISTRY_SCHEMA_VERSION
-        or _POLICY_VERSION_RE.fullmatch(str(registry.get("registry_version"))) is None
-        or registry.get("registry_version") != selected_registry_version
-    ):
-        raise ExplorationValidationError("query_policy_registry_binding_invalid")
-    _assert_technical_envelope(
-        registry,
-        error="query_policy_registry_technical_envelope_exceeded",
+    selected_registry_version, _ = _query_policy_registry_path(query_policy_registry_version)
+    issuance_history = _query_commitment_issuance_history(deadline_monotonic=deadline_monotonic)
+    admitted_registries = _admitted_query_policy_registries(
+        issuance_history,
         deadline_monotonic=deadline_monotonic,
     )
-    lineage = registry.get("commitment_issuance_lineage")
-    if not isinstance(lineage, list) or not lineage:
-        raise ExplorationValidationError("query_commitment_issuance_lineage_invalid")
-    issuance_history = _query_commitment_issuance_history(deadline_monotonic=deadline_monotonic)
-    if len(lineage) > len(issuance_history) or canonical_json(lineage) != canonical_json(
-        issuance_history[: len(lineage)]
-    ):
-        raise ExplorationValidationError("query_commitment_issuance_history_prefix_invalid")
+    registry = admitted_registries[selected_registry_version]
+    lineage = registry["commitment_issuance_lineage"]
     issuance_by_id: dict[str, Mapping[str, Any]] = {}
     seen_issuance_policy_versions: set[str] = set()
     seen_issuance_runs: set[str] = set()
@@ -1291,6 +1689,13 @@ def _validate_query_policy_body(
         or policy.get("commitment_issuance_id") != approved_record["commitment_issuance_id"]
         or not isinstance(policy.get("commitment_issuance_id"), str)
         or re.fullmatch(r"qci_[0-9a-f]{24}", policy["commitment_issuance_id"]) is None
+        or policy.get("commitment_issuance_id")
+        != query_commitment_issuance_id(
+            str(policy.get("policy_version")),
+            str(policy.get("run_binding_commitment")),
+            str(policy.get("commitment_key_id")),
+            str(policy.get("commitment_nonce_id")),
+        )
         or policy.get("commitment_key_id") != approved_record["commitment_key_id"]
         or policy.get("commitment_nonce_id") != approved_record["commitment_nonce_id"]
         or policy.get("run_binding_commitment") != approved_record["run_binding_commitment"]
@@ -2945,12 +3350,16 @@ def validate_evaluation_output(
 
 
 __all__ = [
+    "BASE_DISCOVERY_TOOL_ARGUMENT_POLICY_VERSION",
     "EVALUATION_SCHEMA_VERSION",
     "ExplorationValidationError",
     "PROTECTED_CATEGORY_BOUNDARY_VERSION",
+    "base_discovery_tool_arguments_allowed",
+    "base_discovery_tool_subject_allowed",
     "build_hydration_tasks",
     "canonical_sha256",
     "evaluate_exploration",
+    "query_commitment_issuance_id",
     "validate_evaluation_output",
     "validate_hydration_task",
 ]

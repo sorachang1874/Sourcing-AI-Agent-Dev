@@ -260,13 +260,26 @@ Query-policy v2 generates a fresh random 256-bit HMAC key and independent 256-bi
 owner-only `0600` tool receipt retains `key_hex`, `nonce_hex`, raw run identifiers, and query arguments. The intended-
 public descriptor/registry, evaluation, and hydration tasks retain only `key_id`, `nonce_id`, a deterministic opaque
 `commitment_issuance_id`, the domain-separated HMAC commitments, and descriptor/registry/issuance-row hashes. Every
-immutable version-named registry snapshot carries an issuance lineage that must equal an exact prefix of the single
-append-only owner `configs/grok_cli_exploration_query_commitment_issuance_history.v1.json`. The corresponding closed
-schema is `contracts/x.grok_cli.exploration.query_commitment_issuance_history.v1.schema.json`. Runtime validates the
-entire owner before selecting any snapshot and rejects duplicate issuance ids, policy versions, run commitments, key
-ids, or nonce ids across all snapshots. A standalone newer snapshot cannot discard its predecessor rows or reuse an
-older key under a fresh nonce. A new lab therefore requires a new all-history row, a fresh key and nonce, and a new
-registry snapshot whose lineage is the resulting exact prefix. The key and nonce live exactly as long as the private receipt: they are
+immutable version-named registry snapshot carries an explicit position, predecessor version/hash, issuance-history
+count, and issuance-history head hash. Runtime loads the complete snapshot set admitted by
+`QUERY_POLICY_REGISTRY_SNAPSHOT_ADMISSIONS`, requires the registry directory to contain exactly that set, verifies each
+canonical snapshot hash and code-bound head, verifies strict predecessor inheritance, and only then permits selection.
+The latest code-admitted snapshot must equal the complete single append-only owner
+`configs/grok_cli_exploration_query_commitment_issuance_history.v1.json`; an older admitted snapshot remains replayable
+only while the complete latest chain and owner both validate. Adding a snapshot therefore requires a reviewed source
+change to the admission tuple as well as immutable config. Dropping an old file, inserting an unadmitted sibling, or
+publishing a latest snapshot that omits history fails closed.
+
+Each canonical history row binds `policy_path`, canonical `policy_sha256`,
+`protected_category_boundary_version`, and `semantic_manifest_sha256` in addition to its policy/run/key/nonce
+identities. Every descendant snapshot inherits earlier history and policy rows byte-for-byte. Runtime recomputes the
+opaque issuance ID from canonical `policy_version`, `run_binding_commitment`, `commitment_key_id`, and
+`commitment_nonce_id` rather than trusting a coherently rewritten ID. It also loads every admitted descriptor,
+recomputes its policy and semantic-manifest hashes, and reconciles them to the corresponding history and registry rows
+before selecting a run. The corresponding closed schema is
+`contracts/x.grok_cli.exploration.query_commitment_issuance_history.v1.schema.json`. Duplicate issuance ids, policy
+versions, run commitments, key ids, or nonce ids across the owner remain forbidden. A new lab therefore requires a new
+immutable policy, all-history row, fresh key and nonce, descendant snapshot, and reviewed code admission. The key and nonce live exactly as long as the private receipt: they are
 needed for offline source replay, are never copied into tracked files or terminal summaries, and are deleted with that
 receipt under the run's private retention/purge policy. A replay after deletion is intentionally impossible. Key/nonce
 reuse across runs is forbidden. `scripts/migrate_grok_cli_query_commitments_v2.py` is the bounded one-time migration,
@@ -326,18 +339,29 @@ state closed set, four complete temporal combinations, segment priority, Recall 
 and hydration triggers. Its executable schema requires four unique closed rows, while runtime validation proves the
 exact state-pair/segment bijection. Query-policy registries are immutable version-named snapshots under
 `configs/grok_cli_exploration_query_policy_registries/`; each public snapshot binds an approved experiment through an
-opaque run commitment, exact all-history issuance prefix, descriptor hash, legacy full-policy commitment, and exact ordered call commitments without
-publishing query operands. These are domain-separated HMAC values under the private run key and nonce, not unsalted
-operand hashes. Adding another lab creates a new reviewed descriptor snapshot instead of editing the snapshot named by an
+opaque run commitment, exact all-history issuance prefix, descriptor hash, legacy full-policy commitment, and exact
+ordered call commitments without publishing query operands. These are domain-separated HMAC values under the private
+run key and nonce, not unsalted operand hashes. The code-admission tuple owns snapshot membership, ordering, canonical
+hashes, and the latest head; the history file owns append-only issuance/content identity; each snapshot owns its
+explicit predecessor link; and each descriptor owns its ordered semantic manifest. Adding another lab creates a
+descendant reviewed descriptor/snapshot and reviewed code admission instead of editing the snapshot named by an
 existing evaluation, so historical artifacts remain replayable. It must not require adding a new candidate field or
 changing segment code.
 
 Candidate inclusion/exclusion and caveats are closed reason-code fields. Free-form text is permitted only as bounded
-source evidence. Descriptor and registry rows bind `protected_category_boundary_version`; the current reviewed value is
-`base-discovery-protected-category-boundary-v2`. That versioned, code-governed protected-category/value boundary scans each exact query/supporting span;
-possible protected targeting or claims such as American, Indian, Muslim, women, Black, disabled, gay, 华人, or multilingual equivalents cannot
-support a base lab/pretraining axis. This is a data-driven phrase registry, not an expanding identity regex. China/
-Asia professional-experience proxy interpretation remains a separate governed Bio-semantic lane and cannot modify
+source evidence. Descriptor, registry, and issuance-history rows bind `protected_category_boundary_version`; the
+current reviewed value is `base-discovery-protected-category-boundary-v3`. That versioned, code-governed
+protected-category/value boundary scans each exact query/supporting span. Possible protected targeting or claims such
+as American, Indian, Muslim, women, Black, disabled, gay/LGBTQ, autistic, wheelchair users, 华人, or reviewed
+multilingual equivalents cannot support a base lab/pretraining axis. Four narrow professional collocations are
+reviewed neutral exceptions: `race condition`, `blind evaluation`, `white paper`, and `straight-through estimator`.
+Only the protected-token occurrence contained in that complete token span is ignored; `race researcher`, `white
+researchers`, or `white paper women` still fail closed. This is a data-driven phrase registry plus exact collocation
+context, not a broad token allowlist or expanding identity regex. The shared public
+`base_discovery_tool_arguments_allowed` boundary is versioned as `base-discovery-tool-arguments-v3`; it validates each
+tool's complete closed argument shape, scans every admitted semantic operand, and exempts only typed transport controls
+such as `limit`, `count`, and `mode`. Unknown, nested, or secondary fields fail closed instead of hiding a protected
+operand. China/Asia professional-experience proxy interpretation remains a separate governed Bio-semantic lane and cannot modify
 base discovery, exclusion, Recall, Precision, or ordering decisions here. If the same non-null reported numeric X ID
 appears under multiple handles, every involved row is quarantined, excluded from unique/Recall/Precision counts, given
 `reported_platform_user_id_conflict` hydration, and retained in raw candidate-row denominators for auditability.
