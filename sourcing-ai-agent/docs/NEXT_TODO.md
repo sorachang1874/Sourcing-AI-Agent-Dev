@@ -163,6 +163,27 @@
   observation epoch 必须每个 release window bump，且 `NOT VALID` checks 的既有行 validation 在独立部署完成；
   任一 action 进入 served 集前必须满足完整 schema+adapter+Activity+revisioned model-safe result+simulate serializer
   谓词；当前 15/15 schema-less、served=0。
+- [x] D3a characterize-first（2026-07-14；enclosing commit 由提交后 handoff 固定）：Plan §6#1 的 registry/snapshot
+  Scout 作者批已完成，机械冻结 registry **2 writers/3 refresh/1 upsert** + physical-reader/semantic-consumer 链、
+  seed catalog live-input 链、snapshot writers **5+3**、shared loader **19 calls/8 files**（fallback provenance
+  `6 empty + 11 latest-pointer + 1 baseline + 1 absent`）、root manifest/candidate fallback writers **3/13+3**、
+  latest-pointer direct writers **7 production/operations + 5 fixture/scripted** + generic restore、3 类 whole-snapshot
+  materializer、resolver **17 calls/6 files**；accepted target disposition 是 PG authoritative，文件路径只可
+  migration bridge→mirror/retire/fixture。另冻结 workflow-command 无 generation/token/control
+  epoch、`attempt` 可重置、1 个 recognized direct PG claim writer 与 **29 direct callers/6 modules**、future token 的
+  API dict pass-through 风险。§6#6 仍只是 characterized prerequisite，未实施 migration/claim fence；company
+  physical PG schema/workspace mapping/precedence/backfill implementation、
+  claim physical shape/authority/redaction/CAS consumer 均未猜测。author evidence=`11+6` characterization、company
+  adjacency `24+3`、claim PG adjacency `3`；fresh pinned formal review pending，不阻断下一 non-live bounded batch。
+- [ ] D3b workflow-command claim-fence contract + effect/CAS consumer characterization：只做零产品码、零 migration、
+  非 live 的决策锁定；从 Plan §6#6（该义务**没有 OB-ID**）、§6#7、R-019 与 R8 pre-transport fence 推导，
+  穷举 claim 后 running/partial/prerequisite/terminal、child command、ActivityAttempt、EntityDelta、result/event/domain
+  apply 写面，裁决 generation 与 opaque capability、control epoch、atomic mint、stale zero-write、API redaction、
+  rolling migration/backfill/bridge deletion 与 29-caller rollout。D3 OB 集仍为 `OB-1.1/2.1/4.1/5.1/10.1/10.2`；
+  `OB-9.1` 已 stale，不得拿来替代 §6#6。D3b 后才允许 D3c physical claim-fence implementation；served=0 不变。
+- [ ] Track D 落地后的首个 live canary：fake/scripted 与 scope-matched review gate 全绿后，仅使用 operator 外置、
+  不入库/不落日志的凭据做 **Thinking Machines Lab-only** 有界尝试，目标为华人 pre-training researcher mapping；
+  OpenAI/Anthropic/Google DeepMind/xAI/Meta 及全量扩展另行 gating，不与首轮 canary 合并。
 - [ ] Agent Session 契约：服务端 agentic loop；工具面 = M1 manifest 导出 + 只读上下文工具 + model_native_search/fetch 转正；效果全部走 typed AgentAction（边界已由 `AGENT_OPERATION_CONTRACT.md` 规定）。
 - [ ] 第一垂直切片：公司身份自验证 loop（搜索→fetch 验证→歧义才升级人工），替代 PlanCard 手动修正 LinkedIn URL。
 - [ ] 之后：plan review 对话化、intent→plan 前门流式化；OpenClaw/Claude 作为可插拔外脑。
