@@ -4382,6 +4382,8 @@ class CrmPublicWebOwner:
             )
             if promotion.get("status") == "not_found":
                 return {"status": "not_found", "reason": "crm_record_not_found"}
+            if promotion.get("status") == "conflict":
+                return promotion
         else:
             promotion = self.store.upsert_crm_public_web_promotion(promotion_payload)
         assertion: dict[str, Any] = {}

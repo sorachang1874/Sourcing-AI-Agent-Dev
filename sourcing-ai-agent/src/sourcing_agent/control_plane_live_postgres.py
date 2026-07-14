@@ -2999,25 +2999,87 @@ class LiveControlPlanePostgresAdapter:
                             connection.commit()
                             return {"status": "not_found", "reason": "crm_record_not_found"}
                         promotion_row["workspace_id"] = current_workspace
+
+                        promotion_id = str(promotion_row.get("promotion_id") or "").strip()
+                        if not promotion_id:
+                            raise ValueError("owner-fenced CRM promotion id is required")
+                        # Fixed lock order: canonical CRM record row first, then
+                        # a schema-scoped promotion-id advisory lock, then the
+                        # promotion row. The advisory lock serializes the
+                        # otherwise-unlockable absent-row case as well.
+                        cursor.execute(
+                            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                            (self._advisory_lock_key(f"crm_public_web_promotion:{promotion_id}"),),
+                        )
+                        cursor.fetchone()
+                        cursor.execute(
+                            'SELECT * FROM "crm_public_web_promotions" WHERE promotion_id = %s FOR UPDATE',
+                            (promotion_id,),
+                        )
+                        existing_promotion = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+
+                        def _promotion_identity_matches(existing: dict[str, Any]) -> bool:
+                            # A promotion id is a strict idempotency identity.
+                            # Every submitted field except storage timestamps is
+                            # immutable; exact replay returns the existing row.
+                            return all(
+                                _normalize_postgres_payload(existing.get(column)) == _normalize_postgres_payload(value)
+                                for column, value in promotion_row.items()
+                                if column not in {"created_at", "updated_at"}
+                            )
+
+                        if existing_promotion:
+                            if not _promotion_identity_matches(existing_promotion):
+                                connection.commit()
+                                return {
+                                    "status": "conflict",
+                                    "reason": "crm_public_web_promotion_idempotency_conflict",
+                                }
+                            connection.commit()
+                            return {
+                                "status": "applied",
+                                "row": existing_promotion,
+                                "idempotent_replay": True,
+                            }
+
                         plan = self._bulk_upsert_plan(
                             "crm_public_web_promotions",
                             [promotion_row],
                             require_primary_key_values=True,
                         )
-                        self._bulk_upsert_rows_with_cursor(
-                            cursor,
-                            table_name="crm_public_web_promotions",
-                            payload_rows=[promotion_row],
-                            plan=plan,
+                        if plan is None:
+                            raise ValueError("owner-fenced CRM promotion insert plan is required")
+                        columns, primary_keys = plan
+                        quoted_columns = ", ".join(_quote_identifier(column) for column in columns)
+                        placeholders = ", ".join(["%s"] * len(columns))
+                        conflict_target = ", ".join(_quote_identifier(column) for column in primary_keys)
+                        cursor.execute(
+                            f'INSERT INTO "crm_public_web_promotions" ({quoted_columns}) '
+                            f"VALUES ({placeholders}) ON CONFLICT ({conflict_target}) DO NOTHING RETURNING *",
+                            tuple(_normalize_postgres_payload(promotion_row.get(column)) for column in columns),
                         )
-                        promotion_id = str(promotion_row.get("promotion_id") or "").strip()
+                        inserted_promotion = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                        if not inserted_promotion:
+                            # Defensive closure for a concurrent legacy writer
+                            # that does not yet share the advisory lock.
+                            cursor.execute(
+                                'SELECT * FROM "crm_public_web_promotions" WHERE promotion_id = %s FOR UPDATE',
+                                (promotion_id,),
+                            )
+                            inserted_promotion = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                            if not inserted_promotion or not _promotion_identity_matches(inserted_promotion):
+                                connection.commit()
+                                return {
+                                    "status": "conflict",
+                                    "reason": "crm_public_web_promotion_idempotency_conflict",
+                                }
                         cursor.execute(
                             'SELECT * FROM "crm_public_web_promotions" WHERE promotion_id = %s',
                             (promotion_id,),
                         )
                         final_row = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
                     connection.commit()
-                return {"status": "applied", "row": final_row}
+                return {"status": "applied", "row": final_row, "idempotent_replay": False}
             except Exception as exc:
                 attempt += 1
                 if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
@@ -3817,12 +3879,21 @@ class LiveControlPlanePostgresAdapter:
         row: dict[str, Any] | None,
         expected_requester_id: str,
         expected_tenant_id: str,
+        expected_job_type: str = "",
+        expected_statuses: list[str] | tuple[str, ...] = (),
+        expected_stage: str = "",
+        forbidden_statuses: list[str] | tuple[str, ...] = (),
+        expected_summary_fields: dict[str, Any] | None = None,
+        forbidden_summary_values: dict[str, list[str] | tuple[str, ...]] | None = None,
     ) -> dict[str, Any] | None:
-        """Owner-CAS update for an existing job.
+        """Typed owner-and-state CAS for an existing job.
 
         Unlike ``save_job_row`` this path cannot insert a missing row and never
-        rewrites owner columns. The owner predicate and state mutation execute in
-        one PostgreSQL statement, closing the request read-to-write race.
+        rewrites owner columns. Owner and caller-supplied state preconditions are
+        evaluated while the job row is locked, closing both owner and terminal
+        state read-to-write races. ``owner_miss`` deliberately combines missing
+        and foreign rows; ``state_conflict`` returns only an already-authorized
+        row for the caller to project through its business contract.
         """
 
         if not self.should_prefer_read("jobs"):
@@ -3832,63 +3903,123 @@ class LiveControlPlanePostgresAdapter:
         normalized_requester = str(expected_requester_id or "").strip()
         normalized_tenant = str(expected_tenant_id or "").strip()
         if not normalized_job_id or not normalized_requester or not normalized_tenant:
-            return None
+            return {"status": "owner_miss"}
         self._ensure_control_plane_writer_schema()
         now = _utc_now_sql_timestamp()
-        return self._execute_returning_one(
-            """
-            UPDATE jobs SET
-                job_type = %s,
-                status = %s,
-                stage = %s,
-                request_json = %s,
-                plan_json = %s,
-                execution_bundle_json = CASE
-                    WHEN %s <> '{}' THEN %s
-                    ELSE jobs.execution_bundle_json
-                END,
-                matching_request_json = CASE
-                    WHEN %s <> '{}' THEN %s
-                    ELSE jobs.matching_request_json
-                END,
-                summary_json = %s,
-                artifact_path = CASE WHEN %s <> '' THEN %s ELSE jobs.artifact_path END,
-                request_signature = %s,
-                request_family_signature = %s,
-                matching_request_signature = %s,
-                matching_request_family_signature = %s,
-                idempotency_key = CASE WHEN %s <> '' THEN %s ELSE jobs.idempotency_key END,
-                updated_at = %s
-            WHERE job_id = %s
-              AND requester_id = %s
-              AND tenant_id = %s
-            RETURNING *
-            """,
-            (
-                str(payload.get("job_type") or "retrieval"),
-                str(payload.get("status") or ""),
-                str(payload.get("stage") or "pending"),
-                str(payload.get("request_json") or "{}"),
-                str(payload.get("plan_json") or "{}"),
-                str(payload.get("execution_bundle_json") or "{}"),
-                str(payload.get("execution_bundle_json") or "{}"),
-                str(payload.get("matching_request_json") or "{}"),
-                str(payload.get("matching_request_json") or "{}"),
-                str(payload.get("summary_json") or "{}"),
-                str(payload.get("artifact_path") or ""),
-                str(payload.get("artifact_path") or ""),
-                str(payload.get("request_signature") or ""),
-                str(payload.get("request_family_signature") or ""),
-                str(payload.get("matching_request_signature") or ""),
-                str(payload.get("matching_request_family_signature") or ""),
-                str(payload.get("idempotency_key") or ""),
-                str(payload.get("idempotency_key") or ""),
-                now,
-                normalized_job_id,
-                normalized_requester,
-                normalized_tenant,
-            ),
-        )
+        normalized_expected_type = str(expected_job_type or "").strip().lower()
+        normalized_expected_statuses = {
+            str(status or "").strip().lower() for status in expected_statuses if str(status or "").strip()
+        }
+        normalized_expected_stage = str(expected_stage or "").strip().lower()
+        normalized_forbidden_statuses = {
+            str(status or "").strip().lower() for status in forbidden_statuses if str(status or "").strip()
+        }
+        expected_summary = dict(expected_summary_fields or {})
+        forbidden_summary = {
+            str(field): {str(value or "").strip().lower() for value in values if str(value or "").strip()}
+            for field, values in dict(forbidden_summary_values or {}).items()
+        }
+
+        def _normalized_guard_value(value: Any) -> str:
+            return str(value or "").strip().lower()
+
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT * FROM jobs WHERE job_id = %s FOR UPDATE", (normalized_job_id,))
+                        current = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                        if (
+                            not current
+                            or str(current.get("requester_id") or "").strip() != normalized_requester
+                            or str(current.get("tenant_id") or "").strip() != normalized_tenant
+                        ):
+                            connection.commit()
+                            return {"status": "owner_miss"}
+
+                        current_type = str(current.get("job_type") or "").strip().lower()
+                        current_status = str(current.get("status") or "").strip().lower()
+                        current_stage = str(current.get("stage") or "").strip().lower()
+                        current_summary = _json_load_dict(current.get("summary_json"))
+                        state_conflict = bool(
+                            (normalized_expected_type and current_type != normalized_expected_type)
+                            or (normalized_expected_statuses and current_status not in normalized_expected_statuses)
+                            or (normalized_expected_stage and current_stage != normalized_expected_stage)
+                            or (normalized_forbidden_statuses and current_status in normalized_forbidden_statuses)
+                            or any(
+                                _normalized_guard_value(current_summary.get(field))
+                                != _normalized_guard_value(expected_value)
+                                for field, expected_value in expected_summary.items()
+                            )
+                            or any(
+                                _normalized_guard_value(current_summary.get(field)) in forbidden_values
+                                for field, forbidden_values in forbidden_summary.items()
+                                if forbidden_values
+                            )
+                        )
+                        if state_conflict:
+                            connection.commit()
+                            return {"status": "state_conflict", "row": current}
+
+                        cursor.execute(
+                            """
+                            UPDATE jobs SET
+                                job_type = %s,
+                                status = %s,
+                                stage = %s,
+                                request_json = %s,
+                                plan_json = %s,
+                                execution_bundle_json = CASE
+                                    WHEN %s <> '{}' THEN %s
+                                    ELSE jobs.execution_bundle_json
+                                END,
+                                matching_request_json = CASE
+                                    WHEN %s <> '{}' THEN %s
+                                    ELSE jobs.matching_request_json
+                                END,
+                                summary_json = %s,
+                                artifact_path = CASE WHEN %s <> '' THEN %s ELSE jobs.artifact_path END,
+                                request_signature = %s,
+                                request_family_signature = %s,
+                                matching_request_signature = %s,
+                                matching_request_family_signature = %s,
+                                idempotency_key = CASE WHEN %s <> '' THEN %s ELSE jobs.idempotency_key END,
+                                updated_at = %s
+                            WHERE job_id = %s
+                            RETURNING *
+                            """,
+                            (
+                                str(payload.get("job_type") or "retrieval"),
+                                str(payload.get("status") or ""),
+                                str(payload.get("stage") or "pending"),
+                                str(payload.get("request_json") or "{}"),
+                                str(payload.get("plan_json") or "{}"),
+                                str(payload.get("execution_bundle_json") or "{}"),
+                                str(payload.get("execution_bundle_json") or "{}"),
+                                str(payload.get("matching_request_json") or "{}"),
+                                str(payload.get("matching_request_json") or "{}"),
+                                str(payload.get("summary_json") or "{}"),
+                                str(payload.get("artifact_path") or ""),
+                                str(payload.get("artifact_path") or ""),
+                                str(payload.get("request_signature") or ""),
+                                str(payload.get("request_family_signature") or ""),
+                                str(payload.get("matching_request_signature") or ""),
+                                str(payload.get("matching_request_family_signature") or ""),
+                                str(payload.get("idempotency_key") or ""),
+                                str(payload.get("idempotency_key") or ""),
+                                now,
+                                normalized_job_id,
+                            ),
+                        )
+                        updated = _fetch_one_dict_row(cursor, cursor.fetchone()) or {}
+                    connection.commit()
+                return {"status": "applied", "row": updated}
+            except Exception as exc:
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
     def append_job_event(
         self,

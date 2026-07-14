@@ -2661,6 +2661,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         status = HTTPStatus.CREATED if result.get("status") in {"promoted", "rejected"} else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "conflict":
+            status = HTTPStatus.CONFLICT
         return _json_response(status, result)
 
     add(["POST"], "/api/crm/records/{record_id}/public-web-promotions", post_crm_public_web_promotion, read_body=True)
@@ -2843,6 +2845,8 @@ def _build_routes(orchestrator: SourcingOrchestrator) -> list[Route]:
         status = HTTPStatus.OK if result.get("status") == "updated" else HTTPStatus.BAD_REQUEST
         if result.get("status") == "not_found":
             status = HTTPStatus.NOT_FOUND
+        elif result.get("status") == "conflict":
+            status = HTTPStatus.CONFLICT
         return _json_response(status, result)
 
     add(["PATCH"], "/api/crm/records/{record_id}", patch_crm_record, read_body=True)

@@ -3939,12 +3939,46 @@ class SourcingOrchestrator:
                 "tenant_id": str(job.get("tenant_id") or ""),
             }
             if owner_fenced:
-                if not self.store.save_job_if_owned(
+                cas_result = self.store.save_job_if_owned(
                     **save_kwargs,
                     expected_requester_id=expected_requester_id,
                     expected_tenant_id=expected_tenant_id,
-                ):
+                    expected_job_type="workflow",
+                    expected_statuses=("blocked",),
+                    expected_stage="retrieving",
+                    expected_summary_fields={"awaiting_user_action": "continue_stage2"},
+                    forbidden_summary_values={"stage2_transition_state": ("queued", "running")},
+                )
+                if cas_result.get("status") == "owner_miss":
                     return {"status": "not_found", "reason": "job_not_found"}
+                if cas_result.get("status") == "state_conflict":
+                    current_job = dict(cas_result.get("job") or {})
+                    current_status = str(current_job.get("status") or "").strip().lower()
+                    current_stage = str(current_job.get("stage") or "").strip().lower()
+                    current_summary = dict(current_job.get("summary") or {})
+                    if str(current_job.get("job_type") or "") != "workflow":
+                        return {"status": "invalid", "reason": "job is not a workflow", "job_id": job_id}
+                    if current_status == "completed":
+                        return {"status": "already_completed", "job_id": job_id}
+                    if current_status != "blocked" or current_stage != "retrieving":
+                        return {
+                            "status": "invalid",
+                            "reason": "workflow_not_waiting_for_stage2",
+                            "job_id": job_id,
+                            "job_status": str(current_job.get("status") or ""),
+                            "job_stage": str(current_job.get("stage") or ""),
+                        }
+                    if str(current_summary.get("awaiting_user_action") or "") != "continue_stage2":
+                        return {"status": "invalid", "reason": "stage2_not_required", "job_id": job_id}
+                    current_transition = str(current_summary.get("stage2_transition_state") or "").strip().lower()
+                    if current_transition in {"queued", "running"}:
+                        return {
+                            "status": "conflict",
+                            "reason": "stage2_already_requested",
+                            "job_id": job_id,
+                            "stage2_transition_state": current_transition,
+                        }
+                    return {"status": "conflict", "reason": "workflow_state_changed", "job_id": job_id}
             else:
                 self.store.save_job(**save_kwargs)
             self.store.append_job_event(
@@ -42492,10 +42526,6 @@ class SourcingOrchestrator:
             }
 
         reason = str(payload.get("reason") or "").strip() or "Workflow cancelled by operator."
-        summary = dict(job.get("summary") or {})
-        summary["message"] = reason
-        summary["cancelled_reason"] = reason
-        summary["cancelled_at"] = datetime.now(timezone.utc).isoformat()
         # Re-fetch to build the freshest transition payload. In authenticated
         # mode the repository owner-CAS below is the authoritative fence; all
         # earlier reads are only fast non-enumeration/state checks.
@@ -42508,6 +42538,10 @@ class SourcingOrchestrator:
             return {"status": "not_found", "reason": "job_not_found"}
         assert latest_job is not None
         job = latest_job
+        summary = dict(job.get("summary") or {})
+        summary["message"] = reason
+        summary["cancelled_reason"] = reason
+        summary["cancelled_at"] = datetime.now(timezone.utc).isoformat()
         save_kwargs = {
             "job_id": normalized_job_id,
             "job_type": "workflow",
@@ -42524,12 +42558,38 @@ class SourcingOrchestrator:
         }
         owner_fenced = bool(str(expected_requester_id or "").strip() or str(expected_tenant_id or "").strip())
         if owner_fenced:
-            if not self.store.save_job_if_owned(
+            cas_result = self.store.save_job_if_owned(
                 **save_kwargs,
                 expected_requester_id=expected_requester_id,
                 expected_tenant_id=expected_tenant_id,
-            ):
+                expected_job_type="workflow",
+                forbidden_statuses=("completed", "failed", "superseded", "cancelled", "canceled"),
+            )
+            if cas_result.get("status") == "owner_miss":
                 return {"status": "not_found", "reason": "job_not_found"}
+            if cas_result.get("status") == "state_conflict":
+                current_job = dict(cas_result.get("job") or {})
+                current_status = str(current_job.get("status") or "").strip().lower()
+                if str(current_job.get("job_type") or "") != "workflow":
+                    return {
+                        "status": "invalid",
+                        "job_id": normalized_job_id,
+                        "reason": "job is not a workflow",
+                    }
+                if current_status in {"completed", "failed", "superseded", "cancelled", "canceled"}:
+                    return {
+                        "status": "already_terminal",
+                        "job_id": normalized_job_id,
+                        "job_status": current_status,
+                        "job": current_job,
+                    }
+                return {
+                    "status": "conflict",
+                    "reason": "workflow_state_changed",
+                    "job_id": normalized_job_id,
+                    "job_status": current_status,
+                    "job_stage": str(current_job.get("stage") or ""),
+                }
         else:
             self.store.save_job(**save_kwargs)
         self.store.update_agent_runtime_session_status(normalized_job_id, "cancelled")
@@ -54725,6 +54785,13 @@ class SourcingOrchestrator:
         expected_requester_id: str = "",
         expected_tenant_id: str = "",
     ) -> dict[str, Any]:
+        preflight = self._preflight_criteria_rerun_job_ownership(
+            payload,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        )
+        if preflight.get("status") == "not_found":
+            return preflight
         feedback = self.store.repos.criteria_confidence.record_feedback(payload)
         suggestions = self._suggest_patterns_from_feedback(int(feedback.get("feedback_id") or 0))
         recompile = self.criteria_evolution.recompile_after_feedback(payload, int(feedback["feedback_id"]))
@@ -54752,6 +54819,13 @@ class SourcingOrchestrator:
         expected_requester_id: str = "",
         expected_tenant_id: str = "",
     ) -> dict[str, Any]:
+        preflight = self._preflight_criteria_rerun_job_ownership(
+            payload,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+        )
+        if preflight.get("status") == "not_found":
+            return preflight
         trigger_feedback_id = int(payload.get("trigger_feedback_id") or 0)
         recompile = self.criteria_evolution.recompile_after_feedback(payload, trigger_feedback_id)
         rerun = self._rerun_after_recompile_if_requested(
@@ -54831,6 +54905,27 @@ class SourcingOrchestrator:
     ) -> dict[str, Any]:
         suggestion_id = int(payload.get("suggestion_id") or 0)
         action = str(payload.get("action") or payload.get("status") or "").strip()
+        # Suggestion/source lookup is read-only and must precede review_pattern,
+        # version/compiler, or rerun writes. A source job is an implicit
+        # baseline and is fenced exactly like a caller-supplied baseline.
+        preflight_suggestion = self.store.repos.criteria_confidence.get_suggestion(suggestion_id)
+        if preflight_suggestion is None:
+            return {"status": "not_found", "suggestion_id": suggestion_id}
+        source_feedback_id = int(preflight_suggestion.get("source_feedback_id") or 0)
+        source_feedback = (
+            self.store.repos.criteria_confidence.get_feedback(source_feedback_id) if source_feedback_id else {}
+        )
+        source_job_id = str(
+            preflight_suggestion.get("source_job_id") or (source_feedback or {}).get("job_id") or ""
+        ).strip()
+        preflight = self._preflight_criteria_rerun_job_ownership(
+            payload,
+            expected_requester_id=expected_requester_id,
+            expected_tenant_id=expected_tenant_id,
+            additional_job_ids=(source_job_id,),
+        )
+        if preflight.get("status") == "not_found":
+            return preflight
         review = self.store.repos.criteria_confidence.review_suggestion(
             suggestion_id=suggestion_id,
             action=action,
@@ -54849,13 +54944,16 @@ class SourcingOrchestrator:
             }
 
         suggestion = dict(review.get("suggestion") or {})
-        source_feedback_id = int(suggestion.get("source_feedback_id") or 0)
-        source_feedback = (
-            self.store.repos.criteria_confidence.get_feedback(source_feedback_id) if source_feedback_id else {}
-        )
+        source_feedback_id = int(suggestion.get("source_feedback_id") or source_feedback_id)
         recompile_payload = {
             "target_company": str(suggestion.get("target_company") or payload.get("target_company") or ""),
-            "job_id": str(suggestion.get("source_job_id") or (source_feedback or {}).get("job_id") or ""),
+            "job_id": str(
+                suggestion.get("source_job_id")
+                or source_job_id
+                or payload.get("job_id")
+                or payload.get("baseline_job_id")
+                or ""
+            ),
             "request_payload": dict(((source_feedback or {}).get("metadata") or {}).get("request_payload") or {}),
             "criteria_version_id": int(payload.get("criteria_version_id") or 0),
             "feedback_type": str(
@@ -54895,6 +54993,43 @@ class SourcingOrchestrator:
             "recompile": recompile,
             "rerun": rerun,
         }
+
+    def _preflight_criteria_rerun_job_ownership(
+        self,
+        payload: dict[str, Any],
+        *,
+        expected_requester_id: str = "",
+        expected_tenant_id: str = "",
+        additional_job_ids: tuple[str, ...] = (),
+    ) -> dict[str, Any]:
+        """Read-only exact-owner gate before any optional-rerun mutation.
+
+        Both explicit id spellings are checked instead of using a fallback
+        ladder, and suggestion/source jobs are supplied by the caller. This
+        prevents a second, ignored foreign id from crossing the mutation
+        boundary. Automatic baseline selection remains owner-scoped inside the
+        rerun helper because it depends on the freshly compiled request.
+        """
+
+        if not payload.get("rerun_retrieval"):
+            return {"status": "ready"}
+        job_ids: list[str] = []
+        for raw_job_id in (
+            payload.get("job_id"),
+            payload.get("baseline_job_id"),
+            *additional_job_ids,
+        ):
+            job_id = str(raw_job_id or "").strip()
+            if job_id and job_id not in job_ids:
+                job_ids.append(job_id)
+        for job_id in job_ids:
+            if not _exact_job_owner_matches(
+                self.store.get_job(job_id),
+                expected_requester_id=expected_requester_id,
+                expected_tenant_id=expected_tenant_id,
+            ):
+                return {"status": "not_found", "reason": "job_not_found"}
+        return {"status": "ready"}
 
     def list_criteria_patterns(self, target_company: str = "") -> dict[str, Any]:
         return {

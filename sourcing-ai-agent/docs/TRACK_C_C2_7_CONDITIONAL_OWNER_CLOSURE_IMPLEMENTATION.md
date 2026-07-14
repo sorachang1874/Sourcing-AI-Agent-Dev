@@ -14,9 +14,13 @@ the first durable write through a PostgreSQL owner predicate or row-lock UoW.
 
 1. The authenticated route registry now includes criteria feedback, suggestion
    review, and explicit recompile. All three pass the bearer-derived exact job
-   owner into optional retrieval reruns. Explicit baselines fail closed before
-   results are read; automatic matching is filtered by requester and tenant;
-   the owner is re-read before execution and persisted on the derived job.
+   owner into optional retrieval reruns. A shared read-only preflight validates
+   every caller-supplied `job_id`/`baseline_job_id` and the suggestion's source
+   job before feedback, pattern-review, criteria-version, compiler, result, or
+   derived-job writes. Missing and foreign baselines therefore produce the same
+   zero-write `job_not_found`; automatic matching is filtered by requester and
+   tenant, and the owner is re-read before execution and persisted on the
+   derived job.
 2. Authenticated `GET /api/workers/daemon/status?job_id=...` ignores raw detail
    opt-in and uses a dedicated allowlist instead of constructing the general
    runtime-controls view. It probes service status only when the stored control
@@ -26,14 +30,24 @@ the first durable write through a PostgreSQL owner predicate or row-lock UoW.
    service details are neither probed nor returned. Open mode retains the global
    operator projection.
 3. `continue-stage2` re-checks the exact owner after a busy lock result before
-   returning job state. Its queued transition and workflow cancel use
-   `UPDATE jobs ... WHERE requester_id = ? AND tenant_id = ? RETURNING *`;
-   owner mismatch is the canonical job `404` and cannot rewrite owner columns.
+   returning job state. Its queued transition and workflow cancel now use a
+   typed PostgreSQL row-lock CAS with `applied | owner_miss | state_conflict`.
+   Stage 2 requires the locked row to remain workflow + blocked + retrieving +
+   `awaiting_user_action=continue_stage2` and not already queued/running;
+   cancel requires a non-terminal workflow. An authorized state conflict is
+   projected through the normal `already_completed`,
+   `stage2_already_requested`, or `already_terminal` contract instead of a
+   false `404`, while a missing/foreign row remains the canonical job `404`.
 4. Authenticated CRM PATCH locks the canonical `crm_records` row, checks exact
    workspace plus the C2.5 blank-or-equal owner rule, checks `crm_version`, and
-   writes record, engagement, and event in the same transaction. Public-Web
-   promotion performs its first durable promotion write under the same record
-   owner lock. Missing and foreign records share the canonical CRM `404`.
+   writes record, engagement, and event in the same transaction. A stale
+   `crm_version` is an HTTP `409`, not malformed-input `400`. Public-Web
+   promotion takes the canonical record lock, then a schema-scoped promotion-id
+   advisory lock, then the existing promotion row. The promotion id is an
+   immutable idempotency identity: only an exact replay may return the existing
+   row; cross-workspace, cross-record, signal, action, or other payload drift is
+   an HTTP `409` conflict and cannot rewrite it. Missing and foreign records
+   share the canonical CRM `404`.
 5. The C2.6 document is corrected: blank `owner_user_id` in the exact user
    workspace is intentionally compatible; this batch does not invent or run an
    owner migration. `default` workspace and conflicting nonblank owner remain
@@ -43,11 +57,11 @@ the first durable write through a PostgreSQL owner predicate or row-lock UoW.
 
 | Operation | Source of truth | Atomic boundary | Failure projection |
 | --- | --- | --- | --- |
-| Existing job queued/cancel write | `jobs.requester_id`, `jobs.tenant_id` | conditional PostgreSQL `UPDATE ... RETURNING` | job not found |
-| Criteria rerun baseline | baseline `jobs` row | owner-scoped selection plus final canonical re-read before derived create | job not found |
+| Existing job queued/cancel write | locked `jobs` owner + operation-specific state | typed PostgreSQL owner/state CAS | job not found; authorized business-state projection |
+| Criteria rerun baseline | explicit/source baseline `jobs` row | shared zero-write preflight; owner-scoped automatic selection; final canonical re-read | job not found |
 | Authenticated worker status | exact-owned `jobs` row | read-only job-scoped projection; raw/global details suppressed | job not found |
-| CRM PATCH | locked `crm_records` row | record + engagement + event transaction | CRM record not found; same-owner stale version is conflict |
-| CRM Public-Web promotion | locked `crm_records` row | owner check + promotion upsert transaction | CRM record not found |
+| CRM PATCH | locked `crm_records` row | record + engagement + event transaction | CRM record not found; same-owner stale version is HTTP 409 |
+| CRM Public-Web promotion | locked `crm_records` row + immutable promotion id | record -> advisory promotion id -> promotion row; exact replay only | CRM record not found; idempotency conflict is HTTP 409 |
 
 ## Explicit residual boundary
 
@@ -56,20 +70,26 @@ person-identity lock path, while this PATCH UoW locks the existing record id;
 `add_person_to_crm`, duplicate-person cleanup, the future
 `(workspace_id, person_identity_key)` unique constraint, and command
 terminal/effect atomicity remain for the CRM Repository/command-completion
-batch. No code in this slice claims global CRM exactly-once semantics.
+batch. Legacy promotion writers also do not yet share the new promotion-id
+advisory lock, so the insert path retains a defensive `ON CONFLICT DO NOTHING`
+and immutable-identity re-read rather than claiming all-writer lock unification.
+No code in this slice claims global CRM exactly-once semantics.
 
 ## Validation contract
 
-- auth/request-scope/private-read/owner-fencing fast lane: `100 passed + 65
-  subtests`;
+- auth/request-scope/private-read/owner-fencing plus transport lane: `109 passed
+  + 65 subtests` (transport alone: `15 passed`);
 - permanent isolated-PG owner-CAS regressions plus the full adjacent live-PG
-  adapter lane: `64 passed + 4 subtests` (the focused new file is `2 passed`);
-- API transport parity: `13 passed`;
+  adapter lane: `71 passed + 4 subtests` (the focused owner-fencing PG file is
+  `9 passed`);
+- API transport parity includes the typed-CAS business projection and stale CRM
+  version `409` regressions: `15 passed`;
 - CRM PATCH and Public-Web promotion endpoint adjacency: `2 passed`;
 - CRM Public-Web runtime boundary: `34 passed`;
-- exact open-mode daemon-status and criteria compatibility nodes from
-  `tests/test_pipeline.py`: `5 passed` with the local PG DSN (the full file was
-  not run);
+- six exact compatibility nodes from `tests/test_pipeline.py` with a local PG
+  DSN and per-test isolated schema: `4 passed / 2 failed`; the same exact two
+  missing-table setup failures (`plan_review_sessions`, `jobs`) reproduce on a
+  clean `97a81d0` worktree. The full file was not run;
 - `make lint`: `58 files already formatted`, all checks passed;
 - mypy ratchet: expected nonzero, unchanged at `81 errors / 4 files`;
 - touched-module `py_compile` and `git diff --check`: clean;

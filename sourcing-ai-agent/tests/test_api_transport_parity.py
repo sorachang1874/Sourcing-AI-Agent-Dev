@@ -312,10 +312,7 @@ class ApiTransportParityTest(unittest.TestCase):
 
     def test_route_inventory_matches_legacy_route_table(self) -> None:
         app = create_app(_StubOrchestrator())
-        observed = [
-            (route.path, frozenset(set(route.methods or ()) - {"HEAD"}))
-            for route in app.routes
-        ]
+        observed = [(route.path, frozenset(set(route.methods or ()) - {"HEAD"})) for route in app.routes]
         expected = [(path, frozenset({method})) for method, path in EXPECTED_ROUTES]
         expected.append(EXPECTED_FALLBACK_ROUTE)
         self.assertEqual(observed, expected)
@@ -600,6 +597,110 @@ class ApiTransportParityTest(unittest.TestCase):
 
         self.assertEqual(status, 503)
         self.assertEqual(json.loads(response_body).get("reason"), "shared_recovery_signal_unavailable")
+
+    def test_workflow_job_cas_business_projections_preserve_transport_contract(self) -> None:
+        class _JobCasProjectionOrchestrator(_StubOrchestrator):
+            def continue_workflow_stage2(self, payload, **_owner):
+                if payload.get("job_id") == "job-completed":
+                    return {"status": "already_completed", "job_id": "job-completed"}
+                return {
+                    "status": "conflict",
+                    "reason": "stage2_already_requested",
+                    "job_id": str(payload.get("job_id") or ""),
+                    "stage2_transition_state": "queued",
+                }
+
+            def cancel_workflow_job(self, job_id, _payload, **_owner):
+                return {
+                    "status": "already_terminal",
+                    "job_id": job_id,
+                    "job_status": "failed",
+                    "job": {"job_id": job_id, "status": "failed", "stage": "failed"},
+                }
+
+        _server, _thread, base_url, opener, _orchestrator = self._start_server(_JobCasProjectionOrchestrator())
+        status, _headers, body = self._request(
+            opener,
+            f"{base_url}/api/workflows/job-completed/continue-stage2",
+            method="POST",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(json.loads(body), {"status": "already_completed", "job_id": "job-completed"})
+
+        status, _headers, body = self._request(
+            opener,
+            f"{base_url}/api/workflows/job-queued/continue-stage2",
+            method="POST",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(json.loads(body).get("reason"), "stage2_already_requested")
+
+        status, _headers, body = self._request(
+            opener,
+            f"{base_url}/api/jobs/job-failed/cancel",
+            method="POST",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body).get("status"), "already_terminal")
+        self.assertEqual(json.loads(body).get("job_status"), "failed")
+
+    def test_crm_typed_conflicts_map_to_http_409(self) -> None:
+        class _StaleCrmOrchestrator(_StubOrchestrator):
+            def update_crm_record_api(self, record_id, _payload, **_owner):
+                return {
+                    "status": "conflict",
+                    "reason": "crm_record_stale",
+                    "crm_record_id": record_id,
+                }
+
+            def promote_crm_record_public_web_signal(self, record_id, _payload, **_owner):
+                return {
+                    "status": "conflict",
+                    "reason": "crm_public_web_promotion_idempotency_conflict",
+                    "crm_record_id": record_id,
+                }
+
+        _server, _thread, base_url, opener, _orchestrator = self._start_server(_StaleCrmOrchestrator())
+        status, _headers, body = self._request(
+            opener,
+            f"{base_url}/api/crm/records/crm-stale",
+            method="PATCH",
+            data=json.dumps({"stage": "contacted_waiting"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+
+        self.assertEqual(status, 409)
+        self.assertEqual(
+            json.loads(body),
+            {
+                "status": "conflict",
+                "reason": "crm_record_stale",
+                "crm_record_id": "crm-stale",
+            },
+        )
+
+        status, _headers, body = self._request(
+            opener,
+            f"{base_url}/api/crm/records/crm-stale/public-web-promotions",
+            method="POST",
+            data=json.dumps({"signal_id": "signal-drift", "action": "promote"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 409)
+        self.assertEqual(
+            json.loads(body),
+            {
+                "status": "conflict",
+                "reason": "crm_public_web_promotion_idempotency_conflict",
+                "crm_record_id": "crm-stale",
+            },
+        )
 
     def test_bytes_endpoints_preserve_payload_and_headers(self) -> None:
         _server, _thread, base_url, opener, _orchestrator = self._start_server()

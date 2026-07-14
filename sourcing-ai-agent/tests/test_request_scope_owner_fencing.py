@@ -132,6 +132,91 @@ def test_concurrent_owner_change_cannot_cross_cancel_canonical_fence() -> None:
     assert store.saved == []
 
 
+@pytest.mark.parametrize(
+    ("conflict_job", "expected"),
+    (
+        (
+            _owned_job(status="completed", stage="completed"),
+            {"status": "already_completed", "job_id": "job-1"},
+        ),
+        (
+            _owned_job(
+                status="blocked",
+                stage="retrieving",
+                summary={"awaiting_user_action": "continue_stage2", "stage2_transition_state": "queued"},
+            ),
+            {
+                "status": "conflict",
+                "reason": "stage2_already_requested",
+                "job_id": "job-1",
+                "stage2_transition_state": "queued",
+            },
+        ),
+    ),
+)
+def test_stage2_typed_cas_projects_authorized_state_conflict_without_side_effect(
+    conflict_job: dict[str, object], expected: dict[str, object]
+) -> None:
+    waiting = _owned_job(
+        status="blocked",
+        stage="retrieving",
+        summary={"awaiting_user_action": "continue_stage2", "stage2_transition_state": ""},
+    )
+    writes: list[str] = []
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda _job_id: dict(waiting),
+        save_job_if_owned=lambda **_kwargs: {
+            "status": "state_conflict",
+            "job": dict(conflict_job),
+        },
+        append_job_event=lambda *_args, **_kwargs: writes.append("event"),
+    )
+
+    @contextmanager
+    def acquired_lock():
+        yield {"acquired": True}
+
+    orchestrator._job_run_lock = lambda _job_id: acquired_lock()
+
+    result = orchestrator.continue_workflow_stage2(
+        {"job_id": "job-1"},
+        expected_requester_id="alice",
+        expected_tenant_id="user-alice",
+    )
+
+    assert result == expected
+    assert writes == []
+
+
+def test_cancel_typed_cas_projects_terminal_interleaving_without_cleanup_side_effect() -> None:
+    running = _owned_job(status="running", stage="acquiring", summary={"progress": "working"})
+    terminal = _owned_job(status="failed", stage="failed", summary={"error": "winner"})
+    side_effects: list[str] = []
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda _job_id: dict(running),
+        save_job_if_owned=lambda **_kwargs: {"status": "state_conflict", "job": dict(terminal)},
+        update_agent_runtime_session_status=lambda *_args: side_effects.append("runtime_status"),
+        release_workflow_job_lease=lambda *_args: side_effects.append("lease_release"),
+    )
+
+    result = orchestrator.cancel_workflow_job(
+        "job-1",
+        {},
+        expected_requester_id="alice",
+        expected_tenant_id="user-alice",
+    )
+
+    assert result == {
+        "status": "already_terminal",
+        "job_id": "job-1",
+        "job_status": "failed",
+        "job": terminal,
+    }
+    assert side_effects == []
+
+
 def test_interrupt_rechecks_worker_to_job_link_and_owner_before_side_effect() -> None:
     orchestrator = object.__new__(SourcingOrchestrator)
     store = _SequencedJobStore([_owned_job(), _foreign_job()])
@@ -461,3 +546,108 @@ def test_criteria_rerun_rejects_foreign_explicit_baseline_before_results_read() 
     )
 
     assert result == {"status": "not_found", "reason": "job_not_found"}
+
+
+def test_criteria_feedback_preflights_missing_explicit_baseline_before_any_write() -> None:
+    events: list[str] = []
+    criteria_repo = SimpleNamespace(
+        record_feedback=lambda _payload: events.append("record_feedback"),
+    )
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        repos=SimpleNamespace(criteria_confidence=criteria_repo),
+        get_job=lambda _job_id: events.append("get_job") or None,
+    )
+    orchestrator.criteria_evolution = SimpleNamespace(
+        recompile_after_feedback=lambda *_args: events.append("recompile")
+    )
+
+    result = orchestrator.record_criteria_feedback(
+        {"rerun_retrieval": True, "job_id": "job-missing"},
+        expected_requester_id="alice",
+        expected_tenant_id="user-alice",
+    )
+
+    assert result == {"status": "not_found", "reason": "job_not_found"}
+    assert events == ["get_job"]
+
+
+def test_criteria_recompile_preflights_foreign_explicit_baseline_before_any_write() -> None:
+    events: list[str] = []
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda _job_id: events.append("get_job") or _foreign_job(),
+    )
+    orchestrator.criteria_evolution = SimpleNamespace(
+        recompile_after_feedback=lambda *_args: events.append("recompile")
+    )
+
+    result = orchestrator.recompile_criteria(
+        {"rerun_retrieval": True, "baseline_job_id": "job-bob"},
+        expected_requester_id="alice",
+        expected_tenant_id="user-alice",
+    )
+
+    assert result == {"status": "not_found", "reason": "job_not_found"}
+    assert events == ["get_job"]
+
+
+def test_criteria_suggestion_preflights_foreign_source_baseline_before_review_write() -> None:
+    events: list[str] = []
+    criteria_repo = SimpleNamespace(
+        get_suggestion=lambda _suggestion_id: (
+            events.append("get_suggestion") or {"suggestion_id": 7, "source_feedback_id": 11}
+        ),
+        get_feedback=lambda _feedback_id: events.append("get_feedback") or {"job_id": "job-bob"},
+        review_suggestion=lambda **_kwargs: events.append("review_suggestion"),
+    )
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        repos=SimpleNamespace(criteria_confidence=criteria_repo),
+        get_job=lambda _job_id: events.append("get_job") or _foreign_job(),
+    )
+    orchestrator.criteria_evolution = SimpleNamespace(
+        recompile_after_feedback=lambda *_args: events.append("recompile")
+    )
+
+    result = orchestrator.review_pattern_suggestion(
+        {"suggestion_id": 7, "action": "apply", "rerun_retrieval": True},
+        expected_requester_id="alice",
+        expected_tenant_id="user-alice",
+    )
+
+    assert result == {"status": "not_found", "reason": "job_not_found"}
+    assert events == ["get_suggestion", "get_feedback", "get_job"]
+
+
+def test_criteria_automatic_baseline_selection_is_exact_owner_scoped() -> None:
+    captured: dict[str, object] = {}
+
+    def find_best_completed_job_match(**kwargs):
+        captured.update(kwargs)
+        return None
+
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        find_best_completed_job_match=find_best_completed_job_match,
+        get_job_results=lambda _job_id: [],
+    )
+    with patch(
+        "sourcing_agent.orchestrator.decide_rerun_policy",
+        return_value={"status": "gated_off", "mode": "none"},
+    ):
+        result = orchestrator._rerun_after_recompile_if_requested(
+            {"rerun_retrieval": True},
+            {"feedback_id": 1},
+            {
+                "status": "recompiled",
+                "request": {"target_company": "OpenAI"},
+                "plan": {},
+            },
+            expected_requester_id="alice",
+            expected_tenant_id="user-alice",
+        )
+
+    assert result["status"] == "gated_off"
+    assert captured["requester_id"] == "alice"
+    assert captured["tenant_id"] == "user-alice"

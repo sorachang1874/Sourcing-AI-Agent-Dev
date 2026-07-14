@@ -1619,13 +1619,19 @@ class ControlPlaneStore:
         requester_id: str = "",
         tenant_id: str = "",
         idempotency_key: str = "",
-    ) -> bool:
-        """Atomically update an existing job only while its exact owner is unchanged."""
+        expected_job_type: str = "",
+        expected_statuses: tuple[str, ...] = (),
+        expected_stage: str = "",
+        forbidden_statuses: tuple[str, ...] = (),
+        expected_summary_fields: dict[str, Any] | None = None,
+        forbidden_summary_values: dict[str, tuple[str, ...]] | None = None,
+    ) -> dict[str, Any]:
+        """Atomically update an existing job under exact owner and state guards."""
 
         normalized_requester = str(expected_requester_id or "").strip()
         normalized_tenant = str(expected_tenant_id or "").strip()
         if not normalized_requester or not normalized_tenant:
-            return False
+            return {"status": "owner_miss"}
         row_payload = self._job_storage_row(
             job_id=job_id,
             job_type=job_type,
@@ -1640,13 +1646,35 @@ class ControlPlaneStore:
             tenant_id=tenant_id,
             idempotency_key=idempotency_key,
         )
-        row = self._call_control_plane_postgres_native(
+        result = self._call_control_plane_postgres_native(
             "update_job_row_if_owned",
             row=row_payload,
             expected_requester_id=normalized_requester,
             expected_tenant_id=normalized_tenant,
+            expected_job_type=str(expected_job_type or "").strip(),
+            expected_statuses=list(expected_statuses),
+            expected_stage=str(expected_stage or "").strip(),
+            forbidden_statuses=list(forbidden_statuses),
+            expected_summary_fields=dict(expected_summary_fields or {}),
+            forbidden_summary_values={
+                str(field): list(values) for field, values in dict(forbidden_summary_values or {}).items()
+            },
         )
-        return row is not None
+        if not isinstance(result, dict) or str(result.get("status") or "") not in {
+            "applied",
+            "owner_miss",
+            "state_conflict",
+        }:
+            self._raise_control_plane_postgres_write_failure(
+                table_name="jobs",
+                method_name="save_job_if_owned",
+                reason="postgres-only: typed owner/state CAS returned no valid confirmation",
+            )
+        response = dict(result)
+        raw_row = response.pop("row", None)
+        if isinstance(raw_row, dict) and raw_row:
+            response["job"] = self._job_from_row(raw_row)
+        return response
 
     def append_job_event(
         self,
@@ -5857,10 +5885,12 @@ class ControlPlaneStore:
         expected_owner_user_id: str,
     ) -> dict[str, Any]:
         normalized = _normalize_crm_public_web_promotion_payload(payload)
-        existing = self.get_crm_public_web_promotion(normalized["promotion_id"])
         row_payload = _crm_public_web_promotion_row_payload(
             normalized,
-            existing=existing,
+            # The authoritative existing-row read belongs inside the PG owner
+            # transaction. Reading it here would reopen the promotion-id race
+            # that this method is intended to close.
+            existing=None,
             now=_utc_now_timestamp(),
         )
         result = self._call_control_plane_postgres_native(
