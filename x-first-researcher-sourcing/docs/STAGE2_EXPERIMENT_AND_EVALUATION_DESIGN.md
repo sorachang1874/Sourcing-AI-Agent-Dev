@@ -1,9 +1,10 @@
 # Stage 2 experiment and evaluation design
 
-> Status: design plus exploration evidence, not a promotion approval. Seven later Grok CLI sessions proved native-X
+> Status: design plus exploration evidence and one bounded Stage 2A offline field-capability implementation, not a
+> promotion approval. Seven later Grok CLI sessions proved native-X
 > keyword, semantic, user, and thread search plus adaptive recall expansion, but did not prove replayable Post bodies
 > or complete profile fields. No
-> Stage 2 provider adapter, reviewed live profile probe, Batch runner, durable task ledger, promotion-grade evaluator,
+> Stage 2 provider adapter, reviewed live profile probe, Batch runner, durable task ledger, search-quality evaluator,
 > supported API credential path, or canonical product writer exists yet.
 
 ## Decision this design supports
@@ -59,17 +60,31 @@ likewise model-mediated and not replayable. The replay copy is owner-only, but t
 still fail the owner-only retention requirement. These gaps prevent promotion or batching but do not negate the
 search result.
 
-## Future artifact owners
+## Stage 2A artifact owners
 
-The smallest Stage 2A slice introduces four independent envelopes. Names below are proposed; implementation requires
-schema, executable validator, deterministic fixtures, tests, and a new non-author review in one batch.
+The bounded field-capability slice implements four independent offline envelopes. Their outer shapes are closed by
+JSON Schema; deep replay, digest, terminal, retention, and authority rules are executable. This does not implement a
+provider adapter, live runner, search-quality experiment, or Batch scheduler. See
+`STAGE2_FIELD_CAPABILITY_CONTRACT.md`.
+
+A separately supplied `x.stage2.external_selection.fixture.v1` manifest owns the unique four-row fixture selection.
+It is not a fifth result envelope and does not self-prove search output: the request binds its id, version, digest,
+selected count, and selected-row digest and must cover the same lead/candidate/account denominator exactly once. The
+comparison covers each row's opaque lead ref, full candidate SHA-256, lookup handle, reported numeric-id value, and
+reported-id status; matching only a subset is invalid.
+
+The experiment request also owns a closed scenario manifest before collection construction. Each task is bound to one
+closed `scenario_id` and exact terminal, error/quarantine, field-state, and source-count semantics. The request stores
+both the complete scenario-manifest SHA-256 and expectation-semantics SHA-256. The capability expectation must copy
+those exact semantics, bind the complete request SHA-256, and reproduce both digests. Collection output cannot mutate
+or choose its own expectation.
 
 | Envelope | Owner / source of truth | Required contents | Forbidden authority |
 | --- | --- | --- | --- |
-| `x.stage2.experiment.request.v1` | Experiment owner | frozen lab/window, registry and prompt digests, model/tool policy, handle filters, source/turn/observation/cost/deadline caps, task keys | No provider result or caller-reported KPI |
-| `x.stage2.collection.v1` | Collection/task-ledger owner | terminal task rows, provider call/source/citation receipts, accounts, Posts, profiles, source-match refs, quarantine, incidents, coverage, retention | `assertions=[]`, `canonical_writes=[]`; no inferred exhaustive coverage |
-| `x.stage2.gold_and_adjudication.v1` | Independent evaluation owner | pre-provider golden manifest, two reviewers, conflicts, development/blind split, evidence hashes, hard negatives | Provider discoveries cannot create or relabel gold rows |
-| `x.stage2.evaluation.v1` | Deterministic evaluator | mechanically recomputed KPIs, intervals, guardrails, segment results, decision and reason codes | No caller aggregates, provider calls, identity merge, or product write |
+| `x.stage2.experiment.request.v1` | Experiment owner | frozen lab/window, registry digest, complete source-manifest denominator, request-frozen scenario semantics/digests, per-task native-X-only tool policy, technical parser/execution ceilings, retention and zero-authority policy | No provider result, live execution authority, or caller-reported KPI |
+| `x.stage2.collection.v1` | Collection/task-ledger owner | source-derived terminal task rows and field states, offline call/source receipts, exact profiles, bounded Posts, mechanically derived quarantine/incidents, retention | `assertions=[]`, `canonical_writes=[]`, `outreach_actions=[]`; no inferred exhaustive coverage |
+| `x.stage2.capability_expectation.v1` | Offline fixture-scenario owner | request-bound terminal/error/quarantine/field/source expectations frozen before collection construction | Collection output cannot create or relabel expectations; no accuracy-gold or human-adjudication claim |
+| `x.stage2.evaluation.v1` | Deterministic evaluator | recomputed terminal/field counts, fixture-expectation conformance, guardrails, decision and reason codes | No search-quality KPI, interval, segment claim, caller aggregate, provider call, identity merge, or product write |
 
 The source-neutral patterns to reuse from `sourcing-ai-agent` are semantic, not runtime dependencies:
 
@@ -110,12 +125,24 @@ Every requested field has one explicit state:
 - `absent` — the reviewed provider response explicitly lacked the field;
 - `unverified` — the transport or receipt cannot establish presence or absence.
 
-The first Post field registry should include stable Post id, canonical URL, numeric author id, handle, authored time,
-text, reply/quote/thread relation, media references, engagement snapshot, and language observation. The first profile
-registry should include numeric user id, handle, Bio, Bio content hash/version, profile URL, and observed time.
+The implemented v1 Post registry includes stable Post id, canonical URL, numeric author id, handle, authored time,
+bounded excerpt, and thread relation. The implemented profile registry includes numeric user id, handle, profile URL,
+Bio, Bio content hash/version, and observed time. Full text, media, engagement, and language observations require a
+future registry version rather than being inferred from this narrower slice.
 
 A citation or model answer cannot silently promote `unverified` to `present_exact`. Handle alone cannot establish
 account identity. Bio text and organization mentions remain evidence proposals; they do not confirm employment.
+
+Task-row field states are derived from retained raw records and their normalized consumers rather than accepted as
+caller summaries. A replayable full profile/Post payload must be consumed by normalization or its derived
+quarantine/incident; a metadata-only trace is non-replayable and leaves fields `unverified`. A present Post can never
+be reported `absent`. With no Post payload, Post fields are `absent` only when a replayable profile response explicitly
+records their absence; otherwise they remain `unverified`.
+
+Receipt, source, task, profile and Post identities close bidirectionally. Source observation timestamps stay inside
+their receipt window, a profile Bio timestamp equals its source observation, and a Post cannot be authored after it
+was observed. Numeric canonical Post ids are unique collection-wide. Quarantine/incident reason codes are derived
+from actual retained conflicts, so a caller cannot swap one valid code for another and merely rehash ids.
 
 ### Raw evidence and retention
 
@@ -131,6 +158,14 @@ Unknown retention state, an unverified deletion, or a full body in the normal co
 
 ## Stage 2A offline fixture slice
 
+The first bounded field-capability slice is author-complete offline. Its deterministic four-task fixture covers an
+exact profile/same-account bounded Post, conflicting numeric ids, handle rename, metadata-only tool trace, unbound
+Bio, cross-account Post, missing terminal rows, retention drift, and zero-authority violations. The exact state result
+is `4 terminal = 1 completed + 2 quarantined + 1 failed`. A metadata-only trace cannot promote any field above
+`unverified`.
+
+The broader Stage 2 program still requires the following separate fixtures before search-quality or Batch promotion:
+
 Before any Stage 2 live request, deterministic `.invalid` fixtures must cover:
 
 - exact, bounded, absent, and unverified Post/profile fields;
@@ -143,10 +178,28 @@ Before any Stage 2 live request, deterministic `.invalid` fixtures must cover:
 - profile/Bio unavailable, malformed nested provider values, and retention deletion failure;
 - zero tasks, NaN/Infinity, fake provenance, omitted selected packets, and forged aggregate KPIs.
 
-All metrics must be recomputed from task, observation, packet, gold, adjudication, incident, and retention rows. The
-evaluator must reject a valid-looking decision whose underlying rows do not reproduce it.
+The implemented evaluator recomputes terminal counts, all 14 field-state denominators, capability-expectation
+conformance, and hard guardrails from the bound request/collection/expectation rows. It rejects a valid-looking
+decision whose underlying rows do not reproduce it. It intentionally emits no precision/recall KPI, confidence
+interval, population segment result, or human-adjudication result. Its decision is mechanically
+`offline_fixture_expectation_conformant` only for zero mismatches and
+`offline_fixture_expectation_mismatch` otherwise.
 
-## Stage 2B bounded canary
+Validation performs a bounded byte/depth/node scan before JSON Schema traversal. `collection_id` hashes every
+material collection field except itself, including rows, receipts, raw and normalized evidence, quarantine,
+incidents, retention, empty authority-write arrays, and authority; rehashing only a convenient subset cannot hide a
+mutation.
+
+Source-conflict precedence is total: zero profile payloads fail as unavailable, multiple replayable profile payloads
+quarantine as `multiple_profile_sources`, malformed/multiple numeric ids take precedence over collection-wide
+id/handle conflict, then lookup-handle rename and cross-account Post evidence follow. This prevents present payloads
+from being erased as unavailable and gives combined multi-id/cross-handle evidence one legal terminal state.
+
+## Stage 2B bounded canary — future design only
+
+Everything from this heading through the iteration/scale gate is an unimplemented search-quality and transport
+design. None of these golden-set, KPI, interval, segment, or Batch claims are outputs of the Stage 2A fixture
+evaluator.
 
 The first owner-reviewed canary remains intentionally small:
 
@@ -155,10 +208,15 @@ The first owner-reviewed canary remains intentionally small:
 - four high-authority discovery tasks:
   `official_lab_output`, `first_party_technical_posts`, `official_lab_interactions`, and
   `paper_conference_linkage`;
-- after stable account discovery, at most one separate profile task covering at most five accounts;
+- after stable account discovery, at most one separate profile task covering at most five accounts for this first
+  live safety canary only;
 - at most five tasks total, two model/tool turns per task, and 100 retained observations;
 - no retry, provider fallback, generic web fallback, canonical write, export, outreach, or automatic identity merge;
 - owner-pinned cost and deadline caps; missing provider cost is `unreported`, never zero.
+
+The five-account limit is not a generalized hydration-queue cap or a business success target. The offline v1 request
+uses a `10,000`-task technical ceiling solely for parser/execution protection; later volume and convergence remain
+owner-controlled and evidence-driven.
 
 ### Independent golden set
 

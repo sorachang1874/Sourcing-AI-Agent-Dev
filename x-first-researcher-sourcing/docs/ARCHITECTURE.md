@@ -29,6 +29,11 @@ The sibling has isolated fixture layers plus bounded diagnostic lanes:
 7. **Reported profile-text semantic lane** — performs provider-free, terminal-total batch adjudication of
    `grok_model_mediated_unverified_text` into strong/weak/none professional-experience verification-queue proposals;
    it preserves opaque campaign/text bindings and cannot establish platform identity or physical-region experience.
+8. **Stage 2A field-capability fixture** — owns the source-neutral 14-field registry, terminal task rows, replayable
+   source/call bindings, exact profile and bounded Post semantics, source-consumption closure, identity-conflict
+   quarantine, metadata-only fail-closed behavior, request-frozen fixture expectations, schema-first deterministic
+   conformance evaluation, and simulation-only TTL records. It performs no provider or network call and makes no
+   live capability claim. Search-quality gold and human adjudication remain a separate future lane.
 
 Fixture validation executes no provider, model, network client, database, or product adapter. Stage 1 v1 is deliberately
 `execution_mode=fixture_only`; it cannot represent or validate a live result and cannot emit `x_native_proven`.
@@ -81,6 +86,7 @@ approved query policy—no lab name belongs in the evaluator algorithm.
 | Adaptive Grok live wave | Request/grant/process/receipt schemas + hardened runner | Explicit operator execution only | Pinned review plus one-shot grant; no product promotion |
 | Recall-pool campaign | Raw replay receipts + campaign merger | Private evaluation only | Source trust remains field-specific; no canonical write |
 | Reported profile text | Opaque campaign/text-hash observation + offline adjudicator | Verification queue proposal only | New source-bound artifact required for any trust upgrade |
+| Stage 2A field capability | Field registry + four envelope schemas + executable replay validator | Offline fixture evaluator only | Non-author review, new live contract, supported payload-returning transport, and explicit trigger |
 | External account identity | Stable platform user ID | Fixture-local references | Handle remains mutable evidence |
 | Canonical person/assertion | Existing product owners | None in this sibling | Separate adjudication and adapter gate |
 | Live provider/model/runtime | Unassigned pending owner decision | None | New version, implementation, review, explicit trigger |

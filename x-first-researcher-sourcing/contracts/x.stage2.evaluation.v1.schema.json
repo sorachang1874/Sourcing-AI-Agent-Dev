@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.stage2.evaluation.v1.schema.json",
+  "title": "X-first Stage 2A field-capability evaluation v1",
+  "description": "Closed outer envelope. The executable owner recomputes this artifact byte-for-byte from the bound request, collection, pre-collection capability expectation, and field registry. This is fixture conformance, not search-quality accuracy.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "execution_mode",
+    "evaluation_id",
+    "experiment_id",
+    "request_sha256",
+    "collection_sha256",
+    "expectation_sha256",
+    "terminal_metrics",
+    "field_metrics",
+    "expectation_metrics",
+    "guardrails",
+    "decision",
+    "reason_codes",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.stage2.evaluation.v1"},
+    "execution_mode": {"const": "offline_fixture"},
+    "evaluation_id": {"type": "string", "pattern": "^xstage2eval_[0-9a-f]{24}$"},
+    "experiment_id": {"type": "string", "pattern": "^xstage2exp_[0-9a-f]{24}$"},
+    "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "collection_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "expectation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "terminal_metrics": {"type": "object"},
+    "field_metrics": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+    "expectation_metrics": {"type": "object"},
+    "guardrails": {"type": "object"},
+    "decision": {
+      "enum": [
+        "offline_fixture_expectation_conformant",
+        "offline_fixture_expectation_mismatch"
+      ]
+    },
+    "reason_codes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+    "authority": {"type": "object"}
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.stage2.collection.v1.schema.json",
+  "title": "X-first Stage 2A field-capability collection v1",
+  "description": "Closed outer envelope. collection_id binds every material field except itself; runtime mechanically derives field states, terminal reasons, temporal closure and source consumption.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "execution_mode",
+    "collection_id",
+    "experiment_id",
+    "request_sha256",
+    "field_registry",
+    "terminal_summary",
+    "task_rows",
+    "call_receipts",
+    "source_records",
+    "profiles",
+    "posts",
+    "quarantine",
+    "incidents",
+    "retention",
+    "assertions",
+    "canonical_writes",
+    "outreach_actions",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.stage2.collection.v1"},
+    "execution_mode": {"const": "offline_fixture"},
+    "collection_id": {"type": "string", "pattern": "^xstage2collection_[0-9a-f]{24}$"},
+    "experiment_id": {"type": "string", "pattern": "^xstage2exp_[0-9a-f]{24}$"},
+    "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "field_registry": {"type": "object"},
+    "terminal_summary": {"type": "object"},
+    "task_rows": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"type": "object"}},
+    "call_receipts": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
+    "source_records": {"type": "array", "maxItems": 100000, "items": {"type": "object"}},
+    "profiles": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
+    "posts": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "post_id",
+          "task_id",
+          "source_record_id",
+          "canonical_post_id",
+          "canonical_post_url",
+          "post_author_platform_user_id",
+          "post_author_handle",
+          "post_authored_at",
+          "bounded_excerpt",
+          "thread_relation",
+          "field_states",
+          "source_binding_status",
+          "authority"
+        ],
+        "properties": {
+          "post_id": {"type": "string", "pattern": "^xstage2post_[0-9a-f]{24}$"},
+          "task_id": {"type": "string", "pattern": "^xstage2task_[0-9a-f]{24}$"},
+          "source_record_id": {"type": "string", "pattern": "^xstage2src_[0-9a-f]{24}$"},
+          "canonical_post_id": {},
+          "canonical_post_url": {},
+          "post_author_platform_user_id": {},
+          "post_author_handle": {},
+          "post_authored_at": {},
+          "bounded_excerpt": {},
+          "thread_relation": {},
+          "field_states": {
+            "type": "array",
+            "minItems": 7,
+            "maxItems": 7,
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["field_id", "state"],
+              "properties": {
+                "field_id": {
+                  "enum": [
+                    "canonical_post_id",
+                    "canonical_post_url",
+                    "post_author_platform_user_id",
+                    "post_author_handle",
+                    "post_authored_at",
+                    "bounded_excerpt",
+                    "thread_relation"
+                  ]
+                },
+                "state": {"enum": ["present_exact", "present_bounded", "absent", "unverified"]}
+              }
+            }
+          },
+          "source_binding_status": {"const": "replay_bound_exact"},
+          "authority": {"type": "object"}
+        }
+      }
+    },
+    "quarantine": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
+    "incidents": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
+    "retention": {"type": "object"},
+    "assertions": {"type": "array", "maxItems": 0},
+    "canonical_writes": {"type": "array", "maxItems": 0},
+    "outreach_actions": {"type": "array", "maxItems": 0},
+    "authority": {"type": "object"}
+  }
+}
