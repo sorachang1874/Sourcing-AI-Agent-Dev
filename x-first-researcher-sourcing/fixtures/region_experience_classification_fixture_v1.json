@@ -2,6 +2,7 @@
   "claims": {
     "canonical_writes_authorized": false,
     "citizenship_inferred": false,
+    "discovery_or_ranking_authorized": false,
     "ethnicity_inferred": false,
     "handle_used": false,
     "language_used": false,
@@ -10,77 +11,92 @@
     "outreach_authorized": false,
     "protected_identity_inferred": false,
     "social_graph_used": false,
-    "third_party_mentions_used": false
+    "third_party_mentions_used_to_support_labels": false
   },
   "evidence_decisions": [
     {
-      "evidence_id": "xregion_ev_bio_singapore",
+      "evidence_id": "xev_01J00000000000000000000001",
       "reason": "eligible_explicit_experience",
       "status": "eligible"
     },
     {
-      "evidence_id": "xregion_ev_employment_beijing",
+      "evidence_id": "xev_01J00000000000000000000002",
       "reason": "eligible_explicit_experience",
       "status": "eligible"
     },
     {
-      "evidence_id": "xregion_ev_education_tokyo",
+      "evidence_id": "xev_01J00000000000000000000003",
       "reason": "eligible_explicit_experience",
       "status": "eligible"
     },
     {
-      "evidence_id": "xregion_ev_research_hong_kong",
+      "evidence_id": "xev_01J00000000000000000000004",
       "reason": "eligible_explicit_experience",
       "status": "eligible"
     },
     {
-      "evidence_id": "xregion_ev_post_taipei_self",
+      "evidence_id": "xev_01J00000000000000000000005",
       "reason": "eligible_explicit_experience",
       "status": "eligible"
     },
     {
-      "evidence_id": "xregion_ev_post_topic_only",
-      "reason": "rejected_non_subject_scope",
+      "evidence_id": "xev_01J00000000000000000000006",
+      "reason": "rejected_by_adjudication",
       "status": "rejected"
     },
     {
-      "evidence_id": "xregion_ev_post_third_party_mention",
-      "reason": "rejected_non_subject_scope",
+      "evidence_id": "xev_01J00000000000000000000007",
+      "reason": "rejected_by_adjudication",
       "status": "rejected"
+    },
+    {
+      "evidence_id": "xev_01J00000000000000000000008",
+      "reason": "eligible_unregistered_location",
+      "status": "unregistered_location"
     }
   ],
-  "input_sha256": "c7158c96f4423e1ef39554d566dcd946bc8e28cdfa56b3d0d41546f370cc07b5",
+  "input_sha256": "b8b79804a5cc8ca7a8ec47c947e273afaf441629d321ba336f6973fc316e30cf",
   "labels": [
     {
       "evidence_refs": [
-        "xregion_ev_bio_singapore",
-        "xregion_ev_education_tokyo",
-        "xregion_ev_employment_beijing",
-        "xregion_ev_post_taipei_self",
-        "xregion_ev_research_hong_kong"
+        "xev_01J00000000000000000000001",
+        "xev_01J00000000000000000000002",
+        "xev_01J00000000000000000000003",
+        "xev_01J00000000000000000000004",
+        "xev_01J00000000000000000000005"
       ],
       "label": "ASIA_EXPERIENCE",
-      "status": "supported"
+      "status": "supported",
+      "unregistered_evidence_refs": [
+        "xev_01J00000000000000000000008"
+      ]
     },
     {
       "evidence_refs": [
-        "xregion_ev_bio_singapore",
-        "xregion_ev_employment_beijing",
-        "xregion_ev_post_taipei_self",
-        "xregion_ev_research_hong_kong"
+        "xev_01J00000000000000000000002",
+        "xev_01J00000000000000000000004",
+        "xev_01J00000000000000000000005"
       ],
       "label": "GREATER_CHINA_EXPERIENCE",
-      "status": "supported"
+      "status": "supported",
+      "unregistered_evidence_refs": [
+        "xev_01J00000000000000000000008"
+      ]
     },
     {
       "evidence_refs": [
-        "xregion_ev_employment_beijing"
+        "xev_01J00000000000000000000002"
       ],
       "label": "MAINLAND_CHINA_EXPERIENCE",
-      "status": "supported"
+      "status": "supported",
+      "unregistered_evidence_refs": [
+        "xev_01J00000000000000000000008"
+      ]
     }
   ],
+  "policy_sha256": "dcb4343e1ddb2221986f65b0af472bd021b91ab1d88c521ef2f4f32a00434438",
   "policy_version": "x-region-experience-public-professional-v1",
   "schema_version": "x.region_experience.classification.v1",
-  "subject_ref": "xregion_subject_fixture_001"
+  "subject_platform_user_id": "100000000000000001",
+  "subject_ref": "pp_x_01J00000000000000000000001"
 }
